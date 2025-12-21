@@ -34,12 +34,13 @@ export function ScoreText({ score, size = 'md', showLabel = false, className }: 
     
     const absValue = Math.abs(rounded);
     
-    // Negative = Left, Positive = Right
-    if (rounded < 0) {
-      return `L${absValue}`;
-    } else {
-      return `R${absValue}`;
+    // Center zone: -3 to 3 (use CL/CR)
+    if (rounded >= -3 && rounded <= 3) {
+      return rounded < 0 ? `CL${absValue}` : `CR${absValue}`;
     }
+    
+    // Outside center zone: L/R
+    return rounded < 0 ? `L${absValue}` : `R${absValue}`;
   };
 
   const getScoreColorClass = (s: number | null | undefined): string => {
@@ -108,6 +109,12 @@ export function ScoreTextInline({ score, className }: { score: number | null | u
     }
     
     const absValue = Math.abs(rounded);
+    
+    // Center zone: -3 to 3 (use CL/CR)
+    if (rounded >= -3 && rounded <= 3) {
+      return rounded < 0 ? `CL${absValue}` : `CR${absValue}`;
+    }
+    
     return rounded < 0 ? `L${absValue}` : `R${absValue}`;
   };
 
