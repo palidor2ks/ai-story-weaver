@@ -4,6 +4,7 @@ import { ScoreBar } from '@/components/ScoreBar';
 import { useAuth } from '@/context/AuthContext';
 import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding, useUpdateProfile } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
+import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
 import { calculateMatchScore } from '@/hooks/useCandidates';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,10 +38,14 @@ export const UserProfile = () => {
   const { data: userTopics = [] } = useUserTopics();
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: repsData, isLoading: repsLoading, error: repsError, refetch: refetchReps } = useRepresentatives(profile?.address);
-  const representatives = repsData?.representatives ?? [];
+  const { data: civicData, isLoading: civicLoading, refetch: refetchCivic } = useCivicOfficials(profile?.address);
+  const federalReps = repsData?.representatives ?? [];
   const congressionalDistrict = repsData?.district;
   const congressionalState = repsData?.state;
   const geocodeFailed = !repsLoading && profile?.address && !congressionalDistrict && !repsError;
+  
+  // Combine all representatives
+  const allRepsLoading = repsLoading || civicLoading;
   const resetOnboarding = useResetOnboarding();
   const updateProfile = useUpdateProfile();
 
@@ -80,6 +85,7 @@ export const UserProfile = () => {
   const handleRefreshRepresentatives = () => {
     if (!profile?.address) return;
     refetchReps();
+    refetchCivic();
     toast('Refreshing representatives...');
   };
 
@@ -141,6 +147,49 @@ export const UserProfile = () => {
       case 'Independent': return 'bg-purple-500/10 text-purple-600 border-purple-500/20';
       default: return 'bg-muted text-muted-foreground';
     }
+  };
+
+  // Helper component for civic officials
+  const RepresentativeCard = ({ 
+    official, 
+    userScore, 
+    getPartyColor 
+  }: { 
+    official: CivicOfficial; 
+    userScore: number; 
+    getPartyColor: (party: string) => string;
+  }) => {
+    const matchScore = official.overall_score !== null 
+      ? calculateMatchScore(userScore, official.overall_score) 
+      : null;
+    
+    return (
+      <div className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors">
+        <div className="w-12 h-12 rounded-full bg-gradient-hero flex items-center justify-center flex-shrink-0 overflow-hidden">
+          {official.image_url ? (
+            <img src={official.image_url} alt={official.name} className="w-full h-full object-cover" />
+          ) : (
+            <User className="w-6 h-6 text-primary-foreground" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="font-semibold text-foreground truncate">{official.name}</h4>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground">{official.office}</span>
+            <Badge variant="outline" className={cn("text-xs", getPartyColor(official.party))}>
+              {official.party}
+            </Badge>
+          </div>
+        </div>
+        {matchScore !== null ? (
+          <MatchBadge matchScore={matchScore} size="sm" />
+        ) : (
+          <Badge variant="outline" className="text-xs text-muted-foreground">
+            No score
+          </Badge>
+        )}
+      </div>
+    );
   };
 
   if (profileLoading) {
@@ -405,9 +454,9 @@ export const UserProfile = () => {
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-accent" />
                 Your Representatives
-                {repsLoading ? (
+                {allRepsLoading ? (
                   <Badge variant="outline" className="ml-2 text-xs font-normal animate-pulse">
-                    Looking up district...
+                    Looking up representatives...
                   </Badge>
                 ) : congressionalState && congressionalDistrict ? (
                   <Badge variant="outline" className="ml-2 text-xs font-normal">
@@ -421,10 +470,10 @@ export const UserProfile = () => {
                   variant="ghost"
                   size="icon"
                   onClick={handleRefreshRepresentatives}
-                  disabled={repsLoading}
+                  disabled={allRepsLoading}
                   aria-label="Refresh representatives"
                 >
-                  <RefreshCw className={cn("h-4 w-4", repsLoading && "animate-spin")} />
+                  <RefreshCw className={cn("h-4 w-4", allRepsLoading && "animate-spin")} />
                 </Button>
               )}
             </CardTitle>
@@ -432,16 +481,16 @@ export const UserProfile = () => {
           <CardContent>
             {!profile.address ? (
               <div className="text-center py-6">
-                <p className="text-muted-foreground mb-4">Add your address to see your congressional representatives.</p>
+                <p className="text-muted-foreground mb-4">Add your address to see your representatives.</p>
                 <Button variant="outline" onClick={handleEditAddress}>
                   Add Address
                 </Button>
               </div>
-            ) : repsLoading ? (
+            ) : allRepsLoading ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-center gap-3 py-4 text-muted-foreground">
                   <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent" />
-                  <span>Finding your congressional representatives...</span>
+                  <span>Finding your representatives...</span>
                 </div>
                 {[1, 2, 3].map(i => (
                   <div key={i} className="flex items-center gap-4 p-4 rounded-lg border border-border animate-pulse">
@@ -454,32 +503,123 @@ export const UserProfile = () => {
                   </div>
                 ))}
               </div>
-            ) : representatives.length > 0 ? (
-              <div className="space-y-4">
-                {representatives.map((rep) => {
-                  const matchScore = calculateMatchScore(profile.overall_score ?? 0, rep.overall_score);
-                  return (
-                    <Link
-                      key={rep.id}
-                      to={`/candidate/${rep.bioguide_id || rep.id}`}
-                      className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
-                    >
-                      <div className="w-12 h-12 rounded-full bg-gradient-hero flex items-center justify-center flex-shrink-0">
-                        <User className="w-6 h-6 text-primary-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-foreground truncate">{rep.name}</h4>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm text-muted-foreground">{rep.office}</span>
-                          <Badge variant="outline" className={cn("text-xs", getPartyColor(rep.party))}>
-                            {rep.party}
-                          </Badge>
-                        </div>
-                      </div>
-                      <MatchBadge matchScore={matchScore} size="sm" />
-                    </Link>
-                  );
-                })}
+            ) : (federalReps.length > 0 || (civicData && (civicData.federalExecutive.length > 0 || civicData.stateExecutive.length > 0 || civicData.stateLegislative.length > 0 || civicData.local.length > 0))) ? (
+              <div className="space-y-6">
+                {/* Federal Executive (President, VP) */}
+                {civicData && civicData.federalExecutive.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      Federal Executive
+                    </h4>
+                    <div className="space-y-3">
+                      {civicData.federalExecutive.map((official) => (
+                        <RepresentativeCard
+                          key={official.id}
+                          official={official}
+                          userScore={profile.overall_score ?? 0}
+                          getPartyColor={getPartyColor}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Federal Legislative (Congress) */}
+                {federalReps.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      U.S. Congress
+                    </h4>
+                    <div className="space-y-3">
+                      {federalReps.map((rep) => {
+                        const matchScore = calculateMatchScore(profile.overall_score ?? 0, rep.overall_score);
+                        return (
+                          <Link
+                            key={rep.id}
+                            to={`/candidate/${rep.bioguide_id || rep.id}`}
+                            className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
+                          >
+                            <div className="w-12 h-12 rounded-full bg-gradient-hero flex items-center justify-center flex-shrink-0">
+                              <User className="w-6 h-6 text-primary-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-foreground truncate">{rep.name}</h4>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm text-muted-foreground">{rep.office}</span>
+                                <Badge variant="outline" className={cn("text-xs", getPartyColor(rep.party))}>
+                                  {rep.party}
+                                </Badge>
+                              </div>
+                            </div>
+                            <MatchBadge matchScore={matchScore} size="sm" />
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* State Executive (Governor, Lt. Governor) */}
+                {civicData && civicData.stateExecutive.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      State Executive
+                    </h4>
+                    <div className="space-y-3">
+                      {civicData.stateExecutive.map((official) => (
+                        <RepresentativeCard
+                          key={official.id}
+                          official={official}
+                          userScore={profile.overall_score ?? 0}
+                          getPartyColor={getPartyColor}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* State Legislative */}
+                {civicData && civicData.stateLegislative.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      State Legislature
+                    </h4>
+                    <div className="space-y-3">
+                      {civicData.stateLegislative.map((official) => (
+                        <RepresentativeCard
+                          key={official.id}
+                          official={official}
+                          userScore={profile.overall_score ?? 0}
+                          getPartyColor={getPartyColor}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Local Officials */}
+                {civicData && civicData.local.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Local Officials
+                    </h4>
+                    <div className="space-y-3">
+                      {civicData.local.map((official) => (
+                        <RepresentativeCard
+                          key={official.id}
+                          official={official}
+                          userScore={profile.overall_score ?? 0}
+                          getPartyColor={getPartyColor}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : repsError ? (
               <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
