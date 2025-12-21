@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.import-legislators]
 verify_jwt = false
+
+[functions.batch-populate-answers]
+verify_jwt = false
