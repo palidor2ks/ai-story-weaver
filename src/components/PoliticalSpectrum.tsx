@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 
 interface Candidate {
@@ -8,6 +9,7 @@ interface Candidate {
   name: string;
   party: 'Democrat' | 'Republican' | 'Independent' | 'Other';
   overall_score: number;
+  image_url?: string | null;
 }
 
 interface PoliticalSpectrumProps {
@@ -32,22 +34,26 @@ export const PoliticalSpectrum = ({ userScore, candidates, onCandidateClick }: P
     return groups;
   }, [candidates]);
 
-  const getPartyColor = (party: string) => {
+  const getPartyRingColor = (party: string) => {
     switch (party) {
-      case 'Democrat': return 'bg-blue-500 border-blue-600';
-      case 'Republican': return 'bg-red-500 border-red-600';
-      case 'Independent': return 'bg-purple-500 border-purple-600';
-      default: return 'bg-gray-500 border-gray-600';
+      case 'Democrat': return 'ring-blue-500';
+      case 'Republican': return 'ring-red-500';
+      case 'Independent': return 'ring-purple-500';
+      default: return 'ring-gray-500';
     }
   };
 
-  const getPartyRingColor = (party: string) => {
+  const getPartyBgColor = (party: string) => {
     switch (party) {
-      case 'Democrat': return 'ring-blue-300';
-      case 'Republican': return 'ring-red-300';
-      case 'Independent': return 'ring-purple-300';
-      default: return 'ring-gray-300';
+      case 'Democrat': return 'bg-blue-500';
+      case 'Republican': return 'bg-red-500';
+      case 'Independent': return 'bg-purple-500';
+      default: return 'bg-gray-500';
     }
+  };
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   };
 
   return (
@@ -57,7 +63,7 @@ export const PoliticalSpectrum = ({ userScore, candidates, onCandidateClick }: P
         <div className="relative h-8 rounded-full overflow-visible shadow-inner">
           <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-500/30 via-muted to-red-500/30" />
           
-          {/* Candidate markers - positioned ON the bar */}
+          {/* Candidate markers - positioned ON the bar with avatars */}
           {Object.entries(groupedCandidates).map(([groupScore, groupCandidates]) => {
             const position = scoreToPosition(Number(groupScore));
             const isStacked = groupCandidates.length > 1;
@@ -68,18 +74,26 @@ export const PoliticalSpectrum = ({ userScore, candidates, onCandidateClick }: P
                   <button
                     onClick={() => onCandidateClick?.(candidate.id)}
                     className={cn(
-                      "absolute w-6 h-6 rounded-full border-2 transition-all hover:scale-125 cursor-pointer top-1/2 -translate-y-1/2 -translate-x-1/2",
-                      getPartyColor(candidate.party),
-                      "hover:ring-2",
+                      "absolute w-7 h-7 rounded-full transition-all hover:scale-125 cursor-pointer top-1/2 -translate-y-1/2 -translate-x-1/2",
+                      "ring-2 ring-offset-1 ring-offset-background hover:ring-4",
                       getPartyRingColor(candidate.party)
                     )}
                     style={{
                       left: `${position}%`,
-                      marginTop: isStacked ? `${(idx - (groupCandidates.length - 1) / 2) * 12}px` : '0px',
+                      marginTop: isStacked ? `${(idx - (groupCandidates.length - 1) / 2) * 14}px` : '0px',
                       zIndex: 10 + idx,
                     }}
                     aria-label={`${candidate.name} - ${formatScore(candidate.overall_score)}`}
-                  />
+                  >
+                    <Avatar className="w-full h-full">
+                      {candidate.image_url && (
+                        <AvatarImage src={candidate.image_url} alt={candidate.name} />
+                      )}
+                      <AvatarFallback className={cn("text-[10px] font-bold text-white", getPartyBgColor(candidate.party))}>
+                        {getInitials(candidate.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="text-xs">
                   <div className="font-semibold">{candidate.name}</div>
