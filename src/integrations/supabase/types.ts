@@ -300,6 +300,57 @@ export type Database = {
           },
         ]
       }
+      static_officials: {
+        Row: {
+          confidence: string | null
+          coverage_tier: string | null
+          created_at: string | null
+          district: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          level: string
+          name: string
+          office: string
+          party: string
+          state: string
+          updated_at: string | null
+          website_url: string | null
+        }
+        Insert: {
+          confidence?: string | null
+          coverage_tier?: string | null
+          created_at?: string | null
+          district?: string | null
+          id: string
+          image_url?: string | null
+          is_active?: boolean | null
+          level: string
+          name: string
+          office: string
+          party: string
+          state: string
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Update: {
+          confidence?: string | null
+          coverage_tier?: string | null
+          created_at?: string | null
+          district?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          level?: string
+          name?: string
+          office?: string
+          party?: string
+          state?: string
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Relationships: []
+      }
       topics: {
         Row: {
           icon: string
@@ -318,6 +369,27 @@ export type Database = {
           id?: string
           name?: string
           weight?: number | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
         }
         Relationships: []
       }
@@ -445,9 +517,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "admin" | "moderator" | "user"
       confidence_level: "high" | "medium" | "low"
       coverage_tier: "tier_1" | "tier_2" | "tier_3"
       donor_type: "Individual" | "PAC" | "Organization" | "Unknown"
@@ -580,6 +659,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "moderator", "user"],
       confidence_level: ["high", "medium", "low"],
       coverage_tier: ["tier_1", "tier_2", "tier_3"],
       donor_type: ["Individual", "PAC", "Organization", "Unknown"],

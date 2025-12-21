@@ -17,6 +17,7 @@ import { QuizResults } from "./pages/QuizResults";
 import { Search } from "./pages/Search";
 import { QuizLibrary } from "./pages/QuizLibrary";
 import { HowScoringWorks } from "./pages/HowScoringWorks";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
 
@@ -121,6 +122,11 @@ const AppRoutes = () => {
       <Route path="/how-scoring-works" element={
         <ProtectedRoute>
           <HowScoringWorks />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin" element={
+        <ProtectedRoute>
+          <Admin />
         </ProtectedRoute>
       } />
       <Route path="*" element={<NotFound />} />

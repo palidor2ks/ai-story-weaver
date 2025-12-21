@@ -1,7 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/context/UserContext';
-import { User, LayoutGrid, Menu, X, Search, BookOpen, HelpCircle, Users, DollarSign } from 'lucide-react';
+import { useAdminRole } from '@/hooks/useAdminRole';
+import { User, LayoutGrid, Menu, X, Search, BookOpen, HelpCircle, Users, DollarSign, Shield } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
@@ -9,7 +10,9 @@ import logoImg from '@/assets/logo.png';
 export const Header = () => {
   const location = useLocation();
   const { user } = useUser();
+  const { data: adminData } = useAdminRole();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isAdmin = adminData?.isAdmin;
 
   const navItems = [
     { path: '/feed', label: 'Feed', icon: LayoutGrid },
@@ -51,6 +54,18 @@ export const Header = () => {
               <HelpCircle className="w-4 h-4" />
             </Button>
           </Link>
+          {isAdmin && (
+            <Link to="/admin">
+              <Button 
+                variant={isActive('/admin') ? "secondary" : "ghost"}
+                size="icon"
+                className="ml-1"
+                title="Admin"
+              >
+                <Shield className="w-4 h-4" />
+              </Button>
+            </Link>
+          )}
         </nav>
 
         {/* User Info */}
@@ -104,6 +119,20 @@ export const Header = () => {
                 How Scoring Works
               </Button>
             </Link>
+            {isAdmin && (
+              <Link 
+                to="/admin"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Button 
+                  variant={isActive('/admin') ? "secondary" : "ghost"}
+                  className="w-full justify-start gap-3"
+                >
+                  <Shield className="w-5 h-5" />
+                  Admin
+                </Button>
+              </Link>
+            )}
           </nav>
         </div>
       )}
