@@ -106,8 +106,26 @@ export const CandidateProfile = () => {
         <div className="bg-card rounded-2xl border border-border p-6 md:p-8 mb-8 shadow-elevated">
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             {/* Avatar */}
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl bg-gradient-hero flex items-center justify-center flex-shrink-0">
-              <User className="w-12 h-12 md:w-16 md:h-16 text-primary-foreground" />
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden flex-shrink-0">
+              {(representativeDetails?.image_url || candidate.image_url) ? (
+                <img 
+                  src={representativeDetails?.image_url || candidate.image_url || ''}
+                  alt={candidate.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    target.style.display = 'none';
+                    const fallback = target.nextElementSibling as HTMLElement;
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div 
+                className="w-full h-full bg-gradient-hero flex items-center justify-center"
+                style={{ display: (representativeDetails?.image_url || candidate.image_url) ? 'none' : 'flex' }}
+              >
+                <User className="w-12 h-12 md:w-16 md:h-16 text-primary-foreground" />
+              </div>
             </div>
 
             {/* Info */}
