@@ -8,6 +8,8 @@ import { UserProvider, useUser } from "./context/UserContext";
 import Index from "./pages/Index";
 import { Auth } from "./pages/Auth";
 import { Feed } from "./pages/Feed";
+import { Candidates } from "./pages/Candidates";
+import { Donors } from "./pages/Donors";
 import { CandidateProfile } from "./pages/CandidateProfile";
 import { UserProfile } from "./pages/UserProfile";
 import { Quiz } from "./pages/Quiz";
@@ -79,6 +81,16 @@ const AppRoutes = () => {
       <Route path="/feed" element={
         <ProtectedRoute>
           <Feed />
+        </ProtectedRoute>
+      } />
+      <Route path="/candidates" element={
+        <ProtectedRoute>
+          <Candidates />
+        </ProtectedRoute>
+      } />
+      <Route path="/donors" element={
+        <ProtectedRoute>
+          <Donors />
         </ProtectedRoute>
       } />
       <Route path="/search" element={

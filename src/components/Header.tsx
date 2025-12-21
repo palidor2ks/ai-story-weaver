@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/context/UserContext';
-import { User, LayoutGrid, FileText, Menu, X, Search, BookOpen, HelpCircle } from 'lucide-react';
+import { User, LayoutGrid, Menu, X, Search, BookOpen, HelpCircle, Users, DollarSign } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +12,8 @@ export const Header = () => {
 
   const navItems = [
     { path: '/feed', label: 'Feed', icon: LayoutGrid },
+    { path: '/candidates', label: 'Candidates', icon: Users },
+    { path: '/donors', label: 'Donors', icon: DollarSign },
     { path: '/search', label: 'Search', icon: Search },
     { path: '/quiz-library', label: 'Quizzes', icon: BookOpen },
     { path: '/profile', label: 'Profile', icon: User },
