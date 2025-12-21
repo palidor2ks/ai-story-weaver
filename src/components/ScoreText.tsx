@@ -25,22 +25,19 @@ export function ScoreText({ score, size = 'md', showLabel = false, className }: 
     // Clamp to valid range (-10 to 10)
     const clamped = Math.max(-10, Math.min(10, s));
     
-    // Round to nearest integer for display
-    const rounded = Math.round(clamped);
-    
-    if (rounded === 0) {
+    if (clamped === 0) {
       return 'C';
     }
     
-    const absValue = Math.abs(rounded);
+    const absValue = Math.abs(clamped).toFixed(2);
     
     // Center zone: -3 to 3 (use CL/CR)
-    if (rounded >= -3 && rounded <= 3) {
-      return rounded < 0 ? `CL${absValue}` : `CR${absValue}`;
+    if (clamped >= -3 && clamped <= 3) {
+      return clamped < 0 ? `CL${absValue}` : `CR${absValue}`;
     }
     
     // Outside center zone: L/R
-    return rounded < 0 ? `L${absValue}` : `R${absValue}`;
+    return clamped < 0 ? `L${absValue}` : `R${absValue}`;
   };
 
   const getScoreColorClass = (s: number | null | undefined): string => {
@@ -102,20 +99,19 @@ export function ScoreTextInline({ score, className }: { score: number | null | u
     }
     
     const clamped = Math.max(-10, Math.min(10, s));
-    const rounded = Math.round(clamped);
     
-    if (rounded === 0) {
+    if (clamped === 0) {
       return 'C';
     }
     
-    const absValue = Math.abs(rounded);
+    const absValue = Math.abs(clamped).toFixed(2);
     
     // Center zone: -3 to 3 (use CL/CR)
-    if (rounded >= -3 && rounded <= 3) {
-      return rounded < 0 ? `CL${absValue}` : `CR${absValue}`;
+    if (clamped >= -3 && clamped <= 3) {
+      return clamped < 0 ? `CL${absValue}` : `CR${absValue}`;
     }
     
-    return rounded < 0 ? `L${absValue}` : `R${absValue}`;
+    return clamped < 0 ? `L${absValue}` : `R${absValue}`;
   };
 
   const getScoreColorClass = (s: number | null | undefined): string => {

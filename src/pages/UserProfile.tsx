@@ -322,11 +322,8 @@ export const UserProfile = () => {
               <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                 Overall Score
               </span>
-              <div className="flex items-center justify-center gap-4 mt-2">
+              <div className="flex items-center justify-center mt-2">
                 <ScoreText score={profile.overall_score} size="lg" className="text-5xl" />
-                <div className="text-2xl text-muted-foreground">
-                  ({profile.overall_score > 0 ? '+' : ''}{profile.overall_score})
-                </div>
               </div>
               <p className="text-sm text-muted-foreground mt-2">
                 {profile.overall_score >= 30 ? 'You tend to lean Progressive on most issues' : 
