@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
-import { ScoreBar } from '@/components/ScoreBar';
-import { ComparisonSpectrum } from '@/components/ComparisonSpectrum';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck } from 'lucide-react';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
+import { ScoreText } from '@/components/ScoreText';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
 import { EvidenceBrowser } from '@/components/EvidenceBrowser';
@@ -239,18 +238,6 @@ export const CandidateProfile = () => {
                 <span>Data updated {new Date(candidate.last_updated).toLocaleDateString()}</span>
               </div>
             </div>
-
-            {/* Score Comparison */}
-            <div className="w-48">
-              <p className="text-sm text-muted-foreground mb-2 text-center">Score Comparison</p>
-              <ComparisonSpectrum 
-                userScore={profile?.overall_score ?? 0} 
-                repScore={candidate.overall_score ?? 0} 
-                repName={candidate.name.split(' ').pop() || 'Candidate'}
-                repImageUrl={representativeDetails?.image_url || candidate.image_url}
-                size="md"
-              />
-            </div>
           </div>
         </div>
 
@@ -355,14 +342,13 @@ export const CandidateProfile = () => {
 
             {/* Topic Breakdown */}
             <div className="mt-8 pt-8 border-t border-border">
-              <h4 className="font-semibold text-foreground mb-4">Topic-by-Topic Comparison</h4>
-              <div className="space-y-4">
+              <h4 className="font-semibold text-foreground mb-4">Topic-by-Topic Scores</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {candidateTopicScores.map(ts => (
-                  <ScoreBar
-                    key={ts.topicId}
-                    score={ts.score}
-                    label={ts.topicName}
-                  />
+                  <div key={ts.topicId} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
+                    <span className="text-sm font-medium text-foreground">{ts.topicName}</span>
+                    <ScoreText score={ts.score} size="sm" />
+                  </div>
                 ))}
               </div>
             </div>

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Header } from '@/components/Header';
-import { ScoreBar } from '@/components/ScoreBar';
 import { useAuth } from '@/context/AuthContext';
 import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding, useUpdateProfile } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
@@ -15,7 +14,7 @@ import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { ComparisonSpectrum } from '@/components/ComparisonSpectrum';
+import { ScoreText } from '@/components/ScoreText';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
@@ -202,18 +201,10 @@ export const UserProfile = () => {
           </div>
         </div>
         {official.overall_score !== null ? (
-          <div className="w-28 flex-shrink-0">
-            <ComparisonSpectrum 
-              userScore={userScore} 
-              repScore={official.overall_score} 
-              repName={official.name.split(' ').pop() || 'Rep'}
-              repImageUrl={official.image_url}
-              size="sm"
-            />
-          </div>
+          <ScoreText score={official.overall_score} size="md" />
         ) : (
           <Badge variant="outline" className="text-xs text-muted-foreground">
-            No score
+            NA
           </Badge>
         )}
       </div>
@@ -386,18 +377,15 @@ export const UserProfile = () => {
 
             {/* Score Breakdown */}
             {topicScoresList.length > 0 && (
-              <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {topicScoresList.map((ts, index) => (
                   <div 
                     key={ts.topicId}
-                    className="animate-slide-up"
+                    className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 animate-slide-up"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <ScoreBar
-                      score={ts.score}
-                      label={ts.topicName}
-                      size="md"
-                    />
+                    <span className="text-sm font-medium text-foreground">{ts.topicName}</span>
+                    <ScoreText score={ts.score} size="sm" />
                   </div>
                 ))}
               </div>
@@ -600,18 +588,10 @@ export const UserProfile = () => {
                               </div>
                             </div>
                             {rep.overall_score !== null ? (
-                              <div className="w-28 flex-shrink-0">
-                                <ComparisonSpectrum 
-                                  userScore={profile.overall_score ?? 0} 
-                                  repScore={rep.overall_score} 
-                                  repName={rep.name.split(' ').pop() || 'Rep'}
-                                  repImageUrl={rep.image_url}
-                                  size="sm"
-                                />
-                              </div>
+                              <ScoreText score={rep.overall_score} size="md" />
                             ) : (
                               <Badge variant="outline" className="text-xs text-muted-foreground">
-                                No score
+                                NA
                               </Badge>
                             )}
                           </Link>
