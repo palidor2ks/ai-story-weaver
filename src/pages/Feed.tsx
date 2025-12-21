@@ -4,6 +4,7 @@ import { CandidateCard } from '@/components/CandidateCard';
 import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile, useUserTopics, useUserTopicScores } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
+import { useCivicOfficials } from '@/hooks/useCivicOfficials';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -20,7 +21,9 @@ export const Feed = () => {
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: dbCandidates = [], isLoading: candidatesLoading } = useCandidates();
   const { data: repsData, isLoading: representativesLoading, error: representativesError } = useRepresentatives(profile?.address);
+  const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
   const congressMembers = repsData?.representatives ?? [];
+  const civicOfficials = civicData?.officials ?? [];
   
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('match');
@@ -28,9 +31,9 @@ export const Feed = () => {
   const [levelFilter, setLevelFilter] = useState<GovernmentLevel>('all');
   const [incumbentFilter, setIncumbentFilter] = useState<string>('all');
 
-  // Combine database candidates with Congress API data
+  // Combine database candidates with Congress API data and Civic API data
   const transformedCandidates: Candidate[] = useMemo(() => {
-    // Transform Congress API members
+    // Transform Congress API members (federal)
     const congressCandidates: Candidate[] = congressMembers.map(member => ({
       id: member.bioguide_id || member.id,
       name: member.name,
@@ -46,7 +49,38 @@ export const Feed = () => {
       confidence: (member.confidence || 'low') as 'high' | 'medium' | 'low',
       isIncumbent: member.is_incumbent ?? true,
       scoreVersion: 'v1.0',
+      level: member.office === 'President' || member.office === 'Vice President' 
+        ? 'federal' 
+        : 'federal',
     }));
+
+    // Transform Civic API officials (state and local)
+    const civicCandidates: Candidate[] = civicOfficials
+      .filter(official => {
+        // Exclude federal legislative (we get those from Congress API)
+        const isFederalLegislative = official.level === 'federal_legislative' ||
+          official.office.toLowerCase().includes('senator') ||
+          official.office.toLowerCase().includes('representative');
+        return !isFederalLegislative;
+      })
+      .map(official => ({
+        id: official.id,
+        name: official.name,
+        party: official.party,
+        office: official.office,
+        state: official.state,
+        district: official.district,
+        imageUrl: official.image_url || '',
+        overallScore: official.overall_score,
+        topicScores: [],
+        lastUpdated: new Date(),
+        coverageTier: (official.coverage_tier || 'tier_3') as 'tier_1' | 'tier_2' | 'tier_3',
+        confidence: (official.confidence || 'low') as 'high' | 'medium' | 'low',
+        isIncumbent: official.is_incumbent ?? true,
+        scoreVersion: 'v1.0',
+        level: official.level?.includes('state') ? 'state' : 
+               official.level === 'local' ? 'local' : 'federal',
+      }));
 
     // Transform database candidates (as fallback)
     const dbTransformed: Candidate[] = dbCandidates.map(c => ({
@@ -70,9 +104,19 @@ export const Feed = () => {
       scoreVersion: c.score_version,
     }));
 
-    // Use Congress data if available, otherwise fall back to DB
-    return congressCandidates.length > 0 ? congressCandidates : dbTransformed;
-  }, [congressMembers, dbCandidates]);
+    // Combine: Congress data + Civic data (deduplicate by name)
+    const allCandidates = [...congressCandidates, ...civicCandidates];
+    const uniqueNames = new Set<string>();
+    const deduped = allCandidates.filter(c => {
+      const key = `${c.name}-${c.office}`;
+      if (uniqueNames.has(key)) return false;
+      uniqueNames.add(key);
+      return true;
+    });
+
+    // Use combined data if available, otherwise fall back to DB
+    return deduped.length > 0 ? deduped : dbTransformed;
+  }, [congressMembers, civicOfficials, dbCandidates]);
 
   const filteredAndSortedCandidates = useMemo(() => {
     let result = [...transformedCandidates];
@@ -98,18 +142,37 @@ export const Feed = () => {
       result = result.filter(c => c.isIncumbent === isIncumbent);
     }
 
-    // Filter by government level (based on office)
+    // Filter by government level (based on office or level property)
     if (levelFilter !== 'all') {
       result = result.filter(c => {
         const office = c.office.toLowerCase();
+        const candidateLevel = (c as any).level;
+        
         if (levelFilter === 'federal') {
-          return office.includes('senator') || office.includes('representative') || office.includes('president');
+          return candidateLevel === 'federal' ||
+            office.includes('president') ||
+            office.includes('vice president') ||
+            office.includes('senator') || 
+            office.includes('representative') ||
+            office.includes('u.s.');
         }
         if (levelFilter === 'state') {
-          return office.includes('governor') || office.includes('state');
+          return candidateLevel === 'state' ||
+            office.includes('governor') || 
+            office.includes('state') ||
+            office.includes('lieutenant') ||
+            office.includes('attorney general') ||
+            office.includes('secretary of state');
         }
         if (levelFilter === 'local') {
-          return office.includes('mayor') || office.includes('council') || office.includes('county') || office.includes('sheriff');
+          return candidateLevel === 'local' ||
+            office.includes('mayor') || 
+            office.includes('council') || 
+            office.includes('county') || 
+            office.includes('sheriff') ||
+            office.includes('commissioner') ||
+            office.includes('supervisor') ||
+            office.includes('school board');
         }
         return true;
       });
@@ -147,7 +210,7 @@ export const Feed = () => {
     ? Math.max(...transformedCandidates.map(c => calculateMatchScore(profile?.overall_score ?? 0, c.overallScore)))
     : 0;
 
-  const isLoading = profileLoading || candidatesLoading || representativesLoading;
+  const isLoading = profileLoading || candidatesLoading || representativesLoading || civicLoading;
 
   if (isLoading) {
     return (
