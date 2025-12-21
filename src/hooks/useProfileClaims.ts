@@ -138,13 +138,33 @@ export function useSubmitClaim() {
   });
 }
 
+// Helper function to send claim notification email
+async function sendClaimNotification(
+  email: string,
+  candidateName: string,
+  status: 'approved' | 'rejected',
+  rejectionReason?: string
+) {
+  try {
+    const { error } = await supabase.functions.invoke('send-claim-notification', {
+      body: { email, candidateName, status, rejectionReason },
+    });
+    
+    if (error) {
+      console.error('Failed to send notification email:', error);
+    }
+  } catch (err) {
+    console.error('Error sending notification email:', err);
+  }
+}
+
 // Admin: approve a claim
 export function useApproveClaim() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (claimId: string) => {
+    mutationFn: async ({ claimId, candidateName }: { claimId: string; candidateName: string }) => {
       if (!user?.id) throw new Error('Must be logged in');
 
       // 1. Get the claim details
@@ -192,13 +212,18 @@ export function useApproveClaim() {
         throw roleError;
       }
 
+      // 5. Send notification email
+      if (claim.official_email) {
+        await sendClaimNotification(claim.official_email, candidateName, 'approved');
+      }
+
       return claim;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-claims'] });
       queryClient.invalidateQueries({ queryKey: ['all-claims'] });
       queryClient.invalidateQueries({ queryKey: ['candidate'] });
-      toast.success('Claim approved! The politician can now edit their profile.');
+      toast.success('Claim approved! Notification email sent.');
     },
     onError: (error: Error) => {
       toast.error(`Failed to approve claim: ${error.message}`);
@@ -215,12 +240,24 @@ export function useRejectClaim() {
     mutationFn: async ({
       claimId,
       rejectionReason,
+      candidateName,
     }: {
       claimId: string;
       rejectionReason: string;
+      candidateName: string;
     }) => {
       if (!user?.id) throw new Error('Must be logged in');
 
+      // 1. Get the claim details for email
+      const { data: claim, error: claimError } = await supabase
+        .from('profile_claims')
+        .select('*')
+        .eq('id', claimId)
+        .single();
+
+      if (claimError) throw claimError;
+
+      // 2. Update the claim status
       const { error } = await supabase
         .from('profile_claims')
         .update({
@@ -232,11 +269,18 @@ export function useRejectClaim() {
         .eq('id', claimId);
 
       if (error) throw error;
+
+      // 3. Send notification email
+      if (claim.official_email) {
+        await sendClaimNotification(claim.official_email, candidateName, 'rejected', rejectionReason);
+      }
+
+      return claim;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-claims'] });
       queryClient.invalidateQueries({ queryKey: ['all-claims'] });
-      toast.success('Claim rejected.');
+      toast.success('Claim rejected. Notification email sent.');
     },
     onError: (error: Error) => {
       toast.error(`Failed to reject claim: ${error.message}`);

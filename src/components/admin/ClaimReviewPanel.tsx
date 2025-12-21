@@ -41,7 +41,10 @@ export function ClaimReviewPanel() {
 
   const handleApprove = async () => {
     if (!selectedClaim) return;
-    await approveClaim.mutateAsync(selectedClaim.id);
+    await approveClaim.mutateAsync({
+      claimId: selectedClaim.id,
+      candidateName: selectedClaim.candidate_id, // Using candidate_id as name for now
+    });
     setIsApproveDialogOpen(false);
     setSelectedClaim(null);
   };
@@ -51,6 +54,7 @@ export function ClaimReviewPanel() {
     await rejectClaim.mutateAsync({
       claimId: selectedClaim.id,
       rejectionReason,
+      candidateName: selectedClaim.candidate_id, // Using candidate_id as name for now
     });
     setIsRejectDialogOpen(false);
     setRejectionReason('');
