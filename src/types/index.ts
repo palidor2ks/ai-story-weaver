@@ -1,3 +1,5 @@
+import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
+
 export interface User {
   id: string;
   email: string;
@@ -20,7 +22,7 @@ export interface Topic {
 export interface TopicScore {
   topicId: string;
   topicName: string;
-  score: number; // -100 to 100
+  score: number; // -10 to 10 (now with decimals)
 }
 
 export interface Question {
@@ -28,6 +30,8 @@ export interface Question {
   topicId: string;
   text: string;
   options: QuestionOption[];
+  isOnboardingCanonical?: boolean;
+  onboardingSlot?: number;
 }
 
 export interface QuestionOption {
@@ -61,6 +65,10 @@ export interface Candidate {
   overallScore: number;
   topicScores: TopicScore[];
   lastUpdated: Date;
+  coverageTier?: CoverageTier;
+  confidence?: ConfidenceLevel;
+  isIncumbent?: boolean;
+  scoreVersion?: string;
 }
 
 export interface MatchResult {
@@ -89,3 +97,6 @@ export interface Vote {
 }
 
 export type OnboardingStep = 'welcome' | 'topics' | 'quiz' | 'results';
+
+// Government level for feed filtering
+export type GovernmentLevel = 'federal' | 'state' | 'local' | 'all';

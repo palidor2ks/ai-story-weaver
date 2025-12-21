@@ -15,6 +15,7 @@ interface Profile {
   age: number | null;
   income: string | null;
   sex: string | null;
+  score_version: string;
 }
 
 interface TopicScore {
@@ -96,7 +97,8 @@ export const useUserTopics = () => {
           weight,
           topics (id, name, icon)
         `)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .order('weight', { ascending: false });
       
       if (error) throw error;
       return data as UserTopic[];
@@ -145,10 +147,13 @@ export const useSaveQuizResults = () => {
     }) => {
       if (!user) throw new Error('Not authenticated');
 
-      // Update overall score in profile
+      // Update overall score in profile with score version
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ overall_score: overallScore })
+        .update({ 
+          overall_score: overallScore,
+          score_version: 'v1.0'
+        })
         .eq('id', user.id);
       
       if (profileError) throw profileError;
@@ -205,14 +210,16 @@ export const useSaveUserTopics = () => {
       
       if (deleteError) throw deleteError;
 
-      // Insert new topics
+      // Insert new topics with weights based on rank order
+      // Per PRD: ranks [5, 4, 3, 2, 1] for topics 1-5
       if (topicIds.length > 0) {
+        const weights = [5, 4, 3, 2, 1];
         const { error: insertError } = await supabase
           .from('user_topics')
-          .insert(topicIds.map(topicId => ({
+          .insert(topicIds.map((topicId, index) => ({
             user_id: user.id,
             topic_id: topicId,
-            weight: 1,
+            weight: weights[index] || 1,
           })));
         
         if (insertError) throw insertError;
