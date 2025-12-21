@@ -149,6 +149,14 @@ export const UserProfile = () => {
     }
   };
 
+  // Helper functions for image fallbacks
+  const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  const getPartyBgColor = (party: string) => {
+    if (party === 'Democrat') return 'bg-blue-600';
+    if (party === 'Republican') return 'bg-red-600';
+    return 'bg-purple-600';
+  };
+
   // Helper component for civic officials
   const RepresentativeCard = ({ 
     official, 
@@ -159,18 +167,30 @@ export const UserProfile = () => {
     userScore: number; 
     getPartyColor: (party: string) => string;
   }) => {
-    const matchScore = official.overall_score !== null 
-      ? calculateMatchScore(userScore, official.overall_score) 
-      : null;
+    const hasImage = official.image_url && official.image_url.trim() !== '';
     
     return (
       <div className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors">
-        <div className="w-12 h-12 rounded-full bg-gradient-hero flex items-center justify-center flex-shrink-0 overflow-hidden">
-          {official.image_url ? (
-            <img src={official.image_url} alt={official.name} className="w-full h-full object-cover" />
-          ) : (
-            <User className="w-6 h-6 text-primary-foreground" />
-          )}
+        <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
+          {hasImage ? (
+            <img 
+              src={official.image_url} 
+              alt={official.name} 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const target = e.currentTarget;
+                target.style.display = 'none';
+                const fallback = target.nextElementSibling as HTMLElement;
+                if (fallback) fallback.style.display = 'flex';
+              }}
+            />
+          ) : null}
+          <div 
+            className={cn("w-full h-full flex items-center justify-center", getPartyBgColor(official.party))}
+            style={{ display: hasImage ? 'none' : 'flex' }}
+          >
+            <span className="text-white font-bold text-sm">{getInitials(official.name)}</span>
+          </div>
         </div>
         <div className="flex-1 min-w-0">
           <h4 className="font-semibold text-foreground truncate">{official.name}</h4>
@@ -541,14 +561,34 @@ export const UserProfile = () => {
                       U.S. Congress
                     </h4>
                     <div className="space-y-3">
-                      {federalReps.map((rep) => (
+                      {federalReps.map((rep) => {
+                        const hasImage = rep.image_url && rep.image_url.trim() !== '';
+                        return (
                           <Link
                             key={rep.id}
                             to={`/candidate/${rep.bioguide_id || rep.id}`}
                             className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
                           >
-                            <div className="w-12 h-12 rounded-full bg-gradient-hero flex items-center justify-center flex-shrink-0">
-                              <User className="w-6 h-6 text-primary-foreground" />
+                            <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
+                              {hasImage ? (
+                                <img 
+                                  src={rep.image_url}
+                                  alt={rep.name}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    const target = e.currentTarget;
+                                    target.style.display = 'none';
+                                    const fallback = target.nextElementSibling as HTMLElement;
+                                    if (fallback) fallback.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+                              <div 
+                                className={cn("w-full h-full flex items-center justify-center", getPartyBgColor(rep.party))}
+                                style={{ display: hasImage ? 'none' : 'flex' }}
+                              >
+                                <span className="text-white font-bold text-sm">{getInitials(rep.name)}</span>
+                              </div>
                             </div>
                             <div className="flex-1 min-w-0">
                               <h4 className="font-semibold text-foreground truncate">{rep.name}</h4>
@@ -565,6 +605,7 @@ export const UserProfile = () => {
                                   userScore={profile.overall_score ?? 0} 
                                   repScore={rep.overall_score} 
                                   repName={rep.name.split(' ').pop() || 'Rep'}
+                                  repImageUrl={rep.image_url}
                                   size="sm"
                                 />
                               </div>
@@ -574,7 +615,8 @@ export const UserProfile = () => {
                               </Badge>
                             )}
                           </Link>
-                        ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
