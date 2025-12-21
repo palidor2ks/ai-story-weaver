@@ -55,15 +55,8 @@ export const PoliticalSpectrum = ({ userScore, candidates, onCandidateClick }: P
       <div className="relative py-8">
         {/* Background gradient spectrum */}
         <div className="relative h-8 rounded-full overflow-hidden shadow-inner">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500 via-purple-400 to-red-500 opacity-30" />
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 via-transparent to-red-600/20" />
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/30 via-muted to-red-500/30" />
         </div>
-
-        {/* Center marker */}
-        <div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 w-0.5 h-12 bg-border/50"
-          style={{ marginTop: '-8px' }}
-        />
 
         {/* Candidate markers */}
         <div className="absolute inset-x-4 top-0 h-8" style={{ marginTop: '16px' }}>

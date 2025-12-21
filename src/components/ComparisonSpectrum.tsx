@@ -49,11 +49,6 @@ export const ComparisonSpectrum = ({
     lg: 'w-8 h-8 -top-2',
   };
 
-  const legendAvatarSizes = {
-    sm: 'w-3 h-3',
-    md: 'w-4 h-4',
-    lg: 'w-5 h-5',
-  };
 
   return (
     <TooltipProvider>
@@ -62,9 +57,6 @@ export const ComparisonSpectrum = ({
           "relative w-full rounded-full bg-gradient-to-r from-blue-500/30 via-muted to-red-500/30 overflow-visible",
           sizeClasses[size]
         )}>
-          {/* Center line indicator */}
-          <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-muted-foreground/40 z-10 -translate-x-1/2" />
-          
           {/* Representative score marker with avatar */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -116,33 +108,9 @@ export const ComparisonSpectrum = ({
           </Tooltip>
         </div>
         
-        {/* Legend */}
-        <div className="flex justify-between mt-2 text-[10px] text-muted-foreground">
+        {/* Minimal L/R labels */}
+        <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
           <span>L</span>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              <Avatar className={cn("ring-1 ring-primary", legendAvatarSizes[size])}>
-                {repImageUrl && (
-                  <AvatarImage src={repImageUrl} alt={repName} className="object-cover" />
-                )}
-                <AvatarFallback className="bg-primary text-primary-foreground text-[6px]">
-                  {getInitials(repName).charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-              <span>{repName}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Avatar className={cn("ring-1 ring-accent", legendAvatarSizes[size])}>
-                {userImageUrl && (
-                  <AvatarImage src={userImageUrl} alt="You" className="object-cover" />
-                )}
-                <AvatarFallback className="bg-accent text-accent-foreground">
-                  <User className="w-2 h-2" />
-                </AvatarFallback>
-              </Avatar>
-              <span>You</span>
-            </div>
-          </div>
           <span>R</span>
         </div>
       </div>

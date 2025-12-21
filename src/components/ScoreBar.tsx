@@ -51,9 +51,6 @@ export const ScoreBar = ({
         "relative w-full rounded-full bg-secondary overflow-hidden",
         sizeClasses[size]
       )}>
-        {/* Center line indicator */}
-        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-muted-foreground/30 z-10" />
-        
         {/* Score indicator */}
         <div 
           className={cn(
