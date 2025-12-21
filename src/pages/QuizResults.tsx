@@ -248,6 +248,7 @@ export const QuizResults = () => {
               userScore={userScore} 
               repScore={official.overall_score} 
               repName={official.name.split(' ').pop() || 'Rep'}
+              repImageUrl={official.image_url}
               size="sm"
             />
           </div>
