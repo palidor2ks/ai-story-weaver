@@ -33,7 +33,10 @@ export const UserProfile = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
   const { data: userTopicScores = [] } = useUserTopicScores();
-  const { data: representatives = [], isLoading: repsLoading } = useRepresentatives(profile?.address);
+  const { data: repsData, isLoading: repsLoading } = useRepresentatives(profile?.address);
+  const representatives = repsData?.representatives ?? [];
+  const congressionalDistrict = repsData?.district;
+  const congressionalState = repsData?.state;
   const resetOnboarding = useResetOnboarding();
 
   const topicScoresList = userTopicScores.map(ts => ({
@@ -313,6 +316,11 @@ export const UserProfile = () => {
             <CardTitle className="font-display flex items-center gap-2">
               <Users className="w-5 h-5 text-accent" />
               Your Representatives
+              {congressionalState && congressionalDistrict && (
+                <Badge variant="outline" className="ml-2 text-xs font-normal">
+                  {congressionalState}-{congressionalDistrict}
+                </Badge>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>

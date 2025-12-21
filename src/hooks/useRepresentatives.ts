@@ -24,6 +24,12 @@ interface FetchRepresentativesResponse {
   error?: string;
 }
 
+interface RepresentativesResult {
+  representatives: Representative[];
+  district: string | null;
+  state: string | null;
+}
+
 // Parse address to extract state and district
 export function parseAddressForState(address: string): { state: string | null; zipCode: string | null } {
   // Common state abbreviations
@@ -95,17 +101,17 @@ export async function getDistrictFromAddress(address: string): Promise<string | 
 export function useRepresentatives(address: string | null | undefined) {
   return useQuery({
     queryKey: ['representatives', address],
-    queryFn: async (): Promise<Representative[]> => {
+    queryFn: async (): Promise<RepresentativesResult> => {
       if (!address) {
         console.log('No address provided');
-        return [];
+        return { representatives: [], district: null, state: null };
       }
 
       const { state } = parseAddressForState(address);
       
       if (!state) {
         console.log('Could not parse state from address:', address);
-        return [];
+        return { representatives: [], district: null, state: null };
       }
 
       // Get the congressional district from the full address
@@ -126,10 +132,14 @@ export function useRepresentatives(address: string | null | undefined) {
 
       if (data?.error) {
         console.error('API error:', data.error);
-        return [];
+        return { representatives: [], district, state };
       }
 
-      return data?.representatives || [];
+      return { 
+        representatives: data?.representatives || [], 
+        district, 
+        state 
+      };
     },
     enabled: !!address,
     staleTime: 1000 * 60 * 60, // Cache for 1 hour

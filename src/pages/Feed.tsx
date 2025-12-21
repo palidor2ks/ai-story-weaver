@@ -19,7 +19,8 @@ export const Feed = () => {
   const { data: userTopics = [] } = useUserTopics();
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: dbCandidates = [], isLoading: candidatesLoading } = useCandidates();
-  const { data: congressMembers = [], isLoading: representativesLoading, error: representativesError } = useRepresentatives(profile?.address);
+  const { data: repsData, isLoading: representativesLoading, error: representativesError } = useRepresentatives(profile?.address);
+  const congressMembers = repsData?.representatives ?? [];
   
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('match');
