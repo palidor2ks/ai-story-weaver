@@ -99,6 +99,9 @@ export type Database = {
       }
       candidates: {
         Row: {
+          answers_source: string | null
+          claimed_at: string | null
+          claimed_by_user_id: string | null
           confidence: Database["public"]["Enums"]["confidence_level"] | null
           coverage_tier: Database["public"]["Enums"]["coverage_tier"] | null
           created_at: string | null
@@ -106,6 +109,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_incumbent: boolean | null
+          last_answers_sync: string | null
           last_updated: string | null
           name: string
           office: string
@@ -115,6 +119,9 @@ export type Database = {
           state: string
         }
         Insert: {
+          answers_source?: string | null
+          claimed_at?: string | null
+          claimed_by_user_id?: string | null
           confidence?: Database["public"]["Enums"]["confidence_level"] | null
           coverage_tier?: Database["public"]["Enums"]["coverage_tier"] | null
           created_at?: string | null
@@ -122,6 +129,7 @@ export type Database = {
           id: string
           image_url?: string | null
           is_incumbent?: boolean | null
+          last_answers_sync?: string | null
           last_updated?: string | null
           name: string
           office: string
@@ -131,6 +139,9 @@ export type Database = {
           state: string
         }
         Update: {
+          answers_source?: string | null
+          claimed_at?: string | null
+          claimed_by_user_id?: string | null
           confidence?: Database["public"]["Enums"]["confidence_level"] | null
           coverage_tier?: Database["public"]["Enums"]["coverage_tier"] | null
           created_at?: string | null
@@ -138,6 +149,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_incumbent?: boolean | null
+          last_answers_sync?: string | null
           last_updated?: string | null
           name?: string
           office?: string
