@@ -7,6 +7,9 @@ import { cn } from '@/lib/utils';
 import { calculateMatchScore } from '@/data/mockData';
 import { useUser } from '@/context/UserContext';
 import { User, MapPin, Calendar } from 'lucide-react';
+import { ScoreDisplay } from './ScoreDisplay';
+import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from './CoverageTierBadge';
+import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 
 interface CandidateCardProps {
   candidate: Candidate;
@@ -43,6 +46,11 @@ export const CandidateCard = ({ candidate, index = 0 }: CandidateCardProps) => {
     })
     .slice(0, 1);
 
+  // Get coverage tier and confidence from candidate (with defaults)
+  const coverageTier: CoverageTier = (candidate as any).coverageTier || 'tier_3';
+  const confidence: ConfidenceLevel = (candidate as any).confidence || 'medium';
+  const isIncumbent: boolean = (candidate as any).isIncumbent ?? true;
+
   return (
     <Link to={`/candidate/${candidate.id}`}>
       <Card 
@@ -77,10 +85,17 @@ export const CandidateCard = ({ candidate, index = 0 }: CandidateCardProps) => {
                 <MatchBadge matchScore={matchScore} size="sm" />
               </div>
 
+              {/* Score display */}
+              <div className="mt-2">
+                <ScoreDisplay score={candidate.overallScore} size="sm" />
+              </div>
+
               <div className="flex flex-wrap items-center gap-2 mt-3">
                 <Badge variant="outline" className={cn("border", getPartyColor(candidate.party))}>
                   {candidate.party}
                 </Badge>
+                
+                <IncumbentBadge isIncumbent={isIncumbent} />
                 
                 {agreements.length > 0 && (
                   <Badge variant="outline" className="bg-agree/10 text-agree border-agree/30">
@@ -95,7 +110,12 @@ export const CandidateCard = ({ candidate, index = 0 }: CandidateCardProps) => {
                 )}
               </div>
 
-              <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <CoverageTierBadge tier={coverageTier} showTooltip={false} />
+                <ConfidenceBadge confidence={confidence} />
+              </div>
+
+              <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                 <Calendar className="w-3 h-3" />
                 <span>Updated {candidate.lastUpdated.toLocaleDateString()}</span>
               </div>
