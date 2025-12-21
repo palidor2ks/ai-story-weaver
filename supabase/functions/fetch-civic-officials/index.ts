@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -6,6 +7,8 @@ const corsHeaders = {
 };
 
 const GOOGLE_API_KEY = Deno.env.get('GOOGLE_CIVIC_API_KEY') ?? Deno.env.get('GOOGLE_PLACES_API_KEY');
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
 // Office level categorization
 type OfficeLevelType = 'federal_executive' | 'federal_legislative' | 'state_executive' | 'state_legislative' | 'local';
@@ -317,38 +320,83 @@ async function fetchOpenStatesLegislators(state: string, lat?: number, lng?: num
   }
 }
 
-// Static federal executive data (President and VP don't change often)
-function getFederalExecutive(): OfficialInfo[] {
-  return [
-    {
-      id: 'federal_president',
-      name: 'Donald J. Trump',
-      party: 'Republican',
-      office: 'President',
-      level: 'federal_executive',
-      state: 'US',
-      image_url: 'https://www.whitehouse.gov/wp-content/uploads/2025/01/P20250120CS-0029.jpg',
-      urls: ['https://www.whitehouse.gov'],
+// Fetch federal executive from database (President, VP)
+async function fetchFederalExecutiveFromDB(): Promise<OfficialInfo[]> {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    const { data, error } = await supabase
+      .from('static_officials')
+      .select('*')
+      .eq('level', 'federal_executive')
+      .eq('is_active', true);
+
+    if (error) {
+      console.error('[DB] Error fetching federal executive:', error);
+      return [];
+    }
+
+    console.log(`[DB] Found ${data?.length || 0} federal executive officials`);
+    
+    return (data || []).map(official => ({
+      id: official.id,
+      name: official.name,
+      party: official.party as 'Democrat' | 'Republican' | 'Independent' | 'Other',
+      office: official.office,
+      level: official.level as OfficeLevelType,
+      state: official.state,
+      district: official.district,
+      image_url: official.image_url || '',
+      urls: official.website_url ? [official.website_url] : [],
       is_incumbent: true,
       overall_score: null,
-      coverage_tier: 'tier_1',
-      confidence: 'high',
-    },
-    {
-      id: 'federal_vice_president',
-      name: 'JD Vance',
-      party: 'Republican',
-      office: 'Vice President',
-      level: 'federal_executive',
-      state: 'US',
-      image_url: 'https://www.whitehouse.gov/wp-content/uploads/2025/01/P20250120CS-0100.jpg',
-      urls: ['https://www.whitehouse.gov'],
+      coverage_tier: official.coverage_tier || 'tier_1',
+      confidence: official.confidence || 'high',
+    }));
+  } catch (error) {
+    console.error('[DB] Exception fetching federal executive:', error);
+    return [];
+  }
+}
+
+// Fetch state executives from database (Governors, etc.)
+async function fetchStateExecutivesFromDB(state: string): Promise<OfficialInfo[]> {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    const { data, error } = await supabase
+      .from('static_officials')
+      .select('*')
+      .eq('level', 'state_executive')
+      .eq('state', state.toUpperCase())
+      .eq('is_active', true);
+
+    if (error) {
+      console.error('[DB] Error fetching state executives:', error);
+      return [];
+    }
+
+    console.log(`[DB] Found ${data?.length || 0} state executive officials for ${state}`);
+    
+    return (data || []).map(official => ({
+      id: official.id,
+      name: official.name,
+      party: official.party as 'Democrat' | 'Republican' | 'Independent' | 'Other',
+      office: official.office,
+      level: official.level as OfficeLevelType,
+      state: official.state,
+      district: official.district,
+      image_url: official.image_url || '',
+      urls: official.website_url ? [official.website_url] : [],
       is_incumbent: true,
       overall_score: null,
-      coverage_tier: 'tier_1',
-      confidence: 'high',
-    },
-  ];
+      coverage_tier: official.coverage_tier || 'tier_2',
+      confidence: official.confidence || 'high',
+    }));
+  } catch (error) {
+    console.error('[DB] Exception fetching state executives:', error);
+    return [];
+  }
 }
 
 serve(async (req) => {
@@ -477,9 +525,18 @@ serve(async (req) => {
       console.log(`[Google Civic] Skipping - No API key configured`);
     }
 
-    // Always add federal executive (static data)
-    const federalExecutive = getFederalExecutive();
-    console.log(`[Static] Added ${federalExecutive.length} federal executive officials`);
+    // Fetch federal executive from database
+    const federalExecutive = await fetchFederalExecutiveFromDB();
+    console.log(`[DB] Added ${federalExecutive.length} federal executive officials`);
+
+    // Fetch state executives from database if we have a state
+    if (stateFromAddress) {
+      const dbStateExecutives = await fetchStateExecutivesFromDB(stateFromAddress);
+      if (dbStateExecutives.length > 0) {
+        console.log(`[DB] Added ${dbStateExecutives.length} state executives for ${stateFromAddress}`);
+        mappedOfficials.push(...dbStateExecutives);
+      }
+    }
 
     // Use Open States as fallback for state legislators if Google Civic failed or returned none
     const civicStateLegislative = mappedOfficials.filter(o => o.level === 'state_legislative');
@@ -500,7 +557,7 @@ serve(async (req) => {
     const local = mappedOfficials.filter(o => o.level === 'local');
 
     console.log(`=== RESULTS ===`);
-    console.log(`Federal Executive: ${federalExecutive.length} (static)`);
+    console.log(`Federal Executive: ${federalExecutive.length} (from DB)`);
     console.log(`State Executive: ${stateExecutive.length}`);
     console.log(`State Legislative: ${stateLegislative.length}`);
     console.log(`Local: ${local.length}`);
@@ -524,8 +581,13 @@ serve(async (req) => {
     console.error('=== ERROR in fetch-civic-officials ===');
     console.error('Error:', errorMessage);
     
-    // Return static federal executive even on error
-    const federalExecutive = getFederalExecutive();
+    // Try to return federal executive even on error
+    let federalExecutive: OfficialInfo[] = [];
+    try {
+      federalExecutive = await fetchFederalExecutiveFromDB();
+    } catch {
+      console.error('Failed to fetch federal executive from DB on error recovery');
+    }
     
     return new Response(JSON.stringify({ 
       error: errorMessage,
