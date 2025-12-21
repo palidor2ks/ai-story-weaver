@@ -1,15 +1,17 @@
+import { useState } from 'react';
 import { Header } from '@/components/Header';
 import { ScoreBar } from '@/components/ScoreBar';
 import { useAuth } from '@/context/AuthContext';
-import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding } from '@/hooks/useProfile';
+import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding, useUpdateProfile } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { calculateMatchScore } from '@/hooks/useCandidates';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin } from 'lucide-react';
+import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -38,6 +40,10 @@ export const UserProfile = () => {
   const congressionalDistrict = repsData?.district;
   const congressionalState = repsData?.state;
   const resetOnboarding = useResetOnboarding();
+  const updateProfile = useUpdateProfile();
+
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [addressInput, setAddressInput] = useState('');
 
   const topicScoresList = userTopicScores.map(ts => ({
     topicId: ts.topic_id,
@@ -82,6 +88,32 @@ export const UserProfile = () => {
       console.error('Error resetting onboarding:', error);
       toast.error('Failed to reset onboarding. Please try again.');
     }
+  };
+
+  const handleEditAddress = () => {
+    setAddressInput(profile?.address || '');
+    setIsEditingAddress(true);
+  };
+
+  const handleSaveAddress = async () => {
+    if (!addressInput.trim()) {
+      toast.error('Please enter a valid address');
+      return;
+    }
+    
+    try {
+      await updateProfile.mutateAsync({ address: addressInput.trim() });
+      setIsEditingAddress(false);
+      toast.success('Address updated successfully!');
+    } catch (error) {
+      console.error('Error updating address:', error);
+      toast.error('Failed to update address. Please try again.');
+    }
+  };
+
+  const handleCancelEditAddress = () => {
+    setIsEditingAddress(false);
+    setAddressInput('');
   };
 
   const getScoreLabel = (score: number) => {
@@ -153,11 +185,51 @@ export const UserProfile = () => {
                 <p className="text-muted-foreground mt-1">
                   Member since {new Date(profile.created_at).toLocaleDateString()}
                 </p>
-                {profile.address && (
-                  <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                {isEditingAddress ? (
+                  <div className="flex items-center gap-2 mt-2">
+                    <Input
+                      value={addressInput}
+                      onChange={(e) => setAddressInput(e.target.value)}
+                      placeholder="Enter your full address..."
+                      className="flex-1 text-sm"
+                      autoFocus
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
+                      onClick={handleSaveAddress}
+                      disabled={updateProfile.isPending}
+                    >
+                      <Check className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={handleCancelEditAddress}
+                      disabled={updateProfile.isPending}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : profile.address ? (
+                  <button
+                    onClick={handleEditAddress}
+                    className="text-sm text-muted-foreground flex items-center gap-1 mt-1 hover:text-foreground transition-colors group"
+                  >
                     <MapPin className="w-3 h-3" />
                     {profile.address}
-                  </p>
+                    <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleEditAddress}
+                    className="text-sm text-primary flex items-center gap-1 mt-1 hover:underline"
+                  >
+                    <MapPin className="w-3 h-3" />
+                    Add your address
+                  </button>
                 )}
               </div>
             </div>
