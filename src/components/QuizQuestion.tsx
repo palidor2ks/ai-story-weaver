@@ -2,11 +2,13 @@ import { Question, QuestionOption } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { X } from 'lucide-react';
 
 interface QuizQuestionProps {
   question: Question;
   selectedOptionId: string | null;
   onSelect: (option: QuestionOption) => void;
+  onSkip?: () => void;
   questionNumber: number;
   totalQuestions: number;
 }
@@ -15,6 +17,7 @@ export const QuizQuestion = ({
   question,
   selectedOptionId,
   onSelect,
+  onSkip,
   questionNumber,
   totalQuestions,
 }: QuizQuestionProps) => {
@@ -65,6 +68,20 @@ export const QuizQuestion = ({
               );
             })}
           </div>
+
+          {/* Not Important option */}
+          {onSkip && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <Button
+                variant="ghost"
+                onClick={onSkip}
+                className="w-full text-muted-foreground hover:text-foreground gap-2"
+              >
+                <X className="w-4 h-4" />
+                Not Important to Me - Skip This Topic
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

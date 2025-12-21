@@ -31,6 +31,7 @@ export const Onboarding = () => {
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [calculatedScores, setCalculatedScores] = useState<{ overall: number; byTopic: TopicScore[] } | null>(null);
+  const [skippedQuestionIds, setSkippedQuestionIds] = useState<Set<string>>(new Set());
 
   // Get selected topic IDs in order (for canonical question fetching)
   const selectedTopicIds = useMemo(() => selectedTopics.map(t => t.id), [selectedTopics]);
@@ -58,6 +59,11 @@ export const Onboarding = () => {
     })),
   })), [canonicalQuestions]);
 
+  // Filter out skipped questions to get active questions
+  const activeQuestions = useMemo(() => 
+    questions.filter(q => !skippedQuestionIds.has(q.id)),
+  [questions, skippedQuestionIds]);
+
   const handleTopicToggle = (topic: Topic) => {
     const exists = selectedTopics.some(t => t.id === topic.id);
     if (exists) {
@@ -69,7 +75,7 @@ export const Onboarding = () => {
   };
 
   const handleOptionSelect = (option: QuestionOption) => {
-    const questionId = questions[currentQuestionIndex].id;
+    const questionId = activeQuestions[currentQuestionIndex].id;
     setQuizAnswers(prev => {
       const existing = prev.findIndex(a => a.questionId === questionId);
       const newAnswer = {
@@ -84,10 +90,35 @@ export const Onboarding = () => {
       }
       return [...prev, newAnswer];
     });
+    
+    // Auto-advance to next question after a short delay
+    setTimeout(() => {
+      if (currentQuestionIndex < activeQuestions.length - 1) {
+        setCurrentQuestionIndex(prev => prev + 1);
+      } else {
+        // Calculate scores and show results
+        const scores = calculateUserScore();
+        setCalculatedScores(scores);
+        setStep('results');
+      }
+    }, 300);
+  };
+
+  const handleSkipQuestion = () => {
+    const currentQuestion = activeQuestions[currentQuestionIndex];
+    setSkippedQuestionIds(prev => new Set([...prev, currentQuestion.id]));
+    
+    // Move to next question (the active questions list will be recalculated)
+    // If we're at the end, calculate scores
+    if (currentQuestionIndex >= activeQuestions.length - 1) {
+      const scores = calculateUserScore();
+      setCalculatedScores(scores);
+      setStep('results');
+    }
   };
 
   const handleNextQuestion = () => {
-    if (currentQuestionIndex < questions.length - 1) {
+    if (currentQuestionIndex < activeQuestions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
       // Calculate scores
@@ -165,15 +196,15 @@ export const Onboarding = () => {
   };
 
   const currentAnswer = quizAnswers.find(
-    a => a.questionId === questions[currentQuestionIndex]?.id
+    a => a.questionId === activeQuestions[currentQuestionIndex]?.id
   );
 
   // Get current question's topic for display
   const currentQuestionTopic = useMemo(() => {
-    if (questions.length === 0 || currentQuestionIndex >= questions.length) return null;
-    const topicId = questions[currentQuestionIndex]?.topicId;
+    if (activeQuestions.length === 0 || currentQuestionIndex >= activeQuestions.length) return null;
+    const topicId = activeQuestions[currentQuestionIndex]?.topicId;
     return topics.find(t => t.id === topicId);
-  }, [currentQuestionIndex, questions, topics]);
+  }, [currentQuestionIndex, activeQuestions, topics]);
 
   if (topicsLoading) {
     return (
@@ -339,7 +370,7 @@ export const Onboarding = () => {
           );
         }
         
-        if (questions.length === 0) {
+        if (activeQuestions.length === 0) {
           return (
             <div className="text-center py-16">
               <p className="text-muted-foreground">No questions available for your selected topics.</p>
@@ -364,11 +395,12 @@ export const Onboarding = () => {
             )}
             
             <QuizQuestion
-              question={questions[currentQuestionIndex]}
+              question={activeQuestions[currentQuestionIndex]}
               selectedOptionId={currentAnswer?.selectedOptionId || null}
               onSelect={handleOptionSelect}
+              onSkip={handleSkipQuestion}
               questionNumber={currentQuestionIndex + 1}
-              totalQuestions={questions.length}
+              totalQuestions={activeQuestions.length}
             />
 
             <div className="flex justify-between mt-8">
@@ -385,7 +417,7 @@ export const Onboarding = () => {
                 onClick={handleNextQuestion}
                 disabled={!currentAnswer}
               >
-                {currentQuestionIndex === questions.length - 1 ? 'See Results' : 'Next Question'}
+                {currentQuestionIndex === activeQuestions.length - 1 ? 'See Results' : 'Next Question'}
                 <ArrowRight className="w-5 h-5" />
               </Button>
             </div>
