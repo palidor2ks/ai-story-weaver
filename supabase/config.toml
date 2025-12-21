@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.fetch-member-votes]
 verify_jwt = false
+
+[functions.user-profile-analysis]
+verify_jwt = false
