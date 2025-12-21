@@ -1,15 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
-import { MapPin, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { MapPin, Loader2, CheckCircle2, AlertCircle, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-
-interface AddressPrediction {
-  placeId: string;
-  description: string;
-  mainText: string;
-  secondaryText: string;
-}
 
 interface AddressDetails {
   formattedAddress: string;
@@ -23,6 +17,7 @@ interface AddressDetails {
   country: string;
   lat?: number;
   lng?: number;
+  isValid?: boolean;
 }
 
 interface AddressAutocompleteProps {
@@ -39,36 +34,28 @@ export const AddressAutocomplete = ({
   value,
   onChange,
   onAddressSelect,
-  placeholder = "Start typing your address...",
+  placeholder = "Enter your full address...",
   className,
   id,
   disabled = false,
 }: AddressAutocompleteProps) => {
-  const [predictions, setPredictions] = useState<AddressPrediction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionToken] = useState(() => crypto.randomUUID());
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [validationResult, setValidationResult] = useState<AddressDetails | null>(null);
   const debounceRef = useRef<NodeJS.Timeout>();
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    onChange(newValue);
+    setIsVerified(false);
+    setError(null);
+    setValidationResult(null);
+  };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const fetchPredictions = useCallback(async (input: string) => {
-    if (input.length < 3) {
-      setPredictions([]);
-      setIsOpen(false);
+  const validateAddress = useCallback(async () => {
+    if (!value || value.length < 5) {
+      setError('Please enter a complete address');
       return;
     }
 
@@ -76,129 +63,105 @@ export const AddressAutocomplete = ({
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('google-places-autocomplete', {
-        body: { input, sessionToken },
+      const { data, error: fnError } = await supabase.functions.invoke('validate-address', {
+        body: { address: value },
       });
 
       if (fnError) throw fnError;
 
-      if (data?.predictions) {
-        setPredictions(data.predictions);
-        setIsOpen(data.predictions.length > 0);
+      if (data?.error) {
+        setError(data.error);
+        setIsVerified(false);
+        return;
       }
-    } catch (err) {
-      console.error('Error fetching predictions:', err);
-      setError('Unable to fetch suggestions');
-      setPredictions([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sessionToken]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    onChange(newValue);
-    setIsVerified(false);
-    setError(null);
-
-    // Debounce API calls
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    debounceRef.current = setTimeout(() => {
-      fetchPredictions(newValue);
-    }, 300);
-  };
-
-  const handleSelectPrediction = async (prediction: AddressPrediction) => {
-    setIsOpen(false);
-    setIsLoading(true);
-    setPredictions([]);
-
-    try {
-      const { data, error: fnError } = await supabase.functions.invoke('google-places-details', {
-        body: { placeId: prediction.placeId, sessionToken },
-      });
-
-      if (fnError) throw fnError;
-
-      if (data?.address) {
-        const address = data.address as AddressDetails;
-        onChange(address.formattedAddress);
+      if (data?.isValid) {
+        setValidationResult(data);
         setIsVerified(true);
-        onAddressSelect?.(address);
+        onChange(data.formattedAddress);
+        onAddressSelect?.(data);
+      } else {
+        setError('Could not verify this address. Please check and try again.');
+        setIsVerified(false);
+        
+        // Still provide the data if we have a formatted address
+        if (data?.formattedAddress) {
+          setValidationResult(data);
+          onAddressSelect?.(data);
+        }
       }
     } catch (err) {
-      console.error('Error fetching place details:', err);
-      setError('Unable to verify address');
-      onChange(prediction.description);
+      console.error('Error validating address:', err);
+      setError('Unable to validate address. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  }, [value, onChange, onAddressSelect]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      validateAddress();
     }
   };
 
   return (
-    <div ref={wrapperRef} className="relative">
-      <div className="relative">
-        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-        <Input
-          id={id}
-          type="text"
-          value={value}
-          onChange={handleInputChange}
-          onFocus={() => predictions.length > 0 && setIsOpen(true)}
-          placeholder={placeholder}
-          disabled={disabled}
-          className={cn("pl-9 pr-9", className)}
-          autoComplete="off"
-        />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-          {isLoading ? (
-            <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
-          ) : isVerified ? (
-            <CheckCircle2 className="w-4 h-4 text-green-500" />
-          ) : error ? (
-            <AlertCircle className="w-4 h-4 text-destructive" />
-          ) : null}
-        </div>
-      </div>
-
-      {isOpen && predictions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-lg shadow-lg overflow-hidden">
-          {predictions.map((prediction) => (
-            <button
-              key={prediction.placeId}
-              type="button"
-              className="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-start gap-3 border-b border-border last:border-b-0"
-              onClick={() => handleSelectPrediction(prediction)}
-            >
-              <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-foreground truncate">
-                  {prediction.mainText}
-                </p>
-                <p className="text-sm text-muted-foreground truncate">
-                  {prediction.secondaryText}
-                </p>
-              </div>
-            </button>
-          ))}
-          <div className="px-4 py-2 bg-muted/50 border-t border-border">
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <img 
-                src="https://developers.google.com/static/maps/documentation/images/powered_by_google_on_white.png" 
-                alt="Powered by Google" 
-                className="h-3 dark:invert"
-              />
-            </p>
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            id={id}
+            type="text"
+            value={value}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={disabled || isLoading}
+            className={cn("pl-9 pr-9", className)}
+            autoComplete="street-address"
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+            ) : isVerified ? (
+              <CheckCircle2 className="w-4 h-4 text-green-500" />
+            ) : error ? (
+              <AlertCircle className="w-4 h-4 text-amber-500" />
+            ) : null}
           </div>
         </div>
-      )}
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={validateAddress}
+          disabled={disabled || isLoading || !value || value.length < 5}
+          className="shrink-0"
+          title="Validate address"
+        >
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Search className="w-4 h-4" />
+          )}
+        </Button>
+      </div>
 
       {error && (
-        <p className="text-xs text-destructive mt-1">{error}</p>
+        <p className="text-xs text-amber-600">{error}</p>
       )}
+
+      {isVerified && validationResult && (
+        <div className="text-xs text-green-600 flex items-center gap-1">
+          <CheckCircle2 className="w-3 h-3" />
+          Address verified: {validationResult.city}, {validationResult.state} {validationResult.zipCode}
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        Enter your full address and click the search button to validate
+      </p>
     </div>
   );
 };
