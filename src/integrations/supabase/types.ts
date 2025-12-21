@@ -126,30 +126,45 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
+          age: number | null
           created_at: string | null
           email: string | null
           id: string
+          income: string | null
           location: string | null
           name: string
           overall_score: number | null
+          political_party: string | null
+          sex: string | null
           updated_at: string | null
         }
         Insert: {
+          address?: string | null
+          age?: number | null
           created_at?: string | null
           email?: string | null
           id: string
+          income?: string | null
           location?: string | null
           name: string
           overall_score?: number | null
+          political_party?: string | null
+          sex?: string | null
           updated_at?: string | null
         }
         Update: {
+          address?: string | null
+          age?: number | null
           created_at?: string | null
           email?: string | null
           id?: string
+          income?: string | null
           location?: string | null
           name?: string
           overall_score?: number | null
+          political_party?: string | null
+          sex?: string | null
           updated_at?: string | null
         }
         Relationships: []

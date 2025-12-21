@@ -4,13 +4,16 @@ import { Button } from '@/components/ui/button';
 import { TopicSelector } from '@/components/TopicSelector';
 import { QuizQuestion } from '@/components/QuizQuestion';
 import { ScoreBar } from '@/components/ScoreBar';
+import { DemographicsForm, DemographicsData } from '@/components/DemographicsForm';
 import { useAuth } from '@/context/AuthContext';
 import { useTopics, useQuestions } from '@/hooks/useCandidates';
-import { useSaveQuizResults, useSaveUserTopics, useProfile } from '@/hooks/useProfile';
+import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { OnboardingStep, Topic, QuestionOption, QuizAnswer, TopicScore } from '@/types';
 import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+type ExtendedOnboardingStep = OnboardingStep | 'demographics';
 
 export const Onboarding = () => {
   const navigate = useNavigate();
@@ -21,8 +24,9 @@ export const Onboarding = () => {
   
   const saveQuizResults = useSaveQuizResults();
   const saveUserTopics = useSaveUserTopics();
+  const updateProfile = useUpdateProfile();
   
-  const [step, setStep] = useState<OnboardingStep>('welcome');
+  const [step, setStep] = useState<ExtendedOnboardingStep>('welcome');
   const [selectedTopics, setSelectedTopics] = useState<Topic[]>([]);
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -173,6 +177,22 @@ export const Onboarding = () => {
     );
   }
 
+  const handleDemographicsSubmit = async (data: DemographicsData) => {
+    try {
+      await updateProfile.mutateAsync({
+        address: data.address,
+        political_party: data.political_party,
+        age: data.age,
+        income: data.income,
+        sex: data.sex,
+      });
+      setStep('topics');
+    } catch (error) {
+      console.error('Error saving demographics:', error);
+      toast.error('Failed to save your information. Please try again.');
+    }
+  };
+
   const renderStep = () => {
     switch (step) {
       case 'welcome':
@@ -225,13 +245,29 @@ export const Onboarding = () => {
             <Button 
               size="xl" 
               variant="hero"
-              onClick={() => setStep('topics')}
+              onClick={() => setStep('demographics')}
               className="w-full"
             >
               Get Started
               <ArrowRight className="w-5 h-5" />
             </Button>
           </div>
+        );
+
+      case 'demographics':
+        return (
+          <DemographicsForm
+            initialData={{
+              address: profile?.address || '',
+              political_party: profile?.political_party || '',
+              age: profile?.age || null,
+              income: profile?.income || '',
+              sex: profile?.sex || '',
+            }}
+            onSubmit={handleDemographicsSubmit}
+            onBack={() => setStep('welcome')}
+            isLoading={updateProfile.isPending}
+          />
         );
 
       case 'topics':
