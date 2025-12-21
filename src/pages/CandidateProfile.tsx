@@ -6,18 +6,29 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { candidates, getDonorsForCandidate, getVotesForCandidate, calculateMatchScore } from '@/data/mockData';
-import { useUser } from '@/context/UserContext';
+import { useCandidate, useCandidateDonors, useCandidateVotes, calculateMatchScore } from '@/hooks/useCandidates';
+import { useProfile, useUserTopicScores } from '@/hooks/useProfile';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, User } from 'lucide-react';
 
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
-  const { user } = useUser();
-  
-  const candidate = candidates.find(c => c.id === id);
-  const donors = id ? getDonorsForCandidate(id) : [];
-  const votes = id ? getVotesForCandidate(id) : [];
+  const { data: profile } = useProfile();
+  const { data: userTopicScores = [] } = useUserTopicScores();
+  const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
+  const { data: donors = [] } = useCandidateDonors(id);
+  const { data: votes = [] } = useCandidateVotes(id);
+
+  if (candidateLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      </div>
+    );
+  }
 
   if (!candidate) {
     return (
@@ -33,8 +44,8 @@ export const CandidateProfile = () => {
     );
   }
 
-  const userScore = user?.overallScore ?? 0;
-  const matchScore = calculateMatchScore(userScore, candidate.overallScore);
+  const userScore = profile?.overall_score ?? 0;
+  const matchScore = calculateMatchScore(userScore, candidate.overall_score);
 
   const getPartyColor = (party: string) => {
     switch (party) {
@@ -45,10 +56,16 @@ export const CandidateProfile = () => {
     }
   };
 
+  // Transform candidate topic scores
+  const candidateTopicScores = (candidate.topicScores || []).map(ts => ({
+    topicId: ts.topic_id,
+    topicName: ts.topics?.name || ts.topic_id,
+    score: ts.score,
+  }));
+
   // Calculate agreements and disagreements
-  const userTopics = user?.topicScores || [];
-  const comparisons = candidate.topicScores.map(cs => {
-    const userTopic = userTopics.find(ut => ut.topicId === cs.topicId);
+  const comparisons = candidateTopicScores.map(cs => {
+    const userTopic = userTopicScores.find(ut => ut.topic_id === cs.topicId);
     const userVal = userTopic?.score ?? 0;
     const diff = Math.abs(userVal - cs.score);
     const isAgreement = userTopic && Math.sign(userTopic.score) === Math.sign(cs.score);
@@ -107,7 +124,7 @@ export const CandidateProfile = () => {
 
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="w-4 h-4" />
-                <span>Data updated {candidate.lastUpdated.toLocaleDateString()}</span>
+                <span>Data updated {new Date(candidate.last_updated).toLocaleDateString()}</span>
               </div>
             </div>
 
@@ -198,7 +215,7 @@ export const CandidateProfile = () => {
             <div className="mt-8 pt-8 border-t border-border">
               <h4 className="font-semibold text-foreground mb-4">Topic-by-Topic Comparison</h4>
               <div className="space-y-4">
-                {candidate.topicScores.map(ts => (
+                {candidateTopicScores.map(ts => (
                   <ScoreBar
                     key={ts.topicId}
                     score={ts.score}
@@ -285,9 +302,9 @@ export const CandidateProfile = () => {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <Badge variant="secondary">{vote.topic}</Badge>
-                              <span className="text-sm text-muted-foreground">{vote.billId}</span>
+                              <span className="text-sm text-muted-foreground">{vote.bill_id}</span>
                             </div>
-                            <h4 className="font-medium text-foreground">{vote.billName}</h4>
+                            <h4 className="font-medium text-foreground">{vote.bill_name}</h4>
                             <p className="text-sm text-muted-foreground mt-1">{vote.description}</p>
                           </div>
                           <div className="text-right flex-shrink-0">
@@ -301,7 +318,7 @@ export const CandidateProfile = () => {
                               {vote.position}
                             </Badge>
                             <p className="text-sm text-muted-foreground mt-1">
-                              {vote.date.toLocaleDateString()}
+                              {new Date(vote.date).toLocaleDateString()}
                             </p>
                           </div>
                         </div>

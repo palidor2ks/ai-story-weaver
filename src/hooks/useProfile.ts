@@ -1,0 +1,244 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
+
+interface Profile {
+  id: string;
+  name: string;
+  email: string | null;
+  location: string | null;
+  overall_score: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface TopicScore {
+  topic_id: string;
+  score: number;
+  topics?: {
+    name: string;
+    icon: string;
+  };
+}
+
+interface UserTopic {
+  topic_id: string;
+  weight: number;
+  topics?: {
+    id: string;
+    name: string;
+    icon: string;
+  };
+}
+
+export const useProfile = () => {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data as Profile | null;
+    },
+    enabled: !!user,
+  });
+};
+
+export const useUserTopicScores = () => {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['user_topic_scores', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const { data, error } = await supabase
+        .from('user_topic_scores')
+        .select(`
+          topic_id,
+          score,
+          topics (name, icon)
+        `)
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      return data as TopicScore[];
+    },
+    enabled: !!user,
+  });
+};
+
+export const useUserTopics = () => {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['user_topics', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const { data, error } = await supabase
+        .from('user_topics')
+        .select(`
+          topic_id,
+          weight,
+          topics (id, name, icon)
+        `)
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      return data as UserTopic[];
+    },
+    enabled: !!user,
+  });
+};
+
+export const useUpdateProfile = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (updates: Partial<Profile>) => {
+      if (!user) throw new Error('Not authenticated');
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+    },
+  });
+};
+
+export const useSaveQuizResults = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ 
+      overallScore, 
+      topicScores, 
+      answers 
+    }: { 
+      overallScore: number; 
+      topicScores: { topicId: string; score: number }[];
+      answers: { questionId: string; selectedOptionId: string; value: number }[];
+    }) => {
+      if (!user) throw new Error('Not authenticated');
+
+      // Update overall score in profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ overall_score: overallScore })
+        .eq('id', user.id);
+      
+      if (profileError) throw profileError;
+
+      // Upsert topic scores
+      for (const ts of topicScores) {
+        const { error } = await supabase
+          .from('user_topic_scores')
+          .upsert({
+            user_id: user.id,
+            topic_id: ts.topicId,
+            score: ts.score,
+          }, { onConflict: 'user_id,topic_id' });
+        
+        if (error) throw error;
+      }
+
+      // Save quiz answers
+      for (const answer of answers) {
+        const { error } = await supabase
+          .from('quiz_answers')
+          .upsert({
+            user_id: user.id,
+            question_id: answer.questionId,
+            selected_option_id: answer.selectedOptionId,
+            value: answer.value,
+          }, { onConflict: 'user_id,question_id' });
+        
+        if (error) throw error;
+      }
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['user_topic_scores', user?.id] });
+    },
+  });
+};
+
+export const useSaveUserTopics = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (topicIds: string[]) => {
+      if (!user) throw new Error('Not authenticated');
+
+      // Delete existing topics
+      const { error: deleteError } = await supabase
+        .from('user_topics')
+        .delete()
+        .eq('user_id', user.id);
+      
+      if (deleteError) throw deleteError;
+
+      // Insert new topics
+      if (topicIds.length > 0) {
+        const { error: insertError } = await supabase
+          .from('user_topics')
+          .insert(topicIds.map(topicId => ({
+            user_id: user.id,
+            topic_id: topicId,
+            weight: 1,
+          })));
+        
+        if (insertError) throw insertError;
+      }
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user_topics', user?.id] });
+    },
+  });
+};
+
+export const useHasCompletedOnboarding = () => {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['has_completed_onboarding', user?.id],
+    queryFn: async () => {
+      if (!user) return false;
+      
+      // Check if user has any quiz answers
+      const { data, error } = await supabase
+        .from('quiz_answers')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+      
+      if (error) throw error;
+      return data && data.length > 0;
+    },
+    enabled: !!user,
+  });
+};

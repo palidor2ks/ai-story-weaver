@@ -1,30 +1,52 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { TopicSelector } from '@/components/TopicSelector';
 import { QuizQuestion } from '@/components/QuizQuestion';
 import { ScoreBar } from '@/components/ScoreBar';
-import { useUser } from '@/context/UserContext';
-import { topics, questions } from '@/data/mockData';
-import { OnboardingStep, Topic, QuestionOption } from '@/types';
+import { useAuth } from '@/context/AuthContext';
+import { useTopics, useQuestions } from '@/hooks/useCandidates';
+import { useSaveQuizResults, useSaveUserTopics, useProfile } from '@/hooks/useProfile';
+import { OnboardingStep, Topic, QuestionOption, QuizAnswer, TopicScore } from '@/types';
 import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export const Onboarding = () => {
   const navigate = useNavigate();
-  const { 
-    selectedTopics, 
-    setSelectedTopics, 
-    addQuizAnswer, 
-    quizAnswers,
-    completeOnboarding,
-    calculateUserScore 
-  } = useUser();
+  const { user } = useAuth();
+  const { data: profile } = useProfile();
+  const { data: dbTopics = [], isLoading: topicsLoading } = useTopics();
+  const { data: dbQuestions = [], isLoading: questionsLoading } = useQuestions();
+  
+  const saveQuizResults = useSaveQuizResults();
+  const saveUserTopics = useSaveUserTopics();
   
   const [step, setStep] = useState<OnboardingStep>('welcome');
-  const [name, setName] = useState('');
+  const [selectedTopics, setSelectedTopics] = useState<Topic[]>([]);
+  const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [calculatedScores, setCalculatedScores] = useState<{ overall: number; byTopic: TopicScore[] } | null>(null);
+
+  // Transform database topics to app format
+  const topics: Topic[] = dbTopics.map(t => ({
+    id: t.id,
+    name: t.name,
+    icon: t.icon,
+    weight: t.weight || 1,
+  }));
+
+  // Transform database questions to app format
+  const questions = dbQuestions.map(q => ({
+    id: q.id,
+    topicId: q.topic_id,
+    text: q.text,
+    options: (q.options || []).map((o: any) => ({
+      id: o.id,
+      text: o.text,
+      value: o.value,
+    })),
+  }));
 
   const handleTopicToggle = (topic: Topic) => {
     const exists = selectedTopics.some(t => t.id === topic.id);
@@ -36,10 +58,20 @@ export const Onboarding = () => {
   };
 
   const handleOptionSelect = (option: QuestionOption) => {
-    addQuizAnswer({
-      questionId: questions[currentQuestionIndex].id,
-      selectedOptionId: option.id,
-      value: option.value,
+    const questionId = questions[currentQuestionIndex].id;
+    setQuizAnswers(prev => {
+      const existing = prev.findIndex(a => a.questionId === questionId);
+      const newAnswer = {
+        questionId,
+        selectedOptionId: option.id,
+        value: option.value,
+      };
+      if (existing !== -1) {
+        const updated = [...prev];
+        updated[existing] = newAnswer;
+        return updated;
+      }
+      return [...prev, newAnswer];
     });
   };
 
@@ -47,6 +79,9 @@ export const Onboarding = () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
+      // Calculate scores
+      const scores = calculateUserScore();
+      setCalculatedScores(scores);
       setStep('results');
     }
   };
@@ -57,14 +92,86 @@ export const Onboarding = () => {
     }
   };
 
-  const handleComplete = () => {
-    completeOnboarding(name);
-    navigate('/feed');
+  const calculateUserScore = (): { overall: number; byTopic: TopicScore[] } => {
+    // Group answers by topic
+    const topicAnswers: Record<string, number[]> = {};
+    
+    quizAnswers.forEach(answer => {
+      const question = questions.find(q => q.id === answer.questionId);
+      if (question) {
+        if (!topicAnswers[question.topicId]) {
+          topicAnswers[question.topicId] = [];
+        }
+        topicAnswers[question.topicId].push(answer.value);
+      }
+    });
+
+    // Calculate score for each topic
+    const topicScores: TopicScore[] = Object.entries(topicAnswers).map(([topicId, values]) => {
+      const avg = values.reduce((a, b) => a + b, 0) / values.length;
+      const normalizedScore = Math.round(avg * 10);
+      const topic = topics.find(t => t.id === topicId);
+      return {
+        topicId,
+        topicName: topic?.name || topicId,
+        score: normalizedScore,
+      };
+    });
+
+    // Calculate overall score
+    let overallScore = 0;
+    let totalWeight = 0;
+    
+    topicScores.forEach(ts => {
+      const selectedTopic = selectedTopics.find(st => st.id === ts.topicId);
+      const weight = selectedTopic?.weight || 1;
+      overallScore += ts.score * weight;
+      totalWeight += weight;
+    });
+
+    if (totalWeight > 0) {
+      overallScore = Math.round(overallScore / totalWeight);
+    }
+
+    return { overall: overallScore, byTopic: topicScores };
+  };
+
+  const handleComplete = async () => {
+    if (!calculatedScores) return;
+
+    try {
+      // Save user topics
+      await saveUserTopics.mutateAsync(selectedTopics.map(t => t.id));
+      
+      // Save quiz results
+      await saveQuizResults.mutateAsync({
+        overallScore: calculatedScores.overall,
+        topicScores: calculatedScores.byTopic.map(ts => ({
+          topicId: ts.topicId,
+          score: ts.score,
+        })),
+        answers: quizAnswers,
+      });
+
+      toast.success('Profile created successfully!');
+      navigate('/feed');
+    } catch (error) {
+      console.error('Error saving quiz results:', error);
+      toast.error('Failed to save your results. Please try again.');
+    }
   };
 
   const currentAnswer = quizAnswers.find(
     a => a.questionId === questions[currentQuestionIndex]?.id
   );
+
+  if (topicsLoading || questionsLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   const renderStep = () => {
     switch (step) {
@@ -76,12 +183,11 @@ export const Onboarding = () => {
             </div>
             
             <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
-              Welcome to <span className="text-gradient">Pulse</span>
+              Welcome, <span className="text-gradient">{profile?.name || 'Voter'}</span>
             </h1>
             
             <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-              Understand your political alignment and discover how you match with politicians 
-              based on real data—not rhetoric.
+              Let's discover your political alignment and find candidates who share your values.
             </p>
 
             <div className="space-y-4 mb-10">
@@ -116,25 +222,15 @@ export const Onboarding = () => {
               </div>
             </div>
 
-            <div className="space-y-4">
-              <Input
-                placeholder="Enter your name to get started"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="h-14 text-lg text-center"
-              />
-              
-              <Button 
-                size="xl" 
-                variant="hero"
-                onClick={() => setStep('topics')}
-                disabled={!name.trim()}
-                className="w-full"
-              >
-                Get Started
-                <ArrowRight className="w-5 h-5" />
-              </Button>
-            </div>
+            <Button 
+              size="xl" 
+              variant="hero"
+              onClick={() => setStep('topics')}
+              className="w-full"
+            >
+              Get Started
+              <ArrowRight className="w-5 h-5" />
+            </Button>
           </div>
         );
 
@@ -176,6 +272,14 @@ export const Onboarding = () => {
         );
 
       case 'quiz':
+        if (questions.length === 0) {
+          return (
+            <div className="text-center py-16">
+              <p className="text-muted-foreground">No questions available.</p>
+            </div>
+          );
+        }
+        
         return (
           <div className="max-w-2xl mx-auto">
             <QuizQuestion
@@ -208,7 +312,7 @@ export const Onboarding = () => {
         );
 
       case 'results':
-        const scores = calculateUserScore();
+        const scores = calculatedScores || { overall: 0, byTopic: [] };
         return (
           <div className="max-w-2xl mx-auto text-center animate-fade-in">
             <div className="w-24 h-24 rounded-2xl bg-gradient-hero mx-auto mb-8 flex items-center justify-center shadow-glow animate-pulse-subtle">
@@ -263,9 +367,10 @@ export const Onboarding = () => {
               size="xl"
               variant="hero"
               onClick={handleComplete}
+              disabled={saveQuizResults.isPending || saveUserTopics.isPending}
               className="w-full"
             >
-              Explore Politicians
+              {saveQuizResults.isPending ? 'Saving...' : 'Explore Politicians'}
               <ArrowRight className="w-5 h-5" />
             </Button>
           </div>
