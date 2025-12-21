@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScoreDisplay } from '@/components/ScoreDisplay';
+import { ScoreText } from '@/components/ScoreText';
 import { Search, SlidersHorizontal, TrendingUp, MapPin, AlertCircle } from 'lucide-react';
 import { Candidate, GovernmentLevel } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -276,7 +276,7 @@ export const Feed = () => {
               <TrendingUp className="w-4 h-4" />
               Your Score
             </div>
-            <ScoreDisplay score={profile?.overall_score} size="md" />
+            <ScoreText score={profile?.overall_score} size="lg" />
           </div>
           <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
             <div className="text-muted-foreground text-sm mb-1">Representatives</div>

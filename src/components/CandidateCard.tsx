@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils';
 import { calculateMatchScore } from '@/data/mockData';
 import { useUser } from '@/context/UserContext';
 import { User, MapPin, Star, Shield, ArrowRightLeft, CheckCircle } from 'lucide-react';
-import { ScoreDisplay } from './ScoreDisplay';
 import { ScoreText } from './ScoreText';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { TransitionStatus } from './TransitionBadge';
@@ -202,7 +201,7 @@ export const CandidateCard = ({
 
           {/* Score */}
           <div className="flex-shrink-0">
-            <ScoreDisplay score={candidate.overallScore} size="sm" />
+            <ScoreText score={candidate.overallScore} size="md" />
           </div>
         </div>
 

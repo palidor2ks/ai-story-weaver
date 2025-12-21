@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
-import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { ScoreText } from '@/components/ScoreText';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -353,7 +352,7 @@ export const QuizResults = () => {
           <CardContent className="pt-8 pb-6 text-center">
             <p className="text-sm text-muted-foreground mb-4">Your Overall Score</p>
             <div className="mb-4">
-              <ScoreDisplay score={profile.overall_score} size="xl" showLabel />
+              <ScoreText score={profile.overall_score} size="lg" showLabel />
             </div>
             <p className="text-lg font-medium text-foreground">
               {getScoreLabel(profile.overall_score)}

@@ -9,7 +9,7 @@ import { useUserTopicScores } from '@/hooks/useProfile';
 import { useAuth } from '@/context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { ScoreDisplay } from '@/components/ScoreDisplay';
+import { ScoreText } from '@/components/ScoreText';
 import { BookOpen, CheckCircle, ArrowRight, PlayCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -202,7 +202,7 @@ export const QuizLibrary = () => {
                             </span>
                             
                             {topicScore !== undefined && (
-                              <ScoreDisplay score={topicScore} size="sm" />
+                              <ScoreText score={topicScore} size="sm" />
                             )}
                           </div>
                         </div>
