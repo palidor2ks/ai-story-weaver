@@ -25,6 +25,8 @@ interface ProfileAnalysis {
   strongestPositions: string[];
   democratAlignment: number;
   republicanAlignment: number;
+  greenAlignment: number;
+  libertarianAlignment: number;
   overallScore: number;
   error?: string;
 }
@@ -333,27 +335,43 @@ export const UserProfile = () => {
             </div>
 
             {/* Party Platform Comparison */}
-            <div className="grid md:grid-cols-2 gap-4 mb-8">
-              <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <Link to="/party/democrat" className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 hover:border-blue-500/40 transition-colors">
                 <div className="flex items-center gap-2 mb-2">
-                  <Building2 className="w-5 h-5 text-blue-600" />
-                  <span className="font-semibold text-blue-600">Democratic Party</span>
+                  <Building2 className="w-4 h-4 text-blue-600" />
+                  <span className="font-semibold text-blue-600 text-sm">Democrat</span>
                 </div>
-                <div className="text-3xl font-bold text-blue-600">
-                  {analysisLoading ? <Skeleton className="h-9 w-16" /> : `${analysis?.democratAlignment ?? 50}%`}
+                <div className="text-2xl font-bold text-blue-600">
+                  {analysisLoading ? <Skeleton className="h-8 w-12" /> : `${analysis?.democratAlignment ?? 50}%`}
                 </div>
-                <p className="text-sm text-muted-foreground">Platform Alignment</p>
-              </div>
-              <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20">
+              </Link>
+              <Link to="/party/republican" className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 hover:border-red-500/40 transition-colors">
                 <div className="flex items-center gap-2 mb-2">
-                  <Building2 className="w-5 h-5 text-red-600" />
-                  <span className="font-semibold text-red-600">Republican Party</span>
+                  <Building2 className="w-4 h-4 text-red-600" />
+                  <span className="font-semibold text-red-600 text-sm">Republican</span>
                 </div>
-                <div className="text-3xl font-bold text-red-600">
-                  {analysisLoading ? <Skeleton className="h-9 w-16" /> : `${analysis?.republicanAlignment ?? 50}%`}
+                <div className="text-2xl font-bold text-red-600">
+                  {analysisLoading ? <Skeleton className="h-8 w-12" /> : `${analysis?.republicanAlignment ?? 50}%`}
                 </div>
-                <p className="text-sm text-muted-foreground">Platform Alignment</p>
-              </div>
+              </Link>
+              <Link to="/party/green" className="p-4 rounded-xl bg-green-500/5 border border-green-500/20 hover:border-green-500/40 transition-colors">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building2 className="w-4 h-4 text-green-600" />
+                  <span className="font-semibold text-green-600 text-sm">Green</span>
+                </div>
+                <div className="text-2xl font-bold text-green-600">
+                  {analysisLoading ? <Skeleton className="h-8 w-12" /> : `${analysis?.greenAlignment ?? 50}%`}
+                </div>
+              </Link>
+              <Link to="/party/libertarian" className="p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20 hover:border-yellow-500/40 transition-colors">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building2 className="w-4 h-4 text-yellow-600" />
+                  <span className="font-semibold text-yellow-600 text-sm">Libertarian</span>
+                </div>
+                <div className="text-2xl font-bold text-yellow-600">
+                  {analysisLoading ? <Skeleton className="h-8 w-12" /> : `${analysis?.libertarianAlignment ?? 50}%`}
+                </div>
+              </Link>
             </div>
 
             {/* Score Breakdown */}

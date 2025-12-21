@@ -14,7 +14,8 @@ import { CandidateProfile } from "./pages/CandidateProfile";
 import { UserProfile } from "./pages/UserProfile";
 import { Quiz } from "./pages/Quiz";
 import { QuizResults } from "./pages/QuizResults";
-
+import Parties from "./pages/Parties";
+import PartyProfile from "./pages/PartyProfile";
 import { QuizLibrary } from "./pages/QuizLibrary";
 import { HowScoringWorks } from "./pages/HowScoringWorks";
 import Admin from "./pages/Admin";
@@ -92,6 +93,16 @@ const AppRoutes = () => {
       <Route path="/donors" element={
         <ProtectedRoute>
           <Donors />
+        </ProtectedRoute>
+      } />
+      <Route path="/parties" element={
+        <ProtectedRoute>
+          <Parties />
+        </ProtectedRoute>
+      } />
+      <Route path="/party/:id" element={
+        <ProtectedRoute>
+          <PartyProfile />
         </ProtectedRoute>
       } />
       <Route path="/candidate/:id" element={
