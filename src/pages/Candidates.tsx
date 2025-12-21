@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
+import { ComparePanel } from '@/components/ComparePanel';
 import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
@@ -10,8 +11,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark } from 'lucide-react';
+import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X } from 'lucide-react';
 import { Candidate } from '@/types';
+import { cn } from '@/lib/utils';
 
 export const Candidates = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
@@ -27,6 +29,36 @@ export const Candidates = () => {
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [officeFilter, setOfficeFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<string>('all');
+  
+  // Compare mode state
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedCandidates, setSelectedCandidates] = useState<Candidate[]>([]);
+
+  const handleToggleSelect = useCallback((candidate: Candidate) => {
+    setSelectedCandidates(prev => {
+      const exists = prev.find(c => c.id === candidate.id);
+      if (exists) {
+        return prev.filter(c => c.id !== candidate.id);
+      }
+      if (prev.length >= 4) {
+        return prev; // Max 4 candidates
+      }
+      return [...prev, candidate];
+    });
+  }, []);
+
+  const handleRemoveFromCompare = useCallback((id: string) => {
+    setSelectedCandidates(prev => prev.filter(c => c.id !== id));
+  }, []);
+
+  const handleClearCompare = useCallback(() => {
+    setSelectedCandidates([]);
+  }, []);
+
+  const handleCloseCompare = useCallback(() => {
+    setCompareMode(false);
+    setSelectedCandidates([]);
+  }, []);
 
   // Transform representatives to Candidate type
   const transformRepToCandidate = (member: any): Candidate => ({
@@ -396,19 +428,57 @@ export const Candidates = () => {
                 </SelectContent>
               </Select>
             )}
+            {/* Compare Mode Toggle */}
+            <Button 
+              variant={compareMode ? "default" : "outline"} 
+              size="sm"
+              onClick={() => {
+                if (compareMode) {
+                  handleCloseCompare();
+                } else {
+                  setCompareMode(true);
+                }
+              }}
+              className={cn("gap-2", compareMode && "bg-primary")}
+            >
+              {compareMode ? (
+                <>
+                  <X className="w-4 h-4" />
+                  Exit Compare
+                </>
+              ) : (
+                <>
+                  <GitCompare className="w-4 h-4" />
+                  Compare
+                </>
+              )}
+            </Button>
           </div>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-4">
-          Showing {filteredCandidates.length} politician{filteredCandidates.length !== 1 ? 's' : ''}
-        </p>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-muted-foreground">
+            Showing {filteredCandidates.length} politician{filteredCandidates.length !== 1 ? 's' : ''}
+          </p>
+          {compareMode && (
+            <p className="text-sm text-primary font-medium">
+              {selectedCandidates.length}/4 selected for comparison
+            </p>
+          )}
+        </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className={cn(
+          "grid gap-4 md:grid-cols-2 lg:grid-cols-3",
+          compareMode && selectedCandidates.length > 0 && "pb-48" // Space for compare panel
+        )}>
           {filteredCandidates.map((candidate, index) => (
             <CandidateCard 
               key={candidate.id} 
               candidate={candidate}
               index={index}
+              compareMode={compareMode}
+              isSelected={selectedCandidates.some(c => c.id === candidate.id)}
+              onToggleSelect={handleToggleSelect}
             />
           ))}
         </div>
@@ -428,6 +498,17 @@ export const Candidates = () => {
               Clear Filters
             </Button>
           </div>
+        )}
+
+        {/* Compare Panel */}
+        {compareMode && selectedCandidates.length > 0 && (
+          <ComparePanel 
+            candidates={selectedCandidates}
+            userScore={profile?.overall_score ?? 0}
+            onRemove={handleRemoveFromCompare}
+            onClear={handleClearCompare}
+            onClose={handleCloseCompare}
+          />
         )}
       </main>
     </div>

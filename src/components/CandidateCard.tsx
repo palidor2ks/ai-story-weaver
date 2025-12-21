@@ -2,10 +2,11 @@ import { Link } from 'react-router-dom';
 import { Candidate } from '@/types';
 import { ComparisonSpectrum } from './ComparisonSpectrum';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { calculateMatchScore } from '@/data/mockData';
 import { useUser } from '@/context/UserContext';
-import { User, MapPin, Star, Shield, TrendingUp, ArrowRightLeft, CheckCircle } from 'lucide-react';
+import { User, MapPin, Star, Shield, ArrowRightLeft, CheckCircle } from 'lucide-react';
 import { ScoreDisplay } from './ScoreDisplay';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { TransitionStatus } from './TransitionBadge';
@@ -14,9 +15,18 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 interface CandidateCardProps {
   candidate: Candidate;
   index?: number;
+  compareMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (candidate: Candidate) => void;
 }
 
-export const CandidateCard = ({ candidate, index = 0 }: CandidateCardProps) => {
+export const CandidateCard = ({ 
+  candidate, 
+  index = 0,
+  compareMode = false,
+  isSelected = false,
+  onToggleSelect
+}: CandidateCardProps) => {
   const { user } = useUser();
   const userScore = user?.overallScore ?? 0;
   const matchScore = calculateMatchScore(userScore, candidate.overallScore);
@@ -64,110 +74,143 @@ export const CandidateCard = ({ candidate, index = 0 }: CandidateCardProps) => {
   const tierInfo = getTierIcon(coverageTier);
   const confidenceInfo = getConfidenceIcon(confidence);
 
-  return (
-    <TooltipProvider>
-      <Link to={`/candidate/${candidate.id}`}>
-        <Card 
-          className={cn(
-            "group overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer",
-            "animate-slide-up bg-card border-border"
-          )}
-          style={{ animationDelay: `${index * 100}ms` }}
-        >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              {/* Compact Avatar */}
-              <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
-                {candidate.imageUrl ? (
-                  <img 
-                    src={candidate.imageUrl}
-                    alt={candidate.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      target.style.display = 'none';
-                      const fallback = target.nextElementSibling as HTMLElement;
-                      if (fallback) fallback.style.display = 'flex';
-                    }}
-                  />
-                ) : null}
-                <div 
-                  className="w-full h-full bg-gradient-hero flex items-center justify-center"
-                  style={{ display: candidate.imageUrl ? 'none' : 'flex' }}
-                >
-                  <User className="w-6 h-6 text-primary-foreground" />
-                </div>
-              </div>
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (compareMode && onToggleSelect) {
+      e.preventDefault();
+      onToggleSelect(candidate);
+    }
+  };
 
-              {/* Name & Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-                    {candidate.name}
-                  </h3>
-                  <span className={cn("text-xs font-bold", getPartyColor(candidate.party))}>
-                    ({getPartyInitial(candidate.party)})
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="truncate">{candidate.office}</span>
-                  <span>•</span>
-                  <MapPin className="w-3 h-3 flex-shrink-0" />
-                  <span>{candidate.state}</span>
-                </div>
-              </div>
-
-              {/* Icon badges */}
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {isIncumbent && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">Incumbent</TooltipContent>
-                  </Tooltip>
-                )}
-                {transitionStatus && transitionStatus !== 'current' && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <ArrowRightLeft className="w-4 h-4 text-amber-500" />
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">Transitioning</TooltipContent>
-                  </Tooltip>
-                )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <tierInfo.icon className={cn("w-4 h-4", tierInfo.color)} />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">{tierInfo.label}</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <confidenceInfo.icon className={cn("w-4 h-4", confidenceInfo.color)} />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">{confidenceInfo.label}</TooltipContent>
-                </Tooltip>
-              </div>
-
-              {/* Score */}
-              <div className="flex-shrink-0">
-                <ScoreDisplay score={candidate.overallScore} size="sm" />
-              </div>
-            </div>
-
-            {/* Prominent Spectrum Bar */}
-            <div className="mt-3 pt-3 border-t border-border/50">
-              <ComparisonSpectrum 
-                userScore={userScore} 
-                repScore={candidate.overallScore ?? 0} 
-                repName={candidate.name.split(' ').pop() || 'Rep'}
-                repImageUrl={candidate.imageUrl}
-                size="md"
+  const cardContent = (
+    <Card 
+      className={cn(
+        "group overflow-hidden transition-all duration-300 cursor-pointer",
+        "animate-slide-up bg-card border-border",
+        compareMode 
+          ? isSelected 
+            ? "ring-2 ring-primary shadow-lg" 
+            : "hover:ring-1 hover:ring-primary/50"
+          : "hover:shadow-lg hover:-translate-y-1"
+      )}
+      style={{ animationDelay: `${index * 50}ms` }}
+      onClick={handleCardClick}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center gap-3">
+          {/* Compare checkbox */}
+          {compareMode && (
+            <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+              <Checkbox 
+                checked={isSelected}
+                onCheckedChange={() => onToggleSelect?.(candidate)}
+                className="w-5 h-5"
               />
             </div>
-          </CardContent>
-        </Card>
-      </Link>
-    </TooltipProvider>
+          )}
+
+          {/* Compact Avatar */}
+          <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
+            {candidate.imageUrl ? (
+              <img 
+                src={candidate.imageUrl}
+                alt={candidate.name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  target.style.display = 'none';
+                  const fallback = target.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            <div 
+              className="w-full h-full bg-gradient-hero flex items-center justify-center"
+              style={{ display: candidate.imageUrl ? 'none' : 'flex' }}
+            >
+              <User className="w-6 h-6 text-primary-foreground" />
+            </div>
+          </div>
+
+          {/* Name & Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                {candidate.name}
+              </h3>
+              <span className={cn("text-xs font-bold", getPartyColor(candidate.party))}>
+                ({getPartyInitial(candidate.party)})
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="truncate">{candidate.office}</span>
+              <span>•</span>
+              <MapPin className="w-3 h-3 flex-shrink-0" />
+              <span>{candidate.state}</span>
+            </div>
+          </div>
+
+          {/* Icon badges */}
+          <TooltipProvider>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {isIncumbent && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">Incumbent</TooltipContent>
+                </Tooltip>
+              )}
+              {transitionStatus && transitionStatus !== 'current' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <ArrowRightLeft className="w-4 h-4 text-amber-500" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">Transitioning</TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <tierInfo.icon className={cn("w-4 h-4", tierInfo.color)} />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">{tierInfo.label}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <confidenceInfo.icon className={cn("w-4 h-4", confidenceInfo.color)} />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">{confidenceInfo.label}</TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
+
+          {/* Score */}
+          <div className="flex-shrink-0">
+            <ScoreDisplay score={candidate.overallScore} size="sm" />
+          </div>
+        </div>
+
+        {/* Prominent Spectrum Bar */}
+        <div className="mt-3 pt-3 border-t border-border/50">
+          <ComparisonSpectrum 
+            userScore={userScore} 
+            repScore={candidate.overallScore ?? 0} 
+            repName={candidate.name.split(' ').pop() || 'Rep'}
+            repImageUrl={candidate.imageUrl}
+            size="md"
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  // In compare mode, don't wrap in Link
+  if (compareMode) {
+    return cardContent;
+  }
+
+  return (
+    <Link to={`/candidate/${candidate.id}`}>
+      {cardContent}
+    </Link>
   );
 };
