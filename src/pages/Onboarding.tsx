@@ -157,7 +157,7 @@ export const Onboarding = () => {
       });
 
       toast.success('Profile created successfully!');
-      navigate('/feed');
+      navigate('/results');
     } catch (error) {
       console.error('Error saving quiz results:', error);
       toast.error('Failed to save your results. Please try again.');

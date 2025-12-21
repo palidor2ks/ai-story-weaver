@@ -1,1 +1,7 @@
 project_id = "ornnzinjrcyigazecctf"
+
+[functions.ai-candidate-explanation]
+verify_jwt = false
+
+[functions.ai-profile-summary]
+verify_jwt = false

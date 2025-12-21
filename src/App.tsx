@@ -11,6 +11,7 @@ import { Feed } from "./pages/Feed";
 import { CandidateProfile } from "./pages/CandidateProfile";
 import { UserProfile } from "./pages/UserProfile";
 import { Quiz } from "./pages/Quiz";
+import { QuizResults } from "./pages/QuizResults";
 import NotFound from "./pages/NotFound";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
 
@@ -66,6 +67,11 @@ const AppRoutes = () => {
         <AuthRoute>
           <Index />
         </AuthRoute>
+      } />
+      <Route path="/results" element={
+        <ProtectedRoute>
+          <QuizResults />
+        </ProtectedRoute>
       } />
       <Route path="/feed" element={
         <ProtectedRoute>
