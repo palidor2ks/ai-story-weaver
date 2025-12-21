@@ -73,23 +73,57 @@ export function parseAddressForState(address: string): { state: string | null; z
 export async function getDistrictFromAddress(address: string): Promise<string | null> {
   try {
     const encodedAddress = encodeURIComponent(address);
-    const url = `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodedAddress}&benchmark=Public_AR_Current&vintage=Current_Current&layers=54&format=json`;
+    // Use layers=all to get all geography data including congressional districts
+    const url = `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodedAddress}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`;
+    
+    console.log('Fetching district from Census API for address:', address);
     
     const response = await fetch(url);
     if (!response.ok) {
-      console.log('Census geocoder request failed');
+      console.log('Census geocoder request failed with status:', response.status);
       return null;
     }
     
     const data = await response.json();
-    const geographies = data?.result?.addressMatches?.[0]?.geographies;
-    const congressionalDistrict = geographies?.['119th Congressional Districts']?.[0];
+    console.log('Census API response:', JSON.stringify(data?.result?.addressMatches?.[0]?.geographies, null, 2));
     
-    if (congressionalDistrict?.CD119) {
-      const districtNum = congressionalDistrict.CD119;
-      console.log(`Found congressional district: ${districtNum}`);
-      return districtNum;
+    const geographies = data?.result?.addressMatches?.[0]?.geographies;
+    
+    if (!geographies) {
+      console.log('No address matches found in Census response');
+      return null;
     }
+    
+    // Try multiple possible layer names for congressional districts
+    const possibleLayers = [
+      '119th Congressional Districts',
+      '118th Congressional Districts', 
+      'Congressional Districts',
+      '2024 Congressional Districts',
+      '2022 Congressional Districts'
+    ];
+    
+    for (const layer of possibleLayers) {
+      const congressionalDistrict = geographies[layer]?.[0];
+      if (congressionalDistrict) {
+        // Try multiple possible field names for the district number
+        const districtNum = congressionalDistrict.CD119 || 
+                           congressionalDistrict.CD118 || 
+                           congressionalDistrict.CD || 
+                           congressionalDistrict.BASENAME ||
+                           congressionalDistrict.NAME;
+        if (districtNum) {
+          // Extract just the number if it's a full name like "Congressional District 6"
+          const numMatch = String(districtNum).match(/\d+/);
+          const finalDistrict = numMatch ? numMatch[0] : districtNum;
+          console.log(`Found congressional district: ${finalDistrict} from layer: ${layer}`);
+          return finalDistrict;
+        }
+      }
+    }
+    
+    // Log available geography layers for debugging
+    console.log('Available geography layers:', Object.keys(geographies));
     
     return null;
   } catch (error) {
