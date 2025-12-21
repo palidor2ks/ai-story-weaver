@@ -9,7 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCandidate, useCandidateDonors, useCandidateVotes, calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile, useUserTopicScores } from '@/hooks/useProfile';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, User } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, User, Sparkles } from 'lucide-react';
+import { ScoreDisplay } from '@/components/ScoreDisplay';
+import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
+import { AIExplanation } from '@/components/AIExplanation';
+import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
@@ -122,6 +126,18 @@ export const CandidateProfile = () => {
                 </Badge>
               </div>
 
+              {/* Score Display */}
+              <div className="mb-3">
+                <ScoreDisplay score={candidate.overall_score} size="md" showLabel />
+              </div>
+
+              {/* Badges */}
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <IncumbentBadge isIncumbent={candidate.is_incumbent ?? true} />
+                <CoverageTierBadge tier={(candidate.coverage_tier as CoverageTier) || 'tier_3'} />
+                <ConfidenceBadge confidence={(candidate.confidence as ConfidenceLevel) || 'medium'} />
+              </div>
+
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="w-4 h-4" />
                 <span>Data updated {new Date(candidate.last_updated).toLocaleDateString()}</span>
@@ -134,6 +150,15 @@ export const CandidateProfile = () => {
               <MatchBadge matchScore={matchScore} size="lg" />
             </div>
           </div>
+        </div>
+
+        {/* AI Explanation Section */}
+        <div className="mb-8">
+          <AIExplanation
+            candidateId={candidate.id}
+            candidateName={candidate.name}
+            topicScores={candidateTopicScores}
+          />
         </div>
 
         {/* You vs Candidate */}
