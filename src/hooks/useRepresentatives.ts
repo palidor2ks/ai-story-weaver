@@ -69,66 +69,30 @@ export function parseAddressForState(address: string): { state: string | null; z
   return { state: foundState, zipCode };
 }
 
-// Get congressional district using Census Geocoder API
-export async function getDistrictFromAddress(address: string): Promise<string | null> {
+// Get congressional district using edge function (avoids CORS issues with Census API)
+export async function getDistrictFromAddress(address: string): Promise<{ district: string | null; state: string | null }> {
   try {
-    const encodedAddress = encodeURIComponent(address);
-    // Use layers=all to get all geography data including congressional districts
-    const url = `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodedAddress}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`;
+    console.log('Geocoding address via edge function:', address);
     
-    console.log('Fetching district from Census API for address:', address);
+    const { data, error } = await supabase.functions.invoke<{ district: string | null; state: string | null; matchedAddress?: string; error?: string }>(
+      'geocode-address',
+      { body: { address } }
+    );
     
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.log('Census geocoder request failed with status:', response.status);
-      return null;
+    if (error) {
+      console.error('Geocode edge function error:', error);
+      return { district: null, state: null };
     }
     
-    const data = await response.json();
-    console.log('Census API response:', JSON.stringify(data?.result?.addressMatches?.[0]?.geographies, null, 2));
-    
-    const geographies = data?.result?.addressMatches?.[0]?.geographies;
-    
-    if (!geographies) {
-      console.log('No address matches found in Census response');
-      return null;
+    if (data?.error) {
+      console.log('Geocode API error:', data.error);
     }
     
-    // Try multiple possible layer names for congressional districts
-    const possibleLayers = [
-      '119th Congressional Districts',
-      '118th Congressional Districts', 
-      'Congressional Districts',
-      '2024 Congressional Districts',
-      '2022 Congressional Districts'
-    ];
-    
-    for (const layer of possibleLayers) {
-      const congressionalDistrict = geographies[layer]?.[0];
-      if (congressionalDistrict) {
-        // Try multiple possible field names for the district number
-        const districtNum = congressionalDistrict.CD119 || 
-                           congressionalDistrict.CD118 || 
-                           congressionalDistrict.CD || 
-                           congressionalDistrict.BASENAME ||
-                           congressionalDistrict.NAME;
-        if (districtNum) {
-          // Extract just the number if it's a full name like "Congressional District 6"
-          const numMatch = String(districtNum).match(/\d+/);
-          const finalDistrict = numMatch ? numMatch[0] : districtNum;
-          console.log(`Found congressional district: ${finalDistrict} from layer: ${layer}`);
-          return finalDistrict;
-        }
-      }
-    }
-    
-    // Log available geography layers for debugging
-    console.log('Available geography layers:', Object.keys(geographies));
-    
-    return null;
+    console.log('Geocode result:', data);
+    return { district: data?.district ?? null, state: data?.state ?? null };
   } catch (error) {
     console.error('Error getting district from address:', error);
-    return null;
+    return { district: null, state: null };
   }
 }
 
@@ -141,21 +105,23 @@ export function useRepresentatives(address: string | null | undefined) {
         return { representatives: [], district: null, state: null };
       }
 
-      const { state } = parseAddressForState(address);
+      // Get state and district from the geocode edge function
+      const { district, state } = await getDistrictFromAddress(address);
       
-      if (!state) {
-        console.log('Could not parse state from address:', address);
+      // Fallback to parsing state from address if geocode didn't return it
+      const parsedState = state || parseAddressForState(address).state;
+      
+      if (!parsedState) {
+        console.log('Could not determine state from address:', address);
         return { representatives: [], district: null, state: null };
       }
 
-      // Get the congressional district from the full address
-      const district = await getDistrictFromAddress(address);
-      console.log(`Fetching representatives for state: ${state}, district: ${district}`);
+      console.log(`Fetching representatives for state: ${parsedState}, district: ${district}`);
 
       const { data, error } = await supabase.functions.invoke<FetchRepresentativesResponse>(
         'fetch-representatives',
         {
-          body: { state, district }
+          body: { state: parsedState, district }
         }
       );
 
@@ -166,13 +132,13 @@ export function useRepresentatives(address: string | null | undefined) {
 
       if (data?.error) {
         console.error('API error:', data.error);
-        return { representatives: [], district, state };
+        return { representatives: [], district, state: parsedState };
       }
 
       return { 
         representatives: data?.representatives || [], 
         district, 
-        state 
+        state: parsedState 
       };
     },
     enabled: !!address,

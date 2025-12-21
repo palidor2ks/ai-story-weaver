@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.user-profile-analysis]
 verify_jwt = false
+
+[functions.geocode-address]
+verify_jwt = false
