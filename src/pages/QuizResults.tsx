@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useProfile, useUserTopicScores, useUserTopics } from '@/hooks/useProfile';
 import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
+import { useRepresentatives } from '@/hooks/useRepresentatives';
+import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
-import { Loader2, Sparkles, ArrowRight, BarChart3, Users, CheckCircle, XCircle, Share2, Copy, Twitter, Facebook, Linkedin } from 'lucide-react';
+import { Loader2, Sparkles, ArrowRight, BarChart3, Users, CheckCircle, XCircle, Share2, Copy, Twitter, Facebook, Linkedin, Building2, MapPin, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MatchBadge } from '@/components/MatchBadge';
 import { PoliticalSpectrum } from '@/components/PoliticalSpectrum';
@@ -44,10 +47,15 @@ export const QuizResults = () => {
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: userTopics = [] } = useUserTopics();
   const { data: candidates = [] } = useCandidates();
+  const { data: repsData, isLoading: repsLoading } = useRepresentatives(profile?.address);
+  const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
   const [profileAnalysis, setProfileAnalysis] = useState<ProfileAnalysis | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [politicianMatches, setPoliticianMatches] = useState<PoliticianMatch[]>([]);
   const [isLoadingMatches, setIsLoadingMatches] = useState(false);
+
+  const federalReps = repsData?.representatives ?? [];
+  const allRepsLoading = repsLoading || civicLoading;
 
   // Fetch AI profile analysis on mount
   useEffect(() => {
@@ -193,6 +201,56 @@ export const QuizResults = () => {
       case 'Republican': return 'bg-red-500';
       default: return 'bg-purple-500';
     }
+  };
+
+  const getPartyBadgeColor = (party: string) => {
+    switch (party) {
+      case 'Democrat': return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
+      case 'Republican': return 'bg-red-500/10 text-red-600 border-red-500/20';
+      case 'Independent': return 'bg-purple-500/10 text-purple-600 border-purple-500/20';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  // Helper component for civic officials
+  const RepresentativeCard = ({ 
+    official, 
+    userScore 
+  }: { 
+    official: CivicOfficial; 
+    userScore: number; 
+  }) => {
+    const matchScore = official.overall_score !== null 
+      ? calculateMatchScore(userScore, official.overall_score) 
+      : null;
+    
+    return (
+      <div className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors">
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 overflow-hidden">
+          {official.image_url ? (
+            <img src={official.image_url} alt={official.name} className="w-full h-full object-cover" />
+          ) : (
+            <User className="w-6 h-6 text-primary-foreground" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="font-semibold text-foreground truncate">{official.name}</h4>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground">{official.office}</span>
+            <Badge variant="outline" className={cn("text-xs", getPartyBadgeColor(official.party))}>
+              {official.party}
+            </Badge>
+          </div>
+        </div>
+        {matchScore !== null ? (
+          <MatchBadge matchScore={matchScore} size="sm" />
+        ) : (
+          <Badge variant="outline" className="text-xs text-muted-foreground">
+            No score
+          </Badge>
+        )}
+      </div>
+    );
   };
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
@@ -453,82 +511,145 @@ export const QuizResults = () => {
           </CardContent>
         </Card>
 
-        {/* Politicians Match Card */}
+        {/* Your Representatives Card */}
         <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '150ms' }}>
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
               <Users className="w-5 h-5 text-primary" />
-              Your Top Candidate Matches
+              Your Representatives
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoadingMatches || politicianMatches.length === 0 ? (
+            {!profile.address ? (
+              <div className="text-center py-6">
+                <p className="text-muted-foreground mb-4">Add your address in your profile to see your representatives and how they match with your views.</p>
+                <Button variant="outline" onClick={() => navigate('/profile')}>
+                  Go to Profile
+                </Button>
+              </div>
+            ) : allRepsLoading ? (
               <div className="flex items-center gap-3 text-muted-foreground py-4">
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Finding your best candidate matches...</span>
+                <span>Finding your representatives...</span>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {politicianMatches.map((politician, index) => (
-                  <div 
-                    key={politician.id} 
-                    className="flex items-start gap-4 p-4 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors cursor-pointer"
-                    onClick={() => navigate(`/candidate/${politician.id}`)}
-                  >
-                    {/* Avatar */}
-                    <div className="relative flex-shrink-0">
-                      <div className="w-12 h-12 rounded-full bg-muted overflow-hidden">
-                        {politician.image_url ? (
-                          <img 
-                            src={politician.image_url} 
-                            alt={politician.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-muted-foreground font-bold">
-                            {politician.name.charAt(0)}
-                          </div>
-                        )}
-                      </div>
-                      <div className={cn(
-                        "absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-background",
-                        getPartyColor(politician.party)
-                      )} />
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-semibold text-foreground truncate">{politician.name}</h4>
-                        <span className={cn(
-                          "text-xs px-2 py-0.5 rounded-full",
-                          politician.party === 'Democrat' ? 'bg-blue-100 text-blue-700' :
-                          politician.party === 'Republican' ? 'bg-red-100 text-red-700' :
-                          'bg-gray-100 text-gray-700'
-                        )}>
-                          {politician.party}
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-2">{politician.office}</p>
-                      
-                      {/* AI Match Reason */}
-                      <div className="flex items-start gap-2 text-sm">
-                        {politician.matchScore >= 60 ? (
-                          <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                        ) : (
-                          <XCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                        )}
-                        <span className="text-muted-foreground">{politician.aiReason}</span>
-                      </div>
-                    </div>
-
-                    {/* Match Score */}
-                    <div className="flex-shrink-0">
-                      <MatchBadge matchScore={politician.matchScore} size="md" />
+            ) : (federalReps.length > 0 || (civicData && (civicData.federalExecutive.length > 0 || civicData.stateExecutive.length > 0 || civicData.stateLegislative.length > 0 || civicData.local.length > 0))) ? (
+              <div className="space-y-6">
+                {/* Federal Executive (President, VP) */}
+                {civicData && civicData.federalExecutive.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      Federal Executive
+                    </h4>
+                    <div className="space-y-3">
+                      {civicData.federalExecutive.map((official) => (
+                        <RepresentativeCard
+                          key={official.id}
+                          official={official}
+                          userScore={profile.overall_score ?? 0}
+                        />
+                      ))}
                     </div>
                   </div>
-                ))}
+                )}
+
+                {/* Federal Legislative (Congress) */}
+                {federalReps.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      U.S. Congress
+                    </h4>
+                    <div className="space-y-3">
+                      {federalReps.map((rep) => {
+                        const matchScore = calculateMatchScore(profile.overall_score ?? 0, rep.overall_score);
+                        return (
+                          <Link
+                            key={rep.id}
+                            to={`/candidate/${rep.bioguide_id || rep.id}`}
+                            className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
+                          >
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0">
+                              <User className="w-6 h-6 text-primary-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-foreground truncate">{rep.name}</h4>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm text-muted-foreground">{rep.office}</span>
+                                <Badge variant="outline" className={cn("text-xs", getPartyBadgeColor(rep.party))}>
+                                  {rep.party}
+                                </Badge>
+                              </div>
+                            </div>
+                            <MatchBadge matchScore={matchScore} size="sm" />
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* State Executive (Governor, Lt. Governor) */}
+                {civicData && civicData.stateExecutive.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      State Executive
+                    </h4>
+                    <div className="space-y-3">
+                      {civicData.stateExecutive.map((official) => (
+                        <RepresentativeCard
+                          key={official.id}
+                          official={official}
+                          userScore={profile.overall_score ?? 0}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* State Legislative */}
+                {civicData && civicData.stateLegislative.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      State Legislature
+                    </h4>
+                    <div className="space-y-3">
+                      {civicData.stateLegislative.map((official) => (
+                        <RepresentativeCard
+                          key={official.id}
+                          official={official}
+                          userScore={profile.overall_score ?? 0}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Local Officials */}
+                {civicData && civicData.local.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Local Officials
+                    </h4>
+                    <div className="space-y-3">
+                      {civicData.local.map((official) => (
+                        <RepresentativeCard
+                          key={official.id}
+                          official={official}
+                          userScore={profile.overall_score ?? 0}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
+            ) : (
+              <p className="text-muted-foreground text-center py-4">
+                No representatives found for your address.
+              </p>
             )}
           </CardContent>
         </Card>
