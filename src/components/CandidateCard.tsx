@@ -127,7 +127,7 @@ export const CandidateCard = ({
 
           {/* Compact Avatar */}
           <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
-            {candidate.imageUrl ? (
+            {candidate.imageUrl && candidate.imageUrl.trim() !== '' ? (
               <img 
                 src={candidate.imageUrl}
                 alt={candidate.name}
@@ -142,7 +142,7 @@ export const CandidateCard = ({
             ) : null}
             <div 
               className={cn("w-full h-full flex items-center justify-center", getPartyBgColor(candidate.party))}
-              style={{ display: candidate.imageUrl ? 'none' : 'flex' }}
+              style={{ display: candidate.imageUrl && candidate.imageUrl.trim() !== '' ? 'none' : 'flex' }}
             >
               <span className="text-white font-bold text-sm">{getInitials(candidate.name)}</span>
             </div>

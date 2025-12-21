@@ -125,25 +125,33 @@ export const CandidateProfile = () => {
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             {/* Avatar */}
             <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden flex-shrink-0">
-              {(representativeDetails?.image_url || candidate.image_url) ? (
-                <img 
-                  src={representativeDetails?.image_url || candidate.image_url || ''}
-                  alt={candidate.name}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    target.style.display = 'none';
-                    const fallback = target.nextElementSibling as HTMLElement;
-                    if (fallback) fallback.style.display = 'flex';
-                  }}
-                />
-              ) : null}
-              <div 
-                className={cn("w-full h-full flex items-center justify-center", getPartyBgColor(candidate.party))}
-                style={{ display: (representativeDetails?.image_url || candidate.image_url) ? 'none' : 'flex' }}
-              >
-                <span className="text-white font-bold text-2xl md:text-3xl">{getInitials(candidate.name)}</span>
-              </div>
+              {(() => {
+                const imageUrl = representativeDetails?.image_url || candidate.image_url;
+                const hasImage = imageUrl && imageUrl.trim() !== '';
+                return (
+                  <>
+                    {hasImage ? (
+                      <img 
+                        src={imageUrl}
+                        alt={candidate.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.style.display = 'none';
+                          const fallback = target.nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div 
+                      className={cn("w-full h-full flex items-center justify-center", getPartyBgColor(candidate.party))}
+                      style={{ display: hasImage ? 'none' : 'flex' }}
+                    >
+                      <span className="text-white font-bold text-2xl md:text-3xl">{getInitials(candidate.name)}</span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Info */}
