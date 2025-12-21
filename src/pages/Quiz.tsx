@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { QuizQuestion } from '@/components/QuizQuestion';
 import { ScoreBar } from '@/components/ScoreBar';
@@ -10,13 +10,37 @@ import { QuizAnswer, TopicScore } from '@/types';
 import { ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 
 export const Quiz = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  
+  const topicFilter = searchParams.get('topic');
+  const mode = searchParams.get('mode'); // 'random' for random questions from top topics
+  
   const { data: dbQuestions = [], isLoading: questionsLoading } = useQuestions();
   const { data: dbTopics = [] } = useTopics();
   const { data: userTopics = [] } = useUserTopics();
   const saveQuizResults = useSaveQuizResults();
+  
+  // Fetch user's existing answers to filter out already answered questions
+  const { data: existingAnswers = [] } = useQuery({
+    queryKey: ['quiz_answers', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('quiz_answers')
+        .select('question_id')
+        .eq('user_id', user.id);
+      if (error) throw error;
+      return data.map(a => a.question_id);
+    },
+    enabled: !!user,
+  });
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showResults, setShowResults] = useState(false);
@@ -24,16 +48,51 @@ export const Quiz = () => {
   const [calculatedScores, setCalculatedScores] = useState<{ overall: number; byTopic: TopicScore[] } | null>(null);
 
   // Transform database questions to app format
-  const questions = dbQuestions.map(q => ({
-    id: q.id,
-    topicId: q.topic_id,
-    text: q.text,
-    options: (q.options || []).map((o: any) => ({
-      id: o.id,
-      text: o.text,
-      value: o.value,
-    })),
-  }));
+  const allQuestions = useMemo(() => {
+    return dbQuestions.map(q => ({
+      id: q.id,
+      topicId: q.topic_id,
+      text: q.text,
+      options: (q.options || []).map((o: any) => ({
+        id: o.id,
+        text: o.text,
+        value: o.value,
+      })),
+    }));
+  }, [dbQuestions]);
+
+  // Filter questions based on mode
+  const questions = useMemo(() => {
+    let filtered = allQuestions;
+    
+    if (topicFilter) {
+      // Filter by specific topic
+      filtered = allQuestions.filter(q => q.topicId === topicFilter);
+    } else if (mode === 'random') {
+      // Get 5 random unanswered questions from user's top 5 topics
+      const topTopicIds = userTopics.slice(0, 5).map(ut => ut.topic_id);
+      
+      // Filter to questions from top topics that haven't been answered
+      const unansweredFromTopTopics = allQuestions.filter(
+        q => topTopicIds.includes(q.topicId) && !existingAnswers.includes(q.id)
+      );
+      
+      // Shuffle and take 5
+      const shuffled = [...unansweredFromTopTopics].sort(() => Math.random() - 0.5);
+      filtered = shuffled.slice(0, 5);
+      
+      // If not enough unanswered, add some already answered ones
+      if (filtered.length < 5) {
+        const answeredFromTopTopics = allQuestions.filter(
+          q => topTopicIds.includes(q.topicId) && existingAnswers.includes(q.id)
+        );
+        const shuffledAnswered = [...answeredFromTopTopics].sort(() => Math.random() - 0.5);
+        filtered = [...filtered, ...shuffledAnswered.slice(0, 5 - filtered.length)];
+      }
+    }
+    
+    return filtered;
+  }, [allQuestions, topicFilter, mode, userTopics, existingAnswers]);
 
   const topics = dbTopics.map(t => ({
     id: t.id,
@@ -149,6 +208,18 @@ export const Quiz = () => {
     a => a.questionId === questions[currentQuestionIndex]?.id
   );
 
+  // Get quiz title based on mode
+  const getQuizTitle = () => {
+    if (topicFilter) {
+      const topic = topics.find(t => t.id === topicFilter);
+      return topic ? `${topic.icon} ${topic.name} Quiz` : 'Topic Quiz';
+    }
+    if (mode === 'random') {
+      return 'Quick Quiz';
+    }
+    return 'Full Quiz';
+  };
+
   if (questionsLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -235,7 +306,11 @@ export const Quiz = () => {
       <div className="min-h-screen bg-background">
         <Header />
         <main className="container py-8 px-4 text-center">
-          <p className="text-muted-foreground">No questions available.</p>
+          <p className="text-muted-foreground">
+            {mode === 'random' 
+              ? "You've answered all available questions from your top topics!" 
+              : "No questions available."}
+          </p>
           <Button className="mt-4" onClick={() => navigate('/profile')}>
             Back to Profile
           </Button>
@@ -248,6 +323,12 @@ export const Quiz = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container py-8 px-4 max-w-2xl">
+        <div className="text-center mb-6">
+          <h1 className="font-display text-xl font-semibold text-foreground">
+            {getQuizTitle()}
+          </h1>
+        </div>
+        
         <QuizQuestion
           question={questions[currentQuestionIndex]}
           selectedOptionId={currentAnswer?.selectedOptionId || null}
