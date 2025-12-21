@@ -62,9 +62,27 @@ export const CandidateCard = ({ candidate, index = 0 }: CandidateCardProps) => {
       >
         <CardContent className="p-5">
           <div className="flex items-start gap-4">
-            {/* Avatar placeholder */}
-            <div className="w-16 h-16 rounded-full bg-gradient-hero flex items-center justify-center flex-shrink-0">
-              <User className="w-8 h-8 text-primary-foreground" />
+            {/* Avatar with image */}
+            <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0">
+              {candidate.imageUrl ? (
+                <img 
+                  src={candidate.imageUrl}
+                  alt={candidate.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    target.style.display = 'none';
+                    const fallback = target.nextElementSibling as HTMLElement;
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div 
+                className="w-full h-full bg-gradient-hero flex items-center justify-center"
+                style={{ display: candidate.imageUrl ? 'none' : 'flex' }}
+              >
+                <User className="w-8 h-8 text-primary-foreground" />
+              </div>
             </div>
 
             <div className="flex-1 min-w-0">
