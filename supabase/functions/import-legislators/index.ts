@@ -80,8 +80,12 @@ Deno.serve(async (req) => {
         ? String(latestTerm.district) 
         : null;
 
+      // Construct image URL from bioguide ID (official Congress.gov pattern)
+      const bioguideId = leg.id.bioguide;
+      const imageUrl = `https://bioguide.congress.gov/bioguide/photo/${bioguideId[0]}/${bioguideId}.jpg`;
+
       return {
-        id: leg.id.bioguide,
+        id: bioguideId,
         name,
         office,
         state: latestTerm.state,
@@ -91,6 +95,7 @@ Deno.serve(async (req) => {
         coverage_tier: 'tier_2' as const,
         confidence: 'medium' as const,
         answers_source: 'api',
+        image_url: imageUrl,
       };
     }).filter(Boolean);
 

@@ -40,6 +40,15 @@ export const CandidateCard = ({
     }
   };
 
+  const getPartyBgColor = (party: string) => {
+    switch (party) {
+      case 'Democrat': return 'bg-blue-600';
+      case 'Republican': return 'bg-red-600';
+      case 'Independent': return 'bg-purple-600';
+      default: return 'bg-muted';
+    }
+  };
+
   const getPartyInitial = (party: string) => {
     switch (party) {
       case 'Democrat': return 'D';
@@ -47,6 +56,14 @@ export const CandidateCard = ({
       case 'Independent': return 'I';
       default: return '?';
     }
+  };
+
+  const getInitials = (name: string) => {
+    const parts = name.split(' ').filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    }
+    return parts[0]?.[0]?.toUpperCase() || '?';
   };
 
   // Get coverage tier, confidence, and transition status from candidate (with defaults)
@@ -124,10 +141,10 @@ export const CandidateCard = ({
               />
             ) : null}
             <div 
-              className="w-full h-full bg-gradient-hero flex items-center justify-center"
+              className={cn("w-full h-full flex items-center justify-center", getPartyBgColor(candidate.party))}
               style={{ display: candidate.imageUrl ? 'none' : 'flex' }}
             >
-              <User className="w-6 h-6 text-primary-foreground" />
+              <span className="text-white font-bold text-sm">{getInitials(candidate.name)}</span>
             </div>
           </div>
 

@@ -66,6 +66,23 @@ export const CandidateProfile = () => {
     }
   };
 
+  const getPartyBgColor = (party: string) => {
+    switch (party) {
+      case 'Democrat': return 'bg-blue-600';
+      case 'Republican': return 'bg-red-600';
+      case 'Independent': return 'bg-purple-600';
+      default: return 'bg-muted';
+    }
+  };
+
+  const getInitials = (name: string) => {
+    const parts = name.split(' ').filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    }
+    return parts[0]?.[0]?.toUpperCase() || '?';
+  };
+
   // Transform candidate topic scores
   const candidateTopicScores = (candidate.topicScores || []).map(ts => ({
     topicId: ts.topic_id,
@@ -122,10 +139,10 @@ export const CandidateProfile = () => {
                 />
               ) : null}
               <div 
-                className="w-full h-full bg-gradient-hero flex items-center justify-center"
+                className={cn("w-full h-full flex items-center justify-center", getPartyBgColor(candidate.party))}
                 style={{ display: (representativeDetails?.image_url || candidate.image_url) ? 'none' : 'flex' }}
               >
-                <User className="w-12 h-12 md:w-16 md:h-16 text-primary-foreground" />
+                <span className="text-white font-bold text-2xl md:text-3xl">{getInitials(candidate.name)}</span>
               </div>
             </div>
 
