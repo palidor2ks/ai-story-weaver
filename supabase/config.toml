@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.send-claim-notification]
 verify_jwt = false
+
+[functions.populate-party-answers]
+verify_jwt = false
