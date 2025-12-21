@@ -13,6 +13,8 @@ import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 import { Loader2, Sparkles, ArrowRight, BarChart3, Users, CheckCircle, XCircle, Share2, Copy, Twitter, Facebook, Linkedin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MatchBadge } from '@/components/MatchBadge';
+import { PoliticalSpectrum } from '@/components/PoliticalSpectrum';
+import { Compass } from 'lucide-react';
 
 interface ProfileAnalysis {
   summary: string;
@@ -370,7 +372,32 @@ export const QuizResults = () => {
           </CardContent>
         </Card>
 
-        {/* AI Summary Card */}
+        {/* Political Spectrum Card */}
+        <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '75ms' }}>
+          <CardHeader>
+            <CardTitle className="font-display flex items-center gap-2">
+              <Compass className="w-5 h-5 text-primary" />
+              Political Spectrum
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              See where you stand compared to candidates on the political spectrum
+            </p>
+            <PoliticalSpectrum 
+              userScore={profile.overall_score || 0}
+              candidates={candidates
+                .filter(c => c.overall_score !== null)
+                .map(c => ({
+                  id: c.id,
+                  name: c.name,
+                  party: c.party,
+                  overall_score: c.overall_score || 0,
+                }))}
+              onCandidateClick={(id) => navigate(`/candidate/${id}`)}
+            />
+          </CardContent>
+        </Card>
         <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '100ms' }}>
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
