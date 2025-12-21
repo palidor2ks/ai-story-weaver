@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Merriweather:wght@400;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,118 +6,128 @@
 
 @layer base {
   :root {
-    /* Deep Navy - Trust & Authority */
-    --background: 220 20% 97%;
-    --foreground: 222 47% 11%;
+    /* American Flag Colors - Light Theme */
+    /* Old Glory Blue */
+    --flag-blue: 233 69% 30%;
+    /* Old Glory Red */
+    --flag-red: 0 100% 38%;
+    /* White */
+    --flag-white: 0 0% 100%;
+    
+    --background: 0 0% 98%;
+    --foreground: 233 69% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 233 69% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 233 69% 15%;
 
-    /* Deep Indigo Primary */
-    --primary: 230 60% 25%;
-    --primary-foreground: 0 0% 98%;
+    /* Navy Blue Primary */
+    --primary: 233 69% 30%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Warm Gray Secondary */
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 222 47% 11%;
+    /* Light Gray Secondary */
+    --secondary: 220 20% 96%;
+    --secondary-foreground: 233 69% 15%;
 
     --muted: 220 14% 96%;
     --muted-foreground: 220 9% 46%;
 
-    /* Amber/Gold Accent */
-    --accent: 38 92% 50%;
-    --accent-foreground: 222 47% 11%;
+    /* Red Accent */
+    --accent: 0 100% 38%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 100% 38%;
+    --destructive-foreground: 0 0% 100%;
 
     --border: 220 13% 91%;
     --input: 220 13% 91%;
-    --ring: 230 60% 25%;
+    --ring: 233 69% 30%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
     /* Custom semantic colors */
     --agree: 142 76% 36%;
     --agree-foreground: 0 0% 100%;
-    --disagree: 0 84% 60%;
+    --disagree: 0 100% 38%;
     --disagree-foreground: 0 0% 100%;
     --neutral: 220 9% 46%;
     --neutral-foreground: 0 0% 100%;
     
     /* Match score gradient */
     --match-high: 142 76% 36%;
-    --match-medium: 38 92% 50%;
-    --match-low: 0 84% 60%;
+    --match-medium: 45 93% 47%;
+    --match-low: 0 100% 38%;
 
     /* Surface variants */
     --surface-elevated: 0 0% 100%;
-    --surface-sunken: 220 20% 95%;
+    --surface-sunken: 220 20% 96%;
 
-    /* Gradient definitions */
-    --gradient-hero: linear-gradient(135deg, hsl(230 60% 25%) 0%, hsl(230 50% 35%) 50%, hsl(38 92% 50%) 100%);
+    /* Gradient definitions - American flag inspired */
+    --gradient-hero: linear-gradient(135deg, hsl(233 69% 30%) 0%, hsl(233 69% 40%) 50%, hsl(0 100% 38%) 100%);
     --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 20% 98%) 100%);
     --gradient-match: linear-gradient(90deg, hsl(var(--match-low)) 0%, hsl(var(--match-medium)) 50%, hsl(var(--match-high)) 100%);
+    --gradient-patriotic: linear-gradient(135deg, hsl(0 100% 38%) 0%, hsl(0 0% 100%) 50%, hsl(233 69% 30%) 100%);
 
     /* Shadows */
-    --shadow-sm: 0 1px 2px 0 hsl(230 60% 25% / 0.05);
-    --shadow-md: 0 4px 6px -1px hsl(230 60% 25% / 0.1), 0 2px 4px -2px hsl(230 60% 25% / 0.1);
-    --shadow-lg: 0 10px 15px -3px hsl(230 60% 25% / 0.1), 0 4px 6px -4px hsl(230 60% 25% / 0.1);
-    --shadow-glow: 0 0 20px hsl(38 92% 50% / 0.3);
+    --shadow-sm: 0 1px 2px 0 hsl(233 69% 30% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(233 69% 30% / 0.1), 0 2px 4px -2px hsl(233 69% 30% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(233 69% 30% / 0.1), 0 4px 6px -4px hsl(233 69% 30% / 0.1);
+    --shadow-glow: 0 0 20px hsl(0 100% 38% / 0.3);
 
-    --sidebar-background: 220 20% 97%;
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 230 60% 25%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 38 92% 50%;
-    --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 230 60% 25%;
+    --sidebar-background: 233 69% 30%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 100% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 100%;
+    --sidebar-accent-foreground: 233 69% 30%;
+    --sidebar-border: 233 69% 40%;
+    --sidebar-ring: 0 100% 38%;
   }
 
   .dark {
-    --background: 222 47% 8%;
-    --foreground: 210 40% 98%;
+    --background: 233 69% 8%;
+    --foreground: 0 0% 98%;
 
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 98%;
+    --card: 233 50% 12%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 233 50% 12%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 38 92% 50%;
-    --primary-foreground: 222 47% 11%;
+    /* Red Primary in dark mode */
+    --primary: 0 100% 50%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 233 40% 18%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 233 40% 18%;
+    --muted-foreground: 220 20% 65%;
 
-    --accent: 230 60% 60%;
-    --accent-foreground: 210 40% 98%;
+    /* Blue Accent in dark mode */
+    --accent: 233 69% 55%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84% 45%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 38 92% 50%;
+    --border: 233 40% 22%;
+    --input: 233 40% 22%;
+    --ring: 0 100% 50%;
 
-    --surface-elevated: 222 47% 13%;
-    --surface-sunken: 222 47% 6%;
+    --surface-elevated: 233 50% 14%;
+    --surface-sunken: 233 69% 6%;
 
-    --sidebar-background: 222 47% 8%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 38 92% 50%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 230 60% 60%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217 33% 17%;
-    --sidebar-ring: 38 92% 50%;
+    --sidebar-background: 233 69% 10%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 0 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 233 69% 55%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 233 40% 22%;
+    --sidebar-ring: 0 100% 50%;
   }
 }
 
@@ -131,7 +141,7 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display;
+    @apply font-display font-bold tracking-tight;
   }
 }
 
@@ -147,6 +157,10 @@
 
   .bg-gradient-card {
     background-image: var(--gradient-card);
+  }
+
+  .bg-gradient-patriotic {
+    background-image: var(--gradient-patriotic);
   }
 
   .shadow-elevated {
@@ -171,6 +185,17 @@
 
   .animate-pulse-subtle {
     animation: pulseSoft 2s ease-in-out infinite;
+  }
+
+  /* American flag stripe pattern */
+  .bg-stripes {
+    background-image: repeating-linear-gradient(
+      0deg,
+      hsl(0 100% 38%) 0px,
+      hsl(0 100% 38%) 8px,
+      hsl(0 0% 100%) 8px,
+      hsl(0 0% 100%) 16px
+    );
   }
 }
 
@@ -214,7 +239,7 @@
   }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar with patriotic theme */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -225,9 +250,9 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-muted-foreground/30 rounded-full;
+  @apply bg-primary/50 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-muted-foreground/50;
+  @apply bg-primary/70;
 }
