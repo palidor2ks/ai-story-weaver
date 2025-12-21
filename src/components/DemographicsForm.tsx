@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ArrowRight, ArrowLeft, User } from 'lucide-react';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 export interface DemographicsData {
   address: string;
@@ -96,12 +97,14 @@ export const DemographicsForm = ({
             <Label htmlFor="address" className="text-foreground">
               Address / Location
             </Label>
-            <Input
+            <AddressAutocomplete
               id="address"
-              type="text"
-              placeholder="City, State or ZIP code"
               value={formData.address}
-              onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+              onChange={(value) => setFormData(prev => ({ ...prev, address: value }))}
+              onAddressSelect={(details) => {
+                setFormData(prev => ({ ...prev, address: details.formattedAddress }));
+              }}
+              placeholder="Start typing your address..."
               className="bg-background"
             />
             <p className="text-xs text-muted-foreground">

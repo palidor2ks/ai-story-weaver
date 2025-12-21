@@ -8,7 +8,6 @@ import { calculateMatchScore } from '@/hooks/useCandidates';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle } from 'lucide-react';
@@ -17,6 +16,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MatchBadge } from '@/components/MatchBadge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 interface ProfileAnalysis {
   summary: string;
@@ -195,13 +195,15 @@ export const UserProfile = () => {
                 </p>
                 {isEditingAddress ? (
                   <div className="flex items-center gap-2 mt-2">
-                    <Input
-                      value={addressInput}
-                      onChange={(e) => setAddressInput(e.target.value)}
-                      placeholder="Enter your full address..."
-                      className="flex-1 text-sm"
-                      autoFocus
-                    />
+                    <div className="flex-1">
+                      <AddressAutocomplete
+                        value={addressInput}
+                        onChange={setAddressInput}
+                        onAddressSelect={(details) => setAddressInput(details.formattedAddress)}
+                        placeholder="Start typing your address..."
+                        className="text-sm"
+                      />
+                    </div>
                     <Button
                       size="icon"
                       variant="ghost"
