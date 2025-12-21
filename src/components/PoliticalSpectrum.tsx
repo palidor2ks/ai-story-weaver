@@ -52,14 +52,12 @@ export const PoliticalSpectrum = ({ userScore, candidates, onCandidateClick }: P
 
   return (
     <TooltipProvider>
-      <div className="relative py-8">
-        {/* Background gradient spectrum */}
-        <div className="relative h-8 rounded-full overflow-hidden shadow-inner">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/30 via-muted to-red-500/30" />
-        </div>
-
-        {/* Candidate markers */}
-        <div className="absolute inset-x-4 top-0 h-8" style={{ marginTop: '16px' }}>
+      <div className="relative py-6">
+        {/* Background gradient spectrum with markers on it */}
+        <div className="relative h-8 rounded-full overflow-visible shadow-inner">
+          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-500/30 via-muted to-red-500/30" />
+          
+          {/* Candidate markers - positioned ON the bar */}
           {Object.entries(groupedCandidates).map(([groupScore, groupCandidates]) => {
             const position = scoreToPosition(Number(groupScore));
             const isStacked = groupCandidates.length > 1;
@@ -70,15 +68,14 @@ export const PoliticalSpectrum = ({ userScore, candidates, onCandidateClick }: P
                   <button
                     onClick={() => onCandidateClick?.(candidate.id)}
                     className={cn(
-                      "absolute w-4 h-4 rounded-full border-2 transition-all hover:scale-125 hover:z-20 cursor-pointer",
+                      "absolute w-6 h-6 rounded-full border-2 transition-all hover:scale-125 cursor-pointer top-1/2 -translate-y-1/2 -translate-x-1/2",
                       getPartyColor(candidate.party),
                       "hover:ring-2",
                       getPartyRingColor(candidate.party)
                     )}
                     style={{
                       left: `${position}%`,
-                      transform: `translateX(-50%)`,
-                      top: isStacked ? `${-4 + idx * 20}px` : '6px',
+                      marginTop: isStacked ? `${(idx - (groupCandidates.length - 1) / 2) * 12}px` : '0px',
                       zIndex: 10 + idx,
                     }}
                     aria-label={`${candidate.name} - ${formatScore(candidate.overall_score)}`}
@@ -93,28 +90,15 @@ export const PoliticalSpectrum = ({ userScore, candidates, onCandidateClick }: P
               </Tooltip>
             ));
           })}
-        </div>
 
-        {/* User marker - larger and highlighted */}
-        <div 
-          className="absolute"
-          style={{
-            left: `calc(${scoreToPosition(userScore)}% + 16px)`,
-            transform: 'translateX(-50%)',
-            top: '0px',
-          }}
-        >
+          {/* User marker - positioned ON the bar */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="relative">
-                <div className="absolute -inset-2 bg-primary/20 rounded-full animate-pulse" />
-                <div className="relative w-6 h-6 rounded-full bg-primary border-4 border-background shadow-lg ring-2 ring-primary/50 flex items-center justify-center">
-                  <span className="text-[8px] font-bold text-primary-foreground">YOU</span>
-                </div>
-                {/* Arrow pointing down */}
-                <div className="absolute left-1/2 -translate-x-1/2 top-full">
-                  <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-primary" />
-                </div>
+              <div 
+                className="absolute w-8 h-8 rounded-full bg-primary border-2 border-background shadow-lg ring-2 ring-primary/50 flex items-center justify-center cursor-pointer hover:scale-110 transition-all top-1/2 -translate-y-1/2 -translate-x-1/2 z-30"
+                style={{ left: `${scoreToPosition(userScore)}%` }}
+              >
+                <span className="text-[10px] font-bold text-primary-foreground">YOU</span>
               </div>
             </TooltipTrigger>
             <TooltipContent side="top">
@@ -126,15 +110,11 @@ export const PoliticalSpectrum = ({ userScore, candidates, onCandidateClick }: P
           </Tooltip>
         </div>
 
-        {/* Labels */}
+        {/* Labels - removed Center */}
         <div className="flex justify-between mt-4 px-2 text-sm">
           <div className="flex flex-col items-start">
             <span className="font-semibold text-blue-600">Left</span>
             <span className="text-xs text-muted-foreground">Progressive</span>
-          </div>
-          <div className="flex flex-col items-center">
-            <span className="font-semibold text-purple-600">Center</span>
-            <span className="text-xs text-muted-foreground">Moderate</span>
           </div>
           <div className="flex flex-col items-end">
             <span className="font-semibold text-red-600">Right</span>
@@ -143,7 +123,7 @@ export const PoliticalSpectrum = ({ userScore, candidates, onCandidateClick }: P
         </div>
 
         {/* Legend */}
-        <div className="flex justify-center gap-6 mt-6 text-xs">
+        <div className="flex justify-center gap-6 mt-4 text-xs">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full bg-blue-500" />
             <span className="text-muted-foreground">Democrat</span>
@@ -157,7 +137,7 @@ export const PoliticalSpectrum = ({ userScore, candidates, onCandidateClick }: P
             <span className="text-muted-foreground">Independent</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-6 h-6 rounded-full bg-primary border-2 border-background flex items-center justify-center text-[6px] text-primary-foreground font-bold">YOU</div>
+            <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-[6px] text-primary-foreground font-bold">YOU</div>
             <span className="text-muted-foreground">Your Position</span>
           </div>
         </div>
