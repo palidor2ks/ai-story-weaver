@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.populate-candidate-answers]
 verify_jwt = false
+
+[functions.import-legislators]
+verify_jwt = false
