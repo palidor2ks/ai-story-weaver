@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
 import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
-import { useProfile, useUserTopics, useUserTopicScores } from '@/hooks/useProfile';
+import { useProfile, useUserTopics } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials } from '@/hooks/useCivicOfficials';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,6 @@ import { Link } from 'react-router-dom';
 export const Feed = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
-  const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: dbCandidates = [], isLoading: candidatesLoading } = useCandidates();
   const { data: repsData, isLoading: representativesLoading, error: representativesError } = useRepresentatives(profile?.address);
   const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
@@ -108,15 +107,16 @@ export const Feed = () => {
       scoreVersion: c.score_version,
     }));
 
-    // Combine: Congress data + Civic data (deduplicate by name)
-    const allCandidates = [...congressCandidates, ...civicCandidates];
-    const uniqueNames = new Set<string>();
-    const deduped = allCandidates.filter(c => {
-      const key = `${c.name}-${c.office}`;
-      if (uniqueNames.has(key)) return false;
-      uniqueNames.add(key);
-      return true;
-    });
+      // Combine: Congress data + Civic data (deduplicate by name + office + state + district + level)
+      const allCandidates = [...congressCandidates, ...civicCandidates];
+      const uniqueKeys = new Set<string>();
+      const deduped = allCandidates.filter(c => {
+        // Include state, district, and level to prevent legitimate candidates from being filtered out
+        const key = `${c.name}-${c.office}-${c.state}-${c.district || ''}-${(c as any).level || ''}`;
+        if (uniqueKeys.has(key)) return false;
+        uniqueKeys.add(key);
+        return true;
+      });
 
     // Use combined data if available, otherwise fall back to DB
     return deduped.length > 0 ? deduped : dbTransformed;
