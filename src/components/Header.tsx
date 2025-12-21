@@ -2,7 +2,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/context/UserContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
-import { User, LayoutGrid, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2 } from 'lucide-react';
+import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
+import { User, LayoutGrid, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
@@ -11,8 +12,10 @@ export const Header = () => {
   const location = useLocation();
   const { user } = useUser();
   const { data: adminData } = useAdminRole();
+  const { data: politicianData } = usePoliticianRole();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isAdmin = adminData?.isAdmin;
+  const isPolitician = politicianData?.isPolitician;
 
   const navItems = [
     { path: '/feed', label: 'Feed', icon: LayoutGrid },
@@ -54,6 +57,18 @@ export const Header = () => {
               <HelpCircle className="w-4 h-4" />
             </Button>
           </Link>
+          {isPolitician && (
+            <Link to="/politician">
+              <Button 
+                variant={isActive('/politician') ? "secondary" : "ghost"}
+                size="icon"
+                className="ml-1"
+                title="Politician Dashboard"
+              >
+                <FileText className="w-4 h-4" />
+              </Button>
+            </Link>
+          )}
           {isAdmin && (
             <Link to="/admin">
               <Button 
@@ -119,6 +134,20 @@ export const Header = () => {
                 How Scoring Works
               </Button>
             </Link>
+            {isPolitician && (
+              <Link 
+                to="/politician"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Button 
+                  variant={isActive('/politician') ? "secondary" : "ghost"}
+                  className="w-full justify-start gap-3"
+                >
+                  <FileText className="w-5 h-5" />
+                  My Dashboard
+                </Button>
+              </Link>
+            )}
             {isAdmin && (
               <Link 
                 to="/admin"

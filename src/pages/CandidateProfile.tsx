@@ -11,7 +11,7 @@ import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText } from 'lucide-react';
 import { ScoreText } from '@/components/ScoreText';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
@@ -210,6 +210,16 @@ export const CandidateProfile = () => {
                     <Pencil className="h-4 w-4" />
                     Edit
                   </Button>
+                )}
+                
+                {/* Link to Politician Dashboard for profile owner */}
+                {isPoliticianOwner && (
+                  <Link to="/politician">
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <FileText className="h-4 w-4" />
+                      Answer Questions
+                    </Button>
+                  </Link>
                 )}
                 
                 {/* Claim Profile Button */}
