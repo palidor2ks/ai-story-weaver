@@ -541,9 +541,7 @@ export const UserProfile = () => {
                       U.S. Congress
                     </h4>
                     <div className="space-y-3">
-                      {federalReps.map((rep) => {
-                        const matchScore = calculateMatchScore(profile.overall_score ?? 0, rep.overall_score);
-                        return (
+                      {federalReps.map((rep) => (
                           <Link
                             key={rep.id}
                             to={`/candidate/${rep.bioguide_id || rep.id}`}
@@ -561,10 +559,22 @@ export const UserProfile = () => {
                                 </Badge>
                               </div>
                             </div>
-                            <MatchBadge matchScore={matchScore} size="sm" />
+                            {rep.overall_score !== null ? (
+                              <div className="w-28 flex-shrink-0">
+                                <ComparisonSpectrum 
+                                  userScore={profile.overall_score ?? 0} 
+                                  repScore={rep.overall_score} 
+                                  repName={rep.name.split(' ').pop() || 'Rep'}
+                                  size="sm"
+                                />
+                              </div>
+                            ) : (
+                              <Badge variant="outline" className="text-xs text-muted-foreground">
+                                No score
+                              </Badge>
+                            )}
                           </Link>
-                        );
-                      })}
+                        ))}
                     </div>
                   </div>
                 )}
