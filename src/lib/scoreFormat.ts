@@ -16,27 +16,29 @@ export type ConfidenceLevel = 'high' | 'medium' | 'low';
  */
 export function formatScore(score: number | null | undefined): string {
   if (score === null || score === undefined) {
-    return 'N/A';
+    return 'NA';
   }
   
   // Clamp to valid range
   const clamped = Math.max(-10, Math.min(10, score));
   
-  // Round to 2 decimals
-  const rounded = Math.round(clamped * 100) / 100;
+  // Round to nearest integer
+  const rounded = Math.round(clamped);
   
-  // Handle center (within tolerance)
-  if (Math.abs(rounded) < 0.005) {
-    return 'Center 0.00';
+  // Handle exact center
+  if (rounded === 0) {
+    return 'C';
   }
   
-  const absValue = Math.abs(rounded).toFixed(2);
+  const absValue = Math.abs(rounded);
   
-  if (rounded < 0) {
-    return `L${absValue}`;
-  } else {
-    return `R${absValue}`;
+  // Center zone: -3 to 3 (use CL/CR)
+  if (rounded >= -3 && rounded <= 3) {
+    return rounded < 0 ? `CL${absValue}` : `CR${absValue}`;
   }
+  
+  // Outside center zone: L/R
+  return rounded < 0 ? `L${absValue}` : `R${absValue}`;
 }
 
 /**

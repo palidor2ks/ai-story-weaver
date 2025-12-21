@@ -59,26 +59,36 @@ export const HowScoringWorks = () => {
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-3 gap-4 mt-4">
-                <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+              <div className="grid md:grid-cols-5 gap-3 mt-4">
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
                   <p className="font-semibold text-blue-700">Left (L)</p>
-                  <p className="text-sm text-blue-600">-10.00 to -0.01</p>
-                  <p className="text-xs text-blue-500 mt-1">Progressive positions</p>
+                  <p className="text-sm text-blue-600">-10 to -4</p>
+                  <p className="text-xs text-blue-500 mt-1">L10 to L4</p>
                 </div>
-                <div className="p-4 rounded-lg bg-purple-50 border border-purple-200">
-                  <p className="font-semibold text-purple-700">Center</p>
-                  <p className="text-sm text-purple-600">0.00</p>
-                  <p className="text-xs text-purple-500 mt-1">Moderate/mixed positions</p>
+                <div className="p-3 rounded-lg bg-blue-50/50 border border-purple-200">
+                  <p className="font-semibold text-purple-700">Center-Left (CL)</p>
+                  <p className="text-sm text-purple-600">-3 to -1</p>
+                  <p className="text-xs text-purple-500 mt-1">CL3 to CL1</p>
                 </div>
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+                <div className="p-3 rounded-lg bg-purple-50 border border-purple-200">
+                  <p className="font-semibold text-purple-700">Center (C)</p>
+                  <p className="text-sm text-purple-600">0</p>
+                  <p className="text-xs text-purple-500 mt-1">Moderate</p>
+                </div>
+                <div className="p-3 rounded-lg bg-red-50/50 border border-purple-200">
+                  <p className="font-semibold text-purple-700">Center-Right (CR)</p>
+                  <p className="text-sm text-purple-600">+1 to +3</p>
+                  <p className="text-xs text-purple-500 mt-1">CR1 to CR3</p>
+                </div>
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200">
                   <p className="font-semibold text-red-700">Right (R)</p>
-                  <p className="text-sm text-red-600">+0.01 to +10.00</p>
-                  <p className="text-xs text-red-500 mt-1">Conservative positions</p>
+                  <p className="text-sm text-red-600">+4 to +10</p>
+                  <p className="text-xs text-red-500 mt-1">R4 to R10</p>
                 </div>
               </div>
 
               <p className="text-sm text-muted-foreground">
-                Scores are displayed with two decimals (e.g., L2.34, R6.10) for precision.
+                Scores are displayed as integers (e.g., L8, CL2, C, CR1, R5).
               </p>
             </CardContent>
           </Card>
