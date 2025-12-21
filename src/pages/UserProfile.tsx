@@ -129,15 +129,6 @@ export const UserProfile = () => {
     setAddressInput('');
   };
 
-  const getScoreLabel = (score: number) => {
-    if (score >= 7) return 'L10';
-    if (score >= 4) return 'L7';
-    if (score >= 1) return 'L3';
-    if (score >= -1) return 'C';
-    if (score >= -4) return 'R3';
-    if (score >= -7) return 'R7';
-    return 'R10';
-  };
 
   const getPartyColor = (party: string) => {
     switch (party) {
@@ -332,14 +323,7 @@ export const UserProfile = () => {
                 Overall Score
               </span>
               <div className="flex items-center justify-center gap-4 mt-2">
-                <div className={cn(
-                  "text-5xl font-display font-bold",
-                  profile.overall_score >= 30 && "text-blue-600",
-                  profile.overall_score <= -30 && "text-red-600",
-                  profile.overall_score > -30 && profile.overall_score < 30 && "text-accent"
-                )}>
-                  {getScoreLabel(profile.overall_score / 10)}
-                </div>
+                <ScoreText score={profile.overall_score} size="lg" className="text-5xl" />
                 <div className="text-2xl text-muted-foreground">
                   ({profile.overall_score > 0 ? '+' : ''}{profile.overall_score})
                 </div>
