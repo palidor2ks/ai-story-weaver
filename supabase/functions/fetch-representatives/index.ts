@@ -22,14 +22,11 @@ serve(async (req) => {
       throw new Error('Congress.gov API key not configured');
     }
 
-    // Fetch current members of Congress
-    const currentCongress = 119; // 119th Congress (2025-2027)
+    // Fetch current members of Congress for the state
+    const membersUrl = `https://api.congress.gov/v3/member?state=${state}&currentMember=true&api_key=${CONGRESS_API_KEY}&limit=250`;
+    console.log(`Fetching members from: ${membersUrl.replace(CONGRESS_API_KEY, 'REDACTED')}`);
     
-    // Fetch senators for the state
-    const senatorsUrl = `https://api.congress.gov/v3/member?stateCode=${state}&currentMember=true&api_key=${CONGRESS_API_KEY}&limit=100`;
-    console.log(`Fetching senators from: ${senatorsUrl.replace(CONGRESS_API_KEY, 'REDACTED')}`);
-    
-    const senatorsResponse = await fetch(senatorsUrl);
+    const senatorsResponse = await fetch(membersUrl);
     
     if (!senatorsResponse.ok) {
       const errorText = await senatorsResponse.text();
@@ -38,12 +35,21 @@ serve(async (req) => {
     }
     
     const senatorsData = await senatorsResponse.json();
-    console.log(`Found ${senatorsData.members?.length || 0} members for state ${state}`);
+    console.log(`Found ${senatorsData.members?.length || 0} members returned by API for state ${state}`);
 
     // Process and format the members
     const members = senatorsData.members || [];
-    
-    const representatives = members.map((member: any) => {
+    const normalizedState = String(state || '').toUpperCase();
+
+    // Defensive server-side filter (API sometimes returns members for other states)
+    const stateMembers = members.filter((member: any) => {
+      const memberState = String(member.state || member.stateCode || '').toUpperCase();
+      return memberState === normalizedState;
+    });
+
+    console.log(`Filtered to ${stateMembers.length} members after state check (${normalizedState})`);
+
+    const representatives = stateMembers.map((member: any) => {
       // Determine if senator or representative based on chamber
       const latestTerm = member.terms?.item?.[member.terms?.item?.length - 1] || {};
       const chamber = latestTerm.chamber || member.terms?.item?.[0]?.chamber;
