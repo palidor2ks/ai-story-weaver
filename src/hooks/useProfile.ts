@@ -10,6 +10,11 @@ interface Profile {
   overall_score: number;
   created_at: string;
   updated_at: string;
+  address: string | null;
+  political_party: string | null;
+  age: number | null;
+  income: string | null;
+  sex: string | null;
 }
 
 interface TopicScore {
