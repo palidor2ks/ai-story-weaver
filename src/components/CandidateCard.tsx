@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { Candidate } from '@/types';
-import { ComparisonSpectrum } from './ComparisonSpectrum';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
@@ -8,6 +7,7 @@ import { calculateMatchScore } from '@/data/mockData';
 import { useUser } from '@/context/UserContext';
 import { User, MapPin, Star, Shield, ArrowRightLeft, CheckCircle } from 'lucide-react';
 import { ScoreDisplay } from './ScoreDisplay';
+import { ScoreText } from './ScoreText';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { TransitionStatus } from './TransitionBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -206,16 +206,6 @@ export const CandidateCard = ({
           </div>
         </div>
 
-        {/* Prominent Spectrum Bar */}
-        <div className="mt-3 pt-3 border-t border-border/50">
-          <ComparisonSpectrum 
-            userScore={userScore} 
-            repScore={candidate.overallScore ?? 0} 
-            repName={candidate.name.split(' ').pop() || 'Rep'}
-            repImageUrl={candidate.imageUrl}
-            size="md"
-          />
-        </div>
       </CardContent>
     </Card>
   );

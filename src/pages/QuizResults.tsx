@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
+import { ScoreText } from '@/components/ScoreText';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,9 +16,6 @@ import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 import { Loader2, Sparkles, ArrowRight, BarChart3, Users, CheckCircle, XCircle, Share2, Copy, Twitter, Facebook, Linkedin, Building2, MapPin, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ComparisonSpectrum } from '@/components/ComparisonSpectrum';
-import { PoliticalSpectrum } from '@/components/PoliticalSpectrum';
-import { Compass } from 'lucide-react';
 
 interface ProfileAnalysis {
   summary: string;
@@ -243,18 +241,10 @@ export const QuizResults = () => {
           </div>
         </div>
         {official.overall_score !== null ? (
-          <div className="w-28 flex-shrink-0">
-            <ComparisonSpectrum 
-              userScore={userScore} 
-              repScore={official.overall_score} 
-              repName={official.name.split(' ').pop() || 'Rep'}
-              repImageUrl={official.image_url}
-              size="sm"
-            />
-          </div>
+          <ScoreText score={official.overall_score} size="md" />
         ) : (
           <Badge variant="outline" className="text-xs text-muted-foreground">
-            No score
+            NA
           </Badge>
         )}
       </div>
@@ -437,33 +427,6 @@ export const QuizResults = () => {
             )}
           </CardContent>
         </Card>
-
-        {/* Political Spectrum Card */}
-        <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '75ms' }}>
-          <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <Compass className="w-5 h-5 text-primary" />
-              Political Spectrum
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              See where you stand compared to candidates on the political spectrum
-            </p>
-            <PoliticalSpectrum 
-              userScore={profile.overall_score || 0}
-              candidates={candidates
-                .filter(c => c.overall_score !== null)
-                .map(c => ({
-                  id: c.id,
-                  name: c.name,
-                  party: c.party,
-                  overall_score: c.overall_score || 0,
-                }))}
-              onCandidateClick={(id) => navigate(`/candidate/${id}`)}
-            />
-          </CardContent>
-        </Card>
         <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '100ms' }}>
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
@@ -588,17 +551,10 @@ export const QuizResults = () => {
                               </div>
                             </div>
                             {rep.overall_score !== null ? (
-                              <div className="w-28 flex-shrink-0">
-                                <ComparisonSpectrum 
-                                  userScore={profile.overall_score ?? 0} 
-                                  repScore={rep.overall_score} 
-                                  repName={rep.name.split(' ').pop() || 'Rep'}
-                                  size="sm"
-                                />
-                              </div>
+                              <ScoreText score={rep.overall_score} size="md" />
                             ) : (
                               <Badge variant="outline" className="text-xs text-muted-foreground">
-                                No score
+                                NA
                               </Badge>
                             )}
                           </Link>
