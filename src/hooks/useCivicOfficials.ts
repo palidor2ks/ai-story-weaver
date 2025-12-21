@@ -68,7 +68,14 @@ export function useCivicOfficials(address: string | null | undefined) {
 
       if (error) {
         console.error('Error fetching civic officials:', error);
-        throw error;
+        return {
+          officials: [],
+          federalExecutive: [],
+          stateExecutive: [],
+          stateLegislative: [],
+          local: [],
+          state: null,
+        };
       }
 
       if (data?.error) {
