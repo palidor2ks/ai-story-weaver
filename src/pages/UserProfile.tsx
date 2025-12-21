@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle } from 'lucide-react';
+import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -327,10 +327,16 @@ export const UserProfile = () => {
             )}
 
             <div className="mt-6 pt-6 border-t border-border space-y-3">
+              <Link to="/quiz?mode=random">
+                <Button variant="default" className="w-full gap-2">
+                  <HelpCircle className="w-4 h-4" />
+                  Answer More Questions (5 Random)
+                </Button>
+              </Link>
               <Link to="/quiz">
                 <Button variant="outline" className="w-full gap-2">
                   <RefreshCw className="w-4 h-4" />
-                  Retake Quiz
+                  Retake Full Quiz
                 </Button>
               </Link>
               <Button 
