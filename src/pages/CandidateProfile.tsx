@@ -13,6 +13,8 @@ import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, User, Spar
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
+import { EvidenceBrowser } from '@/components/EvidenceBrowser';
+import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 
 export const CandidateProfile = () => {
@@ -360,10 +362,33 @@ export const CandidateProfile = () => {
           </TabsContent>
         </Tabs>
 
+        {/* Evidence Browser */}
+        <div className="mt-8">
+          <EvidenceBrowser 
+            candidateName={candidate.name}
+            stances={candidateTopicScores.map(ts => ({
+              questionId: ts.topicId,
+              questionText: `Position on ${ts.topicName}`,
+              topicName: ts.topicName,
+              stance: 'known' as const,
+              score: ts.score,
+              sources: [{ title: 'Public records', url: '#' }],
+            }))}
+          />
+        </div>
+
+        {/* Report Issue & Feedback */}
+        <div className="mt-6 flex items-center justify-center gap-4">
+          <ReportIssueButton 
+            candidateId={candidate.id} 
+            candidateName={candidate.name}
+          />
+        </div>
+
         {/* AI Disclaimer */}
         <div className="mt-8 p-4 rounded-lg bg-secondary/50 border border-border text-center">
           <p className="text-sm text-muted-foreground">
-            <strong>Score Version:</strong> v1.0 • This is not voting advice. Data is provided for informational purposes only.
+            <strong>Score Version:</strong> {candidate.score_version || 'v1.0'} • This is not voting advice. Data is provided for informational purposes only.
           </p>
         </div>
       </main>

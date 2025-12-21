@@ -12,6 +12,9 @@ import { CandidateProfile } from "./pages/CandidateProfile";
 import { UserProfile } from "./pages/UserProfile";
 import { Quiz } from "./pages/Quiz";
 import { QuizResults } from "./pages/QuizResults";
+import { Search } from "./pages/Search";
+import { QuizLibrary } from "./pages/QuizLibrary";
+import { HowScoringWorks } from "./pages/HowScoringWorks";
 import NotFound from "./pages/NotFound";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
 
@@ -78,6 +81,11 @@ const AppRoutes = () => {
           <Feed />
         </ProtectedRoute>
       } />
+      <Route path="/search" element={
+        <ProtectedRoute>
+          <Search />
+        </ProtectedRoute>
+      } />
       <Route path="/candidate/:id" element={
         <ProtectedRoute>
           <CandidateProfile />
@@ -91,6 +99,16 @@ const AppRoutes = () => {
       <Route path="/quiz" element={
         <ProtectedRoute>
           <Quiz />
+        </ProtectedRoute>
+      } />
+      <Route path="/quiz-library" element={
+        <ProtectedRoute>
+          <QuizLibrary />
+        </ProtectedRoute>
+      } />
+      <Route path="/how-scoring-works" element={
+        <ProtectedRoute>
+          <HowScoringWorks />
         </ProtectedRoute>
       } />
       <Route path="*" element={<NotFound />} />

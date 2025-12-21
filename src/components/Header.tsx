@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/context/UserContext';
-import { User, LayoutGrid, FileText, Menu, X } from 'lucide-react';
+import { User, LayoutGrid, FileText, Menu, X, Search, BookOpen, HelpCircle } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -12,7 +12,8 @@ export const Header = () => {
 
   const navItems = [
     { path: '/feed', label: 'Feed', icon: LayoutGrid },
-    { path: '/quiz', label: 'Quiz', icon: FileText },
+    { path: '/search', label: 'Search', icon: Search },
+    { path: '/quiz-library', label: 'Quizzes', icon: BookOpen },
     { path: '/profile', label: 'Profile', icon: User },
   ];
 
@@ -44,6 +45,11 @@ export const Header = () => {
               </Button>
             </Link>
           ))}
+          <Link to="/how-scoring-works">
+            <Button variant="ghost" size="icon" className="ml-2">
+              <HelpCircle className="w-4 h-4" />
+            </Button>
+          </Link>
         </nav>
 
         {/* User Info */}
@@ -88,6 +94,15 @@ export const Header = () => {
                 </Button>
               </Link>
             ))}
+            <Link 
+              to="/how-scoring-works"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Button variant="ghost" className="w-full justify-start gap-3">
+                <HelpCircle className="w-5 h-5" />
+                How Scoring Works
+              </Button>
+            </Link>
           </nav>
         </div>
       )}
