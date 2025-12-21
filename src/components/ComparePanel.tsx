@@ -34,6 +34,15 @@ export const ComparePanel = ({
     }
   };
 
+  const getPartyBgColor = (party: string) => {
+    switch (party) {
+      case 'Democrat': return 'bg-blue-600';
+      case 'Republican': return 'bg-red-600';
+      case 'Independent': return 'bg-purple-600';
+      default: return 'bg-primary';
+    }
+  };
+
   const getInitials = (name: string) => {
     const parts = name.split(' ');
     if (parts.length >= 2) {
@@ -90,7 +99,7 @@ export const ComparePanel = ({
                     {candidate.imageUrl && (
                       <AvatarImage src={candidate.imageUrl} alt={candidate.name} />
                     )}
-                    <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+                    <AvatarFallback className={cn("text-xs text-white font-bold", getPartyBgColor(candidate.party))}>
                       {getInitials(candidate.name)}
                     </AvatarFallback>
                   </Avatar>
