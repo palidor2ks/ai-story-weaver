@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Source Sans 3", "system-ui", "sans-serif"],
-        display: ["Playfair Display", "Georgia", "serif"],
+        sans: ["Libre Franklin", "system-ui", "sans-serif"],
+        display: ["Merriweather", "Georgia", "serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -76,6 +76,12 @@ export default {
         surface: {
           elevated: "hsl(var(--surface-elevated))",
           sunken: "hsl(var(--surface-sunken))",
+        },
+        // American flag colors for direct use
+        flag: {
+          blue: "hsl(233 69% 30%)",
+          red: "hsl(0 100% 38%)",
+          white: "hsl(0 0% 100%)",
         },
       },
       borderRadius: {
