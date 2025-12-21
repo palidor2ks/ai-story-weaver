@@ -26,14 +26,21 @@ const stateNames: Record<string, string> = {
   'AS': 'American Samoa', 'MP': 'Northern Mariana Islands',
 };
 
-async function fetchAllMembers(apiKey: string): Promise<any[]> {
+// Reverse mapping for state name to code
+const stateNameToCode: Record<string, string> = Object.entries(stateNames).reduce(
+  (acc, [code, name]) => ({ ...acc, [name]: code }), {}
+);
+
+async function fetchAllMembers(apiKey: string, currentOnly: boolean = true): Promise<any[]> {
   const allMembers: any[] = [];
   let offset = 0;
   const limit = 250;
   let hasMore = true;
   
   while (hasMore) {
-    const url = `https://api.congress.gov/v3/member?currentMember=true&api_key=${apiKey}&limit=${limit}&offset=${offset}`;
+    const url = currentOnly 
+      ? `https://api.congress.gov/v3/member?currentMember=true&api_key=${apiKey}&limit=${limit}&offset=${offset}`
+      : `https://api.congress.gov/v3/member?api_key=${apiKey}&limit=${limit}&offset=${offset}`;
     console.log(`Fetching members offset=${offset}...`);
     
     const response = await fetch(url);
@@ -52,13 +59,57 @@ async function fetchAllMembers(apiKey: string): Promise<any[]> {
       offset += limit;
     }
     
-    // Safety limit
-    if (offset > 1000) {
+    // Safety limit - for all members we allow more
+    if (currentOnly && offset > 1000) {
+      hasMore = false;
+    }
+    if (!currentOnly && offset > 2000) {
       hasMore = false;
     }
   }
   
   return allMembers;
+}
+
+function mapMemberToRepresentative(member: any): any {
+  // Get the latest term to determine chamber
+  const terms = member.terms?.item || [];
+  const sortedTerms = [...terms].sort((a: any, b: any) => (b.startYear || 0) - (a.startYear || 0));
+  const latestTerm = sortedTerms[0] || {};
+  const chamber = latestTerm.chamber;
+  const isSenator = chamber === 'Senate';
+  
+  // Get state code
+  const memberState = String(member.state || '').trim();
+  const stateCode = stateNameToCode[memberState] || memberState;
+  
+  // District is at the root level for House members (null for Senators)
+  const memberDistrict = member.district;
+
+  // Map party code to full name
+  let party = 'Other';
+  if (member.partyName === 'Democratic' || member.partyName === 'Democrat') {
+    party = 'Democrat';
+  } else if (member.partyName === 'Republican') {
+    party = 'Republican';
+  } else if (member.partyName === 'Independent') {
+    party = 'Independent';
+  }
+
+  return {
+    id: member.bioguideId,
+    name: member.name || `${member.firstName} ${member.lastName}`,
+    party,
+    office: isSenator ? 'Senator' : 'Representative',
+    state: stateCode,
+    district: memberDistrict ? `${stateCode}-${memberDistrict}` : null,
+    image_url: member.depiction?.imageUrl || '',
+    is_incumbent: true,
+    bioguide_id: member.bioguideId,
+    overall_score: null,
+    coverage_tier: 'tier_3',
+    confidence: 'low',
+  };
 }
 
 serve(async (req) => {
@@ -68,22 +119,38 @@ serve(async (req) => {
   }
 
   try {
-    const { state, district } = await req.json();
+    const { state, district, fetchAll, includePrevious } = await req.json();
     
-    console.log(`Fetching representatives for state: ${state}, district: ${district}`);
+    console.log(`Fetching representatives - fetchAll: ${fetchAll}, state: ${state}, district: ${district}, includePrevious: ${includePrevious}`);
 
     if (!CONGRESS_API_KEY) {
       throw new Error('Congress.gov API key not configured');
     }
 
+    // Fetch all current members of Congress (with pagination)
+    const allMembers = await fetchAllMembers(CONGRESS_API_KEY, !includePrevious);
+    console.log(`Found ${allMembers.length} total members in Congress`);
+
+    // If fetchAll is true, return all Congress members
+    if (fetchAll) {
+      const representatives = allMembers.map(mapMemberToRepresentative);
+      console.log(`Returning all ${representatives.length} Congress members`);
+      
+      return new Response(JSON.stringify({ 
+        representatives,
+        total: representatives.length,
+        state: null,
+        district: null 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Otherwise filter by state/district as before
     const normalizedStateCode = String(state || '').toUpperCase();
     const fullStateName = stateNames[normalizedStateCode] || normalizedStateCode;
     
     console.log(`Looking for state: ${fullStateName}`);
-
-    // Fetch all current members of Congress (with pagination)
-    const allMembers = await fetchAllMembers(CONGRESS_API_KEY);
-    console.log(`Found ${allMembers.length} total members in Congress`);
 
     // Filter by state (using full state name from API response)
     const stateMembers = allMembers.filter((member: any) => {
@@ -92,49 +159,8 @@ serve(async (req) => {
     });
 
     console.log(`Filtered to ${stateMembers.length} members for ${fullStateName}`);
-    
-    // Log all state members for debugging
-    stateMembers.forEach((m: any) => {
-      console.log(`  State member: ${m.name} - District: ${m.district || 'N/A'} - Terms: ${JSON.stringify(m.terms?.item?.[0]?.chamber || 'unknown')}`);
-    });
 
-    const representatives = stateMembers.map((member: any) => {
-      // Get the latest term to determine chamber
-      // Sort terms by startYear descending to get the most recent
-      const terms = member.terms?.item || [];
-      const sortedTerms = [...terms].sort((a: any, b: any) => (b.startYear || 0) - (a.startYear || 0));
-      const latestTerm = sortedTerms[0] || {};
-      const chamber = latestTerm.chamber;
-      const isSenator = chamber === 'Senate';
-      
-      // District is at the root level for House members (null for Senators)
-      const memberDistrict = member.district;
-
-      // Map party code to full name
-      let party = 'Other';
-      if (member.partyName === 'Democratic' || member.partyName === 'Democrat') {
-        party = 'Democrat';
-      } else if (member.partyName === 'Republican') {
-        party = 'Republican';
-      } else if (member.partyName === 'Independent') {
-        party = 'Independent';
-      }
-
-      return {
-        id: member.bioguideId,
-        name: member.name || `${member.firstName} ${member.lastName}`,
-        party,
-        office: isSenator ? 'Senator' : 'Representative',
-        state: normalizedStateCode,
-        district: memberDistrict ? `${normalizedStateCode}-${memberDistrict}` : null,
-        image_url: member.depiction?.imageUrl || '',
-        is_incumbent: true,
-        bioguide_id: member.bioguideId,
-        overall_score: null,
-        coverage_tier: 'tier_3',
-        confidence: 'low',
-      };
-    });
+    const representatives = stateMembers.map(mapMemberToRepresentative);
 
     console.log(`Mapped ${representatives.length} representatives`);
 
@@ -159,7 +185,6 @@ serve(async (req) => {
 
     console.log(`Returning ${filtered.length} filtered representatives for ${normalizedStateCode} district ${district}`);
     
-    // Log who we're returning
     filtered.forEach((rep: any) => {
       console.log(`  - ${rep.name} (${rep.office}) ${rep.district || ''}`);
     });
