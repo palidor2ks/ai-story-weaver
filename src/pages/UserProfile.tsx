@@ -1,24 +1,41 @@
 import { Header } from '@/components/Header';
 import { ScoreBar } from '@/components/ScoreBar';
 import { useAuth } from '@/context/AuthContext';
-import { useProfile, useUserTopics, useUserTopicScores } from '@/hooks/useProfile';
+import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding } from '@/hooks/useProfile';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { User, RefreshCw, TrendingUp, Target, LogOut } from 'lucide-react';
+import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const UserProfile = () => {
+  const navigate = useNavigate();
   const { signOut } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
   const { data: userTopicScores = [] } = useUserTopicScores();
+  const resetOnboarding = useResetOnboarding();
 
   const handleSignOut = async () => {
     await signOut();
     toast.success('Signed out successfully');
+  };
+
+  const handleResetOnboarding = async () => {
+    if (!confirm('Are you sure you want to reset your onboarding? This will delete all your quiz answers and topic selections.')) {
+      return;
+    }
+    
+    try {
+      await resetOnboarding.mutateAsync();
+      toast.success('Onboarding reset successfully!');
+      navigate('/');
+    } catch (error) {
+      console.error('Error resetting onboarding:', error);
+      toast.error('Failed to reset onboarding. Please try again.');
+    }
   };
 
   if (profileLoading) {
@@ -133,13 +150,22 @@ export const UserProfile = () => {
               </div>
             )}
 
-            <div className="mt-6 pt-6 border-t border-border">
+            <div className="mt-6 pt-6 border-t border-border space-y-3">
               <Link to="/quiz">
                 <Button variant="outline" className="w-full gap-2">
                   <RefreshCw className="w-4 h-4" />
                   Retake Quiz
                 </Button>
               </Link>
+              <Button 
+                variant="ghost" 
+                className="w-full gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={handleResetOnboarding}
+                disabled={resetOnboarding.isPending}
+              >
+                <RotateCcw className="w-4 h-4" />
+                {resetOnboarding.isPending ? 'Resetting...' : 'Reset Onboarding'}
+              </Button>
             </div>
           </CardContent>
         </Card>

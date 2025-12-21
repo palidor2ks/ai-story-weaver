@@ -254,3 +254,54 @@ export const useHasCompletedOnboarding = () => {
     enabled: !!user,
   });
 };
+
+export const useResetOnboarding = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error('Not authenticated');
+
+      // Delete quiz answers
+      const { error: answersError } = await supabase
+        .from('quiz_answers')
+        .delete()
+        .eq('user_id', user.id);
+      
+      if (answersError) throw answersError;
+
+      // Delete user topic scores
+      const { error: scoresError } = await supabase
+        .from('user_topic_scores')
+        .delete()
+        .eq('user_id', user.id);
+      
+      if (scoresError) throw scoresError;
+
+      // Delete user topics
+      const { error: topicsError } = await supabase
+        .from('user_topics')
+        .delete()
+        .eq('user_id', user.id);
+      
+      if (topicsError) throw topicsError;
+
+      // Reset overall score in profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ overall_score: 0 })
+        .eq('id', user.id);
+      
+      if (profileError) throw profileError;
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['user_topic_scores', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['user_topics', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['has_completed_onboarding', user?.id] });
+    },
+  });
+};
