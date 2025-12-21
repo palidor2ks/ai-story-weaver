@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.fetch-representatives]
 verify_jwt = false
+
+[functions.fetch-member]
+verify_jwt = false
