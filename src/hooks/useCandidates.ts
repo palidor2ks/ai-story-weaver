@@ -113,6 +113,7 @@ export const useCandidate = (id: string | undefined) => {
     queryFn: async () => {
       if (!id) return null;
       
+      // First try to fetch from database
       const { data: candidate, error } = await supabase
         .from('candidates')
         .select('*')
@@ -120,31 +121,67 @@ export const useCandidate = (id: string | undefined) => {
         .maybeSingle();
       
       if (error) throw error;
-      if (!candidate) return null;
-
-      // Fetch topic scores
-      const { data: topicScores, error: scoresError } = await supabase
-        .from('candidate_topic_scores')
-        .select(`
-          topic_id,
-          score,
-          topics (name, icon)
-        `)
-        .eq('candidate_id', id);
       
-      if (scoresError) throw scoresError;
+      // If found in database, return with topic scores
+      if (candidate) {
+        const { data: topicScores, error: scoresError } = await supabase
+          .from('candidate_topic_scores')
+          .select(`
+            topic_id,
+            score,
+            topics (name, icon)
+          `)
+          .eq('candidate_id', id);
+        
+        if (scoresError) throw scoresError;
 
+        return {
+          ...candidate,
+          coverage_tier: candidate.coverage_tier || 'tier_3',
+          confidence: candidate.confidence || 'medium',
+          is_incumbent: candidate.is_incumbent ?? true,
+          score_version: candidate.score_version || 'v1.0',
+          topicScores: topicScores?.map(ts => ({
+            topic_id: ts.topic_id,
+            score: ts.score,
+            topics: ts.topics,
+          })) || [],
+        } as Candidate;
+      }
+
+      // Not in database - try Congress.gov API (id might be a bioguide ID)
+      console.log('Candidate not in DB, trying Congress API for:', id);
+      
+      const { data: congressData, error: congressError } = await supabase.functions.invoke(
+        'fetch-member',
+        { body: { bioguideId: id } }
+      );
+
+      if (congressError) {
+        console.error('Congress API error:', congressError);
+        return null;
+      }
+
+      if (!congressData?.member) {
+        return null;
+      }
+
+      const member = congressData.member;
       return {
-        ...candidate,
-        coverage_tier: candidate.coverage_tier || 'tier_3',
-        confidence: candidate.confidence || 'medium',
-        is_incumbent: candidate.is_incumbent ?? true,
-        score_version: candidate.score_version || 'v1.0',
-        topicScores: topicScores?.map(ts => ({
-          topic_id: ts.topic_id,
-          score: ts.score,
-          topics: ts.topics,
-        })) || [],
+        id: member.id,
+        name: member.name,
+        party: member.party,
+        office: member.office,
+        state: member.state,
+        district: member.district,
+        image_url: member.image_url,
+        overall_score: member.overall_score,
+        coverage_tier: member.coverage_tier || 'tier_3',
+        confidence: member.confidence || 'low',
+        is_incumbent: member.is_incumbent ?? true,
+        score_version: member.score_version || 'v1.0',
+        last_updated: member.last_updated || new Date().toISOString(),
+        topicScores: [],
       } as Candidate;
     },
     enabled: !!id,
