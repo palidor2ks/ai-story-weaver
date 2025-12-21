@@ -4,38 +4,116 @@ import { Header } from '@/components/Header';
 import { QuizQuestion } from '@/components/QuizQuestion';
 import { ScoreBar } from '@/components/ScoreBar';
 import { Button } from '@/components/ui/button';
-import { useUser } from '@/context/UserContext';
-import { questions } from '@/data/mockData';
-import { QuestionOption } from '@/types';
+import { useQuestions, useTopics } from '@/hooks/useCandidates';
+import { useSaveQuizResults, useUserTopics } from '@/hooks/useProfile';
+import { QuizAnswer, TopicScore } from '@/types';
 import { ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export const Quiz = () => {
   const navigate = useNavigate();
-  const { 
-    user, 
-    setUser, 
-    addQuizAnswer, 
-    quizAnswers, 
-    clearQuizAnswers,
-    calculateUserScore 
-  } = useUser();
+  const { data: dbQuestions = [], isLoading: questionsLoading } = useQuestions();
+  const { data: dbTopics = [] } = useTopics();
+  const { data: userTopics = [] } = useUserTopics();
+  const saveQuizResults = useSaveQuizResults();
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showResults, setShowResults] = useState(false);
+  const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
+  const [calculatedScores, setCalculatedScores] = useState<{ overall: number; byTopic: TopicScore[] } | null>(null);
 
-  const handleOptionSelect = (option: QuestionOption) => {
-    addQuizAnswer({
-      questionId: questions[currentQuestionIndex].id,
-      selectedOptionId: option.id,
-      value: option.value,
+  // Transform database questions to app format
+  const questions = dbQuestions.map(q => ({
+    id: q.id,
+    topicId: q.topic_id,
+    text: q.text,
+    options: (q.options || []).map((o: any) => ({
+      id: o.id,
+      text: o.text,
+      value: o.value,
+    })),
+  }));
+
+  const topics = dbTopics.map(t => ({
+    id: t.id,
+    name: t.name,
+    icon: t.icon,
+    weight: t.weight || 1,
+  }));
+
+  const selectedTopics = userTopics.map(ut => ({
+    id: ut.topics?.id || ut.topic_id,
+    name: ut.topics?.name || ut.topic_id,
+    icon: ut.topics?.icon || '',
+    weight: ut.weight,
+  }));
+
+  const handleOptionSelect = (option: { id: string; text: string; value: number }) => {
+    const questionId = questions[currentQuestionIndex].id;
+    setQuizAnswers(prev => {
+      const existing = prev.findIndex(a => a.questionId === questionId);
+      const newAnswer = {
+        questionId,
+        selectedOptionId: option.id,
+        value: option.value,
+      };
+      if (existing !== -1) {
+        const updated = [...prev];
+        updated[existing] = newAnswer;
+        return updated;
+      }
+      return [...prev, newAnswer];
     });
+  };
+
+  const calculateUserScore = (): { overall: number; byTopic: TopicScore[] } => {
+    const topicAnswers: Record<string, number[]> = {};
+    
+    quizAnswers.forEach(answer => {
+      const question = questions.find(q => q.id === answer.questionId);
+      if (question) {
+        if (!topicAnswers[question.topicId]) {
+          topicAnswers[question.topicId] = [];
+        }
+        topicAnswers[question.topicId].push(answer.value);
+      }
+    });
+
+    const topicScores: TopicScore[] = Object.entries(topicAnswers).map(([topicId, values]) => {
+      const avg = values.reduce((a, b) => a + b, 0) / values.length;
+      const normalizedScore = Math.round(avg * 10);
+      const topic = topics.find(t => t.id === topicId);
+      return {
+        topicId,
+        topicName: topic?.name || topicId,
+        score: normalizedScore,
+      };
+    });
+
+    let overallScore = 0;
+    let totalWeight = 0;
+    
+    topicScores.forEach(ts => {
+      const selectedTopic = selectedTopics.find(st => st.id === ts.topicId);
+      const weight = selectedTopic?.weight || 1;
+      overallScore += ts.score * weight;
+      totalWeight += weight;
+    });
+
+    if (totalWeight > 0) {
+      overallScore = Math.round(overallScore / totalWeight);
+    }
+
+    return { overall: overallScore, byTopic: topicScores };
   };
 
   const handleNext = () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
+      const scores = calculateUserScore();
+      setCalculatedScores(scores);
       setShowResults(true);
     }
   };
@@ -46,36 +124,43 @@ export const Quiz = () => {
     }
   };
 
-  const handleComplete = () => {
-    const scores = calculateUserScore();
-    if (user) {
-      setUser({
-        ...user,
-        overallScore: scores.overall,
-        topicScores: scores.byTopic,
-        quizHistory: [
-          ...user.quizHistory,
-          {
-            id: crypto.randomUUID(),
-            userId: user.id,
-            timestamp: new Date(),
-            answers: quizAnswers,
-            resultingScore: scores.overall,
-          }
-        ]
+  const handleComplete = async () => {
+    if (!calculatedScores) return;
+
+    try {
+      await saveQuizResults.mutateAsync({
+        overallScore: calculatedScores.overall,
+        topicScores: calculatedScores.byTopic.map(ts => ({
+          topicId: ts.topicId,
+          score: ts.score,
+        })),
+        answers: quizAnswers,
       });
+
+      toast.success('Quiz results saved!');
+      navigate('/profile');
+    } catch (error) {
+      console.error('Error saving quiz results:', error);
+      toast.error('Failed to save your results. Please try again.');
     }
-    clearQuizAnswers();
-    navigate('/profile');
   };
 
   const currentAnswer = quizAnswers.find(
     a => a.questionId === questions[currentQuestionIndex]?.id
   );
 
-  if (showResults) {
-    const scores = calculateUserScore();
-    
+  if (questionsLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      </div>
+    );
+  }
+
+  if (showResults && calculatedScores) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
@@ -99,21 +184,21 @@ export const Quiz = () => {
                 </span>
                 <div className={cn(
                   "text-5xl font-display font-bold mt-2",
-                  scores.overall >= 30 && "text-agree",
-                  scores.overall <= -30 && "text-disagree",
-                  scores.overall > -30 && scores.overall < 30 && "text-accent"
+                  calculatedScores.overall >= 30 && "text-agree",
+                  calculatedScores.overall <= -30 && "text-disagree",
+                  calculatedScores.overall > -30 && calculatedScores.overall < 30 && "text-accent"
                 )}>
-                  {scores.overall > 0 ? '+' : ''}{scores.overall}
+                  {calculatedScores.overall > 0 ? '+' : ''}{calculatedScores.overall}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {scores.overall >= 30 ? 'Leans Progressive' : 
-                   scores.overall <= -30 ? 'Leans Conservative' : 
+                  {calculatedScores.overall >= 30 ? 'Leans Progressive' : 
+                   calculatedScores.overall <= -30 ? 'Leans Conservative' : 
                    'Moderate / Centrist'}
                 </p>
               </div>
 
               <div className="space-y-4">
-                {scores.byTopic.map((ts, index) => (
+                {calculatedScores.byTopic.map((ts, index) => (
                   <div 
                     key={ts.topicId} 
                     className="animate-slide-up"
@@ -133,12 +218,27 @@ export const Quiz = () => {
               size="xl"
               variant="hero"
               onClick={handleComplete}
+              disabled={saveQuizResults.isPending}
               className="w-full"
             >
-              Save & View Profile
+              {saveQuizResults.isPending ? 'Saving...' : 'Save & View Profile'}
               <ArrowRight className="w-5 h-5" />
             </Button>
           </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container py-8 px-4 text-center">
+          <p className="text-muted-foreground">No questions available.</p>
+          <Button className="mt-4" onClick={() => navigate('/profile')}>
+            Back to Profile
+          </Button>
         </main>
       </div>
     );

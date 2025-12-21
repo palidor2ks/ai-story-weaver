@@ -1,17 +1,32 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
+import { useHasCompletedOnboarding } from '@/hooks/useProfile';
 import { Onboarding } from './Onboarding';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { isOnboarded } = useUser();
+  const { user, loading: authLoading } = useAuth();
+  const { data: hasCompleted, isLoading: onboardingLoading } = useHasCompletedOnboarding();
 
   useEffect(() => {
-    if (isOnboarded) {
+    if (!authLoading && !onboardingLoading && hasCompleted) {
       navigate('/feed');
     }
-  }, [isOnboarded, navigate]);
+  }, [hasCompleted, authLoading, onboardingLoading, navigate]);
+
+  if (authLoading || onboardingLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    navigate('/auth');
+    return null;
+  }
 
   return <Onboarding />;
 };

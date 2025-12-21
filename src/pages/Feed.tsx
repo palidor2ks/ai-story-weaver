@@ -1,22 +1,46 @@
 import { useState, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
-import { candidates } from '@/data/mockData';
-import { useUser } from '@/context/UserContext';
-import { calculateMatchScore } from '@/data/mockData';
+import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
+import { useProfile, useUserTopics, useUserTopicScores } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, SlidersHorizontal, TrendingUp } from 'lucide-react';
+import { Candidate, TopicScore } from '@/types';
 
 export const Feed = () => {
-  const { user } = useUser();
+  const { data: profile, isLoading: profileLoading } = useProfile();
+  const { data: userTopics = [] } = useUserTopics();
+  const { data: userTopicScores = [] } = useUserTopicScores();
+  const { data: candidates = [], isLoading: candidatesLoading } = useCandidates();
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('match');
   const [partyFilter, setPartyFilter] = useState<string>('all');
 
+  // Transform candidates for display
+  const transformedCandidates: Candidate[] = useMemo(() => {
+    return candidates.map(c => ({
+      id: c.id,
+      name: c.name,
+      party: c.party,
+      office: c.office,
+      state: c.state,
+      district: c.district || undefined,
+      imageUrl: c.image_url || '',
+      overallScore: c.overall_score,
+      topicScores: (c.topicScores || []).map(ts => ({
+        topicId: ts.topic_id,
+        topicName: ts.topics?.name || ts.topic_id,
+        score: ts.score,
+      })),
+      lastUpdated: new Date(c.last_updated),
+    }));
+  }, [candidates]);
+
   const filteredAndSortedCandidates = useMemo(() => {
-    let result = [...candidates];
+    let result = [...transformedCandidates];
 
     // Filter by search query
     if (searchQuery) {
@@ -34,7 +58,7 @@ export const Feed = () => {
     }
 
     // Sort
-    const userScore = user?.overallScore ?? 0;
+    const userScore = profile?.overall_score ?? 0;
     switch (sortBy) {
       case 'match':
         result.sort((a, b) => {
@@ -52,7 +76,29 @@ export const Feed = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, user]);
+  }, [searchQuery, sortBy, partyFilter, transformedCandidates, profile]);
+
+  const userTopicsList = userTopics.map(ut => ({
+    id: ut.topics?.id || ut.topic_id,
+    name: ut.topics?.name || ut.topic_id,
+    icon: ut.topics?.icon || '',
+    weight: ut.weight,
+  }));
+
+  const bestMatch = transformedCandidates.length > 0 
+    ? Math.max(...transformedCandidates.map(c => calculateMatchScore(profile?.overall_score ?? 0, c.overallScore)))
+    : 0;
+
+  if (profileLoading || candidatesLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -62,7 +108,7 @@ export const Feed = () => {
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
-            Welcome back, {user?.name || 'Voter'}
+            Welcome back, {profile?.name || 'Voter'}
           </h1>
           <p className="text-muted-foreground">
             Compare politicians based on your political profile and see who aligns with your values.
@@ -77,22 +123,22 @@ export const Feed = () => {
               Your Score
             </div>
             <div className="text-2xl font-bold text-foreground">
-              {user?.overallScore ?? 0 > 0 ? '+' : ''}{user?.overallScore ?? 0}
+              {(profile?.overall_score ?? 0) > 0 ? '+' : ''}{profile?.overall_score ?? 0}
             </div>
           </div>
           <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
             <div className="text-muted-foreground text-sm mb-1">Candidates</div>
-            <div className="text-2xl font-bold text-foreground">{candidates.length}</div>
+            <div className="text-2xl font-bold text-foreground">{transformedCandidates.length}</div>
           </div>
           <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
             <div className="text-muted-foreground text-sm mb-1">Best Match</div>
             <div className="text-2xl font-bold text-agree">
-              {Math.max(...candidates.map(c => calculateMatchScore(user?.overallScore ?? 0, c.overallScore)))}%
+              {bestMatch}%
             </div>
           </div>
           <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
             <div className="text-muted-foreground text-sm mb-1">Topics</div>
-            <div className="text-2xl font-bold text-foreground">{user?.topTopics.length ?? 0}</div>
+            <div className="text-2xl font-bold text-foreground">{userTopicsList.length}</div>
           </div>
         </div>
 

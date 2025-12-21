@@ -14,7 +14,396 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      candidate_topic_scores: {
+        Row: {
+          candidate_id: string
+          id: string
+          score: number
+          topic_id: string
+        }
+        Insert: {
+          candidate_id: string
+          id?: string
+          score?: number
+          topic_id: string
+        }
+        Update: {
+          candidate_id?: string
+          id?: string
+          score?: number
+          topic_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_topic_scores_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_topic_scores_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      candidates: {
+        Row: {
+          created_at: string | null
+          district: string | null
+          id: string
+          image_url: string | null
+          last_updated: string | null
+          name: string
+          office: string
+          overall_score: number | null
+          party: Database["public"]["Enums"]["party_type"]
+          state: string
+        }
+        Insert: {
+          created_at?: string | null
+          district?: string | null
+          id: string
+          image_url?: string | null
+          last_updated?: string | null
+          name: string
+          office: string
+          overall_score?: number | null
+          party: Database["public"]["Enums"]["party_type"]
+          state: string
+        }
+        Update: {
+          created_at?: string | null
+          district?: string | null
+          id?: string
+          image_url?: string | null
+          last_updated?: string | null
+          name?: string
+          office?: string
+          overall_score?: number | null
+          party?: Database["public"]["Enums"]["party_type"]
+          state?: string
+        }
+        Relationships: []
+      }
+      donors: {
+        Row: {
+          amount: number
+          candidate_id: string
+          cycle: string
+          id: string
+          name: string
+          type: Database["public"]["Enums"]["donor_type"]
+        }
+        Insert: {
+          amount: number
+          candidate_id: string
+          cycle: string
+          id: string
+          name: string
+          type: Database["public"]["Enums"]["donor_type"]
+        }
+        Update: {
+          amount?: number
+          candidate_id?: string
+          cycle?: string
+          id?: string
+          name?: string
+          type?: Database["public"]["Enums"]["donor_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donors_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          location: string | null
+          name: string
+          overall_score: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id: string
+          location?: string | null
+          name: string
+          overall_score?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          location?: string | null
+          name?: string
+          overall_score?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      question_options: {
+        Row: {
+          display_order: number | null
+          id: string
+          question_id: string
+          text: string
+          value: number
+        }
+        Insert: {
+          display_order?: number | null
+          id: string
+          question_id: string
+          text: string
+          value: number
+        }
+        Update: {
+          display_order?: number | null
+          id?: string
+          question_id?: string
+          text?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_options_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      questions: {
+        Row: {
+          created_at: string | null
+          id: string
+          text: string
+          topic_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id: string
+          text: string
+          topic_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          text?: string
+          topic_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_answers: {
+        Row: {
+          created_at: string | null
+          id: string
+          question_id: string
+          selected_option_id: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          question_id: string
+          selected_option_id: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          question_id?: string
+          selected_option_id?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_answers_selected_option_id_fkey"
+            columns: ["selected_option_id"]
+            isOneToOne: false
+            referencedRelation: "question_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_answers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      topics: {
+        Row: {
+          icon: string
+          id: string
+          name: string
+          weight: number | null
+        }
+        Insert: {
+          icon: string
+          id: string
+          name: string
+          weight?: number | null
+        }
+        Update: {
+          icon?: string
+          id?: string
+          name?: string
+          weight?: number | null
+        }
+        Relationships: []
+      }
+      user_topic_scores: {
+        Row: {
+          id: string
+          score: number
+          topic_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          score?: number
+          topic_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          score?: number
+          topic_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_topic_scores_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_topic_scores_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_topics: {
+        Row: {
+          created_at: string | null
+          id: string
+          topic_id: string
+          user_id: string
+          weight: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          topic_id: string
+          user_id: string
+          weight?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          topic_id?: string
+          user_id?: string
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_topics_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_topics_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      votes: {
+        Row: {
+          bill_id: string
+          bill_name: string
+          candidate_id: string
+          date: string
+          description: string | null
+          id: string
+          position: Database["public"]["Enums"]["vote_position"]
+          topic: string
+        }
+        Insert: {
+          bill_id: string
+          bill_name: string
+          candidate_id: string
+          date: string
+          description?: string | null
+          id: string
+          position: Database["public"]["Enums"]["vote_position"]
+          topic: string
+        }
+        Update: {
+          bill_id?: string
+          bill_name?: string
+          candidate_id?: string
+          date?: string
+          description?: string | null
+          id?: string
+          position?: Database["public"]["Enums"]["vote_position"]
+          topic?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "votes_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +412,9 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      donor_type: "Individual" | "PAC" | "Organization" | "Unknown"
+      party_type: "Democrat" | "Republican" | "Independent" | "Other"
+      vote_position: "Yea" | "Nay" | "Present" | "Not Voting"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +541,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      donor_type: ["Individual", "PAC", "Organization", "Unknown"],
+      party_type: ["Democrat", "Republican", "Independent", "Other"],
+      vote_position: ["Yea", "Nay", "Present", "Not Voting"],
+    },
   },
 } as const
