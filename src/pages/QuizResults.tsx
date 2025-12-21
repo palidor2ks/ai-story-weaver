@@ -4,12 +4,13 @@ import { Header } from '@/components/Header';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useProfile, useUserTopicScores, useUserTopics } from '@/hooks/useProfile';
 import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { formatScore, getScoreLabel, getScoreColor } from '@/lib/scoreFormat';
-import { Loader2, Sparkles, ArrowRight, BarChart3, Users, CheckCircle, XCircle } from 'lucide-react';
+import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
+import { Loader2, Sparkles, ArrowRight, BarChart3, Users, CheckCircle, XCircle, Share2, Copy, Twitter, Facebook, Linkedin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MatchBadge } from '@/components/MatchBadge';
 
@@ -192,6 +193,54 @@ export const QuizResults = () => {
     }
   };
 
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const shareText = `I just discovered my political profile! My score: ${formatScore(profile?.overall_score)} (${getScoreLabel(profile?.overall_score)}). Find out where you stand on the issues.`;
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast({
+        title: 'Link copied!',
+        description: 'Share your results with friends and family.',
+      });
+    } catch (err) {
+      toast({
+        title: 'Failed to copy',
+        description: 'Please copy the URL manually.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleShareTwitter = () => {
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleShareFacebook = () => {
+    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleShareLinkedIn = () => {
+    const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleNativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'My Political Profile',
+          text: shareText,
+          url: shareUrl,
+        });
+      } catch (err) {
+        // User cancelled or error
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -202,9 +251,43 @@ export const QuizResults = () => {
           <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
             Your Political Profile
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mb-4">
             Based on your quiz responses and topic priorities
           </p>
+          
+          {/* Share Button */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Share2 className="w-4 h-4" />
+                Share Results
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-48">
+              <DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer">
+                <Copy className="w-4 h-4 mr-2" />
+                Copy Link
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleShareTwitter} className="cursor-pointer">
+                <Twitter className="w-4 h-4 mr-2" />
+                Share on X
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleShareFacebook} className="cursor-pointer">
+                <Facebook className="w-4 h-4 mr-2" />
+                Share on Facebook
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleShareLinkedIn} className="cursor-pointer">
+                <Linkedin className="w-4 h-4 mr-2" />
+                Share on LinkedIn
+              </DropdownMenuItem>
+              {typeof navigator !== 'undefined' && 'share' in navigator && (
+                <DropdownMenuItem onClick={handleNativeShare} className="cursor-pointer">
+                  <Share2 className="w-4 h-4 mr-2" />
+                  More Options...
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Overall Score Card */}
