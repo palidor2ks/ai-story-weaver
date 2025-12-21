@@ -16,11 +16,10 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Plus, Pencil, Trash2, Shield, Users } from "lucide-react";
 
+// Only levels that require manual entry (no API available)
 const LEVELS = [
-  { value: 'federal_executive', label: 'Federal Executive' },
-  { value: 'state_executive', label: 'State Executive' },
-  { value: 'state_legislative', label: 'State Legislative' },
-  { value: 'local', label: 'Local' },
+  { value: 'federal_executive', label: 'Federal Executive (President/VP)' },
+  { value: 'local', label: 'Local (Mayor, City Council, etc.)' },
 ];
 
 const PARTIES = ['Democrat', 'Republican', 'Independent', 'Other'] as const;
@@ -179,7 +178,10 @@ export default function Admin() {
               Manage Politicians
             </h1>
             <p className="text-muted-foreground mt-1">
-              Add and manage static politician data (executives, governors, etc.)
+              Manage officials without API coverage (President/VP, local officials)
+            </p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Note: State legislators and governors are fetched automatically from Open States API
             </p>
           </div>
           
@@ -382,9 +384,9 @@ export default function Admin() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Static Officials</CardTitle>
+            <CardTitle>Manual Entry Officials</CardTitle>
             <CardDescription>
-              Politicians managed manually (not from Congress.gov API)
+              Officials without API coverage: President, Vice President, and local officials (mayors, city council, etc.)
             </CardDescription>
           </CardHeader>
           <CardContent>
