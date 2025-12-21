@@ -388,25 +388,33 @@ export const UserProfile = () => {
             <CardTitle className="font-display flex items-center gap-2">
               <Users className="w-5 h-5 text-accent" />
               Your Representatives
-              {congressionalState && congressionalDistrict && (
+              {repsLoading ? (
+                <Badge variant="outline" className="ml-2 text-xs font-normal animate-pulse">
+                  Looking up district...
+                </Badge>
+              ) : congressionalState && congressionalDistrict ? (
                 <Badge variant="outline" className="ml-2 text-xs font-normal">
                   {congressionalState}-{congressionalDistrict}
                 </Badge>
-              )}
+              ) : null}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {!profile.address ? (
               <div className="text-center py-6">
                 <p className="text-muted-foreground mb-4">Add your address to see your congressional representatives.</p>
-                <Button variant="outline" onClick={() => navigate('/')}>
-                  Update Address
+                <Button variant="outline" onClick={handleEditAddress}>
+                  Add Address
                 </Button>
               </div>
             ) : repsLoading ? (
               <div className="space-y-4">
+                <div className="flex items-center justify-center gap-3 py-4 text-muted-foreground">
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent" />
+                  <span>Finding your congressional representatives...</span>
+                </div>
                 {[1, 2, 3].map(i => (
-                  <div key={i} className="flex items-center gap-4 p-4 rounded-lg border border-border">
+                  <div key={i} className="flex items-center gap-4 p-4 rounded-lg border border-border animate-pulse">
                     <Skeleton className="w-12 h-12 rounded-full" />
                     <div className="flex-1">
                       <Skeleton className="h-4 w-32 mb-2" />
