@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { useStaticOfficials, useCreateStaticOfficial, useUpdateStaticOfficial, useDeleteStaticOfficial, StaticOfficial } from "@/hooks/useStaticOfficials";
 import { Header } from "@/components/Header";
+import { SyncStatusDashboard } from "@/components/admin/SyncStatusDashboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -381,6 +382,8 @@ export default function Admin() {
             </DialogContent>
           </Dialog>
         </div>
+
+        <SyncStatusDashboard />
 
         <Card>
           <CardHeader>
