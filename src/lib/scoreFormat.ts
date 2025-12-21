@@ -22,23 +22,20 @@ export function formatScore(score: number | null | undefined): string {
   // Clamp to valid range
   const clamped = Math.max(-10, Math.min(10, score));
   
-  // Round to nearest integer
-  const rounded = Math.round(clamped);
-  
   // Handle exact center
-  if (rounded === 0) {
+  if (clamped === 0) {
     return 'C';
   }
   
-  const absValue = Math.abs(rounded);
+  const absValue = Math.abs(clamped).toFixed(2);
   
   // Center zone: -3 to 3 (use CL/CR)
-  if (rounded >= -3 && rounded <= 3) {
-    return rounded < 0 ? `CL${absValue}` : `CR${absValue}`;
+  if (clamped >= -3 && clamped <= 3) {
+    return clamped < 0 ? `CL${absValue}` : `CR${absValue}`;
   }
   
   // Outside center zone: L/R
-  return rounded < 0 ? `L${absValue}` : `R${absValue}`;
+  return clamped < 0 ? `L${absValue}` : `R${absValue}`;
 }
 
 /**
