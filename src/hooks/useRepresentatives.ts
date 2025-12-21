@@ -154,7 +154,7 @@ export function useRepresentatives(address: string | null | undefined) {
       const { data, error } = await supabase.functions.invoke<FetchRepresentativesResponse>(
         'fetch-representatives',
         {
-          body: { state: parsedState, district }
+          body: { state: parsedState, district, includeExecutives: true }
         }
       );
 
