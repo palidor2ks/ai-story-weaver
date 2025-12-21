@@ -203,11 +203,12 @@ export const Search = () => {
                                   </span>
                                 </div>
                               </div>
-                              <div className="w-24 flex-shrink-0">
+                              <div className="w-28 flex-shrink-0">
                                 <ComparisonSpectrum 
                                   userScore={userScore} 
                                   repScore={candidate.overall_score ?? 0} 
                                   repName={candidate.name.split(' ').pop() || 'Rep'}
+                                  repImageUrl={candidate.image_url}
                                   size="sm"
                                 />
                               </div>

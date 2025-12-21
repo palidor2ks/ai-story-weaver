@@ -174,6 +174,7 @@ export const CandidateProfile = () => {
                 userScore={profile?.overall_score ?? 0} 
                 repScore={candidate.overall_score ?? 0} 
                 repName={candidate.name.split(' ').pop() || 'Candidate'}
+                repImageUrl={representativeDetails?.image_url || candidate.image_url}
                 size="md"
               />
             </div>

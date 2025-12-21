@@ -103,11 +103,12 @@ export const CandidateCard = ({ candidate, index = 0 }: CandidateCardProps) => {
                     </span>
                   </div>
                 </div>
-                <div className="w-24 flex-shrink-0">
+                <div className="w-28 flex-shrink-0">
                   <ComparisonSpectrum 
                     userScore={userScore} 
                     repScore={candidate.overallScore ?? 0} 
                     repName={candidate.name.split(' ').pop() || 'Rep'}
+                    repImageUrl={candidate.imageUrl}
                     size="sm"
                   />
                 </div>
