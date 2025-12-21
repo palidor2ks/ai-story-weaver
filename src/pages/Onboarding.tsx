@@ -10,9 +10,12 @@ import { useTopics, useCanonicalQuestions } from '@/hooks/useCandidates';
 import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { OnboardingStep, Topic, QuestionOption, QuizAnswer, TopicScore } from '@/types';
 import { formatScore, getScoreLabel, calculateWeightedScore } from '@/lib/scoreFormat';
-import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+// Minimum required answers before allowing quiz completion (50% of questions)
+const MIN_REQUIRED_ANSWERS = 5;
 
 type ExtendedOnboardingStep = OnboardingStep | 'demographics';
 
@@ -106,15 +109,25 @@ export const Onboarding = () => {
 
   const handleSkipQuestion = () => {
     const currentQuestion = activeQuestions[currentQuestionIndex];
-    setSkippedQuestionIds(prev => new Set([...prev, currentQuestion.id]));
+    const newSkippedIds = new Set([...skippedQuestionIds, currentQuestion.id]);
+    setSkippedQuestionIds(newSkippedIds);
     
-    // Move to next question (the active questions list will be recalculated)
-    // If we're at the end, calculate scores
+    // Calculate how many answers we'll have after this skip
+    const remainingQuestions = activeQuestions.length - 1; // After removing current
+    const currentAnswerCount = quizAnswers.length;
+    
+    // If we're at the last question or will have too few questions left
     if (currentQuestionIndex >= activeQuestions.length - 1) {
-      const scores = calculateUserScore();
-      setCalculatedScores(scores);
-      setStep('results');
+      // Check if we have enough answers to proceed
+      if (currentAnswerCount >= MIN_REQUIRED_ANSWERS) {
+        const scores = calculateUserScore();
+        setCalculatedScores(scores);
+        setStep('results');
+      } else {
+        toast.error(`Please answer at least ${MIN_REQUIRED_ANSWERS} questions to continue.`);
+      }
     }
+    // Otherwise the activeQuestions memo will update and show next question
   };
 
   const handleNextQuestion = () => {
@@ -172,6 +185,12 @@ export const Onboarding = () => {
 
   const handleComplete = async () => {
     if (!calculatedScores) return;
+    
+    // Final guard: ensure minimum answers
+    if (quizAnswers.length < MIN_REQUIRED_ANSWERS) {
+      toast.error(`Please answer at least ${MIN_REQUIRED_ANSWERS} questions before continuing.`);
+      return;
+    }
 
     try {
       // Save user topics with proper weights
@@ -194,6 +213,10 @@ export const Onboarding = () => {
       toast.error('Failed to save your results. Please try again.');
     }
   };
+
+  // Calculate if user can complete (has enough answers)
+  const canComplete = quizAnswers.length >= MIN_REQUIRED_ANSWERS;
+  const skippedCount = skippedQuestionIds.size;
 
   const currentAnswer = quizAnswers.find(
     a => a.questionId === activeQuestions[currentQuestionIndex]?.id
@@ -439,6 +462,21 @@ export const Onboarding = () => {
               Based on your answers, here's where you stand on the Left-Right spectrum.
             </p>
 
+            {/* Skipped questions warning */}
+            {skippedCount > 0 && (
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-warning/10 border border-warning/20 mb-6 text-left">
+                <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {skippedCount} question{skippedCount !== 1 ? 's' : ''} skipped
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Your score is based on {quizAnswers.length} of {quizAnswers.length + skippedCount} questions.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="bg-card rounded-2xl border border-border p-6 mb-8 shadow-elevated">
               <div className="text-center mb-8">
                 <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
@@ -473,12 +511,19 @@ export const Onboarding = () => {
               size="xl"
               variant="hero"
               onClick={handleComplete}
-              disabled={saveQuizResults.isPending || saveUserTopics.isPending}
+              disabled={saveQuizResults.isPending || saveUserTopics.isPending || !canComplete}
               className="w-full"
+              title={!canComplete ? `Answer at least ${MIN_REQUIRED_ANSWERS} questions to continue` : undefined}
             >
               {saveQuizResults.isPending ? 'Saving...' : 'Explore Politicians'}
               <ArrowRight className="w-5 h-5" />
             </Button>
+            
+            {!canComplete && (
+              <p className="text-sm text-destructive mt-3">
+                Please answer at least {MIN_REQUIRED_ANSWERS} questions to continue.
+              </p>
+            )}
           </div>
         );
     }

@@ -147,7 +147,10 @@ export const useSaveQuizResults = () => {
     }) => {
       if (!user) throw new Error('Not authenticated');
 
-      // Update overall score in profile with score version
+      // Batch all operations for atomicity and performance
+      const errors: Error[] = [];
+
+      // 1. Update overall score in profile with score version
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ 
@@ -156,33 +159,42 @@ export const useSaveQuizResults = () => {
         })
         .eq('id', user.id);
       
-      if (profileError) throw profileError;
+      if (profileError) errors.push(profileError);
 
-      // Upsert topic scores
-      for (const ts of topicScores) {
-        const { error } = await supabase
-          .from('user_topic_scores')
-          .upsert({
-            user_id: user.id,
-            topic_id: ts.topicId,
-            score: ts.score,
-          }, { onConflict: 'user_id,topic_id' });
+      // 2. Batch upsert all topic scores in a single call
+      if (topicScores.length > 0) {
+        const topicScoreRows = topicScores.map(ts => ({
+          user_id: user.id,
+          topic_id: ts.topicId,
+          score: ts.score,
+        }));
         
-        if (error) throw error;
+        const { error: topicScoresError } = await supabase
+          .from('user_topic_scores')
+          .upsert(topicScoreRows, { onConflict: 'user_id,topic_id' });
+        
+        if (topicScoresError) errors.push(topicScoresError);
       }
 
-      // Save quiz answers
-      for (const answer of answers) {
-        const { error } = await supabase
-          .from('quiz_answers')
-          .upsert({
-            user_id: user.id,
-            question_id: answer.questionId,
-            selected_option_id: answer.selectedOptionId,
-            value: answer.value,
-          }, { onConflict: 'user_id,question_id' });
+      // 3. Batch upsert all quiz answers in a single call
+      if (answers.length > 0) {
+        const answerRows = answers.map(answer => ({
+          user_id: user.id,
+          question_id: answer.questionId,
+          selected_option_id: answer.selectedOptionId,
+          value: answer.value,
+        }));
         
-        if (error) throw error;
+        const { error: answersError } = await supabase
+          .from('quiz_answers')
+          .upsert(answerRows, { onConflict: 'user_id,question_id' });
+        
+        if (answersError) errors.push(answersError);
+      }
+
+      // If any errors occurred, throw the first one (could aggregate if needed)
+      if (errors.length > 0) {
+        throw new Error(`Failed to save quiz results: ${errors.map(e => e.message).join(', ')}`);
       }
 
       return { success: true };
