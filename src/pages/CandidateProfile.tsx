@@ -11,8 +11,9 @@ import { useCandidate, useCandidateDonors, useCandidateVotes, calculateMatchScor
 import { useProfile, useUserTopicScores } from '@/hooks/useProfile';
 import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { useAdminRole } from '@/hooks/useAdminRole';
+import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck } from 'lucide-react';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
@@ -22,6 +23,7 @@ import { ContactInfoCard } from '@/components/ContactInfoCard';
 import { CandidatePositions } from '@/components/CandidatePositions';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
+import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
 
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
@@ -32,10 +34,14 @@ export const CandidateProfile = () => {
   const { data: votes = [] } = useCandidateVotes(id);
   const { data: representativeDetails } = useRepresentativeDetails(id);
   const { data: adminData } = useAdminRole();
+  const { user } = useAuth();
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   
   const isAdmin = adminData?.isAdmin ?? false;
+  const isPoliticianOwner = !!user && candidate?.claimed_by_user_id === user.id;
+  const canEdit = isAdmin || isPoliticianOwner;
+  const isClaimed = !!candidate?.claimed_by_user_id;
 
   if (candidateLoading) {
     return (
@@ -181,6 +187,12 @@ export const CandidateProfile = () => {
                 <Badge variant="outline" className={cn("border text-sm", getPartyColor(candidate.party))}>
                   {candidate.party}
                 </Badge>
+                {isClaimed && (
+                  <Badge variant="secondary" className="bg-agree/10 text-agree border-agree/30">
+                    <BadgeCheck className="h-3 w-3 mr-1" />
+                    Verified
+                  </Badge>
+                )}
                 {candidate.hasOverride && (
                   <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/30">
                     Overridden
@@ -188,18 +200,27 @@ export const CandidateProfile = () => {
                 )}
               </div>
               
-              {/* Admin Edit Button */}
-              {isAdmin && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => setIsEditDialogOpen(true)}
-                >
-                  <Pencil className="h-4 w-4" />
-                  Edit
-                </Button>
-              )}
+              {/* Edit Button (Admin or Politician Owner) */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {canEdit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setIsEditDialogOpen(true)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </Button>
+                )}
+                
+                {/* Claim Profile Button */}
+                <ClaimProfileDialog
+                  candidateId={candidate.id}
+                  candidateName={candidate.name}
+                  isAlreadyClaimed={isClaimed}
+                />
+              </div>
 
               {/* Score Display */}
               <div className="mb-3">

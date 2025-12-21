@@ -6,6 +6,7 @@ import { useStaticOfficials, useCreateStaticOfficial, useUpdateStaticOfficial, u
 import { useCandidateOverrides, useDeleteCandidateOverride, CandidateOverride } from "@/hooks/useCandidateOverrides";
 import { Header } from "@/components/Header";
 import { SyncStatusDashboard } from "@/components/admin/SyncStatusDashboard";
+import { ClaimReviewPanel } from "@/components/admin/ClaimReviewPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit, UserCheck } from "lucide-react";
 
 // Only levels that require manual entry (no API available)
 const LEVELS = [
@@ -417,6 +418,10 @@ export default function Admin() {
               <FileEdit className="h-4 w-4" />
               Overrides ({overrides?.length || 0})
             </TabsTrigger>
+            <TabsTrigger value="claims" className="gap-2">
+              <UserCheck className="h-4 w-4" />
+              Claims
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="officials">
@@ -594,6 +599,10 @@ export default function Admin() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="claims">
+            <ClaimReviewPanel />
           </TabsContent>
         </Tabs>
       </main>
