@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export interface CandidateAnswer {
   id: string;
@@ -56,6 +57,145 @@ export const useCandidateAnswers = (candidateId: string | undefined) => {
       return data as CandidateAnswer[];
     },
     enabled: !!candidateId,
+  });
+};
+
+/**
+ * Smart hook that fetches candidate answers with AI fallback
+ * - First checks database for existing answers
+ * - If user's rep has no answers for user's questions, generates via AI
+ * - Only generates for user's specific representatives to save resources
+ */
+export const useSmartCandidateAnswers = (
+  candidateId: string | undefined,
+  userQuestionIds: string[],
+  isUserRep: boolean = false
+) => {
+  const queryClient = useQueryClient();
+
+  return useQuery({
+    queryKey: ['smart-candidate-answers', candidateId, userQuestionIds, isUserRep],
+    queryFn: async () => {
+      if (!candidateId || userQuestionIds.length === 0) return { answers: [], source: 'none' };
+      
+      // First try to get answers from the database
+      const { data: dbAnswers, error: dbError } = await supabase
+        .from('candidate_answers')
+        .select(`
+          *,
+          question:questions (
+            id,
+            text,
+            topic_id,
+            topics (id, name)
+          )
+        `)
+        .eq('candidate_id', candidateId)
+        .in('question_id', userQuestionIds);
+      
+      if (dbError) {
+        console.error('Error fetching candidate answers:', dbError);
+        throw dbError;
+      }
+
+      // If we have all answers we need, return them
+      if (dbAnswers && dbAnswers.length >= userQuestionIds.length * 0.5) {
+        return { 
+          answers: dbAnswers as CandidateAnswer[], 
+          source: 'database',
+          count: dbAnswers.length 
+        };
+      }
+
+      // Only use AI fallback for user's representatives
+      if (!isUserRep) {
+        return { 
+          answers: dbAnswers as CandidateAnswer[] || [], 
+          source: 'database',
+          count: dbAnswers?.length || 0 
+        };
+      }
+
+      // Generate missing answers via AI for user's representatives
+      console.log(`Generating AI answers for rep ${candidateId}...`);
+      
+      const { data: aiData, error: aiError } = await supabase.functions.invoke(
+        'get-candidate-answers',
+        {
+          body: {
+            candidateId,
+            questionIds: userQuestionIds,
+          },
+        }
+      );
+
+      if (aiError) {
+        console.error('Error generating AI answers:', aiError);
+        // Fall back to whatever we have
+        return { 
+          answers: dbAnswers as CandidateAnswer[] || [], 
+          source: 'database',
+          count: dbAnswers?.length || 0 
+        };
+      }
+
+      // Invalidate cache to pick up new answers
+      queryClient.invalidateQueries({ queryKey: ['candidate-answers', candidateId] });
+
+      return {
+        answers: aiData.answers || [],
+        source: aiData.source || 'ai_generated',
+        count: aiData.count || 0,
+        generated: aiData.generated || 0,
+      };
+    },
+    enabled: !!candidateId && userQuestionIds.length > 0,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
+};
+
+/**
+ * Mutation to trigger AI answer generation for a candidate
+ */
+export const useGenerateCandidateAnswers = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      candidateId, 
+      questionIds,
+      forceRegenerate = false 
+    }: { 
+      candidateId: string; 
+      questionIds?: string[];
+      forceRegenerate?: boolean;
+    }) => {
+      const { data, error } = await supabase.functions.invoke(
+        'get-candidate-answers',
+        {
+          body: {
+            candidateId,
+            questionIds,
+            forceRegenerate,
+          },
+        }
+      );
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['candidate-answers', variables.candidateId] });
+      queryClient.invalidateQueries({ queryKey: ['smart-candidate-answers'] });
+      
+      if (data.generated > 0) {
+        toast.success(`Generated ${data.generated} position${data.generated > 1 ? 's' : ''} for this representative`);
+      }
+    },
+    onError: (error) => {
+      console.error('Error generating answers:', error);
+      toast.error('Failed to generate positions. Please try again.');
+    },
   });
 };
 

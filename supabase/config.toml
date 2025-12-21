@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.populate-party-answers]
 verify_jwt = false
+
+[functions.get-candidate-answers]
+verify_jwt = false
