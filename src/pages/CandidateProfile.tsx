@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCandidate, useCandidateDonors, useCandidateVotes, calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile, useUserTopicScores } from '@/hooks/useProfile';
+import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, User, Sparkles } from 'lucide-react';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
@@ -15,6 +16,7 @@ import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components
 import { AIExplanation } from '@/components/AIExplanation';
 import { EvidenceBrowser } from '@/components/EvidenceBrowser';
 import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
+import { ContactInfoCard } from '@/components/ContactInfoCard';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 
 export const CandidateProfile = () => {
@@ -24,6 +26,7 @@ export const CandidateProfile = () => {
   const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
   const { data: donors = [] } = useCandidateDonors(id);
   const { data: votes = [] } = useCandidateVotes(id);
+  const { data: representativeDetails } = useRepresentativeDetails(id);
 
   if (candidateLoading) {
     return (
@@ -162,6 +165,13 @@ export const CandidateProfile = () => {
             topicScores={candidateTopicScores}
           />
         </div>
+
+        {/* Contact Info Section */}
+        {representativeDetails && (
+          <div className="mb-8">
+            <ContactInfoCard representative={representativeDetails} />
+          </div>
+        )}
 
         {/* You vs Candidate */}
         <Card className="mb-8 shadow-elevated">
