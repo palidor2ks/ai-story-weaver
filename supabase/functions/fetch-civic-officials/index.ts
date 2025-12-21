@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const GOOGLE_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY');
+const GOOGLE_API_KEY = Deno.env.get('GOOGLE_CIVIC_API_KEY') ?? Deno.env.get('GOOGLE_PLACES_API_KEY');
 
 // Office level categorization
 type OfficeLevelType = 'federal_executive' | 'federal_legislative' | 'state_executive' | 'state_legislative' | 'local';
@@ -158,7 +158,7 @@ serve(async (req) => {
     console.log(`Include federal legislative: ${includeFederalLegislative}`);
 
     if (!GOOGLE_API_KEY) {
-      throw new Error('Google Places API key not configured');
+      throw new Error('Google Civic API key not configured (set GOOGLE_CIVIC_API_KEY or reuse GOOGLE_PLACES_API_KEY)');
     }
 
     if (!address) {
