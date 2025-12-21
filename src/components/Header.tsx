@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/context/UserContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
-import { User, LayoutGrid, Menu, X, Search, BookOpen, HelpCircle, Users, DollarSign, Shield } from 'lucide-react';
+import { User, LayoutGrid, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
@@ -18,7 +18,6 @@ export const Header = () => {
     { path: '/feed', label: 'Feed', icon: LayoutGrid },
     { path: '/candidates', label: 'Candidates', icon: Users },
     { path: '/donors', label: 'Donors', icon: DollarSign },
-    { path: '/search', label: 'Search', icon: Search },
     { path: '/quiz-library', label: 'Quizzes', icon: BookOpen },
     { path: '/profile', label: 'Profile', icon: User },
   ];

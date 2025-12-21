@@ -14,7 +14,7 @@ import { CandidateProfile } from "./pages/CandidateProfile";
 import { UserProfile } from "./pages/UserProfile";
 import { Quiz } from "./pages/Quiz";
 import { QuizResults } from "./pages/QuizResults";
-import { Search } from "./pages/Search";
+
 import { QuizLibrary } from "./pages/QuizLibrary";
 import { HowScoringWorks } from "./pages/HowScoringWorks";
 import Admin from "./pages/Admin";
@@ -92,11 +92,6 @@ const AppRoutes = () => {
       <Route path="/donors" element={
         <ProtectedRoute>
           <Donors />
-        </ProtectedRoute>
-      } />
-      <Route path="/search" element={
-        <ProtectedRoute>
-          <Search />
         </ProtectedRoute>
       } />
       <Route path="/candidate/:id" element={
