@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { QuizQuestion } from '@/components/QuizQuestion';
-import { ScoreBar } from '@/components/ScoreBar';
+import { ScoreText } from '@/components/ScoreText';
 import { Button } from '@/components/ui/button';
 import { useQuestions, useTopics } from '@/hooks/useCandidates';
 import { useSaveQuizResults, useUserTopics } from '@/hooks/useProfile';
@@ -268,18 +268,15 @@ export const Quiz = () => {
                 </p>
               </div>
 
-              <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {calculatedScores.byTopic.map((ts, index) => (
                   <div 
                     key={ts.topicId} 
-                    className="animate-slide-up"
+                    className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 animate-slide-up"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <ScoreBar
-                      score={ts.score}
-                      label={ts.topicName}
-                      size="md"
-                    />
+                    <span className="text-sm font-medium text-foreground">{ts.topicName}</span>
+                    <ScoreText score={ts.score} size="sm" />
                   </div>
                 ))}
               </div>
