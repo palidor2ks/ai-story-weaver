@@ -63,11 +63,33 @@ export function parseAddressForState(address: string): { state: string | null; z
   return { state: foundState, zipCode };
 }
 
-// Map zip code to congressional district (simplified - in production would use Census API)
-export async function getDistrictFromZip(zipCode: string): Promise<string | null> {
-  // This is a simplified mapping - in production, you'd use the Census Geocoder API
-  // For now, return null and rely on showing all representatives for the state
-  return null;
+// Get congressional district using Census Geocoder API
+export async function getDistrictFromAddress(address: string): Promise<string | null> {
+  try {
+    const encodedAddress = encodeURIComponent(address);
+    const url = `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodedAddress}&benchmark=Public_AR_Current&vintage=Current_Current&layers=54&format=json`;
+    
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.log('Census geocoder request failed');
+      return null;
+    }
+    
+    const data = await response.json();
+    const geographies = data?.result?.addressMatches?.[0]?.geographies;
+    const congressionalDistrict = geographies?.['119th Congressional Districts']?.[0];
+    
+    if (congressionalDistrict?.CD119) {
+      const districtNum = congressionalDistrict.CD119;
+      console.log(`Found congressional district: ${districtNum}`);
+      return districtNum;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting district from address:', error);
+    return null;
+  }
 }
 
 export function useRepresentatives(address: string | null | undefined) {
@@ -79,19 +101,21 @@ export function useRepresentatives(address: string | null | undefined) {
         return [];
       }
 
-      const { state, zipCode } = parseAddressForState(address);
+      const { state } = parseAddressForState(address);
       
       if (!state) {
         console.log('Could not parse state from address:', address);
         return [];
       }
 
-      console.log(`Fetching representatives for state: ${state}`);
+      // Get the congressional district from the full address
+      const district = await getDistrictFromAddress(address);
+      console.log(`Fetching representatives for state: ${state}, district: ${district}`);
 
       const { data, error } = await supabase.functions.invoke<FetchRepresentativesResponse>(
         'fetch-representatives',
         {
-          body: { state, district: null }
+          body: { state, district }
         }
       );
 

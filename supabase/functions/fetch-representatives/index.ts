@@ -82,10 +82,16 @@ serve(async (req) => {
       if (rep.office === 'Senator') {
         return true; // Include all senators for the state
       }
-      if (rep.office === 'Representative' && district) {
-        // Match by district number
-        const repDistrictNum = rep.district?.split('-')[1];
-        return repDistrictNum === String(district);
+      if (rep.office === 'Representative') {
+        if (district) {
+          // Match by district number (handle both "01" and "1" formats)
+          const repDistrictNum = rep.district?.split('-')[1];
+          const normalizedRepDistrict = repDistrictNum ? parseInt(repDistrictNum, 10).toString() : null;
+          const normalizedInputDistrict = parseInt(String(district), 10).toString();
+          return normalizedRepDistrict === normalizedInputDistrict;
+        }
+        // If no district provided, don't include any representatives (only senators)
+        return false;
       }
       return false;
     });
