@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { ComparisonSpectrum } from './ComparisonSpectrum';
 import { ScoreDisplay } from './ScoreDisplay';
+import { ScoreText } from './ScoreText';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
@@ -116,17 +116,8 @@ export const ComparePanel = ({
 
                 {/* Score */}
                 <div className="mb-3 flex justify-center">
-                  <ScoreDisplay score={candidate.overallScore} size="sm" />
+                  <ScoreText score={candidate.overallScore} size="lg" showLabel />
                 </div>
-
-                {/* Spectrum */}
-                <ComparisonSpectrum 
-                  userScore={userScore} 
-                  repScore={candidate.overallScore ?? 0} 
-                  repName={candidate.name.split(' ').pop() || 'Rep'}
-                  repImageUrl={candidate.imageUrl}
-                  size="md"
-                />
 
                 {/* View profile link */}
                 <Link to={`/candidate/${candidate.id}`}>
