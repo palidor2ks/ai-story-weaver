@@ -10,6 +10,9 @@ const OPEN_STATES_API_KEY = Deno.env.get('OPEN_STATES_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
+// GitHub Pages URL for executive data
+const EXECUTIVE_URL = 'https://unitedstates.github.io/congress-legislators/executive.json';
+
 // Office level categorization
 type OfficeLevelType = 'federal_executive' | 'federal_legislative' | 'state_executive' | 'state_legislative' | 'local';
 
@@ -30,6 +33,22 @@ interface OfficialInfo {
   coverage_tier: string;
   confidence: string;
 }
+
+interface Executive {
+  id: { bioguide?: string; govtrack?: number };
+  name: { official_full?: string; first: string; last: string };
+  terms: Array<{
+    type: 'prez' | 'viceprez';
+    start: string;
+    end: string;
+    party: string;
+  }>;
+}
+
+// Cached executives data
+let cachedExecutives: Executive[] | null = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
 
 // Map party names to our types
 function mapParty(party: string | undefined): 'Democrat' | 'Republican' | 'Independent' | 'Other' {
@@ -73,6 +92,111 @@ function extractStateFromAddress(address: string): string {
   }
   
   return '';
+}
+
+// Fetch federal executives from GitHub (unitedstates/congress-legislators)
+async function fetchFederalExecutiveFromGitHub(): Promise<OfficialInfo[]> {
+  const now = Date.now();
+  
+  try {
+    // Use cache if available
+    if (cachedExecutives && (now - cacheTimestamp) < CACHE_DURATION) {
+      console.log('[Cache] Using cached executives data');
+    } else {
+      console.log('[Fetch] Downloading executives from GitHub...');
+      const response = await fetch(EXECUTIVE_URL);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch executives: ${response.status}`);
+      }
+      cachedExecutives = await response.json();
+      cacheTimestamp = now;
+      console.log(`[Fetch] Downloaded ${cachedExecutives!.length} executives`);
+    }
+
+    // Get current date for filtering
+    const today = new Date();
+    
+    // Find current President and VP
+    const currentExecutives: OfficialInfo[] = [];
+    
+    for (const exec of cachedExecutives!) {
+      const currentTerm = exec.terms?.find(term => {
+        const start = new Date(term.start);
+        const end = new Date(term.end);
+        return today >= start && today <= end;
+      });
+
+      if (currentTerm) {
+        const bioguideId = exec.id.bioguide || `exec_${exec.name.last.toLowerCase()}`;
+        const isPrez = currentTerm.type === 'prez';
+        
+        // Construct image URL
+        const imageUrl = exec.id.bioguide 
+          ? `https://bioguide.congress.gov/bioguide/photo/${bioguideId[0]}/${bioguideId}.jpg`
+          : '';
+
+        currentExecutives.push({
+          id: bioguideId,
+          name: exec.name.official_full || `${exec.name.first} ${exec.name.last}`,
+          party: mapParty(currentTerm.party),
+          office: isPrez ? 'President' : 'Vice President',
+          level: 'federal_executive',
+          state: 'US',
+          image_url: imageUrl,
+          is_incumbent: true,
+          overall_score: null,
+          coverage_tier: 'tier_1',
+          confidence: 'high',
+        });
+      }
+    }
+
+    console.log(`[GitHub] Found ${currentExecutives.length} current federal executives`);
+    return currentExecutives;
+  } catch (error) {
+    console.error('[GitHub] Error fetching executives:', error);
+    // Fall back to database if GitHub fails
+    return fetchFederalExecutiveFromDB();
+  }
+}
+
+// Fallback: Fetch federal executive from database
+async function fetchFederalExecutiveFromDB(): Promise<OfficialInfo[]> {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    const { data, error } = await supabase
+      .from('static_officials')
+      .select('*')
+      .eq('level', 'federal_executive')
+      .eq('is_active', true);
+
+    if (error) {
+      console.error('[DB Fallback] Error fetching federal executive:', error);
+      return [];
+    }
+
+    console.log(`[DB Fallback] Found ${data?.length || 0} federal executive officials`);
+    
+    return (data || []).map(official => ({
+      id: official.id,
+      name: official.name,
+      party: official.party as 'Democrat' | 'Republican' | 'Independent' | 'Other',
+      office: official.office,
+      level: official.level as OfficeLevelType,
+      state: official.state,
+      district: official.district,
+      image_url: official.image_url || '',
+      urls: official.website_url ? [official.website_url] : [],
+      is_incumbent: true,
+      overall_score: null,
+      coverage_tier: official.coverage_tier || 'tier_1',
+      confidence: official.confidence || 'high',
+    }));
+  } catch (error) {
+    console.error('[DB Fallback] Exception fetching federal executive:', error);
+    return [];
+  }
 }
 
 // Fetch state legislators and governors from Open States API v3
@@ -201,45 +325,6 @@ async function fetchOpenStatesOfficials(state: string, lat?: number, lng?: numbe
   return { legislators, governors };
 }
 
-// Fetch federal executive from database (President, VP - no API exists)
-async function fetchFederalExecutiveFromDB(): Promise<OfficialInfo[]> {
-  try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    
-    const { data, error } = await supabase
-      .from('static_officials')
-      .select('*')
-      .eq('level', 'federal_executive')
-      .eq('is_active', true);
-
-    if (error) {
-      console.error('[DB] Error fetching federal executive:', error);
-      return [];
-    }
-
-    console.log(`[DB] Found ${data?.length || 0} federal executive officials`);
-    
-    return (data || []).map(official => ({
-      id: official.id,
-      name: official.name,
-      party: official.party as 'Democrat' | 'Republican' | 'Independent' | 'Other',
-      office: official.office,
-      level: official.level as OfficeLevelType,
-      state: official.state,
-      district: official.district,
-      image_url: official.image_url || '',
-      urls: official.website_url ? [official.website_url] : [],
-      is_incumbent: true,
-      overall_score: null,
-      coverage_tier: official.coverage_tier || 'tier_1',
-      confidence: official.confidence || 'high',
-    }));
-  } catch (error) {
-    console.error('[DB] Exception fetching federal executive:', error);
-    return [];
-  }
-}
-
 // Fetch local officials from database (no free API exists)
 async function fetchLocalOfficialsFromDB(state: string): Promise<OfficialInfo[]> {
   try {
@@ -337,7 +422,8 @@ serve(async (req) => {
 
     if (!state) {
       console.error('Could not extract state from address');
-      const federalExecutive = await fetchFederalExecutiveFromDB();
+      // Still try to get federal executive even without state
+      const federalExecutive = await fetchFederalExecutiveFromGitHub();
       return new Response(JSON.stringify({ 
         officials: federalExecutive,
         federalExecutive,
@@ -356,7 +442,7 @@ serve(async (req) => {
 
     // Fetch from all sources in parallel
     const [federalExecutive, openStatesResult, localOfficials] = await Promise.all([
-      fetchFederalExecutiveFromDB(),
+      fetchFederalExecutiveFromGitHub(),
       fetchOpenStatesOfficials(state, coords?.lat, coords?.lng),
       fetchLocalOfficialsFromDB(state),
     ]);
@@ -364,7 +450,7 @@ serve(async (req) => {
     const { legislators: stateLegislative, governors: stateExecutiveFromAPI } = openStatesResult;
 
     console.log(`=== RESULTS ===`);
-    console.log(`Federal Executive: ${federalExecutive.length} (from DB - no API exists)`);
+    console.log(`Federal Executive: ${federalExecutive.length} (from GitHub unitedstates/congress-legislators)`);
     console.log(`State Executive: ${stateExecutiveFromAPI.length} (from Open States API)`);
     console.log(`State Legislative: ${stateLegislative.length} (from Open States API)`);
     console.log(`Local: ${localOfficials.length} (from DB - no free API exists)`);
@@ -396,9 +482,9 @@ serve(async (req) => {
     // Try to return federal executive even on error
     let federalExecutive: OfficialInfo[] = [];
     try {
-      federalExecutive = await fetchFederalExecutiveFromDB();
+      federalExecutive = await fetchFederalExecutiveFromGitHub();
     } catch {
-      console.error('Failed to fetch federal executive from DB on error recovery');
+      console.error('Failed to fetch federal executive on error recovery');
     }
     
     return new Response(JSON.stringify({ 

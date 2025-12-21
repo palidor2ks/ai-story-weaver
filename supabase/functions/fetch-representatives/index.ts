@@ -5,110 +5,152 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const CONGRESS_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
+// GitHub Pages URLs for unitedstates/congress-legislators data
+const LEGISLATORS_URL = 'https://unitedstates.github.io/congress-legislators/legislators-current.json';
+const EXECUTIVE_URL = 'https://unitedstates.github.io/congress-legislators/executive.json';
 
-// State code to full name mapping
-const stateNames: Record<string, string> = {
-  'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
-  'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
-  'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
-  'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
-  'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
-  'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
-  'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
-  'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
-  'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
-  'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
-  'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
-  'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
-  'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia',
-  'PR': 'Puerto Rico', 'GU': 'Guam', 'VI': 'Virgin Islands',
-  'AS': 'American Samoa', 'MP': 'Northern Mariana Islands',
-};
+// Cached data to avoid repeated fetches
+let cachedLegislators: any[] | null = null;
+let cachedExecutives: any[] | null = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
 
-// Reverse mapping for state name to code
-const stateNameToCode: Record<string, string> = Object.entries(stateNames).reduce(
-  (acc, [code, name]) => ({ ...acc, [name]: code }), {}
-);
-
-async function fetchAllMembers(apiKey: string, currentOnly: boolean = true): Promise<any[]> {
-  const allMembers: any[] = [];
-  let offset = 0;
-  const limit = 250;
-  let hasMore = true;
-  
-  while (hasMore) {
-    const url = currentOnly 
-      ? `https://api.congress.gov/v3/member?currentMember=true&api_key=${apiKey}&limit=${limit}&offset=${offset}`
-      : `https://api.congress.gov/v3/member?api_key=${apiKey}&limit=${limit}&offset=${offset}`;
-    console.log(`Fetching members offset=${offset}...`);
-    
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Congress API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    const members = data.members || [];
-    allMembers.push(...members);
-    
-    // Check if there are more pages
-    if (members.length < limit) {
-      hasMore = false;
-    } else {
-      offset += limit;
-    }
-    
-    // Safety limit - for all members we allow more
-    if (currentOnly && offset > 1000) {
-      hasMore = false;
-    }
-    if (!currentOnly && offset > 2000) {
-      hasMore = false;
-    }
-  }
-  
-  return allMembers;
+interface Legislator {
+  id: { bioguide: string; govtrack?: number };
+  name: { official_full?: string; first: string; last: string };
+  bio: { birthday?: string; gender?: string };
+  terms: Array<{
+    type: 'sen' | 'rep';
+    start: string;
+    end: string;
+    state: string;
+    district?: number;
+    party: string;
+  }>;
 }
 
-function mapMemberToRepresentative(member: any): any {
-  // Get the latest term to determine chamber
-  const terms = member.terms?.item || [];
-  const sortedTerms = [...terms].sort((a: any, b: any) => (b.startYear || 0) - (a.startYear || 0));
-  const latestTerm = sortedTerms[0] || {};
-  const chamber = latestTerm.chamber;
-  const isSenator = chamber === 'Senate';
-  
-  // Get state code
-  const memberState = String(member.state || '').trim();
-  const stateCode = stateNameToCode[memberState] || memberState;
-  
-  // District is at the root level for House members (null for Senators)
-  const memberDistrict = member.district;
+interface Executive {
+  id: { bioguide?: string; govtrack?: number };
+  name: { official_full?: string; first: string; last: string };
+  terms: Array<{
+    type: 'prez' | 'viceprez';
+    start: string;
+    end: string;
+    party: string;
+  }>;
+}
 
-  // Map party code to full name
-  let party = 'Other';
-  if (member.partyName === 'Democratic' || member.partyName === 'Democrat') {
-    party = 'Democrat';
-  } else if (member.partyName === 'Republican') {
-    party = 'Republican';
-  } else if (member.partyName === 'Independent') {
-    party = 'Independent';
+async function fetchLegislators(): Promise<Legislator[]> {
+  const now = Date.now();
+  if (cachedLegislators && (now - cacheTimestamp) < CACHE_DURATION) {
+    console.log('[Cache] Using cached legislators data');
+    return cachedLegislators;
   }
 
+  console.log('[Fetch] Downloading legislators from GitHub...');
+  const response = await fetch(LEGISLATORS_URL);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch legislators: ${response.status}`);
+  }
+  
+  cachedLegislators = await response.json();
+  cacheTimestamp = now;
+  console.log(`[Fetch] Downloaded ${cachedLegislators!.length} current legislators`);
+  return cachedLegislators!;
+}
+
+async function fetchExecutives(): Promise<Executive[]> {
+  const now = Date.now();
+  if (cachedExecutives && (now - cacheTimestamp) < CACHE_DURATION) {
+    console.log('[Cache] Using cached executives data');
+    return cachedExecutives;
+  }
+
+  console.log('[Fetch] Downloading executives from GitHub...');
+  const response = await fetch(EXECUTIVE_URL);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch executives: ${response.status}`);
+  }
+  
+  cachedExecutives = await response.json();
+  console.log(`[Fetch] Downloaded ${cachedExecutives!.length} executives`);
+  return cachedExecutives!;
+}
+
+function mapParty(party: string): 'Democrat' | 'Republican' | 'Independent' | 'Other' {
+  const normalized = party.toLowerCase();
+  if (normalized === 'democrat' || normalized === 'democratic') return 'Democrat';
+  if (normalized === 'republican') return 'Republican';
+  if (normalized === 'independent') return 'Independent';
+  return 'Other';
+}
+
+function getLatestTerm<T extends { start: string; end: string }>(terms: T[]): T | null {
+  if (!terms || terms.length === 0) return null;
+  return terms.reduce((latest, term) => 
+    new Date(term.start) > new Date(latest.start) ? term : latest
+  );
+}
+
+function isCurrentTerm(term: { start: string; end: string }): boolean {
+  const now = new Date();
+  const start = new Date(term.start);
+  const end = new Date(term.end);
+  return now >= start && now <= end;
+}
+
+function mapLegislatorToRepresentative(legislator: Legislator): any {
+  const latestTerm = getLatestTerm(legislator.terms);
+  if (!latestTerm) return null;
+
+  const isSenator = latestTerm.type === 'sen';
+  const bioguideId = legislator.id.bioguide;
+  
+  // Construct image URL from bioguide_id (official Congress.gov pattern)
+  const imageUrl = `https://bioguide.congress.gov/bioguide/photo/${bioguideId[0]}/${bioguideId}.jpg`;
+
   return {
-    id: member.bioguideId,
-    name: member.name || `${member.firstName} ${member.lastName}`,
-    party,
+    id: bioguideId,
+    name: legislator.name.official_full || `${legislator.name.first} ${legislator.name.last}`,
+    party: mapParty(latestTerm.party),
     office: isSenator ? 'Senator' : 'Representative',
-    state: stateCode,
-    district: memberDistrict ? `${stateCode}-${memberDistrict}` : null,
-    image_url: member.depiction?.imageUrl || '',
+    state: latestTerm.state,
+    district: latestTerm.district !== undefined ? `${latestTerm.state}-${latestTerm.district}` : null,
+    image_url: imageUrl,
     is_incumbent: true,
-    bioguide_id: member.bioguideId,
+    bioguide_id: bioguideId,
     overall_score: null,
     coverage_tier: 'tier_3',
     confidence: 'low',
+  };
+}
+
+function mapExecutiveToRepresentative(executive: Executive): any | null {
+  const latestTerm = getLatestTerm(executive.terms);
+  if (!latestTerm || !isCurrentTerm(latestTerm)) return null;
+
+  const bioguideId = executive.id.bioguide || `exec_${executive.name.last.toLowerCase()}`;
+  const isPrez = latestTerm.type === 'prez';
+  
+  // For executives, use White House images or fallback
+  const imageUrl = executive.id.bioguide 
+    ? `https://bioguide.congress.gov/bioguide/photo/${bioguideId[0]}/${bioguideId}.jpg`
+    : '';
+
+  return {
+    id: bioguideId,
+    name: executive.name.official_full || `${executive.name.first} ${executive.name.last}`,
+    party: mapParty(latestTerm.party),
+    office: isPrez ? 'President' : 'Vice President',
+    state: 'US',
+    district: null,
+    image_url: imageUrl,
+    is_incumbent: true,
+    bioguide_id: bioguideId,
+    overall_score: null,
+    coverage_tier: 'tier_1',
+    confidence: 'high',
+    level: 'federal_executive',
   };
 }
 
@@ -119,25 +161,35 @@ serve(async (req) => {
   }
 
   try {
-    const { state, district, fetchAll, includePrevious } = await req.json();
+    const { state, district, fetchAll, includeExecutives } = await req.json();
     
-    console.log(`Fetching representatives - fetchAll: ${fetchAll}, state: ${state}, district: ${district}, includePrevious: ${includePrevious}`);
+    console.log(`=== FETCH REPRESENTATIVES START ===`);
+    console.log(`fetchAll: ${fetchAll}, state: ${state}, district: ${district}, includeExecutives: ${includeExecutives}`);
 
-    if (!CONGRESS_API_KEY) {
-      throw new Error('Congress.gov API key not configured');
-    }
+    // Fetch data from GitHub (cached)
+    const [legislators, executives] = await Promise.all([
+      fetchLegislators(),
+      includeExecutives ? fetchExecutives() : Promise.resolve([]),
+    ]);
 
-    // Fetch all current members of Congress (with pagination)
-    const allMembers = await fetchAllMembers(CONGRESS_API_KEY, !includePrevious);
-    console.log(`Found ${allMembers.length} total members in Congress`);
+    // Map executives to representatives
+    const executiveReps = executives
+      .map(mapExecutiveToRepresentative)
+      .filter((e): e is NonNullable<typeof e> => e !== null);
+
+    console.log(`Executives found: ${executiveReps.length}`);
 
     // If fetchAll is true, return all Congress members
     if (fetchAll) {
-      const representatives = allMembers.map(mapMemberToRepresentative);
-      console.log(`Returning all ${representatives.length} Congress members`);
+      const representatives = legislators
+        .map(mapLegislatorToRepresentative)
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+      
+      console.log(`Returning all ${representatives.length} legislators`);
       
       return new Response(JSON.stringify({ 
-        representatives,
+        representatives: [...executiveReps, ...representatives],
+        executives: executiveReps,
         total: representatives.length,
         state: null,
         district: null 
@@ -146,26 +198,34 @@ serve(async (req) => {
       });
     }
 
-    // Otherwise filter by state/district as before
-    const normalizedStateCode = String(state || '').toUpperCase();
-    const fullStateName = stateNames[normalizedStateCode] || normalizedStateCode;
+    // Filter by state/district
+    const normalizedState = String(state || '').toUpperCase();
     
-    console.log(`Looking for state: ${fullStateName}`);
+    if (!normalizedState) {
+      console.log('No state provided, returning only executives');
+      return new Response(JSON.stringify({ 
+        representatives: executiveReps,
+        executives: executiveReps,
+        total: 0,
+        state: null,
+        district: null 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    // Filter by state (using full state name from API response)
-    const stateMembers = allMembers.filter((member: any) => {
-      const memberState = String(member.state || '').trim();
-      return memberState === fullStateName;
-    });
+    console.log(`Filtering for state: ${normalizedState}`);
 
-    console.log(`Filtered to ${stateMembers.length} members for ${fullStateName}`);
+    // Filter legislators by state
+    const stateReps = legislators
+      .map(mapLegislatorToRepresentative)
+      .filter((r): r is NonNullable<typeof r> => r !== null)
+      .filter(r => r.state === normalizedState);
 
-    const representatives = stateMembers.map(mapMemberToRepresentative);
-
-    console.log(`Mapped ${representatives.length} representatives`);
+    console.log(`Found ${stateReps.length} legislators for ${normalizedState}`);
 
     // Filter: include all senators for the state, and only the representative for the user's district
-    const filtered = representatives.filter((rep: any) => {
+    const filtered = stateReps.filter(rep => {
       if (rep.office === 'Senator') {
         return true; // Include all senators for the state
       }
@@ -183,16 +243,19 @@ serve(async (req) => {
       return false;
     });
 
-    console.log(`Returning ${filtered.length} filtered representatives for ${normalizedStateCode} district ${district}`);
+    console.log(`Returning ${filtered.length} filtered legislators for ${normalizedState} district ${district}`);
     
-    filtered.forEach((rep: any) => {
+    filtered.forEach(rep => {
       console.log(`  - ${rep.name} (${rep.office}) ${rep.district || ''}`);
     });
 
+    const allReps = [...executiveReps, ...filtered];
+
     return new Response(JSON.stringify({ 
-      representatives: filtered,
+      representatives: allReps,
+      executives: executiveReps,
       total: filtered.length,
-      state: normalizedStateCode,
+      state: normalizedState,
       district 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -200,10 +263,12 @@ serve(async (req) => {
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Error in fetch-representatives function:', errorMessage);
+    console.error('=== ERROR in fetch-representatives ===');
+    console.error('Error:', errorMessage);
     return new Response(JSON.stringify({ 
       error: errorMessage,
-      representatives: [] 
+      representatives: [],
+      executives: [],
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
