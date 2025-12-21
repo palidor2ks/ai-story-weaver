@@ -107,11 +107,22 @@ export const useCandidates = () => {
   });
 };
 
+export interface CandidateWithOverride extends Candidate {
+  hasOverride?: boolean;
+}
+
 export const useCandidate = (id: string | undefined) => {
   return useQuery({
     queryKey: ['candidate', id],
     queryFn: async () => {
       if (!id) return null;
+      
+      // Fetch override if exists
+      const { data: override } = await supabase
+        .from('candidate_overrides')
+        .select('*')
+        .eq('candidate_id', id)
+        .maybeSingle();
       
       // First try to fetch from database
       const { data: candidate, error } = await supabase
@@ -122,7 +133,7 @@ export const useCandidate = (id: string | undefined) => {
       
       if (error) throw error;
       
-      // If found in database, return with topic scores
+      // If found in database, return with topic scores and merged overrides
       if (candidate) {
         const { data: topicScores, error: scoresError } = await supabase
           .from('candidate_topic_scores')
@@ -135,10 +146,18 @@ export const useCandidate = (id: string | undefined) => {
         
         if (scoresError) throw scoresError;
 
-        return {
+        // Merge override fields with base candidate data
+        const mergedCandidate: CandidateWithOverride = {
           ...candidate,
-          coverage_tier: candidate.coverage_tier || 'tier_3',
-          confidence: candidate.confidence || 'medium',
+          name: override?.name ?? candidate.name,
+          party: (override?.party as Candidate['party']) ?? candidate.party,
+          office: override?.office ?? candidate.office,
+          state: override?.state ?? candidate.state,
+          district: override?.district ?? candidate.district,
+          image_url: override?.image_url ?? candidate.image_url,
+          overall_score: override?.overall_score ?? candidate.overall_score,
+          coverage_tier: (override?.coverage_tier as CoverageTier) ?? candidate.coverage_tier ?? 'tier_3',
+          confidence: (override?.confidence as ConfidenceLevel) ?? candidate.confidence ?? 'medium',
           is_incumbent: candidate.is_incumbent ?? true,
           score_version: candidate.score_version || 'v1.0',
           topicScores: topicScores?.map(ts => ({
@@ -146,7 +165,10 @@ export const useCandidate = (id: string | undefined) => {
             score: ts.score,
             topics: ts.topics,
           })) || [],
-        } as Candidate;
+          hasOverride: !!override,
+        };
+
+        return mergedCandidate;
       }
 
       // Not in database - try Congress.gov API (id might be a bioguide ID)
@@ -167,22 +189,27 @@ export const useCandidate = (id: string | undefined) => {
       }
 
       const member = congressData.member;
-      return {
+      
+      // Apply overrides to API data too
+      const mergedMember: CandidateWithOverride = {
         id: member.id,
-        name: member.name,
-        party: member.party,
-        office: member.office,
-        state: member.state,
-        district: member.district,
-        image_url: member.image_url,
-        overall_score: member.overall_score,
-        coverage_tier: member.coverage_tier || 'tier_3',
-        confidence: member.confidence || 'low',
+        name: override?.name ?? member.name,
+        party: (override?.party as Candidate['party']) ?? member.party,
+        office: override?.office ?? member.office,
+        state: override?.state ?? member.state,
+        district: override?.district ?? member.district,
+        image_url: override?.image_url ?? member.image_url,
+        overall_score: override?.overall_score ?? member.overall_score,
+        coverage_tier: (override?.coverage_tier as CoverageTier) ?? member.coverage_tier ?? 'tier_3',
+        confidence: (override?.confidence as ConfidenceLevel) ?? member.confidence ?? 'low',
         is_incumbent: member.is_incumbent ?? true,
         score_version: member.score_version || 'v1.0',
         last_updated: member.last_updated || new Date().toISOString(),
         topicScores: [],
-      } as Candidate;
+        hasOverride: !!override,
+      };
+      
+      return mergedMember;
     },
     enabled: !!id,
   });

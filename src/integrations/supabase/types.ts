@@ -61,6 +61,63 @@ export type Database = {
           },
         ]
       }
+      candidate_overrides: {
+        Row: {
+          candidate_id: string
+          confidence: string | null
+          coverage_tier: string | null
+          created_at: string | null
+          created_by: string | null
+          district: string | null
+          id: string
+          image_url: string | null
+          name: string | null
+          notes: string | null
+          office: string | null
+          overall_score: number | null
+          party: string | null
+          state: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          candidate_id: string
+          confidence?: string | null
+          coverage_tier?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          district?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string | null
+          notes?: string | null
+          office?: string | null
+          overall_score?: number | null
+          party?: string | null
+          state?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          confidence?: string | null
+          coverage_tier?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          district?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string | null
+          notes?: string | null
+          office?: string | null
+          overall_score?: number | null
+          party?: string | null
+          state?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       candidate_topic_scores: {
         Row: {
           candidate_id: string
