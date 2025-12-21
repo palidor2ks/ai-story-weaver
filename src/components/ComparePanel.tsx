@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { ScoreDisplay } from './ScoreDisplay';
 import { ScoreText } from './ScoreText';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';

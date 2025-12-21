@@ -12,7 +12,6 @@ import { useAdminRole } from '@/hooks/useAdminRole';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck } from 'lucide-react';
-import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { ScoreText } from '@/components/ScoreText';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
@@ -223,7 +222,7 @@ export const CandidateProfile = () => {
 
               {/* Score Display */}
               <div className="mb-3">
-                <ScoreDisplay score={candidate.overall_score} size="md" showLabel />
+                <ScoreText score={candidate.overall_score} size="lg" showLabel />
               </div>
 
               {/* Badges */}

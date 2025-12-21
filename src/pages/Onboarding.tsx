@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { TopicSelector } from '@/components/TopicSelector';
 import { QuizQuestion } from '@/components/QuizQuestion';
-import { ScoreDisplay } from '@/components/ScoreDisplay';
+import { ScoreText } from '@/components/ScoreText';
 import { DemographicsForm, DemographicsData } from '@/components/DemographicsForm';
 import { useAuth } from '@/context/AuthContext';
 import { useTopics, useCanonicalQuestions } from '@/hooks/useCandidates';
@@ -445,7 +445,7 @@ export const Onboarding = () => {
                   Overall Score
                 </span>
                 <div className="mt-4">
-                  <ScoreDisplay score={scores.overall} size="xl" showLabel />
+                  <ScoreText score={scores.overall} size="lg" showLabel />
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
                   Score Version: v1.0
@@ -463,7 +463,7 @@ export const Onboarding = () => {
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <span className="font-medium text-foreground">{ts.topicName}</span>
-                    <ScoreDisplay score={ts.score} size="sm" />
+                    <ScoreText score={ts.score} size="sm" />
                   </div>
                 ))}
               </div>
