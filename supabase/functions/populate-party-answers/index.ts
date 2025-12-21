@@ -67,12 +67,16 @@ You must analyze each question and determine where the ${partyContext.name} woul
 - Public statements from party leadership
 - Historical party positions
 
-Score each answer from -10 to +10:
-- -10 = Strongly oppose / Very conservative position
-- -5 = Oppose / Conservative position
-- 0 = Neutral or no clear party position
-- +5 = Support / Progressive position
-- +10 = Strongly support / Very progressive position
+CRITICAL - Use the LEFT-RIGHT political spectrum for scoring:
+- -10 = Far LEFT / Very progressive position (e.g., Democrats, Greens typically score here)
+- -5 = Left-leaning / Progressive position
+- 0 = Neutral, centrist, or no clear party position
+- +5 = Right-leaning / Conservative position  
+- +10 = Far RIGHT / Very conservative position (e.g., Republicans typically score here)
+
+IMPORTANT: Democrats and Green Party should have NEGATIVE scores (left-leaning).
+Republicans should have POSITIVE scores (right-leaning).
+Libertarians are mixed: socially liberal (negative) but fiscally conservative (positive).
 
 Be accurate to the party's actual documented positions. Include confidence level (high/medium/low) based on how clearly documented the position is.`;
 
