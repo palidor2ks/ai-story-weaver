@@ -13,7 +13,8 @@ import { Candidate } from '@/types';
 export const Candidates = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: dbCandidates = [], isLoading: candidatesLoading } = useCandidates();
-  const { data: congressMembers = [], isLoading: representativesLoading } = useRepresentatives(profile?.address);
+  const { data: repsData, isLoading: representativesLoading } = useRepresentatives(profile?.address);
+  const congressMembers = repsData?.representatives ?? [];
   
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('name');
