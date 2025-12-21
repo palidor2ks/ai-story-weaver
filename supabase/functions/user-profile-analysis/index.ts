@@ -45,6 +45,42 @@ const PARTY_PLATFORMS = {
     'china-taiwan': -6,
     'israel-palestine': -3,
   },
+  Green: {
+    healthcare: 10,
+    economy: 8,
+    immigration: 9,
+    environment: 10,
+    education: 9,
+    'criminal-justice': 8,
+    'civil-rights': 10,
+    'gun-policy': 7,
+    'social-issues': 10,
+    'foreign-policy': 8,
+    'government-reform': 7,
+    'domestic-policy': 8,
+    technology: 6,
+    'electoral-reform': 9,
+    'china-taiwan': 5,
+    'israel-palestine': 7,
+  },
+  Libertarian: {
+    healthcare: -4,
+    economy: -8,
+    immigration: 5,
+    environment: -2,
+    education: -6,
+    'criminal-justice': 4,
+    'civil-rights': 7,
+    'gun-policy': -10,
+    'social-issues': 6,
+    'foreign-policy': 6,
+    'government-reform': -8,
+    'domestic-policy': -7,
+    technology: -5,
+    'electoral-reform': 3,
+    'china-taiwan': 4,
+    'israel-palestine': 5,
+  },
 };
 
 function calculatePartyAlignment(userScores: Record<string, number>, partyScores: Record<string, number>): number {
@@ -103,6 +139,8 @@ serve(async (req) => {
 
     const democratAlignment = calculatePartyAlignment(userScoresMap, PARTY_PLATFORMS.Democrat);
     const republicanAlignment = calculatePartyAlignment(userScoresMap, PARTY_PLATFORMS.Republican);
+    const greenAlignment = calculatePartyAlignment(userScoresMap, PARTY_PLATFORMS.Green);
+    const libertarianAlignment = calculatePartyAlignment(userScoresMap, PARTY_PLATFORMS.Libertarian);
 
     // Format topic scores for the prompt
     const topicScoresText = topicScores
@@ -120,6 +158,8 @@ User: ${userName || 'Voter'}
 Overall Score: ${overallScore} (on a scale from -10 conservative to +10 progressive)
 Democratic Party Alignment: ${democratAlignment}%
 Republican Party Alignment: ${republicanAlignment}%
+Green Party Alignment: ${greenAlignment}%
+Libertarian Party Alignment: ${libertarianAlignment}%
 
 Topic Scores:
 ${topicScoresText}
@@ -127,13 +167,13 @@ ${topicScoresText}
 Please provide:
 1. A 2-3 sentence summary of their overall political philosophy
 2. 3-4 key insights about their positions (what makes them unique, any interesting patterns)
-3. A brief comparison to the two major party platforms
+3. A brief comparison to the four major party platforms
 
 Return your response as JSON with this exact structure:
 {
   "summary": "2-3 sentence summary of political philosophy",
   "keyInsights": ["insight 1", "insight 2", "insight 3"],
-  "partyComparison": "2-3 sentences comparing to Democrat and Republican platforms",
+  "partyComparison": "2-3 sentences comparing to all four party platforms",
   "strongestPositions": ["topic where they have strongest views", "another strong position"]
 }`;
 
@@ -215,6 +255,8 @@ Return your response as JSON with this exact structure:
       ...parsed,
       democratAlignment,
       republicanAlignment,
+      greenAlignment,
+      libertarianAlignment,
       overallScore,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

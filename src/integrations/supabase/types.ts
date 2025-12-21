@@ -309,6 +309,96 @@ export type Database = {
         }
         Relationships: []
       }
+      party_answers: {
+        Row: {
+          answer_value: number
+          confidence: string | null
+          created_at: string | null
+          id: string
+          notes: string | null
+          party_id: string
+          question_id: string
+          source_description: string | null
+          source_url: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          answer_value: number
+          confidence?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          party_id: string
+          question_id: string
+          source_description?: string | null
+          source_url?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          answer_value?: number
+          confidence?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          party_id?: string
+          question_id?: string
+          source_description?: string | null
+          source_url?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_answers_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "party_platforms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      party_platforms: {
+        Row: {
+          color: string
+          created_at: string | null
+          description: string | null
+          id: string
+          logo_icon: string | null
+          name: string
+          short_name: string
+          updated_at: string | null
+          website_url: string | null
+        }
+        Insert: {
+          color: string
+          created_at?: string | null
+          description?: string | null
+          id: string
+          logo_icon?: string | null
+          name: string
+          short_name: string
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Update: {
+          color?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          logo_icon?: string | null
+          name?: string
+          short_name?: string
+          updated_at?: string | null
+          website_url?: string | null
+        }
+        Relationships: []
+      }
       profile_claims: {
         Row: {
           candidate_id: string
