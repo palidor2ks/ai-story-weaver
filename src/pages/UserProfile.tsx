@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X } from 'lucide-react';
+import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,10 +36,11 @@ export const UserProfile = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
   const { data: userTopicScores = [] } = useUserTopicScores();
-  const { data: repsData, isLoading: repsLoading } = useRepresentatives(profile?.address);
+  const { data: repsData, isLoading: repsLoading, error: repsError, refetch: refetchReps } = useRepresentatives(profile?.address);
   const representatives = repsData?.representatives ?? [];
   const congressionalDistrict = repsData?.district;
   const congressionalState = repsData?.state;
+  const geocodeFailed = !repsLoading && profile?.address && !congressionalDistrict && !repsError;
   const resetOnboarding = useResetOnboarding();
   const updateProfile = useUpdateProfile();
 
@@ -78,7 +79,7 @@ export const UserProfile = () => {
 
   const handleRefreshRepresentatives = () => {
     if (!profile?.address) return;
-    queryClient.invalidateQueries({ queryKey: ['representatives', profile.address] });
+    refetchReps();
     toast('Refreshing representatives...');
   };
 
@@ -471,6 +472,60 @@ export const UserProfile = () => {
                     </Link>
                   );
                 })}
+              </div>
+            ) : repsError ? (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-destructive">Failed to load representatives</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      There was an error fetching your representatives. Please try again.
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-3 gap-2"
+                      onClick={handleRefreshRepresentatives}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : geocodeFailed ? (
+              <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-amber-600">Could not find your congressional district</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      We couldn't determine your exact congressional district from the address provided. 
+                      Try updating your address to include street number, city, state, and ZIP code.
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-2"
+                        onClick={handleEditAddress}
+                      >
+                        <Pencil className="w-4 h-4" />
+                        Edit Address
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="gap-2"
+                        onClick={handleRefreshRepresentatives}
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Retry
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
               <p className="text-muted-foreground text-center py-4">
