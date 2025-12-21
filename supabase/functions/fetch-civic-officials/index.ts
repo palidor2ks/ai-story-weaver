@@ -167,30 +167,43 @@ serve(async (req) => {
 
     // Call Google Civic Information API
     const encodedAddress = encodeURIComponent(address);
-    const civicUrl = `https://civicinfo.googleapis.com/civicinfo/v2/representatives?address=${encodedAddress}&key=${GOOGLE_API_KEY}`;
-    
+    // Use the canonical googleapis.com base to avoid "Method not found" issues on alternate hosts
+    const civicBaseUrl = 'https://www.googleapis.com/civicinfo/v2/representatives';
+    const civicUrl = `${civicBaseUrl}?address=${encodedAddress}&key=${GOOGLE_API_KEY}`;
+
     console.log('Calling Google Civic Information API...');
-    
+    console.log(`Civic endpoint: ${civicBaseUrl}`);
+
     const response = await fetch(civicUrl);
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Civic API error:', response.status, errorText);
-      
+
+      let friendlyError = `Civic API error: ${response.status}`;
       if (response.status === 400) {
-        return new Response(JSON.stringify({ 
-          error: 'Invalid address or no officials found for this address',
+        friendlyError = 'Invalid address or no officials found for this address';
+      } else if (response.status === 403) {
+        friendlyError = 'Google Civic Information API access denied. Enable the Civic Information API and/or update your API key restrictions.';
+      } else if (response.status === 404) {
+        friendlyError = 'Google Civic endpoint returned 404. This usually means the Civic Information API is not enabled for your project.';
+      }
+
+      // Return a 200 so the client receives a typed payload (no thrown invoke error)
+      return new Response(
+        JSON.stringify({
+          error: friendlyError,
           officials: [],
           federalExecutive: [],
           stateExecutive: [],
           stateLegislative: [],
-          local: []
-        }), {
+          local: [],
+        }),
+        {
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      
-      throw new Error(`Civic API error: ${response.status}`);
+        }
+      );
     }
 
     const data = await response.json();
