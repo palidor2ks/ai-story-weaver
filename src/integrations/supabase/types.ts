@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      candidate_answers: {
+        Row: {
+          answer_value: number
+          candidate_id: string
+          confidence: string | null
+          created_at: string
+          id: string
+          question_id: string
+          source_description: string | null
+          source_type: string | null
+          source_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          answer_value: number
+          candidate_id: string
+          confidence?: string | null
+          created_at?: string
+          id?: string
+          question_id: string
+          source_description?: string | null
+          source_type?: string | null
+          source_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          answer_value?: number
+          candidate_id?: string
+          confidence?: string | null
+          created_at?: string
+          id?: string
+          question_id?: string
+          source_description?: string | null
+          source_type?: string | null
+          source_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_topic_scores: {
         Row: {
           candidate_id: string
@@ -571,7 +618,23 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      calculated_candidate_topic_scores: {
+        Row: {
+          answer_count: number | null
+          calculated_score: number | null
+          candidate_id: string | null
+          topic_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       has_role: {
