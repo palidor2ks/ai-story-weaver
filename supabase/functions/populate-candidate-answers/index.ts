@@ -140,12 +140,15 @@ interface CandidateAnswer {
 
 function matchBillToQuestions(bill: LegislationItem): { questionId: string; direction: number }[] {
   const matches: { questionId: string; direction: number }[] = [];
-  const titleLower = bill.title.toLowerCase();
-  const policyArea = bill.policyArea?.name?.toLowerCase() || '';
+  
+  // Safely handle potentially undefined title
+  const titleLower = (bill.title || '').toLowerCase();
+  const policyArea = (bill.policyArea?.name || '').toLowerCase();
 
   for (const [questionId, config] of Object.entries(questionKeywordMapping)) {
     for (const keyword of config.keywords) {
-      if (titleLower.includes(keyword.toLowerCase()) || policyArea.includes(keyword.toLowerCase())) {
+      const keywordLower = keyword.toLowerCase();
+      if (titleLower.includes(keywordLower) || policyArea.includes(keywordLower)) {
         matches.push({ questionId, direction: config.direction });
         break; // Only match each question once per bill
       }
@@ -267,9 +270,9 @@ serve(async (req) => {
                   candidate_id: candidate.id,
                   question_id: match.questionId,
                   answer_value: calculateAnswerValue('sponsored', match.direction),
-                  source_type: 'voting_record',
+                  source_type: 'legislation',
                   source_url: generateSourceUrl(bill),
-                  source_description: `Sponsored: ${bill.title}`,
+                  source_description: `Sponsored: ${bill.title || 'Unknown bill'}`,
                   confidence: 'high',
                 });
               }
@@ -302,9 +305,9 @@ serve(async (req) => {
                   candidate_id: candidate.id,
                   question_id: match.questionId,
                   answer_value: calculateAnswerValue('cosponsored', match.direction),
-                  source_type: 'cosponsorship',
+                  source_type: 'legislation',
                   source_url: generateSourceUrl(bill),
-                  source_description: `Cosponsored: ${bill.title}`,
+                  source_description: `Cosponsored: ${bill.title || 'Unknown bill'}`,
                   confidence: 'medium',
                 });
               }
