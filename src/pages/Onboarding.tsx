@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { TopicSelector } from '@/components/TopicSelector';
 import { QuizQuestion } from '@/components/QuizQuestion';
-import { ScoreBar } from '@/components/ScoreBar';
+import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { DemographicsForm, DemographicsData } from '@/components/DemographicsForm';
 import { useAuth } from '@/context/AuthContext';
-import { useTopics, useQuestions } from '@/hooks/useCandidates';
+import { useTopics, useCanonicalQuestions } from '@/hooks/useCandidates';
 import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { OnboardingStep, Topic, QuestionOption, QuizAnswer, TopicScore } from '@/types';
+import { formatScore, getScoreLabel, calculateWeightedScore } from '@/lib/scoreFormat';
 import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -20,7 +21,6 @@ export const Onboarding = () => {
   const { user } = useAuth();
   const { data: profile } = useProfile();
   const { data: dbTopics = [], isLoading: topicsLoading } = useTopics();
-  const { data: dbQuestions = [], isLoading: questionsLoading } = useQuestions();
   
   const saveQuizResults = useSaveQuizResults();
   const saveUserTopics = useSaveUserTopics();
@@ -32,6 +32,12 @@ export const Onboarding = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [calculatedScores, setCalculatedScores] = useState<{ overall: number; byTopic: TopicScore[] } | null>(null);
 
+  // Get selected topic IDs in order (for canonical question fetching)
+  const selectedTopicIds = useMemo(() => selectedTopics.map(t => t.id), [selectedTopics]);
+  
+  // Fetch canonical questions for selected topics (2 per topic = 10 total for 5 topics)
+  const { data: canonicalQuestions = [], isLoading: questionsLoading } = useCanonicalQuestions(selectedTopicIds);
+
   // Transform database topics to app format
   const topics: Topic[] = dbTopics.map(t => ({
     id: t.id,
@@ -40,8 +46,8 @@ export const Onboarding = () => {
     weight: t.weight || 1,
   }));
 
-  // Transform database questions to app format
-  const questions = dbQuestions.map(q => ({
+  // Transform questions to app format
+  const questions = useMemo(() => canonicalQuestions.map(q => ({
     id: q.id,
     topicId: q.topic_id,
     text: q.text,
@@ -50,14 +56,15 @@ export const Onboarding = () => {
       text: o.text,
       value: o.value,
     })),
-  }));
+  })), [canonicalQuestions]);
 
   const handleTopicToggle = (topic: Topic) => {
     const exists = selectedTopics.some(t => t.id === topic.id);
     if (exists) {
       setSelectedTopics(selectedTopics.filter(t => t.id !== topic.id));
     } else if (selectedTopics.length < 5) {
-      setSelectedTopics([...selectedTopics, { ...topic, weight: 1 }]);
+      // Add with weight based on position (first selected = highest weight)
+      setSelectedTopics([...selectedTopics, { ...topic, weight: 5 - selectedTopics.length }]);
     }
   };
 
@@ -110,32 +117,24 @@ export const Onboarding = () => {
       }
     });
 
-    // Calculate score for each topic
+    // Calculate score for each topic (average of answers, already in -10 to +10 range)
     const topicScores: TopicScore[] = Object.entries(topicAnswers).map(([topicId, values]) => {
       const avg = values.reduce((a, b) => a + b, 0) / values.length;
-      const normalizedScore = Math.round(avg * 10);
+      // Round to 2 decimals
+      const score = Math.round(avg * 100) / 100;
       const topic = topics.find(t => t.id === topicId);
       return {
         topicId,
         topicName: topic?.name || topicId,
-        score: normalizedScore,
+        score,
       };
     });
 
-    // Calculate overall score
-    let overallScore = 0;
-    let totalWeight = 0;
-    
-    topicScores.forEach(ts => {
-      const selectedTopic = selectedTopics.find(st => st.id === ts.topicId);
-      const weight = selectedTopic?.weight || 1;
-      overallScore += ts.score * weight;
-      totalWeight += weight;
-    });
-
-    if (totalWeight > 0) {
-      overallScore = Math.round(overallScore / totalWeight);
-    }
+    // Calculate weighted overall score using PRD weighting
+    const overallScore = calculateWeightedScore(
+      topicScores.map(ts => ({ topicId: ts.topicId, score: ts.score })),
+      selectedTopicIds
+    );
 
     return { overall: overallScore, byTopic: topicScores };
   };
@@ -144,8 +143,8 @@ export const Onboarding = () => {
     if (!calculatedScores) return;
 
     try {
-      // Save user topics
-      await saveUserTopics.mutateAsync(selectedTopics.map(t => t.id));
+      // Save user topics with proper weights
+      await saveUserTopics.mutateAsync(selectedTopicIds);
       
       // Save quiz results
       await saveQuizResults.mutateAsync({
@@ -169,7 +168,14 @@ export const Onboarding = () => {
     a => a.questionId === questions[currentQuestionIndex]?.id
   );
 
-  if (topicsLoading || questionsLoading) {
+  // Get current question's topic for display
+  const currentQuestionTopic = useMemo(() => {
+    if (questions.length === 0 || currentQuestionIndex >= questions.length) return null;
+    const topicId = questions[currentQuestionIndex]?.topicId;
+    return topics.find(t => t.id === topicId);
+  }, [currentQuestionIndex, questions, topics]);
+
+  if (topicsLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -207,7 +213,7 @@ export const Onboarding = () => {
             </h1>
             
             <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-              Let's discover your political alignment and find candidates who share your values.
+              Let's discover your political alignment on the Left-Right spectrum and find candidates who share your values.
             </p>
 
             <div className="space-y-4 mb-10">
@@ -216,8 +222,8 @@ export const Onboarding = () => {
                   <Target className="w-6 h-6 text-agree" />
                 </div>
                 <div className="text-left">
-                  <h3 className="font-semibold text-foreground">Take a Quick Quiz</h3>
-                  <p className="text-sm text-muted-foreground">Answer questions about issues you care about</p>
+                  <h3 className="font-semibold text-foreground">Select Your Top 5 Topics</h3>
+                  <p className="text-sm text-muted-foreground">Choose the issues that matter most to you</p>
                 </div>
               </div>
               
@@ -226,8 +232,8 @@ export const Onboarding = () => {
                   <Sparkles className="w-6 h-6 text-accent" />
                 </div>
                 <div className="text-left">
-                  <h3 className="font-semibold text-foreground">Get Your Score</h3>
-                  <p className="text-sm text-muted-foreground">See where you stand on the political spectrum</p>
+                  <h3 className="font-semibold text-foreground">Answer 10 Questions</h3>
+                  <p className="text-sm text-muted-foreground">2 questions for each of your top topics</p>
                 </div>
               </div>
               
@@ -236,8 +242,8 @@ export const Onboarding = () => {
                   <CheckCircle className="w-6 h-6 text-primary" />
                 </div>
                 <div className="text-left">
-                  <h3 className="font-semibold text-foreground">Compare & Explore</h3>
-                  <p className="text-sm text-muted-foreground">Match with politicians based on real voting records</p>
+                  <h3 className="font-semibold text-foreground">Get Your L/R Score</h3>
+                  <p className="text-sm text-muted-foreground">See where you stand from L10 (Left) to R10 (Right)</p>
                 </div>
               </div>
             </div>
@@ -275,10 +281,10 @@ export const Onboarding = () => {
           <div className="max-w-3xl mx-auto animate-fade-in">
             <div className="text-center mb-8">
               <h2 className="font-display text-3xl font-bold text-foreground mb-3">
-                What matters most to you?
+                Select Your Top 5 Topics
               </h2>
               <p className="text-muted-foreground">
-                Select up to 5 topics that influence your political views. 
+                Choose the 5 issues that matter most to you. Order matters - select most important first!
                 <span className="text-foreground font-medium"> ({selectedTopics.length}/5 selected)</span>
               </p>
             </div>
@@ -289,18 +295,35 @@ export const Onboarding = () => {
               onToggle={handleTopicToggle}
             />
 
+            {selectedTopics.length > 0 && (
+              <div className="mt-6 p-4 rounded-lg bg-secondary/50 border border-border">
+                <p className="text-sm font-medium text-foreground mb-2">Your priority order:</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedTopics.map((topic, index) => (
+                    <span key={topic.id} className="text-sm px-3 py-1 rounded-full bg-primary/10 text-primary">
+                      {index + 1}. {topic.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between mt-10">
-              <Button variant="ghost" onClick={() => setStep('welcome')}>
+              <Button variant="ghost" onClick={() => setStep('demographics')}>
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
               </Button>
               <Button 
                 size="lg"
                 variant="hero"
-                onClick={() => setStep('quiz')}
-                disabled={selectedTopics.length === 0}
+                onClick={() => {
+                  setCurrentQuestionIndex(0);
+                  setQuizAnswers([]);
+                  setStep('quiz');
+                }}
+                disabled={selectedTopics.length !== 5}
               >
-                Continue to Quiz
+                Continue to Quiz ({selectedTopics.length === 5 ? '10 questions' : `${selectedTopics.length * 2} questions`})
                 <ArrowRight className="w-5 h-5" />
               </Button>
             </div>
@@ -308,16 +331,38 @@ export const Onboarding = () => {
         );
 
       case 'quiz':
+        if (questionsLoading) {
+          return (
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            </div>
+          );
+        }
+        
         if (questions.length === 0) {
           return (
             <div className="text-center py-16">
-              <p className="text-muted-foreground">No questions available.</p>
+              <p className="text-muted-foreground">No questions available for your selected topics.</p>
+              <Button variant="ghost" className="mt-4" onClick={() => setStep('topics')}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Select different topics
+              </Button>
             </div>
           );
         }
         
         return (
           <div className="max-w-2xl mx-auto">
+            {/* Topic indicator */}
+            {currentQuestionTopic && (
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <span className="text-2xl">{currentQuestionTopic.icon}</span>
+                <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  {currentQuestionTopic.name}
+                </span>
+              </div>
+            )}
+            
             <QuizQuestion
               question={questions[currentQuestionIndex]}
               selectedOptionId={currentAnswer?.selectedOptionId || null}
@@ -359,7 +404,7 @@ export const Onboarding = () => {
               Your Political Profile
             </h2>
             <p className="text-muted-foreground mb-10">
-              Based on your answers, here's where you stand on key issues.
+              Based on your answers, here's where you stand on the Left-Right spectrum.
             </p>
 
             <div className="bg-card rounded-2xl border border-border p-6 mb-8 shadow-elevated">
@@ -367,33 +412,26 @@ export const Onboarding = () => {
                 <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                   Overall Score
                 </span>
-                <div className={cn(
-                  "text-5xl font-display font-bold mt-2",
-                  scores.overall >= 30 && "text-agree",
-                  scores.overall <= -30 && "text-disagree",
-                  scores.overall > -30 && scores.overall < 30 && "text-accent"
-                )}>
-                  {scores.overall > 0 ? '+' : ''}{scores.overall}
+                <div className="mt-4">
+                  <ScoreDisplay score={scores.overall} size="xl" showLabel />
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {scores.overall >= 30 ? 'Leans Progressive' : 
-                   scores.overall <= -30 ? 'Leans Conservative' : 
-                   'Moderate / Centrist'}
+                <p className="text-xs text-muted-foreground mt-2">
+                  Score Version: v1.0
                 </p>
               </div>
 
               <div className="space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wide text-left">
+                  By Topic
+                </h4>
                 {scores.byTopic.map((ts, index) => (
                   <div 
                     key={ts.topicId} 
-                    className="animate-slide-up"
+                    className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 animate-slide-up"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <ScoreBar
-                      score={ts.score}
-                      label={ts.topicName}
-                      size="md"
-                    />
+                    <span className="font-medium text-foreground">{ts.topicName}</span>
+                    <ScoreDisplay score={ts.score} size="sm" />
                   </div>
                 ))}
               </div>

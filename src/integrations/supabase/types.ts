@@ -52,39 +52,51 @@ export type Database = {
       }
       candidates: {
         Row: {
+          confidence: Database["public"]["Enums"]["confidence_level"] | null
+          coverage_tier: Database["public"]["Enums"]["coverage_tier"] | null
           created_at: string | null
           district: string | null
           id: string
           image_url: string | null
+          is_incumbent: boolean | null
           last_updated: string | null
           name: string
           office: string
           overall_score: number | null
           party: Database["public"]["Enums"]["party_type"]
+          score_version: string | null
           state: string
         }
         Insert: {
+          confidence?: Database["public"]["Enums"]["confidence_level"] | null
+          coverage_tier?: Database["public"]["Enums"]["coverage_tier"] | null
           created_at?: string | null
           district?: string | null
           id: string
           image_url?: string | null
+          is_incumbent?: boolean | null
           last_updated?: string | null
           name: string
           office: string
           overall_score?: number | null
           party: Database["public"]["Enums"]["party_type"]
+          score_version?: string | null
           state: string
         }
         Update: {
+          confidence?: Database["public"]["Enums"]["confidence_level"] | null
+          coverage_tier?: Database["public"]["Enums"]["coverage_tier"] | null
           created_at?: string | null
           district?: string | null
           id?: string
           image_url?: string | null
+          is_incumbent?: boolean | null
           last_updated?: string | null
           name?: string
           office?: string
           overall_score?: number | null
           party?: Database["public"]["Enums"]["party_type"]
+          score_version?: string | null
           state?: string
         }
         Relationships: []
@@ -136,6 +148,7 @@ export type Database = {
           name: string
           overall_score: number | null
           political_party: string | null
+          score_version: string | null
           sex: string | null
           updated_at: string | null
         }
@@ -150,6 +163,7 @@ export type Database = {
           name: string
           overall_score?: number | null
           political_party?: string | null
+          score_version?: string | null
           sex?: string | null
           updated_at?: string | null
         }
@@ -164,6 +178,7 @@ export type Database = {
           name?: string
           overall_score?: number | null
           political_party?: string | null
+          score_version?: string | null
           sex?: string | null
           updated_at?: string | null
         }
@@ -205,18 +220,24 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          is_onboarding_canonical: boolean | null
+          onboarding_slot: number | null
           text: string
           topic_id: string
         }
         Insert: {
           created_at?: string | null
           id: string
+          is_onboarding_canonical?: boolean | null
+          onboarding_slot?: number | null
           text: string
           topic_id: string
         }
         Update: {
           created_at?: string | null
           id?: string
+          is_onboarding_canonical?: boolean | null
+          onboarding_slot?: number | null
           text?: string
           topic_id?: string
         }
@@ -427,6 +448,8 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      confidence_level: "high" | "medium" | "low"
+      coverage_tier: "tier_1" | "tier_2" | "tier_3"
       donor_type: "Individual" | "PAC" | "Organization" | "Unknown"
       party_type: "Democrat" | "Republican" | "Independent" | "Other"
       vote_position: "Yea" | "Nay" | "Present" | "Not Voting"
@@ -557,6 +580,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      confidence_level: ["high", "medium", "low"],
+      coverage_tier: ["tier_1", "tier_2", "tier_3"],
       donor_type: ["Individual", "PAC", "Organization", "Unknown"],
       party_type: ["Democrat", "Republican", "Independent", "Other"],
       vote_position: ["Yea", "Nay", "Present", "Not Voting"],

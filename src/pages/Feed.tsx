@@ -6,8 +6,10 @@ import { useProfile, useUserTopics, useUserTopicScores } from '@/hooks/useProfil
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { Search, SlidersHorizontal, TrendingUp } from 'lucide-react';
-import { Candidate, TopicScore } from '@/types';
+import { Candidate, TopicScore, GovernmentLevel } from '@/types';
 
 export const Feed = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
@@ -18,6 +20,8 @@ export const Feed = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('match');
   const [partyFilter, setPartyFilter] = useState<string>('all');
+  const [levelFilter, setLevelFilter] = useState<GovernmentLevel>('all');
+  const [incumbentFilter, setIncumbentFilter] = useState<string>('all');
 
   // Transform candidates for display
   const transformedCandidates: Candidate[] = useMemo(() => {
@@ -36,6 +40,10 @@ export const Feed = () => {
         score: ts.score,
       })),
       lastUpdated: new Date(c.last_updated),
+      coverageTier: c.coverage_tier,
+      confidence: c.confidence,
+      isIncumbent: c.is_incumbent,
+      scoreVersion: c.score_version,
     }));
   }, [candidates]);
 
@@ -57,6 +65,29 @@ export const Feed = () => {
       result = result.filter(c => c.party === partyFilter);
     }
 
+    // Filter by incumbent/challenger
+    if (incumbentFilter !== 'all') {
+      const isIncumbent = incumbentFilter === 'incumbent';
+      result = result.filter(c => c.isIncumbent === isIncumbent);
+    }
+
+    // Filter by government level (based on office)
+    if (levelFilter !== 'all') {
+      result = result.filter(c => {
+        const office = c.office.toLowerCase();
+        if (levelFilter === 'federal') {
+          return office.includes('senator') || office.includes('representative') || office.includes('president');
+        }
+        if (levelFilter === 'state') {
+          return office.includes('governor') || office.includes('state');
+        }
+        if (levelFilter === 'local') {
+          return office.includes('mayor') || office.includes('council') || office.includes('county') || office.includes('sheriff');
+        }
+        return true;
+      });
+    }
+
     // Sort
     const userScore = profile?.overall_score ?? 0;
     switch (sortBy) {
@@ -76,7 +107,7 @@ export const Feed = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, transformedCandidates, profile]);
+  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, transformedCandidates, profile]);
 
   const userTopicsList = userTopics.map(ut => ({
     id: ut.topics?.id || ut.topic_id,
@@ -118,13 +149,11 @@ export const Feed = () => {
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
               <TrendingUp className="w-4 h-4" />
               Your Score
             </div>
-            <div className="text-2xl font-bold text-foreground">
-              {(profile?.overall_score ?? 0) > 0 ? '+' : ''}{profile?.overall_score ?? 0}
-            </div>
+            <ScoreDisplay score={profile?.overall_score} size="md" />
           </div>
           <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
             <div className="text-muted-foreground text-sm mb-1">Candidates</div>
@@ -141,6 +170,16 @@ export const Feed = () => {
             <div className="text-2xl font-bold text-foreground">{userTopicsList.length}</div>
           </div>
         </div>
+
+        {/* Government Level Tabs */}
+        <Tabs value={levelFilter} onValueChange={(v) => setLevelFilter(v as GovernmentLevel)} className="mb-6">
+          <TabsList>
+            <TabsTrigger value="all">All Levels</TabsTrigger>
+            <TabsTrigger value="federal">Federal</TabsTrigger>
+            <TabsTrigger value="state">State</TabsTrigger>
+            <TabsTrigger value="local">Local</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -174,6 +213,16 @@ export const Feed = () => {
                 <SelectItem value="Democrat">Democrat</SelectItem>
                 <SelectItem value="Republican">Republican</SelectItem>
                 <SelectItem value="Independent">Independent</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={incumbentFilter} onValueChange={setIncumbentFilter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="incumbent">Incumbents</SelectItem>
+                <SelectItem value="challenger">Challengers</SelectItem>
               </SelectContent>
             </Select>
           </div>

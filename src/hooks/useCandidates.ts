@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 
 interface CandidateTopicScore {
   topic_id: string;
@@ -20,6 +21,10 @@ interface Candidate {
   image_url: string | null;
   overall_score: number;
   last_updated: string;
+  coverage_tier: CoverageTier;
+  confidence: ConfidenceLevel;
+  is_incumbent: boolean;
+  score_version: string;
   topicScores?: CandidateTopicScore[];
 }
 
@@ -39,6 +44,23 @@ interface Vote {
   position: 'Yea' | 'Nay' | 'Present' | 'Not Voting';
   topic: string;
   description: string | null;
+}
+
+interface QuestionOption {
+  id: string;
+  question_id: string;
+  text: string;
+  value: number;
+  display_order: number;
+}
+
+interface Question {
+  id: string;
+  topic_id: string;
+  text: string;
+  is_onboarding_canonical: boolean;
+  onboarding_slot: number | null;
+  options?: QuestionOption[];
 }
 
 export const useCandidates = () => {
@@ -67,6 +89,10 @@ export const useCandidates = () => {
       // Map topic scores to candidates
       const candidatesWithScores = candidates.map(candidate => ({
         ...candidate,
+        coverage_tier: candidate.coverage_tier || 'tier_3',
+        confidence: candidate.confidence || 'medium',
+        is_incumbent: candidate.is_incumbent ?? true,
+        score_version: candidate.score_version || 'v1.0',
         topicScores: topicScores
           ?.filter(ts => ts.candidate_id === candidate.id)
           .map(ts => ({
@@ -110,6 +136,10 @@ export const useCandidate = (id: string | undefined) => {
 
       return {
         ...candidate,
+        coverage_tier: candidate.coverage_tier || 'tier_3',
+        confidence: candidate.confidence || 'medium',
+        is_incumbent: candidate.is_incumbent ?? true,
+        score_version: candidate.score_version || 'v1.0',
         topicScores: topicScores?.map(ts => ({
           topic_id: ts.topic_id,
           score: ts.score,
@@ -195,16 +225,72 @@ export const useQuestions = () => {
       // Map options to questions
       return questions.map(q => ({
         ...q,
+        is_onboarding_canonical: q.is_onboarding_canonical ?? false,
+        onboarding_slot: q.onboarding_slot ?? null,
         options: options?.filter(o => o.question_id === q.id) || [],
-      }));
+      })) as Question[];
     },
   });
 };
 
+/**
+ * Get canonical onboarding questions for selected topics
+ * Returns 2 questions per topic (slot 1 and slot 2)
+ */
+export const useCanonicalQuestions = (selectedTopicIds: string[]) => {
+  return useQuery({
+    queryKey: ['canonical_questions', selectedTopicIds],
+    queryFn: async () => {
+      if (selectedTopicIds.length === 0) return [];
+      
+      const { data: questions, error } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('is_onboarding_canonical', true)
+        .in('topic_id', selectedTopicIds)
+        .order('onboarding_slot');
+      
+      if (error) throw error;
+
+      // Fetch options for these questions
+      const questionIds = questions.map(q => q.id);
+      const { data: options, error: optionsError } = await supabase
+        .from('question_options')
+        .select('*')
+        .in('question_id', questionIds)
+        .order('display_order');
+      
+      if (optionsError) throw optionsError;
+
+      // Map options to questions
+      const questionsWithOptions = questions.map(q => ({
+        ...q,
+        options: options?.filter(o => o.question_id === q.id) || [],
+      }));
+
+      // Sort by topic order (matching selectedTopicIds order) then by slot
+      const topicOrderMap = new Map(selectedTopicIds.map((id, idx) => [id, idx]));
+      questionsWithOptions.sort((a, b) => {
+        const topicOrderA = topicOrderMap.get(a.topic_id) ?? 999;
+        const topicOrderB = topicOrderMap.get(b.topic_id) ?? 999;
+        if (topicOrderA !== topicOrderB) return topicOrderA - topicOrderB;
+        return (a.onboarding_slot || 0) - (b.onboarding_slot || 0);
+      });
+
+      return questionsWithOptions as Question[];
+    },
+    enabled: selectedTopicIds.length > 0,
+  });
+};
+
+/**
+ * Calculate match score between user and candidate
+ * Uses the L/R spectrum (-10 to +10)
+ */
 export const calculateMatchScore = (userScore: number, candidateScore: number): number => {
-  const userNormalized = userScore + 100;
-  const candidateNormalized = candidateScore + 100;
-  const difference = Math.abs(userNormalized - candidateNormalized);
-  const matchPercentage = Math.round(100 - (difference / 2));
+  // Calculate absolute distance on -10 to +10 scale
+  const distance = Math.abs(userScore - candidateScore);
+  // Max distance is 20 (from -10 to +10)
+  const matchPercentage = Math.round(100 - (distance / 20) * 100);
   return Math.max(0, Math.min(100, matchPercentage));
 };
