@@ -213,6 +213,7 @@ export const useCandidateVotes = (candidateId: string | undefined) => {
     queryFn: async () => {
       if (!candidateId) return [];
       
+      // First try to fetch from database
       const { data, error } = await supabase
         .from('votes')
         .select('*')
@@ -220,7 +221,40 @@ export const useCandidateVotes = (candidateId: string | undefined) => {
         .order('date', { ascending: false });
       
       if (error) throw error;
-      return data as Vote[];
+      
+      // If we have votes in the DB, return them
+      if (data && data.length > 0) {
+        return data as Vote[];
+      }
+
+      // Not in database - try Congress.gov API (candidateId might be a bioguide ID)
+      console.log('No votes in DB, trying Congress API for:', candidateId);
+      
+      const { data: congressData, error: congressError } = await supabase.functions.invoke(
+        'fetch-member-votes',
+        { body: { bioguideId: candidateId } }
+      );
+
+      if (congressError) {
+        console.error('Congress API votes error:', congressError);
+        return [];
+      }
+
+      if (!congressData?.votes) {
+        return [];
+      }
+
+      // Transform Congress API votes to match our Vote interface
+      return congressData.votes.map((v: any) => ({
+        id: v.id,
+        bill_id: v.bill_id,
+        bill_name: v.bill_name,
+        candidate_id: v.candidate_id,
+        position: v.position as 'Yea' | 'Nay' | 'Present' | 'Not Voting',
+        topic: v.topic,
+        description: v.description,
+        date: v.date,
+      })) as Vote[];
     },
     enabled: !!candidateId,
   });
