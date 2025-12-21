@@ -25,6 +25,8 @@ interface Candidate {
   confidence: ConfidenceLevel;
   is_incumbent: boolean;
   score_version: string;
+  claimed_by_user_id: string | null;
+  claimed_at: string | null;
   topicScores?: CandidateTopicScore[];
 }
 
@@ -205,6 +207,8 @@ export const useCandidate = (id: string | undefined) => {
         is_incumbent: member.is_incumbent ?? true,
         score_version: member.score_version || 'v1.0',
         last_updated: member.last_updated || new Date().toISOString(),
+        claimed_by_user_id: null,
+        claimed_at: null,
         topicScores: [],
         hasOverride: !!override,
       };
