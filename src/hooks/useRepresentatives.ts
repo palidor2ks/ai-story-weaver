@@ -1,7 +1,28 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-interface Representative {
+export interface SocialMedia {
+  twitter?: string;
+  facebook?: string;
+  youtube?: string;
+  instagram?: string;
+}
+
+export interface DistrictOffice {
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  phone?: string;
+  fax?: string;
+  building?: string;
+  suite?: string;
+  hours?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface Representative {
   id: string;
   name: string;
   party: 'Democrat' | 'Republican' | 'Independent' | 'Other';
@@ -14,6 +35,18 @@ interface Representative {
   overall_score: number | null;
   coverage_tier: string;
   confidence: string;
+  // Contact info
+  website_url?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  contact_form?: string | null;
+  fax?: string | null;
+  rss_url?: string | null;
+  dc_office?: string | null;
+  // Social media
+  social_media?: SocialMedia | null;
+  // District offices
+  district_offices?: DistrictOffice[] | null;
 }
 
 interface FetchRepresentativesResponse {
