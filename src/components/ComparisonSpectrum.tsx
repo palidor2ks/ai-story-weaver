@@ -44,9 +44,9 @@ export const ComparisonSpectrum = ({
   };
 
   const avatarSizes = {
-    sm: 'w-6 h-6 -top-2',
-    md: 'w-7 h-7 -top-2',
-    lg: 'w-8 h-8 -top-2',
+    sm: 'w-6 h-6 top-1/2 -translate-y-1/2',
+    md: 'w-7 h-7 top-1/2 -translate-y-1/2',
+    lg: 'w-8 h-8 top-1/2 -translate-y-1/2',
   };
 
 
@@ -62,10 +62,10 @@ export const ComparisonSpectrum = ({
             <TooltipTrigger asChild>
               <div 
                 className={cn(
-                  "absolute cursor-pointer transition-all hover:scale-110 z-20",
+                  "absolute cursor-pointer transition-all hover:scale-110 z-20 -translate-x-1/2",
                   avatarSizes[size]
                 )}
-                style={{ left: `${repPosition}%`, transform: 'translateX(-50%)' }}
+                style={{ left: `${repPosition}%` }}
               >
                 <Avatar className="w-full h-full ring-2 ring-primary ring-offset-1 ring-offset-background shadow-md">
                   {repImageUrl && (
@@ -87,10 +87,10 @@ export const ComparisonSpectrum = ({
             <TooltipTrigger asChild>
               <div 
                 className={cn(
-                  "absolute cursor-pointer transition-all hover:scale-110 z-30",
+                  "absolute cursor-pointer transition-all hover:scale-110 z-30 -translate-x-1/2",
                   avatarSizes[size]
                 )}
-                style={{ left: `${userPosition}%`, transform: 'translateX(-50%)' }}
+                style={{ left: `${userPosition}%` }}
               >
                 <Avatar className="w-full h-full ring-2 ring-accent ring-offset-1 ring-offset-background shadow-md">
                   {userImageUrl && (
