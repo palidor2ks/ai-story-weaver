@@ -19,6 +19,7 @@ import PartyProfile from "./pages/PartyProfile";
 import { QuizLibrary } from "./pages/QuizLibrary";
 import { HowScoringWorks } from "./pages/HowScoringWorks";
 import Admin from "./pages/Admin";
+import PoliticianDashboard from "./pages/PoliticianDashboard";
 import NotFound from "./pages/NotFound";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
 
@@ -133,6 +134,11 @@ const AppRoutes = () => {
       <Route path="/admin" element={
         <ProtectedRoute>
           <Admin />
+        </ProtectedRoute>
+      } />
+      <Route path="/politician" element={
+        <ProtectedRoute>
+          <PoliticianDashboard />
         </ProtectedRoute>
       } />
       <Route path="*" element={<NotFound />} />
