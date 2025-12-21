@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 type OfficeLevelType = 'federal_executive' | 'federal_legislative' | 'state_executive' | 'state_legislative' | 'local';
 
+export type TransitionStatusType = 'current' | 'incoming' | 'outgoing' | 'candidate';
+
 export interface CivicOfficial {
   id: string;
   name: string;
@@ -19,6 +21,10 @@ export interface CivicOfficial {
   overall_score: number | null;
   coverage_tier: string;
   confidence: string;
+  // Transition fields
+  transition_status?: TransitionStatusType;
+  new_office?: string;
+  inauguration_date?: string;
 }
 
 interface FetchCivicOfficialsResponse {
@@ -29,6 +35,7 @@ interface FetchCivicOfficialsResponse {
   local: CivicOfficial[];
   normalizedAddress?: string;
   state?: string;
+  hasTransitions?: boolean;
   error?: string;
 }
 
@@ -39,6 +46,7 @@ interface CivicOfficialsResult {
   stateLegislative: CivicOfficial[];
   local: CivicOfficial[];
   state: string | null;
+  hasTransitions: boolean;
 }
 
 export function useCivicOfficials(address: string | null | undefined) {
@@ -53,7 +61,8 @@ export function useCivicOfficials(address: string | null | undefined) {
           stateExecutive: [], 
           stateLegislative: [], 
           local: [],
-          state: null 
+          state: null,
+          hasTransitions: false,
         };
       }
 
@@ -75,6 +84,7 @@ export function useCivicOfficials(address: string | null | undefined) {
           stateLegislative: [],
           local: [],
           state: null,
+          hasTransitions: false,
         };
       }
 
@@ -86,7 +96,8 @@ export function useCivicOfficials(address: string | null | undefined) {
           stateExecutive: [], 
           stateLegislative: [], 
           local: [],
-          state: null 
+          state: null,
+          hasTransitions: false,
         };
       }
 
@@ -98,7 +109,8 @@ export function useCivicOfficials(address: string | null | undefined) {
         stateExecutive: data?.stateExecutive || [],
         stateLegislative: data?.stateLegislative || [],
         local: data?.local || [],
-        state: data?.state || null
+        state: data?.state || null,
+        hasTransitions: data?.hasTransitions || false,
       };
     },
     enabled: !!address,

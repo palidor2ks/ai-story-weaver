@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.fetch-civic-officials]
 verify_jwt = false
+
+[functions.update-election-results]
+verify_jwt = false

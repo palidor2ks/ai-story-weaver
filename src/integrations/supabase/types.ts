@@ -136,6 +136,63 @@ export type Database = {
           },
         ]
       }
+      official_transitions: {
+        Row: {
+          ai_confidence: string | null
+          created_at: string | null
+          current_office: string | null
+          district: string | null
+          election_date: string
+          id: string
+          inauguration_date: string
+          is_active: boolean | null
+          new_office: string
+          official_name: string
+          party: string | null
+          source_url: string | null
+          state: string
+          transition_type: string
+          updated_at: string | null
+          verified: boolean | null
+        }
+        Insert: {
+          ai_confidence?: string | null
+          created_at?: string | null
+          current_office?: string | null
+          district?: string | null
+          election_date: string
+          id?: string
+          inauguration_date: string
+          is_active?: boolean | null
+          new_office: string
+          official_name: string
+          party?: string | null
+          source_url?: string | null
+          state: string
+          transition_type?: string
+          updated_at?: string | null
+          verified?: boolean | null
+        }
+        Update: {
+          ai_confidence?: string | null
+          created_at?: string | null
+          current_office?: string | null
+          district?: string | null
+          election_date?: string
+          id?: string
+          inauguration_date?: string
+          is_active?: boolean | null
+          new_office?: string
+          official_name?: string
+          party?: string | null
+          source_url?: string | null
+          state?: string
+          transition_type?: string
+          updated_at?: string | null
+          verified?: boolean | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address: string | null

@@ -16,6 +16,9 @@ const EXECUTIVE_URL = 'https://unitedstates.github.io/congress-legislators/execu
 // Office level categorization
 type OfficeLevelType = 'federal_executive' | 'federal_legislative' | 'state_executive' | 'state_legislative' | 'local';
 
+// Transition status for officials
+type TransitionStatusType = 'current' | 'incoming' | 'outgoing' | 'candidate';
+
 interface OfficialInfo {
   id: string;
   name: string;
@@ -32,6 +35,25 @@ interface OfficialInfo {
   overall_score: number | null;
   coverage_tier: string;
   confidence: string;
+  // New transition fields
+  transition_status?: TransitionStatusType;
+  new_office?: string;
+  inauguration_date?: string;
+}
+
+interface OfficialTransition {
+  id: string;
+  official_name: string;
+  current_office: string | null;
+  new_office: string;
+  state: string;
+  district: string | null;
+  party: string | null;
+  election_date: string;
+  inauguration_date: string;
+  transition_type: string;
+  ai_confidence: string | null;
+  verified: boolean | null;
 }
 
 interface Executive {
@@ -398,6 +420,126 @@ async function geocodeAddress(address: string): Promise<{ lat: number, lng: numb
   }
 }
 
+// Fetch official transitions from database
+async function fetchOfficialTransitions(state: string): Promise<OfficialTransition[]> {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    const { data, error } = await supabase
+      .from('official_transitions')
+      .select('*')
+      .eq('state', state.toUpperCase())
+      .eq('is_active', true);
+
+    if (error) {
+      console.error('[Transitions] Error fetching transitions:', error);
+      return [];
+    }
+
+    console.log(`[Transitions] Found ${data?.length || 0} transitions for ${state}`);
+    return data || [];
+  } catch (error) {
+    console.error('[Transitions] Exception:', error);
+    return [];
+  }
+}
+
+// Apply transition data to officials list
+function applyTransitions(officials: OfficialInfo[], transitions: OfficialTransition[]): OfficialInfo[] {
+  if (transitions.length === 0) return officials;
+
+  const today = new Date();
+  const transitionMap = new Map<string, OfficialTransition>();
+  
+  // Build map of transitions by name (normalized)
+  for (const t of transitions) {
+    transitionMap.set(t.official_name.toLowerCase(), t);
+  }
+
+  // Mark officials with transition status
+  const updatedOfficials = officials.map(official => {
+    const transition = transitionMap.get(official.name.toLowerCase());
+    
+    if (transition) {
+      const inaugDate = new Date(transition.inauguration_date);
+      const isBeforeInauguration = today < inaugDate;
+      
+      // If this official is transitioning TO a different office
+      if (transition.current_office && 
+          official.office.toLowerCase().includes(transition.current_office.toLowerCase())) {
+        // They're running for or elected to a new position
+        return {
+          ...official,
+          transition_status: isBeforeInauguration ? 'candidate' as TransitionStatusType : 'current' as TransitionStatusType,
+          new_office: transition.new_office,
+          inauguration_date: transition.inauguration_date,
+        };
+      }
+      
+      // If this official IS the incumbent being replaced
+      const isCurrentIncumbent = official.office.toLowerCase().includes(transition.new_office.toLowerCase());
+      if (isCurrentIncumbent && isBeforeInauguration) {
+        // Find if there's someone else who won their seat
+        const hasReplacement = transitions.some(t => 
+          t.new_office.toLowerCase() === official.office.toLowerCase() &&
+          t.official_name.toLowerCase() !== official.name.toLowerCase()
+        );
+        if (hasReplacement) {
+          return {
+            ...official,
+            transition_status: 'outgoing' as TransitionStatusType,
+          };
+        }
+      }
+    }
+    
+    return official;
+  });
+
+  // Add incoming officials who aren't yet in the list
+  const incomingOfficials: OfficialInfo[] = [];
+  
+  for (const transition of transitions) {
+    const inaugDate = new Date(transition.inauguration_date);
+    const isBeforeInauguration = today < inaugDate;
+    
+    if (!isBeforeInauguration) continue; // Already inaugurated, skip
+    
+    // Check if this person is already in our list
+    const alreadyInList = officials.some(o => 
+      o.name.toLowerCase() === transition.official_name.toLowerCase()
+    );
+    
+    if (!alreadyInList) {
+      // Add as incoming official
+      incomingOfficials.push({
+        id: `transition_${transition.id}`,
+        name: transition.official_name,
+        party: (transition.party as 'Democrat' | 'Republican' | 'Independent' | 'Other') || 'Other',
+        office: transition.new_office,
+        level: transition.new_office.toLowerCase().includes('governor') 
+          ? 'state_executive' 
+          : transition.new_office.toLowerCase().includes('senator') || transition.new_office.toLowerCase().includes('representative')
+            ? 'state_legislative'
+            : 'local',
+        state: transition.state,
+        district: transition.district || undefined,
+        image_url: '',
+        is_incumbent: false,
+        overall_score: null,
+        coverage_tier: 'tier_2',
+        confidence: transition.ai_confidence || 'medium',
+        transition_status: 'incoming',
+        new_office: transition.new_office,
+        inauguration_date: transition.inauguration_date,
+      });
+    }
+  }
+
+  console.log(`[Transitions] Added ${incomingOfficials.length} incoming officials`);
+  return [...updatedOfficials, ...incomingOfficials];
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -440,11 +582,12 @@ serve(async (req) => {
     // Get coordinates for geo-based lookup
     const coords = await geocodeAddress(address);
 
-    // Fetch from all sources in parallel
-    const [federalExecutive, openStatesResult, localOfficials] = await Promise.all([
+    // Fetch from all sources in parallel (including transitions)
+    const [federalExecutive, openStatesResult, localOfficials, transitions] = await Promise.all([
       fetchFederalExecutiveFromGitHub(),
       fetchOpenStatesOfficials(state, coords?.lat, coords?.lng),
       fetchLocalOfficialsFromDB(state),
+      fetchOfficialTransitions(state),
     ]);
 
     const { legislators: stateLegislative, governors: stateExecutiveFromAPI } = openStatesResult;
@@ -454,22 +597,36 @@ serve(async (req) => {
     console.log(`State Executive: ${stateExecutiveFromAPI.length} (from Open States API)`);
     console.log(`State Legislative: ${stateLegislative.length} (from Open States API)`);
     console.log(`Local: ${localOfficials.length} (from DB - no free API exists)`);
-    console.log(`=== FETCH CIVIC OFFICIALS END ===`);
+    console.log(`Transitions: ${transitions.length} (from DB)`);
 
-    const allOfficials = [
+    // Combine all officials
+    let allOfficials = [
       ...federalExecutive,
       ...stateExecutiveFromAPI,
       ...stateLegislative,
       ...localOfficials,
     ];
 
+    // Apply transition data (mark outgoing, add incoming officials)
+    allOfficials = applyTransitions(allOfficials, transitions);
+
+    console.log(`Total officials after transitions: ${allOfficials.length}`);
+    console.log(`=== FETCH CIVIC OFFICIALS END ===`);
+
+    // Re-categorize for response
+    const finalFederalExecutive = allOfficials.filter(o => o.level === 'federal_executive');
+    const finalStateExecutive = allOfficials.filter(o => o.level === 'state_executive');
+    const finalStateLegislative = allOfficials.filter(o => o.level === 'state_legislative');
+    const finalLocal = allOfficials.filter(o => o.level === 'local');
+
     return new Response(JSON.stringify({ 
       officials: allOfficials,
-      federalExecutive,
-      stateExecutive: stateExecutiveFromAPI,
-      stateLegislative,
-      local: localOfficials,
+      federalExecutive: finalFederalExecutive,
+      stateExecutive: finalStateExecutive,
+      stateLegislative: finalStateLegislative,
+      local: finalLocal,
       state,
+      hasTransitions: transitions.length > 0,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -9,6 +9,7 @@ import { useUser } from '@/context/UserContext';
 import { User, MapPin, Calendar } from 'lucide-react';
 import { ScoreDisplay } from './ScoreDisplay';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from './CoverageTierBadge';
+import { TransitionBadge, TransitionStatus } from './TransitionBadge';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 
 interface CandidateCardProps {
@@ -46,10 +47,12 @@ export const CandidateCard = ({ candidate, index = 0 }: CandidateCardProps) => {
     })
     .slice(0, 1);
 
-  // Get coverage tier and confidence from candidate (with defaults)
+  // Get coverage tier, confidence, and transition status from candidate (with defaults)
   const coverageTier: CoverageTier = (candidate as any).coverageTier || 'tier_3';
   const confidence: ConfidenceLevel = (candidate as any).confidence || 'medium';
   const isIncumbent: boolean = (candidate as any).isIncumbent ?? true;
+  const transitionStatus: TransitionStatus | undefined = (candidate as any).transitionStatus;
+  const newOffice: string | undefined = (candidate as any).newOffice;
 
   return (
     <Link to={`/candidate/${candidate.id}`}>
@@ -112,8 +115,11 @@ export const CandidateCard = ({ candidate, index = 0 }: CandidateCardProps) => {
                 <Badge variant="outline" className={cn("border", getPartyColor(candidate.party))}>
                   {candidate.party}
                 </Badge>
-                
-                <IncumbentBadge isIncumbent={isIncumbent} />
+                {transitionStatus && transitionStatus !== 'current' ? (
+                  <TransitionBadge status={transitionStatus} newOffice={newOffice} />
+                ) : (
+                  <IncumbentBadge isIncumbent={isIncumbent} />
+                )}
                 
                 {agreements.length > 0 && (
                   <Badge variant="outline" className="bg-agree/10 text-agree border-agree/30">

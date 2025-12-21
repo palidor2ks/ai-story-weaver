@@ -80,6 +80,10 @@ export const Feed = () => {
         scoreVersion: 'v1.0',
         level: official.level?.includes('state') ? 'state' : 
                official.level === 'local' ? 'local' : 'federal',
+        // Transition fields
+        transitionStatus: official.transition_status,
+        newOffice: official.new_office,
+        inaugurationDate: official.inauguration_date,
       }));
 
     // Transform database candidates (as fallback)
