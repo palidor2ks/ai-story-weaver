@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ScoreBar } from '@/components/ScoreBar';
@@ -9,8 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCandidate, useCandidateDonors, useCandidateVotes, calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile, useUserTopicScores } from '@/hooks/useProfile';
 import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
+import { useAdminRole } from '@/hooks/useAdminRole';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, User, Sparkles } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil } from 'lucide-react';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
@@ -19,6 +21,7 @@ import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
 import { ContactInfoCard } from '@/components/ContactInfoCard';
 import { CandidatePositions } from '@/components/CandidatePositions';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
+import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
 
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +31,11 @@ export const CandidateProfile = () => {
   const { data: donors = [] } = useCandidateDonors(id);
   const { data: votes = [] } = useCandidateVotes(id);
   const { data: representativeDetails } = useRepresentativeDetails(id);
+  const { data: adminData } = useAdminRole();
+  
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  
+  const isAdmin = adminData?.isAdmin ?? false;
 
   if (candidateLoading) {
     return (
@@ -173,7 +181,25 @@ export const CandidateProfile = () => {
                 <Badge variant="outline" className={cn("border text-sm", getPartyColor(candidate.party))}>
                   {candidate.party}
                 </Badge>
+                {candidate.hasOverride && (
+                  <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/30">
+                    Overridden
+                  </Badge>
+                )}
               </div>
+              
+              {/* Admin Edit Button */}
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setIsEditDialogOpen(true)}
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit
+                </Button>
+              )}
 
               {/* Score Display */}
               <div className="mb-3">
@@ -460,6 +486,27 @@ export const CandidateProfile = () => {
             <strong>Score Version:</strong> {candidate.score_version || 'v1.0'} • This is not voting advice. Data is provided for informational purposes only.
           </p>
         </div>
+
+        {/* Admin Edit Dialog */}
+        {isAdmin && candidate && (
+          <CandidateEditDialog
+            open={isEditDialogOpen}
+            onOpenChange={setIsEditDialogOpen}
+            candidateId={candidate.id}
+            candidateName={candidate.name}
+            currentData={{
+              name: candidate.name,
+              party: candidate.party,
+              office: candidate.office,
+              state: candidate.state,
+              district: candidate.district,
+              image_url: candidate.image_url,
+              overall_score: candidate.overall_score,
+              coverage_tier: candidate.coverage_tier || 'tier_3',
+              confidence: candidate.confidence || 'medium',
+            }}
+          />
+        )}
       </main>
     </div>
   );

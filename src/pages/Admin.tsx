@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { useStaticOfficials, useCreateStaticOfficial, useUpdateStaticOfficial, useDeleteStaticOfficial, StaticOfficial } from "@/hooks/useStaticOfficials";
+import { useCandidateOverrides, useDeleteCandidateOverride, CandidateOverride } from "@/hooks/useCandidateOverrides";
 import { Header } from "@/components/Header";
 import { SyncStatusDashboard } from "@/components/admin/SyncStatusDashboard";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit } from "lucide-react";
 
 // Only levels that require manual entry (no API available)
 const LEVELS = [
@@ -60,9 +62,11 @@ export default function Admin() {
   const { user, loading: authLoading } = useAuth();
   const { data: adminData, isLoading: adminLoading } = useAdminRole();
   const { data: officials, isLoading: officialsLoading } = useStaticOfficials();
+  const { data: overrides, isLoading: overridesLoading } = useCandidateOverrides();
   const createMutation = useCreateStaticOfficial();
   const updateMutation = useUpdateStaticOfficial();
   const deleteMutation = useDeleteStaticOfficial();
+  const deleteOverrideMutation = useDeleteCandidateOverride();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingOfficial, setEditingOfficial] = useState<StaticOfficial | null>(null);
@@ -152,6 +156,24 @@ export default function Admin() {
 
   const handleDelete = async (id: string) => {
     await deleteMutation.mutateAsync(id);
+  };
+
+  const handleDeleteOverride = async (candidateId: string) => {
+    await deleteOverrideMutation.mutateAsync(candidateId);
+  };
+
+  const getOverriddenFields = (override: CandidateOverride): string[] => {
+    const fields: string[] = [];
+    if (override.name) fields.push('name');
+    if (override.party) fields.push('party');
+    if (override.office) fields.push('office');
+    if (override.state) fields.push('state');
+    if (override.district) fields.push('district');
+    if (override.image_url) fields.push('image');
+    if (override.overall_score !== null) fields.push('score');
+    if (override.coverage_tier) fields.push('tier');
+    if (override.confidence) fields.push('confidence');
+    return fields;
   };
 
   const getPartyColor = (party: string) => {
@@ -385,99 +407,195 @@ export default function Admin() {
 
         <SyncStatusDashboard />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Manual Entry Officials</CardTitle>
-            <CardDescription>
-              Officials without API coverage: President, Vice President, and local officials (mayors, city council, etc.)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {officialsLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : officials && officials.length > 0 ? (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Office</TableHead>
-                      <TableHead>Level</TableHead>
-                      <TableHead>Party</TableHead>
-                      <TableHead>State</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {officials.map((official) => (
-                      <TableRow key={official.id}>
-                        <TableCell className="font-medium">{official.name}</TableCell>
-                        <TableCell>{official.office}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{getLevelLabel(official.level)}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getPartyColor(official.party)}>
-                            {official.party}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{official.state}</TableCell>
-                        <TableCell>
-                          <Badge variant={official.is_active ? "default" : "secondary"}>
-                            {official.is_active ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleOpenEdit(official)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-destructive">
-                                  <Trash2 className="h-4 w-4" />
+        <Tabs defaultValue="officials" className="w-full">
+          <TabsList className="mb-6">
+            <TabsTrigger value="officials" className="gap-2">
+              <Users className="h-4 w-4" />
+              Static Officials
+            </TabsTrigger>
+            <TabsTrigger value="overrides" className="gap-2">
+              <FileEdit className="h-4 w-4" />
+              Overrides ({overrides?.length || 0})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="officials">
+            <Card>
+              <CardHeader>
+                <CardTitle>Manual Entry Officials</CardTitle>
+                <CardDescription>
+                  Officials without API coverage: President, Vice President, and local officials
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {officialsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : officials && officials.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Office</TableHead>
+                          <TableHead>Level</TableHead>
+                          <TableHead>Party</TableHead>
+                          <TableHead>State</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {officials.map((official) => (
+                          <TableRow key={official.id}>
+                            <TableCell className="font-medium">{official.name}</TableCell>
+                            <TableCell>{official.office}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{getLevelLabel(official.level)}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={getPartyColor(official.party)}>{official.party}</Badge>
+                            </TableCell>
+                            <TableCell>{official.state}</TableCell>
+                            <TableCell>
+                              <Badge variant={official.is_active ? "default" : "secondary"}>
+                                {official.is_active ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(official)}>
+                                  <Pencil className="h-4 w-4" />
                                 </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete {official.name}?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the official from the database.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDelete(official.id)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                No static officials yet. Click "Add Official" to create one.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="text-destructive">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete {official.name}?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        This action cannot be undone.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => handleDelete(official.id)} className="bg-destructive text-destructive-foreground">
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No static officials yet. Click "Add Official" to create one.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="overrides">
+            <Card>
+              <CardHeader>
+                <CardTitle>Candidate Overrides</CardTitle>
+                <CardDescription>
+                  Admin overrides for candidate data. These take priority over API data.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {overridesLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : overrides && overrides.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Candidate</TableHead>
+                          <TableHead>Overridden Fields</TableHead>
+                          <TableHead>Notes</TableHead>
+                          <TableHead>Updated</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {overrides.map((override) => (
+                          <TableRow key={override.id}>
+                            <TableCell className="font-medium">
+                              <Link to={`/candidate/${override.candidate_id}`} className="hover:underline flex items-center gap-1">
+                                {override.name || override.candidate_id}
+                                <ExternalLink className="h-3 w-3" />
+                              </Link>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                {getOverriddenFields(override).map((field) => (
+                                  <Badge key={field} variant="secondary" className="text-xs">{field}</Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="max-w-[200px] truncate text-muted-foreground">
+                              {override.notes || '-'}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {new Date(override.updated_at).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Link to={`/candidate/${override.candidate_id}`}>
+                                  <Button variant="ghost" size="icon">
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </Link>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="text-destructive">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete override?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        This will revert to the original API data.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => handleDeleteOverride(override.candidate_id)} className="bg-destructive text-destructive-foreground">
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No overrides yet. Edit a candidate profile to create one.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
