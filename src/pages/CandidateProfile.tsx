@@ -17,6 +17,7 @@ import { AIExplanation } from '@/components/AIExplanation';
 import { EvidenceBrowser } from '@/components/EvidenceBrowser';
 import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
 import { ContactInfoCard } from '@/components/ContactInfoCard';
+import { CandidatePositions } from '@/components/CandidatePositions';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 
 export const CandidateProfile = () => {
@@ -187,6 +188,14 @@ export const CandidateProfile = () => {
             candidateId={candidate.id}
             candidateName={candidate.name}
             topicScores={candidateTopicScores}
+          />
+        </div>
+
+        {/* Positions & Sources Section */}
+        <div className="mb-8">
+          <CandidatePositions 
+            candidateId={candidate.id} 
+            candidateName={candidate.name} 
           />
         </div>
 
