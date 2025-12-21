@@ -1,6 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+export interface TopicCoverage {
+  topicId: string;
+  topicName: string;
+  icon: string;
+  totalQuestions: number;
+  answeredQuestions: number;
+  coveragePercent: number;
+  candidatesWithAnswers: number;
+}
+
 interface SyncStats {
   totalCandidates: number;
   syncedCandidates: number;
@@ -10,6 +20,7 @@ interface SyncStats {
   oldestPendingCandidate: string | null;
   candidatesWithAnswers: number;
   avgAnswersPerCandidate: number;
+  topicCoverage: TopicCoverage[];
 }
 
 export function useSyncStats() {
@@ -60,6 +71,47 @@ export function useSyncStats() {
         ? Math.round((totalAnswers || 0) / candidatesWithAnswers)
         : 0;
 
+      // Get topic coverage stats
+      const { data: topics, error: topicsError } = await supabase
+        .from('topics')
+        .select('id, name, icon');
+
+      if (topicsError) throw topicsError;
+
+      const { data: questions, error: questionsError } = await supabase
+        .from('questions')
+        .select('id, topic_id');
+
+      if (questionsError) throw questionsError;
+
+      const { data: allAnswers, error: allAnswersError } = await supabase
+        .from('candidate_answers')
+        .select('question_id, candidate_id');
+
+      if (allAnswersError) throw allAnswersError;
+
+      // Calculate topic coverage
+      const topicCoverage: TopicCoverage[] = (topics || []).map(topic => {
+        const topicQuestions = questions?.filter(q => q.topic_id === topic.id) || [];
+        const topicQuestionIds = new Set(topicQuestions.map(q => q.id));
+        
+        const topicAnswers = allAnswers?.filter(a => topicQuestionIds.has(a.question_id)) || [];
+        const answeredQuestionIds = new Set(topicAnswers.map(a => a.question_id));
+        const candidatesWithTopicAnswers = new Set(topicAnswers.map(a => a.candidate_id));
+
+        return {
+          topicId: topic.id,
+          topicName: topic.name,
+          icon: topic.icon,
+          totalQuestions: topicQuestions.length,
+          answeredQuestions: answeredQuestionIds.size,
+          coveragePercent: topicQuestions.length > 0 
+            ? Math.round((answeredQuestionIds.size / topicQuestions.length) * 100)
+            : 0,
+          candidatesWithAnswers: candidatesWithTopicAnswers.size,
+        };
+      }).sort((a, b) => b.coveragePercent - a.coveragePercent);
+
       return {
         totalCandidates,
         syncedCandidates,
@@ -69,6 +121,7 @@ export function useSyncStats() {
         oldestPendingCandidate,
         candidatesWithAnswers,
         avgAnswersPerCandidate,
+        topicCoverage,
       };
     },
     staleTime: 1000 * 60, // 1 minute
