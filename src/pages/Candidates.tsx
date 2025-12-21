@@ -5,11 +5,12 @@ import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useAllPoliticians } from '@/hooks/useAllPoliticians';
+import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, SlidersHorizontal, Users, MapPin, Building } from 'lucide-react';
+import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark } from 'lucide-react';
 import { Candidate } from '@/types';
 
 export const Candidates = () => {
@@ -17,6 +18,7 @@ export const Candidates = () => {
   const { data: dbCandidates = [], isLoading: candidatesLoading } = useCandidates();
   const { data: repsData, isLoading: representativesLoading } = useRepresentatives(profile?.address);
   const { data: allPoliticians = [], isLoading: allPoliticiansLoading } = useAllPoliticians();
+  const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
   
   const userReps = repsData?.representatives ?? [];
   
@@ -44,7 +46,25 @@ export const Candidates = () => {
     scoreVersion: 'v1.0',
   });
 
-  // User's representatives (filtered by their district)
+  // Transform civic official to Candidate type
+  const transformCivicToCandidate = (official: CivicOfficial): Candidate => ({
+    id: official.id,
+    name: official.name,
+    party: official.party,
+    office: official.office,
+    state: official.state,
+    district: official.district,
+    imageUrl: official.image_url || '',
+    overallScore: official.overall_score,
+    topicScores: [],
+    lastUpdated: new Date(),
+    coverageTier: (official.coverage_tier || 'tier_3') as 'tier_1' | 'tier_2' | 'tier_3',
+    confidence: (official.confidence || 'low') as 'high' | 'medium' | 'low',
+    isIncumbent: official.is_incumbent ?? true,
+    scoreVersion: 'v1.0',
+  });
+
+  // User's federal representatives (filtered by their district)
   const userRepresentatives: Candidate[] = useMemo(() => {
     return userReps.map(transformRepToCandidate);
   }, [userReps]);
@@ -53,6 +73,23 @@ export const Candidates = () => {
   const allCongressCandidates: Candidate[] = useMemo(() => {
     return allPoliticians.map(transformRepToCandidate);
   }, [allPoliticians]);
+
+  // Civic officials (President, VP, Governors, State/Local)
+  const federalExecutiveCandidates: Candidate[] = useMemo(() => {
+    return (civicData?.federalExecutive || []).map(transformCivicToCandidate);
+  }, [civicData?.federalExecutive]);
+
+  const stateExecutiveCandidates: Candidate[] = useMemo(() => {
+    return (civicData?.stateExecutive || []).map(transformCivicToCandidate);
+  }, [civicData?.stateExecutive]);
+
+  const stateLegislativeCandidates: Candidate[] = useMemo(() => {
+    return (civicData?.stateLegislative || []).map(transformCivicToCandidate);
+  }, [civicData?.stateLegislative]);
+
+  const localCandidates: Candidate[] = useMemo(() => {
+    return (civicData?.local || []).map(transformCivicToCandidate);
+  }, [civicData?.local]);
 
   // Database candidates (local/state officials, running candidates)
   const dbTransformed: Candidate[] = useMemo(() => {
@@ -80,10 +117,107 @@ export const Candidates = () => {
 
   // All candidates combined (deduplicated)
   const allCandidates: Candidate[] = useMemo(() => {
-    const congressIds = new Set(allCongressCandidates.map(c => c.id));
-    const uniqueDb = dbTransformed.filter(c => !congressIds.has(c.id));
-    return [...allCongressCandidates, ...uniqueDb];
-  }, [allCongressCandidates, dbTransformed]);
+    const seen = new Set<string>();
+    const result: Candidate[] = [];
+    
+    // Add federal executive first (President, VP)
+    for (const c of federalExecutiveCandidates) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    
+    // Add Congress members (from Congress.gov API - more detailed)
+    for (const c of allCongressCandidates) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    
+    // Add state executive (Governors, etc.)
+    for (const c of stateExecutiveCandidates) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    
+    // Add state legislative
+    for (const c of stateLegislativeCandidates) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    
+    // Add local officials
+    for (const c of localCandidates) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    
+    // Add database candidates
+    for (const c of dbTransformed) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    
+    return result;
+  }, [federalExecutiveCandidates, allCongressCandidates, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, dbTransformed]);
+
+  // My Reps combined (federal + state + local for user's address)
+  const myRepsCombined: Candidate[] = useMemo(() => {
+    const seen = new Set<string>();
+    const result: Candidate[] = [];
+    
+    // Add federal executive
+    for (const c of federalExecutiveCandidates) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    
+    // Add user's federal reps (from Congress.gov)
+    for (const c of userRepresentatives) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    
+    // Add state executive
+    for (const c of stateExecutiveCandidates) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    
+    // Add state legislative
+    for (const c of stateLegislativeCandidates) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    
+    // Add local
+    for (const c of localCandidates) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        result.push(c);
+      }
+    }
+    
+    return result;
+  }, [federalExecutiveCandidates, userRepresentatives, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates]);
 
   // Get unique offices for filter
   const uniqueOffices = useMemo(() => {
@@ -95,16 +229,22 @@ export const Candidates = () => {
   const tabCandidates = useMemo(() => {
     switch (activeTab) {
       case 'my-reps':
-        return userRepresentatives;
+        return myRepsCombined;
+      case 'executive':
+        return [...federalExecutiveCandidates, ...stateExecutiveCandidates];
       case 'senators':
         return allCandidates.filter(c => c.office === 'Senator');
       case 'representatives':
         return allCandidates.filter(c => c.office === 'Representative');
+      case 'state':
+        return [...stateExecutiveCandidates, ...stateLegislativeCandidates];
+      case 'local':
+        return localCandidates;
       case 'all':
       default:
         return allCandidates;
     }
-  }, [activeTab, userRepresentatives, allCandidates]);
+  }, [activeTab, myRepsCombined, federalExecutiveCandidates, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, allCandidates]);
 
   const filteredCandidates = useMemo(() => {
     let result = [...tabCandidates];
@@ -142,7 +282,12 @@ export const Candidates = () => {
     return result;
   }, [searchQuery, sortBy, partyFilter, officeFilter, tabCandidates, profile]);
 
-  const isLoading = profileLoading || candidatesLoading || representativesLoading || allPoliticiansLoading;
+  const isLoading = profileLoading || candidatesLoading || representativesLoading || allPoliticiansLoading || civicLoading;
+
+  // Count for tabs
+  const executiveCount = federalExecutiveCandidates.length + stateExecutiveCandidates.length;
+  const stateCount = stateExecutiveCandidates.length + stateLegislativeCandidates.length;
+  const localCount = localCandidates.length;
 
   if (isLoading) {
     return (
@@ -150,7 +295,7 @@ export const Candidates = () => {
         <Header />
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          <p className="text-muted-foreground text-sm">Loading all Congress members...</p>
+          <p className="text-muted-foreground text-sm">Loading all officials...</p>
         </div>
       </div>
     );
@@ -166,20 +311,24 @@ export const Candidates = () => {
             All Politicians
           </h1>
           <p className="text-muted-foreground">
-            Browse all {allCandidates.length} current members of Congress, your representatives, and candidates in our database.
+            Browse {allCandidates.length} officials including the President, Congress, Governors, and local representatives.
           </p>
         </div>
 
         {/* Tabs for different views */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
+          <TabsList className="flex flex-wrap h-auto gap-1 w-full lg:w-auto lg:inline-flex">
             <TabsTrigger value="all" className="gap-2">
               <Building className="w-4 h-4 hidden sm:inline" />
               All ({allCandidates.length})
             </TabsTrigger>
             <TabsTrigger value="my-reps" className="gap-2">
               <MapPin className="w-4 h-4 hidden sm:inline" />
-              My Reps ({userRepresentatives.length})
+              My Reps ({myRepsCombined.length})
+            </TabsTrigger>
+            <TabsTrigger value="executive" className="gap-2">
+              <Crown className="w-4 h-4 hidden sm:inline" />
+              Executive ({executiveCount})
             </TabsTrigger>
             <TabsTrigger value="senators" className="gap-2">
               <Users className="w-4 h-4 hidden sm:inline" />
@@ -188,6 +337,14 @@ export const Candidates = () => {
             <TabsTrigger value="representatives" className="gap-2">
               <Users className="w-4 h-4 hidden sm:inline" />
               House ({allCandidates.filter(c => c.office === 'Representative').length})
+            </TabsTrigger>
+            <TabsTrigger value="state" className="gap-2">
+              <Landmark className="w-4 h-4 hidden sm:inline" />
+              State ({stateCount})
+            </TabsTrigger>
+            <TabsTrigger value="local" className="gap-2">
+              <MapPin className="w-4 h-4 hidden sm:inline" />
+              Local ({localCount})
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -259,7 +416,7 @@ export const Candidates = () => {
         {filteredCandidates.length === 0 && (
           <div className="text-center py-16">
             <p className="text-muted-foreground">
-              {activeTab === 'my-reps' && !profile?.address 
+              {(activeTab === 'my-reps' || activeTab === 'state' || activeTab === 'local' || activeTab === 'executive') && !profile?.address 
                 ? 'Add your address in your profile to see your representatives.' 
                 : 'No politicians found.'}
             </p>

@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.validate-address]
 verify_jwt = false
+
+[functions.fetch-civic-officials]
+verify_jwt = false
