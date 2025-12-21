@@ -336,10 +336,11 @@ export const CandidateProfile = () => {
                           </div>
                           <div className="text-right flex-shrink-0">
                             <Badge 
-                              variant={vote.position === 'Yea' ? 'default' : 'secondary'}
+                              variant={(vote.position === 'Yea' || (vote.position as string) === 'Sponsored') ? 'default' : 'secondary'}
                               className={cn(
-                                vote.position === 'Yea' && "bg-agree text-agree-foreground",
-                                vote.position === 'Nay' && "bg-disagree text-disagree-foreground"
+                                (vote.position === 'Yea' || (vote.position as string) === 'Sponsored') && "bg-agree text-agree-foreground",
+                                vote.position === 'Nay' && "bg-disagree text-disagree-foreground",
+                                (vote.position as string) === 'Cosponsored' && "bg-primary/80 text-primary-foreground"
                               )}
                             >
                               {vote.position}

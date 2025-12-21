@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.fetch-member]
 verify_jwt = false
+
+[functions.fetch-member-votes]
+verify_jwt = false
