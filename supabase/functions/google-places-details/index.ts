@@ -30,65 +30,65 @@ serve(async (req) => {
       );
     }
 
-    // Call Google Places Details API
-    const params = new URLSearchParams({
-      place_id: placeId,
-      fields: 'formatted_address,address_components,geometry',
-      key: apiKey,
-    });
+    console.log('Fetching place details for placeId:', placeId);
+
+    // Use the new Places API (New) endpoint
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': 'id,formattedAddress,addressComponents,location',
+    };
 
     if (sessionToken) {
-      params.append('sessiontoken', sessionToken);
+      headers['X-Goog-Session-Token'] = sessionToken;
     }
 
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`
-    );
+    const response = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+      method: 'GET',
+      headers,
+    });
 
     if (!response.ok) {
-      console.error('Google API error:', response.status, await response.text());
+      const errorText = await response.text();
+      console.error('Google API error:', response.status, errorText);
       return new Response(
         JSON.stringify({ error: 'Failed to fetch place details' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const data = await response.json();
+    const result = await response.json();
+    console.log('Place details received for:', result.formattedAddress);
     
-    if (data.status !== 'OK') {
-      console.error('Google Places API error:', data.status, data.error_message);
-      return new Response(
-        JSON.stringify({ error: data.error_message || 'API error' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    const components = result.addressComponents || [];
+    
+    // Extract address components using the new format
+    const getComponent = (types: string[]) => {
+      const comp = components.find((c: any) => 
+        types.some(type => c.types?.includes(type))
       );
-    }
-
-    const result = data.result;
-    const components = result.address_components || [];
-    
-    // Extract address components
-    const getComponent = (type: string) => {
-      const comp = components.find((c: any) => c.types.includes(type));
-      return comp?.long_name || '';
+      return comp?.longText || '';
     };
 
-    const getComponentShort = (type: string) => {
-      const comp = components.find((c: any) => c.types.includes(type));
-      return comp?.short_name || '';
+    const getComponentShort = (types: string[]) => {
+      const comp = components.find((c: any) => 
+        types.some(type => c.types?.includes(type))
+      );
+      return comp?.shortText || '';
     };
 
     const addressDetails = {
-      formattedAddress: result.formatted_address || '',
-      streetNumber: getComponent('street_number'),
-      street: getComponent('route'),
-      city: getComponent('locality') || getComponent('sublocality'),
-      county: getComponent('administrative_area_level_2'),
-      state: getComponentShort('administrative_area_level_1'),
-      stateFull: getComponent('administrative_area_level_1'),
-      zipCode: getComponent('postal_code'),
-      country: getComponentShort('country'),
-      lat: result.geometry?.location?.lat,
-      lng: result.geometry?.location?.lng,
+      formattedAddress: result.formattedAddress || '',
+      streetNumber: getComponent(['street_number']),
+      street: getComponent(['route']),
+      city: getComponent(['locality']) || getComponent(['sublocality']),
+      county: getComponent(['administrative_area_level_2']),
+      state: getComponentShort(['administrative_area_level_1']),
+      stateFull: getComponent(['administrative_area_level_1']),
+      zipCode: getComponent(['postal_code']),
+      country: getComponentShort(['country']),
+      lat: result.location?.latitude,
+      lng: result.location?.longitude,
     };
 
     return new Response(

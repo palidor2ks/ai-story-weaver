@@ -30,24 +30,31 @@ serve(async (req) => {
       );
     }
 
-    // Call Google Places Autocomplete API
-    const params = new URLSearchParams({
+    console.log('Fetching autocomplete for input:', input);
+
+    // Use the new Places API (New) endpoint
+    const requestBody: Record<string, unknown> = {
       input,
-      types: 'address',
-      components: 'country:us',
-      key: apiKey,
-    });
+      includedRegionCodes: ['us'],
+      includedPrimaryTypes: ['street_address', 'subpremise', 'premise', 'geocode'],
+    };
 
     if (sessionToken) {
-      params.append('sessiontoken', sessionToken);
+      requestBody.sessionToken = sessionToken;
     }
 
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`
-    );
+    const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+      },
+      body: JSON.stringify(requestBody),
+    });
 
     if (!response.ok) {
-      console.error('Google API error:', response.status, await response.text());
+      const errorText = await response.text();
+      console.error('Google API error:', response.status, errorText);
       return new Response(
         JSON.stringify({ error: 'Failed to fetch suggestions' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -55,21 +62,19 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    
-    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-      console.error('Google Places API error:', data.status, data.error_message);
-      return new Response(
-        JSON.stringify({ error: data.error_message || 'API error' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    console.log('Autocomplete response received, suggestions count:', data.suggestions?.length || 0);
 
-    const predictions = (data.predictions || []).map((p: any) => ({
-      placeId: p.place_id,
-      description: p.description,
-      mainText: p.structured_formatting?.main_text || '',
-      secondaryText: p.structured_formatting?.secondary_text || '',
-    }));
+    const predictions = (data.suggestions || [])
+      .filter((s: any) => s.placePrediction)
+      .map((s: any) => {
+        const p = s.placePrediction;
+        return {
+          placeId: p.placeId,
+          description: p.text?.text || '',
+          mainText: p.structuredFormat?.mainText?.text || '',
+          secondaryText: p.structuredFormat?.secondaryText?.text || '',
+        };
+      });
 
     return new Response(
       JSON.stringify({ predictions }),
