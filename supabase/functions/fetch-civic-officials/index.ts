@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const GOOGLE_API_KEY = Deno.env.get('GOOGLE_CIVIC_API_KEY') ?? Deno.env.get('GOOGLE_PLACES_API_KEY');
+const OPEN_STATES_API_KEY = Deno.env.get('OPEN_STATES_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
@@ -31,7 +31,7 @@ interface OfficialInfo {
   confidence: string;
 }
 
-// Map Google Civic party names to our party types
+// Map party names to our types
 function mapParty(party: string | undefined): 'Democrat' | 'Republican' | 'Independent' | 'Other' {
   if (!party) return 'Other';
   const normalizedParty = party.toLowerCase();
@@ -39,106 +39,6 @@ function mapParty(party: string | undefined): 'Democrat' | 'Republican' | 'Indep
   if (normalizedParty.includes('republican')) return 'Republican';
   if (normalizedParty.includes('independent') || normalizedParty.includes('nonpartisan')) return 'Independent';
   return 'Other';
-}
-
-// Categorize office by level
-function categorizeOffice(officeName: string, divisionId: string): { level: OfficeLevelType; normalizedOffice: string } {
-  const lowerName = officeName.toLowerCase();
-  
-  // Federal Executive
-  if (lowerName.includes('president') && !lowerName.includes('vice')) {
-    return { level: 'federal_executive', normalizedOffice: 'President' };
-  }
-  if (lowerName.includes('vice president')) {
-    return { level: 'federal_executive', normalizedOffice: 'Vice President' };
-  }
-  
-  // Federal Legislative - skip these as we get them from Congress.gov with more detail
-  if (lowerName.includes('u.s. senator') || lowerName.includes('united states senator')) {
-    return { level: 'federal_legislative', normalizedOffice: 'Senator' };
-  }
-  if (lowerName.includes('u.s. representative') || lowerName.includes('united states representative')) {
-    return { level: 'federal_legislative', normalizedOffice: 'Representative' };
-  }
-  
-  // State Executive
-  if (lowerName.includes('governor') && !lowerName.includes('lieutenant')) {
-    return { level: 'state_executive', normalizedOffice: 'Governor' };
-  }
-  if (lowerName.includes('lieutenant governor') || lowerName.includes('lt. governor')) {
-    return { level: 'state_executive', normalizedOffice: 'Lieutenant Governor' };
-  }
-  if (lowerName.includes('attorney general') && divisionId.includes('state:')) {
-    return { level: 'state_executive', normalizedOffice: 'State Attorney General' };
-  }
-  if (lowerName.includes('secretary of state') && divisionId.includes('state:')) {
-    return { level: 'state_executive', normalizedOffice: 'Secretary of State' };
-  }
-  if (lowerName.includes('state treasurer') || (lowerName.includes('treasurer') && divisionId.includes('state:'))) {
-    return { level: 'state_executive', normalizedOffice: 'State Treasurer' };
-  }
-  if (lowerName.includes('state comptroller') || lowerName.includes('state controller')) {
-    return { level: 'state_executive', normalizedOffice: 'State Comptroller' };
-  }
-  
-  // State Legislative
-  if (lowerName.includes('state senator') || (lowerName.includes('senator') && divisionId.includes('sldl'))) {
-    return { level: 'state_legislative', normalizedOffice: 'State Senator' };
-  }
-  if (lowerName.includes('state representative') || lowerName.includes('state assembly') || 
-      lowerName.includes('assemblymember') || lowerName.includes('state delegate') ||
-      divisionId.includes('sldu')) {
-    return { level: 'state_legislative', normalizedOffice: 'State Representative' };
-  }
-  
-  // Local - Mayor
-  if (lowerName.includes('mayor')) {
-    return { level: 'local', normalizedOffice: 'Mayor' };
-  }
-  
-  // Local - City Council
-  if (lowerName.includes('city council') || lowerName.includes('councilmember') || 
-      lowerName.includes('councilperson') || lowerName.includes('alderman') ||
-      lowerName.includes('alderwoman')) {
-    return { level: 'local', normalizedOffice: 'City Council Member' };
-  }
-  
-  // Local - County
-  if (lowerName.includes('county commissioner') || lowerName.includes('county supervisor') ||
-      lowerName.includes('county executive') || lowerName.includes('county council')) {
-    return { level: 'local', normalizedOffice: 'County Official' };
-  }
-  if (lowerName.includes('county clerk')) {
-    return { level: 'local', normalizedOffice: 'County Clerk' };
-  }
-  if (lowerName.includes('sheriff')) {
-    return { level: 'local', normalizedOffice: 'Sheriff' };
-  }
-  if (lowerName.includes('district attorney') || lowerName.includes('county attorney')) {
-    return { level: 'local', normalizedOffice: 'District Attorney' };
-  }
-  
-  // Local - School Board
-  if (lowerName.includes('school board') || lowerName.includes('board of education')) {
-    return { level: 'local', normalizedOffice: 'School Board Member' };
-  }
-  
-  // Default based on division
-  if (divisionId.includes('place:') || divisionId.includes('county:')) {
-    return { level: 'local', normalizedOffice: officeName };
-  }
-  if (divisionId.includes('state:') && !divisionId.includes('cd:')) {
-    return { level: 'state_executive', normalizedOffice: officeName };
-  }
-  
-  return { level: 'local', normalizedOffice: officeName };
-}
-
-// Extract state from division ID
-function extractStateFromDivision(divisionId: string): string {
-  // Format: ocd-division/country:us/state:nj/...
-  const stateMatch = divisionId.match(/state:([a-z]{2})/i);
-  return stateMatch ? stateMatch[1].toUpperCase() : '';
 }
 
 // Extract state from address
@@ -175,152 +75,133 @@ function extractStateFromAddress(address: string): string {
   return '';
 }
 
-// Create a unique ID for an official
-function createOfficialId(name: string, office: string, state: string): string {
-  const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const cleanOffice = office.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return `civic_${cleanName}_${cleanOffice}_${state}`.substring(0, 50);
-}
+// Fetch state legislators and governors from Open States API v3
+async function fetchOpenStatesOfficials(state: string, lat?: number, lng?: number): Promise<{ legislators: OfficialInfo[], governors: OfficialInfo[] }> {
+  if (!OPEN_STATES_API_KEY) {
+    console.error('[Open States] No API key configured');
+    return { legislators: [], governors: [] };
+  }
 
-// Fetch state legislators from Open States API (free, no API key required)
-async function fetchOpenStatesLegislators(state: string, lat?: number, lng?: number): Promise<OfficialInfo[]> {
-  console.log(`[Open States] Fetching legislators for state: ${state}`);
+  console.log(`[Open States] Fetching officials for state: ${state}, lat: ${lat}, lng: ${lng}`);
   
+  const headers = {
+    'X-API-KEY': OPEN_STATES_API_KEY,
+    'Accept': 'application/json',
+  };
+
+  const legislators: OfficialInfo[] = [];
+  const governors: OfficialInfo[] = [];
+
   try {
-    // Open States GraphQL API endpoint
-    const openStatesUrl = 'https://openstates.org/graphql';
-    
-    // Build query based on available data
-    let query: string;
-    let variables: Record<string, unknown>;
-    
+    // Fetch legislators - use geo endpoint if we have coordinates
+    let legislatorsUrl: string;
     if (lat && lng) {
-      // Use geo lookup if coordinates available
-      query = `
-        query PeopleByLocation($lat: Float!, $lng: Float!) {
-          people(latitude: $lat, longitude: $lng, first: 20) {
-            edges {
-              node {
-                id
-                name
-                party
-                currentRole {
-                  title
-                  orgClassification
-                  district
-                }
-                image
-                links {
-                  url
-                }
-                email
-              }
-            }
-          }
-        }
-      `;
-      variables = { lat, lng };
+      legislatorsUrl = `https://v3.openstates.org/people.geo?lat=${lat}&lng=${lng}`;
+      console.log(`[Open States] Using geo endpoint: ${legislatorsUrl}`);
     } else {
-      // Fall back to state-wide search for current legislators
-      query = `
-        query PeopleByState($state: String!) {
-          people(state: $state, first: 100) {
-            edges {
-              node {
-                id
-                name
-                party
-                currentRole {
-                  title
-                  orgClassification
-                  district
-                }
-                image
-                links {
-                  url
-                }
-                email
-              }
-            }
-          }
+      legislatorsUrl = `https://v3.openstates.org/people?jurisdiction=${state.toLowerCase()}&per_page=100`;
+      console.log(`[Open States] Using jurisdiction endpoint: ${legislatorsUrl}`);
+    }
+
+    const legislatorsResponse = await fetch(legislatorsUrl, { headers });
+    console.log(`[Open States] Legislators response status: ${legislatorsResponse.status}`);
+
+    if (legislatorsResponse.ok) {
+      const data = await legislatorsResponse.json();
+      const results = data.results || [];
+      console.log(`[Open States] Found ${results.length} legislators`);
+
+      for (const person of results) {
+        if (!person.current_role) continue;
+
+        const role = person.current_role;
+        let office = 'State Legislator';
+        
+        if (role.org_classification === 'upper') {
+          office = 'State Senator';
+        } else if (role.org_classification === 'lower') {
+          office = 'State Representative';
         }
-      `;
-      variables = { state: state.toLowerCase() };
-    }
 
-    console.log(`[Open States] Query variables:`, JSON.stringify(variables));
+        const official: OfficialInfo = {
+          id: `openstates_${person.id}`,
+          name: person.name,
+          party: mapParty(person.party),
+          office,
+          level: 'state_legislative',
+          state: state.toUpperCase(),
+          district: role.district ? `${state.toUpperCase()}-${role.district}` : undefined,
+          image_url: person.image || '',
+          urls: person.links?.map((l: { url: string }) => l.url) || [],
+          emails: person.email ? [person.email] : [],
+          is_incumbent: true,
+          overall_score: null,
+          coverage_tier: 'tier_3',
+          confidence: 'medium',
+        };
 
-    const response = await fetch(openStatesUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query, variables }),
-    });
-
-    console.log(`[Open States] Response status: ${response.status}`);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Open States] API error: ${response.status} - ${errorText}`);
-      return [];
-    }
-
-    const data = await response.json();
-    console.log(`[Open States] Response received, edges count: ${data.data?.people?.edges?.length || 0}`);
-
-    if (data.errors) {
-      console.error(`[Open States] GraphQL errors:`, JSON.stringify(data.errors));
-      return [];
-    }
-
-    const edges = data.data?.people?.edges || [];
-    const legislators: OfficialInfo[] = [];
-
-    for (const edge of edges) {
-      const person = edge.node;
-      if (!person.currentRole) continue; // Skip if no current role
-
-      const orgClass = person.currentRole.orgClassification?.toLowerCase() || '';
-      let office = 'State Legislator';
-      
-      if (orgClass.includes('upper') || orgClass.includes('senate')) {
-        office = 'State Senator';
-      } else if (orgClass.includes('lower') || orgClass.includes('house') || orgClass.includes('assembly')) {
-        office = 'State Representative';
+        legislators.push(official);
       }
-
-      const official: OfficialInfo = {
-        id: `openstates_${person.id}`,
-        name: person.name,
-        party: mapParty(person.party),
-        office,
-        level: 'state_legislative',
-        state: state.toUpperCase(),
-        district: person.currentRole.district ? `${state.toUpperCase()}-${person.currentRole.district}` : undefined,
-        image_url: person.image || '',
-        urls: person.links?.map((l: { url: string }) => l.url) || [],
-        emails: person.email ? [person.email] : [],
-        is_incumbent: true,
-        overall_score: null,
-        coverage_tier: 'tier_3',
-        confidence: 'low',
-      };
-
-      legislators.push(official);
-      console.log(`[Open States] Mapped: ${official.name} - ${official.office} (${official.district || 'no district'})`);
+    } else {
+      const errorText = await legislatorsResponse.text();
+      console.error(`[Open States] Legislators API error: ${legislatorsResponse.status} - ${errorText}`);
     }
 
-    console.log(`[Open States] Total legislators found: ${legislators.length}`);
-    return legislators;
+    // Fetch governors - use jurisdiction search for executive officials
+    const governorsUrl = `https://v3.openstates.org/people?jurisdiction=${state.toLowerCase()}&org_classification=executive&per_page=10`;
+    console.log(`[Open States] Fetching governors: ${governorsUrl}`);
+
+    const governorsResponse = await fetch(governorsUrl, { headers });
+    console.log(`[Open States] Governors response status: ${governorsResponse.status}`);
+
+    if (governorsResponse.ok) {
+      const data = await governorsResponse.json();
+      const results = data.results || [];
+      console.log(`[Open States] Found ${results.length} executive officials`);
+
+      for (const person of results) {
+        if (!person.current_role) continue;
+
+        const role = person.current_role;
+        const title = (role.title || '').toLowerCase();
+        
+        // Only include governors and lieutenant governors
+        if (!title.includes('governor')) continue;
+
+        const isLtGov = title.includes('lieutenant') || title.includes('lt.');
+        
+        const official: OfficialInfo = {
+          id: `openstates_${person.id}`,
+          name: person.name,
+          party: mapParty(person.party),
+          office: isLtGov ? 'Lieutenant Governor' : 'Governor',
+          level: 'state_executive',
+          state: state.toUpperCase(),
+          image_url: person.image || '',
+          urls: person.links?.map((l: { url: string }) => l.url) || [],
+          emails: person.email ? [person.email] : [],
+          is_incumbent: true,
+          overall_score: null,
+          coverage_tier: 'tier_2',
+          confidence: 'high',
+        };
+
+        governors.push(official);
+      }
+    } else {
+      const errorText = await governorsResponse.text();
+      console.error(`[Open States] Governors API error: ${governorsResponse.status} - ${errorText}`);
+    }
 
   } catch (error) {
-    console.error(`[Open States] Error fetching legislators:`, error);
-    return [];
+    console.error(`[Open States] Error:`, error);
   }
+
+  console.log(`[Open States] Total: ${legislators.length} legislators, ${governors.length} governors`);
+  return { legislators, governors };
 }
 
-// Fetch federal executive from database (President, VP)
+// Fetch federal executive from database (President, VP - no API exists)
 async function fetchFederalExecutiveFromDB(): Promise<OfficialInfo[]> {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -359,24 +240,24 @@ async function fetchFederalExecutiveFromDB(): Promise<OfficialInfo[]> {
   }
 }
 
-// Fetch state executives from database (Governors, etc.)
-async function fetchStateExecutivesFromDB(state: string): Promise<OfficialInfo[]> {
+// Fetch local officials from database (no free API exists)
+async function fetchLocalOfficialsFromDB(state: string): Promise<OfficialInfo[]> {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
     const { data, error } = await supabase
       .from('static_officials')
       .select('*')
-      .eq('level', 'state_executive')
+      .eq('level', 'local')
       .eq('state', state.toUpperCase())
       .eq('is_active', true);
 
     if (error) {
-      console.error('[DB] Error fetching state executives:', error);
+      console.error('[DB] Error fetching local officials:', error);
       return [];
     }
 
-    console.log(`[DB] Found ${data?.length || 0} state executive officials for ${state}`);
+    console.log(`[DB] Found ${data?.length || 0} local officials for ${state}`);
     
     return (data || []).map(official => ({
       id: official.id,
@@ -390,12 +271,45 @@ async function fetchStateExecutivesFromDB(state: string): Promise<OfficialInfo[]
       urls: official.website_url ? [official.website_url] : [],
       is_incumbent: true,
       overall_score: null,
-      coverage_tier: official.coverage_tier || 'tier_2',
-      confidence: official.confidence || 'high',
+      coverage_tier: official.coverage_tier || 'tier_3',
+      confidence: official.confidence || 'medium',
     }));
   } catch (error) {
-    console.error('[DB] Exception fetching state executives:', error);
+    console.error('[DB] Exception fetching local officials:', error);
     return [];
+  }
+}
+
+// Geocode address to get coordinates
+async function geocodeAddress(address: string): Promise<{ lat: number, lng: number } | null> {
+  const GOOGLE_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY');
+  if (!GOOGLE_API_KEY) {
+    console.log('[Geocode] No Google API key available');
+    return null;
+  }
+
+  try {
+    const encodedAddress = encodeURIComponent(address);
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${GOOGLE_API_KEY}`;
+    
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error('[Geocode] API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    if (data.status === 'OK' && data.results?.length > 0) {
+      const location = data.results[0].geometry.location;
+      console.log(`[Geocode] Found coordinates: ${location.lat}, ${location.lng}`);
+      return { lat: location.lat, lng: location.lng };
+    }
+
+    console.log('[Geocode] No results found');
+    return null;
+  } catch (error) {
+    console.error('[Geocode] Error:', error);
+    return null;
   }
 }
 
@@ -411,167 +325,65 @@ serve(async (req) => {
     console.log(`=== FETCH CIVIC OFFICIALS START ===`);
     console.log(`Address: ${address}`);
     console.log(`Include federal legislative: ${includeFederalLegislative}`);
-    console.log(`GOOGLE_CIVIC_API_KEY set: ${!!Deno.env.get('GOOGLE_CIVIC_API_KEY')}`);
-    console.log(`GOOGLE_PLACES_API_KEY set: ${!!Deno.env.get('GOOGLE_PLACES_API_KEY')}`);
-    console.log(`Using API key: ${GOOGLE_API_KEY ? 'Yes (length: ' + GOOGLE_API_KEY.length + ')' : 'No'}`);
+    console.log(`OPEN_STATES_API_KEY set: ${!!OPEN_STATES_API_KEY}`);
 
     if (!address) {
       throw new Error('Address is required');
     }
 
-    // Extract state from address for fallback
-    const stateFromAddress = extractStateFromAddress(address);
-    console.log(`State extracted from address: ${stateFromAddress}`);
+    // Extract state from address
+    const state = extractStateFromAddress(address);
+    console.log(`State extracted from address: ${state}`);
 
-    let civicApiSuccess = false;
-    let mappedOfficials: OfficialInfo[] = [];
-
-    // Try Google Civic API first
-    if (GOOGLE_API_KEY) {
-      const encodedAddress = encodeURIComponent(address);
-      const civicBaseUrl = 'https://www.googleapis.com/civicinfo/v2/representatives';
-      const civicUrl = `${civicBaseUrl}?address=${encodedAddress}&key=${GOOGLE_API_KEY}`;
-
-      console.log(`[Google Civic] Calling API...`);
-      console.log(`[Google Civic] Endpoint: ${civicBaseUrl}`);
-      console.log(`[Google Civic] Full URL (without key): ${civicBaseUrl}?address=${encodedAddress}&key=***`);
-
-      try {
-        const response = await fetch(civicUrl);
-        console.log(`[Google Civic] Response status: ${response.status}`);
-        console.log(`[Google Civic] Response headers:`, JSON.stringify(Object.fromEntries(response.headers.entries())));
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`[Google Civic] ERROR: ${response.status}`);
-          console.error(`[Google Civic] Error body: ${errorText}`);
-          
-          // Parse error for more details
-          try {
-            const errorJson = JSON.parse(errorText);
-            console.error(`[Google Civic] Error code: ${errorJson.error?.code}`);
-            console.error(`[Google Civic] Error message: ${errorJson.error?.message}`);
-            console.error(`[Google Civic] Error status: ${errorJson.error?.status}`);
-            if (errorJson.error?.errors) {
-              console.error(`[Google Civic] Error details:`, JSON.stringify(errorJson.error.errors));
-            }
-          } catch {
-            console.error(`[Google Civic] Could not parse error as JSON`);
-          }
-
-          // Don't throw, let fallback handle it
-        } else {
-          const data = await response.json();
-          
-          const offices = data.offices || [];
-          const officials = data.officials || [];
-          const divisions = data.divisions || {};
-          
-          console.log(`[Google Civic] SUCCESS - Found ${offices.length} offices and ${officials.length} officials`);
-          civicApiSuccess = true;
-
-          // Map offices to officials
-          for (const office of offices) {
-            const divisionId = office.divisionId || '';
-            const { level, normalizedOffice } = categorizeOffice(office.name, divisionId);
-            
-            // Skip federal legislative unless specifically requested
-            if (level === 'federal_legislative' && !includeFederalLegislative) {
-              console.log(`[Google Civic] Skipping federal legislative: ${office.name}`);
-              continue;
-            }
-            
-            const officialIndices = office.officialIndices || [];
-            const state = extractStateFromDivision(divisionId);
-            
-            for (const idx of officialIndices) {
-              const official = officials[idx];
-              if (!official) continue;
-              
-              const officialInfo: OfficialInfo = {
-                id: createOfficialId(official.name, normalizedOffice, state),
-                name: official.name,
-                party: mapParty(official.party),
-                office: normalizedOffice,
-                level,
-                state,
-                image_url: official.photoUrl || '',
-                phones: official.phones || [],
-                urls: official.urls || [],
-                emails: official.emails || [],
-                is_incumbent: true,
-                overall_score: null,
-                coverage_tier: level === 'federal_executive' ? 'tier_2' : 'tier_3',
-                confidence: 'low',
-              };
-              
-              // Add district info for state legislative
-              if (level === 'state_legislative') {
-                const districtMatch = divisionId.match(/sld[ul]:(\d+)/i);
-                if (districtMatch) {
-                  officialInfo.district = `${state}-${districtMatch[1]}`;
-                }
-              }
-              
-              mappedOfficials.push(officialInfo);
-              console.log(`[Google Civic] Mapped: ${officialInfo.name} - ${officialInfo.office} (${level})`);
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`[Google Civic] Fetch error:`, error);
-      }
-    } else {
-      console.log(`[Google Civic] Skipping - No API key configured`);
+    if (!state) {
+      console.error('Could not extract state from address');
+      const federalExecutive = await fetchFederalExecutiveFromDB();
+      return new Response(JSON.stringify({ 
+        officials: federalExecutive,
+        federalExecutive,
+        stateExecutive: [],
+        stateLegislative: [],
+        local: [],
+        state: null,
+        error: 'Could not determine state from address',
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    // Fetch federal executive from database
-    const federalExecutive = await fetchFederalExecutiveFromDB();
-    console.log(`[DB] Added ${federalExecutive.length} federal executive officials`);
+    // Get coordinates for geo-based lookup
+    const coords = await geocodeAddress(address);
 
-    // Fetch state executives from database if we have a state
-    if (stateFromAddress) {
-      const dbStateExecutives = await fetchStateExecutivesFromDB(stateFromAddress);
-      if (dbStateExecutives.length > 0) {
-        console.log(`[DB] Added ${dbStateExecutives.length} state executives for ${stateFromAddress}`);
-        mappedOfficials.push(...dbStateExecutives);
-      }
-    }
+    // Fetch from all sources in parallel
+    const [federalExecutive, openStatesResult, localOfficials] = await Promise.all([
+      fetchFederalExecutiveFromDB(),
+      fetchOpenStatesOfficials(state, coords?.lat, coords?.lng),
+      fetchLocalOfficialsFromDB(state),
+    ]);
 
-    // Use Open States as fallback for state legislators if Google Civic failed or returned none
-    const civicStateLegislative = mappedOfficials.filter(o => o.level === 'state_legislative');
-    
-    if (civicStateLegislative.length === 0 && stateFromAddress) {
-      console.log(`[Fallback] No state legislators from Civic API, trying Open States...`);
-      const openStatesLegislators = await fetchOpenStatesLegislators(stateFromAddress);
-      
-      if (openStatesLegislators.length > 0) {
-        console.log(`[Fallback] Open States returned ${openStatesLegislators.length} legislators`);
-        mappedOfficials.push(...openStatesLegislators);
-      }
-    }
-
-    // Categorize all officials by level
-    const stateExecutive = mappedOfficials.filter(o => o.level === 'state_executive');
-    const stateLegislative = mappedOfficials.filter(o => o.level === 'state_legislative');
-    const local = mappedOfficials.filter(o => o.level === 'local');
+    const { legislators: stateLegislative, governors: stateExecutiveFromAPI } = openStatesResult;
 
     console.log(`=== RESULTS ===`);
-    console.log(`Federal Executive: ${federalExecutive.length} (from DB)`);
-    console.log(`State Executive: ${stateExecutive.length}`);
-    console.log(`State Legislative: ${stateLegislative.length}`);
-    console.log(`Local: ${local.length}`);
-    console.log(`Google Civic API success: ${civicApiSuccess}`);
+    console.log(`Federal Executive: ${federalExecutive.length} (from DB - no API exists)`);
+    console.log(`State Executive: ${stateExecutiveFromAPI.length} (from Open States API)`);
+    console.log(`State Legislative: ${stateLegislative.length} (from Open States API)`);
+    console.log(`Local: ${localOfficials.length} (from DB - no free API exists)`);
     console.log(`=== FETCH CIVIC OFFICIALS END ===`);
 
+    const allOfficials = [
+      ...federalExecutive,
+      ...stateExecutiveFromAPI,
+      ...stateLegislative,
+      ...localOfficials,
+    ];
+
     return new Response(JSON.stringify({ 
-      officials: [...federalExecutive, ...mappedOfficials],
+      officials: allOfficials,
       federalExecutive,
-      stateExecutive,
+      stateExecutive: stateExecutiveFromAPI,
       stateLegislative,
-      local,
-      state: stateFromAddress,
-      googleCivicApiSuccess: civicApiSuccess,
+      local: localOfficials,
+      state,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -596,9 +408,8 @@ serve(async (req) => {
       stateExecutive: [],
       stateLegislative: [],
       local: [],
-      googleCivicApiSuccess: false,
     }), {
-      status: 200, // Return 200 so client gets the static data
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
