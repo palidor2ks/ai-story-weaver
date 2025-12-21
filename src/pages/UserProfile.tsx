@@ -13,7 +13,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MatchBadge } from '@/components/MatchBadge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,6 +31,7 @@ interface ProfileAnalysis {
 
 export const UserProfile = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { signOut } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
@@ -73,6 +74,12 @@ export const UserProfile = () => {
   const handleSignOut = async () => {
     await signOut();
     toast.success('Signed out successfully');
+  };
+
+  const handleRefreshRepresentatives = () => {
+    if (!profile?.address) return;
+    queryClient.invalidateQueries({ queryKey: ['representatives', profile.address] });
+    toast('Refreshing representatives...');
   };
 
   const handleResetOnboarding = async () => {
@@ -385,18 +392,32 @@ export const UserProfile = () => {
         {/* Your Representatives */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <Users className="w-5 h-5 text-accent" />
-              Your Representatives
-              {repsLoading ? (
-                <Badge variant="outline" className="ml-2 text-xs font-normal animate-pulse">
-                  Looking up district...
-                </Badge>
-              ) : congressionalState && congressionalDistrict ? (
-                <Badge variant="outline" className="ml-2 text-xs font-normal">
-                  {congressionalState}-{congressionalDistrict}
-                </Badge>
-              ) : null}
+            <CardTitle className="font-display flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-accent" />
+                Your Representatives
+                {repsLoading ? (
+                  <Badge variant="outline" className="ml-2 text-xs font-normal animate-pulse">
+                    Looking up district...
+                  </Badge>
+                ) : congressionalState && congressionalDistrict ? (
+                  <Badge variant="outline" className="ml-2 text-xs font-normal">
+                    {congressionalState}-{congressionalDistrict}
+                  </Badge>
+                ) : null}
+              </div>
+
+              {profile.address && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleRefreshRepresentatives}
+                  disabled={repsLoading}
+                  aria-label="Refresh representatives"
+                >
+                  <RefreshCw className={cn("h-4 w-4", repsLoading && "animate-spin")} />
+                </Button>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>

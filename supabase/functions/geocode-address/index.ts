@@ -13,17 +13,19 @@ serve(async (req) => {
 
   try {
     const { address } = await req.json();
-    
-    if (!address) {
-      return new Response(JSON.stringify({ error: 'Address is required' }), {
+
+    if (typeof address !== 'string' || address.trim().length < 5 || address.trim().length > 200) {
+      return new Response(JSON.stringify({ error: 'Address is required (5-200 characters)' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log('Geocoding address:', address);
-    
-    const encodedAddress = encodeURIComponent(address);
+    const normalizedAddress = address.trim();
+
+    console.log('Geocoding address:', normalizedAddress);
+
+    const encodedAddress = encodeURIComponent(normalizedAddress);
     const url = `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodedAddress}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`;
     
     console.log('Fetching from Census API');
