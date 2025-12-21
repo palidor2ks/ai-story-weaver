@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MatchBadge } from '@/components/MatchBadge';
+import { ComparisonSpectrum } from '@/components/ComparisonSpectrum';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
@@ -181,8 +182,15 @@ export const UserProfile = () => {
             </Badge>
           </div>
         </div>
-        {matchScore !== null ? (
-          <MatchBadge matchScore={matchScore} size="sm" />
+        {official.overall_score !== null ? (
+          <div className="w-28 flex-shrink-0">
+            <ComparisonSpectrum 
+              userScore={userScore} 
+              repScore={official.overall_score} 
+              repName={official.name.split(' ').pop() || 'Rep'}
+              size="sm"
+            />
+          </div>
         ) : (
           <Badge variant="outline" className="text-xs text-muted-foreground">
             No score
