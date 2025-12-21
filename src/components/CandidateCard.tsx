@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Candidate } from '@/types';
-import { MatchBadge } from './MatchBadge';
+import { ComparisonSpectrum } from './ComparisonSpectrum';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -103,7 +103,14 @@ export const CandidateCard = ({ candidate, index = 0 }: CandidateCardProps) => {
                     </span>
                   </div>
                 </div>
-                <MatchBadge matchScore={matchScore} size="sm" />
+                <div className="w-24 flex-shrink-0">
+                  <ComparisonSpectrum 
+                    userScore={userScore} 
+                    repScore={candidate.overallScore ?? 0} 
+                    repName={candidate.name.split(' ').pop() || 'Rep'}
+                    size="sm"
+                  />
+                </div>
               </div>
 
               {/* Score display */}

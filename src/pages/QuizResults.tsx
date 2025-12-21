@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 import { Loader2, Sparkles, ArrowRight, BarChart3, Users, CheckCircle, XCircle, Share2, Copy, Twitter, Facebook, Linkedin, Building2, MapPin, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { MatchBadge } from '@/components/MatchBadge';
+import { ComparisonSpectrum } from '@/components/ComparisonSpectrum';
 import { PoliticalSpectrum } from '@/components/PoliticalSpectrum';
 import { Compass } from 'lucide-react';
 
@@ -242,8 +242,15 @@ export const QuizResults = () => {
             </Badge>
           </div>
         </div>
-        {matchScore !== null ? (
-          <MatchBadge matchScore={matchScore} size="sm" />
+        {official.overall_score !== null ? (
+          <div className="w-28 flex-shrink-0">
+            <ComparisonSpectrum 
+              userScore={userScore} 
+              repScore={official.overall_score} 
+              repName={official.name.split(' ').pop() || 'Rep'}
+              size="sm"
+            />
+          </div>
         ) : (
           <Badge variant="outline" className="text-xs text-muted-foreground">
             No score
@@ -561,9 +568,7 @@ export const QuizResults = () => {
                       U.S. Congress
                     </h4>
                     <div className="space-y-3">
-                      {federalReps.map((rep) => {
-                        const matchScore = calculateMatchScore(profile.overall_score ?? 0, rep.overall_score);
-                        return (
+                      {federalReps.map((rep) => (
                           <Link
                             key={rep.id}
                             to={`/candidate/${rep.bioguide_id || rep.id}`}
@@ -581,10 +586,22 @@ export const QuizResults = () => {
                                 </Badge>
                               </div>
                             </div>
-                            <MatchBadge matchScore={matchScore} size="sm" />
+                            {rep.overall_score !== null ? (
+                              <div className="w-28 flex-shrink-0">
+                                <ComparisonSpectrum 
+                                  userScore={profile.overall_score ?? 0} 
+                                  repScore={rep.overall_score} 
+                                  repName={rep.name.split(' ').pop() || 'Rep'}
+                                  size="sm"
+                                />
+                              </div>
+                            ) : (
+                              <Badge variant="outline" className="text-xs text-muted-foreground">
+                                No score
+                              </Badge>
+                            )}
                           </Link>
-                        );
-                      })}
+                        ))}
                     </div>
                   </div>
                 )}

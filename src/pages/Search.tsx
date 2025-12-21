@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile } from '@/hooks/useProfile';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
-import { MatchBadge } from '@/components/MatchBadge';
+import { ComparisonSpectrum } from '@/components/ComparisonSpectrum';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { Search as SearchIcon, User, MapPin, Filter, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -203,7 +203,14 @@ export const Search = () => {
                                   </span>
                                 </div>
                               </div>
-                              <MatchBadge matchScore={matchScore} size="sm" />
+                              <div className="w-24 flex-shrink-0">
+                                <ComparisonSpectrum 
+                                  userScore={userScore} 
+                                  repScore={candidate.overall_score ?? 0} 
+                                  repName={candidate.name.split(' ').pop() || 'Rep'}
+                                  size="sm"
+                                />
+                              </div>
                             </div>
 
                             <div className="mt-2">

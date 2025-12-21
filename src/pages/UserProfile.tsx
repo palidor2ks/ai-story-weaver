@@ -15,7 +15,6 @@ import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { MatchBadge } from '@/components/MatchBadge';
 import { ComparisonSpectrum } from '@/components/ComparisonSpectrum';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';

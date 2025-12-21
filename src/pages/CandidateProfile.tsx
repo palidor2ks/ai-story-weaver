@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ScoreBar } from '@/components/ScoreBar';
-import { MatchBadge } from '@/components/MatchBadge';
+import { ComparisonSpectrum } from '@/components/ComparisonSpectrum';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -167,10 +167,15 @@ export const CandidateProfile = () => {
               </div>
             </div>
 
-            {/* Match Score */}
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-2">Your Match</p>
-              <MatchBadge matchScore={matchScore} size="lg" />
+            {/* Score Comparison */}
+            <div className="w-48">
+              <p className="text-sm text-muted-foreground mb-2 text-center">Score Comparison</p>
+              <ComparisonSpectrum 
+                userScore={profile?.overall_score ?? 0} 
+                repScore={candidate.overall_score ?? 0} 
+                repName={candidate.name.split(' ').pop() || 'Candidate'}
+                size="md"
+              />
             </div>
           </div>
         </div>
