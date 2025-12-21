@@ -3,19 +3,23 @@ import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
 import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile, useUserTopics, useUserTopicScores } from '@/hooks/useProfile';
+import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
-import { Search, SlidersHorizontal, TrendingUp } from 'lucide-react';
-import { Candidate, TopicScore, GovernmentLevel } from '@/types';
+import { Search, SlidersHorizontal, TrendingUp, MapPin, AlertCircle } from 'lucide-react';
+import { Candidate, GovernmentLevel } from '@/types';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Link } from 'react-router-dom';
 
 export const Feed = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
   const { data: userTopicScores = [] } = useUserTopicScores();
-  const { data: candidates = [], isLoading: candidatesLoading } = useCandidates();
+  const { data: dbCandidates = [], isLoading: candidatesLoading } = useCandidates();
+  const { data: congressMembers = [], isLoading: representativesLoading, error: representativesError } = useRepresentatives(profile?.address);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('match');
@@ -23,9 +27,28 @@ export const Feed = () => {
   const [levelFilter, setLevelFilter] = useState<GovernmentLevel>('all');
   const [incumbentFilter, setIncumbentFilter] = useState<string>('all');
 
-  // Transform candidates for display
+  // Combine database candidates with Congress API data
   const transformedCandidates: Candidate[] = useMemo(() => {
-    return candidates.map(c => ({
+    // Transform Congress API members
+    const congressCandidates: Candidate[] = congressMembers.map(member => ({
+      id: member.bioguide_id || member.id,
+      name: member.name,
+      party: member.party as 'Democrat' | 'Republican' | 'Independent' | 'Other',
+      office: member.office,
+      state: member.state,
+      district: member.district || undefined,
+      imageUrl: member.image_url || '',
+      overallScore: member.overall_score,
+      topicScores: [],
+      lastUpdated: new Date(),
+      coverageTier: (member.coverage_tier || 'tier_3') as 'tier_1' | 'tier_2' | 'tier_3',
+      confidence: (member.confidence || 'low') as 'high' | 'medium' | 'low',
+      isIncumbent: member.is_incumbent ?? true,
+      scoreVersion: 'v1.0',
+    }));
+
+    // Transform database candidates (as fallback)
+    const dbTransformed: Candidate[] = dbCandidates.map(c => ({
       id: c.id,
       name: c.name,
       party: c.party,
@@ -45,7 +68,10 @@ export const Feed = () => {
       isIncumbent: c.is_incumbent,
       scoreVersion: c.score_version,
     }));
-  }, [candidates]);
+
+    // Use Congress data if available, otherwise fall back to DB
+    return congressCandidates.length > 0 ? congressCandidates : dbTransformed;
+  }, [congressMembers, dbCandidates]);
 
   const filteredAndSortedCandidates = useMemo(() => {
     let result = [...transformedCandidates];
@@ -120,16 +146,21 @@ export const Feed = () => {
     ? Math.max(...transformedCandidates.map(c => calculateMatchScore(profile?.overall_score ?? 0, c.overallScore)))
     : 0;
 
-  if (profileLoading || candidatesLoading) {
+  const isLoading = profileLoading || candidatesLoading || representativesLoading;
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <div className="flex items-center justify-center py-20">
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          <p className="text-muted-foreground text-sm">Loading your representatives...</p>
         </div>
       </div>
     );
   }
+
+  const hasAddress = !!profile?.address;
 
   return (
     <div className="min-h-screen bg-background">
@@ -142,21 +173,45 @@ export const Feed = () => {
             Welcome back, {profile?.name || 'Voter'}
           </h1>
           <p className="text-muted-foreground">
-            Compare politicians based on your political profile and see who aligns with your values.
+            {hasAddress 
+              ? 'Compare your congressional representatives based on your political profile.'
+              : 'Add your address to see your local representatives.'}
           </p>
         </div>
+
+        {/* Address Status */}
+        {!hasAddress && (
+          <Alert className="mb-6">
+            <MapPin className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>Add your address in your profile to see your congressional representatives.</span>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/profile">Update Profile</Link>
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {representativesError && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Failed to load representatives. Showing cached data.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
               <TrendingUp className="w-4 h-4" />
               Your Score
             </div>
             <ScoreDisplay score={profile?.overall_score} size="md" />
           </div>
           <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
-            <div className="text-muted-foreground text-sm mb-1">Candidates</div>
+            <div className="text-muted-foreground text-sm mb-1">Representatives</div>
             <div className="text-2xl font-bold text-foreground">{transformedCandidates.length}</div>
           </div>
           <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
@@ -186,14 +241,14 @@ export const Feed = () => {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
-              placeholder="Search candidates..."
+              placeholder="Search representatives..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
             />
           </div>
           <div className="flex gap-2">
-            <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+            <Select value={sortBy} onValueChange={(v: 'match' | 'name' | 'party') => setSortBy(v)}>
               <SelectTrigger className="w-[140px]">
                 <SlidersHorizontal className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Sort by" />
@@ -230,7 +285,8 @@ export const Feed = () => {
 
         {/* Results Count */}
         <p className="text-sm text-muted-foreground mb-4">
-          Showing {filteredAndSortedCandidates.length} candidate{filteredAndSortedCandidates.length !== 1 ? 's' : ''}
+          Showing {filteredAndSortedCandidates.length} representative{filteredAndSortedCandidates.length !== 1 ? 's' : ''}
+          {hasAddress && congressMembers.length > 0 && ' from Congress.gov'}
         </p>
 
         {/* Candidate Grid */}
@@ -246,13 +302,19 @@ export const Feed = () => {
 
         {filteredAndSortedCandidates.length === 0 && (
           <div className="text-center py-16">
-            <p className="text-muted-foreground">No candidates found matching your criteria.</p>
-            <Button variant="ghost" className="mt-4" onClick={() => {
-              setSearchQuery('');
-              setPartyFilter('all');
-            }}>
-              Clear Filters
-            </Button>
+            <p className="text-muted-foreground">
+              {hasAddress 
+                ? 'No representatives found matching your criteria.' 
+                : 'Add your address to see your representatives.'}
+            </p>
+            {hasAddress && (
+              <Button variant="ghost" className="mt-4" onClick={() => {
+                setSearchQuery('');
+                setPartyFilter('all');
+              }}>
+                Clear Filters
+              </Button>
+            )}
           </div>
         )}
       </main>
