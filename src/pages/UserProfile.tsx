@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle } from 'lucide-react';
+import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -366,44 +367,78 @@ export const UserProfile = () => {
             </div>
 
             {/* Party Platform Comparison */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              <Link to="/party/democrat" className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 hover:border-blue-500/40 transition-colors">
-                <div className="flex items-center gap-2 mb-2">
-                  <Building2 className="w-4 h-4 text-blue-600" />
-                  <span className="font-semibold text-blue-600 text-sm">Democrat</span>
-                </div>
-                <div className="text-2xl font-bold text-blue-600">
-                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.democrat} size="md" />}
-                </div>
-              </Link>
-              <Link to="/party/republican" className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 hover:border-red-500/40 transition-colors">
-                <div className="flex items-center gap-2 mb-2">
-                  <Building2 className="w-4 h-4 text-red-600" />
-                  <span className="font-semibold text-red-600 text-sm">Republican</span>
-                </div>
-                <div className="text-2xl font-bold text-red-600">
-                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.republican} size="md" />}
-                </div>
-              </Link>
-              <Link to="/party/green" className="p-4 rounded-xl bg-green-500/5 border border-green-500/20 hover:border-green-500/40 transition-colors">
-                <div className="flex items-center gap-2 mb-2">
-                  <Building2 className="w-4 h-4 text-green-600" />
-                  <span className="font-semibold text-green-600 text-sm">Green</span>
-                </div>
-                <div className="text-2xl font-bold text-green-600">
-                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.green} size="md" />}
-                </div>
-              </Link>
-              <Link to="/party/libertarian" className="p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20 hover:border-yellow-500/40 transition-colors">
-                <div className="flex items-center gap-2 mb-2">
-                  <Building2 className="w-4 h-4 text-yellow-600" />
-                  <span className="font-semibold text-yellow-600 text-sm">Libertarian</span>
-                </div>
-                <div className="text-2xl font-bold text-yellow-600">
-                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.libertarian} size="md" />}
-                </div>
-              </Link>
-            </div>
+            <TooltipProvider>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <Link to="/party/democrat" className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 hover:border-blue-500/40 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Building2 className="w-4 h-4 text-blue-600" />
+                    <span className="font-semibold text-blue-600 text-sm">Democrat</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>L = Left-leaning, R = Right-leaning. The number shows how far left or right the Democratic Party's positions are based on their answers to policy questions.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <div className="text-2xl font-bold text-blue-600">
+                    {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.democrat} size="md" />}
+                  </div>
+                </Link>
+                <Link to="/party/republican" className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 hover:border-red-500/40 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Building2 className="w-4 h-4 text-red-600" />
+                    <span className="font-semibold text-red-600 text-sm">Republican</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>L = Left-leaning, R = Right-leaning. The number shows how far left or right the Republican Party's positions are based on their answers to policy questions.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <div className="text-2xl font-bold text-red-600">
+                    {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.republican} size="md" />}
+                  </div>
+                </Link>
+                <Link to="/party/green" className="p-4 rounded-xl bg-green-500/5 border border-green-500/20 hover:border-green-500/40 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Building2 className="w-4 h-4 text-green-600" />
+                    <span className="font-semibold text-green-600 text-sm">Green</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>L = Left-leaning, R = Right-leaning. The number shows how far left or right the Green Party's positions are based on their answers to policy questions.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <div className="text-2xl font-bold text-green-600">
+                    {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.green} size="md" />}
+                  </div>
+                </Link>
+                <Link to="/party/libertarian" className="p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20 hover:border-yellow-500/40 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Building2 className="w-4 h-4 text-yellow-600" />
+                    <span className="font-semibold text-yellow-600 text-sm">Libertarian</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>L = Left-leaning, R = Right-leaning. The number shows how far left or right the Libertarian Party's positions are based on their answers to policy questions.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <div className="text-2xl font-bold text-yellow-600">
+                    {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.libertarian} size="md" />}
+                  </div>
+                </Link>
+              </div>
+            </TooltipProvider>
 
             {/* Score Breakdown */}
             {topicScoresList.length > 0 && (
