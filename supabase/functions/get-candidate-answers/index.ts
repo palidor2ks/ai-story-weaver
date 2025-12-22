@@ -77,10 +77,16 @@ async function ensureScoreIsSaved(
   }
 }
 
+interface QuestionOption {
+  value: number;
+  text: string;
+}
+
 interface Question {
   id: string;
   text: string;
   topic_id: string;
+  question_options?: QuestionOption[];
 }
 
 interface GeneratedAnswer {
@@ -99,9 +105,20 @@ async function generateAnswersWithAI(
   candidateState: string,
   questions: Question[]
 ): Promise<GeneratedAnswer[]> {
+  // Format questions with their specific answer options
   const questionsText = questions
-    .map((q, i) => `${i + 1}. [${q.id}] ${q.text}`)
-    .join('\n');
+    .map((q, i) => {
+      let questionStr = `${i + 1}. [${q.id}] ${q.text}`;
+      if (q.question_options && q.question_options.length > 0) {
+        const sortedOptions = [...q.question_options].sort((a, b) => a.value - b.value);
+        const optionsStr = sortedOptions
+          .map(opt => `   (${opt.value}) ${opt.text}`)
+          .join('\n');
+        questionStr += `\n   Options:\n${optionsStr}`;
+      }
+      return questionStr;
+    })
+    .join('\n\n');
 
   const systemPrompt = `You are a non-partisan political analyst determining likely positions for elected officials based on:
 - Their party's official platform
@@ -134,10 +151,12 @@ ${questionsText}
 
 For each question, provide a JSON array with objects containing:
 - question_id: the ID in brackets
-- answer_value: integer from -10 to +10
+- answer_value: MUST be one of the exact option values provided for that question (e.g., -10, -5, 0, 5, or 10)
 - confidence: "high" (verified from voting record), "medium" (inferred from party/statements), or "low" (estimated)
 - source_description: brief source (e.g., "Inferred from ${candidateParty} Party platform", "Based on voting record", "State political context")
 - notes: brief explanation if notable (null if standard party position)
+
+IMPORTANT: Only use the exact numeric values shown in the Options for each question. Do not use intermediate values.
 
 Return ONLY a valid JSON array, no other text.`;
 
@@ -310,10 +329,10 @@ serve(async (req) => {
       });
     }
 
-    // Get questions to generate answers for
+    // Get questions to generate answers for (including their options for the AI prompt)
     let questionsQuery = supabase
       .from('questions')
-      .select('id, text, topic_id');
+      .select('id, text, topic_id, question_options(value, text)');
     
     if (questionIds && questionIds.length > 0) {
       questionsQuery = questionsQuery.in('id', questionIds);
