@@ -256,6 +256,15 @@ export const CandidateProfile = () => {
             candidateId={candidate.id}
             candidateName={candidate.name}
             topicScores={candidateTopicScores}
+            userTopicScores={userTopicScores.map(uts => {
+              const topic = candidateTopicScores.find(c => c.topicId === uts.topic_id);
+              return {
+                topicId: uts.topic_id,
+                topicName: topic?.topicName || uts.topic_id,
+                score: uts.score,
+              };
+            })}
+            matchScore={matchScore}
           />
         </div>
 
