@@ -9,12 +9,14 @@ import { cn } from '@/lib/utils';
 interface CandidateAnswerCardProps {
   answer: CandidateAnswer;
   userAnswer?: number | null;
+  userAnswerText?: string | null;
   showQuestion?: boolean;
 }
 
 export const CandidateAnswerCard = ({ 
   answer, 
   userAnswer, 
+  userAnswerText,
   showQuestion = true 
 }: CandidateAnswerCardProps) => {
   const getSourceIcon = (sourceType: CandidateAnswer['source_type']) => {
@@ -37,20 +39,30 @@ export const CandidateAnswerCard = ({
     }
   };
 
+  // Positive = Right/Conservative (red), Negative = Left/Progressive (blue)
   const getScoreColor = (value: number) => {
-    if (value >= 5) return 'text-blue-600 bg-blue-500/10';
-    if (value <= -5) return 'text-red-600 bg-red-500/10';
-    return 'text-muted-foreground bg-muted';
+    if (value >= 5) return 'text-red-600 bg-red-500/10';
+    if (value <= -5) return 'text-blue-600 bg-blue-500/10';
+    return 'text-purple-600 bg-purple-500/10';
   };
 
   const getScoreLabel = (value: number) => {
-    if (value >= 7) return 'Strongly Progressive';
-    if (value >= 3) return 'Progressive';
-    if (value >= 1) return 'Lean Progressive';
-    if (value <= -7) return 'Strongly Conservative';
-    if (value <= -3) return 'Conservative';
-    if (value <= -1) return 'Lean Conservative';
+    if (value >= 7) return 'Strongly Conservative';
+    if (value >= 3) return 'Conservative';
+    if (value >= 1) return 'Lean Conservative';
+    if (value <= -7) return 'Strongly Progressive';
+    if (value <= -3) return 'Progressive';
+    if (value <= -1) return 'Lean Progressive';
     return 'Moderate';
+  };
+
+  // Get the answer text from question options
+  const getAnswerText = (value: number) => {
+    if (!answer.question?.question_options) return null;
+    const option = answer.question.question_options.find(
+      opt => opt.value === value
+    );
+    return option?.text || null;
   };
 
   const getAgreementBadge = () => {
@@ -82,6 +94,15 @@ export const CandidateAnswerCard = ({
                 {answer.question.topics?.name || 'General'}
               </Badge>
               <p className="text-sm font-medium text-foreground">{answer.question.text}</p>
+            </div>
+          )}
+
+          {/* Candidate's Answer Text */}
+          {getAnswerText(answer.answer_value) && (
+            <div className="mb-3 p-2 rounded-lg bg-primary/5 border border-primary/10">
+              <p className="text-sm text-foreground italic">
+                "{getAnswerText(answer.answer_value)}"
+              </p>
             </div>
           )}
 
@@ -149,10 +170,15 @@ export const CandidateAnswerCard = ({
 
           {/* User comparison */}
           {userAnswer !== null && userAnswer !== undefined && (
-            <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Your answer:</span>
+            <div className="mt-2 pt-2 border-t border-border/50">
+              <div className="text-xs text-muted-foreground mb-1">Your answer:</div>
+              {(userAnswerText || getAnswerText(userAnswer)) && (
+                <p className="text-sm italic text-foreground/80 mb-1">
+                  "{userAnswerText || getAnswerText(userAnswer)}"
+                </p>
+              )}
               <span className={cn(
-                "font-medium px-1.5 py-0.5 rounded",
+                "font-medium px-1.5 py-0.5 rounded text-xs",
                 getScoreColor(userAnswer)
               )}>
                 {userAnswer > 0 ? '+' : ''}{userAnswer}
