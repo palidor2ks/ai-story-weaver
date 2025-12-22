@@ -1,87 +1,50 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/context/AuthContext';
 
-interface PartyMatchScores {
-  democrat: number;
-  republican: number;
-  green: number;
-  libertarian: number;
+interface PartyScores {
+  democrat: number | null;
+  republican: number | null;
+  green: number | null;
+  libertarian: number | null;
 }
 
 /**
- * Calculate match percentage between user answers and party answers.
- * Uses the same logic as candidate matching: smaller difference = higher match.
+ * Calculate average political score for a party's answers.
+ * Returns the average answer_value on the -10 to +10 scale.
  */
-function calculatePartyMatchScore(
-  userAnswers: { question_id: string; value: number }[],
-  partyAnswers: { question_id: string; answer_value: number }[]
-): number {
-  const partyQuestionMap = new Map(partyAnswers.map(a => [a.question_id, a.answer_value]));
-  
-  let matchSum = 0;
-  let matchCount = 0;
-  
-  for (const userAnswer of userAnswers) {
-    const partyValue = partyQuestionMap.get(userAnswer.question_id);
-    if (partyValue !== undefined) {
-      // Convert -10 to +10 difference into 0-100% match
-      const diff = Math.abs(userAnswer.value - partyValue);
-      const maxDiff = 20; // Range from -10 to +10
-      const match = 100 - (diff / maxDiff) * 100;
-      matchSum += match;
-      matchCount++;
-    }
-  }
-  
-  return matchCount > 0 ? Math.round(matchSum / matchCount) : 0;
+function calculatePartyScore(partyAnswers: { answer_value: number }[]): number | null {
+  if (partyAnswers.length === 0) return null;
+  const sum = partyAnswers.reduce((acc, a) => acc + a.answer_value, 0);
+  return sum / partyAnswers.length;
 }
 
 export function usePartyMatchScores() {
-  const { user } = useAuth();
-
-  return useQuery<PartyMatchScores>({
-    queryKey: ['party-match-scores', user?.id],
+  return useQuery<PartyScores>({
+    queryKey: ['party-scores'],
     queryFn: async () => {
-      if (!user?.id) {
-        return { democrat: 0, republican: 0, green: 0, libertarian: 0 };
-      }
-
-      // Fetch user's quiz answers
-      const { data: userAnswers, error: userError } = await supabase
-        .from('quiz_answers')
-        .select('question_id, value')
-        .eq('user_id', user.id);
-
-      if (userError) throw userError;
-      if (!userAnswers || userAnswers.length === 0) {
-        return { democrat: 0, republican: 0, green: 0, libertarian: 0 };
-      }
-
       // Fetch all party answers
       const { data: partyAnswers, error: partyError } = await supabase
         .from('party_answers')
-        .select('party_id, question_id, answer_value');
+        .select('party_id, answer_value');
 
       if (partyError) throw partyError;
 
       // Group party answers by party_id
-      const partyAnswersMap = new Map<string, { question_id: string; answer_value: number }[]>();
+      const partyAnswersMap = new Map<string, { answer_value: number }[]>();
       partyAnswers?.forEach(answer => {
         const existing = partyAnswersMap.get(answer.party_id) || [];
-        existing.push({ question_id: answer.question_id, answer_value: answer.answer_value });
+        existing.push({ answer_value: answer.answer_value });
         partyAnswersMap.set(answer.party_id, existing);
       });
 
-      // Calculate match scores for each party
+      // Calculate average score for each party
       return {
-        democrat: calculatePartyMatchScore(userAnswers, partyAnswersMap.get('democrat') || []),
-        republican: calculatePartyMatchScore(userAnswers, partyAnswersMap.get('republican') || []),
-        green: calculatePartyMatchScore(userAnswers, partyAnswersMap.get('green') || []),
-        libertarian: calculatePartyMatchScore(userAnswers, partyAnswersMap.get('libertarian') || []),
+        democrat: calculatePartyScore(partyAnswersMap.get('democrat') || []),
+        republican: calculatePartyScore(partyAnswersMap.get('republican') || []),
+        green: calculatePartyScore(partyAnswersMap.get('green') || []),
+        libertarian: calculatePartyScore(partyAnswersMap.get('libertarian') || []),
       };
     },
-    enabled: !!user?.id,
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    staleTime: 1000 * 60 * 30, // Cache for 30 minutes (party scores don't change often)
   });
 }
