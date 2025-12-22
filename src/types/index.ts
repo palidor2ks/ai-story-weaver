@@ -61,7 +61,7 @@ export interface Candidate {
   office: string;
   state: string;
   district?: string;
-  imageUrl: string;
+  imageUrl?: string;
   overallScore: number;
   topicScores: TopicScore[];
   lastUpdated: Date;
@@ -69,6 +69,13 @@ export interface Candidate {
   confidence?: ConfidenceLevel;
   isIncumbent?: boolean;
   scoreVersion?: string;
+  // Transition metadata
+  transitionStatus?: 'incoming' | 'outgoing' | 'current' | 'candidate';
+  newOffice?: string;
+  inaugurationDate?: string;
+  // AI answer metadata
+  hasAIAnswers?: boolean;
+  answerCount?: number;
 }
 
 export interface MatchResult {
@@ -100,3 +107,6 @@ export type OnboardingStep = 'welcome' | 'topics' | 'quiz' | 'results';
 
 // Government level for feed filtering
 export type GovernmentLevel = 'federal' | 'state' | 'local' | 'all';
+
+// Transition status for officials (incoming/outgoing after elections)
+export type TransitionStatus = 'incoming' | 'outgoing' | 'current' | 'candidate';

@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils';
 import { MapPin, Star, Shield, ArrowRightLeft, CheckCircle, Sparkles } from 'lucide-react';
 import { ScoreText } from './ScoreText';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
-import { TransitionStatus } from './TransitionBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface CandidateCardProps {
@@ -24,8 +23,8 @@ export const CandidateCard = ({
   isSelected = false,
   onToggleSelect
 }: CandidateCardProps) => {
-  const hasAIAnswers = (candidate as any).hasAIAnswers ?? false;
-  const answerCount = (candidate as any).answerCount;
+  const hasAIAnswers = candidate.hasAIAnswers ?? false;
+  const answerCount = candidate.answerCount;
 
   const getPartyColor = (party: string) => {
     switch (party) {
@@ -63,10 +62,10 @@ export const CandidateCard = ({
   };
 
   // Get coverage tier, confidence, and transition status from candidate (with defaults)
-  const coverageTier: CoverageTier = (candidate as any).coverageTier || 'tier_3';
-  const confidence: ConfidenceLevel = (candidate as any).confidence || 'medium';
-  const isIncumbent: boolean = (candidate as any).isIncumbent ?? true;
-  const transitionStatus: TransitionStatus | undefined = (candidate as any).transitionStatus;
+  const coverageTier: CoverageTier = candidate.coverageTier || 'tier_3';
+  const confidence: ConfidenceLevel = candidate.confidence || 'medium';
+  const isIncumbent = candidate.isIncumbent ?? true;
+  const transitionStatus = candidate.transitionStatus;
 
   const getTierIcon = (tier: CoverageTier) => {
     switch (tier) {
