@@ -373,7 +373,7 @@ export const UserProfile = () => {
                   <span className="font-semibold text-blue-600 text-sm">Democrat</span>
                 </div>
                 <div className="text-2xl font-bold text-blue-600">
-                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : `${partyScores?.democrat ?? 0}%`}
+                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.democrat} size="md" />}
                 </div>
               </Link>
               <Link to="/party/republican" className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 hover:border-red-500/40 transition-colors">
@@ -382,7 +382,7 @@ export const UserProfile = () => {
                   <span className="font-semibold text-red-600 text-sm">Republican</span>
                 </div>
                 <div className="text-2xl font-bold text-red-600">
-                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : `${partyScores?.republican ?? 0}%`}
+                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.republican} size="md" />}
                 </div>
               </Link>
               <Link to="/party/green" className="p-4 rounded-xl bg-green-500/5 border border-green-500/20 hover:border-green-500/40 transition-colors">
@@ -391,7 +391,7 @@ export const UserProfile = () => {
                   <span className="font-semibold text-green-600 text-sm">Green</span>
                 </div>
                 <div className="text-2xl font-bold text-green-600">
-                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : `${partyScores?.green ?? 0}%`}
+                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.green} size="md" />}
                 </div>
               </Link>
               <Link to="/party/libertarian" className="p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20 hover:border-yellow-500/40 transition-colors">
@@ -400,7 +400,7 @@ export const UserProfile = () => {
                   <span className="font-semibold text-yellow-600 text-sm">Libertarian</span>
                 </div>
                 <div className="text-2xl font-bold text-yellow-600">
-                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : `${partyScores?.libertarian ?? 0}%`}
+                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.libertarian} size="md" />}
                 </div>
               </Link>
             </div>
