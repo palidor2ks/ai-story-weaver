@@ -18,7 +18,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit, UserCheck } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit, UserCheck, Building2, RefreshCw } from "lucide-react";
+import { usePopulatePartyAnswers } from "@/hooks/usePopulatePartyAnswers";
 
 // Only levels that require manual entry (no API available)
 const LEVELS = [
@@ -68,6 +69,7 @@ export default function Admin() {
   const updateMutation = useUpdateStaticOfficial();
   const deleteMutation = useDeleteStaticOfficial();
   const deleteOverrideMutation = useDeleteCandidateOverride();
+  const { isLoading: partyAnswersLoading, progress: partyAnswersProgress, populateAll: populatePartyAnswers } = usePopulatePartyAnswers();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingOfficial, setEditingOfficial] = useState<StaticOfficial | null>(null);
@@ -422,6 +424,10 @@ export default function Admin() {
               <UserCheck className="h-4 w-4" />
               Claims
             </TabsTrigger>
+            <TabsTrigger value="parties" className="gap-2">
+              <Building2 className="h-4 w-4" />
+              Party Answers
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="officials">
@@ -603,6 +609,62 @@ export default function Admin() {
 
           <TabsContent value="claims">
             <ClaimReviewPanel />
+          </TabsContent>
+
+          <TabsContent value="parties">
+            <Card>
+              <CardHeader>
+                <CardTitle>Regenerate Party Answers</CardTitle>
+                <CardDescription>
+                  Use AI to generate party position answers based on official platforms and voting records.
+                  This will regenerate all answers for all parties using the corrected left-right scoring scale.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-muted/50 rounded-lg p-4 text-sm">
+                  <p className="font-medium mb-2">Scoring Scale:</p>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li>• <strong>-10</strong>: Far LEFT / Very progressive (Democrats, Greens)</li>
+                    <li>• <strong>0</strong>: Neutral / Centrist</li>
+                    <li>• <strong>+10</strong>: Far RIGHT / Very conservative (Republicans)</li>
+                  </ul>
+                </div>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button disabled={partyAnswersLoading} className="w-full sm:w-auto">
+                      {partyAnswersLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          {partyAnswersProgress || 'Generating...'}
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Regenerate All Party Answers
+                        </>
+                      )}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Regenerate All Party Answers?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will use AI to generate new position answers for all 4 political parties 
+                        (Democrat, Republican, Green, Libertarian) based on their official platforms. 
+                        Existing answers will be replaced.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => populatePartyAnswers()}>
+                        Regenerate
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </main>
