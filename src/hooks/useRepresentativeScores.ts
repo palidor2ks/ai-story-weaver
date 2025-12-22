@@ -52,15 +52,18 @@ export const useRepresentativeAnswersAndScores = (
   representatives: RepresentativeInfo[],
   userAnswers: QuizAnswer[]
 ) => {
+  // Only run query when we have both reps and answers
+  const hasData = representatives.length > 0 && userAnswers.length > 0;
+  const repIds = representatives.map(r => r.id).sort();
+  const questionIds = userAnswers.map(a => a.question_id).sort();
+
   return useQuery({
-    queryKey: ['rep-answers-scores', representatives.map(r => r.id), userAnswers.map(a => a.question_id)],
+    queryKey: ['rep-answers-scores', repIds, questionIds],
     queryFn: async () => {
-      if (representatives.length === 0 || userAnswers.length === 0) {
+      if (!hasData) {
         return { scores: {}, answersGenerated: 0 };
       }
 
-      const questionIds = userAnswers.map(a => a.question_id);
-      const repIds = representatives.map(r => r.id);
       const scores: Record<string, { score: number; answerCount: number; generated: boolean }> = {};
       let totalGenerated = 0;
 
@@ -68,8 +71,8 @@ export const useRepresentativeAnswersAndScores = (
       const { data: existingAnswers, error: fetchError } = await supabase
         .from('candidate_answers')
         .select('candidate_id, question_id, answer_value')
-        .in('candidate_id', repIds)
-        .in('question_id', questionIds);
+        .in('candidate_id', representatives.map(r => r.id))
+        .in('question_id', userAnswers.map(a => a.question_id));
 
       if (fetchError) {
         console.error('Error fetching existing answers:', fetchError);
@@ -89,7 +92,8 @@ export const useRepresentativeAnswersAndScores = (
         const repAnswers = answersByCandidate[rep.id] || [];
         
         // If we have at least 30% of answers, calculate score from existing
-        if (repAnswers.length >= questionIds.length * 0.3) {
+        const neededQuestions = userAnswers.map(a => a.question_id);
+        if (repAnswers.length >= neededQuestions.length * 0.3) {
           const score = calculateMatchScore(userAnswers, repAnswers);
           scores[rep.id] = { 
             score, 
@@ -105,8 +109,7 @@ export const useRepresentativeAnswersAndScores = (
               {
                 body: {
                   candidateId: rep.id,
-                  questionIds: questionIds,
-                  // Pass candidate info for reps not in DB
+                  questionIds: userAnswers.map(a => a.question_id),
                   candidateName: rep.name,
                   candidateParty: rep.party,
                   candidateOffice: rep.office,
@@ -144,8 +147,8 @@ export const useRepresentativeAnswersAndScores = (
 
       return { scores, answersGenerated: totalGenerated };
     },
-    enabled: representatives.length > 0 && userAnswers.length > 0,
-    staleTime: 1000 * 60 * 10, // Cache for 10 minutes
+    enabled: hasData,
+    staleTime: 1000 * 60 * 10,
     refetchOnWindowFocus: false,
   });
 };
