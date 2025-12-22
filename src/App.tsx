@@ -22,15 +22,9 @@ import Admin from "./pages/Admin";
 import PoliticianDashboard from "./pages/PoliticianDashboard";
 import NotFound from "./pages/NotFound";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
+import { LoadingScreen } from "./components/LoadingScreen";
 
 const queryClient = new QueryClient();
-
-// Loading component
-const LoadingScreen = () => (
-  <div className="min-h-screen bg-background flex items-center justify-center">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-  </div>
-);
 
 // Consolidated route guard with configurable auth and onboarding requirements
 interface RouteGuardProps {
