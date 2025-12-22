@@ -5,7 +5,7 @@ import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding, useU
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
-import { calculateMatchScore } from '@/hooks/useCandidates';
+import { usePartyMatchScores } from '@/hooks/usePartyMatchScores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +41,7 @@ export const UserProfile = () => {
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: repsData, isLoading: repsLoading, error: repsError, refetch: refetchReps } = useRepresentatives(profile?.address);
   const { data: civicData, isLoading: civicLoading, refetch: refetchCivic } = useCivicOfficials(profile?.address);
+  const { data: partyScores, isLoading: partyScoresLoading } = usePartyMatchScores();
   const federalReps = repsData?.representatives ?? [];
   const congressionalDistrict = repsData?.district;
   const congressionalState = repsData?.state;
@@ -372,7 +373,7 @@ export const UserProfile = () => {
                   <span className="font-semibold text-blue-600 text-sm">Democrat</span>
                 </div>
                 <div className="text-2xl font-bold text-blue-600">
-                  {analysisLoading ? <Skeleton className="h-8 w-12" /> : `${analysis?.democratAlignment ?? 50}%`}
+                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : `${partyScores?.democrat ?? 0}%`}
                 </div>
               </Link>
               <Link to="/party/republican" className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 hover:border-red-500/40 transition-colors">
@@ -381,7 +382,7 @@ export const UserProfile = () => {
                   <span className="font-semibold text-red-600 text-sm">Republican</span>
                 </div>
                 <div className="text-2xl font-bold text-red-600">
-                  {analysisLoading ? <Skeleton className="h-8 w-12" /> : `${analysis?.republicanAlignment ?? 50}%`}
+                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : `${partyScores?.republican ?? 0}%`}
                 </div>
               </Link>
               <Link to="/party/green" className="p-4 rounded-xl bg-green-500/5 border border-green-500/20 hover:border-green-500/40 transition-colors">
@@ -390,7 +391,7 @@ export const UserProfile = () => {
                   <span className="font-semibold text-green-600 text-sm">Green</span>
                 </div>
                 <div className="text-2xl font-bold text-green-600">
-                  {analysisLoading ? <Skeleton className="h-8 w-12" /> : `${analysis?.greenAlignment ?? 50}%`}
+                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : `${partyScores?.green ?? 0}%`}
                 </div>
               </Link>
               <Link to="/party/libertarian" className="p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20 hover:border-yellow-500/40 transition-colors">
@@ -399,7 +400,7 @@ export const UserProfile = () => {
                   <span className="font-semibold text-yellow-600 text-sm">Libertarian</span>
                 </div>
                 <div className="text-2xl font-bold text-yellow-600">
-                  {analysisLoading ? <Skeleton className="h-8 w-12" /> : `${analysis?.libertarianAlignment ?? 50}%`}
+                  {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : `${partyScores?.libertarian ?? 0}%`}
                 </div>
               </Link>
             </div>
