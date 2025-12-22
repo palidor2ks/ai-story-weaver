@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
 import { ComparePanel } from '@/components/ComparePanel';
@@ -14,6 +15,45 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X } from 'lucide-react';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+
+// Hook to fetch saved AI scores from candidate_overrides and candidates tables
+const useCandidateScores = () => {
+  return useQuery({
+    queryKey: ['candidate-scores-all'],
+    queryFn: async () => {
+      // Fetch overrides with overall_score
+      const { data: overrides } = await supabase
+        .from('candidate_overrides')
+        .select('candidate_id, overall_score');
+      
+      // Fetch candidates with overall_score
+      const { data: candidates } = await supabase
+        .from('candidates')
+        .select('id, overall_score');
+      
+      // Create a map of candidate_id -> overall_score
+      const scoreMap = new Map<string, number>();
+      
+      // Add candidate scores
+      (candidates || []).forEach(c => {
+        if (c.overall_score !== null && c.overall_score !== 0) {
+          scoreMap.set(c.id, c.overall_score);
+        }
+      });
+      
+      // Override with candidate_overrides (these take precedence)
+      (overrides || []).forEach(o => {
+        if (o.overall_score !== null) {
+          scoreMap.set(o.candidate_id, o.overall_score);
+        }
+      });
+      
+      return scoreMap;
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+};
 
 export const Candidates = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
@@ -21,6 +61,7 @@ export const Candidates = () => {
   const { data: repsData, isLoading: representativesLoading } = useRepresentatives(profile?.address);
   const { data: allPoliticians = [], isLoading: allPoliticiansLoading } = useAllPoliticians();
   const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
+  const { data: scoreMap } = useCandidateScores();
   
   const userReps = repsData?.representatives ?? [];
   
@@ -60,68 +101,74 @@ export const Candidates = () => {
     setSelectedCandidates([]);
   }, []);
 
-  // Transform representatives to Candidate type
-  const transformRepToCandidate = (member: any): Candidate => ({
-    id: member.bioguide_id || member.id,
-    name: member.name,
-    party: member.party as 'Democrat' | 'Republican' | 'Independent' | 'Other',
-    office: member.office,
-    state: member.state,
-    district: member.district || undefined,
-    imageUrl: member.image_url || undefined,
-    overallScore: member.overall_score,
-    topicScores: [],
-    lastUpdated: new Date(),
-    coverageTier: (member.coverage_tier || 'tier_3') as 'tier_1' | 'tier_2' | 'tier_3',
-    confidence: (member.confidence || 'low') as 'high' | 'medium' | 'low',
-    isIncumbent: member.is_incumbent ?? true,
-    scoreVersion: 'v1.0',
-  });
+  // Transform representatives to Candidate type (with saved scores)
+  const transformRepToCandidate = useCallback((member: any): Candidate => {
+    const savedScore = scoreMap?.get(member.bioguide_id || member.id);
+    return {
+      id: member.bioguide_id || member.id,
+      name: member.name,
+      party: member.party as 'Democrat' | 'Republican' | 'Independent' | 'Other',
+      office: member.office,
+      state: member.state,
+      district: member.district || undefined,
+      imageUrl: member.image_url || undefined,
+      overallScore: savedScore ?? member.overall_score ?? 0,
+      topicScores: [],
+      lastUpdated: new Date(),
+      coverageTier: (member.coverage_tier || 'tier_3') as 'tier_1' | 'tier_2' | 'tier_3',
+      confidence: (member.confidence || 'low') as 'high' | 'medium' | 'low',
+      isIncumbent: member.is_incumbent ?? true,
+      scoreVersion: 'v1.0',
+    };
+  }, [scoreMap]);
 
-  // Transform civic official to Candidate type
-  const transformCivicToCandidate = (official: CivicOfficial): Candidate => ({
-    id: official.id,
-    name: official.name,
-    party: official.party,
-    office: official.office,
-    state: official.state,
-    district: official.district,
-    imageUrl: official.image_url || undefined,
-    overallScore: official.overall_score,
-    topicScores: [],
-    lastUpdated: new Date(),
-    coverageTier: (official.coverage_tier || 'tier_3') as 'tier_1' | 'tier_2' | 'tier_3',
-    confidence: (official.confidence || 'low') as 'high' | 'medium' | 'low',
-    isIncumbent: official.is_incumbent ?? true,
-    scoreVersion: 'v1.0',
-  });
+  // Transform civic official to Candidate type (with saved scores)
+  const transformCivicToCandidate = useCallback((official: CivicOfficial): Candidate => {
+    const savedScore = scoreMap?.get(official.id);
+    return {
+      id: official.id,
+      name: official.name,
+      party: official.party,
+      office: official.office,
+      state: official.state,
+      district: official.district,
+      imageUrl: official.image_url || undefined,
+      overallScore: savedScore ?? official.overall_score ?? 0,
+      topicScores: [],
+      lastUpdated: new Date(),
+      coverageTier: (official.coverage_tier || 'tier_3') as 'tier_1' | 'tier_2' | 'tier_3',
+      confidence: (official.confidence || 'low') as 'high' | 'medium' | 'low',
+      isIncumbent: official.is_incumbent ?? true,
+      scoreVersion: 'v1.0',
+    };
+  }, [scoreMap]);
 
   // User's federal representatives (filtered by their district)
   const userRepresentatives: Candidate[] = useMemo(() => {
     return userReps.map(transformRepToCandidate);
-  }, [userReps]);
+  }, [userReps, transformRepToCandidate]);
 
   // All Congress members
   const allCongressCandidates: Candidate[] = useMemo(() => {
     return allPoliticians.map(transformRepToCandidate);
-  }, [allPoliticians]);
+  }, [allPoliticians, transformRepToCandidate]);
 
   // Civic officials (President, VP, Governors, State/Local)
   const federalExecutiveCandidates: Candidate[] = useMemo(() => {
     return (civicData?.federalExecutive || []).map(transformCivicToCandidate);
-  }, [civicData?.federalExecutive]);
+  }, [civicData?.federalExecutive, transformCivicToCandidate]);
 
   const stateExecutiveCandidates: Candidate[] = useMemo(() => {
     return (civicData?.stateExecutive || []).map(transformCivicToCandidate);
-  }, [civicData?.stateExecutive]);
+  }, [civicData?.stateExecutive, transformCivicToCandidate]);
 
   const stateLegislativeCandidates: Candidate[] = useMemo(() => {
     return (civicData?.stateLegislative || []).map(transformCivicToCandidate);
-  }, [civicData?.stateLegislative]);
+  }, [civicData?.stateLegislative, transformCivicToCandidate]);
 
   const localCandidates: Candidate[] = useMemo(() => {
     return (civicData?.local || []).map(transformCivicToCandidate);
-  }, [civicData?.local]);
+  }, [civicData?.local, transformCivicToCandidate]);
 
   // Database candidates (local/state officials, running candidates)
   const dbTransformed: Candidate[] = useMemo(() => {
