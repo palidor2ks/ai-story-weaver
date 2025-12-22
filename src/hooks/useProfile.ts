@@ -214,28 +214,21 @@ export const useSaveUserTopics = () => {
     mutationFn: async (topicIds: string[]) => {
       if (!user) throw new Error('Not authenticated');
 
-      // Delete existing topics
-      const { error: deleteError } = await supabase
-        .from('user_topics')
-        .delete()
-        .eq('user_id', user.id);
-      
-      if (deleteError) throw deleteError;
-
-      // Insert new topics with weights based on rank order
+      // Build topics array with weights based on rank order
       // Per PRD: ranks [5, 4, 3, 2, 1] for topics 1-5
-      if (topicIds.length > 0) {
-        const weights = [5, 4, 3, 2, 1];
-        const { error: insertError } = await supabase
-          .from('user_topics')
-          .insert(topicIds.map((topicId, index) => ({
-            user_id: user.id,
-            topic_id: topicId,
-            weight: weights[index] || 1,
-          })));
-        
-        if (insertError) throw insertError;
-      }
+      const weights = [5, 4, 3, 2, 1];
+      const topicsPayload = topicIds.map((topicId, index) => ({
+        topic_id: topicId,
+        weight: weights[index] || 1,
+      }));
+
+      // Use atomic RPC function for transactional delete + insert
+      const { error } = await supabase.rpc('save_user_topics', {
+        p_user_id: user.id,
+        p_topics: topicsPayload,
+      });
+
+      if (error) throw error;
 
       return { success: true };
     },
