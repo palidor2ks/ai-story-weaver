@@ -69,43 +69,36 @@ export const useCandidates = () => {
   return useQuery({
     queryKey: ['candidates'],
     queryFn: async () => {
-      const { data: candidates, error } = await supabase
-        .from('candidates')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
+      // Fetch all data in parallel to reduce latency
+      const [candidatesResult, topicScoresResult, overridesResult] = await Promise.all([
+        supabase.from('candidates').select('*').order('name'),
+        supabase.from('calculated_candidate_topic_scores').select('candidate_id, topic_id, calculated_score'),
+        supabase.from('candidate_overrides').select('candidate_id, overall_score, name, party, office, state, district, image_url, coverage_tier, confidence'),
+      ]);
 
-      // Fetch topic scores for all candidates
-      const { data: topicScores, error: scoresError } = await supabase
-        .from('candidate_topic_scores')
-        .select(`
-          candidate_id,
-          topic_id,
-          score,
-          topics (name, icon)
-        `);
-      
-      if (scoresError) throw scoresError;
+      if (candidatesResult.error) throw candidatesResult.error;
 
-      // Fetch all overrides to merge scores
-      const { data: overrides, error: overridesError } = await supabase
-        .from('candidate_overrides')
-        .select('candidate_id, overall_score, name, party, office, state, district, image_url, coverage_tier, confidence');
-      
-      if (overridesError) console.error('Error fetching overrides:', overridesError);
+      const candidates = candidatesResult.data;
+      const topicScores = topicScoresResult.data || [];
+      const overrides = overridesResult.data || [];
 
-      // Create a map of overrides by candidate_id
-      const overrideMap = new Map(
-        (overrides || []).map(o => [o.candidate_id, o])
-      );
+      // Create maps for O(1) lookups
+      const overrideMap = new Map(overrides.map(o => [o.candidate_id, o]));
+      const topicScoresMap = new Map<string, typeof topicScores>();
+      topicScores.forEach(ts => {
+        if (!topicScoresMap.has(ts.candidate_id!)) {
+          topicScoresMap.set(ts.candidate_id!, []);
+        }
+        topicScoresMap.get(ts.candidate_id!)!.push(ts);
+      });
 
-      // Map topic scores to candidates and merge overrides
+      // Map and merge data in single pass
       const candidatesWithScores = candidates.map(candidate => {
         const override = overrideMap.get(candidate.id);
+        const candidateTopicScores = topicScoresMap.get(candidate.id) || [];
+        
         return {
-          ...candidate,
-          // Apply overrides if available
+          id: candidate.id,
           name: override?.name ?? candidate.name,
           party: (override?.party as Candidate['party']) ?? candidate.party,
           office: override?.office ?? candidate.office,
@@ -117,13 +110,13 @@ export const useCandidates = () => {
           confidence: (override?.confidence as ConfidenceLevel) ?? candidate.confidence ?? 'medium',
           is_incumbent: candidate.is_incumbent ?? true,
           score_version: candidate.score_version || 'v1.0',
-          topicScores: topicScores
-            ?.filter(ts => ts.candidate_id === candidate.id)
-            .map(ts => ({
-              topic_id: ts.topic_id,
-              score: ts.score,
-              topics: ts.topics,
-            })) || [],
+          last_updated: candidate.last_updated,
+          claimed_by_user_id: candidate.claimed_by_user_id,
+          claimed_at: candidate.claimed_at,
+          topicScores: candidateTopicScores.map(ts => ({
+            topic_id: ts.topic_id,
+            score: ts.calculated_score ?? 0,
+          })),
         };
       });
 

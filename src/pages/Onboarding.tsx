@@ -9,9 +9,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useTopics, useCanonicalQuestions } from '@/hooks/useCandidates';
 import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { OnboardingStep, Topic, QuestionOption, QuizAnswer, TopicScore } from '@/types';
-import { formatScore, getScoreLabel, calculateWeightedScore } from '@/lib/scoreFormat';
+import { calculateWeightedScore } from '@/lib/scoreFormat';
 import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 // Minimum required answers before allowing quiz completion (50% of questions)

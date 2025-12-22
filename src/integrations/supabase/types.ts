@@ -852,6 +852,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      save_user_topics: {
+        Args: { p_topics: Json; p_user_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "politician"
