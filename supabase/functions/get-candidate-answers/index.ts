@@ -96,6 +96,13 @@ Return ONLY a valid JSON array, no other text.`;
   if (!response.ok) {
     const errorText = await response.text();
     console.error('AI Gateway error:', response.status, errorText);
+    
+    // Handle rate limit and payment errors gracefully - return empty instead of throwing
+    if (response.status === 402 || response.status === 429) {
+      console.log(`AI Gateway ${response.status} - returning empty answers for ${candidateName}`);
+      return []; // Return empty array so caller can use existing data
+    }
+    
     throw new Error(`AI Gateway error: ${response.status}`);
   }
 
