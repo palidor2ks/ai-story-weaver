@@ -2,27 +2,45 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronUp, Sparkles, ExternalLink, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Sparkles, ExternalLink, Loader2, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface AIExplanationProps {
   candidateId: string;
   candidateName: string;
   topicScores: Array<{ topicId: string; topicName: string; score: number }>;
+  userTopicScores?: Array<{ topicId: string; topicName: string; score: number }>;
+  matchScore?: number;
+}
+
+interface PersonalizedComparison {
+  agreements: string[];
+  disagreements: string[];
+  overallAssessment: string;
 }
 
 interface AIAnalysis {
   summary: string;
   deepAnalysis: string;
+  personalizedComparison?: PersonalizedComparison;
   sources: Array<{ title: string; url: string }>;
 }
 
-export const AIExplanation = ({ candidateId, candidateName, topicScores }: AIExplanationProps) => {
+export const AIExplanation = ({ 
+  candidateId, 
+  candidateName, 
+  topicScores,
+  userTopicScores,
+  matchScore 
+}: AIExplanationProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  const hasUserScores = userTopicScores && userTopicScores.length > 0;
 
   const fetchAnalysis = async () => {
     if (analysis) return; // Already loaded
@@ -34,6 +52,8 @@ export const AIExplanation = ({ candidateId, candidateName, topicScores }: AIExp
           candidateId,
           candidateName,
           topicScores,
+          userTopicScores: hasUserScores ? userTopicScores : undefined,
+          matchScore: hasUserScores ? matchScore : undefined,
         },
       });
 
@@ -65,6 +85,16 @@ export const AIExplanation = ({ candidateId, candidateName, topicScores }: AIExp
         <CardTitle className="font-display flex items-center gap-2 text-lg">
           <Sparkles className="w-5 h-5 text-primary" />
           AI Stance Analysis
+          {hasUserScores && matchScore !== undefined && (
+            <span className={cn(
+              "ml-2 text-sm font-normal px-2 py-0.5 rounded-full",
+              matchScore >= 70 ? "bg-agree/10 text-agree" :
+              matchScore >= 40 ? "bg-yellow-500/10 text-yellow-600" :
+              "bg-disagree/10 text-disagree"
+            )}>
+              {matchScore}% Match
+            </span>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -73,16 +103,59 @@ export const AIExplanation = ({ candidateId, candidateName, topicScores }: AIExp
           {isLoading && !analysis ? (
             <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Generating analysis...</span>
+              <span>Generating personalized analysis...</span>
             </div>
           ) : analysis ? (
             <p className="text-foreground leading-relaxed">{analysis.summary}</p>
           ) : (
             <p className="text-muted-foreground italic">
-              Click below to generate an AI-powered analysis of {candidateName}&apos;s political positions.
+              Click below to generate an AI-powered analysis of {candidateName}&apos;s political positions
+              {hasUserScores ? ' and how they compare to yours.' : '.'}
             </p>
           )}
         </div>
+
+        {/* Personalized Comparison Section */}
+        {analysis?.personalizedComparison && (
+          <div className="mb-4 space-y-3">
+            {/* Overall Assessment */}
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <p className="text-sm text-foreground">{analysis.personalizedComparison.overallAssessment}</p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3">
+              {/* Agreements */}
+              {analysis.personalizedComparison.agreements.length > 0 && (
+                <div className="p-3 rounded-lg bg-agree/5 border border-agree/20">
+                  <h5 className="text-sm font-semibold text-agree mb-2 flex items-center gap-1">
+                    <ThumbsUp className="w-4 h-4" />
+                    Where You Align
+                  </h5>
+                  <ul className="space-y-1">
+                    {analysis.personalizedComparison.agreements.map((agreement, idx) => (
+                      <li key={idx} className="text-sm text-foreground">• {agreement}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Disagreements */}
+              {analysis.personalizedComparison.disagreements.length > 0 && (
+                <div className="p-3 rounded-lg bg-disagree/5 border border-disagree/20">
+                  <h5 className="text-sm font-semibold text-disagree mb-2 flex items-center gap-1">
+                    <ThumbsDown className="w-4 h-4" />
+                    Where You Differ
+                  </h5>
+                  <ul className="space-y-1">
+                    {analysis.personalizedComparison.disagreements.map((disagreement, idx) => (
+                      <li key={idx} className="text-sm text-foreground">• {disagreement}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Expandable Deep Analysis */}
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
