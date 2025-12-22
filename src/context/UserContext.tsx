@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useMemo } from 'react';
 import { User, Topic, TopicScore, QuizAnswer } from '@/types';
 import { topics as allTopics } from '@/data/mockData';
 import { calculateQuizScore } from '@/lib/score';
+
+// ============= Types =============
 
 interface UserContextType {
   user: User | null;
@@ -17,6 +19,26 @@ interface UserContextType {
   completeOnboarding: (name: string) => void;
 }
 
+// ============= Module-Level Constants =============
+
+/**
+ * Hoisted question-to-topic mapping to avoid recreation on every render.
+ * This is legacy data used for demo/fallback scoring when the actual
+ * question metadata is not available.
+ */
+const LEGACY_QUESTION_TOPIC_MAP: { id: string; topicId: string }[] = [
+  { id: 'q1', topicId: 'economy' },
+  { id: 'q2', topicId: 'economy' },
+  { id: 'q3', topicId: 'healthcare' },
+  { id: 'q4', topicId: 'immigration' },
+  { id: 'q5', topicId: 'environment' },
+  { id: 'q6', topicId: 'education' },
+  { id: 'q7', topicId: 'gun-policy' },
+  { id: 'q8', topicId: 'criminal-justice' },
+];
+
+// ============= Context =============
+
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
@@ -25,7 +47,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [selectedTopics, setSelectedTopics] = useState<Topic[]>([]);
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
 
-  const addQuizAnswer = (answer: QuizAnswer) => {
+  const addQuizAnswer = useCallback((answer: QuizAnswer) => {
     setQuizAnswers(prev => {
       const existing = prev.findIndex(a => a.questionId === answer.questionId);
       if (existing !== -1) {
@@ -35,35 +57,23 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       }
       return [...prev, answer];
     });
-  };
+  }, []);
 
-  const clearQuizAnswers = () => {
+  const clearQuizAnswers = useCallback(() => {
     setQuizAnswers([]);
-  };
+  }, []);
 
-  // Use centralized scoring utility
-  const calculateUserScore = (): { overall: number; byTopic: TopicScore[] } => {
-    // Build question-topic map from allTopics (legacy support for this context)
-    const questionTopicMap: { id: string; topicId: string }[] = [
-      { id: 'q1', topicId: 'economy' },
-      { id: 'q2', topicId: 'economy' },
-      { id: 'q3', topicId: 'healthcare' },
-      { id: 'q4', topicId: 'immigration' },
-      { id: 'q5', topicId: 'environment' },
-      { id: 'q6', topicId: 'education' },
-      { id: 'q7', topicId: 'gun-policy' },
-      { id: 'q8', topicId: 'criminal-justice' },
-    ];
-
+  // Use centralized scoring utility with hoisted question-topic map
+  const calculateUserScore = useCallback((): { overall: number; byTopic: TopicScore[] } => {
     return calculateQuizScore(
       quizAnswers,
-      questionTopicMap,
+      LEGACY_QUESTION_TOPIC_MAP, // Hoisted to module scope
       selectedTopics.map(t => ({ id: t.id, weight: t.weight || 1 })),
       allTopics.map(t => ({ id: t.id, name: t.name }))
     );
-  };
+  }, [quizAnswers, selectedTopics]);
 
-  const completeOnboarding = (name: string) => {
+  const completeOnboarding = useCallback((name: string) => {
     const scores = calculateUserScore();
     const newUser: User = {
       id: crypto.randomUUID(),
@@ -83,24 +93,34 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     };
     setUser(newUser);
     setIsOnboarded(true);
-  };
+  }, [calculateUserScore, selectedTopics, quizAnswers]);
+
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({
+    user,
+    isOnboarded,
+    selectedTopics,
+    quizAnswers,
+    setUser,
+    setIsOnboarded,
+    setSelectedTopics,
+    addQuizAnswer,
+    clearQuizAnswers,
+    calculateUserScore,
+    completeOnboarding,
+  }), [
+    user,
+    isOnboarded,
+    selectedTopics,
+    quizAnswers,
+    addQuizAnswer,
+    clearQuizAnswers,
+    calculateUserScore,
+    completeOnboarding,
+  ]);
 
   return (
-    <UserContext.Provider
-      value={{
-        user,
-        isOnboarded,
-        selectedTopics,
-        quizAnswers,
-        setUser,
-        setIsOnboarded,
-        setSelectedTopics,
-        addQuizAnswer,
-        clearQuizAnswers,
-        calculateUserScore,
-        completeOnboarding,
-      }}
-    >
+    <UserContext.Provider value={value}>
       {children}
     </UserContext.Provider>
   );

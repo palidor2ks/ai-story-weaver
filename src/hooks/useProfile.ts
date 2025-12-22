@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
+
+// ============= Types =============
 
 interface Profile {
   id: string;
@@ -36,6 +39,42 @@ interface UserTopic {
     icon: string;
   };
 }
+
+// Typed mutation result for consistency
+type SaveResult = { success: true };
+
+// Query key prefixes for consolidated invalidation
+const USER_DATA_QUERY_KEYS = ['profile', 'user_topic_scores', 'user_topics', 'has_completed_onboarding'] as const;
+
+// ============= Helper Functions =============
+
+/**
+ * Invalidate all user-related queries in one call using a predicate
+ */
+const invalidateUserQueries = (queryClient: ReturnType<typeof useQueryClient>, userId: string | undefined) => {
+  if (!userId) return;
+  
+  queryClient.invalidateQueries({
+    predicate: (query) => {
+      const key = query.queryKey[0] as string;
+      return USER_DATA_QUERY_KEYS.includes(key as typeof USER_DATA_QUERY_KEYS[number]);
+    },
+  });
+};
+
+/**
+ * Standard error handler for mutations - logs and shows toast
+ */
+const handleMutationError = (error: unknown, context: string) => {
+  console.error(`${context} failed:`, error);
+  toast.error(
+    error instanceof Error 
+      ? `${context} failed: ${error.message.slice(0, 80)}`
+      : `${context} failed unexpectedly`
+  );
+};
+
+// ============= Query Hooks =============
 
 export const useProfile = () => {
   const { user } = useAuth();
@@ -107,6 +146,30 @@ export const useUserTopics = () => {
   });
 };
 
+export const useHasCompletedOnboarding = () => {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['has_completed_onboarding', user?.id],
+    queryFn: async () => {
+      if (!user) return false;
+      
+      // Check if user has any quiz answers
+      const { data, error } = await supabase
+        .from('quiz_answers')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+      
+      if (error) throw error;
+      return data && data.length > 0;
+    },
+    enabled: !!user,
+  });
+};
+
+// ============= Mutation Hooks =============
+
 export const useUpdateProfile = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -128,6 +191,7 @@ export const useUpdateProfile = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
     },
+    onError: (error) => handleMutationError(error, 'Profile update'),
   });
 };
 
@@ -135,16 +199,12 @@ export const useSaveQuizResults = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  return useMutation({
-    mutationFn: async ({ 
-      overallScore, 
-      topicScores, 
-      answers 
-    }: { 
-      overallScore: number; 
-      topicScores: { topicId: string; score: number }[];
-      answers: { questionId: string; selectedOptionId: string; value: number }[];
-    }) => {
+  return useMutation<SaveResult, Error, { 
+    overallScore: number; 
+    topicScores: { topicId: string; score: number }[];
+    answers: { questionId: string; selectedOptionId: string; value: number }[];
+  }>({
+    mutationFn: async ({ overallScore, topicScores, answers }) => {
       if (!user) throw new Error('Not authenticated');
 
       // Use atomic RPC function for all-or-nothing semantics
@@ -167,9 +227,9 @@ export const useSaveQuizResults = () => {
       return { success: true };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['user_topic_scores', user?.id] });
+      invalidateUserQueries(queryClient, user?.id);
     },
+    onError: (error) => handleMutationError(error, 'Quiz save'),
   });
 };
 
@@ -177,8 +237,8 @@ export const useSaveUserTopics = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  return useMutation({
-    mutationFn: async (topicIds: string[]) => {
+  return useMutation<SaveResult, Error, string[]>({
+    mutationFn: async (topicIds) => {
       if (!user) throw new Error('Not authenticated');
 
       // Build topics array with weights based on rank order
@@ -202,28 +262,7 @@ export const useSaveUserTopics = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user_topics', user?.id] });
     },
-  });
-};
-
-export const useHasCompletedOnboarding = () => {
-  const { user } = useAuth();
-
-  return useQuery({
-    queryKey: ['has_completed_onboarding', user?.id],
-    queryFn: async () => {
-      if (!user) return false;
-      
-      // Check if user has any quiz answers
-      const { data, error } = await supabase
-        .from('quiz_answers')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1);
-      
-      if (error) throw error;
-      return data && data.length > 0;
-    },
-    enabled: !!user,
+    onError: (error) => handleMutationError(error, 'Topic save'),
   });
 };
 
@@ -231,7 +270,7 @@ export const useResetOnboarding = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  return useMutation({
+  return useMutation<SaveResult, Error, void>({
     mutationFn: async () => {
       if (!user) throw new Error('Not authenticated');
 
@@ -270,10 +309,9 @@ export const useResetOnboarding = () => {
       return { success: true };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['user_topic_scores', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['user_topics', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['has_completed_onboarding', user?.id] });
+      // Consolidated invalidation for all user data
+      invalidateUserQueries(queryClient, user?.id);
     },
+    onError: (error) => handleMutationError(error, 'Onboarding reset'),
   });
 };
