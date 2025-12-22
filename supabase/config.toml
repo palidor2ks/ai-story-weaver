@@ -1,10 +1,10 @@
 project_id = "ornnzinjrcyigazecctf"
 
 [functions.ai-candidate-explanation]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-profile-summary]
-verify_jwt = false
+verify_jwt = true
 
 [functions.fetch-representatives]
 verify_jwt = false
@@ -16,7 +16,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.user-profile-analysis]
-verify_jwt = false
+verify_jwt = true
 
 [functions.geocode-address]
 verify_jwt = false
