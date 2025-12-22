@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { UserProvider, useUser } from "./context/UserContext";
+import { UserProvider } from "./context/UserContext";
 import Index from "./pages/Index";
 import { Auth } from "./pages/Auth";
 import { Feed } from "./pages/Feed";
@@ -32,35 +32,33 @@ const LoadingScreen = () => (
   </div>
 );
 
-// Auth protected route wrapper
-const AuthRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
-  
-  if (loading) {
-    return <LoadingScreen />;
-  }
-  
-  if (!user) {
-    return <Navigate to="/auth" replace />;
-  }
-  
-  return <>{children}</>;
-};
+// Consolidated route guard with configurable auth and onboarding requirements
+interface RouteGuardProps {
+  children: React.ReactNode;
+  requireAuth?: boolean;
+  requireOnboarding?: boolean;
+}
 
-// Onboarding protected route wrapper
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+const RouteGuard = ({ 
+  children, 
+  requireAuth = true, 
+  requireOnboarding = false 
+}: RouteGuardProps) => {
   const { user, loading: authLoading } = useAuth();
   const { data: hasCompleted, isLoading: onboardingLoading } = useHasCompletedOnboarding();
   
-  if (authLoading || onboardingLoading) {
+  // Only check onboarding if required
+  const isLoading = authLoading || (requireOnboarding && onboardingLoading);
+  
+  if (isLoading) {
     return <LoadingScreen />;
   }
   
-  if (!user) {
+  if (requireAuth && !user) {
     return <Navigate to="/auth" replace />;
   }
   
-  if (!hasCompleted) {
+  if (requireOnboarding && !hasCompleted) {
     return <Navigate to="/" replace />;
   }
   
@@ -72,74 +70,74 @@ const AppRoutes = () => {
     <Routes>
       <Route path="/auth" element={<Auth />} />
       <Route path="/" element={
-        <AuthRoute>
+        <RouteGuard requireAuth requireOnboarding={false}>
           <Index />
-        </AuthRoute>
+        </RouteGuard>
       } />
       <Route path="/results" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <QuizResults />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/feed" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <Feed />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/candidates" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <Candidates />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/donors" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <Donors />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/parties" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <Parties />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/party/:id" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <PartyProfile />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/candidate/:id" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <CandidateProfile />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/profile" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <UserProfile />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/quiz" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <Quiz />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/quiz-library" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <QuizLibrary />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/how-scoring-works" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <HowScoringWorks />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/admin" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <Admin />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="/politician" element={
-        <ProtectedRoute>
+        <RouteGuard requireAuth requireOnboarding>
           <PoliticianDashboard />
-        </ProtectedRoute>
+        </RouteGuard>
       } />
       <Route path="*" element={<NotFound />} />
     </Routes>

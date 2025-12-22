@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
+import { shuffleArray, calculateQuizScore } from '@/lib/score';
 
 export const Quiz = () => {
   const navigate = useNavigate();
@@ -77,8 +78,8 @@ export const Quiz = () => {
         q => topTopicIds.includes(q.topicId) && !existingAnswers.includes(q.id)
       );
       
-      // Shuffle and take 5
-      const shuffled = [...unansweredFromTopTopics].sort(() => Math.random() - 0.5);
+      // Fisher-Yates shuffle and take 5
+      const shuffled = shuffleArray(unansweredFromTopTopics);
       filtered = shuffled.slice(0, 5);
       
       // If not enough unanswered, add some already answered ones
@@ -86,7 +87,7 @@ export const Quiz = () => {
         const answeredFromTopTopics = allQuestions.filter(
           q => topTopicIds.includes(q.topicId) && existingAnswers.includes(q.id)
         );
-        const shuffledAnswered = [...answeredFromTopTopics].sort(() => Math.random() - 0.5);
+        const shuffledAnswered = shuffleArray(answeredFromTopTopics);
         filtered = [...filtered, ...shuffledAnswered.slice(0, 5 - filtered.length)];
       }
     }
@@ -126,52 +127,19 @@ export const Quiz = () => {
     });
   };
 
-  const calculateUserScore = (): { overall: number; byTopic: TopicScore[] } => {
-    const topicAnswers: Record<string, number[]> = {};
+  const calculateUserScoreFromAnswers = (): { overall: number; byTopic: TopicScore[] } => {
+    const questionData = questions.map(q => ({ id: q.id, topicId: q.topicId }));
+    const topicWeights = selectedTopics.map(t => ({ id: t.id, weight: t.weight }));
+    const topicInfoList = topics.map(t => ({ id: t.id, name: t.name }));
     
-    quizAnswers.forEach(answer => {
-      const question = questions.find(q => q.id === answer.questionId);
-      if (question) {
-        if (!topicAnswers[question.topicId]) {
-          topicAnswers[question.topicId] = [];
-        }
-        topicAnswers[question.topicId].push(answer.value);
-      }
-    });
-
-    const topicScores: TopicScore[] = Object.entries(topicAnswers).map(([topicId, values]) => {
-      const avg = values.reduce((a, b) => a + b, 0) / values.length;
-      const normalizedScore = Math.round(avg * 10);
-      const topic = topics.find(t => t.id === topicId);
-      return {
-        topicId,
-        topicName: topic?.name || topicId,
-        score: normalizedScore,
-      };
-    });
-
-    let overallScore = 0;
-    let totalWeight = 0;
-    
-    topicScores.forEach(ts => {
-      const selectedTopic = selectedTopics.find(st => st.id === ts.topicId);
-      const weight = selectedTopic?.weight || 1;
-      overallScore += ts.score * weight;
-      totalWeight += weight;
-    });
-
-    if (totalWeight > 0) {
-      overallScore = Math.round(overallScore / totalWeight);
-    }
-
-    return { overall: overallScore, byTopic: topicScores };
+    return calculateQuizScore(quizAnswers, questionData, topicWeights, topicInfoList);
   };
 
   const handleNext = () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
-      const scores = calculateUserScore();
+      const scores = calculateUserScoreFromAnswers();
       setCalculatedScores(scores);
       setShowResults(true);
     }
@@ -200,7 +168,10 @@ export const Quiz = () => {
       navigate('/profile');
     } catch (error) {
       console.error('Error saving quiz results:', error);
-      toast.error('Failed to save your results. Please try again.');
+      const message = error instanceof Error 
+        ? error.message.substring(0, 100) 
+        : 'Unknown error';
+      toast.error(`Failed to save results: ${message}`);
     }
   };
 
