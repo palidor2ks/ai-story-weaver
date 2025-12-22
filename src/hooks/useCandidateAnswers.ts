@@ -22,6 +22,12 @@ export interface CandidateAnswer {
       id: string;
       name: string;
     };
+    question_options?: Array<{
+      id: string;
+      value: number;
+      text: string;
+      display_order: number | null;
+    }>;
   };
 }
 
@@ -43,6 +49,12 @@ export const useCandidateAnswers = (candidateId: string | undefined) => {
             topics (
               id,
               name
+            ),
+            question_options (
+              id,
+              value,
+              text,
+              display_order
             )
           )
         `)
@@ -87,7 +99,8 @@ export const useSmartCandidateAnswers = (
             id,
             text,
             topic_id,
-            topics (id, name)
+            topics (id, name),
+            question_options (id, value, text, display_order)
           )
         `)
         .eq('candidate_id', candidateId)
@@ -220,6 +233,12 @@ export const useCandidateAnswersForUser = (
             topics (
               id,
               name
+            ),
+            question_options (
+              id,
+              value,
+              text,
+              display_order
             )
           )
         `)

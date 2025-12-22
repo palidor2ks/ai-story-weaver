@@ -28,7 +28,7 @@ export const CandidatePositions = ({ candidateId, candidateName, isUserRep = fal
   const { data: candidateAnswers = [], isLoading, refetch } = useCandidateAnswers(candidateId);
   const generateAnswers = useGenerateCandidateAnswers();
   
-  // Get user's quiz answers to compare
+  // Get user's quiz answers to compare (with option text)
   const { data: userQuizAnswers = [] } = useQuery({
     queryKey: ['user-quiz-answers-for-comparison'],
     queryFn: async () => {
@@ -37,20 +37,32 @@ export const CandidatePositions = ({ candidateId, candidateName, isUserRep = fal
       
       const { data, error } = await supabase
         .from('quiz_answers')
-        .select('question_id, value')
+        .select(`
+          question_id, 
+          value,
+          selected_option:question_options (
+            id,
+            text,
+            value
+          )
+        `)
         .eq('user_id', user.id);
       
       if (error) {
         console.error('Error fetching user answers:', error);
         return [];
       }
-      return data;
+      return data as Array<{
+        question_id: string;
+        value: number;
+        selected_option: { id: string; text: string; value: number } | null;
+      }>;
     },
   });
 
   // Create a map of user answers for quick lookup
   const userAnswerMap = new Map(
-    userQuizAnswers.map(a => [a.question_id, a.value])
+    userQuizAnswers.map(a => [a.question_id, { value: a.value, text: a.selected_option?.text || null }])
   );
 
   // Get unique topics from answers
@@ -71,14 +83,14 @@ export const CandidatePositions = ({ candidateId, candidateName, isUserRep = fal
   // Calculate stats
   const totalAnswers = candidateAnswers.length;
   const sharedQuestions = candidateAnswers.filter(a => userAnswerMap.has(a.question_id)).length;
+  const userQuestionIds = userQuizAnswers.map(a => a.question_id);
   const highConfidence = candidateAnswers.filter(a => a.confidence === 'high').length;
   const aiGenerated = candidateAnswers.filter(a => a.source_type === 'other').length;
 
   const handleGeneratePositions = async () => {
-    const questionIds = userQuizAnswers.map(a => a.question_id);
     await generateAnswers.mutateAsync({ 
       candidateId, 
-      questionIds: questionIds.length > 0 ? questionIds : undefined 
+      questionIds: userQuestionIds.length > 0 ? userQuestionIds : undefined 
     });
     refetch();
   };
@@ -242,13 +254,17 @@ export const CandidatePositions = ({ candidateId, candidateName, isUserRep = fal
 
         {/* Answers Grid */}
         <div className="grid gap-4 md:grid-cols-2">
-          {displayedAnswers.map(answer => (
-            <CandidateAnswerCard
-              key={answer.id}
-              answer={answer}
-              userAnswer={userAnswerMap.get(answer.question_id) ?? null}
-            />
-          ))}
+          {displayedAnswers.map(answer => {
+            const userData = userAnswerMap.get(answer.question_id);
+            return (
+              <CandidateAnswerCard
+                key={answer.id}
+                answer={answer}
+                userAnswer={userData?.value ?? null}
+                userAnswerText={userData?.text ?? null}
+              />
+            );
+          })}
         </div>
 
         {/* Show More/Less */}
