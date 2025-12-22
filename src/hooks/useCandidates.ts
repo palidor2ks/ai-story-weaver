@@ -149,7 +149,7 @@ export const useCandidate = (id: string | undefined) => {
         .eq('candidate_id', id)
         .maybeSingle();
       
-      // First try to fetch from database
+      // First try to fetch from database (candidates table)
       const { data: candidate, error } = await supabase
         .from('candidates')
         .select('*')
@@ -194,6 +194,67 @@ export const useCandidate = (id: string | undefined) => {
         };
 
         return mergedCandidate;
+      }
+
+      // Not in candidates table - check static_officials (executive/state/local officials)
+      const { data: staticOfficial } = await supabase
+        .from('static_officials')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (staticOfficial) {
+        const mergedOfficial: CandidateWithOverride = {
+          id: staticOfficial.id,
+          name: override?.name ?? staticOfficial.name,
+          party: (override?.party as Candidate['party']) ?? staticOfficial.party as Candidate['party'],
+          office: override?.office ?? staticOfficial.office,
+          state: override?.state ?? staticOfficial.state,
+          district: override?.district ?? staticOfficial.district ?? null,
+          image_url: override?.image_url ?? staticOfficial.image_url,
+          overall_score: override?.overall_score ?? 0,
+          coverage_tier: (override?.coverage_tier as CoverageTier) ?? (staticOfficial.coverage_tier as CoverageTier) ?? 'tier_3',
+          confidence: (override?.confidence as ConfidenceLevel) ?? (staticOfficial.confidence as ConfidenceLevel) ?? 'medium',
+          is_incumbent: staticOfficial.is_active ?? true,
+          score_version: 'v1.0',
+          last_updated: staticOfficial.updated_at || new Date().toISOString(),
+          claimed_by_user_id: null,
+          claimed_at: null,
+          topicScores: [],
+          hasOverride: !!override,
+        };
+        return mergedOfficial;
+      }
+
+      // Check if this is an executive ID pattern (exec_*, gov_*, etc.) - skip Congress API
+      const isExecutiveId = id.startsWith('exec_') || id.startsWith('gov_') || id.startsWith('local_') || id.startsWith('state_');
+      
+      if (isExecutiveId) {
+        // For executive IDs not in DB, return basic info from override if available
+        if (override) {
+          return {
+            id,
+            name: override.name ?? 'Unknown Official',
+            party: (override.party as Candidate['party']) ?? 'Other',
+            office: override.office ?? 'Official',
+            state: override.state ?? 'US',
+            district: override.district ?? null,
+            image_url: override.image_url ?? null,
+            overall_score: override.overall_score ?? 0,
+            coverage_tier: (override.coverage_tier as CoverageTier) ?? 'tier_3',
+            confidence: (override.confidence as ConfidenceLevel) ?? 'low',
+            is_incumbent: true,
+            score_version: 'v1.0',
+            last_updated: new Date().toISOString(),
+            claimed_by_user_id: null,
+            claimed_at: null,
+            topicScores: [],
+            hasOverride: true,
+          } as CandidateWithOverride;
+        }
+        // Executive not found anywhere
+        console.log('Executive official not found in DB:', id);
+        return null;
       }
 
       // Not in database - try Congress.gov API (id might be a bioguide ID)
