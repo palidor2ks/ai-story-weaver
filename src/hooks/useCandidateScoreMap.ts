@@ -4,8 +4,10 @@ import { supabase } from '@/integrations/supabase/client';
 /**
  * Source of truth for political scores across the app.
  *
- * - Reads scores from `candidates.overall_score` and `candidate_overrides.overall_score`
- * - `candidate_overrides` takes precedence
+ * Priority order:
+ * 1. `candidate_overrides.overall_score` (manual overrides)
+ * 2. `candidates.overall_score` (pre-saved scores)
+ * 3. Calculated from `candidate_answers` (dynamic fallback for missing scores)
  */
 export const useCandidateScoreMap = (candidateIds?: string[]) => {
   const ids = (candidateIds ?? []).filter(Boolean);
@@ -15,6 +17,7 @@ export const useCandidateScoreMap = (candidateIds?: string[]) => {
   return useQuery({
     queryKey: ['candidate-score-map', idsKey],
     queryFn: async () => {
+      // Fetch saved scores from candidates and overrides tables
       let overridesQuery = supabase
         .from('candidate_overrides')
         .select('candidate_id, overall_score');
@@ -38,13 +41,52 @@ export const useCandidateScoreMap = (candidateIds?: string[]) => {
 
       const map = new Map<string, number>();
 
+      // First pass: add scores from candidates table
       (candidates || []).forEach((c) => {
-        if (c.overall_score !== null) map.set(c.id, c.overall_score);
+        if (c.overall_score !== null && c.overall_score !== 0) {
+          map.set(c.id, c.overall_score);
+        }
       });
 
+      // Second pass: overrides take precedence
       (overrides || []).forEach((o) => {
-        if (o.overall_score !== null) map.set(o.candidate_id, o.overall_score);
+        if (o.overall_score !== null && o.overall_score !== 0) {
+          map.set(o.candidate_id, o.overall_score);
+        }
       });
+
+      // Identify candidates with missing scores that we need to calculate
+      const candidatesWithMissingScores = ids.filter(id => !map.has(id));
+
+      if (candidatesWithMissingScores.length > 0) {
+        // Fetch answers from candidate_answers and calculate scores dynamically
+        const { data: answers, error: answersError } = await supabase
+          .from('candidate_answers')
+          .select('candidate_id, answer_value')
+          .in('candidate_id', candidatesWithMissingScores);
+
+        if (answersError) {
+          console.error('Error fetching candidate_answers for score calculation:', answersError);
+        } else if (answers && answers.length > 0) {
+          // Group answers by candidate and calculate average
+          const answersByCandidate = new Map<string, number[]>();
+          
+          answers.forEach((a) => {
+            const existing = answersByCandidate.get(a.candidate_id) || [];
+            existing.push(a.answer_value);
+            answersByCandidate.set(a.candidate_id, existing);
+          });
+
+          // Calculate and add scores for each candidate
+          answersByCandidate.forEach((values, candidateId) => {
+            const sum = values.reduce((acc, val) => acc + val, 0);
+            const avg = Math.round((sum / values.length) * 100) / 100;
+            map.set(candidateId, avg);
+          });
+
+          console.log(`Calculated scores from candidate_answers for ${answersByCandidate.size} candidates`);
+        }
+      }
 
       return map;
     },

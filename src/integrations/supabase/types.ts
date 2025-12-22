@@ -838,6 +838,13 @@ export type Database = {
       }
     }
     Functions: {
+      backfill_candidate_scores: {
+        Args: never
+        Returns: {
+          details: string
+          updated_count: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
