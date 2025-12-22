@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
 import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
@@ -142,9 +142,13 @@ export const Feed = () => {
     userQuizAnswers
   );
 
-  // Show toast when answers are generated
+  // Track if we've shown the toast this session to avoid duplicates
+  const toastShownRef = useRef(false);
+
+  // Show toast when NEW answers are generated (only once per session)
   useEffect(() => {
-    if (scoresData?.answersGenerated && scoresData.answersGenerated > 0) {
+    if (scoresData?.answersGenerated && scoresData.answersGenerated > 0 && !toastShownRef.current) {
+      toastShownRef.current = true;
       toast.success(`Generated ${scoresData.answersGenerated} AI-predicted positions for your representatives`, {
         icon: <Sparkles className="w-4 h-4" />,
       });
@@ -160,7 +164,8 @@ export const Feed = () => {
       if (scoreInfo && scoreInfo.answerCount > 0) {
         return {
           ...candidate,
-          // Override overallScore with calculated match if available
+          // Use the calculated overallScore from AI answers
+          overallScore: scoreInfo.overallScore,
           matchScore: scoreInfo.score,
           hasAIAnswers: scoreInfo.generated,
           answerCount: scoreInfo.answerCount,
