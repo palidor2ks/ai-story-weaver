@@ -3,14 +3,11 @@ import { Candidate } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { calculateMatchScore } from '@/data/mockData';
-import { useUser } from '@/context/UserContext';
-import { User, MapPin, Star, Shield, ArrowRightLeft, CheckCircle, Sparkles } from 'lucide-react';
+import { MapPin, Star, Shield, ArrowRightLeft, CheckCircle, Sparkles } from 'lucide-react';
 import { ScoreText } from './ScoreText';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { TransitionStatus } from './TransitionBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Badge } from '@/components/ui/badge';
 
 interface CandidateCardProps {
   candidate: Candidate;
@@ -27,12 +24,6 @@ export const CandidateCard = ({
   isSelected = false,
   onToggleSelect
 }: CandidateCardProps) => {
-  const { user } = useUser();
-  const userScore = user?.overallScore ?? 0;
-  
-  // Use calculated matchScore if available (from AI-generated answers), otherwise calculate from overall scores
-  const calculatedMatchScore = (candidate as any).matchScore;
-  const matchScore = calculatedMatchScore ?? calculateMatchScore(userScore, candidate.overallScore);
   const hasAIAnswers = (candidate as any).hasAIAnswers ?? false;
   const answerCount = (candidate as any).answerCount;
 
@@ -205,7 +196,7 @@ export const CandidateCard = ({
             </div>
           </TooltipProvider>
 
-          {/* Match Score */}
+          {/* Political Score */}
           <div className="flex-shrink-0 flex items-center gap-1.5">
             {hasAIAnswers && (
               <Tooltip>
@@ -217,16 +208,7 @@ export const CandidateCard = ({
                 </TooltipContent>
               </Tooltip>
             )}
-            <div className="text-right">
-              <div className={cn(
-                "font-bold text-lg",
-                matchScore >= 70 ? "text-agree" : 
-                matchScore >= 40 ? "text-amber-500" : "text-disagree"
-              )}>
-                {matchScore}%
-              </div>
-              <div className="text-[10px] text-muted-foreground">match</div>
-            </div>
+            <ScoreText score={candidate.overallScore} size="lg" />
           </div>
         </div>
 
