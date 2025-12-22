@@ -9,7 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTopics, useCanonicalQuestions } from '@/hooks/useCandidates';
 import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { OnboardingStep, Topic, QuestionOption, QuizAnswer, TopicScore } from '@/types';
-import { calculateWeightedScore } from '@/lib/scoreFormat';
+import { calculateQuizScore } from '@/lib/score';
 import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -146,40 +146,13 @@ export const Onboarding = () => {
     }
   };
 
-  const calculateUserScore = (): { overall: number; byTopic: TopicScore[] } => {
-    // Group answers by topic
-    const topicAnswers: Record<string, number[]> = {};
-    
-    quizAnswers.forEach(answer => {
-      const question = questions.find(q => q.id === answer.questionId);
-      if (question) {
-        if (!topicAnswers[question.topicId]) {
-          topicAnswers[question.topicId] = [];
-        }
-        topicAnswers[question.topicId].push(answer.value);
-      }
-    });
-
-    // Calculate score for each topic (average of answers, already in -10 to +10 range)
-    const topicScores: TopicScore[] = Object.entries(topicAnswers).map(([topicId, values]) => {
-      const avg = values.reduce((a, b) => a + b, 0) / values.length;
-      // Round to 2 decimals
-      const score = Math.round(avg * 100) / 100;
-      const topic = topics.find(t => t.id === topicId);
-      return {
-        topicId,
-        topicName: topic?.name || topicId,
-        score,
-      };
-    });
-
-    // Calculate weighted overall score using PRD weighting
-    const overallScore = calculateWeightedScore(
-      topicScores.map(ts => ({ topicId: ts.topicId, score: ts.score })),
-      selectedTopicIds
+  const calculateUserScore = () => {
+    return calculateQuizScore(
+      quizAnswers,
+      questions.map(q => ({ id: q.id, topicId: q.topicId })),
+      selectedTopics.map(t => ({ id: t.id, weight: t.weight || 1 })),
+      topics.map(t => ({ id: t.id, name: t.name }))
     );
-
-    return { overall: overallScore, byTopic: topicScores };
   };
 
   const handleComplete = async () => {
