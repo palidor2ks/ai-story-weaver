@@ -10,6 +10,73 @@ const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+/**
+ * Helper function to ensure score is calculated and saved from candidate_answers.
+ * This is the PRIMARY source of truth for political scores.
+ */
+async function ensureScoreIsSaved(
+  supabase: any,
+  candidateId: string,
+  answers: Array<{ answer_value: number }>
+): Promise<void> {
+  if (!answers || answers.length === 0) return;
+
+  // Calculate score from answers
+  const totalScore = answers.reduce((sum, a) => sum + a.answer_value, 0);
+  const overallScore = Math.round((totalScore / answers.length) * 100) / 100;
+
+  // Check if candidate exists in candidates table
+  const { data: existingCandidate } = await supabase
+    .from('candidates')
+    .select('id, overall_score')
+    .eq('id', candidateId)
+    .maybeSingle();
+
+  if (existingCandidate) {
+    // Only update if score is different or missing
+    if (existingCandidate.overall_score !== overallScore) {
+      const { error: updateError } = await supabase
+        .from('candidates')
+        .update({
+          overall_score: overallScore,
+          last_answers_sync: new Date().toISOString(),
+        })
+        .eq('id', candidateId);
+
+      if (updateError) {
+        console.error('Error updating candidates score:', updateError);
+      } else {
+        console.log(`Updated candidates.overall_score to ${overallScore} for ${candidateId}`);
+      }
+    }
+  } else {
+    // Check if override exists and has correct score
+    const { data: existingOverride } = await supabase
+      .from('candidate_overrides')
+      .select('candidate_id, overall_score')
+      .eq('candidate_id', candidateId)
+      .maybeSingle();
+
+    if (!existingOverride || existingOverride.overall_score !== overallScore) {
+      const { error: overrideError } = await supabase
+        .from('candidate_overrides')
+        .upsert({
+          candidate_id: candidateId,
+          overall_score: overallScore,
+        }, {
+          onConflict: 'candidate_id',
+          ignoreDuplicates: false,
+        });
+
+      if (overrideError) {
+        console.error('Error upserting candidate_overrides score:', overrideError);
+      } else {
+        console.log(`Saved candidate_overrides.overall_score ${overallScore} for ${candidateId}`);
+      }
+    }
+  }
+}
+
 interface Question {
   id: string;
   text: string;
@@ -177,9 +244,13 @@ serve(async (req) => {
     const { data: existingAnswers, error: existingError } = await existingAnswersQuery;
     if (existingError) throw existingError;
 
-    // If we have answers and not forcing regeneration, return them
+    // If we have answers and not forcing regeneration, check if score needs to be calculated
     if (existingAnswers && existingAnswers.length > 0 && !forceRegenerate) {
       console.log(`Found ${existingAnswers.length} existing answers for ${candidateId}`);
+      
+      // Always ensure overall_score is calculated and saved (fixes gap where answers exist but score is 0)
+      await ensureScoreIsSaved(supabase, candidateId, existingAnswers);
+      
       return new Response(JSON.stringify({
         answers: existingAnswers,
         source: 'database',
