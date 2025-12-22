@@ -147,55 +147,22 @@ export const useSaveQuizResults = () => {
     }) => {
       if (!user) throw new Error('Not authenticated');
 
-      // Batch all operations for atomicity and performance
-      const errors: Error[] = [];
-
-      // 1. Update overall score in profile with score version
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ 
-          overall_score: overallScore,
-          score_version: 'v1.0'
-        })
-        .eq('id', user.id);
-      
-      if (profileError) errors.push(profileError);
-
-      // 2. Batch upsert all topic scores in a single call
-      if (topicScores.length > 0) {
-        const topicScoreRows = topicScores.map(ts => ({
-          user_id: user.id,
-          topic_id: ts.topicId,
+      // Use atomic RPC function for all-or-nothing semantics
+      const { error } = await supabase.rpc('save_quiz_results', {
+        p_user_id: user.id,
+        p_overall_score: overallScore,
+        p_topic_scores: topicScores.map(ts => ({
+          topicId: ts.topicId,
           score: ts.score,
-        }));
-        
-        const { error: topicScoresError } = await supabase
-          .from('user_topic_scores')
-          .upsert(topicScoreRows, { onConflict: 'user_id,topic_id' });
-        
-        if (topicScoresError) errors.push(topicScoresError);
-      }
+        })),
+        p_answers: answers.map(a => ({
+          questionId: a.questionId,
+          selectedOptionId: a.selectedOptionId,
+          value: a.value,
+        })),
+      });
 
-      // 3. Batch upsert all quiz answers in a single call
-      if (answers.length > 0) {
-        const answerRows = answers.map(answer => ({
-          user_id: user.id,
-          question_id: answer.questionId,
-          selected_option_id: answer.selectedOptionId,
-          value: answer.value,
-        }));
-        
-        const { error: answersError } = await supabase
-          .from('quiz_answers')
-          .upsert(answerRows, { onConflict: 'user_id,question_id' });
-        
-        if (answersError) errors.push(answersError);
-      }
-
-      // If any errors occurred, throw the first one (could aggregate if needed)
-      if (errors.length > 0) {
-        throw new Error(`Failed to save quiz results: ${errors.map(e => e.message).join(', ')}`);
-      }
+      if (error) throw error;
 
       return { success: true };
     },

@@ -852,6 +852,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      save_quiz_results: {
+        Args: {
+          p_answers: Json
+          p_overall_score: number
+          p_topic_scores: Json
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       save_user_topics: {
         Args: { p_topics: Json; p_user_id: string }
         Returns: undefined
