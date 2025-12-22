@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { User, Topic, TopicScore, QuizAnswer } from '@/types';
 import { topics as allTopics } from '@/data/mockData';
+import { calculateQuizScore } from '@/lib/score';
 
 interface UserContextType {
   user: User | null;
@@ -40,62 +41,26 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     setQuizAnswers([]);
   };
 
+  // Use centralized scoring utility
   const calculateUserScore = (): { overall: number; byTopic: TopicScore[] } => {
-    // Group answers by topic
-    const topicAnswers: Record<string, number[]> = {};
-    
-    quizAnswers.forEach(answer => {
-      // We need to find the topic for this question
-      // For now, we'll use a simple mapping based on question IDs
-      const questionTopicMap: Record<string, string> = {
-        q1: 'economy',
-        q2: 'economy',
-        q3: 'healthcare',
-        q4: 'immigration',
-        q5: 'environment',
-        q6: 'education',
-        q7: 'gun-policy',
-        q8: 'criminal-justice',
-      };
-      
-      const topicId = questionTopicMap[answer.questionId];
-      if (topicId) {
-        if (!topicAnswers[topicId]) {
-          topicAnswers[topicId] = [];
-        }
-        topicAnswers[topicId].push(answer.value);
-      }
-    });
+    // Build question-topic map from allTopics (legacy support for this context)
+    const questionTopicMap: { id: string; topicId: string }[] = [
+      { id: 'q1', topicId: 'economy' },
+      { id: 'q2', topicId: 'economy' },
+      { id: 'q3', topicId: 'healthcare' },
+      { id: 'q4', topicId: 'immigration' },
+      { id: 'q5', topicId: 'environment' },
+      { id: 'q6', topicId: 'education' },
+      { id: 'q7', topicId: 'gun-policy' },
+      { id: 'q8', topicId: 'criminal-justice' },
+    ];
 
-    // Calculate score for each topic
-    const topicScores: TopicScore[] = Object.entries(topicAnswers).map(([topicId, values]) => {
-      const avg = values.reduce((a, b) => a + b, 0) / values.length;
-      // Normalize to -100 to 100 scale
-      const normalizedScore = Math.round(avg * 10);
-      const topic = allTopics.find(t => t.id === topicId);
-      return {
-        topicId,
-        topicName: topic?.name || topicId,
-        score: normalizedScore,
-      };
-    });
-
-    // Calculate overall score (weighted by selected topics)
-    let overallScore = 0;
-    let totalWeight = 0;
-    
-    topicScores.forEach(ts => {
-      const selectedTopic = selectedTopics.find(st => st.id === ts.topicId);
-      const weight = selectedTopic?.weight || 1;
-      overallScore += ts.score * weight;
-      totalWeight += weight;
-    });
-
-    if (totalWeight > 0) {
-      overallScore = Math.round(overallScore / totalWeight);
-    }
-
-    return { overall: overallScore, byTopic: topicScores };
+    return calculateQuizScore(
+      quizAnswers,
+      questionTopicMap,
+      selectedTopics.map(t => ({ id: t.id, weight: t.weight || 1 })),
+      allTopics.map(t => ({ id: t.id, name: t.name }))
+    );
   };
 
   const completeOnboarding = (name: string) => {

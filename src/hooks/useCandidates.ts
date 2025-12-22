@@ -135,35 +135,22 @@ export const useCandidate = (id: string | undefined) => {
     queryFn: async () => {
       if (!id) return null;
       
-      // Fetch override if exists
-      const { data: override } = await supabase
-        .from('candidate_overrides')
-        .select('*')
-        .eq('candidate_id', id)
-        .maybeSingle();
-      
-      // First try to fetch from database (candidates table)
-      const { data: candidate, error } = await supabase
-        .from('candidates')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-      
-      if (error) throw error;
+      // Fetch override, candidate, and topic scores in parallel for reduced latency
+      const [overrideResult, candidateResult, topicScoresResult] = await Promise.all([
+        supabase.from('candidate_overrides').select('*').eq('candidate_id', id).maybeSingle(),
+        supabase.from('candidates').select('*').eq('id', id).maybeSingle(),
+        supabase.from('candidate_topic_scores').select('topic_id, score, topics(name, icon)').eq('candidate_id', id),
+      ]);
+
+      const override = overrideResult.data;
+      const candidate = candidateResult.data;
+      const topicScores = topicScoresResult.data || [];
+
+      if (candidateResult.error) throw candidateResult.error;
+      if (topicScoresResult.error) throw topicScoresResult.error;
       
       // If found in database, return with topic scores and merged overrides
       if (candidate) {
-        const { data: topicScores, error: scoresError } = await supabase
-          .from('candidate_topic_scores')
-          .select(`
-            topic_id,
-            score,
-            topics (name, icon)
-          `)
-          .eq('candidate_id', id);
-        
-        if (scoresError) throw scoresError;
-
         // Merge override fields with base candidate data
         const mergedCandidate: CandidateWithOverride = {
           ...candidate,
@@ -178,11 +165,11 @@ export const useCandidate = (id: string | undefined) => {
           confidence: (override?.confidence as ConfidenceLevel) ?? candidate.confidence ?? 'medium',
           is_incumbent: candidate.is_incumbent ?? true,
           score_version: candidate.score_version || 'v1.0',
-          topicScores: topicScores?.map(ts => ({
+          topicScores: topicScores.map(ts => ({
             topic_id: ts.topic_id,
             score: ts.score,
             topics: ts.topics,
-          })) || [],
+          })),
           hasOverride: !!override,
         };
 
@@ -387,26 +374,22 @@ export const useQuestions = () => {
   return useQuery({
     queryKey: ['questions'],
     queryFn: async () => {
+      // Single relational query instead of two separate queries
       const { data: questions, error } = await supabase
         .from('questions')
-        .select('*');
+        .select('*, question_options(*)');
       
       if (error) throw error;
 
-      // Fetch options for all questions
-      const { data: options, error: optionsError } = await supabase
-        .from('question_options')
-        .select('*')
-        .order('display_order');
-      
-      if (optionsError) throw optionsError;
-
-      // Map options to questions
+      // Rename question_options to options and sort them
       return questions.map(q => ({
         ...q,
         is_onboarding_canonical: q.is_onboarding_canonical ?? false,
         onboarding_slot: q.onboarding_slot ?? null,
-        options: options?.filter(o => o.question_id === q.id) || [],
+        options: (q.question_options || []).sort((a: any, b: any) => 
+          (a.display_order || 0) - (b.display_order || 0)
+        ),
+        question_options: undefined,
       })) as Question[];
     },
   });
@@ -422,41 +405,33 @@ export const useCanonicalQuestions = (selectedTopicIds: string[]) => {
     queryFn: async () => {
       if (selectedTopicIds.length === 0) return [];
       
+      // Single relational query instead of two separate queries
       const { data: questions, error } = await supabase
         .from('questions')
-        .select('*')
+        .select('*, question_options(*)')
         .eq('is_onboarding_canonical', true)
         .in('topic_id', selectedTopicIds)
         .order('onboarding_slot');
       
       if (error) throw error;
 
-      // Fetch options for these questions
-      const questionIds = questions.map(q => q.id);
-      const { data: options, error: optionsError } = await supabase
-        .from('question_options')
-        .select('*')
-        .in('question_id', questionIds)
-        .order('display_order');
-      
-      if (optionsError) throw optionsError;
-
-      // Map options to questions
-      const questionsWithOptions = questions.map(q => ({
-        ...q,
-        options: options?.filter(o => o.question_id === q.id) || [],
-      }));
-
       // Sort by topic order (matching selectedTopicIds order) then by slot
       const topicOrderMap = new Map(selectedTopicIds.map((id, idx) => [id, idx]));
-      questionsWithOptions.sort((a, b) => {
+      questions.sort((a, b) => {
         const topicOrderA = topicOrderMap.get(a.topic_id) ?? 999;
         const topicOrderB = topicOrderMap.get(b.topic_id) ?? 999;
         if (topicOrderA !== topicOrderB) return topicOrderA - topicOrderB;
         return (a.onboarding_slot || 0) - (b.onboarding_slot || 0);
       });
 
-      return questionsWithOptions as Question[];
+      // Rename question_options to options and sort them
+      return questions.map(q => ({
+        ...q,
+        options: (q.question_options || []).sort((a: any, b: any) => 
+          (a.display_order || 0) - (b.display_order || 0)
+        ),
+        question_options: undefined,
+      })) as Question[];
     },
     enabled: selectedTopicIds.length > 0,
   });
