@@ -109,7 +109,8 @@ Return ONLY a valid JSON array, no other text.`;
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       answers = parsed.map((item: any) => ({
-        question_id: item.question_id,
+        // Strip brackets from question_id (AI sometimes returns "[eco1]" instead of "eco1")
+        question_id: String(item.question_id || '').replace(/[\[\]]/g, ''),
         answer_value: Math.max(-10, Math.min(10, Math.round(item.answer_value))),
         source_description: item.source_description || `Inferred from ${candidateParty} Party platform`,
         source_url: null,
