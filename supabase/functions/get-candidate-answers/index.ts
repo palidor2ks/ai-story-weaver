@@ -43,12 +43,15 @@ async function generateAnswersWithAI(
 - Their state/district's political leanings
 - Common positions for officials in similar roles
 
-Score each answer from -10 to +10:
-- -10 = Strongly oppose / Very conservative position
-- -5 = Oppose / Conservative position  
-- 0 = Neutral or no clear position
-- +5 = Support / Progressive position
-- +10 = Strongly support / Very progressive position
+CRITICAL - Use the LEFT-RIGHT political spectrum for scoring:
+- -10 = Far LEFT / Very progressive position (typical Democrat/Green positions)
+- -5 = Left-leaning / Progressive position
+- 0 = Neutral, centrist, or no clear position
+- +5 = Right-leaning / Conservative position  
+- +10 = Far RIGHT / Very conservative position (typical Republican positions)
+
+IMPORTANT: Democrats should generally have NEGATIVE scores (left-leaning).
+Republicans should generally have POSITIVE scores (right-leaning).
 
 Be as accurate as possible based on available public information. If uncertain, use party platform as baseline with medium confidence.`;
 
