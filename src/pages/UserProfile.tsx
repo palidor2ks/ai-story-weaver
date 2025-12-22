@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { useAuth } from '@/context/AuthContext';
 import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding, useUpdateProfile } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
+import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { calculateMatchScore } from '@/hooks/useCandidates';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,30 @@ export const UserProfile = () => {
 
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [addressInput, setAddressInput] = useState('');
+
+  // Collect all candidate IDs from civic officials and reps to fetch their scores
+  const allOfficialIds = useMemo(() => {
+    const ids: string[] = [];
+    federalReps.forEach(rep => ids.push(rep.bioguide_id || rep.id));
+    if (civicData) {
+      civicData.federalExecutive.forEach(o => ids.push(o.id));
+      civicData.stateExecutive.forEach(o => ids.push(o.id));
+      civicData.stateLegislative.forEach(o => ids.push(o.id));
+      civicData.local.forEach(o => ids.push(o.id));
+    }
+    return ids.filter(Boolean);
+  }, [federalReps, civicData]);
+
+  // Fetch saved scores from DB (candidates + candidate_overrides)
+  const { data: scoreMap } = useCandidateScoreMap(allOfficialIds);
+
+  // Helper to get the resolved score for an official
+  const getResolvedScore = (id: string, fallbackScore: number | null): number | null => {
+    if (scoreMap?.has(id)) {
+      return scoreMap.get(id) ?? null;
+    }
+    return fallbackScore;
+  };
 
   const topicScoresList = userTopicScores.map(ts => ({
     topicId: ts.topic_id,
@@ -153,16 +178,21 @@ export const UserProfile = () => {
   const RepresentativeCard = ({ 
     official, 
     userScore, 
-    getPartyColor 
+    getPartyColor,
+    resolvedScore,
   }: { 
     official: CivicOfficial; 
     userScore: number; 
     getPartyColor: (party: string) => string;
+    resolvedScore: number | null;
   }) => {
     const hasImage = official.image_url && official.image_url.trim() !== '';
     
     return (
-      <div className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors">
+      <Link 
+        to={`/candidate/${official.id}`}
+        className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
+      >
         <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
           {hasImage ? (
             <img 
@@ -193,14 +223,14 @@ export const UserProfile = () => {
             </Badge>
           </div>
         </div>
-        {official.overall_score !== null ? (
-          <ScoreText score={official.overall_score} size="md" />
+        {resolvedScore !== null ? (
+          <ScoreText score={resolvedScore} size="md" />
         ) : (
           <Badge variant="outline" className="text-xs text-muted-foreground">
             NA
           </Badge>
         )}
-      </div>
+      </Link>
     );
   };
 
@@ -534,6 +564,7 @@ export const UserProfile = () => {
                           official={official}
                           userScore={profile.overall_score ?? 0}
                           getPartyColor={getPartyColor}
+                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
                     </div>
@@ -586,13 +617,16 @@ export const UserProfile = () => {
                                 </Badge>
                               </div>
                             </div>
-                            {rep.overall_score !== null ? (
-                              <ScoreText score={rep.overall_score} size="md" />
-                            ) : (
-                              <Badge variant="outline" className="text-xs text-muted-foreground">
-                                NA
-                              </Badge>
-                            )}
+                            {(() => {
+                              const resolvedRepScore = getResolvedScore(rep.bioguide_id || rep.id, rep.overall_score);
+                              return resolvedRepScore !== null ? (
+                                <ScoreText score={resolvedRepScore} size="md" />
+                              ) : (
+                                <Badge variant="outline" className="text-xs text-muted-foreground">
+                                  NA
+                                </Badge>
+                              );
+                            })()}
                           </Link>
                         );
                       })}
@@ -614,6 +648,7 @@ export const UserProfile = () => {
                           official={official}
                           userScore={profile.overall_score ?? 0}
                           getPartyColor={getPartyColor}
+                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
                     </div>
@@ -634,6 +669,7 @@ export const UserProfile = () => {
                           official={official}
                           userScore={profile.overall_score ?? 0}
                           getPartyColor={getPartyColor}
+                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
                     </div>
@@ -654,6 +690,7 @@ export const UserProfile = () => {
                           official={official}
                           userScore={profile.overall_score ?? 0}
                           getPartyColor={getPartyColor}
+                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
                     </div>
