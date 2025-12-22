@@ -88,21 +88,44 @@ export const useCandidates = () => {
       
       if (scoresError) throw scoresError;
 
-      // Map topic scores to candidates
-      const candidatesWithScores = candidates.map(candidate => ({
-        ...candidate,
-        coverage_tier: candidate.coverage_tier || 'tier_3',
-        confidence: candidate.confidence || 'medium',
-        is_incumbent: candidate.is_incumbent ?? true,
-        score_version: candidate.score_version || 'v1.0',
-        topicScores: topicScores
-          ?.filter(ts => ts.candidate_id === candidate.id)
-          .map(ts => ({
-            topic_id: ts.topic_id,
-            score: ts.score,
-            topics: ts.topics,
-          })) || [],
-      }));
+      // Fetch all overrides to merge scores
+      const { data: overrides, error: overridesError } = await supabase
+        .from('candidate_overrides')
+        .select('candidate_id, overall_score, name, party, office, state, district, image_url, coverage_tier, confidence');
+      
+      if (overridesError) console.error('Error fetching overrides:', overridesError);
+
+      // Create a map of overrides by candidate_id
+      const overrideMap = new Map(
+        (overrides || []).map(o => [o.candidate_id, o])
+      );
+
+      // Map topic scores to candidates and merge overrides
+      const candidatesWithScores = candidates.map(candidate => {
+        const override = overrideMap.get(candidate.id);
+        return {
+          ...candidate,
+          // Apply overrides if available
+          name: override?.name ?? candidate.name,
+          party: (override?.party as Candidate['party']) ?? candidate.party,
+          office: override?.office ?? candidate.office,
+          state: override?.state ?? candidate.state,
+          district: override?.district ?? candidate.district,
+          image_url: override?.image_url ?? candidate.image_url,
+          overall_score: override?.overall_score ?? candidate.overall_score,
+          coverage_tier: (override?.coverage_tier as CoverageTier) ?? candidate.coverage_tier ?? 'tier_3',
+          confidence: (override?.confidence as ConfidenceLevel) ?? candidate.confidence ?? 'medium',
+          is_incumbent: candidate.is_incumbent ?? true,
+          score_version: candidate.score_version || 'v1.0',
+          topicScores: topicScores
+            ?.filter(ts => ts.candidate_id === candidate.id)
+            .map(ts => ({
+              topic_id: ts.topic_id,
+              score: ts.score,
+              topics: ts.topics,
+            })) || [],
+        };
+      });
 
       return candidatesWithScores as Candidate[];
     },

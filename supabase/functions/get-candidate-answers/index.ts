@@ -312,6 +312,52 @@ serve(async (req) => {
         // Still return the generated answers even if save fails
       } else {
         console.log(`Saved ${answersToInsert.length} AI-generated answers for ${officialInfo.name}`);
+        
+        // Calculate and save the overall score based on ALL answers for this candidate
+        const { data: allCandidateAnswers } = await supabase
+          .from('candidate_answers')
+          .select('answer_value')
+          .eq('candidate_id', candidateId);
+        
+        if (allCandidateAnswers && allCandidateAnswers.length > 0) {
+          const totalScore = allCandidateAnswers.reduce((sum, a) => sum + a.answer_value, 0);
+          const overallScore = Math.round((totalScore / allCandidateAnswers.length) * 100) / 100;
+          
+          // Try to update candidates table first
+          const { error: candidateUpdateError } = await supabase
+            .from('candidates')
+            .update({ 
+              overall_score: overallScore,
+              last_answers_sync: new Date().toISOString(),
+              answers_source: 'ai_generated'
+            })
+            .eq('id', candidateId);
+          
+          if (candidateUpdateError) {
+            // If not in candidates, try static_officials
+            const { error: staticUpdateError } = await supabase
+              .from('static_officials')
+              .update({ 
+                // static_officials doesn't have overall_score, but we can add it via candidate_overrides
+              })
+              .eq('id', candidateId);
+            
+            // Use candidate_overrides for officials not in main candidates table
+            if (staticUpdateError || !candidateUpdateError) {
+              await supabase
+                .from('candidate_overrides')
+                .upsert({
+                  candidate_id: candidateId,
+                  overall_score: overallScore,
+                }, {
+                  onConflict: 'candidate_id',
+                  ignoreDuplicates: false,
+                });
+            }
+          }
+          
+          console.log(`Updated overall_score to ${overallScore} for ${officialInfo.name}`);
+        }
       }
     }
 
