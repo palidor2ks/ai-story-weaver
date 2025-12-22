@@ -270,7 +270,7 @@ async function fetchOpenStatesOfficials(state: string, lat?: number, lng?: numbe
         }
 
         const official: OfficialInfo = {
-          id: `openstates_${person.id}`,
+          id: `openstates_${person.id.replace(/\//g, '_')}`,
           name: person.name,
           party: mapParty(person.party),
           office,
@@ -317,7 +317,7 @@ async function fetchOpenStatesOfficials(state: string, lat?: number, lng?: numbe
         const isLtGov = title.includes('lieutenant') || title.includes('lt.');
         
         const official: OfficialInfo = {
-          id: `openstates_${person.id}`,
+          id: `openstates_${person.id.replace(/\//g, '_')}`,
           name: person.name,
           party: mapParty(person.party),
           office: isLtGov ? 'Lieutenant Governor' : 'Governor',
