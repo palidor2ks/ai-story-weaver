@@ -7,8 +7,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { TransitionStatus } from '@/types';
 
-export type TransitionStatus = 'incoming' | 'outgoing' | 'current' | 'candidate';
+// Re-export for backwards compatibility
+export type { TransitionStatus };
 
 interface TransitionBadgeProps {
   status: TransitionStatus;

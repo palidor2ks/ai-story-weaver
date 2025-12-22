@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { TransitionStatus } from '@/types';
 
 type OfficeLevelType = 'federal_executive' | 'federal_legislative' | 'state_executive' | 'state_legislative' | 'local';
-
-export type TransitionStatusType = 'current' | 'incoming' | 'outgoing' | 'candidate';
 
 export interface CivicOfficial {
   id: string;
@@ -22,7 +21,7 @@ export interface CivicOfficial {
   coverage_tier: string;
   confidence: string;
   // Transition fields
-  transition_status?: TransitionStatusType;
+  transition_status?: TransitionStatus;
   new_office?: string;
   inauguration_date?: string;
 }
