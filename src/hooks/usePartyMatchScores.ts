@@ -20,24 +20,40 @@ function calculatePartyScore(partyAnswers: { answer_value: number }[]): number |
 
 export function usePartyMatchScores() {
   return useQuery<PartyScores>({
-    queryKey: ['party-scores'],
+    queryKey: ['party-scores-user-filtered'],
     queryFn: async () => {
+      // Fetch user's answered question IDs
+      const { data: userAnswers, error: userError } = await supabase
+        .from('quiz_answers')
+        .select('question_id');
+
+      if (userError) throw userError;
+      
+      const userQuestionIds = new Set(userAnswers?.map(a => a.question_id) || []);
+      
+      // If user hasn't answered any questions, return nulls
+      if (userQuestionIds.size === 0) {
+        return { democrat: null, republican: null, green: null, libertarian: null };
+      }
+
       // Fetch all party answers
       const { data: partyAnswers, error: partyError } = await supabase
         .from('party_answers')
-        .select('party_id, answer_value');
+        .select('party_id, question_id, answer_value');
 
       if (partyError) throw partyError;
 
-      // Group party answers by party_id
+      // Group party answers by party_id, but ONLY for questions user answered
       const partyAnswersMap = new Map<string, { answer_value: number }[]>();
       partyAnswers?.forEach(answer => {
-        const existing = partyAnswersMap.get(answer.party_id) || [];
-        existing.push({ answer_value: answer.answer_value });
-        partyAnswersMap.set(answer.party_id, existing);
+        if (userQuestionIds.has(answer.question_id)) {
+          const existing = partyAnswersMap.get(answer.party_id) || [];
+          existing.push({ answer_value: answer.answer_value });
+          partyAnswersMap.set(answer.party_id, existing);
+        }
       });
 
-      // Calculate average score for each party
+      // Calculate average score for each party (filtered to user's questions)
       return {
         democrat: calculatePartyScore(partyAnswersMap.get('democrat') || []),
         republican: calculatePartyScore(partyAnswersMap.get('republican') || []),
@@ -45,6 +61,6 @@ export function usePartyMatchScores() {
         libertarian: calculatePartyScore(partyAnswersMap.get('libertarian') || []),
       };
     },
-    staleTime: 1000 * 60 * 30, // Cache for 30 minutes (party scores don't change often)
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes (depends on user's answers)
   });
 }
