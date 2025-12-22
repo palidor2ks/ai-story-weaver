@@ -323,40 +323,48 @@ serve(async (req) => {
           const totalScore = allCandidateAnswers.reduce((sum, a) => sum + a.answer_value, 0);
           const overallScore = Math.round((totalScore / allCandidateAnswers.length) * 100) / 100;
           
-          // Try to update candidates table first
-          const { error: candidateUpdateError } = await supabase
+          // Check if candidate exists in candidates table
+          const { data: existingCandidate } = await supabase
             .from('candidates')
-            .update({ 
-              overall_score: overallScore,
-              last_answers_sync: new Date().toISOString(),
-              answers_source: 'ai_generated'
-            })
-            .eq('id', candidateId);
+            .select('id')
+            .eq('id', candidateId)
+            .maybeSingle();
           
-          if (candidateUpdateError) {
-            // If not in candidates, try static_officials
-            const { error: staticUpdateError } = await supabase
-              .from('static_officials')
+          if (existingCandidate) {
+            // Update candidates table directly
+            const { error: updateError } = await supabase
+              .from('candidates')
               .update({ 
-                // static_officials doesn't have overall_score, but we can add it via candidate_overrides
+                overall_score: overallScore,
+                last_answers_sync: new Date().toISOString(),
+                answers_source: 'ai_generated'
               })
               .eq('id', candidateId);
             
-            // Use candidate_overrides for officials not in main candidates table
-            if (staticUpdateError || !candidateUpdateError) {
-              await supabase
-                .from('candidate_overrides')
-                .upsert({
-                  candidate_id: candidateId,
-                  overall_score: overallScore,
-                }, {
-                  onConflict: 'candidate_id',
-                  ignoreDuplicates: false,
-                });
+            if (updateError) {
+              console.error('Error updating candidates table:', updateError);
+            } else {
+              console.log(`Updated overall_score to ${overallScore} in candidates table for ${officialInfo.name}`);
+            }
+          } else {
+            // For officials not in candidates table (civic officials, executives, etc.),
+            // ALWAYS use candidate_overrides to persist the score
+            const { error: overrideError } = await supabase
+              .from('candidate_overrides')
+              .upsert({
+                candidate_id: candidateId,
+                overall_score: overallScore,
+              }, {
+                onConflict: 'candidate_id',
+                ignoreDuplicates: false,
+              });
+            
+            if (overrideError) {
+              console.error('Error upserting candidate_overrides:', overrideError);
+            } else {
+              console.log(`Saved overall_score ${overallScore} to candidate_overrides for ${officialInfo.name}`);
             }
           }
-          
-          console.log(`Updated overall_score to ${overallScore} for ${officialInfo.name}`);
         }
       }
     }
