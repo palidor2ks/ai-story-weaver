@@ -1,5 +1,4 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
 import { ComparePanel } from '@/components/ComparePanel';
@@ -8,6 +7,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useAllPoliticians } from '@/hooks/useAllPoliticians';
 import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
+import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -15,45 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X } from 'lucide-react';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
 
-// Hook to fetch saved AI scores from candidate_overrides and candidates tables
-const useCandidateScores = () => {
-  return useQuery({
-    queryKey: ['candidate-scores-all'],
-    queryFn: async () => {
-      // Fetch overrides with overall_score
-      const { data: overrides } = await supabase
-        .from('candidate_overrides')
-        .select('candidate_id, overall_score');
-      
-      // Fetch candidates with overall_score
-      const { data: candidates } = await supabase
-        .from('candidates')
-        .select('id, overall_score');
-      
-      // Create a map of candidate_id -> overall_score
-      const scoreMap = new Map<string, number>();
-      
-      // Add candidate scores
-      (candidates || []).forEach(c => {
-        if (c.overall_score !== null && c.overall_score !== 0) {
-          scoreMap.set(c.id, c.overall_score);
-        }
-      });
-      
-      // Override with candidate_overrides (these take precedence)
-      (overrides || []).forEach(o => {
-        if (o.overall_score !== null) {
-          scoreMap.set(o.candidate_id, o.overall_score);
-        }
-      });
-      
-      return scoreMap;
-    },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-  });
-};
 
 export const Candidates = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
@@ -61,7 +23,7 @@ export const Candidates = () => {
   const { data: repsData, isLoading: representativesLoading } = useRepresentatives(profile?.address);
   const { data: allPoliticians = [], isLoading: allPoliticiansLoading } = useAllPoliticians();
   const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
-  const { data: scoreMap } = useCandidateScores();
+  const { data: scoreMap } = useCandidateScoreMap();
   
   const userReps = repsData?.representatives ?? [];
   

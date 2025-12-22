@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
 import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile, useUserTopics } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials } from '@/hooks/useCivicOfficials';
+import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { useUserQuizQuestionIds, useRepresentativeAnswersAndScores } from '@/hooks/useRepresentativeScores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +20,8 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
 export const Feed = () => {
+  const queryClient = useQueryClient();
+
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
   const { data: dbCandidates = [], isLoading: candidatesLoading } = useCandidates();
@@ -136,8 +140,11 @@ export const Feed = () => {
     }));
   }, [transformedCandidates]);
 
-  // Fetch/generate answers and calculate scores for representatives
-  const { data: scoresData, isLoading: scoresLoading } = useRepresentativeAnswersAndScores(
+  // Source-of-truth scores (saved to DB via get-candidate-answers)
+  const { data: scoreMap } = useCandidateScoreMap(representativeInfoList.map(r => r.id));
+
+  // Fetch/generate answers and calculate match scores for representatives
+  const { data: scoresData } = useRepresentativeAnswersAndScores(
     representativeInfoList,
     userQuizAnswers
   );
@@ -152,20 +159,27 @@ export const Feed = () => {
       toast.success(`Generated ${scoresData.answersGenerated} AI-predicted positions for your representatives`, {
         icon: <Sparkles className="w-4 h-4" />,
       });
-    }
-  }, [scoresData?.answersGenerated]);
 
-  // Merge AI-calculated scores into candidates
+      // Pull freshly-saved overall scores from the DB so all pages stay consistent
+      queryClient.invalidateQueries({ queryKey: ['candidate-score-map'] });
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+    }
+  }, [scoresData?.answersGenerated, queryClient]);
+
+  // Merge DB-saved overall scores + per-user matchScore into candidates
   const candidatesWithScores = useMemo(() => {
-    if (!scoresData?.scores) return transformedCandidates;
-    
-    return transformedCandidates.map(candidate => {
+    const base = transformedCandidates.map((candidate) => {
+      const stored = scoreMap?.get(candidate.id);
+      return stored !== undefined ? { ...candidate, overallScore: stored } : candidate;
+    });
+
+    if (!scoresData?.scores) return base;
+
+    return base.map((candidate) => {
       const scoreInfo = scoresData.scores[candidate.id];
       if (scoreInfo && scoreInfo.answerCount > 0) {
         return {
           ...candidate,
-          // Use the calculated overallScore from AI answers
-          overallScore: scoreInfo.overallScore,
           matchScore: scoreInfo.score,
           hasAIAnswers: scoreInfo.generated,
           answerCount: scoreInfo.answerCount,
@@ -173,7 +187,7 @@ export const Feed = () => {
       }
       return candidate;
     });
-  }, [transformedCandidates, scoresData]);
+  }, [transformedCandidates, scoreMap, scoresData]);
 
   const filteredAndSortedCandidates = useMemo(() => {
     let result = [...candidatesWithScores];
