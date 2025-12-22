@@ -378,7 +378,8 @@ export const UserProfile = () => {
                         <Info className="w-3 h-3 text-muted-foreground cursor-help" />
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs">
-                        <p>L = Left-leaning, R = Right-leaning. The number shows how far left or right the Democratic Party's positions are based on their answers to policy questions.</p>
+                        <p className="font-medium mb-1">L = Left, R = Right</p>
+                        <p className="text-sm">This score shows the Democratic Party's average position <strong>only on the questions you've answered</strong>. Answer more quiz questions to refine this comparison.</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -395,7 +396,8 @@ export const UserProfile = () => {
                         <Info className="w-3 h-3 text-muted-foreground cursor-help" />
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs">
-                        <p>L = Left-leaning, R = Right-leaning. The number shows how far left or right the Republican Party's positions are based on their answers to policy questions.</p>
+                        <p className="font-medium mb-1">L = Left, R = Right</p>
+                        <p className="text-sm">This score shows the Republican Party's average position <strong>only on the questions you've answered</strong>. Answer more quiz questions to refine this comparison.</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -412,7 +414,8 @@ export const UserProfile = () => {
                         <Info className="w-3 h-3 text-muted-foreground cursor-help" />
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs">
-                        <p>L = Left-leaning, R = Right-leaning. The number shows how far left or right the Green Party's positions are based on their answers to policy questions.</p>
+                        <p className="font-medium mb-1">L = Left, R = Right</p>
+                        <p className="text-sm">This score shows the Green Party's average position <strong>only on the questions you've answered</strong>. Answer more quiz questions to refine this comparison.</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -429,7 +432,8 @@ export const UserProfile = () => {
                         <Info className="w-3 h-3 text-muted-foreground cursor-help" />
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs">
-                        <p>L = Left-leaning, R = Right-leaning. The number shows how far left or right the Libertarian Party's positions are based on their answers to policy questions.</p>
+                        <p className="font-medium mb-1">L = Left, R = Right</p>
+                        <p className="text-sm">This score shows the Libertarian Party's average position <strong>only on the questions you've answered</strong>. Answer more quiz questions to refine this comparison.</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
