@@ -166,11 +166,35 @@ serve(async (req) => {
   }
 
   try {
-    const { topicId, partyId, batchSize = 20 } = await req.json();
+    const { topicId, partyId, batchSize = 15, skipExisting = true } = await req.json();
 
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
+
+    // Require partyId to process one party at a time (prevents timeout)
+    if (!partyId) {
+      return new Response(JSON.stringify({ 
+        error: 'partyId is required. Process one party at a time to avoid timeouts.',
+        validParties: ['democrat', 'republican', 'green', 'libertarian']
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const partyContext = PARTY_CONTEXT[partyId as keyof typeof PARTY_CONTEXT];
+    if (!partyContext) {
+      return new Response(JSON.stringify({ 
+        error: `Invalid partyId: ${partyId}`,
+        validParties: ['democrat', 'republican', 'green', 'libertarian']
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log(`Starting party answers generation for ${partyContext.name}, skipExisting=${skipExisting}`);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -195,79 +219,97 @@ serve(async (req) => {
     }
 
     // Format questions
-    const formattedQuestions: Question[] = questions.map(q => ({
+    let formattedQuestions: Question[] = questions.map(q => ({
       id: q.id,
       text: q.text,
       topic_id: q.topic_id,
       topic_name: (q.topics as any)?.name || q.topic_id,
     }));
 
-    console.log(`Found ${formattedQuestions.length} questions to process`);
+    console.log(`Found ${formattedQuestions.length} total questions`);
 
-    // Determine which parties to process
-    const partiesToProcess = partyId 
-      ? [partyId] 
-      : ['democrat', 'republican', 'green', 'libertarian'];
+    // If skipExisting, filter out questions that already have answers for this party
+    if (skipExisting) {
+      const { data: existingAnswers, error: existingError } = await supabase
+        .from('party_answers')
+        .select('question_id')
+        .eq('party_id', partyId);
 
-    const results: { party: string; inserted: number; errors: number }[] = [];
-
-    for (const party of partiesToProcess) {
-      const partyContext = PARTY_CONTEXT[party as keyof typeof PARTY_CONTEXT];
-      if (!partyContext) continue;
-
-      console.log(`Processing ${partyContext.name}...`);
-
-      // Process in batches
-      let totalInserted = 0;
-      let totalErrors = 0;
-
-      for (let i = 0; i < formattedQuestions.length; i += batchSize) {
-        const batch = formattedQuestions.slice(i, i + batchSize);
-        console.log(`Processing batch ${Math.floor(i / batchSize) + 1} (${batch.length} questions)`);
-
-        try {
-          const answers = await getPartyStances(batch, party, partyContext);
-
-          if (answers.length > 0) {
-            // Upsert answers (update if exists, insert if not)
-            const { error: upsertError } = await supabase
-              .from('party_answers')
-              .upsert(answers, { 
-                onConflict: 'party_id,question_id',
-                ignoreDuplicates: false 
-              });
-
-            if (upsertError) {
-              console.error(`Upsert error for ${party}:`, upsertError);
-              totalErrors += batch.length;
-            } else {
-              totalInserted += answers.length;
-            }
-          }
-        } catch (batchError) {
-          console.error(`Batch error for ${party}:`, batchError);
-          totalErrors += batch.length;
-        }
-
-        // Small delay between batches to avoid rate limiting
-        if (i + batchSize < formattedQuestions.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+      if (existingError) {
+        console.error('Error fetching existing answers:', existingError);
+      } else if (existingAnswers && existingAnswers.length > 0) {
+        const existingQuestionIds = new Set(existingAnswers.map(a => a.question_id));
+        const originalCount = formattedQuestions.length;
+        formattedQuestions = formattedQuestions.filter(q => !existingQuestionIds.has(q.id));
+        console.log(`Skipping ${originalCount - formattedQuestions.length} questions with existing answers`);
       }
+    }
 
-      results.push({
+    if (formattedQuestions.length === 0) {
+      console.log(`All questions already have answers for ${partyContext.name}`);
+      return new Response(JSON.stringify({
+        success: true,
+        message: `All questions already have answers for ${partyContext.name}`,
+        questionsProcessed: 0,
         party: partyContext.name,
-        inserted: totalInserted,
-        errors: totalErrors,
+        skipped: true,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log('Population complete:', results);
+    console.log(`Processing ${formattedQuestions.length} questions for ${partyContext.name}...`);
+
+    // Process in batches
+    let totalInserted = 0;
+    let totalErrors = 0;
+
+    for (let i = 0; i < formattedQuestions.length; i += batchSize) {
+      const batch = formattedQuestions.slice(i, i + batchSize);
+      const batchNum = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(formattedQuestions.length / batchSize);
+      console.log(`Processing batch ${batchNum}/${totalBatches} (${batch.length} questions)`);
+
+      try {
+        const answers = await getPartyStances(batch, partyId, partyContext);
+
+        if (answers.length > 0) {
+          // Upsert answers (update if exists, insert if not)
+          const { error: upsertError } = await supabase
+            .from('party_answers')
+            .upsert(answers, { 
+              onConflict: 'party_id,question_id',
+              ignoreDuplicates: false 
+            });
+
+          if (upsertError) {
+            console.error(`Upsert error:`, upsertError);
+            totalErrors += batch.length;
+          } else {
+            totalInserted += answers.length;
+            console.log(`Inserted ${answers.length} answers (total: ${totalInserted})`);
+          }
+        }
+      } catch (batchError) {
+        console.error(`Batch error:`, batchError);
+        totalErrors += batch.length;
+      }
+
+      // Small delay between batches to avoid rate limiting
+      if (i + batchSize < formattedQuestions.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    console.log(`Population complete for ${partyContext.name}: ${totalInserted} inserted, ${totalErrors} errors`);
 
     return new Response(JSON.stringify({
       success: true,
+      party: partyContext.name,
+      partyId,
       questionsProcessed: formattedQuestions.length,
-      results,
+      inserted: totalInserted,
+      errors: totalErrors,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -18,8 +18,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit, UserCheck, Building2, RefreshCw } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit, UserCheck, Building2, RefreshCw, CheckCircle2 } from "lucide-react";
 import { usePopulatePartyAnswers } from "@/hooks/usePopulatePartyAnswers";
+import { usePartyAnswerStats } from "@/hooks/usePartyAnswerStats";
+import { Progress } from "@/components/ui/progress";
 
 // Only levels that require manual entry (no API available)
 const LEVELS = [
@@ -69,7 +71,8 @@ export default function Admin() {
   const updateMutation = useUpdateStaticOfficial();
   const deleteMutation = useDeleteStaticOfficial();
   const deleteOverrideMutation = useDeleteCandidateOverride();
-  const { isLoading: partyAnswersLoading, progress: partyAnswersProgress, populateAll: populatePartyAnswers } = usePopulatePartyAnswers();
+  const { populateParty, isLoading: isPartyLoading, isAnyLoading: partyAnswersLoading } = usePopulatePartyAnswers();
+  const { data: partyStats, isLoading: statsLoading } = usePartyAnswerStats();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingOfficial, setEditingOfficial] = useState<StaticOfficial | null>(null);
@@ -614,13 +617,13 @@ export default function Admin() {
           <TabsContent value="parties">
             <Card>
               <CardHeader>
-                <CardTitle>Regenerate Party Answers</CardTitle>
+                <CardTitle>Party Position Answers</CardTitle>
                 <CardDescription>
-                  Use AI to generate party position answers based on official platforms and voting records.
-                  This will regenerate all answers for all parties using the corrected left-right scoring scale.
+                  Generate AI-powered party position answers based on official platforms and voting records.
+                  Each party is processed independently to avoid timeouts.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-6">
                 <div className="bg-muted/50 rounded-lg p-4 text-sm">
                   <p className="font-medium mb-2">Scoring Scale:</p>
                   <ul className="space-y-1 text-muted-foreground">
@@ -629,40 +632,99 @@ export default function Admin() {
                     <li>• <strong>+10</strong>: Far RIGHT / Very conservative (Republicans)</li>
                   </ul>
                 </div>
-                
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button disabled={partyAnswersLoading} className="w-full sm:w-auto">
-                      {partyAnswersLoading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          {partyAnswersProgress || 'Generating...'}
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Regenerate All Party Answers
-                        </>
-                      )}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Regenerate All Party Answers?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will use AI to generate new position answers for all 4 political parties 
-                        (Democrat, Republican, Green, Libertarian) based on their official platforms. 
-                        Existing answers will be replaced.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => populatePartyAnswers()}>
-                        Regenerate
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+
+                {statsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {partyStats?.map((stats) => {
+                      const isComplete = stats.percentage === 100;
+                      const loading = isPartyLoading(stats.partyId);
+                      
+                      return (
+                        <div 
+                          key={stats.partyId}
+                          className="border rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Badge 
+                                variant={isComplete ? "default" : "secondary"}
+                                className={isComplete ? "bg-green-600" : ""}
+                              >
+                                {isComplete ? (
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                ) : null}
+                                {stats.percentage}%
+                              </Badge>
+                              <div>
+                                <p className="font-medium">{stats.partyName}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {stats.answerCount} / {stats.totalQuestions} questions answered
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex gap-2">
+                              {!isComplete && (
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  disabled={loading || partyAnswersLoading}
+                                  onClick={() => populateParty(stats.partyId, false)}
+                                >
+                                  {loading ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Generating...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="h-4 w-4 mr-2" />
+                                      Fill Missing
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                              
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={loading || partyAnswersLoading}
+                                  >
+                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    Regenerate All
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Regenerate {stats.partyName} Answers?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will use AI to regenerate ALL position answers for {stats.partyName}, 
+                                      replacing any existing answers. This may take a minute to complete.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => populateParty(stats.partyId, true)}>
+                                      Regenerate
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </div>
+                          
+                          <Progress value={stats.percentage} className="h-2" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

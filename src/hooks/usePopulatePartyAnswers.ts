@@ -1,25 +1,32 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface PopulateResult {
   success: boolean;
   questionsProcessed?: number;
-  results?: Record<string, { success: number; failed: number }>;
+  inserted?: number;
+  errors?: number;
+  party?: string;
+  partyId?: string;
+  skipped?: boolean;
+  message?: string;
   error?: string;
 }
 
 export function usePopulatePartyAnswers() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState<string | null>(null);
+  const [loadingParties, setLoadingParties] = useState<Record<string, boolean>>({});
+  const [progress, setProgress] = useState<Record<string, string>>({});
+  const queryClient = useQueryClient();
 
-  const populate = async (partyId?: string): Promise<PopulateResult> => {
-    setIsLoading(true);
-    setProgress(partyId ? `Generating ${partyId} answers...` : 'Generating all party answers...');
+  const populateParty = async (partyId: string, forceRegenerate = false): Promise<PopulateResult> => {
+    setLoadingParties(prev => ({ ...prev, [partyId]: true }));
+    setProgress(prev => ({ ...prev, [partyId]: 'Starting...' }));
     
     try {
       const { data, error } = await supabase.functions.invoke('populate-party-answers', {
-        body: partyId ? { partyId } : {},
+        body: { partyId, skipExisting: !forceRegenerate },
       });
 
       if (error) {
@@ -29,31 +36,43 @@ export function usePopulatePartyAnswers() {
       const result = data as PopulateResult;
       
       if (result.success) {
-        const totalSuccess = result.results 
-          ? Object.values(result.results).reduce((sum, r) => sum + r.success, 0)
-          : 0;
-        toast.success(`Generated ${totalSuccess} party answers successfully`);
+        if (result.skipped) {
+          toast.info(`${result.party}: All questions already have answers`);
+        } else {
+          toast.success(`${result.party}: Generated ${result.inserted || 0} answers`);
+        }
+        // Invalidate stats to refresh counts
+        queryClient.invalidateQueries({ queryKey: ['party-answer-stats'] });
       }
 
-      setProgress(null);
+      setProgress(prev => {
+        const newProgress = { ...prev };
+        delete newProgress[partyId];
+        return newProgress;
+      });
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to generate party answers';
-      toast.error(message);
-      setProgress(null);
+      toast.error(`${partyId}: ${message}`);
+      setProgress(prev => {
+        const newProgress = { ...prev };
+        delete newProgress[partyId];
+        return newProgress;
+      });
       return { success: false, error: message };
     } finally {
-      setIsLoading(false);
+      setLoadingParties(prev => ({ ...prev, [partyId]: false }));
     }
   };
 
-  const populateAll = () => populate();
-  const populateParty = (partyId: string) => populate(partyId);
+  const isLoading = (partyId: string) => loadingParties[partyId] || false;
+  const getProgress = (partyId: string) => progress[partyId] || null;
+  const isAnyLoading = Object.values(loadingParties).some(Boolean);
 
   return {
-    isLoading,
-    progress,
-    populateAll,
     populateParty,
+    isLoading,
+    getProgress,
+    isAnyLoading,
   };
 }
