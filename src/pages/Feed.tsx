@@ -1,19 +1,21 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
 import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile, useUserTopics } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials } from '@/hooks/useCivicOfficials';
+import { useUserQuizQuestionIds, useRepresentativeAnswersAndScores } from '@/hooks/useRepresentativeScores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScoreText } from '@/components/ScoreText';
-import { Search, SlidersHorizontal, TrendingUp, MapPin, AlertCircle } from 'lucide-react';
+import { Search, SlidersHorizontal, TrendingUp, MapPin, AlertCircle, Sparkles } from 'lucide-react';
 import { Candidate, GovernmentLevel } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 
 export const Feed = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
@@ -21,6 +23,7 @@ export const Feed = () => {
   const { data: dbCandidates = [], isLoading: candidatesLoading } = useCandidates();
   const { data: repsData, isLoading: representativesLoading, error: representativesError } = useRepresentatives(profile?.address);
   const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
+  const { data: userQuizAnswers = [] } = useUserQuizQuestionIds();
   const congressMembers = repsData?.representatives ?? [];
   const civicOfficials = civicData?.officials ?? [];
   
@@ -122,8 +125,47 @@ export const Feed = () => {
     return deduped.length > 0 ? deduped : dbTransformed;
   }, [congressMembers, civicOfficials, dbCandidates]);
 
+  // Get all representative IDs for score generation
+  const representativeIds = useMemo(() => {
+    return transformedCandidates.map(c => c.id);
+  }, [transformedCandidates]);
+
+  // Fetch/generate answers and calculate scores for representatives
+  const { data: scoresData, isLoading: scoresLoading } = useRepresentativeAnswersAndScores(
+    representativeIds,
+    userQuizAnswers
+  );
+
+  // Show toast when answers are generated
+  useEffect(() => {
+    if (scoresData?.answersGenerated && scoresData.answersGenerated > 0) {
+      toast.success(`Generated ${scoresData.answersGenerated} AI-predicted positions for your representatives`, {
+        icon: <Sparkles className="w-4 h-4" />,
+      });
+    }
+  }, [scoresData?.answersGenerated]);
+
+  // Merge AI-calculated scores into candidates
+  const candidatesWithScores = useMemo(() => {
+    if (!scoresData?.scores) return transformedCandidates;
+    
+    return transformedCandidates.map(candidate => {
+      const scoreInfo = scoresData.scores[candidate.id];
+      if (scoreInfo && scoreInfo.answerCount > 0) {
+        return {
+          ...candidate,
+          // Override overallScore with calculated match if available
+          matchScore: scoreInfo.score,
+          hasAIAnswers: scoreInfo.generated,
+          answerCount: scoreInfo.answerCount,
+        };
+      }
+      return candidate;
+    });
+  }, [transformedCandidates, scoresData]);
+
   const filteredAndSortedCandidates = useMemo(() => {
-    let result = [...transformedCandidates];
+    let result = [...candidatesWithScores];
 
     // Filter by search query
     if (searchQuery) {
@@ -187,8 +229,9 @@ export const Feed = () => {
     switch (sortBy) {
       case 'match':
         result.sort((a, b) => {
-          const matchA = calculateMatchScore(userScore, a.overallScore);
-          const matchB = calculateMatchScore(userScore, b.overallScore);
+          // Use calculated matchScore if available, otherwise fall back to overall score comparison
+          const matchA = (a as any).matchScore ?? calculateMatchScore(userScore, a.overallScore);
+          const matchB = (b as any).matchScore ?? calculateMatchScore(userScore, b.overallScore);
           return matchB - matchA;
         });
         break;
@@ -201,7 +244,7 @@ export const Feed = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, transformedCandidates, profile]);
+  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, candidatesWithScores, profile]);
 
   const userTopicsList = userTopics.map(ut => ({
     id: ut.topics?.id || ut.topic_id,
@@ -210,9 +253,13 @@ export const Feed = () => {
     weight: ut.weight,
   }));
 
-  const bestMatch = transformedCandidates.length > 0 
-    ? Math.max(...transformedCandidates.map(c => calculateMatchScore(profile?.overall_score ?? 0, c.overallScore)))
-    : 0;
+  const bestMatch = useMemo(() => {
+    if (candidatesWithScores.length === 0) return 0;
+    const matches = candidatesWithScores.map(c => 
+      (c as any).matchScore ?? calculateMatchScore(profile?.overall_score ?? 0, c.overallScore)
+    );
+    return Math.max(...matches);
+  }, [candidatesWithScores, profile?.overall_score]);
 
   const isLoading = profileLoading || candidatesLoading || representativesLoading || civicLoading;
 
