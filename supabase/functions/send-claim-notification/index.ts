@@ -14,6 +14,16 @@ interface ClaimNotificationRequest {
   rejectionReason?: string;
 }
 
+// Utility to mask PII in logs (e.g., "user@example.com" -> "us***@example.com")
+const maskEmail = (email: string): string => {
+  if (!email || !email.includes('@')) return '***';
+  const [localPart, domain] = email.split('@');
+  const maskedLocal = localPart.length > 2 
+    ? localPart.substring(0, 2) + '***' 
+    : '***';
+  return `${maskedLocal}@${domain}`;
+};
+
 const handler = async (req: Request): Promise<Response> => {
   console.log("send-claim-notification function called");
 
@@ -25,7 +35,8 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const { email, candidateName, status, rejectionReason }: ClaimNotificationRequest = await req.json();
 
-    console.log(`Sending ${status} notification to ${email} for candidate ${candidateName}`);
+    // Log with masked PII to prevent sensitive data exposure
+    console.log(`Sending ${status} notification to ${maskEmail(email)} for candidate ${candidateName}`);
 
     if (!email) {
       throw new Error("Email is required");

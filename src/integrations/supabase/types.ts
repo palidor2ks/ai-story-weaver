@@ -399,6 +399,36 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_access_log: {
+        Row: {
+          accessed_at: string | null
+          action: string
+          changed_fields: string[] | null
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          accessed_at?: string | null
+          action: string
+          changed_fields?: string[] | null
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          accessed_at?: string | null
+          action?: string
+          changed_fields?: string[] | null
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profile_claims: {
         Row: {
           candidate_id: string
