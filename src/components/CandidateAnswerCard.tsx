@@ -56,13 +56,25 @@ export const CandidateAnswerCard = ({
     return 'Moderate';
   };
 
-  // Get the answer text from question options
-  const getAnswerText = (value: number) => {
-    if (!answer.question?.question_options) return null;
-    const option = answer.question.question_options.find(
-      opt => opt.value === value
-    );
-    return option?.text || null;
+  // Get the answer text from question options - with nearest-match fallback
+  const getAnswerText = (value: number, approximate = false): { text: string; isApproximate: boolean } | null => {
+    if (!answer.question?.question_options || answer.question.question_options.length === 0) return null;
+    
+    // Try exact match first
+    const exactMatch = answer.question.question_options.find(opt => opt.value === value);
+    if (exactMatch) return { text: exactMatch.text, isApproximate: false };
+    
+    // Fallback: find nearest option by value
+    if (approximate) {
+      const sorted = [...answer.question.question_options].sort(
+        (a, b) => Math.abs(a.value - value) - Math.abs(b.value - value)
+      );
+      if (sorted[0]) {
+        return { text: sorted[0].text, isApproximate: true };
+      }
+    }
+    
+    return null;
   };
 
   const getAgreementBadge = () => {
@@ -98,10 +110,13 @@ export const CandidateAnswerCard = ({
           )}
 
           {/* Candidate's Answer Text */}
-          {getAnswerText(answer.answer_value) && (
+          {getAnswerText(answer.answer_value, true) && (
             <div className="mb-3 p-2 rounded-lg bg-primary/5 border border-primary/10">
               <p className="text-sm text-foreground italic">
-                "{getAnswerText(answer.answer_value)}"
+                {getAnswerText(answer.answer_value, true)?.isApproximate && (
+                  <span className="text-muted-foreground not-italic">≈ </span>
+                )}
+                "{getAnswerText(answer.answer_value, true)?.text}"
               </p>
             </div>
           )}
@@ -172,9 +187,9 @@ export const CandidateAnswerCard = ({
           {userAnswer !== null && userAnswer !== undefined && (
             <div className="mt-2 pt-2 border-t border-border/50">
               <div className="text-xs text-muted-foreground mb-1">Your answer:</div>
-              {(userAnswerText || getAnswerText(userAnswer)) && (
+              {(userAnswerText || getAnswerText(userAnswer, true)) && (
                 <p className="text-sm italic text-foreground/80 mb-1">
-                  "{userAnswerText || getAnswerText(userAnswer)}"
+                  "{userAnswerText || getAnswerText(userAnswer, true)?.text}"
                 </p>
               )}
               <span className={cn(
