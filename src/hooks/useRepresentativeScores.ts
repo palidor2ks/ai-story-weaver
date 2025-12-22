@@ -36,22 +36,31 @@ export const useUserQuizQuestionIds = () => {
   });
 };
 
+interface RepresentativeInfo {
+  id: string;
+  name: string;
+  party: string;
+  office: string;
+  state: string;
+}
+
 /**
  * Hook to fetch or generate answers for a list of representatives
  * and calculate match scores against user's answers
  */
 export const useRepresentativeAnswersAndScores = (
-  representativeIds: string[],
+  representatives: RepresentativeInfo[],
   userAnswers: QuizAnswer[]
 ) => {
   return useQuery({
-    queryKey: ['rep-answers-scores', representativeIds, userAnswers.map(a => a.question_id)],
+    queryKey: ['rep-answers-scores', representatives.map(r => r.id), userAnswers.map(a => a.question_id)],
     queryFn: async () => {
-      if (representativeIds.length === 0 || userAnswers.length === 0) {
+      if (representatives.length === 0 || userAnswers.length === 0) {
         return { scores: {}, answersGenerated: 0 };
       }
 
       const questionIds = userAnswers.map(a => a.question_id);
+      const repIds = representatives.map(r => r.id);
       const scores: Record<string, { score: number; answerCount: number; generated: boolean }> = {};
       let totalGenerated = 0;
 
@@ -59,7 +68,7 @@ export const useRepresentativeAnswersAndScores = (
       const { data: existingAnswers, error: fetchError } = await supabase
         .from('candidate_answers')
         .select('candidate_id, question_id, answer_value')
-        .in('candidate_id', representativeIds)
+        .in('candidate_id', repIds)
         .in('question_id', questionIds);
 
       if (fetchError) {
@@ -76,37 +85,42 @@ export const useRepresentativeAnswersAndScores = (
       });
 
       // For each representative, calculate score or trigger generation
-      for (const repId of representativeIds) {
-        const repAnswers = answersByCandidate[repId] || [];
+      for (const rep of representatives) {
+        const repAnswers = answersByCandidate[rep.id] || [];
         
         // If we have at least 30% of answers, calculate score from existing
         if (repAnswers.length >= questionIds.length * 0.3) {
           const score = calculateMatchScore(userAnswers, repAnswers);
-          scores[repId] = { 
+          scores[rep.id] = { 
             score, 
             answerCount: repAnswers.length,
             generated: false 
           };
         } else {
-          // Trigger AI generation for this rep
+          // Trigger AI generation for this rep - pass candidate info
           try {
-            console.log(`Triggering AI generation for rep ${repId}...`);
+            console.log(`Triggering AI generation for rep ${rep.name} (${rep.id})...`);
             const { data, error } = await supabase.functions.invoke(
               'get-candidate-answers',
               {
                 body: {
-                  candidateId: repId,
+                  candidateId: rep.id,
                   questionIds: questionIds,
+                  // Pass candidate info for reps not in DB
+                  candidateName: rep.name,
+                  candidateParty: rep.party,
+                  candidateOffice: rep.office,
+                  candidateState: rep.state,
                 },
               }
             );
 
             if (error) {
-              console.error(`Error generating answers for ${repId}:`, error);
+              console.error(`Error generating answers for ${rep.name}:`, error);
               // Use whatever we have
               if (repAnswers.length > 0) {
                 const score = calculateMatchScore(userAnswers, repAnswers);
-                scores[repId] = { score, answerCount: repAnswers.length, generated: false };
+                scores[rep.id] = { score, answerCount: repAnswers.length, generated: false };
               }
             } else {
               totalGenerated += data?.generated || 0;
@@ -115,7 +129,7 @@ export const useRepresentativeAnswersAndScores = (
               // Calculate score from generated answers
               if (allAnswers.length > 0) {
                 const score = calculateMatchScore(userAnswers, allAnswers);
-                scores[repId] = { 
+                scores[rep.id] = { 
                   score, 
                   answerCount: allAnswers.length,
                   generated: (data?.generated || 0) > 0 
@@ -123,14 +137,14 @@ export const useRepresentativeAnswersAndScores = (
               }
             }
           } catch (e) {
-            console.error(`Failed to generate answers for ${repId}:`, e);
+            console.error(`Failed to generate answers for ${rep.name}:`, e);
           }
         }
       }
 
       return { scores, answersGenerated: totalGenerated };
     },
-    enabled: representativeIds.length > 0 && userAnswers.length > 0,
+    enabled: representatives.length > 0 && userAnswers.length > 0,
     staleTime: 1000 * 60 * 10, // Cache for 10 minutes
     refetchOnWindowFocus: false,
   });

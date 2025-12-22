@@ -132,7 +132,16 @@ serve(async (req) => {
   }
 
   try {
-    const { candidateId, questionIds, forceRegenerate = false } = await req.json();
+    const { 
+      candidateId, 
+      questionIds, 
+      forceRegenerate = false,
+      // Allow passing candidate info directly for reps not in DB
+      candidateName,
+      candidateParty,
+      candidateOffice,
+      candidateState,
+    } = await req.json();
 
     if (!candidateId) {
       return new Response(JSON.stringify({ error: 'candidateId is required' }), {
@@ -172,32 +181,52 @@ serve(async (req) => {
       });
     }
 
-    // Get candidate info for AI generation
-    const { data: candidate, error: candidateError } = await supabase
-      .from('candidates')
-      .select('id, name, party, office, state')
-      .eq('id', candidateId)
-      .maybeSingle();
+    // Get candidate info - first try from request params, then database
+    let officialInfo: { id: string; name: string; party: string; office: string; state: string } | null = null;
 
-    // Also check static_officials if not in candidates
-    let officialInfo = candidate;
-    if (!officialInfo) {
-      const { data: staticOfficial } = await supabase
-        .from('static_officials')
+    // If candidate info was passed directly, use it
+    if (candidateName && candidateParty && candidateOffice && candidateState) {
+      officialInfo = {
+        id: candidateId,
+        name: candidateName,
+        party: candidateParty,
+        office: candidateOffice,
+        state: candidateState,
+      };
+      console.log(`Using provided candidate info for ${candidateName}`);
+    } else {
+      // Try to find in candidates table
+      const { data: candidate } = await supabase
+        .from('candidates')
         .select('id, name, party, office, state')
         .eq('id', candidateId)
         .maybeSingle();
-      officialInfo = staticOfficial;
+
+      if (candidate) {
+        officialInfo = candidate;
+      } else {
+        // Try static_officials table
+        const { data: staticOfficial } = await supabase
+          .from('static_officials')
+          .select('id, name, party, office, state')
+          .eq('id', candidateId)
+          .maybeSingle();
+        
+        if (staticOfficial) {
+          officialInfo = staticOfficial;
+        }
+      }
     }
 
     if (!officialInfo) {
+      console.log(`Candidate ${candidateId} not found in DB and no info provided`);
       return new Response(JSON.stringify({ 
-        error: 'Candidate not found',
-        answers: [],
-        source: 'none',
-        count: 0,
+        error: 'Candidate not found. Provide candidateName, candidateParty, candidateOffice, and candidateState.',
+        answers: existingAnswers || [],
+        source: 'database',
+        count: existingAnswers?.length || 0,
       }), {
-        status: 404,
+        status: 200, // Return 200 with empty answers instead of 404
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

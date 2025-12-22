@@ -125,14 +125,20 @@ export const Feed = () => {
     return deduped.length > 0 ? deduped : dbTransformed;
   }, [congressMembers, civicOfficials, dbCandidates]);
 
-  // Get all representative IDs for score generation
-  const representativeIds = useMemo(() => {
-    return transformedCandidates.map(c => c.id);
+  // Get representative info for score generation
+  const representativeInfoList = useMemo(() => {
+    return transformedCandidates.map(c => ({
+      id: c.id,
+      name: c.name,
+      party: c.party,
+      office: c.office,
+      state: c.state,
+    }));
   }, [transformedCandidates]);
 
   // Fetch/generate answers and calculate scores for representatives
   const { data: scoresData, isLoading: scoresLoading } = useRepresentativeAnswersAndScores(
-    representativeIds,
+    representativeInfoList,
     userQuizAnswers
   );
 
