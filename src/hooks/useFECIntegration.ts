@@ -45,7 +45,8 @@ export function useFECIntegration() {
     candidateId: string,
     candidateName: string,
     state: string,
-    updateDatabase = true
+    updateDatabase = true,
+    autoFetchDonors = true
   ): Promise<FetchFECIdResult> => {
     setLoadingIds(prev => new Set(prev).add(candidateId));
     
@@ -59,7 +60,22 @@ export function useFECIntegration() {
         return { found: false, error: error.message };
       }
 
-      return data as FetchFECIdResult;
+      const result = data as FetchFECIdResult;
+
+      // Auto-fetch donors if FEC ID was found and updated
+      if (autoFetchDonors && result.found && result.updated && result.fecCandidateId) {
+        console.log('[FEC] Auto-fetching donors for', candidateName);
+        toast.info(`Fetching donor data for ${candidateName}...`);
+        
+        const donorResult = await fetchFECDonors(candidateId, result.fecCandidateId);
+        if (donorResult.success) {
+          toast.success(`Imported ${donorResult.imported} donors for ${candidateName}`);
+        } else if (donorResult.error) {
+          toast.error(`Failed to fetch donors: ${donorResult.error}`);
+        }
+      }
+
+      return result;
     } catch (err) {
       console.error('[FEC] Exception:', err);
       return { found: false, error: 'Failed to fetch FEC candidate ID' };

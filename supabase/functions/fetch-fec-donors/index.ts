@@ -87,6 +87,12 @@ serve(async (req) => {
     console.log('[FEC-DONORS] Found', data.results?.length || 0, 'contributions');
 
     if (!data.results || data.results.length === 0) {
+      // Still update last_donor_sync even if no donors found
+      await supabase
+        .from('candidates')
+        .update({ last_donor_sync: new Date().toISOString() })
+        .eq('id', candidateId);
+
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -146,6 +152,16 @@ serve(async (req) => {
     }
 
     console.log('[FEC-DONORS] Successfully upserted', upsertedData?.length || 0, 'donors');
+
+    // Update last_donor_sync timestamp on candidate
+    const { error: updateError } = await supabase
+      .from('candidates')
+      .update({ last_donor_sync: new Date().toISOString() })
+      .eq('id', candidateId);
+
+    if (updateError) {
+      console.warn('[FEC-DONORS] Failed to update last_donor_sync:', updateError);
+    }
 
     // Calculate total raised
     const totalRaised = uniqueDonors.reduce((sum, d) => sum + d.amount, 0);

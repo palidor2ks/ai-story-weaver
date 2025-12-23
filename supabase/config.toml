@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.fetch-fec-donors]
 verify_jwt = false
+
+[functions.sync-all-donors]
+verify_jwt = false

@@ -168,6 +168,7 @@ export type Database = {
           image_url: string | null
           is_incumbent: boolean | null
           last_answers_sync: string | null
+          last_donor_sync: string | null
           last_updated: string | null
           name: string
           office: string
@@ -189,6 +190,7 @@ export type Database = {
           image_url?: string | null
           is_incumbent?: boolean | null
           last_answers_sync?: string | null
+          last_donor_sync?: string | null
           last_updated?: string | null
           name: string
           office: string
@@ -210,6 +212,7 @@ export type Database = {
           image_url?: string | null
           is_incumbent?: boolean | null
           last_answers_sync?: string | null
+          last_donor_sync?: string | null
           last_updated?: string | null
           name?: string
           office?: string
