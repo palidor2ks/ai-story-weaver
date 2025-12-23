@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { calculateEntityScore } from '@/lib/scoring';
 
 /**
  * Source of truth for political scores across the app.
+ * All scores are on the -10 to +10 scale.
  *
  * Priority order:
  * 1. `candidate_overrides.overall_score` (manual overrides)
@@ -62,26 +64,27 @@ export const useCandidateScoreMap = (candidateIds?: string[]) => {
         // Fetch answers from candidate_answers and calculate scores dynamically
         const { data: answers, error: answersError } = await supabase
           .from('candidate_answers')
-          .select('candidate_id, answer_value')
+          .select('candidate_id, question_id, answer_value')
           .in('candidate_id', candidatesWithMissingScores);
 
         if (answersError) {
           console.error('Error fetching candidate_answers for score calculation:', answersError);
         } else if (answers && answers.length > 0) {
-          // Group answers by candidate and calculate average
-          const answersByCandidate = new Map<string, number[]>();
+          // Group answers by candidate
+          const answersByCandidate = new Map<string, Array<{ question_id: string; answer_value: number }>>();
           
           answers.forEach((a) => {
             const existing = answersByCandidate.get(a.candidate_id) || [];
-            existing.push(a.answer_value);
+            existing.push({ question_id: a.question_id, answer_value: a.answer_value });
             answersByCandidate.set(a.candidate_id, existing);
           });
 
-          // Calculate and add scores for each candidate
-          answersByCandidate.forEach((values, candidateId) => {
-            const sum = values.reduce((acc, val) => acc + val, 0);
-            const avg = Math.round((sum / values.length) * 100) / 100;
-            map.set(candidateId, avg);
+          // Calculate scores using unified scoring utility
+          answersByCandidate.forEach((candidateAnswers, candidateId) => {
+            const score = calculateEntityScore(candidateAnswers);
+            if (score !== null) {
+              map.set(candidateId, score);
+            }
           });
 
           console.log(`Calculated scores from candidate_answers for ${answersByCandidate.size} candidates`);

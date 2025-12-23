@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
+import { calculateWeightedPartyScore, calculateEntityScore, TopicWeight } from '@/lib/scoring';
 
 interface PartyScores {
   democrat: number | null;
@@ -9,23 +11,28 @@ interface PartyScores {
 }
 
 /**
- * Calculate average political score for a party's answers.
- * Returns the average answer_value on the -10 to +10 scale.
+ * Fetch party match scores with user's topic weighting applied.
+ * 
+ * This hook:
+ * 1. Fetches user's answered questions and their topic weights
+ * 2. Fetches party answers only for questions the user answered
+ * 3. Calculates weighted scores using user's topic priorities
+ * 
+ * This ensures party scores are comparable to user scores (both use same weighting).
  */
-function calculatePartyScore(partyAnswers: { answer_value: number }[]): number | null {
-  if (partyAnswers.length === 0) return null;
-  const sum = partyAnswers.reduce((acc, a) => acc + a.answer_value, 0);
-  return sum / partyAnswers.length;
-}
-
 export function usePartyMatchScores() {
+  const { user } = useAuth();
+
   return useQuery<PartyScores>({
-    queryKey: ['party-scores-user-filtered'],
+    queryKey: ['party-scores-user-weighted', user?.id],
     queryFn: async () => {
-      // Fetch user's answered question IDs
+      // Fetch user's answered questions with their topics
       const { data: userAnswers, error: userError } = await supabase
         .from('quiz_answers')
-        .select('question_id');
+        .select(`
+          question_id,
+          questions!inner(topic_id)
+        `);
 
       if (userError) throw userError;
       
@@ -36,6 +43,29 @@ export function usePartyMatchScores() {
         return { democrat: null, republican: null, green: null, libertarian: null };
       }
 
+      // Build question -> topic map
+      const questionTopicMap = new Map<string, string>();
+      userAnswers?.forEach(a => {
+        const topicId = (a.questions as unknown as { topic_id: string })?.topic_id;
+        if (topicId) {
+          questionTopicMap.set(a.question_id, topicId);
+        }
+      });
+
+      // Fetch user's topic weights
+      const { data: userTopics, error: topicsError } = await supabase
+        .from('user_topics')
+        .select('topic_id, weight')
+        .order('weight', { ascending: false });
+
+      if (topicsError) throw topicsError;
+
+      // Convert to TopicWeight format
+      const topicWeights: TopicWeight[] = (userTopics || []).map(ut => ({
+        id: ut.topic_id,
+        weight: ut.weight || 1,
+      }));
+
       // Fetch all party answers
       const { data: partyAnswers, error: partyError } = await supabase
         .from('party_answers')
@@ -43,24 +73,41 @@ export function usePartyMatchScores() {
 
       if (partyError) throw partyError;
 
-      // Group party answers by party_id, but ONLY for questions user answered
-      const partyAnswersMap = new Map<string, { answer_value: number }[]>();
+      // Group party answers by party_id, filtered to user's questions
+      const partyAnswersMap = new Map<string, Array<{ question_id: string; answer_value: number }>>();
       partyAnswers?.forEach(answer => {
         if (userQuestionIds.has(answer.question_id)) {
           const existing = partyAnswersMap.get(answer.party_id) || [];
-          existing.push({ answer_value: answer.answer_value });
+          existing.push({ question_id: answer.question_id, answer_value: answer.answer_value });
           partyAnswersMap.set(answer.party_id, existing);
         }
       });
 
-      // Calculate average score for each party (filtered to user's questions)
+      // Calculate weighted scores for each party using user's topic weights
+      const calculateScore = (partyId: string): number | null => {
+        const answers = partyAnswersMap.get(partyId) || [];
+        if (answers.length === 0) return null;
+
+        // If user has topic weights, use weighted calculation
+        if (topicWeights.length > 0) {
+          return calculateWeightedPartyScore(answers, topicWeights, questionTopicMap);
+        }
+
+        // Fallback to simple average if no topic weights
+        return calculateEntityScore(answers.map(a => ({ 
+          question_id: a.question_id, 
+          answer_value: a.answer_value 
+        })));
+      };
+
       return {
-        democrat: calculatePartyScore(partyAnswersMap.get('democrat') || []),
-        republican: calculatePartyScore(partyAnswersMap.get('republican') || []),
-        green: calculatePartyScore(partyAnswersMap.get('green') || []),
-        libertarian: calculatePartyScore(partyAnswersMap.get('libertarian') || []),
+        democrat: calculateScore('democrat'),
+        republican: calculateScore('republican'),
+        green: calculateScore('green'),
+        libertarian: calculateScore('libertarian'),
       };
     },
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes (depends on user's answers)
+    enabled: !!user,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
 }

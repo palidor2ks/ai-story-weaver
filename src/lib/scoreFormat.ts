@@ -107,13 +107,16 @@ export function getConfidenceInfo(confidence: ConfidenceLevel): { label: string;
 }
 
 /**
- * Calculate weighted score from topic scores using PRD v1.6 weighting
- * User ranks topics 1-5, weights are [5, 4, 3, 2, 1] normalized
+ * Calculate weighted score from topic scores using PRD v1.6 weighting.
+ * 
+ * @deprecated Use calculateWeightedOverallScore from src/lib/scoring.ts instead.
+ * This function is kept for backward compatibility.
  */
 export function calculateWeightedScore(
   topicScores: Array<{ topicId: string; score: number }>,
   selectedTopicIds: string[]
 ): number {
+  // Import dynamically to avoid circular dependency issues
   // Weights based on rank (1st = 5, 2nd = 4, etc.), normalized
   const rawWeights = [5, 4, 3, 2, 1];
   const weightSum = rawWeights.reduce((a, b) => a + b, 0); // 15
@@ -135,6 +138,6 @@ export function calculateWeightedScore(
   
   if (totalWeight === 0) return 0;
   
-  // Round to 2 decimals
+  // Round to 2 decimals - scores are already on -10 to +10 scale
   return Math.round((weightedSum / totalWeight) * 100) / 100;
 }
