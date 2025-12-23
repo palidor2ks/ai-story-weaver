@@ -98,6 +98,14 @@ interface GeneratedAnswer {
   notes: string | null;
 }
 
+// Snap AI-generated values to the nearest valid discrete score
+function snapToValidValue(value: number): number {
+  const validValues = [-10, -5, 0, 5, 10];
+  return validValues.reduce((prev, curr) => 
+    Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev
+  );
+}
+
 async function generateAnswersWithAI(
   candidateName: string,
   candidateParty: string,
@@ -136,6 +144,9 @@ CRITICAL - Use the LEFT-RIGHT political spectrum for scoring:
 
 IMPORTANT: Democrats should generally have NEGATIVE scores (left-leaning).
 Republicans should generally have POSITIVE scores (right-leaning).
+
+CRITICAL: You MUST use ONLY these exact values: -10, -5, 0, +5, or +10.
+NO intermediate values like -7, -3, +2, +8, etc. are allowed.
 
 Be as accurate as possible based on available public information. If uncertain, use party platform as baseline with medium confidence.`;
 
@@ -204,7 +215,7 @@ Return ONLY a valid JSON array, no other text.`;
       answers = parsed.map((item: any) => ({
         // Strip brackets from question_id (AI sometimes returns "[eco1]" instead of "eco1")
         question_id: String(item.question_id || '').replace(/[\[\]]/g, ''),
-        answer_value: Math.max(-10, Math.min(10, Math.round(item.answer_value))),
+        answer_value: snapToValidValue(item.answer_value),
         source_description: item.source_description || `Inferred from ${candidateParty} Party platform`,
         source_url: null,
         confidence: item.confidence || 'low',
