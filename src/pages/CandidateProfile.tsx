@@ -22,6 +22,7 @@ import { CandidatePositions } from '@/components/CandidatePositions';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
 import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
+import { OfficialAvatar } from '@/components/OfficialAvatar';
 
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
@@ -78,22 +79,6 @@ export const CandidateProfile = () => {
     }
   };
 
-  const getPartyBgColor = (party: string) => {
-    switch (party) {
-      case 'Democrat': return 'bg-blue-600';
-      case 'Republican': return 'bg-red-600';
-      case 'Independent': return 'bg-purple-600';
-      default: return 'bg-muted';
-    }
-  };
-
-  const getInitials = (name: string) => {
-    const parts = name.split(' ').filter(Boolean);
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    }
-    return parts[0]?.[0]?.toUpperCase() || '?';
-  };
 
   // Transform candidate topic scores
   const candidateTopicScores = (candidate.topicScores || []).map(ts => ({
@@ -136,35 +121,13 @@ export const CandidateProfile = () => {
         <div className="bg-card rounded-2xl border border-border p-6 md:p-8 mb-8 shadow-elevated">
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             {/* Avatar */}
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden flex-shrink-0">
-              {(() => {
-                const imageUrl = representativeDetails?.image_url || candidate.image_url;
-                const hasImage = imageUrl && imageUrl.trim() !== '';
-                return (
-                  <>
-                    {hasImage ? (
-                      <img 
-                        src={imageUrl}
-                        alt={candidate.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          target.style.display = 'none';
-                          const fallback = target.nextElementSibling as HTMLElement;
-                          if (fallback) fallback.style.display = 'flex';
-                        }}
-                      />
-                    ) : null}
-                    <div 
-                      className={cn("w-full h-full flex items-center justify-center", getPartyBgColor(candidate.party))}
-                      style={{ display: hasImage ? 'none' : 'flex' }}
-                    >
-                      <span className="text-white font-bold text-2xl md:text-3xl">{getInitials(candidate.name)}</span>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
+            <OfficialAvatar
+              imageUrl={representativeDetails?.image_url || candidate.image_url}
+              name={candidate.name}
+              party={candidate.party}
+              size="lg"
+              className="rounded-2xl"
+            />
 
             {/* Info */}
             <div className="flex-1">
