@@ -31,6 +31,18 @@ serve(async (req) => {
     
     const response = await fetch(memberUrl);
     
+    // Congress.gov returns 404 for unknown/unsupported bioguide IDs.
+    // Treat that as a normal "not found" response so the client doesn't receive a 500.
+    if (response.status === 404) {
+      console.warn(`Congress API 404 (member not found) for bioguideId: ${bioguideId}`);
+      return new Response(JSON.stringify({
+        member: null,
+        error: 'Member not found',
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Congress API error: ${response.status} - ${errorText}`);
