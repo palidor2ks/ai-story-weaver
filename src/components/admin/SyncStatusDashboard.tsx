@@ -1,35 +1,81 @@
-import { useSyncStats, TopicCoverage } from "@/hooks/useSyncStats";
+import { useSyncStats, TopicCoverage, CandidateCoverage } from "@/hooks/useSyncStats";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, Database, Clock, FileText, Users, CheckCircle2, AlertCircle, BarChart3 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
 
-function TopicCoverageItem({ topic }: { topic: TopicCoverage }) {
-  const getCoverageColor = (percent: number) => {
-    if (percent >= 80) return "text-green-600";
-    if (percent >= 50) return "text-amber-600";
-    return "text-red-600";
-  };
+function getPartyColor(party: string) {
+  switch (party) {
+    case "Democrat": return "text-blue-600 dark:text-blue-400";
+    case "Republican": return "text-red-600 dark:text-red-400";
+    case "Independent": return "text-purple-600 dark:text-purple-400";
+    default: return "text-muted-foreground";
+  }
+}
 
+function getPartyBadge(party: string) {
+  switch (party) {
+    case "Democrat": return "D";
+    case "Republican": return "R";
+    case "Independent": return "I";
+    default: return "O";
+  }
+}
+
+function getCoverageColor(percent: number) {
+  if (percent >= 50) return "text-green-600 dark:text-green-400";
+  if (percent >= 20) return "text-amber-600 dark:text-amber-400";
+  return "text-red-600 dark:text-red-400";
+}
+
+function RepCoverageItem({ rep }: { rep: CandidateCoverage }) {
   return (
-    <div className="flex items-center gap-3 py-2">
+    <div className="flex items-center gap-3 py-2 px-3 hover:bg-muted/50 rounded-md transition-colors">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium truncate">{rep.name}</span>
+          <Badge variant="outline" className={`text-xs px-1.5 ${getPartyColor(rep.party)}`}>
+            {getPartyBadge(rep.party)}
+          </Badge>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 text-sm">
+        <span className="text-muted-foreground whitespace-nowrap">
+          {rep.answerCount} / {rep.totalQuestions}
+        </span>
+        <div className="w-16">
+          <Progress value={rep.coveragePercent} className="h-2" />
+        </div>
+        <span className={`font-medium w-14 text-right ${getCoverageColor(rep.coveragePercent)}`}>
+          {rep.coveragePercent}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function TopicCoverageItem({ topic }: { topic: TopicCoverage }) {
+  return (
+    <div className="flex items-center gap-3 py-2 px-3 hover:bg-muted/50 rounded-md transition-colors">
       <span className="text-lg w-8">{topic.icon}</span>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-sm font-medium truncate">{topic.topicName}</span>
-          <span className={`text-sm font-bold ${getCoverageColor(topic.coveragePercent)}`}>
-            {topic.coveragePercent}%
-          </span>
+        <span className="text-sm font-medium truncate">{topic.topicName}</span>
+      </div>
+      <div className="flex items-center gap-3 text-sm">
+        <span className="text-muted-foreground whitespace-nowrap">
+          {topic.totalActualAnswers.toLocaleString()} / {topic.totalPotentialAnswers.toLocaleString()}
+        </span>
+        <div className="w-16">
+          <Progress value={topic.coveragePercent} className="h-2" />
         </div>
-        <Progress value={topic.coveragePercent} className="h-2" />
-        <div className="flex items-center justify-between text-xs text-muted-foreground mt-1">
-          <span>{topic.answeredQuestions} / {topic.totalQuestions} questions</span>
-          <span>{topic.candidatesWithAnswers} candidates</span>
-        </div>
+        <span className={`font-medium w-14 text-right ${getCoverageColor(topic.coveragePercent)}`}>
+          {topic.coveragePercent}%
+        </span>
       </div>
     </div>
   );
@@ -38,6 +84,8 @@ function TopicCoverageItem({ topic }: { topic: TopicCoverage }) {
 export function SyncStatusDashboard() {
   const { data: stats, isLoading, refetch, isRefetching } = useSyncStats();
   const [isTriggeringSync, setIsTriggeringSync] = useState(false);
+  const [showAllReps, setShowAllReps] = useState(false);
+  const [showAllTopics, setShowAllTopics] = useState(false);
 
   const handleManualSync = async () => {
     setIsTriggeringSync(true);
@@ -85,171 +133,186 @@ export function SyncStatusDashboard() {
 
   if (!stats) return null;
 
-  const syncProgress = stats.totalCandidates > 0 
-    ? (stats.syncedCandidates / stats.totalCandidates) * 100 
-    : 0;
+  const displayedReps = showAllReps ? stats.candidateCoverage : stats.candidateCoverage.slice(0, 15);
+  const displayedTopics = showAllTopics ? stats.topicCoverage : stats.topicCoverage.slice(0, 10);
+  const hasMoreReps = stats.candidateCoverage.length > 15;
+  const hasMoreTopics = stats.topicCoverage.length > 10;
 
   return (
-    <div className="space-y-6 mb-8">
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Database className="h-5 w-5 text-primary" />
-                Answer Sync Status
-              </CardTitle>
-              <CardDescription>
-                Automated population of candidate answers from Congress.gov
-              </CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => refetch()}
-                disabled={isRefetching}
-              >
-                {isRefetching ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-              </Button>
-              <Button 
-                size="sm"
-                onClick={handleManualSync}
-                disabled={isTriggeringSync || stats.pendingCandidates === 0}
-              >
-                {isTriggeringSync ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Run Batch Now
-                  </>
-                )}
-              </Button>
-            </div>
+    <Card className="mb-8">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              Answer Coverage Dashboard
+            </CardTitle>
+            <CardDescription>
+              Comprehensive view of representative answer data
+            </CardDescription>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Progress Section */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Sync Progress</span>
-              <span className="font-medium">
-                {stats.syncedCandidates} / {stats.totalCandidates} candidates
-              </span>
-            </div>
-            <Progress value={syncProgress} className="h-3" />
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{syncProgress.toFixed(1)}% complete</span>
-              {stats.pendingCandidates > 0 && (
-                <span className="text-amber-600 dark:text-amber-400">
-                  {stats.pendingCandidates} pending
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Users className="h-4 w-4" />
-                Total Candidates
-              </div>
-              <div className="text-2xl font-bold">{stats.totalCandidates}</div>
-            </div>
-
-            <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                With Answers
-              </div>
-              <div className="text-2xl font-bold text-green-600">{stats.candidatesWithAnswers}</div>
-            </div>
-
-            <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <FileText className="h-4 w-4" />
-                Total Answers
-              </div>
-              <div className="text-2xl font-bold">{stats.totalAnswers.toLocaleString()}</div>
-            </div>
-
-            <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <FileText className="h-4 w-4" />
-                Avg per Candidate
-              </div>
-              <div className="text-2xl font-bold">{stats.avgAnswersPerCandidate}</div>
-            </div>
-          </div>
-
-          {/* Timing Info */}
-          <div className="flex flex-wrap gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Last sync:</span>
-              {stats.lastSyncTime ? (
-                <Badge variant="outline">
-                  {formatDistanceToNow(new Date(stats.lastSyncTime), { addSuffix: true })}
-                </Badge>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+            >
+              {isRefetching ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Badge variant="secondary">Never</Badge>
+                <RefreshCw className="h-4 w-4" />
               )}
+            </Button>
+            <Button 
+              size="sm"
+              onClick={handleManualSync}
+              disabled={isTriggeringSync}
+            >
+              {isTriggeringSync ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Run Batch
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Overall Stats Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Users className="h-4 w-4" />
+              Total Reps
             </div>
+            <div className="text-2xl font-bold">{stats.totalCandidates.toLocaleString()}</div>
+          </div>
 
-            {stats.pendingCandidates > 0 && (
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-amber-600" />
-                <span className="text-muted-foreground">Next up:</span>
-                <Badge variant="outline" className="text-amber-600 border-amber-600/30">
-                  {stats.oldestPendingCandidate}
-                </Badge>
-              </div>
+          <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <HelpCircle className="h-4 w-4" />
+              Total Questions
+            </div>
+            <div className="text-2xl font-bold">{stats.totalQuestions.toLocaleString()}</div>
+          </div>
+
+          <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <FileText className="h-4 w-4" />
+              Potential Answers
+            </div>
+            <div className="text-2xl font-bold">{stats.totalPotentialAnswers.toLocaleString()}</div>
+          </div>
+
+          <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <FileText className="h-4 w-4 text-green-600" />
+              Actual Answers
+            </div>
+            <div className="text-2xl font-bold text-green-600">{stats.totalActualAnswers.toLocaleString()}</div>
+          </div>
+        </div>
+
+        {/* Overall Progress */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Overall Coverage</span>
+            <span className="font-medium">
+              {stats.totalActualAnswers.toLocaleString()} / {stats.totalPotentialAnswers.toLocaleString()} answers
+            </span>
+          </div>
+          <Progress value={stats.overallCoveragePercent} className="h-3" />
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span className={getCoverageColor(stats.overallCoveragePercent)}>
+              {stats.overallCoveragePercent}% complete
+            </span>
+            {stats.lastSyncTime && (
+              <span>
+                Last sync: {formatDistanceToNow(new Date(stats.lastSyncTime), { addSuffix: true })}
+              </span>
             )}
+          </div>
+        </div>
 
-            <div className="flex items-center gap-2">
-              <RefreshCw className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Schedule:</span>
-              <Badge variant="secondary">Every 6 hours</Badge>
+        {/* Tabs for Rep vs Topic view */}
+        <Tabs defaultValue="representatives" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="representatives">By Representative</TabsTrigger>
+            <TabsTrigger value="topics">By Topic</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="representatives" className="mt-4">
+            <div className="space-y-1">
+              {displayedReps.map(rep => (
+                <RepCoverageItem key={rep.candidateId} rep={rep} />
+              ))}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+            {hasMoreReps && (
+              <Button 
+                variant="ghost" 
+                className="w-full mt-2" 
+                onClick={() => setShowAllReps(!showAllReps)}
+              >
+                {showAllReps ? (
+                  <>
+                    <ChevronUp className="h-4 w-4 mr-2" />
+                    Show Less
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4 mr-2" />
+                    Show All ({stats.candidateCoverage.length} representatives)
+                  </>
+                )}
+              </Button>
+            )}
+            {stats.candidateCoverage.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No representatives found
+              </p>
+            )}
+          </TabsContent>
 
-      {/* Topic Coverage Card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            Answer Coverage by Topic
-          </CardTitle>
-          <CardDescription>
-            Question coverage across all policy topics
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1 divide-y md:divide-y-0">
-            {stats.topicCoverage.map((topic, index) => (
-              <div key={topic.topicId} className={index > 0 ? "md:border-t-0 border-t border-border pt-2 md:pt-0" : ""}>
-                <TopicCoverageItem topic={topic} />
-              </div>
-            ))}
-          </div>
-          {stats.topicCoverage.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No topics found
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+          <TabsContent value="topics" className="mt-4">
+            <div className="space-y-1">
+              {displayedTopics.map(topic => (
+                <TopicCoverageItem key={topic.topicId} topic={topic} />
+              ))}
+            </div>
+            {hasMoreTopics && (
+              <Button 
+                variant="ghost" 
+                className="w-full mt-2" 
+                onClick={() => setShowAllTopics(!showAllTopics)}
+              >
+                {showAllTopics ? (
+                  <>
+                    <ChevronUp className="h-4 w-4 mr-2" />
+                    Show Less
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4 mr-2" />
+                    Show All ({stats.topicCoverage.length} topics)
+                  </>
+                )}
+              </Button>
+            )}
+            {stats.topicCoverage.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No topics found
+              </p>
+            )}
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   );
 }
