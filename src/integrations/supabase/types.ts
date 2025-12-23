@@ -230,25 +230,61 @@ export type Database = {
         Row: {
           amount: number
           candidate_id: string
+          contributor_city: string | null
+          contributor_state: string | null
+          contributor_zip: string | null
           cycle: string
+          employer: string | null
+          first_receipt_date: string | null
           id: string
+          is_contribution: boolean | null
+          last_receipt_date: string | null
+          line_number: string | null
           name: string
+          occupation: string | null
+          recipient_committee_id: string | null
+          recipient_committee_name: string | null
+          transaction_count: number | null
           type: Database["public"]["Enums"]["donor_type"]
         }
         Insert: {
           amount: number
           candidate_id: string
+          contributor_city?: string | null
+          contributor_state?: string | null
+          contributor_zip?: string | null
           cycle: string
+          employer?: string | null
+          first_receipt_date?: string | null
           id: string
+          is_contribution?: boolean | null
+          last_receipt_date?: string | null
+          line_number?: string | null
           name: string
+          occupation?: string | null
+          recipient_committee_id?: string | null
+          recipient_committee_name?: string | null
+          transaction_count?: number | null
           type: Database["public"]["Enums"]["donor_type"]
         }
         Update: {
           amount?: number
           candidate_id?: string
+          contributor_city?: string | null
+          contributor_state?: string | null
+          contributor_zip?: string | null
           cycle?: string
+          employer?: string | null
+          first_receipt_date?: string | null
           id?: string
+          is_contribution?: boolean | null
+          last_receipt_date?: string | null
+          line_number?: string | null
           name?: string
+          occupation?: string | null
+          recipient_committee_id?: string | null
+          recipient_committee_name?: string | null
+          transaction_count?: number | null
           type?: Database["public"]["Enums"]["donor_type"]
         }
         Relationships: [

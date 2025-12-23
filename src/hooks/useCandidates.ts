@@ -38,7 +38,20 @@ interface Donor {
   type: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
   amount: number;
   cycle: string;
+  recipient_committee_id: string | null;
+  recipient_committee_name: string | null;
+  first_receipt_date: string | null;
+  last_receipt_date: string | null;
+  transaction_count: number;
+  contributor_city: string | null;
+  contributor_state: string | null;
+  contributor_zip: string | null;
+  employer: string | null;
+  occupation: string | null;
+  is_contribution: boolean;
 }
+
+export type { Donor };
 
 interface Vote {
   id: string;
