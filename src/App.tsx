@@ -16,6 +16,7 @@ import { Quiz } from "./pages/Quiz";
 import { QuizResults } from "./pages/QuizResults";
 import Parties from "./pages/Parties";
 import PartyProfile from "./pages/PartyProfile";
+import DonorProfile from "./pages/DonorProfile";
 import { QuizLibrary } from "./pages/QuizLibrary";
 import { HowScoringWorks } from "./pages/HowScoringWorks";
 import Admin from "./pages/Admin";
@@ -96,6 +97,11 @@ const AppRoutes = () => {
       <Route path="/party/:id" element={
         <RouteGuard requireAuth requireOnboarding>
           <PartyProfile />
+        </RouteGuard>
+      } />
+      <Route path="/donor/:id" element={
+        <RouteGuard requireAuth requireOnboarding>
+          <DonorProfile />
         </RouteGuard>
       } />
       <Route path="/candidate/:id" element={
