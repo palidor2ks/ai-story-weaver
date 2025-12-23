@@ -29,7 +29,37 @@ interface GeneratedAnswer {
   answer_value: number;
   source_description: string;
   source_url: string | null;
+  source_type: string;
   confidence: 'high' | 'medium' | 'low';
+}
+
+// Check if candidate ID is a congressional bioguide ID (letter + 6 digits, e.g., K000383)
+function isBioguideId(candidateId: string): boolean {
+  return /^[A-Z]\d{6}$/.test(candidateId);
+}
+
+// Check if the office indicates a congressional member
+function isCongressionalOffice(office: string): boolean {
+  const lowerOffice = office.toLowerCase();
+  return lowerOffice.includes('senator') || 
+         lowerOffice.includes('representative') ||
+         lowerOffice.includes('u.s. senator') ||
+         lowerOffice.includes('u.s. representative') ||
+         lowerOffice.includes('united states senator') ||
+         lowerOffice.includes('united states representative');
+}
+
+// Generate congress.gov profile URL from name and bioguide ID
+function buildCongressGovProfileUrl(bioguideId: string, name: string): string {
+  // Clean name and create slug: "Angus S. King, Jr." -> "angus-s-king-jr"
+  const slug = name
+    .toLowerCase()
+    .replace(/[.,]/g, '')  // Remove periods and commas
+    .replace(/[^a-z0-9\s-]/g, '')  // Remove special chars except spaces and hyphens
+    .trim()
+    .replace(/\s+/g, '-');  // Replace spaces with hyphens
+  
+  return `https://www.congress.gov/member/${slug}/${bioguideId}`;
 }
 
 // Snap AI-generated values to the nearest valid discrete score
@@ -59,8 +89,15 @@ async function generateChunkAnswers(
   candidateParty: string,
   candidateOffice: string,
   candidateState: string,
+  candidateId: string,
   questions: Question[]
 ): Promise<GeneratedAnswer[]> {
+  // Check if this is a congressional member
+  const isCongressional = isBioguideId(candidateId) && isCongressionalOffice(candidateOffice);
+  const congressGovUrl = isCongressional 
+    ? buildCongressGovProfileUrl(candidateId, candidateName) 
+    : null;
+
   // Format questions with their specific answer options
   const questionsText = questions
     .map((q, i) => {
@@ -135,7 +172,10 @@ CRITICAL: Return ONLY the JSON array. No markdown. No explanation.`;
       question_id: String(item.question_id || '').replace(/[\[\]]/g, ''),
       answer_value: snapToValidValue(item.answer_value),
       source_description: (item.source_description || `${candidateParty} platform`).slice(0, 100),
-      source_url: null,
+      // For congressional members, use congress.gov profile; otherwise null
+      source_url: congressGovUrl,
+      // For congressional members, set as voting_record; otherwise 'other'
+      source_type: isCongressional ? 'voting_record' : 'other',
       confidence: item.confidence || 'medium',
     }));
   } catch (e) {
@@ -175,6 +215,7 @@ async function generateAnswersInChunks(
         candidateParty,
         candidateOffice,
         candidateState,
+        candidateId,
         chunk
       );
       
@@ -191,7 +232,7 @@ async function generateAnswersInChunks(
         answer_value: answer.answer_value,
         source_description: answer.source_description,
         source_url: answer.source_url,
-        source_type: 'other', // AI-generated
+        source_type: answer.source_type,
         confidence: answer.confidence,
       }));
       
