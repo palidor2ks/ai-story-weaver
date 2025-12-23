@@ -169,8 +169,8 @@ async function fetchFederalExecutiveFromGitHub(): Promise<OfficialInfo[]> {
           image_url: imageUrl,
           is_incumbent: true,
           overall_score: null,
-          coverage_tier: 'tier_1',
-          confidence: 'high',
+          coverage_tier: 'tier_3',
+          confidence: 'low',
         });
       }
     }
@@ -285,7 +285,7 @@ async function fetchOpenStatesOfficials(state: string, lat?: number, lng?: numbe
           is_incumbent: true,
           overall_score: null,
           coverage_tier: 'tier_3',
-          confidence: 'medium',
+          confidence: 'low',
         };
 
         legislators.push(official);
@@ -330,8 +330,8 @@ async function fetchOpenStatesOfficials(state: string, lat?: number, lng?: numbe
           emails: person.email ? [person.email] : [],
           is_incumbent: true,
           overall_score: null,
-          coverage_tier: 'tier_2',
-          confidence: 'high',
+          coverage_tier: 'tier_3',
+          confidence: 'low',
         };
 
         governors.push(official);
@@ -381,7 +381,7 @@ async function fetchLocalOfficialsFromDB(state: string): Promise<OfficialInfo[]>
       is_incumbent: true,
       overall_score: null,
       coverage_tier: official.coverage_tier || 'tier_3',
-      confidence: official.confidence || 'medium',
+      confidence: official.confidence || 'low',
     }));
   } catch (error) {
     console.error('[DB] Exception fetching local officials:', error);

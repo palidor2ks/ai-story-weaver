@@ -92,8 +92,8 @@ Deno.serve(async (req) => {
         party: mapParty(latestTerm.party),
         district,
         is_incumbent: true,
-        coverage_tier: 'tier_2' as const,
-        confidence: 'medium' as const,
+        coverage_tier: 'tier_3' as const,
+        confidence: 'low' as const,
         answers_source: 'api',
         image_url: imageUrl,
       };
