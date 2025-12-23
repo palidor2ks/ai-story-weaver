@@ -99,20 +99,24 @@ serve(async (req) => {
         cycles: r.election_years || [],
       };
 
-      // Fetch principal committee ID for this candidate
+      // Fetch principal committee ID for this candidate using the committees endpoint
       try {
-        const committeeUrl = `https://api.open.fec.gov/v1/candidate/${r.candidate_id}/?api_key=${fecApiKey}`;
-        console.log('[FEC] Fetching committee for:', r.candidate_id);
+        const committeeUrl = `https://api.open.fec.gov/v1/candidate/${r.candidate_id}/committees/?api_key=${fecApiKey}&designation=P`;
+        console.log('[FEC] Fetching principal committee for:', r.candidate_id);
         
         const committeeResponse = await fetch(committeeUrl);
         if (committeeResponse.ok) {
           const committeeData = await committeeResponse.json();
-          const principalCommittees = committeeData.results?.[0]?.principal_committees || [];
-          if (principalCommittees.length > 0) {
-            // Get the most recent principal committee
-            candidate.principal_committee_id = principalCommittees[0].committee_id;
+          console.log('[FEC] Committee response:', JSON.stringify(committeeData.results?.slice(0, 2)));
+          
+          // Find principal committee (designation P) - they're returned directly
+          const principalCommittee = committeeData.results?.[0];
+          if (principalCommittee?.committee_id) {
+            candidate.principal_committee_id = principalCommittee.committee_id;
             console.log('[FEC] Found principal committee:', candidate.principal_committee_id);
           }
+        } else {
+          console.warn('[FEC] Committee lookup failed:', committeeResponse.status);
         }
       } catch (err) {
         console.warn('[FEC] Failed to fetch committee for', r.candidate_id, err);
