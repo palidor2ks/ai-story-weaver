@@ -274,20 +274,9 @@ serve(async (req) => {
     const { data: existingAnswers, error: existingError } = await existingAnswersQuery;
     if (existingError) throw existingError;
 
-    // If we have answers and not forcing regeneration, check if score needs to be calculated
-    if (existingAnswers && existingAnswers.length > 0 && !forceRegenerate) {
+    // Log existing answers count (we'll filter and generate missing ones below)
+    if (existingAnswers && existingAnswers.length > 0) {
       console.log(`Found ${existingAnswers.length} existing answers for ${candidateId}`);
-      
-      // Always ensure overall_score is calculated and saved (fixes gap where answers exist but score is 0)
-      await ensureScoreIsSaved(supabase, candidateId, existingAnswers);
-      
-      return new Response(JSON.stringify({
-        answers: existingAnswers,
-        source: 'database',
-        count: existingAnswers.length,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
     }
 
     // Get candidate info - first try from request params, then database
