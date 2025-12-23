@@ -121,7 +121,7 @@ export function SyncStatusDashboard() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || !stats) {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
@@ -130,8 +130,6 @@ export function SyncStatusDashboard() {
       </Card>
     );
   }
-
-  if (!stats) return null;
 
   const displayedReps = showAllReps ? stats.candidateCoverage : stats.candidateCoverage.slice(0, 15);
   const displayedTopics = showAllTopics ? stats.topicCoverage : stats.topicCoverage.slice(0, 10);
