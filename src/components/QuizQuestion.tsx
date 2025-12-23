@@ -63,7 +63,7 @@ export const QuizQuestion = ({
                   )}>
                     {String.fromCharCode(65 + index)}
                   </span>
-                  <span className="text-base">{option.text}</span>
+                  <span className="text-base break-words whitespace-normal text-wrap">{option.text}</span>
                 </Button>
               );
             })}
