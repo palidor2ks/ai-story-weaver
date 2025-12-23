@@ -115,7 +115,7 @@ export const CandidateCard = ({
           {/* Name & Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+              <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2 break-words">
                 {candidate.name}
               </h3>
               <span className={cn("text-xs font-bold", getPartyColor(candidate.party))}>
