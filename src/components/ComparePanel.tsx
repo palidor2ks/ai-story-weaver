@@ -2,9 +2,9 @@ import { useMemo } from 'react';
 import { X, Users, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScoreText } from './ScoreText';
+import { OfficialAvatar } from './OfficialAvatar';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
@@ -31,23 +31,6 @@ export const ComparePanel = ({
       case 'Independent': return 'bg-purple-500/10 text-purple-700 border-purple-500/30';
       default: return 'bg-muted text-muted-foreground';
     }
-  };
-
-  const getPartyBgColor = (party: string) => {
-    switch (party) {
-      case 'Democrat': return 'bg-blue-600';
-      case 'Republican': return 'bg-red-600';
-      case 'Independent': return 'bg-purple-600';
-      default: return 'bg-primary';
-    }
-  };
-
-  const getInitials = (name: string) => {
-    const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase();
   };
 
   // Sort by score for easier comparison
@@ -94,14 +77,12 @@ export const ComparePanel = ({
 
                 {/* Candidate info */}
                 <div className="flex items-center gap-2 mb-3">
-                  <Avatar className="w-10 h-10 ring-1 ring-border">
-                    {candidate.imageUrl && (
-                      <AvatarImage src={candidate.imageUrl} alt={candidate.name} />
-                    )}
-                    <AvatarFallback className={cn("text-xs text-white font-bold", getPartyBgColor(candidate.party))}>
-                      {getInitials(candidate.name)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <OfficialAvatar
+                    imageUrl={candidate.imageUrl}
+                    name={candidate.name}
+                    party={candidate.party}
+                    size="sm"
+                  />
                   <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-sm text-foreground truncate">{candidate.name}</h4>
                     <div className="flex items-center gap-1.5 flex-wrap">

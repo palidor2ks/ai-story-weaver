@@ -7,6 +7,7 @@ import { MapPin, Star, Shield, ArrowRightLeft, CheckCircle, Sparkles } from 'luc
 import { ScoreText } from './ScoreText';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { OfficialAvatar } from './OfficialAvatar';
 
 interface CandidateCardProps {
   candidate: Candidate;
@@ -35,15 +36,6 @@ export const CandidateCard = ({
     }
   };
 
-  const getPartyBgColor = (party: string) => {
-    switch (party) {
-      case 'Democrat': return 'bg-blue-600';
-      case 'Republican': return 'bg-red-600';
-      case 'Independent': return 'bg-purple-600';
-      default: return 'bg-muted';
-    }
-  };
-
   const getPartyInitial = (party: string) => {
     switch (party) {
       case 'Democrat': return 'D';
@@ -51,14 +43,6 @@ export const CandidateCard = ({
       case 'Independent': return 'I';
       default: return '?';
     }
-  };
-
-  const getInitials = (name: string) => {
-    const parts = name.split(' ').filter(Boolean);
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    }
-    return parts[0]?.[0]?.toUpperCase() || '?';
   };
 
   // Get coverage tier, confidence, and transition status from candidate (with defaults)
@@ -121,27 +105,12 @@ export const CandidateCard = ({
           )}
 
           {/* Compact Avatar */}
-          <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
-            {candidate.imageUrl && candidate.imageUrl.trim() !== '' ? (
-              <img 
-                src={candidate.imageUrl}
-                alt={candidate.name}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  const target = e.currentTarget;
-                  target.style.display = 'none';
-                  const fallback = target.nextElementSibling as HTMLElement;
-                  if (fallback) fallback.style.display = 'flex';
-                }}
-              />
-            ) : null}
-            <div 
-              className={cn("w-full h-full flex items-center justify-center", getPartyBgColor(candidate.party))}
-              style={{ display: candidate.imageUrl && candidate.imageUrl.trim() !== '' ? 'none' : 'flex' }}
-            >
-              <span className="text-white font-bold text-sm">{getInitials(candidate.name)}</span>
-            </div>
-          </div>
+          <OfficialAvatar
+            imageUrl={candidate.imageUrl}
+            name={candidate.name}
+            party={candidate.party}
+            size="md"
+          />
 
           {/* Name & Info */}
           <div className="flex-1 min-w-0">
