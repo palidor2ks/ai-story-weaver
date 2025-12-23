@@ -206,10 +206,14 @@ export const useCandidate = (id: string | undefined) => {
         return mergedOfficial;
       }
 
-      // Check if this is an executive ID pattern (exec_*, gov_*, etc.) - skip Congress API
-      const isExecutiveId = id.startsWith('exec_') || id.startsWith('gov_') || id.startsWith('local_') || id.startsWith('state_');
+      // Check if this is a non-Congress ID pattern - skip Congress API
+      const isNonCongressId = id.startsWith('exec_') || 
+                               id.startsWith('gov_') || 
+                               id.startsWith('local_') || 
+                               id.startsWith('state_') ||
+                               id.startsWith('openstates_');
       
-      if (isExecutiveId) {
+      if (isNonCongressId) {
         // For executive IDs not in DB, return basic info from override if available
         if (override) {
           return {
