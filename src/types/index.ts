@@ -76,6 +76,9 @@ export interface Candidate {
   // AI answer metadata
   hasAIAnswers?: boolean;
   answerCount?: number;
+  // Runtime-computed properties
+  level?: 'federal' | 'state' | 'local';
+  matchScore?: number;
 }
 
 export interface MatchResult {
