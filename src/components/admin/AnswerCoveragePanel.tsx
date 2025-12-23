@@ -388,29 +388,50 @@ export function AnswerCoveragePanel() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant={candidate.answerCount === 0 ? 'default' : 'outline'}
-                              disabled={loading || isBatchRunning}
-                              onClick={() => populateCandidate(candidate.id, candidate.answerCount > 0)}
-                            >
-                              {loading ? (
-                                <>
-                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                  ...
-                                </>
-                              ) : candidate.answerCount === 0 ? (
-                                <>
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Generate
-                                </>
-                              ) : (
-                                <>
-                                  <RefreshCw className="h-3 w-3 mr-1" />
-                                  Regen
-                                </>
+                            <div className="flex gap-1 justify-end">
+                              {/* Generate button - visible when there are missing answers */}
+                              {candidate.answerCount < candidate.totalQuestions && (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  disabled={loading || isBatchRunning}
+                                  onClick={() => populateCandidate(candidate.id, false)}
+                                >
+                                  {loading ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      ...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="h-3 w-3 mr-1" />
+                                      Generate
+                                    </>
+                                  )}
+                                </Button>
                               )}
-                            </Button>
+                              {/* Regenerate button - visible when there are existing answers */}
+                              {candidate.answerCount > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={loading || isBatchRunning}
+                                  onClick={() => populateCandidate(candidate.id, true)}
+                                >
+                                  {loading ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      ...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <RefreshCw className="h-3 w-3 mr-1" />
+                                      Regen
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
