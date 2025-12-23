@@ -51,6 +51,14 @@ interface PartyAnswer {
   notes: string | null;
 }
 
+// Snap AI-generated values to the nearest valid discrete score
+function snapToValidValue(value: number): number {
+  const validValues = [-10, -5, 0, 5, 10];
+  return validValues.reduce((prev, curr) => 
+    Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev
+  );
+}
+
 async function getPartyStances(
   questions: Question[],
   partyId: string,
@@ -78,6 +86,9 @@ IMPORTANT: Democrats and Green Party should have NEGATIVE scores (left-leaning).
 Republicans should have POSITIVE scores (right-leaning).
 Libertarians are mixed: socially liberal (negative) but fiscally conservative (positive).
 
+CRITICAL: You MUST use ONLY these exact values: -10, -5, 0, +5, or +10.
+NO intermediate values like -7, -3, +2, +8, etc. are allowed.
+
 Be accurate to the party's actual documented positions. Include confidence level (high/medium/low) based on how clearly documented the position is.`;
 
   const userPrompt = `Analyze the ${partyContext.name}'s official position on each of these questions.
@@ -90,7 +101,7 @@ ${questionsText}
 
 For each question, provide a JSON array with objects containing:
 - question_id: the ID in brackets
-- answer_value: integer from -10 to +10
+- answer_value: MUST be one of: -10, -5, 0, +5, or +10 (no intermediate values)
 - confidence: "high", "medium", or "low"
 - source_description: brief description of where this position comes from (e.g., "2024 Party Platform", "Congressional voting pattern")
 - notes: optional brief explanation of the position (null if not needed)
@@ -134,7 +145,7 @@ Return ONLY a valid JSON array, no other text.`;
       answers = parsed.map((item: any) => ({
         party_id: partyId,
         question_id: item.question_id,
-        answer_value: Math.max(-10, Math.min(10, Math.round(item.answer_value))),
+        answer_value: snapToValidValue(item.answer_value),
         source_description: item.source_description || `${partyContext.name} Platform`,
         source_url: getSourceUrl(partyId),
         confidence: item.confidence || 'medium',
