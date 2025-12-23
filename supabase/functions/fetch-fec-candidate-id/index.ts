@@ -131,8 +131,8 @@ serve(async (req) => {
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      // Use the first (best) match
-      const bestMatch = candidates[0];
+      // Prefer a candidate with a committee ID, otherwise use the first match
+      const bestMatch = candidates.find(c => c.principal_committee_id) || candidates[0];
       console.log('[FEC] Updating candidate', candidateId, 'with FEC ID:', bestMatch.candidate_id, 'committee:', bestMatch.principal_committee_id);
 
       const updateData: Record<string, string | null> = { 
