@@ -57,10 +57,11 @@ export function useSyncStats() {
 
       if (topicsError) throw topicsError;
 
-      // Get all answers
+      // Get all answers (explicit limit to avoid Supabase's default 1000 row limit)
       const { data: allAnswers, error: allAnswersError } = await supabase
         .from('candidate_answers')
-        .select('question_id, candidate_id');
+        .select('question_id, candidate_id')
+        .limit(100000);
 
       if (allAnswersError) throw allAnswersError;
 
