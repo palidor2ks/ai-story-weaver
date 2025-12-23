@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { TopicSelector } from '@/components/TopicSelector';
@@ -13,8 +13,7 @@ import { calculateQuizScore } from '@/lib/score';
 import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Minimum required answers before allowing quiz completion (50% of questions)
-const MIN_REQUIRED_ANSWERS = 5;
+// Minimum required answers is now dynamically calculated based on available questions
 
 type ExtendedOnboardingStep = OnboardingStep | 'demographics';
 
@@ -66,14 +65,37 @@ export const Onboarding = () => {
     questions.filter(q => !skippedQuestionIds.has(q.id)),
   [questions, skippedQuestionIds]);
 
-  const handleTopicToggle = (topic: Topic) => {
-    const exists = selectedTopics.some(t => t.id === topic.id);
-    if (exists) {
-      setSelectedTopics(selectedTopics.filter(t => t.id !== topic.id));
-    } else if (selectedTopics.length < 5) {
-      // Add with weight based on position (first selected = highest weight)
-      setSelectedTopics([...selectedTopics, { ...topic, weight: 5 - selectedTopics.length }]);
+  // Dynamic minimum: at least 50% of available questions, minimum of 1
+  const minRequiredAnswers = useMemo(() => 
+    Math.max(1, Math.ceil(questions.length / 2)),
+  [questions.length]);
+
+  // Clamp currentQuestionIndex when activeQuestions shrinks (e.g., after skipping)
+  useEffect(() => {
+    if (activeQuestions.length > 0 && currentQuestionIndex >= activeQuestions.length) {
+      setCurrentQuestionIndex(activeQuestions.length - 1);
     }
+  }, [activeQuestions.length, currentQuestionIndex]);
+
+  const handleTopicToggle = (topic: Topic) => {
+    setSelectedTopics(prev => {
+      const exists = prev.some(t => t.id === topic.id);
+      let newTopics: Topic[];
+      
+      if (exists) {
+        newTopics = prev.filter(t => t.id !== topic.id);
+      } else if (prev.length < 5) {
+        newTopics = [...prev, topic];
+      } else {
+        return prev;
+      }
+      
+      // Re-normalize weights based on new order (5 = highest priority, 1 = lowest)
+      return newTopics.map((t, index) => ({
+        ...t,
+        weight: 5 - index
+      }));
+    });
   };
 
   const handleOptionSelect = (option: QuestionOption) => {
@@ -118,12 +140,12 @@ export const Onboarding = () => {
     // If we're at the last question or will have too few questions left
     if (currentQuestionIndex >= activeQuestions.length - 1) {
       // Check if we have enough answers to proceed
-      if (currentAnswerCount >= MIN_REQUIRED_ANSWERS) {
+      if (currentAnswerCount >= minRequiredAnswers) {
         const scores = calculateUserScore();
         setCalculatedScores(scores);
         setStep('results');
       } else {
-        toast.error(`Please answer at least ${MIN_REQUIRED_ANSWERS} questions to continue.`);
+        toast.error(`Please answer at least ${minRequiredAnswers} questions to continue.`);
       }
     }
     // Otherwise the activeQuestions memo will update and show next question
@@ -159,8 +181,8 @@ export const Onboarding = () => {
     if (!calculatedScores) return;
     
     // Final guard: ensure minimum answers
-    if (quizAnswers.length < MIN_REQUIRED_ANSWERS) {
-      toast.error(`Please answer at least ${MIN_REQUIRED_ANSWERS} questions before continuing.`);
+    if (quizAnswers.length < minRequiredAnswers) {
+      toast.error(`Please answer at least ${minRequiredAnswers} questions before continuing.`);
       return;
     }
 
@@ -187,7 +209,7 @@ export const Onboarding = () => {
   };
 
   // Calculate if user can complete (has enough answers)
-  const canComplete = quizAnswers.length >= MIN_REQUIRED_ANSWERS;
+  const canComplete = quizAnswers.length >= minRequiredAnswers;
   const skippedCount = skippedQuestionIds.size;
 
   const currentAnswer = quizAnswers.find(
@@ -376,6 +398,16 @@ export const Onboarding = () => {
             </div>
           );
         }
+
+        // Defensive check: ensure current question exists
+        const currentQuestion = activeQuestions[currentQuestionIndex];
+        if (!currentQuestion) {
+          return (
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            </div>
+          );
+        }
         
         return (
           <div className="max-w-2xl mx-auto">
@@ -390,7 +422,7 @@ export const Onboarding = () => {
             )}
             
             <QuizQuestion
-              question={activeQuestions[currentQuestionIndex]}
+              question={currentQuestion}
               selectedOptionId={currentAnswer?.selectedOptionId || null}
               onSelect={handleOptionSelect}
               onSkip={handleSkipQuestion}
@@ -485,7 +517,7 @@ export const Onboarding = () => {
               onClick={handleComplete}
               disabled={saveQuizResults.isPending || saveUserTopics.isPending || !canComplete}
               className="w-full"
-              title={!canComplete ? `Answer at least ${MIN_REQUIRED_ANSWERS} questions to continue` : undefined}
+              title={!canComplete ? `Answer at least ${minRequiredAnswers} questions to continue` : undefined}
             >
               {saveQuizResults.isPending ? 'Saving...' : 'Explore Politicians'}
               <ArrowRight className="w-5 h-5" />
@@ -493,7 +525,7 @@ export const Onboarding = () => {
             
             {!canComplete && (
               <p className="text-sm text-destructive mt-3">
-                Please answer at least {MIN_REQUIRED_ANSWERS} questions to continue.
+                Please answer at least {minRequiredAnswers} questions to continue.
               </p>
             )}
           </div>
