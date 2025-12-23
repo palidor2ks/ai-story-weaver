@@ -51,7 +51,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { candidateId, fecCandidateId, fecCommitteeId, cycle = '2024', maxPages = 50 } = await req.json();
+    const { candidateId, fecCandidateId, fecCommitteeId, cycle = '2024', maxPages = 150 } = await req.json();
     console.log('[FEC-DONORS] Fetching donors for:', { candidateId, fecCandidateId, fecCommitteeId, cycle });
 
     if (!candidateId) {
