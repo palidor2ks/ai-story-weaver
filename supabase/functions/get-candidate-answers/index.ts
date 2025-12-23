@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+const CONGRESS_GOV_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -33,6 +34,16 @@ interface GeneratedAnswer {
   confidence: 'high' | 'medium' | 'low';
 }
 
+interface LegislationRecord {
+  bill_id: string;
+  title: string;
+  policy_area: string;
+  action: 'Sponsored' | 'Cosponsored';
+  congress: number;
+  type: string;
+  number: number;
+}
+
 // Check if candidate ID is a congressional bioguide ID (letter + 6 digits, e.g., K000383)
 function isBioguideId(candidateId: string): boolean {
   return /^[A-Z]\d{6}$/.test(candidateId);
@@ -51,16 +62,131 @@ function isCongressionalOffice(office: string): boolean {
 
 // Generate congress.gov profile URL from name and bioguide ID
 function buildCongressGovProfileUrl(bioguideId: string, name: string): string {
-  // Clean name and create slug: "Angus S. King, Jr." -> "angus-s-king-jr"
   const slug = name
     .toLowerCase()
-    .replace(/[.,]/g, '')  // Remove periods and commas
-    .replace(/[^a-z0-9\s-]/g, '')  // Remove special chars except spaces and hyphens
+    .replace(/[.,]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
     .trim()
-    .replace(/\s+/g, '-');  // Replace spaces with hyphens
+    .replace(/\s+/g, '-');
   
   return `https://www.congress.gov/member/${slug}/${bioguideId}`;
 }
+
+// Build URL to a specific bill on congress.gov
+function buildBillUrl(type: string, number: number, congress: number): string {
+  const typeMap: Record<string, string> = {
+    'HR': 'house-bill',
+    'S': 'senate-bill',
+    'HRES': 'house-resolution',
+    'SRES': 'senate-resolution',
+    'HJRES': 'house-joint-resolution',
+    'SJRES': 'senate-joint-resolution',
+    'HCONRES': 'house-concurrent-resolution',
+    'SCONRES': 'senate-concurrent-resolution',
+  };
+  const urlType = typeMap[type.toUpperCase()] || 'bill';
+  return `https://www.congress.gov/bill/${congress}th-congress/${urlType}/${number}`;
+}
+
+// Extract bill info from source_description to build specific bill URL
+function extractBillInfo(sourceDescription: string): { type: string; number: number } | null {
+  // Match patterns like "H.R. 1234", "S. 567", "HR1234", "S567", etc.
+  const patterns = [
+    /\b(H\.?R\.?|S\.?|H\.?RES\.?|S\.?RES\.?|H\.?J\.?RES\.?|S\.?J\.?RES\.?)\s*(\d+)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = sourceDescription.match(pattern);
+    if (match) {
+      const type = match[1].replace(/\./g, '').toUpperCase();
+      return { type, number: parseInt(match[2], 10) };
+    }
+  }
+  return null;
+}
+
+// Fetch member's voting record from Congress.gov API
+async function fetchMemberVotingRecord(bioguideId: string): Promise<LegislationRecord[]> {
+  if (!CONGRESS_GOV_API_KEY) {
+    console.log('CONGRESS_GOV_API_KEY not configured, skipping voting record fetch');
+    return [];
+  }
+  
+  const records: LegislationRecord[] = [];
+  
+  try {
+    // Fetch sponsored legislation
+    const sponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/sponsored-legislation?api_key=${CONGRESS_GOV_API_KEY}&limit=50`;
+    console.log(`Fetching sponsored legislation for ${bioguideId}...`);
+    const sponsoredResponse = await fetch(sponsoredUrl);
+    
+    if (sponsoredResponse.ok) {
+      const sponsoredData = await sponsoredResponse.json();
+      const sponsored = (sponsoredData.sponsoredLegislation || []).map((bill: any) => ({
+        bill_id: `${bill.type || 'HR'}${bill.number}`,
+        title: bill.title || '',
+        policy_area: bill.policyArea?.name || 'General',
+        action: 'Sponsored' as const,
+        congress: bill.congress || 118,
+        type: bill.type || 'HR',
+        number: bill.number || 0,
+      }));
+      records.push(...sponsored);
+      console.log(`Found ${sponsored.length} sponsored bills`);
+    } else {
+      console.error(`Failed to fetch sponsored legislation: ${sponsoredResponse.status}`);
+    }
+    
+    // Fetch cosponsored legislation
+    const cosponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/cosponsored-legislation?api_key=${CONGRESS_GOV_API_KEY}&limit=50`;
+    const cosponsoredResponse = await fetch(cosponsoredUrl);
+    
+    if (cosponsoredResponse.ok) {
+      const cosponsoredData = await cosponsoredResponse.json();
+      const cosponsored = (cosponsoredData.cosponsoredLegislation || []).map((bill: any) => ({
+        bill_id: `${bill.type || 'HR'}${bill.number}`,
+        title: bill.title || '',
+        policy_area: bill.policyArea?.name || 'General',
+        action: 'Cosponsored' as const,
+        congress: bill.congress || 118,
+        type: bill.type || 'HR',
+        number: bill.number || 0,
+      }));
+      records.push(...cosponsored);
+      console.log(`Found ${cosponsored.length} cosponsored bills`);
+    } else {
+      console.error(`Failed to fetch cosponsored legislation: ${cosponsoredResponse.status}`);
+    }
+  } catch (e) {
+    console.error('Error fetching voting record:', e);
+  }
+  
+  return records;
+}
+
+// Map policy areas to question topics for relevance matching
+const policyAreaToTopics: Record<string, string[]> = {
+  'Health': ['healthcare'],
+  'Economics and Public Finance': ['economy', 'taxes'],
+  'Taxation': ['economy', 'taxes'],
+  'Education': ['education'],
+  'Environmental Protection': ['environment', 'climate'],
+  'Energy': ['environment', 'climate', 'energy'],
+  'Immigration': ['immigration'],
+  'Crime and Law Enforcement': ['criminal-justice', 'gun-policy'],
+  'Civil Rights and Liberties, Minority Issues': ['civil-rights', 'lgbtq'],
+  'Armed Forces and National Security': ['foreign-policy', 'defense'],
+  'International Affairs': ['foreign-policy', 'israel-palestine', 'china-taiwan'],
+  'Labor and Employment': ['economy', 'labor'],
+  'Social Welfare': ['welfare', 'economy'],
+  'Agriculture and Food': ['agriculture'],
+  'Science, Technology, Communications': ['technology'],
+  'Government Operations and Politics': ['government'],
+  'Transportation and Public Works': ['infrastructure'],
+  'Housing and Community Development': ['housing'],
+  'Finance and Financial Sector': ['economy', 'finance'],
+  'Commerce': ['economy', 'commerce'],
+};
 
 // Snap AI-generated values to the nearest valid discrete score
 function snapToValidValue(value: number): number {
@@ -72,11 +198,9 @@ function snapToValidValue(value: number): number {
 
 // Clean and parse JSON from AI response - handles code fences and whitespace
 function parseAIResponse(content: string): any[] {
-  // Strip markdown code fences if present
   let cleaned = content.trim();
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   
-  // Try to find JSON array
   const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
   if (jsonMatch) {
     return JSON.parse(jsonMatch[0]);
@@ -90,9 +214,9 @@ async function generateChunkAnswers(
   candidateOffice: string,
   candidateState: string,
   candidateId: string,
-  questions: Question[]
+  questions: Question[],
+  votingRecord: LegislationRecord[]
 ): Promise<GeneratedAnswer[]> {
-  // Check if this is a congressional member
   const isCongressional = isBioguideId(candidateId) && isCongressionalOffice(candidateOffice);
   const congressGovUrl = isCongressional 
     ? buildCongressGovProfileUrl(candidateId, candidateName) 
@@ -113,6 +237,14 @@ async function generateChunkAnswers(
     })
     .join('\n\n');
 
+  // Build voting record context for congressional members
+  let votingContext = '';
+  if (isCongressional && votingRecord.length > 0) {
+    const relevantBills = votingRecord.slice(0, 40); // Limit to keep prompt size reasonable
+    votingContext = `\n\nLEGISLATIVE RECORD (cite specific bills in source_description when relevant):
+${relevantBills.map(v => `- ${v.action} ${v.type}${v.number}: "${v.title.slice(0, 80)}" (${v.policy_area})`).join('\n')}`;
+  }
+
   const systemPrompt = `You are a non-partisan political analyst. Determine likely positions for elected officials based on party platform, voting record, public statements, and state context.
 
 Use LEFT-RIGHT spectrum: -10 = Far LEFT, -5 = Left, 0 = Neutral, +5 = Right, +10 = Far RIGHT.
@@ -121,7 +253,12 @@ ONLY use: -10, -5, 0, +5, or +10. No intermediate values.
 
 Return ONLY valid JSON array, no markdown fences, no extra text.`;
 
+  const sourceInstructions = isCongressional && votingRecord.length > 0
+    ? `- source_description: CITE SPECIFIC BILL when relevant (e.g., "Sponsored HR1234 Climate Act" or "Cosponsored S567 Tax Reform"). If no specific bill applies, use general party platform.`
+    : `- source_description: brief source (max 50 chars)`;
+
   const userPrompt = `Official: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
+${votingContext}
 
 Questions:
 ${questionsText}
@@ -130,7 +267,7 @@ Return JSON array with objects: {question_id, answer_value, confidence, source_d
 - question_id: the ID in brackets (e.g. "eco1")
 - answer_value: -10, -5, 0, 5, or 10
 - confidence: "high"/"medium"/"low"
-- source_description: brief source (max 50 chars)
+${sourceInstructions}
 
 CRITICAL: Return ONLY the JSON array. No markdown. No explanation.`;
 
@@ -147,7 +284,7 @@ CRITICAL: Return ONLY the JSON array. No markdown. No explanation.`;
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.3,
-      max_tokens: 2000, // Enough for 20 answers
+      max_tokens: 2000,
     }),
   });
 
@@ -168,16 +305,32 @@ CRITICAL: Return ONLY the JSON array. No markdown. No explanation.`;
 
   try {
     const parsed = parseAIResponse(content);
-    return parsed.map((item: any) => ({
-      question_id: String(item.question_id || '').replace(/[\[\]]/g, ''),
-      answer_value: snapToValidValue(item.answer_value),
-      source_description: (item.source_description || `${candidateParty} platform`).slice(0, 100),
-      // For congressional members, use congress.gov profile; otherwise null
-      source_url: congressGovUrl,
-      // For congressional members, set as voting_record; otherwise 'other'
-      source_type: isCongressional ? 'voting_record' : 'other',
-      confidence: item.confidence || 'medium',
-    }));
+    return parsed.map((item: any) => {
+      const sourceDesc = (item.source_description || `${candidateParty} platform`).slice(0, 100);
+      
+      // For congressional members, try to extract bill info and build specific URL
+      let sourceUrl = congressGovUrl;
+      if (isCongressional) {
+        const billInfo = extractBillInfo(sourceDesc);
+        if (billInfo) {
+          // Find the bill in voting record to get congress number
+          const matchingBill = votingRecord.find(
+            v => v.type.toUpperCase() === billInfo.type && v.number === billInfo.number
+          );
+          const congress = matchingBill?.congress || 118;
+          sourceUrl = buildBillUrl(billInfo.type, billInfo.number, congress);
+        }
+      }
+      
+      return {
+        question_id: String(item.question_id || '').replace(/[\[\]]/g, ''),
+        answer_value: snapToValidValue(item.answer_value),
+        source_description: sourceDesc,
+        source_url: sourceUrl,
+        source_type: isCongressional ? 'voting_record' : 'other',
+        confidence: item.confidence || 'medium',
+      };
+    });
   } catch (e) {
     console.error('Failed to parse AI response:', e);
     console.error('Raw content:', content.slice(0, 300));
@@ -192,7 +345,8 @@ async function generateAnswersInChunks(
   candidateParty: string,
   candidateOffice: string,
   candidateState: string,
-  questions: Question[]
+  questions: Question[],
+  votingRecord: LegislationRecord[]
 ): Promise<{ generated: number; failed: number }> {
   let totalGenerated = 0;
   let failedChunks = 0;
@@ -216,7 +370,8 @@ async function generateAnswersInChunks(
         candidateOffice,
         candidateState,
         candidateId,
-        chunk
+        chunk,
+        votingRecord
       );
       
       if (answers.length === 0) {
@@ -462,6 +617,16 @@ serve(async (req) => {
 
     console.log(`Generating ${missingBefore} missing answers for ${officialInfo.name}...`);
 
+    // For congressional members, fetch their voting record first
+    const isCongressional = isBioguideId(candidateId) && isCongressionalOffice(officialInfo.office);
+    let votingRecord: LegislationRecord[] = [];
+    
+    if (isCongressional) {
+      console.log(`Fetching voting record for congressional member ${candidateId}...`);
+      votingRecord = await fetchMemberVotingRecord(candidateId);
+      console.log(`Retrieved ${votingRecord.length} legislative records`);
+    }
+
     // Generate answers in chunks
     const { generated, failed } = await generateAnswersInChunks(
       supabase,
@@ -470,7 +635,8 @@ serve(async (req) => {
       officialInfo.party,
       officialInfo.office,
       officialInfo.state,
-      questionsToGenerate
+      questionsToGenerate,
+      votingRecord
     );
 
     // Update overall score if we generated any answers
