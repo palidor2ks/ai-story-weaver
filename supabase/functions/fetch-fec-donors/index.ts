@@ -250,7 +250,24 @@ serve(async (req) => {
     let totalUpserted = 0;
 
     for (let i = 0; i < donors.length; i += batchSize) {
-      const batch = donors.slice(i, i + batchSize);
+      const batchRaw = donors.slice(i, i + batchSize);
+
+      // Safety: ensure no duplicate IDs within a single upsert payload
+      const batchMap = new Map<string, typeof batchRaw[number]>();
+      for (const row of batchRaw) {
+        const existing = batchMap.get(row.id);
+        if (existing) {
+          existing.amount += row.amount;
+        } else {
+          batchMap.set(row.id, { ...row });
+        }
+      }
+
+      const batch = Array.from(batchMap.values());
+      if (batch.length !== batchRaw.length) {
+        console.warn('[FEC-DONORS] Deduped', batchRaw.length - batch.length, 'duplicate IDs within batch', Math.floor(i / batchSize) + 1);
+      }
+
       const { data: upsertedData, error: upsertError } = await supabase
         .from('donors')
         .upsert(batch, { 
