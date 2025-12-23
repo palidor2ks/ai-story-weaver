@@ -119,7 +119,7 @@ export const Feed = () => {
       const uniqueKeys = new Set<string>();
       const deduped = allCandidates.filter(c => {
         // Include state, district, and level to prevent legitimate candidates from being filtered out
-        const key = `${c.name}-${c.office}-${c.state}-${c.district || ''}-${(c as any).level || ''}`;
+        const key = `${c.name}-${c.office}-${c.state}-${c.district || ''}-${c.level || ''}`;
         if (uniqueKeys.has(key)) return false;
         uniqueKeys.add(key);
         return true;
@@ -217,7 +217,7 @@ export const Feed = () => {
     if (levelFilter !== 'all') {
       result = result.filter(c => {
         const office = c.office.toLowerCase();
-        const candidateLevel = (c as any).level;
+        const candidateLevel = c.level;
         
         if (levelFilter === 'federal') {
           return candidateLevel === 'federal' ||
@@ -255,8 +255,8 @@ export const Feed = () => {
       case 'match':
         result.sort((a, b) => {
           // Use calculated matchScore if available, otherwise fall back to overall score comparison
-          const matchA = (a as any).matchScore ?? calculateMatchScore(userScore, a.overallScore);
-          const matchB = (b as any).matchScore ?? calculateMatchScore(userScore, b.overallScore);
+          const matchA = a.matchScore ?? calculateMatchScore(userScore, a.overallScore);
+          const matchB = b.matchScore ?? calculateMatchScore(userScore, b.overallScore);
           return matchB - matchA;
         });
         break;
@@ -281,7 +281,7 @@ export const Feed = () => {
   const bestMatch = useMemo(() => {
     if (candidatesWithScores.length === 0) return 0;
     const matches = candidatesWithScores.map(c => 
-      (c as any).matchScore ?? calculateMatchScore(profile?.overall_score ?? 0, c.overallScore)
+      c.matchScore ?? calculateMatchScore(profile?.overall_score ?? 0, c.overallScore)
     );
     return Math.max(...matches);
   }, [candidatesWithScores, profile?.overall_score]);
