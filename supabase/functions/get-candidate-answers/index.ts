@@ -351,10 +351,11 @@ async function generateAnswersInChunks(
   let totalGenerated = 0;
   let failedChunks = 0;
   
-  // Split questions into chunks
+  // Use larger chunks to reduce AI calls (fewer requests = less resource usage)
+  const LARGE_CHUNK_SIZE = 25;
   const chunks: Question[][] = [];
-  for (let i = 0; i < questions.length; i += CHUNK_SIZE) {
-    chunks.push(questions.slice(i, i + CHUNK_SIZE));
+  for (let i = 0; i < questions.length; i += LARGE_CHUNK_SIZE) {
+    chunks.push(questions.slice(i, i + LARGE_CHUNK_SIZE));
   }
   
   console.log(`Processing ${questions.length} questions in ${chunks.length} chunks for ${candidateName}`);
@@ -406,9 +407,9 @@ async function generateAnswersInChunks(
         console.log(`Saved chunk ${i + 1}: ${answers.length} answers (total: ${totalGenerated})`);
       }
       
-      // Small delay between chunks to avoid rate limiting
+      // Longer delay between chunks to reduce resource pressure
       if (i < chunks.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     } catch (e) {
       console.error(`Error processing chunk ${i + 1}:`, e);
