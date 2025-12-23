@@ -110,9 +110,9 @@ export function usePopulateCandidateAnswers() {
 
       setBatchProgress(prev => prev ? { ...prev, completed: i + 1, errors: errorCount } : null);
 
-      // Small delay to avoid rate limiting
+      // Longer delay between candidates to avoid worker resource exhaustion
       if (i < candidates.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
 
