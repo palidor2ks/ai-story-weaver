@@ -275,8 +275,8 @@ function mapExecutiveToRepresentative(executive: Executive): any | null {
     is_incumbent: true,
     bioguide_id: bioguideId,
     overall_score: null,
-    coverage_tier: 'tier_1',
-    confidence: 'high',
+    coverage_tier: 'tier_3',
+    confidence: 'low',
     level: 'federal_executive',
     // Executive contact info
     website_url: isPrez ? 'https://www.whitehouse.gov/' : 'https://www.whitehouse.gov/administration/vice-president-harris/',
