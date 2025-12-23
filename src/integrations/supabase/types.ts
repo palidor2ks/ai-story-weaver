@@ -164,6 +164,7 @@ export type Database = {
           created_at: string | null
           district: string | null
           fec_candidate_id: string | null
+          fec_committee_id: string | null
           id: string
           image_url: string | null
           is_incumbent: boolean | null
@@ -186,6 +187,7 @@ export type Database = {
           created_at?: string | null
           district?: string | null
           fec_candidate_id?: string | null
+          fec_committee_id?: string | null
           id: string
           image_url?: string | null
           is_incumbent?: boolean | null
@@ -208,6 +210,7 @@ export type Database = {
           created_at?: string | null
           district?: string | null
           fec_candidate_id?: string | null
+          fec_committee_id?: string | null
           id?: string
           image_url?: string | null
           is_incumbent?: boolean | null

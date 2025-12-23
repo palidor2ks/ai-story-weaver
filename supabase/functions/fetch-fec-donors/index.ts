@@ -25,8 +25,10 @@ function mapEntityType(entityType: string): 'Individual' | 'PAC' | 'Organization
 }
 
 // Generate a consistent ID for a donor contribution
-function generateDonorId(fecContributionId: string, candidateId: string): string {
-  return `fec-${candidateId}-${fecContributionId}`.slice(0, 100);
+function generateDonorId(contributorName: string, candidateId: string, cycle: string): string {
+  // Create a simple hash from contributor name + candidate + cycle
+  const key = `${contributorName}-${candidateId}-${cycle}`.toLowerCase().replace(/[^a-z0-9]/g, '-');
+  return `fec-${key}`.slice(0, 100);
 }
 
 serve(async (req) => {
@@ -49,28 +51,77 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { candidateId, fecCandidateId, cycle = '2024', maxResults = 100 } = await req.json();
-    console.log('[FEC-DONORS] Fetching donors for:', { candidateId, fecCandidateId, cycle });
+    const { candidateId, fecCandidateId, fecCommitteeId, cycle = '2024', maxResults = 100 } = await req.json();
+    console.log('[FEC-DONORS] Fetching donors for:', { candidateId, fecCandidateId, fecCommitteeId, cycle });
 
-    if (!candidateId || !fecCandidateId) {
+    if (!candidateId) {
       return new Response(
-        JSON.stringify({ error: 'Both candidateId and fecCandidateId are required' }),
+        JSON.stringify({ error: 'candidateId is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Fetch contributions from FEC API (Schedule A = individual contributions)
+    // We need either fecCommitteeId (preferred) or fecCandidateId (to look up committee)
+    let committeeId = fecCommitteeId;
+
+    // If no committee ID provided, try to get it from the candidate record or look it up
+    if (!committeeId) {
+      // First check if we already have it in the database
+      const { data: candidateData } = await supabase
+        .from('candidates')
+        .select('fec_committee_id, fec_candidate_id')
+        .eq('id', candidateId)
+        .single();
+
+      if (candidateData?.fec_committee_id) {
+        committeeId = candidateData.fec_committee_id;
+        console.log('[FEC-DONORS] Using stored committee ID:', committeeId);
+      } else if (fecCandidateId || candidateData?.fec_candidate_id) {
+        // Look up the principal committee from FEC API
+        const fecId = fecCandidateId || candidateData?.fec_candidate_id;
+        console.log('[FEC-DONORS] Looking up committee for FEC candidate:', fecId);
+        
+        const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/?api_key=${fecApiKey}`;
+        const committeeResponse = await fetch(committeeUrl);
+        
+        if (committeeResponse.ok) {
+          const committeeData = await committeeResponse.json();
+          const principalCommittees = committeeData.results?.[0]?.principal_committees || [];
+          if (principalCommittees.length > 0) {
+            committeeId = principalCommittees[0].committee_id;
+            console.log('[FEC-DONORS] Found principal committee:', committeeId);
+            
+            // Store it for future use
+            await supabase
+              .from('candidates')
+              .update({ fec_committee_id: committeeId })
+              .eq('id', candidateId);
+          }
+        }
+      }
+    }
+
+    if (!committeeId) {
+      console.error('[FEC-DONORS] No committee ID available');
+      return new Response(
+        JSON.stringify({ error: 'No FEC committee ID available. Please link FEC ID first.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Fetch contributions from FEC API using COMMITTEE ID (not candidate ID)
+    // This ensures we only get contributions made directly to this candidate's campaign
     const params = new URLSearchParams({
       api_key: fecApiKey,
-      candidate_id: fecCandidateId,
+      committee_id: committeeId,
       two_year_transaction_period: cycle,
       per_page: String(Math.min(maxResults, 100)),
       sort: '-contribution_receipt_amount',
-      is_individual: 'true', // Start with individual contributions
+      is_individual: 'true',
     });
 
     const contributionsUrl = `https://api.open.fec.gov/v1/schedules/schedule_a/?${params.toString()}`;
-    console.log('[FEC-DONORS] Fetching contributions:', contributionsUrl.replace(fecApiKey, 'REDACTED'));
+    console.log('[FEC-DONORS] Fetching contributions by committee:', contributionsUrl.replace(fecApiKey, 'REDACTED'));
 
     const response = await fetch(contributionsUrl);
     
@@ -103,41 +154,44 @@ serve(async (req) => {
       );
     }
 
-    // Transform FEC contributions to our donor format
-    const donors = data.results.map((contribution: any) => {
-      // Use sub_id or line_number as unique identifier
-      const fecId = contribution.sub_id || contribution.line_number || 
-                    `${contribution.contributor_name}-${contribution.contribution_receipt_amount}`;
-      
-      return {
-        id: generateDonorId(String(fecId), candidateId),
-        candidate_id: candidateId,
-        name: contribution.contributor_name || 'Unknown Contributor',
-        type: mapEntityType(contribution.entity_type),
-        amount: Math.round(contribution.contribution_receipt_amount || 0),
-        cycle: cycle,
-      };
-    });
-
     // Aggregate donations by contributor name (sum amounts for same donor)
-    const aggregatedDonors = new Map<string, typeof donors[0]>();
-    for (const donor of donors) {
-      const key = `${donor.name}-${donor.type}`;
+    const aggregatedDonors = new Map<string, {
+      name: string;
+      type: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
+      amount: number;
+    }>();
+
+    for (const contribution of data.results) {
+      const name = contribution.contributor_name || 'Unknown Contributor';
+      const type = mapEntityType(contribution.entity_type);
+      const amount = Math.round(contribution.contribution_receipt_amount || 0);
+      
+      const key = `${name}-${type}`;
       const existing = aggregatedDonors.get(key);
+      
       if (existing) {
-        existing.amount += donor.amount;
+        existing.amount += amount;
       } else {
-        aggregatedDonors.set(key, { ...donor });
+        aggregatedDonors.set(key, { name, type, amount });
       }
     }
 
-    const uniqueDonors = Array.from(aggregatedDonors.values());
-    console.log('[FEC-DONORS] Aggregated to', uniqueDonors.length, 'unique donors');
+    // Transform to our donor format
+    const donors = Array.from(aggregatedDonors.values()).map(donor => ({
+      id: generateDonorId(donor.name, candidateId, cycle),
+      candidate_id: candidateId,
+      name: donor.name,
+      type: donor.type,
+      amount: donor.amount,
+      cycle: cycle,
+    }));
+
+    console.log('[FEC-DONORS] Aggregated to', donors.length, 'unique donors');
 
     // Upsert donors into database
     const { data: upsertedData, error: upsertError } = await supabase
       .from('donors')
-      .upsert(uniqueDonors, { 
+      .upsert(donors, { 
         onConflict: 'id',
         ignoreDuplicates: false 
       })
@@ -164,15 +218,16 @@ serve(async (req) => {
     }
 
     // Calculate total raised
-    const totalRaised = uniqueDonors.reduce((sum, d) => sum + d.amount, 0);
+    const totalRaised = donors.reduce((sum, d) => sum + d.amount, 0);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        imported: uniqueDonors.length,
+        imported: donors.length,
         totalRaised,
         cycle,
-        message: `Imported ${uniqueDonors.length} donors totaling $${totalRaised.toLocaleString()}`
+        committeeId,
+        message: `Imported ${donors.length} donors totaling $${totalRaised.toLocaleString()}`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
