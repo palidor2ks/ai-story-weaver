@@ -213,36 +213,64 @@ serve(async (req) => {
       );
     }
 
-    // Transform to our donor format
-    const donors = Array.from(aggregatedDonors.values()).map(donor => ({
-      id: generateDonorId(donor.name, candidateId, cycle),
-      candidate_id: candidateId,
-      name: donor.name,
-      type: donor.type,
-      amount: donor.amount,
-      cycle: cycle,
-    }));
+    // Transform to our donor format and deduplicate by ID
+    const donorMap = new Map<string, {
+      id: string;
+      candidate_id: string;
+      name: string;
+      type: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
+      amount: number;
+      cycle: string;
+    }>();
 
-    console.log('[FEC-DONORS] Aggregated to', donors.length, 'unique donors');
-
-    // Upsert donors into database
-    const { data: upsertedData, error: upsertError } = await supabase
-      .from('donors')
-      .upsert(donors, { 
-        onConflict: 'id',
-        ignoreDuplicates: false 
-      })
-      .select();
-
-    if (upsertError) {
-      console.error('[FEC-DONORS] Upsert error:', upsertError);
-      return new Response(
-        JSON.stringify({ error: `Database error: ${upsertError.message}` }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    for (const donor of aggregatedDonors.values()) {
+      const donorId = generateDonorId(donor.name, candidateId, cycle);
+      const existing = donorMap.get(donorId);
+      
+      if (existing) {
+        // Merge amounts if same ID (name collision after sanitization)
+        existing.amount += donor.amount;
+      } else {
+        donorMap.set(donorId, {
+          id: donorId,
+          candidate_id: candidateId,
+          name: donor.name,
+          type: donor.type,
+          amount: donor.amount,
+          cycle: cycle,
+        });
+      }
     }
 
-    console.log('[FEC-DONORS] Successfully upserted', upsertedData?.length || 0, 'donors');
+    const donors = Array.from(donorMap.values());
+    console.log('[FEC-DONORS] Aggregated to', donors.length, 'unique donors (after ID dedup)');
+
+    // Upsert donors into database in batches to avoid conflicts
+    const batchSize = 500;
+    let totalUpserted = 0;
+
+    for (let i = 0; i < donors.length; i += batchSize) {
+      const batch = donors.slice(i, i + batchSize);
+      const { data: upsertedData, error: upsertError } = await supabase
+        .from('donors')
+        .upsert(batch, { 
+          onConflict: 'id',
+          ignoreDuplicates: false 
+        })
+        .select();
+
+      if (upsertError) {
+        console.error('[FEC-DONORS] Upsert error on batch', Math.floor(i / batchSize) + 1, ':', upsertError);
+        return new Response(
+          JSON.stringify({ error: `Database error: ${upsertError.message}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      totalUpserted += upsertedData?.length || 0;
+    }
+
+    console.log('[FEC-DONORS] Successfully upserted', totalUpserted, 'donors');
 
     // Update last_donor_sync timestamp on candidate
     const { error: updateError } = await supabase
