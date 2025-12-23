@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useRef } from 'react';
+import { calculateMatchPercentage, calculateEntityScore } from '@/lib/scoring';
 
 interface QuizAnswer {
   question_id: string;
@@ -200,7 +201,8 @@ export const useRepresentativeAnswersAndScores = (
 };
 
 /**
- * Calculate both match score and overall political score from answers
+ * Calculate both match score and overall political score from answers.
+ * Uses unified scoring utilities for consistency.
  */
 function calculateScores(
   userAnswers: QuizAnswer[],
@@ -210,20 +212,17 @@ function calculateScores(
     candidateAnswers.map(a => [a.question_id, a.answer_value])
   );
 
-  let totalDifference = 0;
+  // Calculate average user score and candidate score for matched questions
+  let userTotal = 0;
+  let candidateTotal = 0;
   let sharedCount = 0;
-  let totalCandidateScore = 0;
 
   for (const userAnswer of userAnswers) {
     const candidateValue = candidateMap.get(userAnswer.question_id);
     if (candidateValue !== undefined) {
-      // Calculate match percentage
-      const difference = Math.abs(userAnswer.value - candidateValue);
-      totalDifference += difference;
+      userTotal += userAnswer.value;
+      candidateTotal += candidateValue;
       sharedCount++;
-      
-      // Sum for overall score calculation
-      totalCandidateScore += candidateValue;
     }
   }
 
@@ -231,25 +230,25 @@ function calculateScores(
     return { matchScore: 0, overallScore: 0 };
   }
 
-  // Max possible difference is 20 per question (-10 to +10)
-  const maxDifference = sharedCount * 20;
-  const matchScore = Math.round(((maxDifference - totalDifference) / maxDifference) * 100);
+  // Calculate scores using unified utilities
+  const userAvg = userTotal / sharedCount;
+  const candidateAvg = candidateTotal / sharedCount;
   
-  // Overall score is average of candidate answers (-10 to +10)
-  const overallScore = Math.round((totalCandidateScore / sharedCount) * 10) / 10;
+  const matchScore = calculateMatchPercentage(userAvg, candidateAvg);
+  const overallScore = Math.round(candidateAvg * 100) / 100;
 
   return { matchScore, overallScore };
 }
 
 /**
- * Calculate overall political score for a representative based on their answers
- * Returns a score from -10 to +10
+ * Calculate overall political score for a representative based on their answers.
+ * Returns a score from -10 to +10.
  */
 export function calculateOverallScoreFromAnswers(
   answers: { answer_value: number }[]
 ): number {
-  if (answers.length === 0) return 0;
-  
-  const total = answers.reduce((sum, a) => sum + a.answer_value, 0);
-  return Math.round((total / answers.length) * 10) / 10;
+  const score = calculateEntityScore(
+    answers.map(a => ({ question_id: '', answer_value: a.answer_value }))
+  );
+  return score ?? 0;
 }
