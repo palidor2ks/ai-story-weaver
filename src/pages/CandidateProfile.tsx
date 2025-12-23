@@ -10,8 +10,9 @@ import { useProfile, useUserTopicScores } from '@/hooks/useProfile';
 import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { useAuth } from '@/context/AuthContext';
+import { useFECIntegration } from '@/hooks/useFECIntegration';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw } from 'lucide-react';
 import { ScoreText } from '@/components/ScoreText';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
@@ -23,17 +24,21 @@ import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
 import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
 import { OfficialAvatar } from '@/components/OfficialAvatar';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
   const { data: profile } = useProfile();
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
-  const { data: donors = [] } = useCandidateDonors(id);
+  const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id);
   const { data: votes = [] } = useCandidateVotes(id);
   const { data: representativeDetails } = useRepresentativeDetails(id);
   const { data: adminData } = useAdminRole();
   const { user } = useAuth();
+  const { fetchFECDonors, isDonorLoading } = useFECIntegration();
+  const queryClient = useQueryClient();
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   
@@ -41,6 +46,19 @@ export const CandidateProfile = () => {
   const isPoliticianOwner = !!user && candidate?.claimed_by_user_id === user.id;
   const canEdit = isAdmin || isPoliticianOwner;
   const isClaimed = !!candidate?.claimed_by_user_id;
+
+  const handleFetchDonors = async () => {
+    if (!candidate?.fec_candidate_id || !id) return;
+    
+    const result = await fetchFECDonors(id, candidate.fec_candidate_id);
+    if (result.success) {
+      toast.success(`Imported ${result.imported} donors totaling $${(result.totalRaised || 0).toLocaleString()}`);
+      refetchDonors();
+      queryClient.invalidateQueries({ queryKey: ['candidate', id] });
+    } else {
+      toast.error(result.error || 'Failed to fetch donors');
+    }
+  };
 
   if (candidateLoading) {
     return (
@@ -354,8 +372,26 @@ export const CandidateProfile = () => {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="font-display">Campaign Finance</CardTitle>
-                  <span className="text-sm text-muted-foreground">2024 Cycle</span>
+                  <div className="flex items-center gap-2">
+                    {canEdit && candidate.fec_candidate_id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleFetchDonors}
+                        disabled={isDonorLoading(id || '')}
+                      >
+                        <RefreshCw className={cn("w-4 h-4 mr-2", isDonorLoading(id || '') && "animate-spin")} />
+                        Refresh Donors
+                      </Button>
+                    )}
+                    <span className="text-sm text-muted-foreground">2024 Cycle</span>
+                  </div>
                 </div>
+                {candidate.last_donor_sync && (
+                  <p className="text-xs text-muted-foreground">
+                    Last synced: {new Date(candidate.last_donor_sync).toLocaleDateString()}
+                  </p>
+                )}
               </CardHeader>
               <CardContent>
                 {donors.length > 0 ? (

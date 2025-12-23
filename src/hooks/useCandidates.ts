@@ -27,6 +27,8 @@ interface Candidate {
   score_version: string;
   claimed_by_user_id: string | null;
   claimed_at: string | null;
+  fec_candidate_id: string | null;
+  last_donor_sync: string | null;
   topicScores?: CandidateTopicScore[];
 }
 
@@ -113,6 +115,8 @@ export const useCandidates = () => {
           last_updated: candidate.last_updated,
           claimed_by_user_id: candidate.claimed_by_user_id,
           claimed_at: candidate.claimed_at,
+          fec_candidate_id: candidate.fec_candidate_id,
+          last_donor_sync: candidate.last_donor_sync,
           topicScores: candidateTopicScores.map(ts => ({
             topic_id: ts.topic_id,
             score: ts.calculated_score ?? 0,
@@ -165,6 +169,8 @@ export const useCandidate = (id: string | undefined) => {
           confidence: (override?.confidence as ConfidenceLevel) ?? candidate.confidence ?? 'medium',
           is_incumbent: candidate.is_incumbent ?? true,
           score_version: candidate.score_version || 'v1.0',
+          fec_candidate_id: candidate.fec_candidate_id,
+          last_donor_sync: candidate.last_donor_sync,
           topicScores: topicScores.map(ts => ({
             topic_id: ts.topic_id,
             score: ts.score,
@@ -200,6 +206,8 @@ export const useCandidate = (id: string | undefined) => {
           last_updated: staticOfficial.updated_at || new Date().toISOString(),
           claimed_by_user_id: null,
           claimed_at: null,
+          fec_candidate_id: null,
+          last_donor_sync: null,
           topicScores: [],
           hasOverride: !!override,
         };
@@ -277,6 +285,8 @@ export const useCandidate = (id: string | undefined) => {
         last_updated: member.last_updated || new Date().toISOString(),
         claimed_by_user_id: null,
         claimed_at: null,
+        fec_candidate_id: null,
+        last_donor_sync: null,
         topicScores: [],
         hasOverride: !!override,
       };
