@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useSyncStats, TopicCoverage, CandidateCoverage } from "@/hooks/useSyncStats";
 import { useCandidatesAnswerCoverage, useCandidateAnswerStats, useUniqueStates, useRecalculateCoverageTiers } from "@/hooks/useCandidatesAnswerCoverage";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
+import { useFECIntegration } from "@/hooks/useFECIntegration";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign } from "lucide-react";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge, ConfidenceBadge } from "@/components/CoverageTierBadge";
 import { toast } from "sonner";
@@ -93,6 +94,17 @@ export function AnswerCoveragePanel() {
 
   const { populateCandidate, populateBatch, pauseBatch, resumeBatch, cancelBatch, isLoading, isBatchRunning, batchProgress } = usePopulateCandidateAnswers();
   const { recalculateAll, recalculateSingle, isRecalculatingAll, isRecalculatingSingle } = useRecalculateCoverageTiers();
+  const { 
+    fetchFECCandidateId, 
+    fetchFECDonors, 
+    batchFetchFECIds,
+    batchFetchDonors,
+    isLoading: isFECLoading, 
+    isDonorLoading,
+    batchProgress: fecBatchProgress,
+    isBatchRunning: isFECBatchRunning
+  } = useFECIntegration();
+  
   // Filter candidates by search query
   const filteredCandidates = candidates?.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -414,7 +426,110 @@ export function AnswerCoveragePanel() {
                   </AlertDialogContent>
                 </AlertDialog>
               )}
+
+              {/* Bulk FEC ID Lookup */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={isFECBatchRunning || isBatchRunning}>
+                    <Link2 className="h-4 w-4 mr-2" />
+                    Link FEC IDs
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Bulk Lookup FEC Candidate IDs?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will search the FEC database for candidates without FEC IDs and link them automatically.
+                      Up to 50 candidates will be processed. This may take a few minutes.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={async () => {
+                      const toProcess = (candidates || [])
+                        .filter(c => !c.fecCandidateId)
+                        .slice(0, 50)
+                        .map(c => ({ id: c.id, name: c.name, state: c.state }));
+                      
+                      if (toProcess.length === 0) {
+                        toast.info('All candidates already have FEC IDs');
+                        return;
+                      }
+
+                      const results = await batchFetchFECIds(toProcess);
+                      toast.success(`Linked ${results.success} FEC IDs (${results.failed} failed)`);
+                      refetch();
+                    }}>
+                      Link FEC IDs
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* Bulk Fetch Donors */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={isFECBatchRunning || isBatchRunning}>
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Fetch Donors
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Bulk Fetch FEC Donor Data?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will fetch donor contributions from the FEC API for all candidates with FEC IDs.
+                      Up to 50 candidates will be processed. This may take several minutes.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={async () => {
+                      const toProcess = (candidates || [])
+                        .filter(c => c.fecCandidateId)
+                        .slice(0, 50)
+                        .map(c => ({ 
+                          id: c.id, 
+                          name: c.name, 
+                          fecCandidateId: c.fecCandidateId! 
+                        }));
+                      
+                      if (toProcess.length === 0) {
+                        toast.info('No candidates with FEC IDs found. Link FEC IDs first.');
+                        return;
+                      }
+
+                      const results = await batchFetchDonors(toProcess, '2024');
+                      toast.success(
+                        `Imported ${results.totalImported} donors for ${results.success} candidates ` +
+                        `($${results.totalRaised.toLocaleString()} total)`
+                      );
+                      refetch();
+                    }}>
+                      Fetch Donors
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
+
+            {/* FEC Batch Progress */}
+            {fecBatchProgress && (
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span className="text-sm font-medium">
+                      FEC: Processing {fecBatchProgress.currentName}
+                    </span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {fecBatchProgress.current} / {fecBatchProgress.total}
+                  </span>
+                </div>
+                <Progress value={(fecBatchProgress.current / fecBatchProgress.total) * 100} className="h-2" />
+              </div>
+            )}
 
             {/* Candidates Table */}
             {candidatesLoading ? (
@@ -428,19 +543,21 @@ export function AnswerCoveragePanel() {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Party</TableHead>
-                      <TableHead>Office</TableHead>
                       <TableHead>State</TableHead>
                       <TableHead className="text-center">Answers</TableHead>
                       <TableHead>Tier</TableHead>
-                      <TableHead>Confidence</TableHead>
                       <TableHead>Data</TableHead>
+                      <TableHead>FEC ID</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredCandidates.slice(0, 100).map((candidate) => {
                       const loading = isLoading(candidate.id);
+                      const fecLoading = isFECLoading(candidate.id);
+                      const donorLoading = isDonorLoading(candidate.id);
                       const isComplete = candidate.percentage >= 100;
+                      const hasFecId = !!candidate.fecCandidateId;
 
                       return (
                         <TableRow key={candidate.id}>
@@ -458,7 +575,6 @@ export function AnswerCoveragePanel() {
                               {getPartyBadge(candidate.party)}
                             </Badge>
                           </TableCell>
-                          <TableCell className="max-w-[150px] truncate">{candidate.office}</TableCell>
                           <TableCell>{candidate.state}</TableCell>
                           <TableCell className="text-center">
                             <div className="flex items-center justify-center gap-2">
@@ -476,9 +592,6 @@ export function AnswerCoveragePanel() {
                             <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} />
                           </TableCell>
                           <TableCell>
-                            <ConfidenceBadge confidence={candidate.confidence} />
-                          </TableCell>
-                          <TableCell>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               {candidate.voteCount > 0 && (
                                 <span className="flex items-center gap-1" title="Voting records">
@@ -487,7 +600,7 @@ export function AnswerCoveragePanel() {
                                 </span>
                               )}
                               {candidate.donorCount > 0 && (
-                                <span className="flex items-center gap-1" title="Donors">
+                                <span className="flex items-center gap-1 text-green-600" title="Donors">
                                   <DollarSign className="h-3 w-3" />
                                   {candidate.donorCount}
                                 </span>
@@ -497,8 +610,76 @@ export function AnswerCoveragePanel() {
                               )}
                             </div>
                           </TableCell>
+                          <TableCell>
+                            {hasFecId ? (
+                              <Badge variant="outline" className="text-xs font-mono">
+                                {candidate.fecCandidateId?.slice(0, 9)}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground/50 text-xs">—</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex gap-1 justify-end">
+                            <div className="flex gap-1 justify-end flex-wrap">
+                              {/* Link FEC ID button */}
+                              {!hasFecId && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={fecLoading || isFECBatchRunning}
+                                  onClick={async () => {
+                                    const result = await fetchFECCandidateId(
+                                      candidate.id,
+                                      candidate.name,
+                                      candidate.state,
+                                      true
+                                    );
+                                    if (result.found && result.updated) {
+                                      toast.success(`Linked FEC ID: ${result.fecCandidateId}`);
+                                      refetch();
+                                    } else if (result.found) {
+                                      toast.info(`Found ${result.candidates?.length} matches but couldn't auto-link`);
+                                    } else {
+                                      toast.error('No FEC candidate found');
+                                    }
+                                  }}
+                                  title="Look up FEC candidate ID"
+                                >
+                                  {fecLoading ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Link2 className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              )}
+                              {/* Fetch Donors button - only when FEC ID exists */}
+                              {hasFecId && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={donorLoading || isFECBatchRunning}
+                                  onClick={async () => {
+                                    const result = await fetchFECDonors(
+                                      candidate.id,
+                                      candidate.fecCandidateId!,
+                                      '2024'
+                                    );
+                                    if (result.success) {
+                                      toast.success(result.message || `Imported ${result.imported} donors`);
+                                      refetch();
+                                    } else {
+                                      toast.error(result.error || 'Failed to fetch donors');
+                                    }
+                                  }}
+                                  title="Fetch donors from FEC"
+                                >
+                                  {donorLoading ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <DollarSign className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              )}
                               {/* Generate button - visible when there are missing answers */}
                               {candidate.answerCount < candidate.totalQuestions && (
                                 <Button
@@ -515,7 +696,7 @@ export function AnswerCoveragePanel() {
                                   ) : (
                                     <>
                                       <Plus className="h-3 w-3 mr-1" />
-                                      Generate
+                                      Gen
                                     </>
                                   )}
                                 </Button>
@@ -524,20 +705,15 @@ export function AnswerCoveragePanel() {
                               {candidate.answerCount > 0 && (
                                 <Button
                                   size="sm"
-                                  variant="outline"
+                                  variant="ghost"
                                   disabled={loading || isBatchRunning}
                                   onClick={() => populateCandidate(candidate.id, true)}
+                                  title="Regenerate answers"
                                 >
                                   {loading ? (
-                                    <>
-                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                      ...
-                                    </>
+                                    <Loader2 className="h-3 w-3 animate-spin" />
                                   ) : (
-                                    <>
-                                      <RefreshCw className="h-3 w-3 mr-1" />
-                                      Regen
-                                    </>
+                                    <RefreshCw className="h-3 w-3" />
                                   )}
                                 </Button>
                               )}

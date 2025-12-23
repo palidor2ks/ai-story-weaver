@@ -15,6 +15,7 @@ export interface CandidateAnswerCoverage {
   confidence: ConfidenceLevel;
   voteCount: number;
   donorCount: number;
+  fecCandidateId: string | null;
 }
 
 interface Filters {
@@ -37,7 +38,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       // Get all candidates with coverage tier and confidence
       let candidatesQuery = supabase
         .from('candidates')
-        .select('id, name, party, office, state, coverage_tier, confidence')
+        .select('id, name, party, office, state, coverage_tier, confidence, fec_candidate_id')
         .order('name', { ascending: true });
 
       if (filters.party && filters.party !== 'all') {
@@ -116,6 +117,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           confidence: (c.confidence as ConfidenceLevel) || 'low',
           voteCount: voteCountMap[c.id] || 0,
           donorCount: donorCountMap[c.id] || 0,
+          fecCandidateId: c.fec_candidate_id || null,
         };
       });
 
