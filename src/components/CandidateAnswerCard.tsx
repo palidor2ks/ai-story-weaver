@@ -136,51 +136,52 @@ export const CandidateAnswerCard = ({
           </div>
 
           {/* Source Information */}
-          <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-secondary/30 border border-border/50">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <SourceIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <span className="text-xs font-medium text-foreground block">
-                  {getSourceTypeLabel(answer.source_type)}
-                </span>
-                {answer.source_description && (
-                  <span className="text-xs text-muted-foreground truncate block">
-                    {answer.source_description}
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 border border-border/50">
+            {answer.source_url ? (
+              <a 
+                href={answer.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 flex-1 min-w-0 hover:bg-secondary/50 rounded p-1 -m-1 transition-colors group"
+              >
+                <SourceIcon className="w-4 h-4 text-muted-foreground flex-shrink-0 group-hover:text-primary" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-medium text-foreground block group-hover:text-primary group-hover:underline">
+                    {getSourceTypeLabel(answer.source_type)}
                   </span>
-                )}
+                  {answer.source_description && (
+                    <span className="text-xs text-muted-foreground truncate block group-hover:text-primary/80">
+                      {answer.source_description}
+                    </span>
+                  )}
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+              </a>
+            ) : (
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <SourceIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-medium text-foreground block">
+                    {getSourceTypeLabel(answer.source_type)}
+                  </span>
+                  {answer.source_description && (
+                    <span className="text-xs text-muted-foreground truncate block">
+                      {answer.source_description}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Confidence indicator */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <confidenceInfo.icon className={cn("w-4 h-4", confidenceInfo.color)} />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {confidenceInfo.label}
-                </TooltipContent>
-              </Tooltip>
-
-              {/* Source link */}
-              {answer.source_url && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  asChild
-                >
-                  <a 
-                    href={answer.source_url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </Button>
-              )}
-            </div>
+            {/* Confidence indicator */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <confidenceInfo.icon className={cn("w-4 h-4 flex-shrink-0", confidenceInfo.color)} />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {confidenceInfo.label}
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           {/* User comparison */}
