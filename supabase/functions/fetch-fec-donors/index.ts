@@ -77,26 +77,40 @@ serve(async (req) => {
         committeeId = candidateData.fec_committee_id;
         console.log('[FEC-DONORS] Using stored committee ID:', committeeId);
       } else if (fecCandidateId || candidateData?.fec_candidate_id) {
-        // Look up the principal committee from FEC API
+        // Look up the principal committee from FEC API (designation=P)
         const fecId = fecCandidateId || candidateData?.fec_candidate_id;
-        console.log('[FEC-DONORS] Looking up committee for FEC candidate:', fecId);
-        
-        const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/?api_key=${fecApiKey}`;
-        const committeeResponse = await fetch(committeeUrl);
-        
-        if (committeeResponse.ok) {
-          const committeeData = await committeeResponse.json();
-          const principalCommittees = committeeData.results?.[0]?.principal_committees || [];
-          if (principalCommittees.length > 0) {
-            committeeId = principalCommittees[0].committee_id;
-            console.log('[FEC-DONORS] Found principal committee:', committeeId);
-            
-            // Store it for future use
-            await supabase
-              .from('candidates')
-              .update({ fec_committee_id: committeeId })
-              .eq('id', candidateId);
+        console.log('[FEC-DONORS] Looking up principal committee for FEC candidate:', fecId);
+
+        try {
+          const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&designation=P&per_page=1`;
+          const committeeResponse = await fetch(committeeUrl);
+
+          if (!committeeResponse.ok) {
+            const errorText = await committeeResponse.text();
+            console.error('[FEC-DONORS] Committee lookup API error:', committeeResponse.status, errorText);
+          } else {
+            const committeeData = await committeeResponse.json();
+            const principalCommittee = committeeData.results?.[0];
+
+            if (principalCommittee?.committee_id) {
+              committeeId = principalCommittee.committee_id;
+              console.log('[FEC-DONORS] Found principal committee:', committeeId);
+
+              // Store it for future use
+              const { error: storeError } = await supabase
+                .from('candidates')
+                .update({ fec_committee_id: committeeId })
+                .eq('id', candidateId);
+
+              if (storeError) {
+                console.warn('[FEC-DONORS] Failed to store committee ID:', storeError);
+              }
+            } else {
+              console.warn('[FEC-DONORS] No principal committee found for FEC candidate:', fecId);
+            }
           }
+        } catch (err) {
+          console.error('[FEC-DONORS] Committee lookup failed:', err);
         }
       }
     }
