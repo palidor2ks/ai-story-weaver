@@ -92,48 +92,51 @@ export const CandidateCard = ({
       onClick={handleCardClick}
     >
       <CardContent className="p-4">
-        <div className="flex items-center gap-3">
-          {/* Compare checkbox */}
-          {compareMode && (
-            <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-              <Checkbox 
-                checked={isSelected}
-                onCheckedChange={() => onToggleSelect?.(candidate)}
-                className="w-5 h-5"
-              />
-            </div>
-          )}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          {/* Top row: Checkbox + Avatar + Name/Info */}
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Compare checkbox */}
+            {compareMode && (
+              <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                <Checkbox 
+                  checked={isSelected}
+                  onCheckedChange={() => onToggleSelect?.(candidate)}
+                  className="w-5 h-5"
+                />
+              </div>
+            )}
 
-          {/* Compact Avatar */}
-          <OfficialAvatar
-            imageUrl={candidate.imageUrl}
-            name={candidate.name}
-            party={candidate.party}
-            size="md"
-          />
+            {/* Compact Avatar */}
+            <OfficialAvatar
+              imageUrl={candidate.imageUrl}
+              name={candidate.name}
+              party={candidate.party}
+              size="md"
+            />
 
-          {/* Name & Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2 break-words">
-                {candidate.name}
-              </h3>
-              <span className={cn("text-xs font-bold", getPartyColor(candidate.party))}>
-                ({getPartyInitial(candidate.party)})
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="line-clamp-2 break-words">{candidate.office}</span>
-              <span className="flex-shrink-0">•</span>
-              <MapPin className="w-3 h-3 flex-shrink-0" />
-              <span className="flex-shrink-0">{candidate.state}</span>
+            {/* Name & Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-display text-base font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2 break-words">
+                  {candidate.name}
+                </h3>
+                <span className={cn("text-xs font-bold flex-shrink-0", getPartyColor(candidate.party))}>
+                  ({getPartyInitial(candidate.party)})
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="line-clamp-2 break-words">{candidate.office}</span>
+                <span className="flex-shrink-0">•</span>
+                <MapPin className="w-3 h-3 flex-shrink-0" />
+                <span className="flex-shrink-0">{candidate.state}</span>
+              </div>
             </div>
           </div>
 
-          {/* Icons stacked above Score */}
+          {/* Icons and Score - below on mobile, right side on desktop */}
           <TooltipProvider>
-            <div className="flex-shrink-0 flex flex-col items-end gap-1">
-              {/* Row 1: Status icons */}
+            <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2 sm:gap-1 pl-12 sm:pl-0">
+              {/* Status icons */}
               <div className="flex items-center gap-1">
                 {isIncumbent && (
                   <Tooltip>
@@ -165,7 +168,7 @@ export const CandidateCard = ({
                 </Tooltip>
               </div>
 
-              {/* Row 2: Score with AI indicator */}
+              {/* Score with AI indicator */}
               <div className="flex items-center gap-1.5">
                 {hasAIAnswers && (
                   <Tooltip>
@@ -182,7 +185,6 @@ export const CandidateCard = ({
             </div>
           </TooltipProvider>
         </div>
-
       </CardContent>
     </Card>
   );
