@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 
 export interface CandidateAnswerCoverage {
   id: string;
@@ -10,6 +11,10 @@ export interface CandidateAnswerCoverage {
   answerCount: number;
   totalQuestions: number;
   percentage: number;
+  coverageTier: CoverageTier;
+  confidence: ConfidenceLevel;
+  voteCount: number;
+  donorCount: number;
 }
 
 interface Filters {
@@ -29,10 +34,10 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
 
       if (questionsError) throw questionsError;
 
-      // Get all candidates
+      // Get all candidates with coverage tier and confidence
       let candidatesQuery = supabase
         .from('candidates')
-        .select('id, name, party, office, state')
+        .select('id, name, party, office, state, coverage_tier, confidence')
         .order('name', { ascending: true });
 
       if (filters.party && filters.party !== 'all') {
@@ -68,6 +73,26 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         if (from > 500000) break;
       }
 
+      // Get vote counts per candidate
+      const { data: votesData } = await supabase
+        .from('votes')
+        .select('candidate_id');
+      
+      const voteCountMap: Record<string, number> = {};
+      (votesData || []).forEach(row => {
+        voteCountMap[row.candidate_id] = (voteCountMap[row.candidate_id] || 0) + 1;
+      });
+
+      // Get donor counts per candidate
+      const { data: donorsData } = await supabase
+        .from('donors')
+        .select('candidate_id');
+      
+      const donorCountMap: Record<string, number> = {};
+      (donorsData || []).forEach(row => {
+        donorCountMap[row.candidate_id] = (donorCountMap[row.candidate_id] || 0) + 1;
+      });
+
       // Count answers per candidate
       const answerCountMap: Record<string, number> = {};
       allAnswers.forEach(row => {
@@ -87,6 +112,10 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           answerCount,
           totalQuestions: totalQuestions || 0,
           percentage,
+          coverageTier: (c.coverage_tier as CoverageTier) || 'tier_3',
+          confidence: (c.confidence as ConfidenceLevel) || 'low',
+          voteCount: voteCountMap[c.id] || 0,
+          donorCount: donorCountMap[c.id] || 0,
         };
       });
 
@@ -192,4 +221,41 @@ export function useUniqueStates() {
     },
     staleTime: 60000,
   });
+}
+
+// Hook for recalculating coverage tiers
+export function useRecalculateCoverageTiers() {
+  const queryClient = useQueryClient();
+
+  const recalculateAll = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('recalculate_all_coverage_tiers');
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidates-answer-coverage'] });
+      queryClient.invalidateQueries({ queryKey: ['candidate-answer-stats'] });
+    },
+  });
+
+  const recalculateSingle = useMutation({
+    mutationFn: async (candidateId: string) => {
+      const { data, error } = await supabase.rpc('recalculate_candidate_coverage', {
+        p_candidate_id: candidateId,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidates-answer-coverage'] });
+    },
+  });
+
+  return {
+    recalculateAll: recalculateAll.mutateAsync,
+    recalculateSingle: recalculateSingle.mutateAsync,
+    isRecalculatingAll: recalculateAll.isPending,
+    isRecalculatingSingle: recalculateSingle.isPending,
+  };
 }

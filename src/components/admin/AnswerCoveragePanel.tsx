@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useSyncStats, TopicCoverage, CandidateCoverage } from "@/hooks/useSyncStats";
-import { useCandidatesAnswerCoverage, useCandidateAnswerStats, useUniqueStates } from "@/hooks/useCandidatesAnswerCoverage";
+import { useCandidatesAnswerCoverage, useCandidateAnswerStats, useUniqueStates, useRecalculateCoverageTiers } from "@/hooks/useCandidatesAnswerCoverage";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -12,8 +12,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle } from "lucide-react";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { CoverageTierBadge, ConfidenceBadge } from "@/components/CoverageTierBadge";
+import { toast } from "sonner";
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
 
@@ -90,7 +92,7 @@ export function AnswerCoveragePanel() {
   });
 
   const { populateCandidate, populateBatch, pauseBatch, resumeBatch, cancelBatch, isLoading, isBatchRunning, batchProgress } = usePopulateCandidateAnswers();
-
+  const { recalculateAll, recalculateSingle, isRecalculatingAll, isRecalculatingSingle } = useRecalculateCoverageTiers();
   // Filter candidates by search query
   const filteredCandidates = candidates?.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -136,18 +138,59 @@ export function AnswerCoveragePanel() {
               Manage and generate AI-powered position answers for representatives
             </CardDescription>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-          >
-            {isRefetching ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isRecalculatingAll}
+                >
+                  {isRecalculatingAll ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Calculator className="h-4 w-4" />
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Recalculate All Coverage Tiers?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will recalculate coverage tiers and confidence levels for all candidates based on their actual data:
+                    <ul className="list-disc pl-4 mt-2 space-y-1">
+                      <li><strong>tier_1 (Full)</strong>: ≥80% answers AND has votes or donors</li>
+                      <li><strong>tier_2 (Partial)</strong>: ≥30% answers OR has votes or donors</li>
+                      <li><strong>tier_3 (Basic)</strong>: Less than 30% answers, no votes/donors</li>
+                    </ul>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={async () => {
+                    try {
+                      const result = await recalculateAll();
+                      toast.success(`Coverage tiers recalculated: ${result?.[0]?.updated_count || 0} candidates updated`);
+                    } catch (error) {
+                      toast.error('Failed to recalculate coverage tiers');
+                    }
+                  }}>Recalculate</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+            >
+              {isRefetching ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
@@ -387,7 +430,10 @@ export function AnswerCoveragePanel() {
                       <TableHead>Party</TableHead>
                       <TableHead>Office</TableHead>
                       <TableHead>State</TableHead>
-                      <TableHead className="text-center">Coverage</TableHead>
+                      <TableHead className="text-center">Answers</TableHead>
+                      <TableHead>Tier</TableHead>
+                      <TableHead>Confidence</TableHead>
+                      <TableHead>Data</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -424,6 +470,31 @@ export function AnswerCoveragePanel() {
                                 </span>
                               )}
                               <span className="text-xs text-muted-foreground">({candidate.percentage}%)</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} />
+                          </TableCell>
+                          <TableCell>
+                            <ConfidenceBadge confidence={candidate.confidence} />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {candidate.voteCount > 0 && (
+                                <span className="flex items-center gap-1" title="Voting records">
+                                  <Vote className="h-3 w-3" />
+                                  {candidate.voteCount}
+                                </span>
+                              )}
+                              {candidate.donorCount > 0 && (
+                                <span className="flex items-center gap-1" title="Donors">
+                                  <DollarSign className="h-3 w-3" />
+                                  {candidate.donorCount}
+                                </span>
+                              )}
+                              {candidate.voteCount === 0 && candidate.donorCount === 0 && (
+                                <span className="text-muted-foreground/50">—</span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell className="text-right">

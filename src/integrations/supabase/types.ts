@@ -875,12 +875,34 @@ export type Database = {
           updated_count: number
         }[]
       }
+      calculate_coverage_tier: {
+        Args: { p_candidate_id: string }
+        Returns: {
+          confidence: Database["public"]["Enums"]["confidence_level"]
+          coverage_tier: Database["public"]["Enums"]["coverage_tier"]
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      recalculate_all_coverage_tiers: {
+        Args: never
+        Returns: {
+          details: string
+          updated_count: number
+        }[]
+      }
+      recalculate_candidate_coverage: {
+        Args: { p_candidate_id: string }
+        Returns: {
+          confidence: Database["public"]["Enums"]["confidence_level"]
+          coverage_tier: Database["public"]["Enums"]["coverage_tier"]
+          updated: boolean
+        }[]
       }
       save_quiz_results: {
         Args: {
