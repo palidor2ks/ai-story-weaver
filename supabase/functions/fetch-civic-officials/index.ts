@@ -149,8 +149,10 @@ async function fetchFederalExecutiveFromGitHub(): Promise<OfficialInfo[]> {
       });
 
       if (currentTerm) {
-        const bioguideId = exec.id.bioguide || `exec_${exec.name.last.toLowerCase()}`;
         const isPrez = currentTerm.type === 'prez';
+        // Use standardized IDs matching static_officials table
+        const standardId = isPrez ? 'federal_president' : 'federal_vice_president';
+        const bioguideId = exec.id.bioguide || standardId;
         
         // Construct image URL
         const imageUrl = exec.id.bioguide 
