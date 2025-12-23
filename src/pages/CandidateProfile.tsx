@@ -11,8 +11,9 @@ import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { useAuth } from '@/context/AuthContext';
 import { useFECIntegration } from '@/hooks/useFECIntegration';
+import { useFECTotals } from '@/hooks/useFECTotals';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info } from 'lucide-react';
 import { ScoreText } from '@/components/ScoreText';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
@@ -26,6 +27,7 @@ import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
 import { OfficialAvatar } from '@/components/OfficialAvatar';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +41,10 @@ export const CandidateProfile = () => {
   const { user } = useAuth();
   const { fetchFECDonors, isDonorLoading } = useFECIntegration();
   const queryClient = useQueryClient();
+  
+  // Get FEC committee ID from first donor record or we'll pass null
+  const committeeId = donors[0]?.recipient_committee_id ?? null;
+  const { data: fecTotals } = useFECTotals(committeeId);
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   
@@ -371,7 +377,7 @@ export const CandidateProfile = () => {
             <Card className="shadow-elevated">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="font-display">Campaign Finance</CardTitle>
+                  <CardTitle className="font-display">Campaign Contributions</CardTitle>
                   <div className="flex items-center gap-2">
                     {canEdit && candidate.fec_candidate_id && (
                       <Button
@@ -396,34 +402,93 @@ export const CandidateProfile = () => {
               <CardContent>
                 {donors.length > 0 ? (
                   <>
+                    {/* Recipient Transparency Banner */}
+                    {donors[0]?.recipient_committee_name && (
+                      <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                        <p className="text-sm text-muted-foreground">
+                          <strong className="text-foreground">Recipient:</strong> {donors[0].recipient_committee_name}
+                          {donors[0].recipient_committee_id && (
+                            <span className="text-xs ml-1">({donors[0].recipient_committee_id})</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          These are itemized contributions to the campaign committee, not personal income.
+                        </p>
+                      </div>
+                    )}
+                    
                     <div className="mb-6 p-4 rounded-xl bg-secondary/50">
-                      <p className="text-sm text-muted-foreground">Total Raised</p>
+                      <p className="text-sm text-muted-foreground">Total Itemized Contributions</p>
                       <p className="text-3xl font-bold text-foreground">
                         ${totalDonations.toLocaleString()}
                       </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        From {donors.length} contributors • {donors.reduce((sum, d) => sum + (d.transaction_count || 1), 0)} transactions
+                      </p>
+                      
+                      {/* FEC Reconciliation Summary */}
+                      {fecTotals && (
+                        <TooltipProvider>
+                          <div className="mt-3 pt-3 border-t border-border/50 text-xs text-muted-foreground space-y-1">
+                            <div className="flex justify-between">
+                              <span>FEC Total Receipts:</span>
+                              <span className="font-medium">${fecTotals.total_receipts.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Unitemized (&lt;$200):</span>
+                              <span>${fecTotals.individual_unitemized_contributions.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="flex items-center gap-1">
+                                Other Receipts
+                                <Tooltip>
+                                  <TooltipTrigger><Info className="w-3 h-3" /></TooltipTrigger>
+                                  <TooltipContent>Interest, refunds, investment earnings, etc.</TooltipContent>
+                                </Tooltip>
+                              </span>
+                              <span>${fecTotals.other_receipts.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </TooltipProvider>
+                      )}
                     </div>
                     <div className="space-y-3">
                       {donors.map(donor => (
                         <div key={donor.id} className="flex items-center justify-between p-4 rounded-lg border border-border">
                           <div>
                             <p className="font-medium text-foreground">{donor.name}</p>
-                            <Badge variant="secondary" className="mt-1">{donor.type}</Badge>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <Badge variant="secondary">{donor.type}</Badge>
+                              {donor.contributor_city && donor.contributor_state && (
+                                <span className="text-xs text-muted-foreground">
+                                  {donor.contributor_city}, {donor.contributor_state}
+                                </span>
+                              )}
+                              {donor.employer && (
+                                <span className="text-xs text-muted-foreground">
+                                  • {donor.employer}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <div className="text-right">
                             <p className="font-bold text-foreground">${donor.amount.toLocaleString()}</p>
-                            <p className="text-sm text-muted-foreground">{donor.cycle}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {donor.transaction_count > 1 ? `${donor.transaction_count} contributions` : donor.cycle}
+                            </p>
                           </div>
                         </div>
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
                       <ExternalLink className="w-3 h-3" />
-                      Data sourced from public FEC filings
+                      Itemized contributions from FEC Schedule A filings (line 11*/12*). 
+                      Does not include unitemized small-dollar donations or other receipts.
                     </p>
                   </>
                 ) : (
                   <p className="text-muted-foreground text-center py-8">
-                    Donor information not available for this candidate.
+                    Contribution data not available for this candidate.
                   </p>
                 )}
               </CardContent>
