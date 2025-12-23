@@ -10,72 +10,7 @@ const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-/**
- * Helper function to ensure score is calculated and saved from candidate_answers.
- * This is the PRIMARY source of truth for political scores.
- */
-async function ensureScoreIsSaved(
-  supabase: any,
-  candidateId: string,
-  answers: Array<{ answer_value: number }>
-): Promise<void> {
-  if (!answers || answers.length === 0) return;
-
-  // Calculate score from answers
-  const totalScore = answers.reduce((sum, a) => sum + a.answer_value, 0);
-  const overallScore = Math.round((totalScore / answers.length) * 100) / 100;
-
-  // Check if candidate exists in candidates table
-  const { data: existingCandidate } = await supabase
-    .from('candidates')
-    .select('id, overall_score')
-    .eq('id', candidateId)
-    .maybeSingle();
-
-  if (existingCandidate) {
-    // Only update if score is different or missing
-    if (existingCandidate.overall_score !== overallScore) {
-      const { error: updateError } = await supabase
-        .from('candidates')
-        .update({
-          overall_score: overallScore,
-          last_answers_sync: new Date().toISOString(),
-        })
-        .eq('id', candidateId);
-
-      if (updateError) {
-        console.error('Error updating candidates score:', updateError);
-      } else {
-        console.log(`Updated candidates.overall_score to ${overallScore} for ${candidateId}`);
-      }
-    }
-  } else {
-    // Check if override exists and has correct score
-    const { data: existingOverride } = await supabase
-      .from('candidate_overrides')
-      .select('candidate_id, overall_score')
-      .eq('candidate_id', candidateId)
-      .maybeSingle();
-
-    if (!existingOverride || existingOverride.overall_score !== overallScore) {
-      const { error: overrideError } = await supabase
-        .from('candidate_overrides')
-        .upsert({
-          candidate_id: candidateId,
-          overall_score: overallScore,
-        }, {
-          onConflict: 'candidate_id',
-          ignoreDuplicates: false,
-        });
-
-      if (overrideError) {
-        console.error('Error upserting candidate_overrides score:', overrideError);
-      } else {
-        console.log(`Saved candidate_overrides.overall_score ${overallScore} for ${candidateId}`);
-      }
-    }
-  }
-}
+const CHUNK_SIZE = 20; // Generate 20 questions at a time to avoid truncated responses
 
 interface QuestionOption {
   value: number;
@@ -95,7 +30,6 @@ interface GeneratedAnswer {
   source_description: string;
   source_url: string | null;
   confidence: 'high' | 'medium' | 'low';
-  notes: string | null;
 }
 
 // Snap AI-generated values to the nearest valid discrete score
@@ -106,7 +40,21 @@ function snapToValidValue(value: number): number {
   );
 }
 
-async function generateAnswersWithAI(
+// Clean and parse JSON from AI response - handles code fences and whitespace
+function parseAIResponse(content: string): any[] {
+  // Strip markdown code fences if present
+  let cleaned = content.trim();
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  
+  // Try to find JSON array
+  const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+  if (jsonMatch) {
+    return JSON.parse(jsonMatch[0]);
+  }
+  throw new Error('No JSON array found in response');
+}
+
+async function generateChunkAnswers(
   candidateName: string,
   candidateParty: string,
   candidateOffice: string,
@@ -128,50 +76,26 @@ async function generateAnswersWithAI(
     })
     .join('\n\n');
 
-  const systemPrompt = `You are a non-partisan political analyst determining likely positions for elected officials based on:
-- Their party's official platform
-- Their voting record (if available)
-- Public statements and campaign positions
-- Their state/district's political leanings
-- Common positions for officials in similar roles
+  const systemPrompt = `You are a non-partisan political analyst. Determine likely positions for elected officials based on party platform, voting record, public statements, and state context.
 
-CRITICAL - Use the LEFT-RIGHT political spectrum for scoring:
-- -10 = Far LEFT / Very progressive position (typical Democrat/Green positions)
-- -5 = Left-leaning / Progressive position
-- 0 = Neutral, centrist, or no clear position
-- +5 = Right-leaning / Conservative position  
-- +10 = Far RIGHT / Very conservative position (typical Republican positions)
+Use LEFT-RIGHT spectrum: -10 = Far LEFT, -5 = Left, 0 = Neutral, +5 = Right, +10 = Far RIGHT.
+Democrats: generally NEGATIVE. Republicans: generally POSITIVE.
+ONLY use: -10, -5, 0, +5, or +10. No intermediate values.
 
-IMPORTANT: Democrats should generally have NEGATIVE scores (left-leaning).
-Republicans should generally have POSITIVE scores (right-leaning).
+Return ONLY valid JSON array, no markdown fences, no extra text.`;
 
-CRITICAL: You MUST use ONLY these exact values: -10, -5, 0, +5, or +10.
-NO intermediate values like -7, -3, +2, +8, etc. are allowed.
-
-Be as accurate as possible based on available public information. If uncertain, use party platform as baseline with medium confidence.`;
-
-  const userPrompt = `Determine the likely positions of this elected official on each question:
-
-Official: ${candidateName}
-Party: ${candidateParty}
-Office: ${candidateOffice}
-State: ${candidateState}
+  const userPrompt = `Official: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
 
 Questions:
 ${questionsText}
 
-For each question, provide a JSON array with objects containing:
-- question_id: the ID in brackets
-- answer_value: MUST be one of the exact option values provided for that question (e.g., -10, -5, 0, 5, or 10)
-- confidence: "high" (verified from voting record), "medium" (inferred from party/statements), or "low" (estimated)
-- source_description: brief source (e.g., "Inferred from ${candidateParty} Party platform", "Based on voting record", "State political context")
-- notes: brief explanation if notable (null if standard party position)
+Return JSON array with objects: {question_id, answer_value, confidence, source_description}
+- question_id: the ID in brackets (e.g. "eco1")
+- answer_value: -10, -5, 0, 5, or 10
+- confidence: "high"/"medium"/"low"
+- source_description: brief source (max 50 chars)
 
-IMPORTANT: Only use the exact numeric values shown in the Options for each question. Do not use intermediate values.
-
-Return ONLY a valid JSON array, no other text.`;
-
-  console.log(`Generating AI answers for ${candidateName} on ${questions.length} questions...`);
+CRITICAL: Return ONLY the JSON array. No markdown. No explanation.`;
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
@@ -186,7 +110,7 @@ Return ONLY a valid JSON array, no other text.`;
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.3,
-      max_tokens: 4000,
+      max_tokens: 2000, // Enough for 20 answers
     }),
   });
 
@@ -194,10 +118,9 @@ Return ONLY a valid JSON array, no other text.`;
     const errorText = await response.text();
     console.error('AI Gateway error:', response.status, errorText);
     
-    // Handle rate limit and payment errors gracefully - return empty instead of throwing
     if (response.status === 402 || response.status === 429) {
-      console.log(`AI Gateway ${response.status} - returning empty answers for ${candidateName}`);
-      return []; // Return empty array so caller can use existing data
+      console.log(`AI Gateway ${response.status} - rate limited or payment required`);
+      return []; 
     }
     
     throw new Error(`AI Gateway error: ${response.status}`);
@@ -206,29 +129,151 @@ Return ONLY a valid JSON array, no other text.`;
   const aiResponse = await response.json();
   const content = aiResponse.choices?.[0]?.message?.content || '';
 
-  // Parse JSON from response
-  let answers: GeneratedAnswer[] = [];
   try {
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      answers = parsed.map((item: any) => ({
-        // Strip brackets from question_id (AI sometimes returns "[eco1]" instead of "eco1")
-        question_id: String(item.question_id || '').replace(/[\[\]]/g, ''),
-        answer_value: snapToValidValue(item.answer_value),
-        source_description: item.source_description || `Inferred from ${candidateParty} Party platform`,
-        source_url: null,
-        confidence: item.confidence || 'low',
-        notes: item.notes || null,
-      }));
-    }
+    const parsed = parseAIResponse(content);
+    return parsed.map((item: any) => ({
+      question_id: String(item.question_id || '').replace(/[\[\]]/g, ''),
+      answer_value: snapToValidValue(item.answer_value),
+      source_description: (item.source_description || `${candidateParty} platform`).slice(0, 100),
+      source_url: null,
+      confidence: item.confidence || 'medium',
+    }));
   } catch (e) {
     console.error('Failed to parse AI response:', e);
-    console.error('Raw content:', content.slice(0, 500));
+    console.error('Raw content:', content.slice(0, 300));
+    return [];
   }
+}
 
-  console.log(`Generated ${answers.length} answers for ${candidateName}`);
-  return answers;
+async function generateAnswersInChunks(
+  supabase: any,
+  candidateId: string,
+  candidateName: string,
+  candidateParty: string,
+  candidateOffice: string,
+  candidateState: string,
+  questions: Question[]
+): Promise<{ generated: number; failed: number }> {
+  let totalGenerated = 0;
+  let failedChunks = 0;
+  
+  // Split questions into chunks
+  const chunks: Question[][] = [];
+  for (let i = 0; i < questions.length; i += CHUNK_SIZE) {
+    chunks.push(questions.slice(i, i + CHUNK_SIZE));
+  }
+  
+  console.log(`Processing ${questions.length} questions in ${chunks.length} chunks for ${candidateName}`);
+  
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    console.log(`Generating chunk ${i + 1}/${chunks.length} (${chunk.length} questions)...`);
+    
+    try {
+      const answers = await generateChunkAnswers(
+        candidateName,
+        candidateParty,
+        candidateOffice,
+        candidateState,
+        chunk
+      );
+      
+      if (answers.length === 0) {
+        console.log(`Chunk ${i + 1} returned no answers`);
+        failedChunks++;
+        continue;
+      }
+      
+      // Save this chunk's answers immediately
+      const answersToInsert = answers.map(answer => ({
+        candidate_id: candidateId,
+        question_id: answer.question_id,
+        answer_value: answer.answer_value,
+        source_description: answer.source_description,
+        source_url: answer.source_url,
+        source_type: 'other', // AI-generated
+        confidence: answer.confidence,
+      }));
+      
+      const { error: insertError } = await supabase
+        .from('candidate_answers')
+        .upsert(answersToInsert, {
+          onConflict: 'candidate_id,question_id',
+          ignoreDuplicates: false,
+        });
+      
+      if (insertError) {
+        console.error(`Error saving chunk ${i + 1}:`, insertError);
+        failedChunks++;
+      } else {
+        totalGenerated += answers.length;
+        console.log(`Saved chunk ${i + 1}: ${answers.length} answers (total: ${totalGenerated})`);
+      }
+      
+      // Small delay between chunks to avoid rate limiting
+      if (i < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    } catch (e) {
+      console.error(`Error processing chunk ${i + 1}:`, e);
+      failedChunks++;
+    }
+  }
+  
+  return { generated: totalGenerated, failed: failedChunks };
+}
+
+async function updateCandidateScore(
+  supabase: any,
+  candidateId: string,
+  candidateName: string
+): Promise<void> {
+  // Get all answers for this candidate to calculate score
+  const { data: allAnswers } = await supabase
+    .from('candidate_answers')
+    .select('answer_value')
+    .eq('candidate_id', candidateId);
+  
+  if (!allAnswers || allAnswers.length === 0) return;
+  
+  const totalScore = allAnswers.reduce((sum: number, a: any) => sum + a.answer_value, 0);
+  const overallScore = Math.round((totalScore / allAnswers.length) * 100) / 100;
+  
+  // Check if candidate exists in candidates table
+  const { data: existingCandidate } = await supabase
+    .from('candidates')
+    .select('id')
+    .eq('id', candidateId)
+    .maybeSingle();
+  
+  if (existingCandidate) {
+    const { error } = await supabase
+      .from('candidates')
+      .update({ 
+        overall_score: overallScore,
+        last_answers_sync: new Date().toISOString(),
+        answers_source: 'ai_generated'
+      })
+      .eq('id', candidateId);
+    
+    if (!error) {
+      console.log(`Updated candidates.overall_score to ${overallScore} for ${candidateName}`);
+    }
+  } else {
+    const { error } = await supabase
+      .from('candidate_overrides')
+      .upsert({
+        candidate_id: candidateId,
+        overall_score: overallScore,
+      }, {
+        onConflict: 'candidate_id',
+        ignoreDuplicates: false,
+      });
+    
+    if (!error) {
+      console.log(`Saved candidate_overrides.overall_score ${overallScore} for ${candidateName}`);
+    }
+  }
 }
 
 serve(async (req) => {
@@ -241,7 +286,6 @@ serve(async (req) => {
       candidateId, 
       questionIds, 
       forceRegenerate = false,
-      // Allow passing candidate info directly for reps not in DB
       candidateName,
       candidateParty,
       candidateOffice,
@@ -261,7 +305,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // First, check for existing answers in the database
+    // Get existing answers
     let existingAnswersQuery = supabase
       .from('candidate_answers')
       .select('*')
@@ -274,15 +318,12 @@ serve(async (req) => {
     const { data: existingAnswers, error: existingError } = await existingAnswersQuery;
     if (existingError) throw existingError;
 
-    // Log existing answers count (we'll filter and generate missing ones below)
-    if (existingAnswers && existingAnswers.length > 0) {
-      console.log(`Found ${existingAnswers.length} existing answers for ${candidateId}`);
-    }
+    const existingCount = existingAnswers?.length || 0;
+    console.log(`Found ${existingCount} existing answers for ${candidateId}`);
 
-    // Get candidate info - first try from request params, then database
+    // Get candidate info
     let officialInfo: { id: string; name: string; party: string; office: string; state: string } | null = null;
 
-    // If candidate info was passed directly, use it
     if (candidateName && candidateParty && candidateOffice && candidateState) {
       officialInfo = {
         id: candidateId,
@@ -293,7 +334,6 @@ serve(async (req) => {
       };
       console.log(`Using provided candidate info for ${candidateName}`);
     } else {
-      // Try to find in candidates table
       const { data: candidate } = await supabase
         .from('candidates')
         .select('id, name, party, office, state')
@@ -303,7 +343,6 @@ serve(async (req) => {
       if (candidate) {
         officialInfo = candidate;
       } else {
-        // Try static_officials table
         const { data: staticOfficial } = await supabase
           .from('static_officials')
           .select('id, name, party, office, state')
@@ -317,19 +356,21 @@ serve(async (req) => {
     }
 
     if (!officialInfo) {
-      console.log(`Candidate ${candidateId} not found in DB and no info provided`);
+      console.log(`Candidate ${candidateId} not found`);
       return new Response(JSON.stringify({ 
-        error: 'Candidate not found. Provide candidateName, candidateParty, candidateOffice, and candidateState.',
+        error: 'Candidate not found',
         answers: existingAnswers || [],
         source: 'database',
-        count: existingAnswers?.length || 0,
+        existing: existingCount,
+        generated: 0,
+        missingBefore: 0,
       }), {
-        status: 200, // Return 200 with empty answers instead of 404
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Get questions to generate answers for (including their options for the AI prompt)
+    // Get all questions
     let questionsQuery = supabase
       .from('questions')
       .select('id, text, topic_id, question_options(value, text)');
@@ -341,36 +382,49 @@ serve(async (req) => {
     const { data: questions, error: questionsError } = await questionsQuery;
     if (questionsError) throw questionsError;
 
-    if (!questions || questions.length === 0) {
+    const totalQuestions = questions?.length || 0;
+    
+    if (totalQuestions === 0) {
       return new Response(JSON.stringify({
         answers: [],
         source: 'none',
-        count: 0,
+        existing: 0,
+        generated: 0,
+        missingBefore: 0,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Filter out questions we already have answers for (unless forceRegenerate)
+    // Filter out questions we already have answers for
     const existingQuestionIds = new Set((existingAnswers || []).map(a => a.question_id));
     const questionsToGenerate = forceRegenerate 
       ? questions 
       : questions.filter(q => !existingQuestionIds.has(q.id));
 
-    if (questionsToGenerate.length === 0) {
-      console.log('All questions already have answers');
+    const missingBefore = questionsToGenerate.length;
+    
+    // If nothing to generate, return early
+    if (missingBefore === 0) {
+      console.log(`All ${totalQuestions} questions already have answers for ${officialInfo.name}`);
       return new Response(JSON.stringify({
         answers: existingAnswers || [],
         source: 'database',
-        count: existingAnswers?.length || 0,
+        existing: existingCount,
+        generated: 0,
+        missingBefore: 0,
+        totalQuestions,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Generate answers with AI
-    console.log(`Generating AI answers for ${officialInfo.name}...`);
-    const generatedAnswers = await generateAnswersWithAI(
+    console.log(`Generating ${missingBefore} missing answers for ${officialInfo.name}...`);
+
+    // Generate answers in chunks
+    const { generated, failed } = await generateAnswersInChunks(
+      supabase,
+      candidateId,
       officialInfo.name,
       officialInfo.party,
       officialInfo.office,
@@ -378,101 +432,26 @@ serve(async (req) => {
       questionsToGenerate
     );
 
-    // Save generated answers to database
-    const answersToInsert = generatedAnswers.map(answer => ({
-      candidate_id: candidateId,
-      question_id: answer.question_id,
-      answer_value: answer.answer_value,
-      source_description: answer.source_description,
-      source_url: answer.source_url,
-      source_type: 'other', // AI-generated
-      confidence: answer.confidence,
-    }));
-
-    if (answersToInsert.length > 0) {
-      const { error: insertError } = await supabase
-        .from('candidate_answers')
-        .upsert(answersToInsert, {
-          onConflict: 'candidate_id,question_id',
-          ignoreDuplicates: false,
-        });
-
-      if (insertError) {
-        console.error('Error inserting AI-generated answers:', insertError);
-        // Still return the generated answers even if save fails
-      } else {
-        console.log(`Saved ${answersToInsert.length} AI-generated answers for ${officialInfo.name}`);
-        
-        // Calculate and save the overall score based on ALL answers for this candidate
-        const { data: allCandidateAnswers } = await supabase
-          .from('candidate_answers')
-          .select('answer_value')
-          .eq('candidate_id', candidateId);
-        
-        if (allCandidateAnswers && allCandidateAnswers.length > 0) {
-          const totalScore = allCandidateAnswers.reduce((sum, a) => sum + a.answer_value, 0);
-          const overallScore = Math.round((totalScore / allCandidateAnswers.length) * 100) / 100;
-          
-          // Check if candidate exists in candidates table
-          const { data: existingCandidate } = await supabase
-            .from('candidates')
-            .select('id')
-            .eq('id', candidateId)
-            .maybeSingle();
-          
-          if (existingCandidate) {
-            // Update candidates table directly
-            const { error: updateError } = await supabase
-              .from('candidates')
-              .update({ 
-                overall_score: overallScore,
-                last_answers_sync: new Date().toISOString(),
-                answers_source: 'ai_generated'
-              })
-              .eq('id', candidateId);
-            
-            if (updateError) {
-              console.error('Error updating candidates table:', updateError);
-            } else {
-              console.log(`Updated overall_score to ${overallScore} in candidates table for ${officialInfo.name}`);
-            }
-          } else {
-            // For officials not in candidates table (civic officials, executives, etc.),
-            // ALWAYS use candidate_overrides to persist the score
-            const { error: overrideError } = await supabase
-              .from('candidate_overrides')
-              .upsert({
-                candidate_id: candidateId,
-                overall_score: overallScore,
-              }, {
-                onConflict: 'candidate_id',
-                ignoreDuplicates: false,
-              });
-            
-            if (overrideError) {
-              console.error('Error upserting candidate_overrides:', overrideError);
-            } else {
-              console.log(`Saved overall_score ${overallScore} to candidate_overrides for ${officialInfo.name}`);
-            }
-          }
-        }
-      }
+    // Update overall score if we generated any answers
+    if (generated > 0) {
+      await updateCandidateScore(supabase, candidateId, officialInfo.name);
     }
 
-    // Return combined existing + generated answers
-    const allAnswers = [
-      ...(existingAnswers || []).filter(a => 
-        !generatedAnswers.some(g => g.question_id === a.question_id)
-      ),
-      ...answersToInsert,
-    ];
+    // Fetch final answer count
+    const { data: finalAnswers } = await supabase
+      .from('candidate_answers')
+      .select('*')
+      .eq('candidate_id', candidateId);
 
     return new Response(JSON.stringify({
-      answers: allAnswers,
-      source: generatedAnswers.length > 0 ? 'ai_generated' : 'database',
-      generated: generatedAnswers.length,
-      existing: (existingAnswers || []).length,
-      count: allAnswers.length,
+      answers: finalAnswers || [],
+      source: generated > 0 ? 'ai_generated' : 'database',
+      generated,
+      existing: existingCount,
+      missingBefore,
+      failedChunks: failed,
+      totalQuestions,
+      finalCount: finalAnswers?.length || 0,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

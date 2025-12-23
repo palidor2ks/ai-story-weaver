@@ -8,6 +8,8 @@ interface PopulateResult {
   candidateId: string;
   generated?: number;
   existing?: number;
+  missingBefore?: number;
+  failedChunks?: number;
   error?: string;
 }
 
@@ -37,18 +39,33 @@ export function usePopulateCandidateAnswers() {
 
       const generated = data?.generated || 0;
       const existing = data?.existing || 0;
+      const missingBefore = data?.missingBefore || 0;
+      const failedChunks = data?.failedChunks || 0;
+      const finalCount = data?.finalCount || 0;
+      const totalQuestions = data?.totalQuestions || 0;
       
+      // Show appropriate toast based on result
       if (generated > 0) {
-        toast.success(`Generated ${generated} answers`);
-      } else if (existing > 0) {
-        toast.info(`Already has ${existing} answers`);
+        toast.success(`Generated ${generated} answers (${finalCount}/${totalQuestions} total)`);
+      } else if (missingBefore > 0 && generated === 0) {
+        // Tried to generate but failed (AI returned empty/invalid)
+        toast.error(`Failed to generate ${missingBefore} missing answers - check logs`);
+      } else if (missingBefore === 0 && existing > 0) {
+        // Already has full coverage
+        toast.info(`Already has all ${existing} answers`);
+      } else {
+        toast.info(`No answers generated`);
       }
 
-      queryClient.invalidateQueries({ queryKey: ['candidates-answer-coverage'] });
-      queryClient.invalidateQueries({ queryKey: ['sync-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['candidate-answers'] });
+      // Immediately refetch coverage data
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['candidates-answer-coverage'] }),
+        queryClient.refetchQueries({ queryKey: ['candidate-answer-stats'] }),
+        queryClient.refetchQueries({ queryKey: ['candidate-answers'] }),
+        queryClient.refetchQueries({ queryKey: ['sync-stats'] }),
+      ]);
 
-      return { success: true, candidateId, generated, existing };
+      return { success: generated > 0 || missingBefore === 0, candidateId, generated, existing, missingBefore, failedChunks };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to generate answers';
       toast.error(message);
@@ -79,8 +96,12 @@ export function usePopulateCandidateAnswers() {
         if (error) {
           errorCount++;
           console.error(`Error for ${candidate.name}:`, error);
-        } else {
+        } else if (data?.generated > 0 || data?.missingBefore === 0) {
           successCount++;
+        } else {
+          // Generation was attempted but failed
+          errorCount++;
+          console.error(`Generation failed for ${candidate.name}: no answers returned`);
         }
       } catch (error) {
         errorCount++;
@@ -97,9 +118,13 @@ export function usePopulateCandidateAnswers() {
 
     setBatchProgress(null);
 
-    queryClient.invalidateQueries({ queryKey: ['candidates-answer-coverage'] });
-    queryClient.invalidateQueries({ queryKey: ['sync-stats'] });
-    queryClient.invalidateQueries({ queryKey: ['candidate-answers'] });
+    // Refetch all relevant queries
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ['candidates-answer-coverage'] }),
+      queryClient.refetchQueries({ queryKey: ['candidate-answer-stats'] }),
+      queryClient.refetchQueries({ queryKey: ['candidate-answers'] }),
+      queryClient.refetchQueries({ queryKey: ['sync-stats'] }),
+    ]);
 
     toast.success(`Generated answers for ${successCount} candidates${errorCount > 0 ? ` (${errorCount} errors)` : ''}`);
 
