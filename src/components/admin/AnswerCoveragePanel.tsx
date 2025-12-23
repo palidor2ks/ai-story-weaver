@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2 } from "lucide-react";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
@@ -89,7 +89,7 @@ export function AnswerCoveragePanel() {
     coverageFilter,
   });
 
-  const { populateCandidate, populateBatch, isLoading, isBatchRunning, batchProgress } = usePopulateCandidateAnswers();
+  const { populateCandidate, populateBatch, pauseBatch, resumeBatch, cancelBatch, isLoading, isBatchRunning, batchProgress } = usePopulateCandidateAnswers();
 
   // Filter candidates by search query
   const filteredCandidates = candidates?.filter(c =>
@@ -210,19 +210,58 @@ export function AnswerCoveragePanel() {
           </div>
         )}
 
-        {/* Batch Progress */}
+        {/* Batch Progress with Queue Controls */}
         {isBatchRunning && batchProgress && (
-          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2">
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Processing: {batchProgress.currentName}</span>
+              <div className="flex items-center gap-2">
+                {batchProgress.retrying ? (
+                  <AlertTriangle className="h-4 w-4 text-amber-500 animate-pulse" />
+                ) : batchProgress.paused ? (
+                  <Pause className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                )}
+                <span className="text-sm font-medium">
+                  {batchProgress.paused 
+                    ? 'Paused' 
+                    : batchProgress.retrying 
+                      ? `Retrying ${batchProgress.currentName} (attempt ${batchProgress.retryCount}/3)` 
+                      : `Processing: ${batchProgress.currentName}`}
+                </span>
+              </div>
               <span className="text-sm text-muted-foreground">
                 {batchProgress.completed} / {batchProgress.total}
               </span>
             </div>
             <Progress value={(batchProgress.completed / batchProgress.total) * 100} className="h-2" />
-            {batchProgress.errors > 0 && (
-              <p className="text-sm text-destructive">{batchProgress.errors} error(s)</p>
-            )}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                {batchProgress.errors > 0 && (
+                  <span className="text-destructive">{batchProgress.errors} error(s)</span>
+                )}
+                {batchProgress.retrying && (
+                  <span className="text-amber-600">Worker limit hit - waiting to retry...</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {batchProgress.paused ? (
+                  <Button variant="outline" size="sm" onClick={resumeBatch}>
+                    <Play className="h-4 w-4 mr-1" />
+                    Resume
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={pauseBatch}>
+                    <Pause className="h-4 w-4 mr-1" />
+                    Pause
+                  </Button>
+                )}
+                <Button variant="destructive" size="sm" onClick={cancelBatch}>
+                  <X className="h-4 w-4 mr-1" />
+                  Cancel
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
