@@ -123,61 +123,64 @@ export const CandidateCard = ({
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="truncate">{candidate.office}</span>
-              <span>•</span>
+              <span className="line-clamp-2 break-words">{candidate.office}</span>
+              <span className="flex-shrink-0">•</span>
               <MapPin className="w-3 h-3 flex-shrink-0" />
-              <span>{candidate.state}</span>
+              <span className="flex-shrink-0">{candidate.state}</span>
             </div>
           </div>
 
-          {/* Icon badges */}
+          {/* Icons stacked above Score */}
           <TooltipProvider>
-            <div className="flex items-center gap-1 flex-shrink-0">
-              {isIncumbent && (
+            <div className="flex-shrink-0 flex flex-col items-end gap-1">
+              {/* Row 1: Status icons */}
+              <div className="flex items-center gap-1">
+                {isIncumbent && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">Incumbent</TooltipContent>
+                  </Tooltip>
+                )}
+                {transitionStatus && transitionStatus !== 'current' && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <ArrowRightLeft className="w-4 h-4 text-amber-500" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">Transitioning</TooltipContent>
+                  </Tooltip>
+                )}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <tierInfo.icon className={cn("w-4 h-4", tierInfo.color)} />
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">Incumbent</TooltipContent>
+                  <TooltipContent side="top" className="text-xs">{tierInfo.label}</TooltipContent>
                 </Tooltip>
-              )}
-              {transitionStatus && transitionStatus !== 'current' && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <ArrowRightLeft className="w-4 h-4 text-amber-500" />
+                    <confidenceInfo.icon className={cn("w-4 h-4", confidenceInfo.color)} />
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">Transitioning</TooltipContent>
+                  <TooltipContent side="top" className="text-xs">{confidenceInfo.label}</TooltipContent>
                 </Tooltip>
-              )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <tierInfo.icon className={cn("w-4 h-4", tierInfo.color)} />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">{tierInfo.label}</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <confidenceInfo.icon className={cn("w-4 h-4", confidenceInfo.color)} />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">{confidenceInfo.label}</TooltipContent>
-              </Tooltip>
+              </div>
+
+              {/* Row 2: Score with AI indicator */}
+              <div className="flex items-center gap-1.5">
+                {hasAIAnswers && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Sparkles className="w-3.5 h-3.5 text-accent" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      AI-predicted positions ({answerCount} answers)
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                <ScoreText score={candidate.overallScore} size="lg" />
+              </div>
             </div>
           </TooltipProvider>
-
-          {/* Political Score */}
-          <div className="flex-shrink-0 flex items-center gap-1.5">
-            {hasAIAnswers && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Sparkles className="w-3.5 h-3.5 text-accent" />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  AI-predicted positions ({answerCount} answers)
-                </TooltipContent>
-              </Tooltip>
-            )}
-            <ScoreText score={candidate.overallScore} size="lg" />
-          </div>
         </div>
 
       </CardContent>
