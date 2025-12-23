@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Search, DollarSign, Building2, User as UserIcon } from 'lucide-react';
+import { Search, DollarSign, Building2, User as UserIcon, ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface Donor {
@@ -176,7 +176,11 @@ export const Donors = () => {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
                     {getTypeIcon(donor.type)}
-                    <CardTitle className="text-lg">{donor.name}</CardTitle>
+                    <CardTitle className="text-lg">
+                      <Link to={`/donor/${donor.id}`} className="hover:underline">
+                        {donor.name}
+                      </Link>
+                    </CardTitle>
                   </div>
                   <Badge variant="outline">{donor.type}</Badge>
                 </div>
@@ -205,6 +209,13 @@ export const Donors = () => {
                       </Link>
                     </div>
                   )}
+                  <Link 
+                    to={`/donor/${donor.id}`}
+                    className="inline-flex items-center gap-1 text-primary text-sm hover:underline"
+                  >
+                    <ArrowUpRight className="w-4 h-4" />
+                    View donor profile
+                  </Link>
                 </div>
               </CardContent>
             </Card>
