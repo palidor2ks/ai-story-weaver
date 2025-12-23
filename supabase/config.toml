@@ -56,3 +56,9 @@ verify_jwt = false
 
 [functions.batch-regenerate-answers]
 verify_jwt = false
+
+[functions.fetch-fec-candidate-id]
+verify_jwt = false
+
+[functions.fetch-fec-donors]
+verify_jwt = false
