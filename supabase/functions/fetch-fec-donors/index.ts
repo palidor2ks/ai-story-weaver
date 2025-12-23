@@ -51,7 +51,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { candidateId, fecCandidateId, fecCommitteeId, cycle = '2024', maxResults = 100 } = await req.json();
+    const { candidateId, fecCandidateId, fecCommitteeId, cycle = '2024', maxPages = 50 } = await req.json();
     console.log('[FEC-DONORS] Fetching donors for:', { candidateId, fecCandidateId, fecCommitteeId, cycle });
 
     if (!candidateId) {
@@ -109,36 +109,95 @@ serve(async (req) => {
       );
     }
 
-    // Fetch contributions from FEC API using COMMITTEE ID (not candidate ID)
-    // This ensures we only get contributions made directly to this candidate's campaign
-    const params = new URLSearchParams({
-      api_key: fecApiKey,
-      committee_id: committeeId,
-      two_year_transaction_period: cycle,
-      per_page: String(Math.min(maxResults, 100)),
-      sort: '-contribution_receipt_amount',
-      is_individual: 'true',
-    });
+    // Fetch ALL contributions using pagination
+    // FEC API returns max 100 results per page, so we need to paginate
+    const aggregatedDonors = new Map<string, {
+      name: string;
+      type: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
+      amount: number;
+    }>();
 
-    const contributionsUrl = `https://api.open.fec.gov/v1/schedules/schedule_a/?${params.toString()}`;
-    console.log('[FEC-DONORS] Fetching contributions by committee:', contributionsUrl.replace(fecApiKey, 'REDACTED'));
+    let lastIndex: string | null = null;
+    let lastContributionDate: string | null = null;
+    let pageCount = 0;
+    let totalContributions = 0;
 
-    const response = await fetch(contributionsUrl);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[FEC-DONORS] API error:', response.status, errorText);
-      return new Response(
-        JSON.stringify({ error: `FEC API error: ${response.status}` }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    console.log('[FEC-DONORS] Starting paginated fetch for committee:', committeeId);
+
+    while (pageCount < maxPages) {
+      const params = new URLSearchParams({
+        api_key: fecApiKey,
+        committee_id: committeeId,
+        two_year_transaction_period: cycle,
+        per_page: '100',
+        sort: '-contribution_receipt_date',
+        sort_null_only: 'false',
+      });
+
+      // Add pagination cursors if we have them
+      if (lastIndex && lastContributionDate) {
+        params.set('last_index', lastIndex);
+        params.set('last_contribution_receipt_date', lastContributionDate);
+      }
+
+      const contributionsUrl = `https://api.open.fec.gov/v1/schedules/schedule_a/?${params.toString()}`;
+      
+      if (pageCount === 0) {
+        console.log('[FEC-DONORS] Fetching page 1:', contributionsUrl.replace(fecApiKey, 'REDACTED'));
+      }
+
+      const response = await fetch(contributionsUrl);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[FEC-DONORS] API error on page', pageCount + 1, ':', response.status, errorText);
+        break; // Continue with what we have
+      }
+
+      const data = await response.json();
+      const results = data.results || [];
+      
+      if (results.length === 0) {
+        console.log('[FEC-DONORS] No more results after page', pageCount);
+        break;
+      }
+
+      totalContributions += results.length;
+      pageCount++;
+
+      // Process contributions
+      for (const contribution of results) {
+        const name = contribution.contributor_name || 'Unknown Contributor';
+        const type = mapEntityType(contribution.entity_type);
+        const amount = Math.round(contribution.contribution_receipt_amount || 0);
+        
+        const key = `${name}-${type}`;
+        const existing = aggregatedDonors.get(key);
+        
+        if (existing) {
+          existing.amount += amount;
+        } else {
+          aggregatedDonors.set(key, { name, type, amount });
+        }
+      }
+
+      // Get pagination info for next page
+      const pagination = data.pagination;
+      if (!pagination?.last_indexes || results.length < 100) {
+        console.log('[FEC-DONORS] Reached end of results at page', pageCount);
+        break;
+      }
+
+      lastIndex = pagination.last_indexes.last_index;
+      lastContributionDate = pagination.last_indexes.last_contribution_receipt_date;
+
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
 
-    const data = await response.json();
-    console.log('[FEC-DONORS] Found', data.results?.length || 0, 'contributions');
+    console.log('[FEC-DONORS] Fetched', totalContributions, 'contributions across', pageCount, 'pages');
 
-    if (!data.results || data.results.length === 0) {
-      // Still update last_donor_sync even if no donors found
+    if (aggregatedDonors.size === 0) {
       await supabase
         .from('candidates')
         .update({ last_donor_sync: new Date().toISOString() })
@@ -152,28 +211,6 @@ serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
-
-    // Aggregate donations by contributor name (sum amounts for same donor)
-    const aggregatedDonors = new Map<string, {
-      name: string;
-      type: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
-      amount: number;
-    }>();
-
-    for (const contribution of data.results) {
-      const name = contribution.contributor_name || 'Unknown Contributor';
-      const type = mapEntityType(contribution.entity_type);
-      const amount = Math.round(contribution.contribution_receipt_amount || 0);
-      
-      const key = `${name}-${type}`;
-      const existing = aggregatedDonors.get(key);
-      
-      if (existing) {
-        existing.amount += amount;
-      } else {
-        aggregatedDonors.set(key, { name, type, amount });
-      }
     }
 
     // Transform to our donor format
