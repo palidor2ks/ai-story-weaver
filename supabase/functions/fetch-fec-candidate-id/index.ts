@@ -14,6 +14,7 @@ interface FECCandidate {
   state: string;
   district?: string;
   cycles: number[];
+  principal_committee_id?: string;
 }
 
 serve(async (req) => {
@@ -84,16 +85,41 @@ serve(async (req) => {
       );
     }
 
-    // Map results to our format
-    const candidates: FECCandidate[] = data.results.map((r: any) => ({
-      candidate_id: r.candidate_id,
-      name: r.name,
-      party: r.party_full || r.party,
-      office: r.office_full || r.office,
-      state: r.state,
-      district: r.district,
-      cycles: r.election_years || [],
-    }));
+    // Map results to our format and fetch principal committee for each
+    const candidates: FECCandidate[] = [];
+    
+    for (const r of data.results) {
+      const candidate: FECCandidate = {
+        candidate_id: r.candidate_id,
+        name: r.name,
+        party: r.party_full || r.party,
+        office: r.office_full || r.office,
+        state: r.state,
+        district: r.district,
+        cycles: r.election_years || [],
+      };
+
+      // Fetch principal committee ID for this candidate
+      try {
+        const committeeUrl = `https://api.open.fec.gov/v1/candidate/${r.candidate_id}/?api_key=${fecApiKey}`;
+        console.log('[FEC] Fetching committee for:', r.candidate_id);
+        
+        const committeeResponse = await fetch(committeeUrl);
+        if (committeeResponse.ok) {
+          const committeeData = await committeeResponse.json();
+          const principalCommittees = committeeData.results?.[0]?.principal_committees || [];
+          if (principalCommittees.length > 0) {
+            // Get the most recent principal committee
+            candidate.principal_committee_id = principalCommittees[0].committee_id;
+            console.log('[FEC] Found principal committee:', candidate.principal_committee_id);
+          }
+        }
+      } catch (err) {
+        console.warn('[FEC] Failed to fetch committee for', r.candidate_id, err);
+      }
+
+      candidates.push(candidate);
+    }
 
     // If updateDatabase is true and we have a candidateId, update the candidates table
     if (updateDatabase && candidateId && candidates.length > 0) {
@@ -103,17 +129,26 @@ serve(async (req) => {
 
       // Use the first (best) match
       const bestMatch = candidates[0];
-      console.log('[FEC] Updating candidate', candidateId, 'with FEC ID:', bestMatch.candidate_id);
+      console.log('[FEC] Updating candidate', candidateId, 'with FEC ID:', bestMatch.candidate_id, 'committee:', bestMatch.principal_committee_id);
+
+      const updateData: Record<string, string | null> = { 
+        fec_candidate_id: bestMatch.candidate_id 
+      };
+      
+      // Also store the principal committee ID if available
+      if (bestMatch.principal_committee_id) {
+        updateData.fec_committee_id = bestMatch.principal_committee_id;
+      }
 
       const { error: updateError } = await supabase
         .from('candidates')
-        .update({ fec_candidate_id: bestMatch.candidate_id })
+        .update(updateData)
         .eq('id', candidateId);
 
       if (updateError) {
         console.error('[FEC] Failed to update candidate:', updateError);
       } else {
-        console.log('[FEC] Successfully updated candidate with FEC ID');
+        console.log('[FEC] Successfully updated candidate with FEC ID and committee ID');
       }
 
       return new Response(
@@ -121,6 +156,7 @@ serve(async (req) => {
           found: true, 
           updated: !updateError,
           fecCandidateId: bestMatch.candidate_id,
+          fecCommitteeId: bestMatch.principal_committee_id,
           candidates 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
