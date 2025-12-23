@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Declare EdgeRuntime for Supabase Edge Functions
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -21,26 +26,44 @@ interface ProcessResult {
   error?: string;
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+// Track progress globally for shutdown logging
+let globalProgress = {
+  processed: 0,
+  successful: 0,
+  failed: 0,
+  total: 0,
+  currentCandidate: '',
+  startTime: 0,
+};
 
-  const startTime = Date.now();
+// Log progress on shutdown
+addEventListener('beforeunload', (ev: Event) => {
+  const detail = (ev as CustomEvent).detail;
+  const elapsed = Math.round((Date.now() - globalProgress.startTime) / 60000 * 10) / 10;
+  console.log(`=== SHUTDOWN (${detail?.reason || 'unknown'}) ===`);
+  console.log(`Progress: ${globalProgress.processed}/${globalProgress.total} candidates`);
+  console.log(`Success: ${globalProgress.successful}, Failed: ${globalProgress.failed}`);
+  console.log(`Last processing: ${globalProgress.currentCandidate}`);
+  console.log(`Elapsed: ${elapsed} minutes`);
+});
+
+async function processBatchInBackground(params: {
+  batchSize: number;
+  delayBetweenCandidates: number;
+  delayBetweenBatches: number;
+  maxCandidates: number;
+  startFromId: string | null;
+}) {
+  const { batchSize, delayBetweenCandidates, delayBetweenBatches, maxCandidates, startFromId } = params;
+  
+  globalProgress.startTime = Date.now();
+  
+  console.log(`=== BACKGROUND BATCH REGENERATION STARTED ===`);
+  console.log(`Parameters: batchSize=${batchSize}, maxCandidates=${maxCandidates || 'unlimited'}`);
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    const { 
-      batchSize = 5, 
-      delayBetweenCandidates = 3000,
-      delayBetweenBatches = 5000,
-      maxCandidates = 0, // 0 = no limit
-      startFromId = null // optional: resume from specific candidate ID
-    } = await req.json().catch(() => ({}));
-
-    console.log(`Starting batch regeneration: batchSize=${batchSize}, maxCandidates=${maxCandidates}`);
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
     // Get total question count
     const { count: totalQuestions } = await supabase
       .from('questions')
@@ -98,12 +121,10 @@ serve(async (req) => {
       ? candidatesWithMissing.slice(0, maxCandidates)
       : candidatesWithMissing;
 
+    globalProgress.total = candidatesToProcess.length;
     console.log(`Will process: ${candidatesToProcess.length} candidates`);
 
     const results: ProcessResult[] = [];
-    let processed = 0;
-    let successful = 0;
-    let failed = 0;
 
     // Process in batches
     for (let i = 0; i < candidatesToProcess.length; i += batchSize) {
@@ -111,12 +132,13 @@ serve(async (req) => {
       const batchNum = Math.floor(i / batchSize) + 1;
       const totalBatches = Math.ceil(candidatesToProcess.length / batchSize);
       
-      console.log(`Processing batch ${batchNum}/${totalBatches} (${batch.length} candidates)`);
+      console.log(`\n=== BATCH ${batchNum}/${totalBatches} (${batch.length} candidates) ===`);
 
       for (const candidate of batch) {
         const previousCount = answerCounts?.[candidate.id] || 0;
         
-        console.log(`Processing ${candidate.name} (${candidate.id}) - currently has ${previousCount} answers`);
+        globalProgress.currentCandidate = `${candidate.name} (${candidate.id})`;
+        console.log(`[${globalProgress.processed + 1}/${globalProgress.total}] Processing ${candidate.name} - currently has ${previousCount} answers`);
 
         try {
           // Call get-candidate-answers function
@@ -154,7 +176,7 @@ serve(async (req) => {
             success: true,
           });
 
-          successful++;
+          globalProgress.successful++;
           console.log(`✓ ${candidate.name}: ${previousCount} → ${newCount} answers (+${result.generated || 0})`);
 
         } catch (error) {
@@ -171,10 +193,18 @@ serve(async (req) => {
             error: errorMessage,
           });
 
-          failed++;
+          globalProgress.failed++;
         }
 
-        processed++;
+        globalProgress.processed++;
+
+        // Log progress every 10 candidates
+        if (globalProgress.processed % 10 === 0) {
+          const elapsed = Math.round((Date.now() - globalProgress.startTime) / 60000 * 10) / 10;
+          const rate = globalProgress.processed / elapsed;
+          const remaining = (globalProgress.total - globalProgress.processed) / rate;
+          console.log(`📊 Progress: ${globalProgress.processed}/${globalProgress.total} (${globalProgress.successful} ✓, ${globalProgress.failed} ✗) - ${elapsed}min elapsed, ~${Math.round(remaining)}min remaining`);
+        }
 
         // Delay between candidates (except for last one in batch)
         if (batch.indexOf(candidate) < batch.length - 1) {
@@ -189,36 +219,63 @@ serve(async (req) => {
       }
     }
 
-    const elapsedTime = Date.now() - startTime;
+    const elapsedTime = Date.now() - globalProgress.startTime;
     const elapsedMinutes = Math.round(elapsedTime / 60000 * 10) / 10;
 
-    const summary = {
-      success: true,
-      totalCandidates: candidates?.length || 0,
-      candidatesWithMissingAnswers: candidatesWithMissing.length,
-      processed,
-      successful,
-      failed,
-      totalQuestionsPerCandidate: totalQuestions,
-      elapsedTimeMs: elapsedTime,
-      elapsedMinutes,
-      results: results.slice(0, 50), // Only include first 50 results in response
-      hasMoreResults: results.length > 50,
+    console.log(`\n=== BATCH REGENERATION COMPLETE ===`);
+    console.log(`Total processed: ${globalProgress.processed}`);
+    console.log(`Successful: ${globalProgress.successful}`);
+    console.log(`Failed: ${globalProgress.failed}`);
+    console.log(`Elapsed time: ${elapsedMinutes} minutes`);
+
+  } catch (error) {
+    console.error('=== BATCH REGENERATION ERROR ===');
+    console.error(error instanceof Error ? error.message : 'Unknown error');
+  }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const params = await req.json().catch(() => ({}));
+    
+    const config = {
+      batchSize: params.batchSize || 5,
+      delayBetweenCandidates: params.delayBetweenCandidates || 3000,
+      delayBetweenBatches: params.delayBetweenBatches || 5000,
+      maxCandidates: params.maxCandidates || 0, // 0 = no limit
+      startFromId: params.startFromId || null,
     };
 
-    console.log(`Batch regeneration complete: ${successful} successful, ${failed} failed, ${elapsedMinutes} minutes`);
+    console.log('Received batch regeneration request with config:', config);
 
-    return new Response(JSON.stringify(summary), {
+    // Start background processing - DO NOT await
+    EdgeRuntime.waitUntil(processBatchInBackground(config));
+
+    // Return immediately
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Batch regeneration started in background. Check logs for progress.',
+      config,
+      logsUrl: 'https://supabase.com/dashboard/project/ornnzinjrcyigazecctf/functions/batch-regenerate-answers/logs',
+      tips: [
+        'Progress is logged every 10 candidates',
+        'Use maxCandidates to limit processing for testing',
+        'Use startFromId to resume from a specific candidate',
+      ],
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('Batch regeneration error:', error);
+    console.error('Request error:', error);
     
     return new Response(JSON.stringify({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error',
-      elapsedTimeMs: Date.now() - startTime,
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
