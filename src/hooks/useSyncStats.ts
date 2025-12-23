@@ -57,13 +57,29 @@ export function useSyncStats() {
 
       if (topicsError) throw topicsError;
 
-      // Get all answers (explicit limit to avoid Supabase's default 1000 row limit)
-      const { data: allAnswers, error: allAnswersError } = await supabase
-        .from('candidate_answers')
-        .select('question_id, candidate_id')
-        .limit(100000);
+      // Get all answers (paginate because PostgREST commonly caps responses to 1000 rows)
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      const allAnswers: Array<{ question_id: string; candidate_id: string }> = [];
 
-      if (allAnswersError) throw allAnswersError;
+      while (true) {
+        const { data, error } = await supabase
+          .from('candidate_answers')
+          .select('id, question_id, candidate_id')
+          .order('id', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) throw error;
+
+        (data || []).forEach((row) => {
+          allAnswers.push({ question_id: row.question_id, candidate_id: row.candidate_id });
+        });
+
+        if (!data || data.length < PAGE_SIZE) break;
+
+        from += PAGE_SIZE;
+        if (from > 500000) break; // safety guard
+      }
 
       const totalCandidates = candidates?.length || 0;
       const totalQuestions = questions?.length || 0;
