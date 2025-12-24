@@ -18,12 +18,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit, UserCheck, Building2, RefreshCw, CheckCircle2, AlertTriangle, BarChart3 } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit, UserCheck, Building2, RefreshCw, CheckCircle2, AlertTriangle, BarChart3, DollarSign } from "lucide-react";
 import { usePopulatePartyAnswers } from "@/hooks/usePopulatePartyAnswers";
 import { usePartyAnswerStats } from "@/hooks/usePartyAnswerStats";
 import { Progress } from "@/components/ui/progress";
 import { useInvertedScoreCandidates, useRegenerateCandidateAnswers, useBatchRegenerateCandidates } from "@/hooks/useInvertedScoreCandidates";
 import { ScoreTextInline } from "@/components/ScoreText";
+import { FinanceReconciliationPanel } from "@/components/admin/FinanceReconciliationPanel";
 
 // Only levels that require manual entry (no API available)
 const LEVELS = [
@@ -444,6 +445,10 @@ export default function Admin() {
                   {invertedCandidates.length}
                 </Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="finance" className="gap-2">
+              <DollarSign className="h-4 w-4" />
+              Finance
             </TabsTrigger>
           </TabsList>
 
@@ -900,6 +905,10 @@ export default function Admin() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="finance">
+            <FinanceReconciliationPanel />
           </TabsContent>
         </Tabs>
       </main>

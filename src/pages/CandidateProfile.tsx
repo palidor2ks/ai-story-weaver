@@ -12,6 +12,8 @@ import { useAdminRole } from '@/hooks/useAdminRole';
 import { useAuth } from '@/context/AuthContext';
 import { useFECIntegration } from '@/hooks/useFECIntegration';
 import { useFECTotals } from '@/hooks/useFECTotals';
+import { useFinanceReconciliation, useCommitteeRollups } from '@/hooks/useFinanceReconciliation';
+import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info } from 'lucide-react';
 import { ScoreText } from '@/components/ScoreText';
@@ -45,6 +47,8 @@ export const CandidateProfile = () => {
   // Get FEC committee ID from first donor record or we'll pass null
   const committeeId = donors[0]?.recipient_committee_id ?? null;
   const { data: fecTotals } = useFECTotals(committeeId);
+  const { data: financeReconciliation } = useFinanceReconciliation(id);
+  const { data: committeeRollups = [] } = useCommitteeRollups(id);
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   
@@ -450,6 +454,18 @@ export const CandidateProfile = () => {
                             </div>
                           </div>
                         </TooltipProvider>
+                      )}
+                      
+                      {/* Finance Reconciliation Card */}
+                      {financeReconciliation && (
+                        <div className="mt-4">
+                          <FinanceReconciliationCard 
+                            reconciliation={financeReconciliation}
+                            rollups={committeeRollups}
+                            lastSyncDate={candidate.last_donor_sync}
+                            compact
+                          />
+                        </div>
                       )}
                     </div>
                     <div className="space-y-3">
