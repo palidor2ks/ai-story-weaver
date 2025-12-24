@@ -99,26 +99,21 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
 
       // Aggregate donor amounts for receipts and itemized contributions (current cycle only)
       const FINANCE_CYCLE = '2024';
-
-      const { data: itemizedTotals } = await supabase
+      
+      const { data: donorsWithAmount } = await supabase
         .from('donors')
-        .select('candidate_id, total:amount.sum()', { group: 'candidate_id' })
-        .eq('cycle', FINANCE_CYCLE)
-        .eq('is_contribution', true);
+        .select('candidate_id, amount, is_contribution, cycle');
 
       const itemizedTotalMap: Record<string, number> = {};
-      (itemizedTotals || []).forEach(row => {
-        itemizedTotalMap[row.candidate_id] = Number(row.total) || 0;
-      });
-
-      const { data: receiptTotals } = await supabase
-        .from('donors')
-        .select('candidate_id, total:amount.sum()', { group: 'candidate_id' })
-        .eq('cycle', FINANCE_CYCLE);
-
       const receiptTotalMap: Record<string, number> = {};
-      (receiptTotals || []).forEach(row => {
-        receiptTotalMap[row.candidate_id] = Number(row.total) || 0;
+      
+      (donorsWithAmount || []).forEach(row => {
+        if (row.cycle === FINANCE_CYCLE) {
+          receiptTotalMap[row.candidate_id] = (receiptTotalMap[row.candidate_id] || 0) + (row.amount || 0);
+          if (row.is_contribution) {
+            itemizedTotalMap[row.candidate_id] = (itemizedTotalMap[row.candidate_id] || 0) + (row.amount || 0);
+          }
+        }
       });
 
       // Count answers per candidate
