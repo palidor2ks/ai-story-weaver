@@ -61,6 +61,36 @@ export type Database = {
           },
         ]
       }
+      candidate_committees: {
+        Row: {
+          active: boolean | null
+          candidate_id: string
+          created_at: string | null
+          fec_committee_id: string
+          id: string
+          role: string
+          updated_at: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          candidate_id: string
+          created_at?: string | null
+          fec_committee_id: string
+          id?: string
+          role?: string
+          updated_at?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          candidate_id?: string
+          created_at?: string | null
+          fec_committee_id?: string
+          id?: string
+          role?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       candidate_overrides: {
         Row: {
           candidate_id: string
@@ -238,6 +268,7 @@ export type Database = {
           first_receipt_date: string | null
           id: string
           is_contribution: boolean | null
+          is_transfer: boolean | null
           last_receipt_date: string | null
           line_number: string | null
           name: string
@@ -258,6 +289,7 @@ export type Database = {
           first_receipt_date?: string | null
           id: string
           is_contribution?: boolean | null
+          is_transfer?: boolean | null
           last_receipt_date?: string | null
           line_number?: string | null
           name: string
@@ -278,6 +310,7 @@ export type Database = {
           first_receipt_date?: string | null
           id?: string
           is_contribution?: boolean | null
+          is_transfer?: boolean | null
           last_receipt_date?: string | null
           line_number?: string | null
           name?: string

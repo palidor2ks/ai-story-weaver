@@ -26,15 +26,28 @@ function mapEntityType(entityType: string): 'Individual' | 'PAC' | 'Organization
   }
 }
 
-// Check if a line_number represents an actual contribution (not other receipts)
-function isContributionLine(lineNumber: string | null): boolean {
-  if (!lineNumber) return true; // Default to true if not specified
+interface LineClassification {
+  isContribution: boolean;
+  isTransfer: boolean;
+}
+
+// Classify a line_number to determine if it's a contribution and/or transfer
+function classifyLineNumber(lineNumber: string | null): LineClassification {
+  if (!lineNumber) return { isContribution: true, isTransfer: false }; // Default to contribution
+  
   const line = lineNumber.toUpperCase();
-  // Line 11* = Contributions from individuals/persons
-  // Line 12* = Transfers from authorized committees  
-  // Line 15 = Other receipts (interest, refunds, etc) - EXCLUDE
-  // Line 16/17 = Loans/etc - EXCLUDE
-  return line.startsWith('11') || line.startsWith('12');
+  // Line 11* = Individual/PAC contributions (not transfers)
+  // Line 12* = Transfers from authorized committees (contributions but marked as transfer)
+  // Line 15* = Other receipts (loans, refunds, etc.) - not contributions
+  // Line 17A = Itemized contributions from individuals
+  const isLine11 = line.startsWith('11');
+  const isLine12 = line.startsWith('12');
+  const isLine17 = line.startsWith('17');
+  
+  const isContribution = isLine11 || isLine12 || isLine17;
+  const isTransfer = isLine12; // Committee-to-committee transfers
+  
+  return { isContribution, isTransfer };
 }
 
 // Generate a stable SHA-256 based ID for donor identity
@@ -94,6 +107,7 @@ interface AggregatedDonor {
   occupation: string;
   lineNumber: string;
   isContribution: boolean;
+  isTransfer: boolean;
 }
 
 serve(async (req) => {
@@ -249,6 +263,7 @@ serve(async (req) => {
       occupation: string;
       line_number: string;
       is_contribution: boolean;
+      is_transfer: boolean;
     }> = [];
 
     let totalRaised = 0;
@@ -310,9 +325,9 @@ serve(async (req) => {
 
         for (const contribution of results) {
           const lineNumber = contribution.line_number || '';
-          const isContribution = isContributionLine(lineNumber);
+          const classification = classifyLineNumber(lineNumber);
           
-          if (!isContribution && !includeOtherReceipts) {
+          if (!classification.isContribution && !includeOtherReceipts) {
             skippedNonContributions++;
             continue;
           }
@@ -366,7 +381,8 @@ serve(async (req) => {
               employer,
               occupation,
               lineNumber,
-              isContribution
+              isContribution: classification.isContribution,
+              isTransfer: classification.isTransfer
             });
           }
         }
@@ -406,7 +422,8 @@ serve(async (req) => {
           employer: donor.employer,
           occupation: donor.occupation,
           line_number: donor.lineNumber,
-          is_contribution: donor.isContribution
+          is_contribution: donor.isContribution,
+          is_transfer: donor.isTransfer
         });
 
         totalRaised += donor.amount;
