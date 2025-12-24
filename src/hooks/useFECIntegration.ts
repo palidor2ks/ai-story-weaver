@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -29,6 +29,8 @@ interface FetchDonorsResult {
   error?: string;
   hasMore?: boolean;
   stoppedDueToTimeout?: boolean;
+  committeesRemaining?: number;
+  committeesSynced?: string;
   reconciliation?: {
     localItemized: number;
     localTransfers: number;
@@ -38,10 +40,20 @@ interface FetchDonorsResult {
   };
 }
 
+interface SyncProgress {
+  candidateId: string;
+  candidateName: string;
+  committeesSynced: number;
+  committeesTotal: number;
+  donorsImported: number;
+  isComplete: boolean;
+}
+
 export function useFECIntegration() {
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const [donorLoadingIds, setDonorLoadingIds] = useState<Set<string>>(new Set());
-  const [partialSyncIds, setPartialSyncIds] = useState<Set<string>>(new Set()); // Track candidates with hasMore=true
+  const [partialSyncIds, setPartialSyncIds] = useState<Set<string>>(new Set());
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
     total: number;
@@ -78,7 +90,7 @@ export function useFECIntegration() {
         console.log('[FEC] Auto-fetching donors for', candidateName);
         toast.info(`Fetching donor data for ${candidateName}...`);
         
-        const donorResult = await fetchFECDonors(candidateId, result.fecCandidateId);
+        const donorResult = await fetchFECDonorsComplete(candidateId, result.fecCandidateId, candidateName);
         if (donorResult.success) {
           toast.success(`Imported ${donorResult.imported} donors for ${candidateName}`);
         } else if (donorResult.error) {
@@ -99,6 +111,133 @@ export function useFECIntegration() {
     }
   };
 
+  // Single call to fetch donors (may return hasMore=true)
+  const fetchFECDonorsSingle = async (
+    candidateId: string,
+    fecCandidateId: string,
+    cycle = '2024',
+    forceFullSync = false
+  ): Promise<FetchDonorsResult> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-fec-donors', {
+        body: { candidateId, fecCandidateId, cycle, forceFullSync }
+      });
+
+      if (error) {
+        console.error('[FEC-DONORS] Error:', error);
+        return { success: false, imported: 0, error: error.message, hasMore: true };
+      }
+
+      return data as FetchDonorsResult;
+    } catch (err) {
+      console.error('[FEC-DONORS] Exception:', err);
+      return { success: false, imported: 0, error: 'Failed to fetch donors', hasMore: true };
+    }
+  };
+
+  // Complete fetch: loops until hasMore=false
+  const fetchFECDonorsComplete = useCallback(async (
+    candidateId: string,
+    fecCandidateId: string,
+    candidateName: string,
+    cycle = '2024',
+    forceFullSync = false
+  ): Promise<FetchDonorsResult> => {
+    setDonorLoadingIds(prev => new Set(prev).add(candidateId));
+    
+    let totalImported = 0;
+    let totalRaised = 0;
+    let hasMore = true;
+    let attempts = 0;
+    const maxAttempts = 50; // Safety limit (50 * 25s = ~20min max per candidate)
+    let lastResult: FetchDonorsResult = { success: false, imported: 0 };
+    let committeesSynced = 0;
+    
+    try {
+      while (hasMore && attempts < maxAttempts) {
+        attempts++;
+        
+        setSyncProgress({
+          candidateId,
+          candidateName,
+          committeesSynced,
+          committeesTotal: committeesSynced + (lastResult.committeesRemaining || 1),
+          donorsImported: totalImported,
+          isComplete: false
+        });
+        
+        const result = await fetchFECDonorsSingle(candidateId, fecCandidateId, cycle, forceFullSync && attempts === 1);
+        lastResult = result;
+        
+        if (!result.success && result.error) {
+          console.error(`[FEC-DONORS] Failed on attempt ${attempts}:`, result.error);
+          setPartialSyncIds(prev => new Set(prev).add(candidateId));
+          setSyncProgress(null);
+          return { ...result, imported: totalImported, totalRaised };
+        }
+        
+        totalImported += result.imported || 0;
+        totalRaised += result.totalRaised || 0;
+        hasMore = result.hasMore === true;
+        
+        if (result.committeesSynced) {
+          committeesSynced++;
+        }
+        
+        console.log(`[FEC-DONORS] Attempt ${attempts}: imported ${result.imported}, hasMore=${hasMore}, remaining=${result.committeesRemaining}`);
+        
+        // Small delay between calls to be nice to the API
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      // Update partial sync state
+      if (hasMore) {
+        setPartialSyncIds(prev => new Set(prev).add(candidateId));
+      } else {
+        setPartialSyncIds(prev => {
+          const next = new Set(prev);
+          next.delete(candidateId);
+          return next;
+        });
+      }
+
+      setSyncProgress({
+        candidateId,
+        candidateName,
+        committeesSynced,
+        committeesTotal: committeesSynced,
+        donorsImported: totalImported,
+        isComplete: !hasMore
+      });
+
+      return {
+        success: true,
+        imported: totalImported,
+        totalRaised,
+        hasMore,
+        message: hasMore 
+          ? `Partial sync: ${totalImported} donors imported so far. Call again to continue.`
+          : `Complete: imported ${totalImported} donors totaling $${totalRaised.toLocaleString()}`,
+        reconciliation: lastResult.reconciliation
+      };
+    } catch (err) {
+      console.error('[FEC-DONORS] Complete fetch exception:', err);
+      setPartialSyncIds(prev => new Set(prev).add(candidateId));
+      return { success: false, imported: totalImported, totalRaised, error: 'Failed to complete donor sync', hasMore: true };
+    } finally {
+      setDonorLoadingIds(prev => {
+        const next = new Set(prev);
+        next.delete(candidateId);
+        return next;
+      });
+      // Clear sync progress after a short delay so user sees final state
+      setTimeout(() => setSyncProgress(null), 2000);
+    }
+  }, []);
+
+  // Legacy single-call version for backwards compatibility
   const fetchFECDonors = async (
     candidateId: string,
     fecCandidateId: string,
@@ -108,18 +247,7 @@ export function useFECIntegration() {
     setDonorLoadingIds(prev => new Set(prev).add(candidateId));
     
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-fec-donors', {
-        body: { candidateId, fecCandidateId, cycle, forceFullSync }
-      });
-
-      if (error) {
-        console.error('[FEC-DONORS] Error:', error);
-        // Mark as partial sync on error so user can retry
-        setPartialSyncIds(prev => new Set(prev).add(candidateId));
-        return { success: false, imported: 0, error: error.message, hasMore: true };
-      }
-
-      const result = data as FetchDonorsResult;
+      const result = await fetchFECDonorsSingle(candidateId, fecCandidateId, cycle, forceFullSync);
       
       // Track partial sync state
       if (result.hasMore) {
@@ -133,10 +261,6 @@ export function useFECIntegration() {
       }
 
       return result;
-    } catch (err) {
-      console.error('[FEC-DONORS] Exception:', err);
-      setPartialSyncIds(prev => new Set(prev).add(candidateId));
-      return { success: false, imported: 0, error: 'Failed to fetch donors', hasMore: true };
     } finally {
       setDonorLoadingIds(prev => {
         const next = new Set(prev);
@@ -194,9 +318,11 @@ export function useFECIntegration() {
         currentName: candidate.name
       });
 
-      const result = await fetchFECDonors(
+      // Use complete fetch which auto-loops
+      const result = await fetchFECDonorsComplete(
         candidate.id,
         candidate.fecCandidateId,
+        candidate.name,
         cycle
       );
 
@@ -208,7 +334,7 @@ export function useFECIntegration() {
         results.failed++;
       }
 
-      // Small delay to avoid rate limiting
+      // Small delay between candidates
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
@@ -230,36 +356,19 @@ export function useFECIntegration() {
         currentName: `Resuming: ${candidate.name}`
       });
 
-      // Keep calling until hasMore is false or we hit an error
-      let hasMore = true;
-      let attempts = 0;
-      const maxAttempts = 10; // Safety limit per candidate
-      
-      while (hasMore && attempts < maxAttempts) {
-        attempts++;
-        const result = await fetchFECDonors(
-          candidate.id,
-          candidate.fecCandidateId,
-          cycle
-        );
+      // Use complete fetch which auto-loops until done
+      const result = await fetchFECDonorsComplete(
+        candidate.id,
+        candidate.fecCandidateId,
+        candidate.name,
+        cycle
+      );
 
-        results.totalImported += result.imported;
-        results.totalRaised += result.totalRaised || 0;
-        
-        hasMore = result.hasMore === true;
-        
-        if (!result.success) {
-          break;
-        }
-        
-        // Small delay between pages
-        if (hasMore) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-      
+      results.totalImported += result.imported;
+      results.totalRaised += result.totalRaised || 0;
       results.resumed++;
-      if (!hasMore) {
+      
+      if (!result.hasMore) {
         results.completed++;
       } else {
         results.stillPartial++;
@@ -276,6 +385,7 @@ export function useFECIntegration() {
   return {
     fetchFECCandidateId,
     fetchFECDonors,
+    fetchFECDonorsComplete,
     batchFetchFECIds,
     batchFetchDonors,
     resumeAllPartialSyncs,
@@ -284,6 +394,7 @@ export function useFECIntegration() {
     hasPartialSync,
     partialSyncIds,
     batchProgress,
+    syncProgress,
     isBatchRunning: batchProgress !== null
   };
 }

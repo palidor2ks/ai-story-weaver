@@ -11,19 +11,20 @@ const corsHeaders = {
 // Rate limiting constants
 const MAX_REQUESTS_PER_MINUTE = 45; // FEC limit is 1000/hour, be conservative
 const REQUEST_DELAY_MS = 200;
-const MAX_RUNTIME_MS = 55000; // 55 seconds - leave buffer before timeout
+const MAX_RUNTIME_MS = 25000; // 25 seconds - safe margin to avoid WORKER_LIMIT
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_BASE_MS = 2000;
 
 // Batch sizes for streaming saves
 const CONTRIBUTION_BATCH_SIZE = 500;
 const DONOR_BATCH_SIZE = 500;
+const DONOR_FLUSH_PAGES = 10; // Flush donors to DB every N pages to avoid memory buildup
 
 // Request tracking for rate limiting
 let requestCount = 0;
 let lastMinuteReset = Date.now();
 
-// Rate-limited fetch with retries
+// Rate-limited fetch with retries and defensive error handling
 async function fetchWithRetry(url: string, options: RequestInit = {}, retries = MAX_RETRIES): Promise<Response> {
   // Rate limit check
   const now = Date.now();
@@ -255,16 +256,25 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
   fecTotalReceipts: number | null;
 }> {
   try {
-    const url = `https://api.open.fec.gov/v1/committee/${committeeId}/totals/?api_key=${fecApiKey}&cycle=${cycle}`;
+    const url = `https://api.open.fec.gov/v1/committee/${committeeId}/totals/?api_key=${fecApiKey}&cycle=${cycle}&per_page=1`;
     const response = await fetchWithRetry(url);
     
-    if (!response.ok) {
-      console.warn('[FEC-DONORS] Could not fetch FEC totals:', response.status);
+    // Defensive: check response exists and is ok
+    if (!response?.ok) {
+      console.warn('[FEC-DONORS] Could not fetch FEC totals:', response?.status);
       return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null };
     }
     
-    const data = await response.json();
-    const totals = data.results?.[0];
+    // Defensive: safe JSON parse
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      console.warn('[FEC-DONORS] Failed to parse FEC totals response');
+      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null };
+    }
+    
+    const totals = data?.results?.[0];
     
     if (!totals) {
       return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null };
@@ -302,6 +312,17 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Defensive: safe JSON parse of request body
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { 
       candidateId, 
       fecCandidateId, 
@@ -311,7 +332,7 @@ serve(async (req) => {
       includeOtherReceipts = false,
       forceFullSync = false,
       resumeFromCursor = true // Use saved cursors by default
-    } = await req.json();
+    } = body || {};
     
     console.log('[FEC-DONORS] Starting sync for:', { candidateId, fecCandidateId, fecCommitteeId, cycle, forceFullSync, resumeFromCursor });
 
@@ -330,6 +351,7 @@ serve(async (req) => {
       lastSyncDate?: string;
       lastContributionDate?: string;
       lastIndex?: string;
+      lastSyncCompletedAt?: string;
       hasMore?: boolean;
     }
     
@@ -345,14 +367,15 @@ serve(async (req) => {
     // Fetch existing committee sync info from database
     const { data: existingCommittees } = await supabase
       .from('candidate_committees')
-      .select('fec_committee_id, last_sync_date, last_contribution_date, last_index')
+      .select('fec_committee_id, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
       .eq('candidate_id', candidateId);
 
     const committeeSyncInfo = new Map(
       (existingCommittees || []).map(c => [c.fec_committee_id, {
         lastSyncDate: c.last_sync_date,
         lastContributionDate: c.last_contribution_date,
-        lastIndex: c.last_index
+        lastIndex: c.last_index,
+        lastSyncCompletedAt: c.last_sync_completed_at
       }])
     );
 
@@ -360,7 +383,7 @@ serve(async (req) => {
       .from('candidates')
       .select('fec_committee_id, fec_candidate_id')
       .eq('id', candidateId)
-      .single();
+      .maybeSingle();
 
     const fecId = fecCandidateId || candidateData?.fec_candidate_id || null;
 
@@ -379,9 +402,15 @@ serve(async (req) => {
         const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&designation=P,A&per_page=50`;
         const committeeResponse = await fetchWithRetry(committeeUrl);
 
-        if (committeeResponse.ok) {
-          const committeeData = await committeeResponse.json();
-          const results = committeeData.results || [];
+        if (committeeResponse?.ok) {
+          let committeeData;
+          try {
+            committeeData = await committeeResponse.json();
+          } catch {
+            console.error('[FEC-DONORS] Failed to parse committee response');
+            committeeData = {};
+          }
+          const results = committeeData?.results || [];
           results.forEach((cmte: { committee_id: string; name?: string; designation?: string }) => {
             const role = cmte.designation === 'P' ? 'principal' : 'authorized';
             const syncInfo = committeeSyncInfo.get(cmte.committee_id);
@@ -408,335 +437,156 @@ serve(async (req) => {
       );
     }
 
-    // Enrich committee names (limit to first 3 to save API calls)
-    for (const cmte of committees.slice(0, 3)) {
-      if (!cmte.name) {
-        try {
-          const cmteUrl = `https://api.open.fec.gov/v1/committee/${cmte.id}/?api_key=${fecApiKey}`;
-          const cmteResp = await fetchWithRetry(cmteUrl);
-          if (cmteResp.ok) {
-            const cmteData = await cmteResp.json();
-            cmte.name = cmteData.results?.[0]?.name || cmte.id;
-          } else {
-            cmte.name = cmte.id;
-          }
-        } catch {
-          cmte.name = cmte.id;
+    // CRITICAL: Process only ONE committee per invocation to avoid worker limits
+    // Find the first committee that needs syncing (has cursor OR not completed yet)
+    let targetCommittee: CommitteeInfo | null = null;
+    let remainingCommittees = 0;
+    
+    for (const cmte of committees) {
+      const hasIncompleteSync = cmte.lastIndex && !cmte.lastSyncCompletedAt;
+      const neverSynced = !cmte.lastSyncCompletedAt;
+      const needsSync = forceFullSync || hasIncompleteSync || neverSynced;
+      
+      if (needsSync) {
+        if (!targetCommittee) {
+          targetCommittee = cmte;
+        } else {
+          remainingCommittees++;
         }
       }
     }
 
-    // Upsert committee mappings
+    if (!targetCommittee) {
+      // All committees are fully synced
+      console.log('[FEC-DONORS] All committees already synced');
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          imported: 0,
+          contributionsImported: 0,
+          totalRaised: 0,
+          hasMore: false,
+          message: 'All committees already fully synced',
+          committees: committees.map(c => ({ id: c.id, name: c.name }))
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Enrich committee name if missing
+    if (!targetCommittee.name) {
+      try {
+        const cmteUrl = `https://api.open.fec.gov/v1/committee/${targetCommittee.id}/?api_key=${fecApiKey}`;
+        const cmteResp = await fetchWithRetry(cmteUrl);
+        if (cmteResp?.ok) {
+          let cmteData;
+          try {
+            cmteData = await cmteResp.json();
+          } catch {
+            cmteData = {};
+          }
+          targetCommittee.name = cmteData?.results?.[0]?.name || targetCommittee.id;
+        } else {
+          targetCommittee.name = targetCommittee.id;
+        }
+      } catch {
+        targetCommittee.name = targetCommittee.id;
+      }
+    }
+
+    // Upsert committee mapping
     await supabase
       .from('candidate_committees')
-      .upsert(
-        committees.map(cmte => ({
-          candidate_id: candidateId,
-          fec_committee_id: cmte.id,
-          role: cmte.role,
-          active: true,
-        })),
-        { onConflict: 'candidate_id,fec_committee_id' }
-      );
+      .upsert({
+        candidate_id: candidateId,
+        fec_committee_id: targetCommittee.id,
+        role: targetCommittee.role,
+        active: true,
+      }, { onConflict: 'candidate_id,fec_committee_id' });
 
     let totalRaised = 0;
     let totalDonors = 0;
     let totalContributions = 0;
     let skippedNonContributions = 0;
-    let committeesProcessed = 0;
     let earmarkedCount = 0;
     let transferCount = 0;
-    let globalHasMore = false;
+    let committeeHasMore = false;
     let stoppedDueToTimeout = false;
 
-    // Process each committee with STREAMING saves
-    for (const committee of committees) {
-      // Check runtime guard
-      if (Date.now() - startTime > MAX_RUNTIME_MS) {
-        console.log('[FEC-DONORS] Runtime limit reached, stopping with hasMore=true');
-        globalHasMore = true;
-        stoppedDueToTimeout = true;
-        break;
-      }
+    // Process the single target committee with STREAMING saves
+    const committeeId = targetCommittee.id;
+    const committeeName = targetCommittee.name || targetCommittee.id;
+    
+    // Determine starting cursor for resumable sync
+    let lastIndex: string | null = null;
+    let lastContributionDate: string | null = null;
+    
+    if (resumeFromCursor && !forceFullSync && targetCommittee.lastIndex && targetCommittee.lastContributionDate) {
+      lastIndex = targetCommittee.lastIndex;
+      lastContributionDate = targetCommittee.lastContributionDate;
+      console.log(`[FEC-DONORS] Resuming ${committeeId} from cursor: ${lastIndex}`);
+    }
 
-      const committeeId = committee.id;
-      const committeeName = committee.name || committee.id;
+    // Per-committee aggregation
+    const aggregatedDonors = new Map<string, AggregatedDonor & { id: string }>();
+    let contributionBatch: Array<{
+      identity_hash: string;
+      fec_transaction_id: string | null;
+      candidate_id: string;
+      recipient_committee_id: string;
+      recipient_committee_name: string;
+      contributor_name: string;
+      contributor_type: string;
+      amount: number;
+      receipt_date: string | null;
+      cycle: string;
+      line_number: string;
+      is_contribution: boolean;
+      is_transfer: boolean;
+      is_earmarked: boolean;
+      earmarked_for_candidate_id: string | null;
+      conduit_committee_id: string | null;
+      memo_text: string | null;
+      contributor_city: string;
+      contributor_state: string;
+      contributor_zip: string;
+      employer: string;
+      occupation: string;
+    }> = [];
+
+    let pageCount = 0;
+    let committeeContributions = 0;
+    let newestContributionDate: string | null = null;
+    let newestIndex: string | null = null;
+    
+    let committeeItemized = 0;
+    let committeeTransfers = 0;
+    let committeeEarmarked = 0;
+    let committeeContributionsSaved = 0;
+
+    console.log('[FEC-DONORS] Starting fetch for committee:', committeeId);
+
+    // Helper to save contribution batch
+    const saveContributionBatch = async () => {
+      if (contributionBatch.length === 0) return;
       
-      // Determine starting cursor for resumable sync
-      let startIndex: string | null = null;
-      let startContributionDate: string | null = null;
+      const { error } = await supabase
+        .from('contributions')
+        .upsert(contributionBatch, { onConflict: 'identity_hash,cycle', ignoreDuplicates: false });
       
-      if (resumeFromCursor && !forceFullSync && committee.lastIndex && committee.lastContributionDate) {
-        startIndex = committee.lastIndex;
-        startContributionDate = committee.lastContributionDate;
-        console.log(`[FEC-DONORS] Resuming ${committeeId} from cursor: ${startIndex}`);
+      if (error) {
+        console.error('[FEC-DONORS] Contribution batch save error:', error.message);
+      } else {
+        committeeContributionsSaved += contributionBatch.length;
       }
-
-      // Per-committee aggregation (cleared after each committee saves)
-      const aggregatedDonors = new Map<string, AggregatedDonor & { id: string }>();
-      let contributionBatch: Array<{
-        identity_hash: string;
-        fec_transaction_id: string | null;
-        candidate_id: string;
-        recipient_committee_id: string;
-        recipient_committee_name: string;
-        contributor_name: string;
-        contributor_type: string;
-        amount: number;
-        receipt_date: string | null;
-        cycle: string;
-        line_number: string;
-        is_contribution: boolean;
-        is_transfer: boolean;
-        is_earmarked: boolean;
-        earmarked_for_candidate_id: string | null;
-        conduit_committee_id: string | null;
-        memo_text: string | null;
-        contributor_city: string;
-        contributor_state: string;
-        contributor_zip: string;
-        employer: string;
-        occupation: string;
-      }> = [];
-
-      let lastIndex: string | null = startIndex;
-      let lastContributionDate: string | null = startContributionDate;
-      let pageCount = 0;
-      let committeeContributions = 0;
-      let newestContributionDate: string | null = null;
-      let newestIndex: string | null = null;
-      let committeeHasMore = false;
       
-      let committeeItemized = 0;
-      let committeeTransfers = 0;
-      let committeeEarmarked = 0;
-      let committeeContributionsSaved = 0;
+      contributionBatch = []; // Clear memory
+    };
 
-      console.log('[FEC-DONORS] Starting fetch for committee:', committeeId);
-
-      // Helper to save contribution batch
-      const saveContributionBatch = async () => {
-        if (contributionBatch.length === 0) return;
-        
-        const { error } = await supabase
-          .from('contributions')
-          .upsert(contributionBatch, { onConflict: 'identity_hash,cycle', ignoreDuplicates: false });
-        
-        if (error) {
-          console.error('[FEC-DONORS] Contribution batch save error:', error.message);
-        } else {
-          committeeContributionsSaved += contributionBatch.length;
-        }
-        
-        contributionBatch = []; // Clear memory
-      };
-
-      // Save cursor to database for resumability
-      const saveCursor = async (hasMore: boolean) => {
-        await supabase
-          .from('candidate_committees')
-          .update({
-            last_sync_date: hasMore ? committee.lastSyncDate : new Date().toISOString(),
-            last_contribution_date: lastContributionDate,
-            last_index: hasMore ? lastIndex : null, // Clear cursor when complete
-            local_itemized_total: committeeItemized
-          })
-          .eq('candidate_id', candidateId)
-          .eq('fec_committee_id', committeeId);
-      };
-
-      while (pageCount < maxPages) {
-        // Check runtime guard during pagination
-        if (Date.now() - startTime > MAX_RUNTIME_MS) {
-          console.log('[FEC-DONORS] Runtime limit reached mid-pagination');
-          committeeHasMore = true;
-          globalHasMore = true;
-          stoppedDueToTimeout = true;
-          break;
-        }
-
-        const params = new URLSearchParams({
-          api_key: fecApiKey,
-          committee_id: committeeId,
-          two_year_transaction_period: cycle,
-          per_page: '100',
-          sort: '-contribution_receipt_date',
-          sort_null_only: 'false',
-        });
-
-        if (lastIndex && lastContributionDate) {
-          params.set('last_index', lastIndex);
-          params.set('last_contribution_receipt_date', lastContributionDate);
-        }
-
-        const contributionsUrl = `https://api.open.fec.gov/v1/schedules/schedule_a/?${params.toString()}`;
-        
-        let response: Response;
-        try {
-          response = await fetchWithRetry(contributionsUrl);
-        } catch (err) {
-          console.error('[FEC-DONORS] Fetch failed after retries:', err);
-          committeeHasMore = true;
-          globalHasMore = true;
-          break;
-        }
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('[FEC-DONORS] API error on page', pageCount + 1, ':', response.status, errorText);
-          
-          if (response.status === 429) {
-            // Rate limited - save cursor and return partial results
-            console.log('[FEC-DONORS] Rate limited, saving progress and returning hasMore=true');
-            committeeHasMore = true;
-            globalHasMore = true;
-            await saveContributionBatch();
-            await saveCursor(true);
-            break;
-          }
-          break;
-        }
-
-        const data = await response.json();
-        const results = data.results || [];
-        
-        if (results.length === 0) {
-          break;
-        }
-
-        pageCount++;
-        
-        // Store newest cursor for next sync
-        if (pageCount === 1 && results.length > 0 && !startIndex) {
-          newestContributionDate = results[0].contribution_receipt_date;
-          newestIndex = data.pagination?.last_indexes?.last_index;
-        }
-
-        for (const contribution of results) {
-          const receiptDate = contribution.contribution_receipt_date || null;
-          const lineNumber = contribution.line_number || '';
-          const classification = classifyLineNumber(lineNumber);
-          
-          if (!classification.isContribution && !includeOtherReceipts) {
-            skippedNonContributions++;
-            continue;
-          }
-
-          committeeContributions++;
-          
-          const name = contribution.contributor_name || 'Unknown Contributor';
-          const type = mapEntityType(contribution.entity_type);
-          const amount = Math.round(contribution.contribution_receipt_amount || 0);
-          const city = contribution.contributor_city || '';
-          const state = contribution.contributor_state || '';
-          const zip = contribution.contributor_zip || '';
-          const employer = contribution.contributor_employer || '';
-          const occupation = contribution.contributor_occupation || '';
-          const memoText = contribution.memo_text || null;
-          const memoCode = contribution.memo_code || null;
-          const fecSubId = contribution.sub_id || null;
-          
-          const earmarkInfo = parseEarmarkInfo(memoText, memoCode);
-          if (earmarkInfo.isEarmarked) {
-            earmarkedCount++;
-            committeeEarmarked += amount;
-          }
-          if (classification.isTransfer) {
-            transferCount++;
-            committeeTransfers += amount;
-          }
-          if (classification.isContribution && !classification.isTransfer) {
-            committeeItemized += amount;
-          }
-          
-          const contributionHash = await generateContributionHash(
-            name, amount, receiptDate, committeeId, cycle, fecSubId
-          );
-          
-          contributionBatch.push({
-            identity_hash: contributionHash,
-            fec_transaction_id: fecSubId,
-            candidate_id: candidateId,
-            recipient_committee_id: committeeId,
-            recipient_committee_name: committeeName,
-            contributor_name: name,
-            contributor_type: type,
-            amount,
-            receipt_date: receiptDate,
-            cycle,
-            line_number: lineNumber,
-            is_contribution: classification.isContribution,
-            is_transfer: classification.isTransfer,
-            is_earmarked: earmarkInfo.isEarmarked,
-            earmarked_for_candidate_id: null,
-            conduit_committee_id: earmarkInfo.conduitCommitteeId,
-            memo_text: memoText,
-            contributor_city: city,
-            contributor_state: state,
-            contributor_zip: zip,
-            employer,
-            occupation
-          });
-
-          // STREAM: Save contributions every CONTRIBUTION_BATCH_SIZE to reduce memory
-          if (contributionBatch.length >= CONTRIBUTION_BATCH_SIZE) {
-            await saveContributionBatch();
-          }
-          
-          const donorId = await generateDonorId(
-            name, contribution.entity_type || '', city, state, zip, committeeId, cycle
-          );
-          
-          const existing = aggregatedDonors.get(donorId);
-          
-          if (existing) {
-            existing.amount += amount;
-            existing.transactionCount++;
-            if (receiptDate) {
-              if (!existing.firstReceiptDate || receiptDate < existing.firstReceiptDate) {
-                existing.firstReceiptDate = receiptDate;
-              }
-              if (!existing.lastReceiptDate || receiptDate > existing.lastReceiptDate) {
-                existing.lastReceiptDate = receiptDate;
-              }
-            }
-          } else {
-            aggregatedDonors.set(donorId, { 
-              id: donorId,
-              name, type, amount,
-              transactionCount: 1,
-              firstReceiptDate: receiptDate,
-              lastReceiptDate: receiptDate,
-              city, state, zip, employer, occupation,
-              lineNumber,
-              isContribution: classification.isContribution,
-              isTransfer: classification.isTransfer,
-              receiptType: classification.receiptType
-            });
-          }
-        }
-
-        const pagination = data.pagination;
-        if (!pagination?.last_indexes || results.length < 100) {
-          break;
-        }
-
-        lastIndex = pagination.last_indexes.last_index;
-        lastContributionDate = pagination.last_indexes.last_contribution_receipt_date;
-
-        if (pageCount % 10 === 0) {
-          console.log(`[FEC-DONORS] Progress: page ${pageCount}, ${committeeContributions} contributions (${committeeId})`);
-          // Periodic cursor save for very long syncs
-          await saveCursor(true);
-        }
-
-        await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY_MS));
-      }
-
-      // Save remaining contributions
-      await saveContributionBatch();
-
-      // STREAM: Save donors for THIS committee immediately
+    // Helper to save donors batch (for periodic flushing)
+    const saveDonorBatch = async () => {
+      if (aggregatedDonors.size === 0) return;
+      
       const donors = Array.from(aggregatedDonors.values()).map(donor => ({
         id: donor.id,
         candidate_id: candidateId,
@@ -759,7 +609,7 @@ serve(async (req) => {
         is_transfer: donor.isTransfer
       }));
 
-      // Save donors in batches
+      // Save in batches
       for (let i = 0; i < donors.length; i += DONOR_BATCH_SIZE) {
         const batch = donors.slice(i, i + DONOR_BATCH_SIZE);
         const { error } = await supabase
@@ -770,15 +620,249 @@ serve(async (req) => {
           console.error('[FEC-DONORS] Donor batch save error:', error.message);
         }
       }
-
+      
       totalDonors += donors.length;
-      totalContributions += committeeContributionsSaved;
-      totalRaised += committeeItemized;
+      console.log(`[FEC-DONORS] Flushed ${donors.length} donors to DB`);
+      aggregatedDonors.clear(); // Clear memory after flush
+    };
 
-      // Update committee sync cursors
-      await saveCursor(committeeHasMore);
+    // Save cursor to database for resumability
+    const saveCursor = async (hasMore: boolean) => {
+      const updateData: Record<string, unknown> = {
+        last_sync_date: new Date().toISOString(),
+        last_contribution_date: lastContributionDate,
+        last_index: hasMore ? lastIndex : null, // Clear cursor when complete
+        local_itemized_total: committeeItemized,
+        has_more: hasMore
+      };
+      
+      if (!hasMore) {
+        // Mark as fully completed
+        updateData.last_sync_completed_at = new Date().toISOString();
+      }
+      
+      await supabase
+        .from('candidate_committees')
+        .update(updateData)
+        .eq('candidate_id', candidateId)
+        .eq('fec_committee_id', committeeId);
+    };
 
-      // Fetch FEC totals and store rollup
+    while (pageCount < maxPages) {
+      // Check runtime guard during pagination
+      if (Date.now() - startTime > MAX_RUNTIME_MS) {
+        console.log('[FEC-DONORS] Runtime limit reached mid-pagination');
+        committeeHasMore = true;
+        stoppedDueToTimeout = true;
+        break;
+      }
+
+      const params = new URLSearchParams({
+        api_key: fecApiKey,
+        committee_id: committeeId,
+        two_year_transaction_period: cycle,
+        per_page: '100',
+        sort: '-contribution_receipt_date',
+        sort_null_only: 'false',
+      });
+
+      if (lastIndex && lastContributionDate) {
+        params.set('last_index', lastIndex);
+        params.set('last_contribution_receipt_date', lastContributionDate);
+      }
+
+      const contributionsUrl = `https://api.open.fec.gov/v1/schedules/schedule_a/?${params.toString()}`;
+      
+      let response: Response;
+      try {
+        response = await fetchWithRetry(contributionsUrl);
+      } catch (err) {
+        console.error('[FEC-DONORS] Fetch failed after retries:', err);
+        committeeHasMore = true;
+        break;
+      }
+      
+      // Defensive: check response
+      if (!response?.ok) {
+        let errorText = '';
+        try {
+          errorText = await response.text();
+        } catch {
+          errorText = 'Unknown error';
+        }
+        console.error('[FEC-DONORS] API error on page', pageCount + 1, ':', response?.status, errorText);
+        
+        if (response?.status === 429) {
+          // Rate limited - save cursor and return partial results
+          console.log('[FEC-DONORS] Rate limited, saving progress and returning hasMore=true');
+          committeeHasMore = true;
+          await saveContributionBatch();
+          await saveDonorBatch();
+          await saveCursor(true);
+          break;
+        }
+        break;
+      }
+
+      // Defensive: safe JSON parse
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        console.error('[FEC-DONORS] Failed to parse page response');
+        committeeHasMore = true;
+        break;
+      }
+      
+      const results = data?.results || [];
+      
+      if (results.length === 0) {
+        break;
+      }
+
+      pageCount++;
+      
+      // Store newest cursor for next sync
+      if (pageCount === 1 && results.length > 0 && !lastIndex) {
+        newestContributionDate = results[0]?.contribution_receipt_date;
+        newestIndex = data?.pagination?.last_indexes?.last_index;
+      }
+
+      for (const contribution of results) {
+        const receiptDate = contribution?.contribution_receipt_date || null;
+        const lineNumber = contribution?.line_number || '';
+        const classification = classifyLineNumber(lineNumber);
+        
+        if (!classification.isContribution && !includeOtherReceipts) {
+          skippedNonContributions++;
+          continue;
+        }
+
+        committeeContributions++;
+        
+        const name = contribution?.contributor_name || 'Unknown Contributor';
+        const type = mapEntityType(contribution?.entity_type);
+        const amount = Math.round(contribution?.contribution_receipt_amount || 0);
+        const city = contribution?.contributor_city || '';
+        const state = contribution?.contributor_state || '';
+        const zip = contribution?.contributor_zip || '';
+        const employer = contribution?.contributor_employer || '';
+        const occupation = contribution?.contributor_occupation || '';
+        const memoText = contribution?.memo_text || null;
+        const memoCode = contribution?.memo_code || null;
+        const fecSubId = contribution?.sub_id || null;
+        
+        const earmarkInfo = parseEarmarkInfo(memoText, memoCode);
+        if (earmarkInfo.isEarmarked) {
+          earmarkedCount++;
+          committeeEarmarked += amount;
+        }
+        if (classification.isTransfer) {
+          transferCount++;
+          committeeTransfers += amount;
+        }
+        if (classification.isContribution && !classification.isTransfer) {
+          committeeItemized += amount;
+        }
+        
+        const contributionHash = await generateContributionHash(
+          name, amount, receiptDate, committeeId, cycle, fecSubId
+        );
+        
+        contributionBatch.push({
+          identity_hash: contributionHash,
+          fec_transaction_id: fecSubId,
+          candidate_id: candidateId,
+          recipient_committee_id: committeeId,
+          recipient_committee_name: committeeName,
+          contributor_name: name,
+          contributor_type: type,
+          amount,
+          receipt_date: receiptDate,
+          cycle,
+          line_number: lineNumber,
+          is_contribution: classification.isContribution,
+          is_transfer: classification.isTransfer,
+          is_earmarked: earmarkInfo.isEarmarked,
+          earmarked_for_candidate_id: null,
+          conduit_committee_id: earmarkInfo.conduitCommitteeId,
+          memo_text: memoText,
+          contributor_city: city,
+          contributor_state: state,
+          contributor_zip: zip,
+          employer,
+          occupation
+        });
+
+        // STREAM: Save contributions every CONTRIBUTION_BATCH_SIZE to reduce memory
+        if (contributionBatch.length >= CONTRIBUTION_BATCH_SIZE) {
+          await saveContributionBatch();
+        }
+        
+        const donorId = await generateDonorId(
+          name, contribution?.entity_type || '', city, state, zip, committeeId, cycle
+        );
+        
+        const existing = aggregatedDonors.get(donorId);
+        
+        if (existing) {
+          existing.amount += amount;
+          existing.transactionCount++;
+          if (receiptDate) {
+            if (!existing.firstReceiptDate || receiptDate < existing.firstReceiptDate) {
+              existing.firstReceiptDate = receiptDate;
+            }
+            if (!existing.lastReceiptDate || receiptDate > existing.lastReceiptDate) {
+              existing.lastReceiptDate = receiptDate;
+            }
+          }
+        } else {
+          aggregatedDonors.set(donorId, { 
+            id: donorId,
+            name, type, amount,
+            transactionCount: 1,
+            firstReceiptDate: receiptDate,
+            lastReceiptDate: receiptDate,
+            city, state, zip, employer, occupation,
+            lineNumber,
+            isContribution: classification.isContribution,
+            isTransfer: classification.isTransfer,
+            receiptType: classification.receiptType
+          });
+        }
+      }
+
+      const pagination = data?.pagination;
+      if (!pagination?.last_indexes || results.length < 100) {
+        break;
+      }
+
+      lastIndex = pagination.last_indexes.last_index;
+      lastContributionDate = pagination.last_indexes.last_contribution_receipt_date;
+
+      // Periodic save every DONOR_FLUSH_PAGES pages to avoid memory buildup
+      if (pageCount % DONOR_FLUSH_PAGES === 0) {
+        console.log(`[FEC-DONORS] Progress: page ${pageCount}, ${committeeContributions} contributions - flushing to DB`);
+        await saveContributionBatch();
+        await saveDonorBatch();
+        await saveCursor(true); // Save cursor for resumability
+      }
+
+      await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY_MS));
+    }
+
+    // Save remaining contributions and donors
+    await saveContributionBatch();
+    await saveDonorBatch();
+
+    totalContributions = committeeContributionsSaved;
+    totalRaised = committeeItemized;
+
+    // Update committee sync cursors
+    await saveCursor(committeeHasMore);
+
+    // Fetch FEC totals and store rollup (only if we completed the committee)
+    if (!committeeHasMore) {
       const fecTotals = await fetchFECTotals(fecApiKey, committeeId, cycle);
       
       await supabase
@@ -794,17 +878,16 @@ serve(async (req) => {
           fec_unitemized: fecTotals.fecUnitemized,
           fec_total_receipts: fecTotals.fecTotalReceipts,
           contribution_count: committeeContributions,
-          donor_count: donors.length,
+          donor_count: totalDonors,
           last_sync: new Date().toISOString(),
           last_fec_check: new Date().toISOString()
         }, { onConflict: 'committee_id,cycle' });
-
-      committeesProcessed++;
-      console.log(`[FEC-DONORS] Completed ${committeeId}: ${donors.length} donors, ${committeeContributionsSaved} contributions, $${committeeItemized} itemized, hasMore=${committeeHasMore}`);
-      
-      // Clear memory after each committee
-      aggregatedDonors.clear();
     }
+
+    console.log(`[FEC-DONORS] Completed ${committeeId}: ${totalDonors} donors, ${totalContributions} contributions, $${committeeItemized} itemized, hasMore=${committeeHasMore}`);
+
+    // Determine if there are more committees to process
+    const globalHasMore = committeeHasMore || remainingCommittees > 0;
 
     // Update reconciliation record
     const { data: rollups } = await supabase
@@ -861,7 +944,7 @@ serve(async (req) => {
     }
 
     const elapsedMs = Date.now() - startTime;
-    console.log(`[FEC-DONORS] Sync completed in ${Math.round(elapsedMs/1000)}s, hasMore=${globalHasMore}`);
+    console.log(`[FEC-DONORS] Sync completed in ${Math.round(elapsedMs/1000)}s, hasMore=${globalHasMore}, remaining committees=${remainingCommittees}`);
 
     return new Response(
       JSON.stringify({ 
@@ -874,7 +957,9 @@ serve(async (req) => {
         cycle,
         hasMore: globalHasMore, // Key field for resumable sync
         stoppedDueToTimeout,
-        committeesProcessed,
+        committeesProcessed: 1,
+        committeesSynced: committeeId,
+        committeesRemaining: remainingCommittees,
         committees: committees.map(c => ({ id: c.id, name: c.name })),
         skippedNonContributions,
         reconciliation: { 
@@ -886,7 +971,7 @@ serve(async (req) => {
         },
         elapsedMs,
         message: globalHasMore 
-          ? `Partial sync: ${totalDonors} donors (${totalContributions} transactions). Call again to continue.`
+          ? `Partial sync: ${totalDonors} donors from ${committeeName}. ${remainingCommittees} committees remaining. Call again to continue.`
           : `Imported ${totalDonors} donors (${totalContributions} transactions) totaling $${totalRaised.toLocaleString()}`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
