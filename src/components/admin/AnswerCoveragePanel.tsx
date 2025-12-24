@@ -102,6 +102,7 @@ export function AnswerCoveragePanel() {
     fetchFECDonors, 
     batchFetchFECIds,
     batchFetchDonors,
+    resumeAllPartialSyncs,
     isLoading: isFECLoading, 
     isDonorLoading,
     hasPartialSync,
@@ -605,6 +606,58 @@ export function AnswerCoveragePanel() {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+
+              {/* Resume All Partial Syncs */}
+              {(() => {
+                const partialCandidates = (candidates || []).filter(c => c.hasPartialSync && c.fecCandidateId);
+                if (partialCandidates.length === 0) return null;
+                
+                return (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        disabled={isFECBatchRunning || isBatchRunning}
+                        className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Resume All ({partialCandidates.length})
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Resume All Partial Syncs?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {partialCandidates.length} candidate(s) have incomplete donor syncs. 
+                          This will continue fetching from where each sync stopped until complete.
+                          This may take several minutes.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={async () => {
+                          const toProcess = partialCandidates.map(c => ({ 
+                            id: c.id, 
+                            name: c.name, 
+                            fecCandidateId: c.fecCandidateId! 
+                          }));
+
+                          const results = await resumeAllPartialSyncs(toProcess, '2024');
+                          toast.success(
+                            `Resumed ${results.resumed} syncs: ${results.completed} completed, ` +
+                            `${results.stillPartial} still partial. ` +
+                            `Imported ${results.totalImported} additional donors.`
+                          );
+                          refetch();
+                        }}>
+                          Resume All
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                );
+              })()}
             </div>
 
             {/* FEC Batch Progress */}

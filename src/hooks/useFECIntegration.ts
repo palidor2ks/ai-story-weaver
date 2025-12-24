@@ -216,11 +216,69 @@ export function useFECIntegration() {
     return results;
   };
 
+  const resumeAllPartialSyncs = async (
+    candidates: Array<{ id: string; name: string; fecCandidateId: string }>,
+    cycle = '2024'
+  ) => {
+    const results = { resumed: 0, completed: 0, stillPartial: 0, totalImported: 0, totalRaised: 0 };
+    
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
+      setBatchProgress({
+        current: i + 1,
+        total: candidates.length,
+        currentName: `Resuming: ${candidate.name}`
+      });
+
+      // Keep calling until hasMore is false or we hit an error
+      let hasMore = true;
+      let attempts = 0;
+      const maxAttempts = 10; // Safety limit per candidate
+      
+      while (hasMore && attempts < maxAttempts) {
+        attempts++;
+        const result = await fetchFECDonors(
+          candidate.id,
+          candidate.fecCandidateId,
+          cycle
+        );
+
+        results.totalImported += result.imported;
+        results.totalRaised += result.totalRaised || 0;
+        
+        hasMore = result.hasMore === true;
+        
+        if (!result.success) {
+          break;
+        }
+        
+        // Small delay between pages
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      results.resumed++;
+      if (!hasMore) {
+        results.completed++;
+      } else {
+        results.stillPartial++;
+      }
+
+      // Delay between candidates
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    setBatchProgress(null);
+    return results;
+  };
+
   return {
     fetchFECCandidateId,
     fetchFECDonors,
     batchFetchFECIds,
     batchFetchDonors,
+    resumeAllPartialSyncs,
     isLoading,
     isDonorLoading,
     hasPartialSync,
