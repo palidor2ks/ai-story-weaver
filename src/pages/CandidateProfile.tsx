@@ -132,7 +132,8 @@ export const CandidateProfile = () => {
   const agreements = comparisons.filter(c => c.isAgreement).sort((a, b) => a.difference - b.difference).slice(0, 3);
   const disagreements = comparisons.filter(c => !c.isAgreement && c.score !== 0).sort((a, b) => b.difference - a.difference).slice(0, 3);
 
-  const totalDonations = donors.reduce((sum, d) => sum + d.amount, 0);
+  // Use finance_reconciliation as single source of truth for total donations
+  const totalDonations = financeReconciliation?.local_itemized ?? donors.reduce((sum, d) => sum + d.amount, 0);
 
   return (
     <div className="min-h-screen bg-background">
