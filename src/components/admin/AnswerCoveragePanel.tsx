@@ -14,9 +14,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
+import { CommitteeBreakdown } from "@/components/admin/CommitteeBreakdown";
 import { toast } from "sonner";
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
@@ -841,9 +843,29 @@ export function AnswerCoveragePanel() {
                                 <span className="text-muted-foreground/50 text-xs">—</span>
                               )}
                               {hasFecId && candidate.fecCommitteeId && (
-                                <span className="text-[10px] text-green-600 font-mono">
-                                  {candidate.fecCommitteeId.slice(0, 9)}
-                                </span>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="text-[10px] text-green-600 font-mono hover:underline cursor-pointer text-left">
+                                      {candidate.fecCommitteeId.slice(0, 9)} ▾
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-96 p-0" align="start">
+                                    <div className="p-3 border-b">
+                                      <h4 className="font-medium text-sm">Committee Management</h4>
+                                      <p className="text-xs text-muted-foreground">
+                                        Toggle which committees to include in donor sync
+                                      </p>
+                                    </div>
+                                    <div className="p-3">
+                                      <CommitteeBreakdown
+                                        candidateId={candidate.id}
+                                        candidateName={candidate.name}
+                                        fecCandidateId={candidate.fecCandidateId!}
+                                        onRefetch={refetch}
+                                      />
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
                               )}
                               {hasFecId && !candidate.fecCommitteeId && (
                                 <span className="text-[10px] text-amber-600">No committee</span>
