@@ -521,6 +521,7 @@ export type Database = {
           id: string
           local_earmarked: number | null
           local_itemized: number | null
+          local_itemized_net: number | null
           local_transfers: number | null
           notes: string | null
           status: string | null
@@ -539,6 +540,7 @@ export type Database = {
           id?: string
           local_earmarked?: number | null
           local_itemized?: number | null
+          local_itemized_net?: number | null
           local_transfers?: number | null
           notes?: string | null
           status?: string | null
@@ -557,6 +559,7 @@ export type Database = {
           id?: string
           local_earmarked?: number | null
           local_itemized?: number | null
+          local_itemized_net?: number | null
           local_transfers?: number | null
           notes?: string | null
           status?: string | null

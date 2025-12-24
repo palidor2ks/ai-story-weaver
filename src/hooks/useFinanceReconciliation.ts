@@ -6,6 +6,7 @@ export interface FinanceReconciliation {
   candidate_id: string;
   cycle: string;
   local_itemized: number | null;
+  local_itemized_net: number | null; // Excludes earmark pass-throughs - comparable to FEC
   local_transfers: number | null;
   local_earmarked: number | null;
   fec_itemized: number | null;

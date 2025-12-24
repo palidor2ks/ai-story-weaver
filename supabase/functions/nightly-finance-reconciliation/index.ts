@@ -128,6 +128,19 @@ serve(async (req) => {
         const localItemized = (rollups || []).reduce((sum, r) => sum + (r.local_itemized || 0), 0);
         const localTransfers = (rollups || []).reduce((sum, r) => sum + (r.local_transfers || 0), 0);
         const localEarmarked = (rollups || []).reduce((sum, r) => sum + (r.local_earmarked || 0), 0);
+        
+        // Calculate local_itemized_net by querying contributions directly
+        // Exclude earmark pass-throughs (contributions with "SEE BELOW" memo text)
+        const { data: passThroughData } = await supabase
+          .from('contributions')
+          .select('amount')
+          .eq('candidate_id', candidate.id)
+          .eq('cycle', cycle)
+          .eq('is_contribution', true)
+          .ilike('memo_text', '%SEE BELOW%');
+        
+        const passThroughTotal = (passThroughData || []).reduce((sum, c) => sum + (c.amount || 0), 0);
+        const localItemizedNet = localItemized - passThroughTotal;
 
         // Fetch fresh FEC totals for each committee
         let fecItemized = 0;
@@ -157,8 +170,8 @@ serve(async (req) => {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
 
-        // Calculate variance
-        const deltaAmount = localItemized - fecItemized;
+        // Calculate variance using NET itemized (comparable to FEC)
+        const deltaAmount = localItemizedNet - fecItemized;
         const deltaPct = fecItemized > 0 
           ? Math.round((deltaAmount / fecItemized) * 10000) / 100 
           : 0;
@@ -174,6 +187,7 @@ serve(async (req) => {
             candidate_id: candidate.id,
             cycle,
             local_itemized: localItemized,
+            local_itemized_net: localItemizedNet,
             local_transfers: localTransfers,
             local_earmarked: localEarmarked,
             fec_itemized: fecItemized,
