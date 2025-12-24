@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -13,12 +14,8 @@ interface FinanceReconciliationCardProps {
   compact?: boolean;
 }
 
-export function FinanceReconciliationCard({
-  reconciliation,
-  rollups = [],
-  lastSyncDate,
-  compact = false,
-}: FinanceReconciliationCardProps) {
+export const FinanceReconciliationCard = forwardRef<HTMLDivElement, FinanceReconciliationCardProps>(
+  function FinanceReconciliationCard({ reconciliation, rollups = [], lastSyncDate, compact = false }, ref) {
   if (!reconciliation) {
     return (
       <Card className={cn("border-dashed", compact && "p-3")}>
@@ -209,7 +206,7 @@ export function FinanceReconciliationCard({
       </Card>
     </TooltipProvider>
   );
-}
+});
 
 // Compact badge for use in lists/tables
 export function SyncStatusBadge({ status, deltaPct }: { status: string | null; deltaPct: number | null }) {
