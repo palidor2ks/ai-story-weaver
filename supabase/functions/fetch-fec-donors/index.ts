@@ -8,6 +8,75 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Rate limiting constants
+const MAX_REQUESTS_PER_MINUTE = 45; // FEC limit is 1000/hour, be conservative
+const REQUEST_DELAY_MS = 200;
+const MAX_RUNTIME_MS = 55000; // 55 seconds - leave buffer before timeout
+const MAX_RETRIES = 3;
+const RETRY_BACKOFF_BASE_MS = 2000;
+
+// Batch sizes for streaming saves
+const CONTRIBUTION_BATCH_SIZE = 500;
+const DONOR_BATCH_SIZE = 500;
+
+// Request tracking for rate limiting
+let requestCount = 0;
+let lastMinuteReset = Date.now();
+
+// Rate-limited fetch with retries
+async function fetchWithRetry(url: string, options: RequestInit = {}, retries = MAX_RETRIES): Promise<Response> {
+  // Rate limit check
+  const now = Date.now();
+  if (now - lastMinuteReset > 60000) {
+    requestCount = 0;
+    lastMinuteReset = now;
+  }
+  
+  if (requestCount >= MAX_REQUESTS_PER_MINUTE) {
+    const waitTime = 60000 - (now - lastMinuteReset) + 1000;
+    console.log(`[FEC-DONORS] Rate limit reached, waiting ${Math.round(waitTime/1000)}s...`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+    requestCount = 0;
+    lastMinuteReset = Date.now();
+  }
+  
+  requestCount++;
+  
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      
+      if (response.status === 429) {
+        // Rate limited by API
+        const backoffMs = RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt);
+        console.log(`[FEC-DONORS] Rate limited (429), backing off ${backoffMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      
+      if (response.status >= 500 && attempt < retries - 1) {
+        // Server error - retry with backoff
+        const backoffMs = RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt);
+        console.log(`[FEC-DONORS] Server error ${response.status}, retrying in ${backoffMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      if (attempt < retries - 1) {
+        const backoffMs = RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt);
+        console.log(`[FEC-DONORS] Fetch error, retrying in ${backoffMs}ms:`, error);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      throw error;
+    }
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+
 // Map FEC entity types to our donor types
 function mapEntityType(entityType: string): 'Individual' | 'PAC' | 'Organization' | 'Unknown' {
   switch (entityType?.toUpperCase()) {
@@ -29,21 +98,27 @@ function mapEntityType(entityType: string): 'Individual' | 'PAC' | 'Organization
 interface LineClassification {
   isContribution: boolean;
   isTransfer: boolean;
+  receiptType: 'contribution' | 'transfer' | 'other_receipt';
 }
 
-// Classify a line_number to determine if it's a contribution and/or transfer
+// Classify a line_number to determine receipt type
 function classifyLineNumber(lineNumber: string | null): LineClassification {
-  if (!lineNumber) return { isContribution: true, isTransfer: false };
+  if (!lineNumber) return { isContribution: true, isTransfer: false, receiptType: 'contribution' };
   
   const line = lineNumber.toUpperCase();
-  const isLine11 = line.startsWith('11');
-  const isLine12 = line.startsWith('12');
-  const isLine17 = line.startsWith('17');
+  const isLine11 = line.startsWith('11'); // Individual contributions
+  const isLine12 = line.startsWith('12'); // Authorized committee transfers
+  const isLine17 = line.startsWith('17'); // Other federal receipts
   
-  const isContribution = isLine11 || isLine12 || isLine17;
-  const isTransfer = isLine12;
+  if (isLine11) {
+    return { isContribution: true, isTransfer: false, receiptType: 'contribution' };
+  } else if (isLine12) {
+    return { isContribution: true, isTransfer: true, receiptType: 'transfer' };
+  } else if (isLine17) {
+    return { isContribution: true, isTransfer: false, receiptType: 'contribution' };
+  }
   
-  return { isContribution, isTransfer };
+  return { isContribution: false, isTransfer: false, receiptType: 'other_receipt' };
 }
 
 // Generate a stable SHA-256 based ID for donor identity (aggregated)
@@ -170,6 +245,7 @@ interface AggregatedDonor {
   lineNumber: string;
   isContribution: boolean;
   isTransfer: boolean;
+  receiptType: 'contribution' | 'transfer' | 'other_receipt';
 }
 
 // Fetch FEC totals for a committee to compare with local data
@@ -180,7 +256,7 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
 }> {
   try {
     const url = `https://api.open.fec.gov/v1/committee/${committeeId}/totals/?api_key=${fecApiKey}&cycle=${cycle}`;
-    const response = await fetch(url);
+    const response = await fetchWithRetry(url);
     
     if (!response.ok) {
       console.warn('[FEC-DONORS] Could not fetch FEC totals:', response.status);
@@ -205,11 +281,9 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
   }
 }
 
-// BATCH SIZE for streaming saves to reduce memory usage
-const CONTRIBUTION_BATCH_SIZE = 500;
-const DONOR_BATCH_SIZE = 500;
-
 serve(async (req) => {
+  const startTime = Date.now();
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -233,13 +307,13 @@ serve(async (req) => {
       fecCandidateId, 
       fecCommitteeId, 
       cycle = '2024', 
-      maxPages = 100, // Reduced default to prevent timeout
+      maxPages = 100,
       includeOtherReceipts = false,
-      incrementalSync = true,
-      forceFullSync = false
+      forceFullSync = false,
+      resumeFromCursor = true // Use saved cursors by default
     } = await req.json();
     
-    console.log('[FEC-DONORS] Fetching donors for:', { candidateId, fecCandidateId, fecCommitteeId, cycle, incrementalSync, forceFullSync });
+    console.log('[FEC-DONORS] Starting sync for:', { candidateId, fecCandidateId, fecCommitteeId, cycle, forceFullSync, resumeFromCursor });
 
     if (!candidateId) {
       return new Response(
@@ -248,11 +322,21 @@ serve(async (req) => {
       );
     }
 
-    // Build committee list
-    const committees: Array<{ id: string; name: string; role: string; lastSyncDate?: string; lastContributionDate?: string; lastIndex?: string }> = [];
+    // Build committee list with cursor info
+    interface CommitteeInfo {
+      id: string;
+      name: string;
+      role: string;
+      lastSyncDate?: string;
+      lastContributionDate?: string;
+      lastIndex?: string;
+      hasMore?: boolean;
+    }
+    
+    const committees: CommitteeInfo[] = [];
     const committeeSet = new Set<string>();
 
-    const pushCommittee = (id: string, name = '', role = 'authorized', syncInfo?: { lastSyncDate?: string; lastContributionDate?: string; lastIndex?: string }) => {
+    const pushCommittee = (id: string, name = '', role = 'authorized', syncInfo?: Partial<CommitteeInfo>) => {
       if (!id || committeeSet.has(id)) return;
       committeeSet.add(id);
       committees.push({ id, name, role, ...syncInfo });
@@ -289,10 +373,11 @@ serve(async (req) => {
       pushCommittee(candidateData.fec_committee_id, '', 'stored', syncInfo);
     }
 
+    // Look up committees from FEC API if needed
     if (!fecCommitteeId && fecId) {
       try {
         const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&designation=P,A&per_page=50`;
-        const committeeResponse = await fetch(committeeUrl);
+        const committeeResponse = await fetchWithRetry(committeeUrl);
 
         if (committeeResponse.ok) {
           const committeeData = await committeeResponse.json();
@@ -328,7 +413,7 @@ serve(async (req) => {
       if (!cmte.name) {
         try {
           const cmteUrl = `https://api.open.fec.gov/v1/committee/${cmte.id}/?api_key=${fecApiKey}`;
-          const cmteResp = await fetch(cmteUrl);
+          const cmteResp = await fetchWithRetry(cmteUrl);
           if (cmteResp.ok) {
             const cmteData = await cmteResp.json();
             cmte.name = cmteData.results?.[0]?.name || cmte.id;
@@ -361,20 +446,30 @@ serve(async (req) => {
     let committeesProcessed = 0;
     let earmarkedCount = 0;
     let transferCount = 0;
+    let globalHasMore = false;
+    let stoppedDueToTimeout = false;
 
     // Process each committee with STREAMING saves
     for (const committee of committees) {
+      // Check runtime guard
+      if (Date.now() - startTime > MAX_RUNTIME_MS) {
+        console.log('[FEC-DONORS] Runtime limit reached, stopping with hasMore=true');
+        globalHasMore = true;
+        stoppedDueToTimeout = true;
+        break;
+      }
+
       const committeeId = committee.id;
       const committeeName = committee.name || committee.id;
       
-      // Check if we can skip this committee (incremental sync)
-      const useIncremental = incrementalSync && !forceFullSync && committee.lastSyncDate;
-      const syncCutoffDate = useIncremental && committee.lastContributionDate 
-        ? committee.lastContributionDate 
-        : null;
+      // Determine starting cursor for resumable sync
+      let startIndex: string | null = null;
+      let startContributionDate: string | null = null;
       
-      if (useIncremental) {
-        console.log(`[FEC-DONORS] Incremental sync for ${committeeId} from ${syncCutoffDate}`);
+      if (resumeFromCursor && !forceFullSync && committee.lastIndex && committee.lastContributionDate) {
+        startIndex = committee.lastIndex;
+        startContributionDate = committee.lastContributionDate;
+        console.log(`[FEC-DONORS] Resuming ${committeeId} from cursor: ${startIndex}`);
       }
 
       // Per-committee aggregation (cleared after each committee saves)
@@ -404,13 +499,13 @@ serve(async (req) => {
         occupation: string;
       }> = [];
 
-      let lastIndex: string | null = null;
-      let lastContributionDate: string | null = null;
+      let lastIndex: string | null = startIndex;
+      let lastContributionDate: string | null = startContributionDate;
       let pageCount = 0;
       let committeeContributions = 0;
       let newestContributionDate: string | null = null;
       let newestIndex: string | null = null;
-      let reachedCutoff = false;
+      let committeeHasMore = false;
       
       let committeeItemized = 0;
       let committeeTransfers = 0;
@@ -436,7 +531,30 @@ serve(async (req) => {
         contributionBatch = []; // Clear memory
       };
 
-      while (pageCount < maxPages && !reachedCutoff) {
+      // Save cursor to database for resumability
+      const saveCursor = async (hasMore: boolean) => {
+        await supabase
+          .from('candidate_committees')
+          .update({
+            last_sync_date: hasMore ? committee.lastSyncDate : new Date().toISOString(),
+            last_contribution_date: lastContributionDate,
+            last_index: hasMore ? lastIndex : null, // Clear cursor when complete
+            local_itemized_total: committeeItemized
+          })
+          .eq('candidate_id', candidateId)
+          .eq('fec_committee_id', committeeId);
+      };
+
+      while (pageCount < maxPages) {
+        // Check runtime guard during pagination
+        if (Date.now() - startTime > MAX_RUNTIME_MS) {
+          console.log('[FEC-DONORS] Runtime limit reached mid-pagination');
+          committeeHasMore = true;
+          globalHasMore = true;
+          stoppedDueToTimeout = true;
+          break;
+        }
+
         const params = new URLSearchParams({
           api_key: fecApiKey,
           committee_id: committeeId,
@@ -452,16 +570,28 @@ serve(async (req) => {
         }
 
         const contributionsUrl = `https://api.open.fec.gov/v1/schedules/schedule_a/?${params.toString()}`;
-        const response = await fetch(contributionsUrl);
+        
+        let response: Response;
+        try {
+          response = await fetchWithRetry(contributionsUrl);
+        } catch (err) {
+          console.error('[FEC-DONORS] Fetch failed after retries:', err);
+          committeeHasMore = true;
+          globalHasMore = true;
+          break;
+        }
         
         if (!response.ok) {
           const errorText = await response.text();
           console.error('[FEC-DONORS] API error on page', pageCount + 1, ':', response.status, errorText);
           
           if (response.status === 429) {
-            // Rate limited - save what we have and return partial results
-            console.log('[FEC-DONORS] Rate limited, saving partial results...');
+            // Rate limited - save cursor and return partial results
+            console.log('[FEC-DONORS] Rate limited, saving progress and returning hasMore=true');
+            committeeHasMore = true;
+            globalHasMore = true;
             await saveContributionBatch();
+            await saveCursor(true);
             break;
           }
           break;
@@ -476,22 +606,14 @@ serve(async (req) => {
 
         pageCount++;
         
-        // Store newest cursor for incremental sync
-        if (pageCount === 1 && results.length > 0) {
+        // Store newest cursor for next sync
+        if (pageCount === 1 && results.length > 0 && !startIndex) {
           newestContributionDate = results[0].contribution_receipt_date;
           newestIndex = data.pagination?.last_indexes?.last_index;
         }
 
         for (const contribution of results) {
           const receiptDate = contribution.contribution_receipt_date || null;
-          
-          // Stop if we've reached data we already have (with 3-page overlap buffer)
-          if (syncCutoffDate && receiptDate && receiptDate < syncCutoffDate && pageCount > 3) {
-            console.log(`[FEC-DONORS] Reached cutoff date ${syncCutoffDate} at ${receiptDate}`);
-            reachedCutoff = true;
-            break;
-          }
-          
           const lineNumber = contribution.line_number || '';
           const classification = classifyLineNumber(lineNumber);
           
@@ -588,7 +710,8 @@ serve(async (req) => {
               city, state, zip, employer, occupation,
               lineNumber,
               isContribution: classification.isContribution,
-              isTransfer: classification.isTransfer
+              isTransfer: classification.isTransfer,
+              receiptType: classification.receiptType
             });
           }
         }
@@ -603,15 +726,17 @@ serve(async (req) => {
 
         if (pageCount % 10 === 0) {
           console.log(`[FEC-DONORS] Progress: page ${pageCount}, ${committeeContributions} contributions (${committeeId})`);
+          // Periodic cursor save for very long syncs
+          await saveCursor(true);
         }
 
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY_MS));
       }
 
       // Save remaining contributions
       await saveContributionBatch();
 
-      // STREAM: Save donors for THIS committee immediately (don't accumulate across committees)
+      // STREAM: Save donors for THIS committee immediately
       const donors = Array.from(aggregatedDonors.values()).map(donor => ({
         id: donor.id,
         candidate_id: candidateId,
@@ -651,18 +776,7 @@ serve(async (req) => {
       totalRaised += committeeItemized;
 
       // Update committee sync cursors
-      if (newestContributionDate || newestIndex) {
-        await supabase
-          .from('candidate_committees')
-          .update({
-            last_sync_date: new Date().toISOString(),
-            last_contribution_date: newestContributionDate,
-            last_index: newestIndex,
-            local_itemized_total: committeeItemized
-          })
-          .eq('candidate_id', candidateId)
-          .eq('fec_committee_id', committeeId);
-      }
+      await saveCursor(committeeHasMore);
 
       // Fetch FEC totals and store rollup
       const fecTotals = await fetchFECTotals(fecApiKey, committeeId, cycle);
@@ -686,7 +800,7 @@ serve(async (req) => {
         }, { onConflict: 'committee_id,cycle' });
 
       committeesProcessed++;
-      console.log(`[FEC-DONORS] Completed ${committeeId}: ${donors.length} donors, ${committeeContributionsSaved} contributions, $${committeeItemized} itemized`);
+      console.log(`[FEC-DONORS] Completed ${committeeId}: ${donors.length} donors, ${committeeContributionsSaved} contributions, $${committeeItemized} itemized, hasMore=${committeeHasMore}`);
       
       // Clear memory after each committee
       aggregatedDonors.clear();
@@ -720,6 +834,7 @@ serve(async (req) => {
     let status = 'ok';
     if (Math.abs(deltaPct) > 10) status = 'error';
     else if (Math.abs(deltaPct) > 5) status = 'warning';
+    if (globalHasMore) status = 'partial'; // Mark as partial if sync incomplete
     
     await supabase
       .from('finance_reconciliation')
@@ -738,10 +853,15 @@ serve(async (req) => {
         checked_at: new Date().toISOString()
       }, { onConflict: 'candidate_id,cycle' });
 
-    await supabase
-      .from('candidates')
-      .update({ last_donor_sync: new Date().toISOString() })
-      .eq('id', candidateId);
+    if (!globalHasMore) {
+      await supabase
+        .from('candidates')
+        .update({ last_donor_sync: new Date().toISOString() })
+        .eq('id', candidateId);
+    }
+
+    const elapsedMs = Date.now() - startTime;
+    console.log(`[FEC-DONORS] Sync completed in ${Math.round(elapsedMs/1000)}s, hasMore=${globalHasMore}`);
 
     return new Response(
       JSON.stringify({ 
@@ -752,12 +872,22 @@ serve(async (req) => {
         earmarkedCount,
         transferCount,
         cycle,
-        incrementalSync: incrementalSync && !forceFullSync,
+        hasMore: globalHasMore, // Key field for resumable sync
+        stoppedDueToTimeout,
         committeesProcessed,
         committees: committees.map(c => ({ id: c.id, name: c.name })),
         skippedNonContributions,
-        reconciliation: { localItemized: totalLocalItemized, fecItemized: totalFecItemized, deltaPct, status },
-        message: `Imported ${totalDonors} donors (${totalContributions} transactions) totaling $${totalRaised.toLocaleString()}`
+        reconciliation: { 
+          localItemized: totalLocalItemized, 
+          localTransfers: totalLocalTransfers,
+          fecItemized: totalFecItemized, 
+          deltaPct, 
+          status 
+        },
+        elapsedMs,
+        message: globalHasMore 
+          ? `Partial sync: ${totalDonors} donors (${totalContributions} transactions). Call again to continue.`
+          : `Imported ${totalDonors} donors (${totalContributions} transactions) totaling $${totalRaised.toLocaleString()}`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -766,7 +896,7 @@ serve(async (req) => {
     console.error('[FEC-DONORS] Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: message, hasMore: true }), // Return hasMore=true on error so caller can retry
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
