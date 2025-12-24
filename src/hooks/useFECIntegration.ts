@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -50,15 +50,16 @@ interface SyncProgress {
 }
 
 export function useFECIntegration() {
+  // All useState hooks must be in consistent order
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const [donorLoadingIds, setDonorLoadingIds] = useState<Set<string>>(new Set());
   const [partialSyncIds, setPartialSyncIds] = useState<Set<string>>(new Set());
-  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
     total: number;
     currentName: string;
   } | null>(null);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
 
   const isLoading = (candidateId: string) => loadingIds.has(candidateId);
   const isDonorLoading = (candidateId: string) => donorLoadingIds.has(candidateId);
@@ -136,7 +137,7 @@ export function useFECIntegration() {
   };
 
   // Complete fetch: loops until hasMore=false
-  const fetchFECDonorsComplete = useCallback(async (
+  const fetchFECDonorsComplete = async (
     candidateId: string,
     fecCandidateId: string,
     candidateName: string,
@@ -235,7 +236,7 @@ export function useFECIntegration() {
       // Clear sync progress after a short delay so user sees final state
       setTimeout(() => setSyncProgress(null), 2000);
     }
-  }, []);
+  };
 
   // Legacy single-call version for backwards compatibility
   const fetchFECDonors = async (
