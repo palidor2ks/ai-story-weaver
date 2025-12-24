@@ -119,24 +119,45 @@ export function useFECIntegration() {
     cycle = '2024',
     forceFullSync = false
   ): Promise<FetchDonorsResult> => {
+    const normalizeInvokeError = (raw: unknown) => {
+      const msg = typeof raw === 'string'
+        ? raw
+        : (typeof raw === 'object' && raw !== null && 'message' in raw && typeof (raw as { message?: unknown }).message === 'string')
+          ? (raw as { message: string }).message
+          : JSON.stringify(raw);
+
+      // Supabase often returns: "Edge function returned 400: Error, {\"error\":\"...\"}"
+      const jsonMatch = msg.match(/\{[\s\S]*\}$/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed?.error && typeof parsed.error === 'string') return parsed.error;
+        } catch {
+          // ignore
+        }
+      }
+      return msg;
+    };
+
     try {
+      if (!fecCandidateId) {
+        return { success: false, imported: 0, error: 'Missing FEC candidate ID. Link FEC ID first.', hasMore: false };
+      }
+
       const { data, error } = await supabase.functions.invoke('fetch-fec-donors', {
         body: { candidateId, fecCandidateId, cycle, forceFullSync }
       });
 
-      // Handle Supabase invoke error (network/auth issues)
+      // Handle Supabase invoke error (network/auth/function 4xx/5xx)
       if (error) {
         console.error('[FEC-DONORS] Invoke error:', error);
-        const errorMessage = typeof error === 'object' && error !== null
-          ? ((error as { message?: string }).message || JSON.stringify(error))
-          : String(error);
-        return { success: false, imported: 0, error: errorMessage, hasMore: false };
+        return { success: false, imported: 0, error: normalizeInvokeError(error), hasMore: false };
       }
 
       // Handle edge function returning an error in the response body
       if (data?.error) {
         console.warn('[FEC-DONORS] Function returned error:', data.error);
-        return { success: false, imported: 0, error: data.error, hasMore: false };
+        return { success: false, imported: 0, error: String(data.error), hasMore: false };
       }
 
       // Success
@@ -144,7 +165,7 @@ export function useFECIntegration() {
     } catch (err) {
       console.error('[FEC-DONORS] Exception:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch donors';
-      return { success: false, imported: 0, error: errorMessage, hasMore: false };
+      return { success: false, imported: 0, error: normalizeInvokeError(errorMessage), hasMore: false };
     }
   };
 
