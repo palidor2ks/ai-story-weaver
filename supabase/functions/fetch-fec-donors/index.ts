@@ -172,14 +172,6 @@ interface AggregatedDonor {
   isTransfer: boolean;
 }
 
-interface CommitteeRollup {
-  localItemized: number;
-  localTransfers: number;
-  localEarmarked: number;
-  contributionCount: number;
-  donorCount: number;
-}
-
 // Fetch FEC totals for a committee to compare with local data
 async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: string): Promise<{
   fecItemized: number | null;
@@ -213,6 +205,10 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
   }
 }
 
+// BATCH SIZE for streaming saves to reduce memory usage
+const CONTRIBUTION_BATCH_SIZE = 500;
+const DONOR_BATCH_SIZE = 500;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -237,10 +233,10 @@ serve(async (req) => {
       fecCandidateId, 
       fecCommitteeId, 
       cycle = '2024', 
-      maxPages = 150,
+      maxPages = 100, // Reduced default to prevent timeout
       includeOtherReceipts = false,
-      incrementalSync = true, // Phase B: Enable incremental by default
-      forceFullSync = false   // Override to force full resync
+      incrementalSync = true,
+      forceFullSync = false
     } = await req.json();
     
     console.log('[FEC-DONORS] Fetching donors for:', { candidateId, fecCandidateId, fecCommitteeId, cycle, incrementalSync, forceFullSync });
@@ -327,8 +323,8 @@ serve(async (req) => {
       );
     }
 
-    // Enrich committee names
-    for (const cmte of committees) {
+    // Enrich committee names (limit to first 3 to save API calls)
+    for (const cmte of committees.slice(0, 3)) {
       if (!cmte.name) {
         try {
           const cmteUrl = `https://api.open.fec.gov/v1/committee/${cmte.id}/?api_key=${fecApiKey}`;
@@ -358,68 +354,20 @@ serve(async (req) => {
         { onConflict: 'candidate_id,fec_committee_id' }
       );
 
-    const allDonors = new Map<string, {
-      id: string;
-      candidate_id: string;
-      name: string;
-      type: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
-      amount: number;
-      cycle: string;
-      recipient_committee_id: string;
-      recipient_committee_name: string;
-      first_receipt_date: string | null;
-      last_receipt_date: string | null;
-      transaction_count: number;
-      contributor_city: string;
-      contributor_state: string;
-      contributor_zip: string;
-      employer: string;
-      occupation: string;
-      line_number: string;
-      is_contribution: boolean;
-      is_transfer: boolean;
-    }>();
-
-    const contributions: Array<{
-      identity_hash: string;
-      fec_transaction_id: string | null;
-      candidate_id: string;
-      recipient_committee_id: string;
-      recipient_committee_name: string;
-      contributor_name: string;
-      contributor_type: string;
-      amount: number;
-      receipt_date: string | null;
-      cycle: string;
-      line_number: string;
-      is_contribution: boolean;
-      is_transfer: boolean;
-      is_earmarked: boolean;
-      earmarked_for_candidate_id: string | null;
-      conduit_committee_id: string | null;
-      memo_text: string | null;
-      contributor_city: string;
-      contributor_state: string;
-      contributor_zip: string;
-      employer: string;
-      occupation: string;
-    }> = [];
-
     let totalRaised = 0;
+    let totalDonors = 0;
+    let totalContributions = 0;
     let skippedNonContributions = 0;
     let committeesProcessed = 0;
     let earmarkedCount = 0;
     let transferCount = 0;
-    let skippedCommittees = 0;
-    
-    const committeeRollups = new Map<string, CommitteeRollup>();
 
-    // Process each committee
+    // Process each committee with STREAMING saves
     for (const committee of committees) {
       const committeeId = committee.id;
       const committeeName = committee.name || committee.id;
       
-      // Phase B: Check if we can skip this committee (incremental sync)
+      // Check if we can skip this committee (incremental sync)
       const useIncremental = incrementalSync && !forceFullSync && committee.lastSyncDate;
       const syncCutoffDate = useIncremental && committee.lastContributionDate 
         ? committee.lastContributionDate 
@@ -429,11 +377,37 @@ serve(async (req) => {
         console.log(`[FEC-DONORS] Incremental sync for ${committeeId} from ${syncCutoffDate}`);
       }
 
-      const aggregatedDonors = new Map<string, AggregatedDonor>();
+      // Per-committee aggregation (cleared after each committee saves)
+      const aggregatedDonors = new Map<string, AggregatedDonor & { id: string }>();
+      let contributionBatch: Array<{
+        identity_hash: string;
+        fec_transaction_id: string | null;
+        candidate_id: string;
+        recipient_committee_id: string;
+        recipient_committee_name: string;
+        contributor_name: string;
+        contributor_type: string;
+        amount: number;
+        receipt_date: string | null;
+        cycle: string;
+        line_number: string;
+        is_contribution: boolean;
+        is_transfer: boolean;
+        is_earmarked: boolean;
+        earmarked_for_candidate_id: string | null;
+        conduit_committee_id: string | null;
+        memo_text: string | null;
+        contributor_city: string;
+        contributor_state: string;
+        contributor_zip: string;
+        employer: string;
+        occupation: string;
+      }> = [];
+
       let lastIndex: string | null = null;
       let lastContributionDate: string | null = null;
       let pageCount = 0;
-      let totalContributions = 0;
+      let committeeContributions = 0;
       let newestContributionDate: string | null = null;
       let newestIndex: string | null = null;
       let reachedCutoff = false;
@@ -441,8 +415,26 @@ serve(async (req) => {
       let committeeItemized = 0;
       let committeeTransfers = 0;
       let committeeEarmarked = 0;
+      let committeeContributionsSaved = 0;
 
       console.log('[FEC-DONORS] Starting fetch for committee:', committeeId);
+
+      // Helper to save contribution batch
+      const saveContributionBatch = async () => {
+        if (contributionBatch.length === 0) return;
+        
+        const { error } = await supabase
+          .from('contributions')
+          .upsert(contributionBatch, { onConflict: 'identity_hash,cycle', ignoreDuplicates: false });
+        
+        if (error) {
+          console.error('[FEC-DONORS] Contribution batch save error:', error.message);
+        } else {
+          committeeContributionsSaved += contributionBatch.length;
+        }
+        
+        contributionBatch = []; // Clear memory
+      };
 
       while (pageCount < maxPages && !reachedCutoff) {
         const params = new URLSearchParams({
@@ -467,9 +459,10 @@ serve(async (req) => {
           console.error('[FEC-DONORS] API error on page', pageCount + 1, ':', response.status, errorText);
           
           if (response.status === 429) {
-            console.log('[FEC-DONORS] Rate limited, waiting 60s...');
-            await new Promise(resolve => setTimeout(resolve, 60000));
-            continue;
+            // Rate limited - save what we have and return partial results
+            console.log('[FEC-DONORS] Rate limited, saving partial results...');
+            await saveContributionBatch();
+            break;
           }
           break;
         }
@@ -492,7 +485,7 @@ serve(async (req) => {
         for (const contribution of results) {
           const receiptDate = contribution.contribution_receipt_date || null;
           
-          // Phase B: Stop if we've reached data we already have (with 3-page overlap buffer)
+          // Stop if we've reached data we already have (with 3-page overlap buffer)
           if (syncCutoffDate && receiptDate && receiptDate < syncCutoffDate && pageCount > 3) {
             console.log(`[FEC-DONORS] Reached cutoff date ${syncCutoffDate} at ${receiptDate}`);
             reachedCutoff = true;
@@ -507,7 +500,7 @@ serve(async (req) => {
             continue;
           }
 
-          totalContributions++;
+          committeeContributions++;
           
           const name = contribution.contributor_name || 'Unknown Contributor';
           const type = mapEntityType(contribution.entity_type);
@@ -538,7 +531,7 @@ serve(async (req) => {
             name, amount, receiptDate, committeeId, cycle, fecSubId
           );
           
-          contributions.push({
+          contributionBatch.push({
             identity_hash: contributionHash,
             fec_transaction_id: fecSubId,
             candidate_id: candidateId,
@@ -562,6 +555,11 @@ serve(async (req) => {
             employer,
             occupation
           });
+
+          // STREAM: Save contributions every CONTRIBUTION_BATCH_SIZE to reduce memory
+          if (contributionBatch.length >= CONTRIBUTION_BATCH_SIZE) {
+            await saveContributionBatch();
+          }
           
           const donorId = await generateDonorId(
             name, contribution.entity_type || '', city, state, zip, committeeId, cycle
@@ -582,6 +580,7 @@ serve(async (req) => {
             }
           } else {
             aggregatedDonors.set(donorId, { 
+              id: donorId,
               name, type, amount,
               transactionCount: 1,
               firstReceiptDate: receiptDate,
@@ -603,51 +602,55 @@ serve(async (req) => {
         lastContributionDate = pagination.last_indexes.last_contribution_receipt_date;
 
         if (pageCount % 10 === 0) {
-          console.log(`[FEC-DONORS] Progress: page ${pageCount}, ${totalContributions} contributions (${committeeId})`);
+          console.log(`[FEC-DONORS] Progress: page ${pageCount}, ${committeeContributions} contributions (${committeeId})`);
         }
 
-        await new Promise(resolve => setTimeout(resolve, 250));
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
-      // Add donors to global map
-      for (const [donorId, donor] of aggregatedDonors.entries()) {
-        const existingDonor = allDonors.get(donorId);
-        if (existingDonor) {
-          existingDonor.amount += donor.amount;
-          existingDonor.transaction_count += donor.transactionCount;
-          if (donor.firstReceiptDate && (!existingDonor.first_receipt_date || donor.firstReceiptDate < existingDonor.first_receipt_date)) {
-            existingDonor.first_receipt_date = donor.firstReceiptDate;
-          }
-          if (donor.lastReceiptDate && (!existingDonor.last_receipt_date || donor.lastReceiptDate > existingDonor.last_receipt_date)) {
-            existingDonor.last_receipt_date = donor.lastReceiptDate;
-          }
-        } else {
-          allDonors.set(donorId, {
-            id: donorId,
-            candidate_id: candidateId,
-            name: donor.name,
-            type: donor.type,
-            amount: donor.amount,
-            cycle,
-            recipient_committee_id: committeeId,
-            recipient_committee_name: committeeName,
-            first_receipt_date: donor.firstReceiptDate,
-            last_receipt_date: donor.lastReceiptDate,
-            transaction_count: donor.transactionCount,
-            contributor_city: donor.city,
-            contributor_state: donor.state,
-            contributor_zip: donor.zip,
-            employer: donor.employer,
-            occupation: donor.occupation,
-            line_number: donor.lineNumber,
-            is_contribution: donor.isContribution,
-            is_transfer: donor.isTransfer
-          });
+      // Save remaining contributions
+      await saveContributionBatch();
+
+      // STREAM: Save donors for THIS committee immediately (don't accumulate across committees)
+      const donors = Array.from(aggregatedDonors.values()).map(donor => ({
+        id: donor.id,
+        candidate_id: candidateId,
+        name: donor.name,
+        type: donor.type,
+        amount: donor.amount,
+        cycle,
+        recipient_committee_id: committeeId,
+        recipient_committee_name: committeeName,
+        first_receipt_date: donor.firstReceiptDate,
+        last_receipt_date: donor.lastReceiptDate,
+        transaction_count: donor.transactionCount,
+        contributor_city: donor.city,
+        contributor_state: donor.state,
+        contributor_zip: donor.zip,
+        employer: donor.employer,
+        occupation: donor.occupation,
+        line_number: donor.lineNumber,
+        is_contribution: donor.isContribution,
+        is_transfer: donor.isTransfer
+      }));
+
+      // Save donors in batches
+      for (let i = 0; i < donors.length; i += DONOR_BATCH_SIZE) {
+        const batch = donors.slice(i, i + DONOR_BATCH_SIZE);
+        const { error } = await supabase
+          .from('donors')
+          .upsert(batch, { onConflict: 'id' });
+        
+        if (error) {
+          console.error('[FEC-DONORS] Donor batch save error:', error.message);
         }
-        totalRaised += donor.amount;
       }
 
-      // Phase B: Update committee sync cursors
+      totalDonors += donors.length;
+      totalContributions += committeeContributionsSaved;
+      totalRaised += committeeItemized;
+
+      // Update committee sync cursors
       if (newestContributionDate || newestIndex) {
         await supabase
           .from('candidate_committees')
@@ -661,7 +664,7 @@ serve(async (req) => {
           .eq('fec_committee_id', committeeId);
       }
 
-      // Phase C: Fetch FEC totals and store rollup
+      // Fetch FEC totals and store rollup
       const fecTotals = await fetchFECTotals(fecApiKey, committeeId, cycle);
       
       await supabase
@@ -676,108 +679,37 @@ serve(async (req) => {
           fec_itemized: fecTotals.fecItemized,
           fec_unitemized: fecTotals.fecUnitemized,
           fec_total_receipts: fecTotals.fecTotalReceipts,
-          contribution_count: totalContributions,
-          donor_count: aggregatedDonors.size,
+          contribution_count: committeeContributions,
+          donor_count: donors.length,
           last_sync: new Date().toISOString(),
           last_fec_check: new Date().toISOString()
         }, { onConflict: 'committee_id,cycle' });
 
-      committeeRollups.set(committeeId, {
-        localItemized: committeeItemized,
-        localTransfers: committeeTransfers,
-        localEarmarked: committeeEarmarked,
-        contributionCount: totalContributions,
-        donorCount: aggregatedDonors.size
-      });
-
       committeesProcessed++;
-      console.log(`[FEC-DONORS] Completed ${committeeId}: ${aggregatedDonors.size} donors, $${committeeItemized} itemized`);
-    }
-
-    const donors = Array.from(allDonors.values());
-
-    if (donors.length === 0) {
-      await supabase
-        .from('candidates')
-        .update({ last_donor_sync: new Date().toISOString() })
-        .eq('id', candidateId);
-
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          imported: 0, 
-          message: 'No contributions found for this candidate/cycle',
-          skippedNonContributions,
-          skippedCommittees,
-          committees: committees.map(c => ({ id: c.id, name: c.name }))
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('[FEC-DONORS] Total:', donors.length, 'donors,', contributions.length, 'transactions');
-
-    // Phase A: UPSERT donors instead of delete+insert
-    const batchSize = 500;
-    let totalUpserted = 0;
-
-    for (let i = 0; i < donors.length; i += batchSize) {
-      const batch = donors.slice(i, i + batchSize);
-
-      const { data: upsertedData, error: upsertError } = await supabase
-        .from('donors')
-        .upsert(batch, { onConflict: 'id' })
-        .select();
-
-      if (upsertError) {
-        console.error('[FEC-DONORS] Upsert error on batch', Math.floor(i / batchSize) + 1, ':', upsertError);
-        return new Response(
-          JSON.stringify({ error: `Database error: ${upsertError.message}` }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      console.log(`[FEC-DONORS] Completed ${committeeId}: ${donors.length} donors, ${committeeContributionsSaved} contributions, $${committeeItemized} itemized`);
       
-      totalUpserted += upsertedData?.length || 0;
+      // Clear memory after each committee
+      aggregatedDonors.clear();
     }
 
-    console.log('[FEC-DONORS] Successfully upserted', totalUpserted, 'donors');
-
-    // Upsert contributions
-    let contributionsUpserted = 0;
-    for (let i = 0; i < contributions.length; i += batchSize) {
-      const batch = contributions.slice(i, i + batchSize);
-
-      const { data: upsertedData, error: upsertError } = await supabase
-        .from('contributions')
-        .upsert(batch, { onConflict: 'identity_hash,cycle', ignoreDuplicates: false })
-        .select();
-
-      if (upsertError) {
-        console.error('[FEC-DONORS] Contribution upsert error:', upsertError);
-      } else {
-        contributionsUpserted += upsertedData?.length || 0;
-      }
-    }
-
-    console.log('[FEC-DONORS] Successfully upserted', contributionsUpserted, 'contributions');
-
-    // Phase E: Update reconciliation record
-    const totalLocalItemized = Array.from(committeeRollups.values()).reduce((sum, r) => sum + r.localItemized, 0);
-    const totalLocalTransfers = Array.from(committeeRollups.values()).reduce((sum, r) => sum + r.localTransfers, 0);
-    const totalLocalEarmarked = Array.from(committeeRollups.values()).reduce((sum, r) => sum + r.localEarmarked, 0);
+    // Update reconciliation record
+    const { data: rollups } = await supabase
+      .from('committee_finance_rollups')
+      .select('local_itemized, local_transfers, local_earmarked, fec_itemized, fec_unitemized, fec_total_receipts')
+      .eq('candidate_id', candidateId)
+      .eq('cycle', cycle);
     
-    // Get FEC totals for reconciliation
+    let totalLocalItemized = 0;
+    let totalLocalTransfers = 0;
+    let totalLocalEarmarked = 0;
     let totalFecItemized = 0;
     let totalFecUnitemized = 0;
     let totalFecReceipts = 0;
     
-    const { data: rollups } = await supabase
-      .from('committee_finance_rollups')
-      .select('fec_itemized, fec_unitemized, fec_total_receipts')
-      .eq('candidate_id', candidateId)
-      .eq('cycle', cycle);
-    
     for (const r of rollups || []) {
+      totalLocalItemized += r.local_itemized || 0;
+      totalLocalTransfers += r.local_transfers || 0;
+      totalLocalEarmarked += r.local_earmarked || 0;
       totalFecItemized += r.fec_itemized || 0;
       totalFecUnitemized += r.fec_unitemized || 0;
       totalFecReceipts += r.fec_total_receipts || 0;
@@ -814,17 +746,18 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        imported: donors.length,
-        contributionsImported: contributionsUpserted,
+        imported: totalDonors,
+        contributionsImported: totalContributions,
         totalRaised,
         earmarkedCount,
         transferCount,
         cycle,
         incrementalSync: incrementalSync && !forceFullSync,
+        committeesProcessed,
         committees: committees.map(c => ({ id: c.id, name: c.name })),
         skippedNonContributions,
         reconciliation: { localItemized: totalLocalItemized, fecItemized: totalFecItemized, deltaPct, status },
-        message: `Imported ${donors.length} contributors (${contributionsUpserted} transactions) totaling $${totalRaised.toLocaleString()}`
+        message: `Imported ${totalDonors} donors (${totalContributions} transactions) totaling $${totalRaised.toLocaleString()}`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
