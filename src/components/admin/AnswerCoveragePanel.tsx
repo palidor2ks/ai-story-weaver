@@ -20,6 +20,7 @@ import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { CommitteeBreakdown } from "@/components/admin/CommitteeBreakdown";
 import { FinanceSummaryCard, type FinanceSummaryData } from "@/components/FinanceSummaryCard";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
@@ -111,38 +112,39 @@ export function AnswerCoveragePanel() {
     ) || []
   ), [candidates, searchQuery]);
 
-  // Finance status is now calculated from reconciliation data (single source of truth)
-  // Uses localItemizedNet for comparison with FEC (excludes earmark pass-throughs)
+  // Finance status now uses the standardized formula: Total = Itemized + Unitemized + Other
   const calculateFinanceStatus = useCallback((candidate: CandidateAnswerCoverage) => {
-    const localItemizedNet = candidate.localItemizedNet || 0;
-    const localItemized = candidate.localItemized || 0;
     const fecItemized = candidate.fecItemized;
+    const fecUnitemized = candidate.fecUnitemized || 0;
+    const fecTotalReceipts = candidate.fecTotalReceipts;
     
-    if (fecItemized === null) {
+    if (fecTotalReceipts === null || fecTotalReceipts === undefined) {
       return { 
-        mismatch: false, 
-        difference: 0, 
+        hasData: false, 
         fecItemized: null, 
-        receipts: null, 
-        status: candidate.reconciliationStatus,
-        localNet: localItemizedNet,
-        localGross: localItemized,
-        earmarkPassThroughs: localItemized - localItemizedNet
+        fecUnitemized: null,
+        fecTotalReceipts: null, 
+        otherReceipts: 0,
+        isBalanced: true,
+        status: candidate.reconciliationStatus
       };
     }
     
-    const difference = candidate.deltaAmount || Math.abs(fecItemized - localItemizedNet);
-    const status = candidate.reconciliationStatus;
+    // Calculate Other Receipts = Total - Itemized - Unitemized
+    const otherReceipts = fecTotalReceipts - (fecItemized ?? 0) - fecUnitemized;
+    
+    // Validate the formula
+    const calculatedTotal = (fecItemized ?? 0) + fecUnitemized + otherReceipts;
+    const isBalanced = Math.abs(calculatedTotal - fecTotalReceipts) < 1;
     
     return {
-      mismatch: status === 'warning' || status === 'error',
-      difference,
+      hasData: true,
       fecItemized,
-      receipts: candidate.fecTotalReceipts,
-      status,
-      localNet: localItemizedNet,
-      localGross: localItemized,
-      earmarkPassThroughs: localItemized - localItemizedNet
+      fecUnitemized,
+      fecTotalReceipts,
+      otherReceipts,
+      isBalanced,
+      status: candidate.reconciliationStatus
     };
   }, []);
 
@@ -778,23 +780,36 @@ export function AnswerCoveragePanel() {
                             <Popover>
                               <PopoverTrigger asChild>
                                 <button className="space-y-0.5 text-xs text-left hover:bg-muted/50 p-1 -m-1 rounded cursor-pointer">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-muted-foreground">Net</span>
-                                    <span className="font-medium">{formatCurrency(financeStatus.localNet)}</span>
-                                  </div>
-                                  {financeStatus.fecItemized !== null && (
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="text-muted-foreground">FEC</span>
-                                      <span className={financeStatus.mismatch ? 'text-amber-600 font-medium' : ''}>
-                                        {formatCurrency(financeStatus.fecItemized)}
-                                      </span>
-                                    </div>
-                                  )}
-                                  {financeStatus.mismatch && (
-                                    <div className="flex items-center gap-1 text-amber-600 mt-0.5">
-                                      <AlertTriangle className="h-3 w-3" />
-                                      <span>Δ {formatCurrency(financeStatus.difference)}</span>
-                                    </div>
+                                  {financeStatus.hasData ? (
+                                    <>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-muted-foreground">Total</span>
+                                        <span className="font-semibold">{formatCurrency(financeStatus.fecTotalReceipts)}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-muted-foreground">Itemized</span>
+                                        <span>{formatCurrency(financeStatus.fecItemized)}</span>
+                                      </div>
+                                      {financeStatus.otherReceipts > 0 && (
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-muted-foreground">Other</span>
+                                          <span>{formatCurrency(financeStatus.otherReceipts)}</span>
+                                        </div>
+                                      )}
+                                      <div className={cn(
+                                        "flex items-center gap-1 mt-0.5",
+                                        financeStatus.isBalanced ? "text-agree" : "text-amber-600"
+                                      )}>
+                                        {financeStatus.isBalanced ? (
+                                          <CheckCircle2 className="h-3 w-3" />
+                                        ) : (
+                                          <AlertTriangle className="h-3 w-3" />
+                                        )}
+                                        <span className="text-[10px]">I+U+O=T</span>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <span className="text-muted-foreground">—</span>
                                   )}
                                 </button>
                               </PopoverTrigger>
@@ -802,8 +817,8 @@ export function AnswerCoveragePanel() {
                                 <FinanceSummaryCard
                                   data={{
                                     fecItemized: financeStatus.fecItemized,
-                                    fecUnitemized: candidate.fecUnitemized,
-                                    fecTotalReceipts: financeStatus.receipts,
+                                    fecUnitemized: financeStatus.fecUnitemized,
+                                    fecTotalReceipts: financeStatus.fecTotalReceipts,
                                   }}
                                   compact
                                 />

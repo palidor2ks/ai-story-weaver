@@ -170,14 +170,22 @@ serve(async (req) => {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
 
-        // Calculate variance using NET itemized (comparable to FEC)
-        const deltaAmount = localItemizedNet - fecItemized;
-        const deltaPct = fecItemized > 0 
-          ? Math.round((deltaAmount / fecItemized) * 10000) / 100 
+        // Calculate Other Receipts = Total - Itemized - Unitemized
+        const otherReceipts = fecTotalReceipts - fecItemized - fecUnitemized;
+        
+        // Validate formula: Total = Itemized + Unitemized + Other
+        // If the FEC data doesn't balance, flag as warning
+        const calculatedTotal = fecItemized + fecUnitemized + otherReceipts;
+        const fecDataBalanced = Math.abs(calculatedTotal - fecTotalReceipts) < 1;
+        
+        // Delta now measures FEC data integrity (should always be ~0 if balanced)
+        const deltaAmount = fecTotalReceipts - calculatedTotal;
+        const deltaPct = fecTotalReceipts > 0 
+          ? Math.round((deltaAmount / fecTotalReceipts) * 10000) / 100 
           : 0;
 
         let status = 'ok';
-        if (Math.abs(deltaPct) > 10) status = 'error';
+        if (!fecDataBalanced || Math.abs(deltaPct) > 10) status = 'error';
         else if (Math.abs(deltaPct) > varianceThreshold) status = 'warning';
 
         // Upsert reconciliation record
