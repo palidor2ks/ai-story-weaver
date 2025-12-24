@@ -428,14 +428,9 @@ export const CandidateProfile = () => {
                     {/* Finance Summary Card - visible to all users */}
                     <FinanceSummaryCard
                       data={{
-                        localGross: financeReconciliation?.local_itemized ?? donors.reduce((sum, d) => sum + d.amount, 0),
-                        localNet: financeReconciliation?.local_itemized_net ?? totalDonations,
                         fecItemized: financeReconciliation?.fec_itemized ?? null,
                         fecUnitemized: financeReconciliation?.fec_unitemized ?? fecTotals?.individual_unitemized_contributions ?? null,
                         fecTotalReceipts: financeReconciliation?.fec_total_receipts ?? fecTotals?.total_receipts ?? null,
-                        deltaAmount: financeReconciliation?.delta_amount ?? null,
-                        deltaPct: financeReconciliation?.delta_pct ?? null,
-                        status: financeReconciliation?.status as FinanceSummaryData['status'] ?? null,
                       }}
                       className="mb-6"
                     />

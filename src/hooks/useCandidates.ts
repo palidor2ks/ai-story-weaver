@@ -320,7 +320,8 @@ export const useCandidateDonors = (candidateId: string | undefined) => {
         .from('donors')
         .select('*')
         .eq('candidate_id', candidateId)
-        .order('amount', { ascending: false });
+        .order('amount', { ascending: false })
+        .limit(10000); // Override Supabase default 1000 limit
       
       if (error) throw error;
       return data as Donor[];
