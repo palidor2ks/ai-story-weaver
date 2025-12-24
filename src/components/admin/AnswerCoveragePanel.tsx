@@ -801,15 +801,10 @@ export function AnswerCoveragePanel() {
                               <PopoverContent className="w-72 p-3" align="start">
                                 <FinanceSummaryCard
                                   data={{
-                                    localGross: financeStatus.localGross,
-                                    localNet: financeStatus.localNet,
                                     fecItemized: financeStatus.fecItemized,
                                     fecUnitemized: candidate.fecUnitemized,
                                     fecTotalReceipts: financeStatus.receipts,
-                                    deltaAmount: candidate.deltaAmount,
-                                    deltaPct: candidate.deltaPct,
-                                    status: financeStatus.status,
-                                  } as FinanceSummaryData}
+                                  }}
                                   compact
                                 />
                               </PopoverContent>
