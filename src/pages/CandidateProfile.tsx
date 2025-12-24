@@ -445,33 +445,80 @@ export const CandidateProfile = () => {
                       </p>
                     </div>
                     <div className="space-y-3">
-                      {donors.map(donor => (
-                        <div key={donor.id} className="flex items-center justify-between p-4 rounded-lg border border-border">
-                          <div>
-                            <p className="font-medium text-foreground">{donor.name}</p>
-                            <div className="flex flex-wrap items-center gap-2 mt-1">
-                              <Badge variant="secondary">{donor.type}</Badge>
-                              {donor.contributor_city && donor.contributor_state && (
-                                <span className="text-xs text-muted-foreground">
-                                  {donor.contributor_city}, {donor.contributor_state}
-                                </span>
-                              )}
-                              {donor.employer && (
-                                <span className="text-xs text-muted-foreground">
-                                  • {donor.employer}
-                                </span>
-                              )}
+                      {donors.map(donor => {
+                        // Identify conduit organizations
+                        const conduitOrgs = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
+                        const isConduit = conduitOrgs.some(c => donor.name.toUpperCase().includes(c));
+                        
+                        return (
+                          <div key={donor.id} className={cn(
+                            "flex items-center justify-between p-4 rounded-lg border",
+                            isConduit ? "border-amber-500/30 bg-amber-500/5" : "border-border"
+                          )}>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-foreground">{donor.name}</p>
+                                {isConduit && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 bg-amber-500/10">
+                                          Conduit
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs">
+                                        <p className="font-medium mb-1">Pass-Through Organization</p>
+                                        <p className="text-xs">This organization processes donations on behalf of individual donors. 
+                                        The amount shown is the total routed through this conduit — individual donors are listed separately to avoid double-counting.</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <Badge variant="secondary">{donor.type}</Badge>
+                                {isConduit && (
+                                  <span className="text-xs text-amber-600">Pass-through</span>
+                                )}
+                                {donor.contributor_city && donor.contributor_state && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {donor.contributor_city}, {donor.contributor_state}
+                                  </span>
+                                )}
+                                {donor.employer && (
+                                  <span className="text-xs text-muted-foreground">
+                                    • {donor.employer}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className={cn("font-bold", isConduit ? "text-amber-600" : "text-foreground")}>
+                                ${donor.amount.toLocaleString()}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {donor.transaction_count > 1 ? `${donor.transaction_count} contributions` : donor.cycle}
+                              </p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-bold text-foreground">${donor.amount.toLocaleString()}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {donor.transaction_count > 1 ? `${donor.transaction_count} contributions` : donor.cycle}
-                            </p>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Conduit explanation */}
+                    {donors.some(d => ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'].some(c => d.name.toUpperCase().includes(c))) && (
+                      <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs">
+                        <div className="flex items-start gap-2">
+                          <Info className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-amber-700">
+                            <span className="font-medium">Conduit Organizations: </span>
+                            WinRed, ActBlue, and Democracy Engine are payment processors that route donations from individual donors. 
+                            Their totals represent pass-through amounts — the original donors are listed separately in this table.
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    )}
+                    
                     <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
                       <ExternalLink className="w-3 h-3" />
                       Itemized contributions from FEC Schedule A filings (line 11*/12*). 

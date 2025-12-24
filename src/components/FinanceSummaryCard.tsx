@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { DollarSign, Info, CheckCircle2, AlertTriangle } from "lucide-react";
+import { DollarSign, Info, CheckCircle2, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface FinanceSummaryData {
@@ -77,7 +77,12 @@ export function FinanceSummaryCard({ data, compact = false, className }: Finance
                   <Tooltip>
                     <TooltipTrigger><Info className="h-3 w-3" /></TooltipTrigger>
                     <TooltipContent className="max-w-xs">
-                      PAC contributions, committee transfers, loans, refunds, and other receipts
+                      <p className="font-medium mb-1">Includes:</p>
+                      <ul className="text-xs space-y-0.5">
+                        <li>• Conduit pass-throughs (WinRed, ActBlue, Democracy Engine)</li>
+                        <li>• PAC contributions & committee transfers</li>
+                        <li>• Candidate loans & refunds</li>
+                      </ul>
                     </TooltipContent>
                   </Tooltip>
                 </span>
@@ -152,7 +157,12 @@ export function FinanceSummaryCard({ data, compact = false, className }: Finance
                   <Tooltip>
                     <TooltipTrigger><Info className="h-3 w-3" /></TooltipTrigger>
                     <TooltipContent className="max-w-xs">
-                      PAC contributions, party committee transfers, candidate loans, refunds, and other receipts not included in itemized/unitemized individual contributions
+                      <p className="font-medium mb-1">Includes:</p>
+                      <ul className="text-xs space-y-0.5">
+                        <li>• <span className="font-medium">Conduit pass-throughs</span> — Donations routed via WinRed, ActBlue, Democracy Engine (original donors are listed separately)</li>
+                        <li>• PAC contributions & party committee transfers</li>
+                        <li>• Candidate loans, refunds & other receipts</li>
+                      </ul>
                     </TooltipContent>
                   </Tooltip>
                 </p>
@@ -163,6 +173,16 @@ export function FinanceSummaryCard({ data, compact = false, className }: Finance
             <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
               <p className="text-xs text-muted-foreground">Total Receipts</p>
               <p className="font-bold text-lg">{formatCurrency(data.fecTotalReceipts)}</p>
+            </div>
+          </div>
+          
+          {/* Conduit explanation callout */}
+          <div className="p-3 rounded-lg bg-muted/50 border border-border/50 flex items-start gap-2">
+            <ArrowRightLeft className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">About Conduit Contributions: </span>
+              Organizations like WinRed, ActBlue, and Democracy Engine are "conduits" that process donations on behalf of individual donors. 
+              These pass-throughs appear in "Other Receipts" to avoid double-counting.
             </div>
           </div>
           
