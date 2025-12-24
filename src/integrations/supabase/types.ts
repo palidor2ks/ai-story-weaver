@@ -67,7 +67,12 @@ export type Database = {
           candidate_id: string
           created_at: string | null
           fec_committee_id: string
+          fec_itemized_total: number | null
           id: string
+          last_contribution_date: string | null
+          last_index: string | null
+          last_sync_date: string | null
+          local_itemized_total: number | null
           role: string
           updated_at: string | null
         }
@@ -76,7 +81,12 @@ export type Database = {
           candidate_id: string
           created_at?: string | null
           fec_committee_id: string
+          fec_itemized_total?: number | null
           id?: string
+          last_contribution_date?: string | null
+          last_index?: string | null
+          last_sync_date?: string | null
+          local_itemized_total?: number | null
           role?: string
           updated_at?: string | null
         }
@@ -85,7 +95,12 @@ export type Database = {
           candidate_id?: string
           created_at?: string | null
           fec_committee_id?: string
+          fec_itemized_total?: number | null
           id?: string
+          last_contribution_date?: string | null
+          last_index?: string | null
+          last_sync_date?: string | null
+          local_itemized_total?: number | null
           role?: string
           updated_at?: string | null
         }
@@ -256,6 +271,66 @@ export type Database = {
         }
         Relationships: []
       }
+      committee_finance_rollups: {
+        Row: {
+          candidate_id: string
+          committee_id: string
+          contribution_count: number | null
+          created_at: string | null
+          cycle: string
+          donor_count: number | null
+          fec_itemized: number | null
+          fec_total_receipts: number | null
+          fec_unitemized: number | null
+          id: string
+          last_fec_check: string | null
+          last_sync: string | null
+          local_earmarked: number | null
+          local_itemized: number | null
+          local_other: number | null
+          local_transfers: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          candidate_id: string
+          committee_id: string
+          contribution_count?: number | null
+          created_at?: string | null
+          cycle: string
+          donor_count?: number | null
+          fec_itemized?: number | null
+          fec_total_receipts?: number | null
+          fec_unitemized?: number | null
+          id?: string
+          last_fec_check?: string | null
+          last_sync?: string | null
+          local_earmarked?: number | null
+          local_itemized?: number | null
+          local_other?: number | null
+          local_transfers?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          committee_id?: string
+          contribution_count?: number | null
+          created_at?: string | null
+          cycle?: string
+          donor_count?: number | null
+          fec_itemized?: number | null
+          fec_total_receipts?: number | null
+          fec_unitemized?: number | null
+          id?: string
+          last_fec_check?: string | null
+          last_sync?: string | null
+          local_earmarked?: number | null
+          local_itemized?: number | null
+          local_other?: number | null
+          local_transfers?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       contributions: {
         Row: {
           amount: number
@@ -410,6 +485,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      finance_reconciliation: {
+        Row: {
+          candidate_id: string
+          checked_at: string | null
+          created_at: string | null
+          cycle: string
+          delta_amount: number | null
+          delta_pct: number | null
+          fec_itemized: number | null
+          fec_total_receipts: number | null
+          fec_unitemized: number | null
+          id: string
+          local_earmarked: number | null
+          local_itemized: number | null
+          local_transfers: number | null
+          notes: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          candidate_id: string
+          checked_at?: string | null
+          created_at?: string | null
+          cycle: string
+          delta_amount?: number | null
+          delta_pct?: number | null
+          fec_itemized?: number | null
+          fec_total_receipts?: number | null
+          fec_unitemized?: number | null
+          id?: string
+          local_earmarked?: number | null
+          local_itemized?: number | null
+          local_transfers?: number | null
+          notes?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          checked_at?: string | null
+          created_at?: string | null
+          cycle?: string
+          delta_amount?: number | null
+          delta_pct?: number | null
+          fec_itemized?: number | null
+          fec_total_receipts?: number | null
+          fec_unitemized?: number | null
+          id?: string
+          local_earmarked?: number | null
+          local_itemized?: number | null
+          local_transfers?: number | null
+          notes?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       official_transitions: {
         Row: {
