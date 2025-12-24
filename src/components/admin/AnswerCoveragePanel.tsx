@@ -275,12 +275,12 @@ export function AnswerCoveragePanel() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              Answer Coverage Dashboard
+              Coverage & Finance Dashboard
             </CardTitle>
             <CardDescription>
-              Manage AI position answers and FEC donor data for representatives
+              Unified view of AI position answers, FEC donors, and finance reconciliation
             </CardDescription>
           </div>
           
