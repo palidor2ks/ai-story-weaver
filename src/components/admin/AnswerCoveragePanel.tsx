@@ -205,59 +205,84 @@ export function AnswerCoveragePanel() {
   }, [baseFilteredCandidates, fecTotalsMap]);
 
   const handleFillAll = async () => {
-    if (!candidates) return;
-    const toProcess = candidates.filter(c => c.answerCount === 0).slice(0, 50);
-    await populateBatch(toProcess.map(c => ({ id: c.id, name: c.name })), false);
+    try {
+      if (!candidates) return;
+      const toProcess = candidates.filter(c => c.answerCount === 0).slice(0, 50);
+      await populateBatch(toProcess.map(c => ({ id: c.id, name: c.name })), false);
+    } catch (err) {
+      console.error('[Admin] Fill missing failed:', err);
+      toast.error('Failed to generate AI answers batch');
+    }
   };
 
   const handleFillLowCoverage = async () => {
-    if (!candidates) return;
-    const toProcess = candidates.filter(c => c.percentage > 0 && c.percentage < 50).slice(0, 50);
-    await populateBatch(toProcess.map(c => ({ id: c.id, name: c.name })), true);
+    try {
+      if (!candidates) return;
+      const toProcess = candidates.filter(c => c.percentage > 0 && c.percentage < 50).slice(0, 50);
+      await populateBatch(toProcess.map(c => ({ id: c.id, name: c.name })), true);
+    } catch (err) {
+      console.error('[Admin] Regen low coverage failed:', err);
+      toast.error('Failed to regenerate low coverage batch');
+    }
   };
 
   const handleBatchLinkFECIds = async () => {
-    const toProcess = candidatesWithoutFecId.slice(0, 50).map(c => ({ id: c.id, name: c.name, state: c.state }));
-    if (toProcess.length === 0) {
-      toast.info('All candidates already have FEC IDs');
-      return;
+    try {
+      const toProcess = candidatesWithoutFecId.slice(0, 50).map(c => ({ id: c.id, name: c.name, state: c.state }));
+      if (toProcess.length === 0) {
+        toast.info('All candidates already have FEC IDs');
+        return;
+      }
+      const results = await batchFetchFECIds(toProcess);
+      toast.success(`Linked ${results.success} FEC IDs (${results.failed} failed)`);
+      refetch();
+    } catch (err) {
+      console.error('[Admin] Batch link FEC IDs failed:', err);
+      toast.error('Failed to link FEC IDs');
     }
-    const results = await batchFetchFECIds(toProcess);
-    toast.success(`Linked ${results.success} FEC IDs (${results.failed} failed)`);
-    refetch();
   };
 
   const handleBatchFetchDonors = async () => {
-    const toProcess = candidatesWithFecId.slice(0, 50).map(c => ({ 
-      id: c.id, 
-      name: c.name, 
-      fecCandidateId: c.fecCandidateId! 
-    }));
-    if (toProcess.length === 0) {
-      toast.info('No candidates with FEC IDs found. Link FEC IDs first.');
-      return;
+    try {
+      const toProcess = candidatesWithFecId.slice(0, 50).map(c => ({
+        id: c.id,
+        name: c.name,
+        fecCandidateId: c.fecCandidateId!
+      }));
+      if (toProcess.length === 0) {
+        toast.info('No candidates with FEC IDs found. Link FEC IDs first.');
+        return;
+      }
+      const results = await batchFetchDonors(toProcess, '2024');
+      toast.success(
+        `Imported ${results.totalImported} donors for ${results.success} candidates ` +
+        `($${results.totalRaised.toLocaleString()} total)`
+      );
+      refetch();
+    } catch (err) {
+      console.error('[Admin] Batch fetch donors failed:', err);
+      toast.error('Failed to fetch donors batch');
     }
-    const results = await batchFetchDonors(toProcess, '2024');
-    toast.success(
-      `Imported ${results.totalImported} donors for ${results.success} candidates ` +
-      `($${results.totalRaised.toLocaleString()} total)`
-    );
-    refetch();
   };
 
   const handleResumeAllPartialSyncs = async () => {
-    const toProcess = partialSyncCandidates.map(c => ({ 
-      id: c.id, 
-      name: c.name, 
-      fecCandidateId: c.fecCandidateId! 
-    }));
-    const results = await resumeAllPartialSyncs(toProcess, '2024');
-    toast.success(
-      `Resumed ${results.resumed} syncs: ${results.completed} completed, ` +
-      `${results.stillPartial} still partial. ` +
-      `Imported ${results.totalImported} additional donors.`
-    );
-    refetch();
+    try {
+      const toProcess = partialSyncCandidates.map(c => ({
+        id: c.id,
+        name: c.name,
+        fecCandidateId: c.fecCandidateId!
+      }));
+      const results = await resumeAllPartialSyncs(toProcess, '2024');
+      toast.success(
+        `Resumed ${results.resumed} syncs: ${results.completed} completed, ` +
+        `${results.stillPartial} still partial. ` +
+        `Imported ${results.totalImported} additional donors.`
+      );
+      refetch();
+    } catch (err) {
+      console.error('[Admin] Resume partial syncs failed:', err);
+      toast.error('Failed to resume donor syncs');
+    }
   };
 
   const noAnswersCount = candidateStats?.noAnswers || 0;
@@ -821,21 +846,28 @@ export function AnswerCoveragePanel() {
                                   size="sm"
                                   variant="ghost"
                                   disabled={fecLoading || anyBatchRunning}
-                                  onClick={async () => {
-                                    const result = await fetchFECCandidateId(
-                                      candidate.id,
-                                      candidate.name,
-                                      candidate.state,
-                                      true
-                                    );
-                                    if (result.found && result.updated) {
-                                      toast.success(`Linked: ${result.fecCandidateId}`);
-                                      refetch();
-                                    } else if (result.found) {
-                                      toast.info(`Found ${result.candidates?.length} matches`);
-                                    } else {
-                                      toast.error('No FEC candidate found');
-                                    }
+                                  onClick={() => {
+                                    void (async () => {
+                                      try {
+                                        const result = await fetchFECCandidateId(
+                                          candidate.id,
+                                          candidate.name,
+                                          candidate.state,
+                                          true
+                                        );
+                                        if (result.found && result.updated) {
+                                          toast.success(`Linked: ${result.fecCandidateId}`);
+                                          refetch();
+                                        } else if (result.found) {
+                                          toast.info(`Found ${result.candidates?.length} matches`);
+                                        } else {
+                                          toast.error(result.error || 'No FEC candidate found');
+                                        }
+                                      } catch (err) {
+                                        console.error('[Admin] Link FEC ID failed:', err);
+                                        toast.error('Failed to link FEC ID');
+                                      }
+                                    })();
                                   }}
                                   title="Link FEC ID"
                                 >
@@ -848,22 +880,29 @@ export function AnswerCoveragePanel() {
                                   size="sm"
                                   variant={isPartialSync ? "default" : "ghost"}
                                   disabled={donorLoading || anyBatchRunning}
-                                  onClick={async () => {
-                                    const result = await fetchFECDonors(
-                                      candidate.id,
-                                      candidate.fecCandidateId!,
-                                      '2024'
-                                    );
-                                    if (result.success) {
-                                      if (result.hasMore) {
-                                        toast.info(result.message || `Partial: ${result.imported} donors. Resume to continue.`);
-                                      } else {
-                                        toast.success(result.message || `Imported ${result.imported} donors`);
+                                  onClick={() => {
+                                    void (async () => {
+                                      try {
+                                        const result = await fetchFECDonors(
+                                          candidate.id,
+                                          candidate.fecCandidateId!,
+                                          '2024'
+                                        );
+                                        if (result.success) {
+                                          if (result.hasMore) {
+                                            toast.info(result.message || `Partial: ${result.imported} donors. Resume to continue.`);
+                                          } else {
+                                            toast.success(result.message || `Imported ${result.imported} donors`);
+                                          }
+                                          refetch();
+                                        } else {
+                                          toast.error(result.error || 'Failed');
+                                        }
+                                      } catch (err) {
+                                        console.error('[Admin] Fetch donors failed:', err);
+                                        toast.error('Failed to fetch donors');
                                       }
-                                      refetch();
-                                    } else {
-                                      toast.error(result.error || 'Failed');
-                                    }
+                                    })();
                                   }}
                                   title={isPartialSync ? "Resume sync" : "Fetch donors"}
                                   className={isPartialSync ? "bg-amber-600 hover:bg-amber-700 h-7 text-xs" : "h-7"}
