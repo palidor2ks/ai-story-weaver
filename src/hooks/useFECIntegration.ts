@@ -91,13 +91,14 @@ export function useFECIntegration() {
   const fetchFECDonors = async (
     candidateId: string,
     fecCandidateId: string,
-    cycle = '2024'
+    cycle = '2024',
+    forceFullSync = false
   ): Promise<FetchDonorsResult> => {
     setDonorLoadingIds(prev => new Set(prev).add(candidateId));
     
     try {
       const { data, error } = await supabase.functions.invoke('fetch-fec-donors', {
-        body: { candidateId, fecCandidateId, cycle }
+        body: { candidateId, fecCandidateId, cycle, forceFullSync }
       });
 
       if (error) {
