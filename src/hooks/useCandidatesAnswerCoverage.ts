@@ -18,13 +18,14 @@ export interface CandidateAnswerCoverage {
   fecCandidateId: string | null;
   fecCommitteeId: string | null;
   // Finance breakdown - from finance_reconciliation (single source of truth)
-  localItemized: number;         // Local itemized contributions
+  localItemized: number;         // Local itemized contributions (gross)
+  localItemizedNet: number;      // Local itemized NET (excluding earmark pass-throughs) - comparable to FEC
   localTransfers: number;        // Committee transfers
   localEarmarked: number;        // Earmarked contributions
   fecItemized: number | null;    // FEC itemized contributions
   fecUnitemized: number | null;  // FEC unitemized contributions
   fecTotalReceipts: number | null; // FEC total receipts
-  deltaAmount: number | null;    // Difference between local and FEC
+  deltaAmount: number | null;    // Difference between local NET and FEC
   deltaPct: number | null;       // Percentage difference
   reconciliationStatus: string | null; // ok, warning, error
   // Sync status
@@ -120,6 +121,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       interface ReconciliationRecord {
         candidate_id: string;
         local_itemized: number | null;
+        local_itemized_net: number | null;
         local_transfers: number | null;
         local_earmarked: number | null;
         fec_itemized: number | null;
@@ -182,6 +184,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           fecCommitteeId: c.fec_committee_id || null,
           // Finance data from reconciliation table (single source of truth)
           localItemized: rec?.local_itemized || 0,
+          localItemizedNet: rec?.local_itemized_net || 0, // NET for proper comparison
           localTransfers: rec?.local_transfers || 0,
           localEarmarked: rec?.local_earmarked || 0,
           fecItemized: rec?.fec_itemized ?? null,

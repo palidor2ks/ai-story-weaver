@@ -111,15 +111,26 @@ export function AnswerCoveragePanel() {
   ), [candidates, searchQuery]);
 
   // Finance status is now calculated from reconciliation data (single source of truth)
+  // Uses localItemizedNet for comparison with FEC (excludes earmark pass-throughs)
   const calculateFinanceStatus = useCallback((candidate: CandidateAnswerCoverage) => {
+    const localItemizedNet = candidate.localItemizedNet || 0;
     const localItemized = candidate.localItemized || 0;
     const fecItemized = candidate.fecItemized;
     
     if (fecItemized === null) {
-      return { mismatch: false, difference: 0, fecItemized: null, receipts: null, status: candidate.reconciliationStatus };
+      return { 
+        mismatch: false, 
+        difference: 0, 
+        fecItemized: null, 
+        receipts: null, 
+        status: candidate.reconciliationStatus,
+        localNet: localItemizedNet,
+        localGross: localItemized,
+        earmarkPassThroughs: localItemized - localItemizedNet
+      };
     }
     
-    const difference = candidate.deltaAmount || Math.abs(fecItemized - localItemized);
+    const difference = candidate.deltaAmount || Math.abs(fecItemized - localItemizedNet);
     const status = candidate.reconciliationStatus;
     
     return {
@@ -128,6 +139,9 @@ export function AnswerCoveragePanel() {
       fecItemized,
       receipts: candidate.fecTotalReceipts,
       status,
+      localNet: localItemizedNet,
+      localGross: localItemized,
+      earmarkPassThroughs: localItemized - localItemizedNet
     };
   }, []);
 
@@ -760,26 +774,70 @@ export function AnswerCoveragePanel() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="space-y-0.5 text-xs">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-muted-foreground">Local</span>
-                                <span className="font-medium">{formatCurrency(localItemized)}</span>
-                              </div>
-                              {financeStatus.fecItemized !== null && (
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">FEC</span>
-                                  <span className={financeStatus.mismatch ? 'text-amber-600 font-medium' : ''}>
-                                    {formatCurrency(financeStatus.fecItemized)}
-                                  </span>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="space-y-0.5 text-xs text-left hover:bg-muted/50 p-1 -m-1 rounded cursor-pointer">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-muted-foreground">Net</span>
+                                    <span className="font-medium">{formatCurrency(financeStatus.localNet)}</span>
+                                  </div>
+                                  {financeStatus.fecItemized !== null && (
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-muted-foreground">FEC</span>
+                                      <span className={financeStatus.mismatch ? 'text-amber-600 font-medium' : ''}>
+                                        {formatCurrency(financeStatus.fecItemized)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {financeStatus.mismatch && (
+                                    <div className="flex items-center gap-1 text-amber-600 mt-0.5">
+                                      <AlertTriangle className="h-3 w-3" />
+                                      <span>Δ {formatCurrency(financeStatus.difference)}</span>
+                                    </div>
+                                  )}
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-64 p-3" align="start">
+                                <div className="space-y-2 text-xs">
+                                  <h4 className="font-medium text-sm mb-2">Finance Breakdown</h4>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Local Net (comparable):</span>
+                                    <span className="font-medium">{formatCurrency(financeStatus.localNet)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Local Gross:</span>
+                                    <span>{formatCurrency(financeStatus.localGross)}</span>
+                                  </div>
+                                  {financeStatus.earmarkPassThroughs > 0 && (
+                                    <div className="flex justify-between text-amber-600">
+                                      <span>Earmark Pass-throughs:</span>
+                                      <span>-{formatCurrency(financeStatus.earmarkPassThroughs)}</span>
+                                    </div>
+                                  )}
+                                  <div className="border-t pt-2 mt-2">
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">FEC Itemized:</span>
+                                      <span className="font-medium">{formatCurrency(financeStatus.fecItemized)}</span>
+                                    </div>
+                                    {candidate.fecUnitemized !== null && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">FEC Unitemized:</span>
+                                        <span>{formatCurrency(candidate.fecUnitemized)}</span>
+                                      </div>
+                                    )}
+                                    {financeStatus.receipts !== null && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">FEC Total Receipts:</span>
+                                        <span>{formatCurrency(financeStatus.receipts)}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t">
+                                    "Net" excludes earmark pass-throughs (ActBlue/WinRed "SEE BELOW" entries) for proper comparison with FEC itemized.
+                                  </p>
                                 </div>
-                              )}
-                              {financeStatus.mismatch && (
-                                <div className="flex items-center gap-1 text-amber-600 mt-0.5">
-                                  <AlertTriangle className="h-3 w-3" />
-                                  <span>Δ {formatCurrency(financeStatus.difference)}</span>
-                                </div>
-                              )}
-                            </div>
+                              </PopoverContent>
+                            </Popover>
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col gap-0.5">

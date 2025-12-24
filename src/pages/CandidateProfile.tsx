@@ -133,7 +133,9 @@ export const CandidateProfile = () => {
   const disagreements = comparisons.filter(c => !c.isAgreement && c.score !== 0).sort((a, b) => b.difference - a.difference).slice(0, 3);
 
   // Use finance_reconciliation as single source of truth for total donations
-  const totalDonations = financeReconciliation?.local_itemized ?? donors.reduce((sum, d) => sum + d.amount, 0);
+  // Prefer local_itemized_net (excludes earmark pass-throughs) for accurate display
+  const totalDonations = financeReconciliation?.local_itemized_net ?? financeReconciliation?.local_itemized ?? donors.reduce((sum, d) => sum + d.amount, 0);
+  const earmarkPassThroughs = (financeReconciliation?.local_itemized ?? 0) - (financeReconciliation?.local_itemized_net ?? 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -423,13 +425,18 @@ export const CandidateProfile = () => {
                     )}
                     
                     <div className="mb-6 p-4 rounded-xl bg-secondary/50">
-                      <p className="text-sm text-muted-foreground">Total Itemized Contributions</p>
+                      <p className="text-sm text-muted-foreground">Total Itemized Contributions (Net)</p>
                       <p className="text-3xl font-bold text-foreground">
                         ${totalDonations.toLocaleString()}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         From {donors.length} contributors • {donors.reduce((sum, d) => sum + (d.transaction_count || 1), 0)} transactions
                       </p>
+                      {earmarkPassThroughs > 0 && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Excludes ${earmarkPassThroughs.toLocaleString()} in earmark pass-throughs (ActBlue/WinRed)
+                        </p>
+                      )}
                       
                       {/* FEC Reconciliation Summary */}
                       {fecTotals && (

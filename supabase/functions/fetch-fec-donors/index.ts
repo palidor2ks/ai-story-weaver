@@ -190,23 +190,41 @@ async function generateContributionHash(
 }
 
 // Parse earmark info from memo text
+// CRITICAL: Distinguishes between earmark pass-throughs (SEE BELOW - should be excluded from itemized)
+// and actual earmarked contributions (EARMARKED FOR/THROUGH - should be counted)
 interface EarmarkInfo {
   isEarmarked: boolean;
+  isEarmarkPassThrough: boolean; // TRUE = "SEE BELOW" entry that double-counts, exclude from net
   earmarkedForName: string | null;
   conduitCommitteeId: string | null;
 }
 
 function parseEarmarkInfo(memoText: string | null, _memoCode: string | null): EarmarkInfo {
   if (!memoText) {
-    return { isEarmarked: false, earmarkedForName: null, conduitCommitteeId: null };
+    return { isEarmarked: false, isEarmarkPassThrough: false, earmarkedForName: null, conduitCommitteeId: null };
   }
   
   const upperMemo = memoText.toUpperCase();
   
+  // CRITICAL: "SEE BELOW" entries are pass-throughs that should NOT be counted in net itemized
+  // These are the ActBlue/WinRed entries that say "EARMARKED CONTRIBUTION: SEE BELOW"
+  // The actual contribution is a separate entry saying "EARMARKED FOR [CANDIDATE]" or "EARMARKED THROUGH"
+  if (upperMemo.includes('SEE BELOW') || upperMemo.includes('EARMARKED CONTRIBUTION:')) {
+    return {
+      isEarmarked: true,
+      isEarmarkPassThrough: true, // This is the double-counting entry
+      earmarkedForName: null,
+      conduitCommitteeId: null
+    };
+  }
+  
+  // "EARMARKED FOR" or "EARMARKED THROUGH" - these are the actual contributions
   const earmarkPatterns = [
     /EARMARKED\s+FOR\s+(.+?)(?:\s*\(|$|\.|,)/i,
+    /EARMARKED\s+THROUGH\s+(.+?)(?:\s*\(|$|\.|,)/i,
     /DESIGNATED\s+FOR\s+(.+?)(?:\s*\(|$|\.|,)/i,
     /EAR\s*MARKED\s+FOR\s+(.+?)(?:\s*\(|$|\.|,)/i,
+    /NOTE:\s*ABOVE\s+CONTRIBUTION\s+EARMARKED/i, // This is the REAL contribution
   ];
   
   for (const pattern of earmarkPatterns) {
@@ -214,21 +232,24 @@ function parseEarmarkInfo(memoText: string | null, _memoCode: string | null): Ea
     if (match) {
       return {
         isEarmarked: true,
-        earmarkedForName: match[1].trim(),
+        isEarmarkPassThrough: false, // This is the real contribution, count it
+        earmarkedForName: match[1]?.trim() || null,
         conduitCommitteeId: null
       };
     }
   }
   
+  // Generic conduit references (not pass-throughs)
   if (upperMemo.includes('ACTBLUE') || upperMemo.includes('WINRED') || upperMemo.includes('CONDUIT')) {
     return {
       isEarmarked: true,
+      isEarmarkPassThrough: false,
       earmarkedForName: null,
       conduitCommitteeId: null
     };
   }
   
-  return { isEarmarked: false, earmarkedForName: null, conduitCommitteeId: null };
+  return { isEarmarked: false, isEarmarkPassThrough: false, earmarkedForName: null, conduitCommitteeId: null };
 }
 
 interface AggregatedDonor {
@@ -560,8 +581,10 @@ serve(async (req) => {
     let newestIndex: string | null = null;
     
     let committeeItemized = 0;
+    let committeeItemizedNet = 0; // Excluding earmark pass-throughs
     let committeeTransfers = 0;
     let committeeEarmarked = 0;
+    let committeeEarmarkPassThroughs = 0; // Pass-throughs to exclude from net
     let committeeContributionsSaved = 0;
 
     console.log('[FEC-DONORS] Starting fetch for committee:', committeeId);
@@ -756,6 +779,9 @@ serve(async (req) => {
         if (earmarkInfo.isEarmarked) {
           earmarkedCount++;
           committeeEarmarked += amount;
+          if (earmarkInfo.isEarmarkPassThrough) {
+            committeeEarmarkPassThroughs += amount;
+          }
         }
         if (classification.isTransfer) {
           transferCount++;
@@ -763,6 +789,10 @@ serve(async (req) => {
         }
         if (classification.isContribution && !classification.isTransfer) {
           committeeItemized += amount;
+          // Net = exclude earmark pass-throughs (SEE BELOW entries)
+          if (!earmarkInfo.isEarmarkPassThrough) {
+            committeeItemizedNet += amount;
+          }
         }
         
         const contributionHash = await generateContributionHash(
@@ -897,6 +927,7 @@ serve(async (req) => {
       .eq('cycle', cycle);
     
     let totalLocalItemized = 0;
+    let totalLocalItemizedNet = 0;
     let totalLocalTransfers = 0;
     let totalLocalEarmarked = 0;
     let totalFecItemized = 0;
@@ -912,7 +943,11 @@ serve(async (req) => {
       totalFecReceipts += r.fec_total_receipts || 0;
     }
     
-    const deltaAmount = totalLocalItemized - totalFecItemized;
+    // Calculate net itemized = gross - earmark pass-throughs
+    // This is comparable to FEC itemized (which doesn't double-count earmarks)
+    totalLocalItemizedNet = committeeItemizedNet; // Use the freshly calculated net
+    
+    const deltaAmount = totalLocalItemizedNet - totalFecItemized; // Compare NET to FEC
     const deltaPct = totalFecItemized > 0 ? Math.round((deltaAmount / totalFecItemized) * 10000) / 100 : 0;
     let status = 'ok';
     if (Math.abs(deltaPct) > 10) status = 'error';
@@ -925,6 +960,7 @@ serve(async (req) => {
         candidate_id: candidateId,
         cycle,
         local_itemized: totalLocalItemized,
+        local_itemized_net: totalLocalItemizedNet, // NEW: Net itemized for proper comparison
         local_transfers: totalLocalTransfers,
         local_earmarked: totalLocalEarmarked,
         fec_itemized: totalFecItemized,
@@ -963,7 +999,8 @@ serve(async (req) => {
         committees: committees.map(c => ({ id: c.id, name: c.name })),
         skippedNonContributions,
         reconciliation: { 
-          localItemized: totalLocalItemized, 
+          localItemized: totalLocalItemized,
+          localItemizedNet: totalLocalItemizedNet,
           localTransfers: totalLocalTransfers,
           fecItemized: totalFecItemized, 
           deltaPct, 
