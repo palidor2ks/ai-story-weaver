@@ -98,15 +98,18 @@ serve(async (req) => {
     // Find primary committee (designation P) or first authorized (A)
     const primaryCommittee = committees.find(c => c.designation === 'P') || committees[0];
     
-    // Store all committees in candidate_committees table
+    // Store all committees in candidate_committees table with full metadata
     for (const cmte of committees) {
       const { error: upsertError } = await supabase
         .from('candidate_committees')
         .upsert({
           candidate_id: candidateId,
           fec_committee_id: cmte.committee_id,
+          name: cmte.name,
+          designation: cmte.designation,
+          designation_full: cmte.designation_full,
           role: cmte.designation === 'P' ? 'principal' : 'authorized',
-          active: true,
+          active: cmte.designation === 'P' || cmte.designation === 'A', // Only P and A active by default
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'candidate_id,fec_committee_id'
@@ -139,7 +142,9 @@ serve(async (req) => {
           id: c.committee_id,
           name: c.name,
           designation: c.designation,
-          isPrimary: c.committee_id === primaryCommittee.committee_id
+          designationFull: c.designation_full,
+          isPrimary: c.committee_id === primaryCommittee.committee_id,
+          active: c.designation === 'P' || c.designation === 'A'
         })),
         primaryCommitteeId: primaryCommittee.committee_id,
         primaryCommitteeName: primaryCommittee.name,

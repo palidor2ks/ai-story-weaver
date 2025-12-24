@@ -66,6 +66,8 @@ export type Database = {
           active: boolean | null
           candidate_id: string
           created_at: string | null
+          designation: string | null
+          designation_full: string | null
           fec_committee_id: string
           fec_itemized_total: number | null
           has_more: boolean | null
@@ -77,6 +79,7 @@ export type Database = {
           last_sync_date: string | null
           last_sync_started_at: string | null
           local_itemized_total: number | null
+          name: string | null
           role: string
           updated_at: string | null
         }
@@ -84,6 +87,8 @@ export type Database = {
           active?: boolean | null
           candidate_id: string
           created_at?: string | null
+          designation?: string | null
+          designation_full?: string | null
           fec_committee_id: string
           fec_itemized_total?: number | null
           has_more?: boolean | null
@@ -95,6 +100,7 @@ export type Database = {
           last_sync_date?: string | null
           last_sync_started_at?: string | null
           local_itemized_total?: number | null
+          name?: string | null
           role?: string
           updated_at?: string | null
         }
@@ -102,6 +108,8 @@ export type Database = {
           active?: boolean | null
           candidate_id?: string
           created_at?: string | null
+          designation?: string | null
+          designation_full?: string | null
           fec_committee_id?: string
           fec_itemized_total?: number | null
           has_more?: boolean | null
@@ -113,6 +121,7 @@ export type Database = {
           last_sync_date?: string | null
           last_sync_started_at?: string | null
           local_itemized_total?: number | null
+          name?: string | null
           role?: string
           updated_at?: string | null
         }
