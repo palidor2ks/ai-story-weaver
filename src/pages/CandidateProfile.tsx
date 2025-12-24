@@ -14,6 +14,7 @@ import { useFECIntegration } from '@/hooks/useFECIntegration';
 import { useFECTotals } from '@/hooks/useFECTotals';
 import { useFinanceReconciliation, useCommitteeRollups } from '@/hooks/useFinanceReconciliation';
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
+import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info } from 'lucide-react';
 import { ScoreText } from '@/components/ScoreText';
@@ -424,57 +425,29 @@ export const CandidateProfile = () => {
                       </div>
                     )}
                     
+                    {/* Finance Summary Card - visible to all users */}
+                    <FinanceSummaryCard
+                      data={{
+                        localGross: financeReconciliation?.local_itemized ?? donors.reduce((sum, d) => sum + d.amount, 0),
+                        localNet: financeReconciliation?.local_itemized_net ?? totalDonations,
+                        fecItemized: financeReconciliation?.fec_itemized ?? null,
+                        fecUnitemized: financeReconciliation?.fec_unitemized ?? fecTotals?.individual_unitemized_contributions ?? null,
+                        fecTotalReceipts: financeReconciliation?.fec_total_receipts ?? fecTotals?.total_receipts ?? null,
+                        deltaAmount: financeReconciliation?.delta_amount ?? null,
+                        deltaPct: financeReconciliation?.delta_pct ?? null,
+                        status: financeReconciliation?.status as FinanceSummaryData['status'] ?? null,
+                      }}
+                      className="mb-6"
+                    />
+                    
                     <div className="mb-6 p-4 rounded-xl bg-secondary/50">
-                      <p className="text-sm text-muted-foreground">Total Itemized Contributions (Net)</p>
-                      <p className="text-3xl font-bold text-foreground">
-                        ${totalDonations.toLocaleString()}
+                      <p className="text-sm text-muted-foreground">Contributors</p>
+                      <p className="text-2xl font-bold text-foreground">
+                        {donors.length} donors
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        From {donors.length} contributors • {donors.reduce((sum, d) => sum + (d.transaction_count || 1), 0)} transactions
+                        {donors.reduce((sum, d) => sum + (d.transaction_count || 1), 0)} total transactions
                       </p>
-                      {earmarkPassThroughs > 0 && (
-                        <p className="text-xs text-amber-600 mt-1">
-                          Excludes ${earmarkPassThroughs.toLocaleString()} in earmark pass-throughs (ActBlue/WinRed)
-                        </p>
-                      )}
-                      
-                      {/* FEC Reconciliation Summary */}
-                      {fecTotals && (
-                        <TooltipProvider>
-                          <div className="mt-3 pt-3 border-t border-border/50 text-xs text-muted-foreground space-y-1">
-                            <div className="flex justify-between">
-                              <span>FEC Total Receipts:</span>
-                              <span className="font-medium">${fecTotals.total_receipts.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Unitemized (&lt;$200):</span>
-                              <span>${fecTotals.individual_unitemized_contributions.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="flex items-center gap-1">
-                                Other Receipts
-                                <Tooltip>
-                                  <TooltipTrigger><Info className="w-3 h-3" /></TooltipTrigger>
-                                  <TooltipContent>Interest, refunds, investment earnings, etc.</TooltipContent>
-                                </Tooltip>
-                              </span>
-                              <span>${fecTotals.other_receipts.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        </TooltipProvider>
-                      )}
-                      
-                      {/* Finance Reconciliation Card */}
-                      {financeReconciliation && (
-                        <div className="mt-4">
-                          <FinanceReconciliationCard 
-                            reconciliation={financeReconciliation}
-                            rollups={committeeRollups}
-                            lastSyncDate={candidate.last_donor_sync}
-                            compact
-                          />
-                        </div>
-                      )}
                     </div>
                     <div className="space-y-3">
                       {donors.map(donor => (
