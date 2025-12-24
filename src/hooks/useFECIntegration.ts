@@ -124,15 +124,27 @@ export function useFECIntegration() {
         body: { candidateId, fecCandidateId, cycle, forceFullSync }
       });
 
+      // Handle Supabase invoke error (network/auth issues)
       if (error) {
-        console.error('[FEC-DONORS] Error:', error);
-        return { success: false, imported: 0, error: error.message, hasMore: true };
+        console.error('[FEC-DONORS] Invoke error:', error);
+        const errorMessage = typeof error === 'object' && error !== null
+          ? ((error as { message?: string }).message || JSON.stringify(error))
+          : String(error);
+        return { success: false, imported: 0, error: errorMessage, hasMore: false };
       }
 
+      // Handle edge function returning an error in the response body
+      if (data?.error) {
+        console.warn('[FEC-DONORS] Function returned error:', data.error);
+        return { success: false, imported: 0, error: data.error, hasMore: false };
+      }
+
+      // Success
       return data as FetchDonorsResult;
     } catch (err) {
       console.error('[FEC-DONORS] Exception:', err);
-      return { success: false, imported: 0, error: 'Failed to fetch donors', hasMore: true };
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch donors';
+      return { success: false, imported: 0, error: errorMessage, hasMore: false };
     }
   };
 
