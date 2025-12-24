@@ -850,7 +850,10 @@ export function AnswerCoveragePanel() {
                                 </Popover>
                               )}
                               {hasFecId && !candidate.fecCommitteeId && (
-                                <span className="text-[10px] text-amber-600">No committee</span>
+                                <div className="flex items-center gap-1 text-[10px] text-amber-600">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  <span>No committee</span>
+                                </div>
                               )}
                             </div>
                           </TableCell>
