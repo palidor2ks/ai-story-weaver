@@ -16,6 +16,9 @@ export interface CandidateAnswerCoverage {
   voteCount: number;
   donorCount: number;
   fecCandidateId: string | null;
+  fecCommitteeId: string | null;
+  localItemizedContributions: number;
+  localTotalReceipts: number;
 }
 
 interface Filters {
@@ -38,7 +41,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       // Get all candidates with coverage tier and confidence
       let candidatesQuery = supabase
         .from('candidates')
-        .select('id, name, party, office, state, coverage_tier, confidence, fec_candidate_id')
+        .select('id, name, party, office, state, coverage_tier, confidence, fec_candidate_id, fec_committee_id')
         .order('name', { ascending: true });
 
       if (filters.party && filters.party !== 'all') {
@@ -94,6 +97,30 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         donorCountMap[row.candidate_id] = (donorCountMap[row.candidate_id] || 0) + 1;
       });
 
+      // Aggregate donor amounts for receipts and itemized contributions (current cycle only)
+      const FINANCE_CYCLE = '2024';
+
+      const { data: itemizedTotals } = await supabase
+        .from('donors')
+        .select('candidate_id, total:amount.sum()', { group: 'candidate_id' })
+        .eq('cycle', FINANCE_CYCLE)
+        .eq('is_contribution', true);
+
+      const itemizedTotalMap: Record<string, number> = {};
+      (itemizedTotals || []).forEach(row => {
+        itemizedTotalMap[row.candidate_id] = Number(row.total) || 0;
+      });
+
+      const { data: receiptTotals } = await supabase
+        .from('donors')
+        .select('candidate_id, total:amount.sum()', { group: 'candidate_id' })
+        .eq('cycle', FINANCE_CYCLE);
+
+      const receiptTotalMap: Record<string, number> = {};
+      (receiptTotals || []).forEach(row => {
+        receiptTotalMap[row.candidate_id] = Number(row.total) || 0;
+      });
+
       // Count answers per candidate
       const answerCountMap: Record<string, number> = {};
       allAnswers.forEach(row => {
@@ -118,6 +145,9 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           voteCount: voteCountMap[c.id] || 0,
           donorCount: donorCountMap[c.id] || 0,
           fecCandidateId: c.fec_candidate_id || null,
+          fecCommitteeId: c.fec_committee_id || null,
+          localItemizedContributions: itemizedTotalMap[c.id] || 0,
+          localTotalReceipts: receiptTotalMap[c.id] || itemizedTotalMap[c.id] || 0,
         };
       });
 
