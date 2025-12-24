@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2 } from "lucide-react";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { toast } from "sonner";
@@ -104,6 +104,7 @@ export function AnswerCoveragePanel() {
     batchFetchDonors,
     isLoading: isFECLoading, 
     isDonorLoading,
+    hasPartialSync,
     batchProgress: fecBatchProgress,
     isBatchRunning: isFECBatchRunning
   } = useFECIntegration();
@@ -656,6 +657,8 @@ export function AnswerCoveragePanel() {
                       const financeTotals = fecTotalsMap[candidate.id];
                       const financeStatus = calculateFinanceStatus(candidate);
                       const localItemized = candidate.localItemizedContributions || 0;
+                      // Use database-persisted partial sync OR hook-tracked partial sync
+                      const isPartialSync = candidate.hasPartialSync || hasPartialSync(candidate.id);
 
                       return (
                         <TableRow key={candidate.id}>
@@ -795,11 +798,11 @@ export function AnswerCoveragePanel() {
                                   )}
                                 </Button>
                               )}
-                              {/* Fetch Donors button - only when FEC ID exists */}
+                              {/* Fetch/Resume Donors button - only when FEC ID exists */}
                               {hasFecId && (
                                 <Button
                                   size="sm"
-                                  variant="outline"
+                                  variant={isPartialSync ? "default" : "outline"}
                                   disabled={donorLoading || isFECBatchRunning}
                                   onClick={async () => {
                                     const result = await fetchFECDonors(
@@ -808,16 +811,26 @@ export function AnswerCoveragePanel() {
                                       '2024'
                                     );
                                     if (result.success) {
-                                      toast.success(result.message || `Imported ${result.imported} donors`);
+                                      if (result.hasMore) {
+                                        toast.info(result.message || `Partial sync: ${result.imported} donors. Click Resume to continue.`);
+                                      } else {
+                                        toast.success(result.message || `Imported ${result.imported} donors`);
+                                      }
                                       refetch();
                                     } else {
                                       toast.error(result.error || 'Failed to fetch donors');
                                     }
                                   }}
-                                  title="Fetch donors from FEC"
+                                  title={isPartialSync ? "Resume sync from where it left off" : "Fetch donors from FEC"}
+                                  className={isPartialSync ? "bg-amber-600 hover:bg-amber-700" : ""}
                                 >
                                   {donorLoading ? (
                                     <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : isPartialSync ? (
+                                    <>
+                                      <RotateCcw className="h-3 w-3 mr-1" />
+                                      Resume
+                                    </>
                                   ) : (
                                     <DollarSign className="h-3 w-3" />
                                   )}

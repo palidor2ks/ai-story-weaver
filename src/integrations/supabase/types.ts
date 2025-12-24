@@ -68,10 +68,14 @@ export type Database = {
           created_at: string | null
           fec_committee_id: string
           fec_itemized_total: number | null
+          has_more: boolean | null
           id: string
           last_contribution_date: string | null
+          last_cycle: string | null
           last_index: string | null
+          last_sync_completed_at: string | null
           last_sync_date: string | null
+          last_sync_started_at: string | null
           local_itemized_total: number | null
           role: string
           updated_at: string | null
@@ -82,10 +86,14 @@ export type Database = {
           created_at?: string | null
           fec_committee_id: string
           fec_itemized_total?: number | null
+          has_more?: boolean | null
           id?: string
           last_contribution_date?: string | null
+          last_cycle?: string | null
           last_index?: string | null
+          last_sync_completed_at?: string | null
           last_sync_date?: string | null
+          last_sync_started_at?: string | null
           local_itemized_total?: number | null
           role?: string
           updated_at?: string | null
@@ -96,10 +104,14 @@ export type Database = {
           created_at?: string | null
           fec_committee_id?: string
           fec_itemized_total?: number | null
+          has_more?: boolean | null
           id?: string
           last_contribution_date?: string | null
+          last_cycle?: string | null
           last_index?: string | null
+          last_sync_completed_at?: string | null
           last_sync_date?: string | null
+          last_sync_started_at?: string | null
           local_itemized_total?: number | null
           role?: string
           updated_at?: string | null

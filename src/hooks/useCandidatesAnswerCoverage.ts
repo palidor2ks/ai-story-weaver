@@ -23,6 +23,9 @@ export interface CandidateAnswerCoverage {
   localTotalReceipts: number;          // All receipts
   transactionCount: number;            // Total number of transactions
   earmarkedAmount: number;             // Earmarked contributions
+  // Sync status
+  hasPartialSync: boolean;             // True if any committee has last_index set (incomplete sync)
+  lastSyncDate: string | null;         // Last donor sync date
 }
 
 interface Filters {
@@ -147,6 +150,23 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         }
       });
 
+      // Get partial sync status from candidate_committees (has last_index = incomplete sync)
+      const { data: partialSyncData } = await supabase
+        .from('candidate_committees')
+        .select('candidate_id, last_index, last_sync_date')
+        .not('last_index', 'is', null);
+
+      const partialSyncMap: Record<string, boolean> = {};
+      const lastSyncMap: Record<string, string | null> = {};
+      (partialSyncData || []).forEach(row => {
+        if (row.last_index) {
+          partialSyncMap[row.candidate_id] = true;
+        }
+        if (row.last_sync_date) {
+          lastSyncMap[row.candidate_id] = row.last_sync_date;
+        }
+      });
+
       // Count answers per candidate
       const answerCountMap: Record<string, number> = {};
       allAnswers.forEach(row => {
@@ -180,6 +200,8 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           localTotalReceipts: receiptTotalMap[c.id] || 0,
           transactionCount: transactionCountMap[c.id] || 0,
           earmarkedAmount: earmarkedTotalMap[c.id] || 0,
+          hasPartialSync: partialSyncMap[c.id] || false,
+          lastSyncDate: lastSyncMap[c.id] || null,
         };
       });
 

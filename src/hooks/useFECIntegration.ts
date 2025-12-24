@@ -27,11 +27,21 @@ interface FetchDonorsResult {
   cycle?: string;
   message?: string;
   error?: string;
+  hasMore?: boolean;
+  stoppedDueToTimeout?: boolean;
+  reconciliation?: {
+    localItemized: number;
+    localTransfers: number;
+    fecItemized: number;
+    deltaPct: number;
+    status: string;
+  };
 }
 
 export function useFECIntegration() {
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const [donorLoadingIds, setDonorLoadingIds] = useState<Set<string>>(new Set());
+  const [partialSyncIds, setPartialSyncIds] = useState<Set<string>>(new Set()); // Track candidates with hasMore=true
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
     total: number;
@@ -40,6 +50,7 @@ export function useFECIntegration() {
 
   const isLoading = (candidateId: string) => loadingIds.has(candidateId);
   const isDonorLoading = (candidateId: string) => donorLoadingIds.has(candidateId);
+  const hasPartialSync = (candidateId: string) => partialSyncIds.has(candidateId);
 
   const fetchFECCandidateId = async (
     candidateId: string,
@@ -103,13 +114,29 @@ export function useFECIntegration() {
 
       if (error) {
         console.error('[FEC-DONORS] Error:', error);
-        return { success: false, imported: 0, error: error.message };
+        // Mark as partial sync on error so user can retry
+        setPartialSyncIds(prev => new Set(prev).add(candidateId));
+        return { success: false, imported: 0, error: error.message, hasMore: true };
       }
 
-      return data as FetchDonorsResult;
+      const result = data as FetchDonorsResult;
+      
+      // Track partial sync state
+      if (result.hasMore) {
+        setPartialSyncIds(prev => new Set(prev).add(candidateId));
+      } else {
+        setPartialSyncIds(prev => {
+          const next = new Set(prev);
+          next.delete(candidateId);
+          return next;
+        });
+      }
+
+      return result;
     } catch (err) {
       console.error('[FEC-DONORS] Exception:', err);
-      return { success: false, imported: 0, error: 'Failed to fetch donors' };
+      setPartialSyncIds(prev => new Set(prev).add(candidateId));
+      return { success: false, imported: 0, error: 'Failed to fetch donors', hasMore: true };
     } finally {
       setDonorLoadingIds(prev => {
         const next = new Set(prev);
@@ -196,6 +223,8 @@ export function useFECIntegration() {
     batchFetchDonors,
     isLoading,
     isDonorLoading,
+    hasPartialSync,
+    partialSyncIds,
     batchProgress,
     isBatchRunning: batchProgress !== null
   };
