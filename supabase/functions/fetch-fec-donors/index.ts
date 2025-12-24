@@ -122,10 +122,12 @@ serve(async (req) => {
       fecCommitteeId, 
       cycle = '2024', 
       maxPages = 150,
-      includeOtherReceipts = false // Default OFF - only fetch actual contributions
+      includeOtherReceipts = false, // Default OFF - only fetch actual contributions
+      maxRuntimeMs = 4 * 60 * 1000 // Stop long-running jobs after ~4 minutes by default
     } = await req.json();
     
     console.log('[FEC-DONORS] Fetching donors for:', { candidateId, fecCandidateId, fecCommitteeId, cycle, includeOtherReceipts });
+    const startTime = Date.now();
 
     if (!candidateId) {
       return new Response(
@@ -256,6 +258,12 @@ serve(async (req) => {
     let committeesProcessed = 0;
 
     for (const committee of committees) {
+      // Global runtime guard to avoid timeouts on "sync all"
+      if (Date.now() - startTime > maxRuntimeMs) {
+        console.warn('[FEC-DONORS] Stopping early due to max runtime limit');
+        break;
+      }
+
       const committeeId = committee.id;
       const committeeName = committee.name || committee.id;
 
