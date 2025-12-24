@@ -19,6 +19,7 @@ import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plu
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { CommitteeBreakdown } from "@/components/admin/CommitteeBreakdown";
+import { FinanceSummaryCard, type FinanceSummaryData } from "@/components/FinanceSummaryCard";
 import { toast } from "sonner";
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
@@ -797,45 +798,20 @@ export function AnswerCoveragePanel() {
                                   )}
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-64 p-3" align="start">
-                                <div className="space-y-2 text-xs">
-                                  <h4 className="font-medium text-sm mb-2">Finance Breakdown</h4>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Local Net (comparable):</span>
-                                    <span className="font-medium">{formatCurrency(financeStatus.localNet)}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Local Gross:</span>
-                                    <span>{formatCurrency(financeStatus.localGross)}</span>
-                                  </div>
-                                  {financeStatus.earmarkPassThroughs > 0 && (
-                                    <div className="flex justify-between text-amber-600">
-                                      <span>Earmark Pass-throughs:</span>
-                                      <span>-{formatCurrency(financeStatus.earmarkPassThroughs)}</span>
-                                    </div>
-                                  )}
-                                  <div className="border-t pt-2 mt-2">
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">FEC Itemized:</span>
-                                      <span className="font-medium">{formatCurrency(financeStatus.fecItemized)}</span>
-                                    </div>
-                                    {candidate.fecUnitemized !== null && (
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">FEC Unitemized:</span>
-                                        <span>{formatCurrency(candidate.fecUnitemized)}</span>
-                                      </div>
-                                    )}
-                                    {financeStatus.receipts !== null && (
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">FEC Total Receipts:</span>
-                                        <span>{formatCurrency(financeStatus.receipts)}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t">
-                                    "Net" excludes earmark pass-throughs (ActBlue/WinRed "SEE BELOW" entries) for proper comparison with FEC itemized.
-                                  </p>
-                                </div>
+                              <PopoverContent className="w-72 p-3" align="start">
+                                <FinanceSummaryCard
+                                  data={{
+                                    localGross: financeStatus.localGross,
+                                    localNet: financeStatus.localNet,
+                                    fecItemized: financeStatus.fecItemized,
+                                    fecUnitemized: candidate.fecUnitemized,
+                                    fecTotalReceipts: financeStatus.receipts,
+                                    deltaAmount: candidate.deltaAmount,
+                                    deltaPct: candidate.deltaPct,
+                                    status: financeStatus.status,
+                                  } as FinanceSummaryData}
+                                  compact
+                                />
                               </PopoverContent>
                             </Popover>
                           </TableCell>
