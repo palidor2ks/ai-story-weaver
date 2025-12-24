@@ -40,6 +40,20 @@ interface FetchDonorsResult {
   };
 }
 
+interface FetchCommitteesResult {
+  success: boolean;
+  committees: Array<{
+    id: string;
+    name: string;
+    designation: string;
+    isPrimary: boolean;
+  }>;
+  primaryCommitteeId: string | null;
+  primaryCommitteeName?: string;
+  message?: string;
+  error?: string;
+}
+
 interface SyncProgress {
   candidateId: string;
   candidateName: string;
@@ -53,6 +67,7 @@ export function useFECIntegration() {
   // All useState hooks must be in consistent order
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const [donorLoadingIds, setDonorLoadingIds] = useState<Set<string>>(new Set());
+  const [committeeLoadingIds, setCommitteeLoadingIds] = useState<Set<string>>(new Set());
   const [partialSyncIds, setPartialSyncIds] = useState<Set<string>>(new Set());
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
@@ -63,6 +78,7 @@ export function useFECIntegration() {
 
   const isLoading = (candidateId: string) => loadingIds.has(candidateId);
   const isDonorLoading = (candidateId: string) => donorLoadingIds.has(candidateId);
+  const isCommitteeLoading = (candidateId: string) => committeeLoadingIds.has(candidateId);
   const hasPartialSync = (candidateId: string) => partialSyncIds.has(candidateId);
 
   const fetchFECCandidateId = async (
@@ -105,6 +121,41 @@ export function useFECIntegration() {
       return { found: false, error: 'Failed to fetch FEC candidate ID' };
     } finally {
       setLoadingIds(prev => {
+        const next = new Set(prev);
+        next.delete(candidateId);
+        return next;
+      });
+    }
+  };
+
+  // Fetch and link FEC committees for a candidate
+  const fetchFECCommittees = async (
+    candidateId: string,
+    fecCandidateId: string
+  ): Promise<FetchCommitteesResult> => {
+    setCommitteeLoadingIds(prev => new Set(prev).add(candidateId));
+
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-fec-committees', {
+        body: { candidateId, fecCandidateId }
+      });
+
+      if (error) {
+        console.error('[FEC-COMMITTEES] Invoke error:', error);
+        return { success: false, committees: [], primaryCommitteeId: null, error: error.message };
+      }
+
+      if (data?.error) {
+        console.warn('[FEC-COMMITTEES] Function returned error:', data.error);
+        return { success: false, committees: [], primaryCommitteeId: null, error: String(data.error) };
+      }
+
+      return data as FetchCommitteesResult;
+    } catch (err) {
+      console.error('[FEC-COMMITTEES] Exception:', err);
+      return { success: false, committees: [], primaryCommitteeId: null, error: 'Failed to fetch committees' };
+    } finally {
+      setCommitteeLoadingIds(prev => {
         const next = new Set(prev);
         next.delete(candidateId);
         return next;
@@ -418,6 +469,7 @@ export function useFECIntegration() {
 
   return {
     fetchFECCandidateId,
+    fetchFECCommittees,
     fetchFECDonors,
     fetchFECDonorsComplete,
     batchFetchFECIds,
@@ -425,6 +477,7 @@ export function useFECIntegration() {
     resumeAllPartialSyncs,
     isLoading,
     isDonorLoading,
+    isCommitteeLoading,
     hasPartialSync,
     partialSyncIds,
     batchProgress,
