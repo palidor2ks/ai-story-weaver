@@ -164,10 +164,11 @@ export function AnswerCoveragePanel() {
 
       if (toFetch.length === 0) return;
       setFinanceLoading(true);
-      const apiKey = import.meta.env.VITE_FEC_API_KEY || 'DEMO_KEY';
+      const apiKey = 'DEMO_KEY'; // Use demo key to avoid rate limits with missing env var
       const results: Record<string, { totalReceipts: number; itemizedContributions: number }> = {};
 
       for (const candidate of toFetch) {
+        if (!isActive) break;
         try {
           const response = await fetch(
             `https://api.open.fec.gov/v1/committee/${candidate.fecCommitteeId}/totals/?api_key=${apiKey}&cycle=2024&per_page=1`
@@ -194,7 +195,12 @@ export function AnswerCoveragePanel() {
       setFinanceLoading(false);
     };
 
-    fetchFecTotals();
+    // Wrap in try-catch to prevent uncaught promise rejections
+    fetchFecTotals().catch(err => {
+      console.error('[FEC Totals] Unexpected error:', err);
+      if (isActive) setFinanceLoading(false);
+    });
+    
     return () => { isActive = false; };
   }, [baseFilteredCandidates, fecTotalsMap]);
 
