@@ -13,21 +13,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { toast } from "sonner";
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
-
-function getPartyColor(party: string) {
-  switch (party) {
-    case "Democrat": return "text-blue-600 dark:text-blue-400";
-    case "Republican": return "text-red-600 dark:text-red-400";
-    case "Independent": return "text-purple-600 dark:text-purple-400";
-    default: return "text-muted-foreground";
-  }
-}
 
 function getPartyBadgeColor(party: string) {
   switch (party) {
@@ -85,7 +77,7 @@ export function AnswerCoveragePanel() {
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [stateFilter, setStateFilter] = useState<string>('all');
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('none');
-  const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
+  const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch' | 'partial'>('all');
   const [fecTotalsMap, setFecTotalsMap] = useState<Record<string, { totalReceipts: number; itemizedContributions: number }>>({});
   const [financeLoading, setFinanceLoading] = useState(false);
 
@@ -96,7 +88,7 @@ export function AnswerCoveragePanel() {
   });
 
   const { populateCandidate, populateBatch, pauseBatch, resumeBatch, cancelBatch, isLoading, isBatchRunning, batchProgress } = usePopulateCandidateAnswers();
-  const { recalculateAll, recalculateSingle, isRecalculatingAll, isRecalculatingSingle } = useRecalculateCoverageTiers();
+  const { recalculateAll, isRecalculatingAll } = useRecalculateCoverageTiers();
   const { 
     fetchFECCandidateId, 
     fetchFECDonors, 
@@ -137,12 +129,31 @@ export function AnswerCoveragePanel() {
     return `$${Math.round(value).toLocaleString()}`;
   };
 
+  // Get counts for batch action buttons
+  const partialSyncCandidates = useMemo(() => 
+    baseFilteredCandidates.filter(c => (c.hasPartialSync || hasPartialSync(c.id)) && c.fecCandidateId),
+    [baseFilteredCandidates, hasPartialSync]
+  );
+
+  const candidatesWithoutFecId = useMemo(() => 
+    baseFilteredCandidates.filter(c => !c.fecCandidateId),
+    [baseFilteredCandidates]
+  );
+
+  const candidatesWithFecId = useMemo(() => 
+    baseFilteredCandidates.filter(c => !!c.fecCandidateId),
+    [baseFilteredCandidates]
+  );
+
   const filteredCandidates = useMemo(() => {
     if (financeFilter === 'mismatch') {
       return baseFilteredCandidates.filter(candidate => calculateFinanceStatus(candidate).mismatch);
     }
+    if (financeFilter === 'partial') {
+      return baseFilteredCandidates.filter(c => c.hasPartialSync || hasPartialSync(c.id));
+    }
     return baseFilteredCandidates;
-  }, [baseFilteredCandidates, financeFilter, calculateFinanceStatus]);
+  }, [baseFilteredCandidates, financeFilter, calculateFinanceStatus, hasPartialSync]);
 
   useEffect(() => {
     let isActive = true;
@@ -170,7 +181,6 @@ export function AnswerCoveragePanel() {
             totalReceipts,
             itemizedContributions,
           };
-          // small delay to avoid hammering API
           await new Promise(resolve => setTimeout(resolve, 150));
         } catch (error) {
           console.error('[FEC Totals] Failed to fetch totals for', candidate.name, error);
@@ -200,10 +210,55 @@ export function AnswerCoveragePanel() {
     await populateBatch(toProcess.map(c => ({ id: c.id, name: c.name })), true);
   };
 
+  const handleBatchLinkFECIds = async () => {
+    const toProcess = candidatesWithoutFecId.slice(0, 50).map(c => ({ id: c.id, name: c.name, state: c.state }));
+    if (toProcess.length === 0) {
+      toast.info('All candidates already have FEC IDs');
+      return;
+    }
+    const results = await batchFetchFECIds(toProcess);
+    toast.success(`Linked ${results.success} FEC IDs (${results.failed} failed)`);
+    refetch();
+  };
+
+  const handleBatchFetchDonors = async () => {
+    const toProcess = candidatesWithFecId.slice(0, 50).map(c => ({ 
+      id: c.id, 
+      name: c.name, 
+      fecCandidateId: c.fecCandidateId! 
+    }));
+    if (toProcess.length === 0) {
+      toast.info('No candidates with FEC IDs found. Link FEC IDs first.');
+      return;
+    }
+    const results = await batchFetchDonors(toProcess, '2024');
+    toast.success(
+      `Imported ${results.totalImported} donors for ${results.success} candidates ` +
+      `($${results.totalRaised.toLocaleString()} total)`
+    );
+    refetch();
+  };
+
+  const handleResumeAllPartialSyncs = async () => {
+    const toProcess = partialSyncCandidates.map(c => ({ 
+      id: c.id, 
+      name: c.name, 
+      fecCandidateId: c.fecCandidateId! 
+    }));
+    const results = await resumeAllPartialSyncs(toProcess, '2024');
+    toast.success(
+      `Resumed ${results.resumed} syncs: ${results.completed} completed, ` +
+      `${results.stillPartial} still partial. ` +
+      `Imported ${results.totalImported} additional donors.`
+    );
+    refetch();
+  };
+
   const noAnswersCount = candidateStats?.noAnswers || 0;
   const lowCoverageCount = candidateStats?.lowCoverage || 0;
 
   const isLoading_ = syncLoading || statsLoading;
+  const anyBatchRunning = isBatchRunning || isFECBatchRunning;
 
   if (isLoading_) {
     return (
@@ -225,56 +280,205 @@ export function AnswerCoveragePanel() {
               Answer Coverage Dashboard
             </CardTitle>
             <CardDescription>
-              Manage and generate AI-powered position answers for representatives
+              Manage AI position answers and FEC donor data for representatives
             </CardDescription>
           </div>
-          <div className="flex gap-2">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isRecalculatingAll}
-                >
-                  {isRecalculatingAll ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Calculator className="h-4 w-4" />
-                  )}
+          
+          {/* Consolidated Toolbar */}
+          <div className="flex items-center gap-2">
+            {/* Status indicators */}
+            {financeLoading && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground px-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>FEC totals...</span>
+              </div>
+            )}
+            
+            {/* AI Actions Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={anyBatchRunning}>
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                  AI Actions
+                  <ChevronDown className="h-3 w-3 ml-1" />
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Recalculate All Coverage Tiers?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will recalculate coverage tiers and confidence levels for all candidates based on their actual data:
-                    <ul className="list-disc pl-4 mt-2 space-y-1">
-                      <li><strong>tier_1 (Full)</strong>: ≥80% answers AND has votes or donors</li>
-                      <li><strong>tier_2 (Partial)</strong>: ≥30% answers OR has votes or donors</li>
-                      <li><strong>tier_3 (Basic)</strong>: Less than 30% answers, no votes/donors</li>
-                    </ul>
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={async () => {
-                    try {
-                      const result = await recalculateAll();
-                      toast.success(`Coverage tiers recalculated: ${result?.[0]?.updated_count || 0} candidates updated`);
-                    } catch (error) {
-                      toast.error('Failed to recalculate coverage tiers');
-                    }
-                  }}>Recalculate</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} disabled={noAnswersCount === 0}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Fill Missing ({Math.min(noAnswersCount, 50)})
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Generate AI Answers?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will generate AI answers for up to 50 candidates with no answers.
+                        This may take several minutes.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleFillAll}>Generate</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} disabled={lowCoverageCount === 0}>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Regen Low Coverage ({Math.min(lowCoverageCount, 50)})
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Regenerate Low Coverage Answers?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will regenerate AI answers for up to 50 candidates with less than 50% coverage.
+                        Existing answers will be replaced.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleFillLowCoverage}>Regenerate</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                
+                <DropdownMenuSeparator />
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <Calculator className="h-4 w-4 mr-2" />
+                      Recalculate Tiers
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Recalculate All Coverage Tiers?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will recalculate coverage tiers and confidence levels for all candidates:
+                        <ul className="list-disc pl-4 mt-2 space-y-1 text-sm">
+                          <li><strong>tier_1</strong>: ≥80% answers AND has votes or donors</li>
+                          <li><strong>tier_2</strong>: ≥30% answers OR has votes or donors</li>
+                          <li><strong>tier_3</strong>: Less than 30% answers, no votes/donors</li>
+                        </ul>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={async () => {
+                        try {
+                          const result = await recalculateAll();
+                          toast.success(`Coverage tiers recalculated: ${result?.[0]?.updated_count || 0} updated`);
+                        } catch {
+                          toast.error('Failed to recalculate coverage tiers');
+                        }
+                      }}>Recalculate</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* FEC Actions Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={anyBatchRunning}>
+                  <DollarSign className="h-4 w-4 mr-1.5" />
+                  FEC Actions
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <Link2 className="h-4 w-4 mr-2" />
+                      Link FEC IDs ({candidatesWithoutFecId.length})
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Bulk Lookup FEC Candidate IDs?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will search the FEC database for candidates without FEC IDs and link them automatically.
+                        Up to 50 candidates will be processed.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleBatchLinkFECIds}>Link FEC IDs</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Fetch Donors ({candidatesWithFecId.length})
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Bulk Fetch FEC Donor Data?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will fetch donor contributions from the FEC API for all candidates with FEC IDs.
+                        Up to 50 candidates will be processed. This may take several minutes.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleBatchFetchDonors}>Fetch Donors</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                
+                {partialSyncCandidates.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem 
+                          onSelect={(e) => e.preventDefault()}
+                          className="text-amber-600"
+                        >
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          Resume All Partial ({partialSyncCandidates.length})
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Resume All Partial Syncs?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {partialSyncCandidates.length} candidate(s) have incomplete donor syncs. 
+                            This will continue fetching from where each sync stopped until complete.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleResumeAllPartialSyncs}>Resume All</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Refresh button */}
             <Button
-              variant="outline"
-              size="sm"
+              variant="ghost"
+              size="icon"
               onClick={() => refetch()}
               disabled={isRefetching}
             >
-              {isRefetching ? (
+              {isRefetching || isRecalculatingAll ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4" />
@@ -343,58 +547,75 @@ export function AnswerCoveragePanel() {
           </div>
         )}
 
-        {/* Batch Progress with Queue Controls */}
-        {isBatchRunning && batchProgress && (
+        {/* Unified Batch Progress */}
+        {(isBatchRunning || isFECBatchRunning) && (batchProgress || fecBatchProgress) && (
           <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                {batchProgress.retrying ? (
+                {batchProgress?.retrying ? (
                   <AlertTriangle className="h-4 w-4 text-amber-500 animate-pulse" />
-                ) : batchProgress.paused ? (
+                ) : batchProgress?.paused ? (
                   <Pause className="h-4 w-4 text-muted-foreground" />
                 ) : (
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 )}
                 <span className="text-sm font-medium">
-                  {batchProgress.paused 
+                  {batchProgress?.paused 
                     ? 'Paused' 
-                    : batchProgress.retrying 
+                    : batchProgress?.retrying 
                       ? `Retrying ${batchProgress.currentName} (attempt ${batchProgress.retryCount}/3)` 
-                      : `Processing: ${batchProgress.currentName}`}
+                      : isFECBatchRunning 
+                        ? `FEC: ${fecBatchProgress?.currentName}`
+                        : `Processing: ${batchProgress?.currentName}`}
                 </span>
               </div>
               <span className="text-sm text-muted-foreground">
-                {batchProgress.completed} / {batchProgress.total}
+                {batchProgress 
+                  ? `${batchProgress.completed} / ${batchProgress.total}`
+                  : fecBatchProgress 
+                    ? `${fecBatchProgress.current} / ${fecBatchProgress.total}`
+                    : ''}
               </span>
             </div>
-            <Progress value={(batchProgress.completed / batchProgress.total) * 100} className="h-2" />
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm">
-                {batchProgress.errors > 0 && (
-                  <span className="text-destructive">{batchProgress.errors} error(s)</span>
-                )}
-                {batchProgress.retrying && (
-                  <span className="text-amber-600">Worker limit hit - waiting to retry...</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {batchProgress.paused ? (
-                  <Button variant="outline" size="sm" onClick={resumeBatch}>
-                    <Play className="h-4 w-4 mr-1" />
-                    Resume
+            <Progress 
+              value={
+                batchProgress 
+                  ? (batchProgress.completed / batchProgress.total) * 100 
+                  : fecBatchProgress 
+                    ? (fecBatchProgress.current / fecBatchProgress.total) * 100 
+                    : 0
+              } 
+              className="h-2" 
+            />
+            {isBatchRunning && batchProgress && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  {batchProgress.errors > 0 && (
+                    <span className="text-destructive">{batchProgress.errors} error(s)</span>
+                  )}
+                  {batchProgress.retrying && (
+                    <span className="text-amber-600">Worker limit hit - waiting to retry...</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {batchProgress.paused ? (
+                    <Button variant="outline" size="sm" onClick={resumeBatch}>
+                      <Play className="h-4 w-4 mr-1" />
+                      Resume
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={pauseBatch}>
+                      <Pause className="h-4 w-4 mr-1" />
+                      Pause
+                    </Button>
+                  )}
+                  <Button variant="destructive" size="sm" onClick={cancelBatch}>
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
                   </Button>
-                ) : (
-                  <Button variant="outline" size="sm" onClick={pauseBatch}>
-                    <Pause className="h-4 w-4 mr-1" />
-                    Pause
-                  </Button>
-                )}
-                <Button variant="destructive" size="sm" onClick={cancelBatch}>
-                  <X className="h-4 w-4 mr-1" />
-                  Cancel
-                </Button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -407,7 +628,7 @@ export function AnswerCoveragePanel() {
 
           <TabsContent value="representatives" className="mt-4 space-y-4">
             {/* Search and Filters */}
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-3 items-center">
               <div className="relative flex-1 min-w-[200px] max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -419,7 +640,7 @@ export function AnswerCoveragePanel() {
               </div>
 
               <Select value={coverageFilter} onValueChange={(v) => setCoverageFilter(v as typeof coverageFilter)}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-[130px]">
                   <SelectValue placeholder="Coverage" />
                 </SelectTrigger>
                 <SelectContent>
@@ -431,17 +652,18 @@ export function AnswerCoveragePanel() {
               </Select>
 
               <Select value={financeFilter} onValueChange={(v) => setFinanceFilter(v as typeof financeFilter)}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="Finance" />
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Sync Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Finance</SelectItem>
+                  <SelectItem value="all">All Syncs</SelectItem>
+                  <SelectItem value="partial">Partial Syncs</SelectItem>
                   <SelectItem value="mismatch">FEC Mismatch</SelectItem>
                 </SelectContent>
               </Select>
 
               <Select value={partyFilter} onValueChange={setPartyFilter}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-[130px]">
                   <SelectValue placeholder="Party" />
                 </SelectTrigger>
                 <SelectContent>
@@ -464,219 +686,7 @@ export function AnswerCoveragePanel() {
                   ))}
                 </SelectContent>
               </Select>
-
-              <div className="flex-1" />
-
-              {financeLoading && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground pr-2">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  <span>Syncing FEC totals...</span>
-                </div>
-              )}
-
-              {noAnswersCount > 0 && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="default" size="sm" disabled={isBatchRunning}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Fill Missing ({Math.min(noAnswersCount, 50)})
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Generate AI Answers?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will generate AI answers for up to 50 candidates with no answers.
-                        This may take several minutes to complete.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleFillAll}>Generate</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-
-              {lowCoverageCount > 0 && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline" size="sm" disabled={isBatchRunning}>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Regen Low ({Math.min(lowCoverageCount, 50)})
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Regenerate Low Coverage Answers?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will regenerate AI answers for up to 50 candidates with less than 50% coverage.
-                        Existing answers will be replaced.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleFillLowCoverage}>Regenerate</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-
-              {/* Bulk FEC ID Lookup */}
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" disabled={isFECBatchRunning || isBatchRunning}>
-                    <Link2 className="h-4 w-4 mr-2" />
-                    Link FEC IDs
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Bulk Lookup FEC Candidate IDs?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will search the FEC database for candidates without FEC IDs and link them automatically.
-                      Up to 50 candidates will be processed. This may take a few minutes.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={async () => {
-                      const toProcess = (candidates || [])
-                        .filter(c => !c.fecCandidateId)
-                        .slice(0, 50)
-                        .map(c => ({ id: c.id, name: c.name, state: c.state }));
-                      
-                      if (toProcess.length === 0) {
-                        toast.info('All candidates already have FEC IDs');
-                        return;
-                      }
-
-                      const results = await batchFetchFECIds(toProcess);
-                      toast.success(`Linked ${results.success} FEC IDs (${results.failed} failed)`);
-                      refetch();
-                    }}>
-                      Link FEC IDs
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-
-              {/* Bulk Fetch Donors */}
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" disabled={isFECBatchRunning || isBatchRunning}>
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Fetch Donors
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Bulk Fetch FEC Donor Data?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will fetch donor contributions from the FEC API for all candidates with FEC IDs.
-                      Up to 50 candidates will be processed. This may take several minutes.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={async () => {
-                      const toProcess = (candidates || [])
-                        .filter(c => c.fecCandidateId)
-                        .slice(0, 50)
-                        .map(c => ({ 
-                          id: c.id, 
-                          name: c.name, 
-                          fecCandidateId: c.fecCandidateId! 
-                        }));
-                      
-                      if (toProcess.length === 0) {
-                        toast.info('No candidates with FEC IDs found. Link FEC IDs first.');
-                        return;
-                      }
-
-                      const results = await batchFetchDonors(toProcess, '2024');
-                      toast.success(
-                        `Imported ${results.totalImported} donors for ${results.success} candidates ` +
-                        `($${results.totalRaised.toLocaleString()} total)`
-                      );
-                      refetch();
-                    }}>
-                      Fetch Donors
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-
-              {/* Resume All Partial Syncs */}
-              {(() => {
-                const partialCandidates = (candidates || []).filter(c => c.hasPartialSync && c.fecCandidateId);
-                if (partialCandidates.length === 0) return null;
-                
-                return (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        disabled={isFECBatchRunning || isBatchRunning}
-                        className="border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
-                      >
-                        <RotateCcw className="h-4 w-4 mr-2" />
-                        Resume All ({partialCandidates.length})
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Resume All Partial Syncs?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {partialCandidates.length} candidate(s) have incomplete donor syncs. 
-                          This will continue fetching from where each sync stopped until complete.
-                          This may take several minutes.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={async () => {
-                          const toProcess = partialCandidates.map(c => ({ 
-                            id: c.id, 
-                            name: c.name, 
-                            fecCandidateId: c.fecCandidateId! 
-                          }));
-
-                          const results = await resumeAllPartialSyncs(toProcess, '2024');
-                          toast.success(
-                            `Resumed ${results.resumed} syncs: ${results.completed} completed, ` +
-                            `${results.stillPartial} still partial. ` +
-                            `Imported ${results.totalImported} additional donors.`
-                          );
-                          refetch();
-                        }}>
-                          Resume All
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                );
-              })()}
             </div>
-
-            {/* FEC Batch Progress */}
-            {fecBatchProgress && (
-              <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    <span className="text-sm font-medium">
-                      FEC: Processing {fecBatchProgress.currentName}
-                    </span>
-                  </div>
-                  <span className="text-sm text-muted-foreground">
-                    {fecBatchProgress.current} / {fecBatchProgress.total}
-                  </span>
-                </div>
-                <Progress value={(fecBatchProgress.current / fecBatchProgress.total) * 100} className="h-2" />
-              </div>
-            )}
 
             {/* Candidates Table */}
             {candidatesLoading ? (
@@ -689,15 +699,14 @@ export function AnswerCoveragePanel() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
-                      <TableHead>Party</TableHead>
-                      <TableHead>State</TableHead>
-                      <TableHead className="text-center">Answers</TableHead>
-                      <TableHead>Tier</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead>FEC Receipts</TableHead>
-                      <TableHead>Itemized Contributions</TableHead>
-                      <TableHead>FEC ID</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="w-[60px]">Party</TableHead>
+                      <TableHead className="w-[60px]">State</TableHead>
+                      <TableHead className="text-center w-[100px]">Answers</TableHead>
+                      <TableHead className="w-[80px]">Tier</TableHead>
+                      <TableHead className="w-[90px]">Data</TableHead>
+                      <TableHead className="w-[120px]">Contributions</TableHead>
+                      <TableHead className="w-[100px]">FEC ID</TableHead>
+                      <TableHead className="text-right w-[140px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -707,10 +716,8 @@ export function AnswerCoveragePanel() {
                       const donorLoading = isDonorLoading(candidate.id);
                       const isComplete = candidate.percentage >= 100;
                       const hasFecId = !!candidate.fecCandidateId;
-                      const financeTotals = fecTotalsMap[candidate.id];
                       const financeStatus = calculateFinanceStatus(candidate);
                       const localItemized = candidate.localItemizedContributions || 0;
-                      // Use database-persisted partial sync OR hook-tracked partial sync
                       const isPartialSync = candidate.hasPartialSync || hasPartialSync(candidate.id);
 
                       return (
@@ -731,11 +738,11 @@ export function AnswerCoveragePanel() {
                           </TableCell>
                           <TableCell>{candidate.state}</TableCell>
                           <TableCell className="text-center">
-                            <div className="flex items-center justify-center gap-2">
+                            <div className="flex items-center justify-center gap-1.5">
                               {isComplete ? (
                                 <CheckCircle2 className="h-4 w-4 text-green-500" />
                               ) : (
-                                <span className={candidate.answerCount === 0 ? 'text-amber-600' : 'text-orange-600'}>
+                                <span className={candidate.answerCount === 0 ? 'text-amber-600' : 'text-foreground'}>
                                   {candidate.answerCount}/{candidate.totalQuestions}
                                 </span>
                               )}
@@ -748,63 +755,45 @@ export function AnswerCoveragePanel() {
                           <TableCell>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               {candidate.voteCount > 0 && (
-                                <span className="flex items-center gap-1" title="Voting records">
+                                <span className="flex items-center gap-0.5" title="Voting records">
                                   <Vote className="h-3 w-3" />
                                   {candidate.voteCount}
                                 </span>
                               )}
                               {candidate.donorCount > 0 && (
-                                <span className="flex items-center gap-1 text-green-600" title="Donors">
+                                <span className="flex items-center gap-0.5 text-green-600" title="Donors">
                                   <DollarSign className="h-3 w-3" />
                                   {candidate.donorCount}
                                 </span>
                               )}
-                              {candidate.voteCount === 0 && candidate.donorCount === 0 && (
+                              {isPartialSync && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-amber-600 border-amber-300">
+                                  Partial
+                                </Badge>
+                              )}
+                              {candidate.voteCount === 0 && candidate.donorCount === 0 && !isPartialSync && (
                                 <span className="text-muted-foreground/50">—</span>
                               )}
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="text-sm font-medium">
-                              {formatCurrency(financeTotals?.totalReceipts)}
-                            </div>
-                            <p className="text-[11px] text-muted-foreground">FEC totals</p>
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1 text-xs">
-                              <div className="flex items-center justify-between">
-                                <span>Direct</span>
-                                <span className="font-semibold text-foreground">
-                                  {formatCurrency(localItemized)}
-                                </span>
+                            <div className="space-y-0.5 text-xs">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">Local</span>
+                                <span className="font-medium">{formatCurrency(localItemized)}</span>
                               </div>
-                              {candidate.localTransfers > 0 && (
-                                <div className="flex items-center justify-between text-muted-foreground">
-                                  <span>Transfers</span>
-                                  <span>{formatCurrency(candidate.localTransfers)}</span>
-                                </div>
-                              )}
-                              {candidate.earmarkedAmount > 0 && (
-                                <div className="flex items-center justify-between text-blue-600">
-                                  <span>Earmarked</span>
-                                  <span>{formatCurrency(candidate.earmarkedAmount)}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center justify-between border-t pt-1 mt-1">
-                                <span className="text-muted-foreground">FEC</span>
-                                <span className={financeStatus.mismatch ? 'text-amber-700 font-semibold' : 'text-muted-foreground'}>
-                                  {financeStatus.fecItemized !== null 
-                                    ? formatCurrency(financeStatus.fecItemized) 
-                                    : '—'}
-                                </span>
-                              </div>
-                              {financeStatus.mismatch && (
-                                <div className="flex items-center justify-between text-amber-700">
-                                  <span className="flex items-center gap-1">
-                                    <AlertTriangle className="h-3 w-3" />
-                                    Delta
+                              {financeStatus.fecItemized !== null && (
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">FEC</span>
+                                  <span className={financeStatus.mismatch ? 'text-amber-600 font-medium' : ''}>
+                                    {formatCurrency(financeStatus.fecItemized)}
                                   </span>
-                                  <span>{formatCurrency(financeStatus.difference)}</span>
+                                </div>
+                              )}
+                              {financeStatus.mismatch && (
+                                <div className="flex items-center gap-1 text-amber-600 mt-0.5">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  <span>Δ {formatCurrency(financeStatus.difference)}</span>
                                 </div>
                               )}
                             </div>
@@ -819,13 +808,13 @@ export function AnswerCoveragePanel() {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex gap-1 justify-end flex-wrap">
-                              {/* Link FEC ID button */}
+                            <div className="flex gap-1 justify-end">
+                              {/* Link FEC ID */}
                               {!hasFecId && (
                                 <Button
                                   size="sm"
-                                  variant="outline"
-                                  disabled={fecLoading || isFECBatchRunning}
+                                  variant="ghost"
+                                  disabled={fecLoading || anyBatchRunning}
                                   onClick={async () => {
                                     const result = await fetchFECCandidateId(
                                       candidate.id,
@@ -834,29 +823,25 @@ export function AnswerCoveragePanel() {
                                       true
                                     );
                                     if (result.found && result.updated) {
-                                      toast.success(`Linked FEC ID: ${result.fecCandidateId}`);
+                                      toast.success(`Linked: ${result.fecCandidateId}`);
                                       refetch();
                                     } else if (result.found) {
-                                      toast.info(`Found ${result.candidates?.length} matches but couldn't auto-link`);
+                                      toast.info(`Found ${result.candidates?.length} matches`);
                                     } else {
                                       toast.error('No FEC candidate found');
                                     }
                                   }}
-                                  title="Look up FEC candidate ID"
+                                  title="Link FEC ID"
                                 >
-                                  {fecLoading ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <Link2 className="h-3 w-3" />
-                                  )}
+                                  {fecLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
                                 </Button>
                               )}
-                              {/* Fetch/Resume Donors button - only when FEC ID exists */}
+                              {/* Fetch/Resume Donors */}
                               {hasFecId && (
                                 <Button
                                   size="sm"
-                                  variant={isPartialSync ? "default" : "outline"}
-                                  disabled={donorLoading || isFECBatchRunning}
+                                  variant={isPartialSync ? "default" : "ghost"}
+                                  disabled={donorLoading || anyBatchRunning}
                                   onClick={async () => {
                                     const result = await fetchFECDonors(
                                       candidate.id,
@@ -865,17 +850,17 @@ export function AnswerCoveragePanel() {
                                     );
                                     if (result.success) {
                                       if (result.hasMore) {
-                                        toast.info(result.message || `Partial sync: ${result.imported} donors. Click Resume to continue.`);
+                                        toast.info(result.message || `Partial: ${result.imported} donors. Resume to continue.`);
                                       } else {
                                         toast.success(result.message || `Imported ${result.imported} donors`);
                                       }
                                       refetch();
                                     } else {
-                                      toast.error(result.error || 'Failed to fetch donors');
+                                      toast.error(result.error || 'Failed');
                                     }
                                   }}
-                                  title={isPartialSync ? "Resume sync from where it left off" : "Fetch donors from FEC"}
-                                  className={isPartialSync ? "bg-amber-600 hover:bg-amber-700" : ""}
+                                  title={isPartialSync ? "Resume sync" : "Fetch donors"}
+                                  className={isPartialSync ? "bg-amber-600 hover:bg-amber-700 h-7 text-xs" : "h-7"}
                                 >
                                   {donorLoading ? (
                                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -889,41 +874,30 @@ export function AnswerCoveragePanel() {
                                   )}
                                 </Button>
                               )}
-                              {/* Generate button - visible when there are missing answers */}
+                              {/* Generate answers */}
                               {candidate.answerCount < candidate.totalQuestions && (
                                 <Button
                                   size="sm"
-                                  variant="default"
-                                  disabled={loading || isBatchRunning}
+                                  variant="ghost"
+                                  disabled={loading || anyBatchRunning}
                                   onClick={() => populateCandidate(candidate.id, false)}
+                                  title="Generate AI answers"
+                                  className="h-7"
                                 >
-                                  {loading ? (
-                                    <>
-                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                      ...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Plus className="h-3 w-3 mr-1" />
-                                      Gen
-                                    </>
-                                  )}
+                                  {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                                 </Button>
                               )}
-                              {/* Regenerate button - visible when there are existing answers */}
+                              {/* Regenerate answers */}
                               {candidate.answerCount > 0 && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  disabled={loading || isBatchRunning}
+                                  disabled={loading || anyBatchRunning}
                                   onClick={() => populateCandidate(candidate.id, true)}
                                   title="Regenerate answers"
+                                  className="h-7"
                                 >
-                                  {loading ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <RefreshCw className="h-3 w-3" />
-                                  )}
+                                  {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                                 </Button>
                               )}
                             </div>
