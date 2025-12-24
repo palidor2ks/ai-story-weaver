@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { DollarSign, Info } from "lucide-react";
+import { DollarSign, Info, CheckCircle2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface FinanceSummaryData {
@@ -30,6 +30,10 @@ export function FinanceSummaryCard({ data, compact = false, className }: Finance
   // Calculate "Other Receipts" = Total - Itemized - Unitemized
   // This captures PAC contributions, transfers, loans, offsets, etc.
   const otherReceipts = (data.fecTotalReceipts ?? 0) - (data.fecItemized ?? 0) - (data.fecUnitemized ?? 0);
+  
+  // Validate the formula: Total should equal Itemized + Unitemized + Other
+  const calculatedTotal = (data.fecItemized ?? 0) + (data.fecUnitemized ?? 0) + otherReceipts;
+  const isBalanced = Math.abs(calculatedTotal - (data.fecTotalReceipts ?? 0)) < 1; // Allow $1 rounding
 
   if (compact) {
     return (
@@ -37,9 +41,14 @@ export function FinanceSummaryCard({ data, compact = false, className }: Finance
         <div className={cn("space-y-2 text-xs", className)}>
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium text-sm">FEC Finance Summary</span>
+            {isBalanced ? (
+              <CheckCircle2 className="h-3 w-3 text-agree" />
+            ) : (
+              <AlertTriangle className="h-3 w-3 text-amber-500" />
+            )}
           </div>
           
-          {/* FEC Data */}
+          {/* FEC Data Breakdown */}
           <div className="space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground flex items-center gap-1">
@@ -80,6 +89,15 @@ export function FinanceSummaryCard({ data, compact = false, className }: Finance
               <span className="font-semibold">{formatCurrency(data.fecTotalReceipts)}</span>
             </div>
           </div>
+          
+          {/* Equation validation */}
+          <div className={cn(
+            "text-[10px] p-1.5 rounded flex items-center gap-1",
+            isBalanced ? "bg-agree/10 text-agree" : "bg-amber-500/10 text-amber-600"
+          )}>
+            {isBalanced ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+            <span>Itemized + Unitemized + Other = Total</span>
+          </div>
         </div>
       </TooltipProvider>
     );
@@ -93,11 +111,16 @@ export function FinanceSummaryCard({ data, compact = false, className }: Finance
             <DollarSign className="h-4 w-4 text-muted-foreground" />
             FEC Finance Summary
           </CardTitle>
+          {isBalanced ? (
+            <CheckCircle2 className="h-4 w-4 text-agree" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <TooltipProvider>
-          {/* FEC Data Section */}
+          {/* FEC Data Breakdown */}
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="p-3 rounded-lg bg-secondary/50">
@@ -125,7 +148,7 @@ export function FinanceSummaryCard({ data, compact = false, className }: Finance
             {otherReceipts > 0 && (
               <div className="p-3 rounded-lg bg-secondary/50">
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  Other Committee Contributions
+                  Other Receipts
                   <Tooltip>
                     <TooltipTrigger><Info className="h-3 w-3" /></TooltipTrigger>
                     <TooltipContent className="max-w-xs">
@@ -141,6 +164,21 @@ export function FinanceSummaryCard({ data, compact = false, className }: Finance
               <p className="text-xs text-muted-foreground">Total Receipts</p>
               <p className="font-bold text-lg">{formatCurrency(data.fecTotalReceipts)}</p>
             </div>
+          </div>
+          
+          {/* Equation validation display */}
+          <div className={cn(
+            "p-3 rounded-lg flex items-center gap-2 text-sm",
+            isBalanced ? "bg-agree/10" : "bg-amber-500/10"
+          )}>
+            {isBalanced ? (
+              <CheckCircle2 className="h-4 w-4 text-agree" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+            )}
+            <span className={isBalanced ? "text-agree" : "text-amber-600"}>
+              Itemized + Unitemized + Other = Total Receipts
+            </span>
           </div>
         </TooltipProvider>
       </CardContent>

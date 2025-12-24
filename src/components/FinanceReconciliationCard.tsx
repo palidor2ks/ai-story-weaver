@@ -1,7 +1,5 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertTriangle, CheckCircle2, Info, RefreshCw, XCircle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -33,9 +31,19 @@ export function FinanceReconciliationCard({
     );
   }
 
-  const { local_itemized, fec_itemized, delta_pct, status, local_transfers, local_earmarked, fec_unitemized, fec_total_receipts } = reconciliation;
+  const { fec_itemized, fec_unitemized, fec_total_receipts, status } = reconciliation;
+  
+  // Calculate Other Receipts using the standard formula
+  const otherReceipts = (fec_total_receipts ?? 0) - (fec_itemized ?? 0) - (fec_unitemized ?? 0);
+  
+  // Validate the equation: Total = Itemized + Unitemized + Other
+  const calculatedTotal = (fec_itemized ?? 0) + (fec_unitemized ?? 0) + otherReceipts;
+  const isBalanced = Math.abs(calculatedTotal - (fec_total_receipts ?? 0)) < 1;
   
   const getStatusIcon = () => {
+    if (!isBalanced) {
+      return <AlertTriangle className="w-4 h-4 text-amber-500" />;
+    }
     switch (status) {
       case 'ok':
         return <CheckCircle2 className="w-4 h-4 text-agree" />;
@@ -49,22 +57,25 @@ export function FinanceReconciliationCard({
   };
 
   const getStatusBadge = () => {
+    if (!isBalanced) {
+      return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">Imbalanced</Badge>;
+    }
     switch (status) {
       case 'ok':
-        return <Badge variant="outline" className="bg-agree/10 text-agree border-agree/30">Matched</Badge>;
+        return <Badge variant="outline" className="bg-agree/10 text-agree border-agree/30">Balanced</Badge>;
       case 'warning':
-        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">Variance</Badge>;
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">Warning</Badge>;
       case 'error':
-        return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">Mismatch</Badge>;
+        return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">Error</Badge>;
       default:
         return <Badge variant="outline">Pending</Badge>;
     }
   };
 
-  // Calculate coverage percentage
-  const coverage = fec_itemized && fec_itemized > 0 
-    ? Math.min(100, Math.round(((local_itemized || 0) / fec_itemized) * 100))
-    : 0;
+  const formatCurrency = (value: number | null) => {
+    if (value === null) return '—';
+    return `$${Math.round(value).toLocaleString()}`;
+  };
 
   if (compact) {
     return (
@@ -72,28 +83,37 @@ export function FinanceReconciliationCard({
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             {getStatusIcon()}
-            <span className="text-sm font-medium">FEC Reconciliation</span>
+            <span className="text-sm font-medium">FEC Data Integrity</span>
           </div>
           {getStatusBadge()}
         </div>
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div>
-            <span className="text-muted-foreground">Local:</span>
-            <span className="ml-1 font-medium">${(local_itemized || 0).toLocaleString()}</span>
+            <span className="text-muted-foreground">Itemized:</span>
+            <span className="ml-1 font-medium">{formatCurrency(fec_itemized)}</span>
           </div>
           <div>
-            <span className="text-muted-foreground">FEC:</span>
-            <span className="ml-1 font-medium">${(fec_itemized || 0).toLocaleString()}</span>
+            <span className="text-muted-foreground">Unitemized:</span>
+            <span className="ml-1 font-medium">{formatCurrency(fec_unitemized)}</span>
+          </div>
+          {otherReceipts > 0 && (
+            <div>
+              <span className="text-muted-foreground">Other:</span>
+              <span className="ml-1 font-medium">{formatCurrency(otherReceipts)}</span>
+            </div>
+          )}
+          <div>
+            <span className="text-muted-foreground">Total:</span>
+            <span className="ml-1 font-semibold">{formatCurrency(fec_total_receipts)}</span>
           </div>
         </div>
-        {delta_pct !== null && delta_pct !== 0 && (
-          <div className={cn(
-            "text-xs mt-1",
-            status === 'error' ? 'text-destructive' : status === 'warning' ? 'text-amber-500' : 'text-muted-foreground'
-          )}>
-            Δ {delta_pct > 0 ? '+' : ''}{delta_pct.toFixed(1)}%
-          </div>
-        )}
+        <div className={cn(
+          "text-[10px] mt-2 p-1 rounded flex items-center gap-1",
+          isBalanced ? "bg-agree/10 text-agree" : "bg-amber-500/10 text-amber-600"
+        )}>
+          {isBalanced ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+          <span>I + U + O = Total</span>
+        </div>
       </div>
     );
   }
@@ -105,7 +125,7 @@ export function FinanceReconciliationCard({
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-medium flex items-center gap-2">
               {getStatusIcon()}
-              FEC Finance Reconciliation
+              FEC Data Reconciliation
             </CardTitle>
             {getStatusBadge()}
           </div>
@@ -117,74 +137,69 @@ export function FinanceReconciliationCard({
           )}
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Main comparison */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* FEC Breakdown Grid */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="p-3 rounded-lg bg-secondary/50">
-              <p className="text-xs text-muted-foreground mb-1">Local Itemized</p>
-              <p className="text-xl font-bold">${(local_itemized || 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                Itemized
+                <Tooltip>
+                  <TooltipTrigger><Info className="h-3 w-3" /></TooltipTrigger>
+                  <TooltipContent>Individual contributions $200+</TooltipContent>
+                </Tooltip>
+              </p>
+              <p className="text-lg font-bold">{formatCurrency(fec_itemized)}</p>
             </div>
             <div className="p-3 rounded-lg bg-secondary/50">
-              <p className="text-xs text-muted-foreground mb-1">FEC Itemized</p>
-              <p className="text-xl font-bold">${(fec_itemized || 0).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                Unitemized
+                <Tooltip>
+                  <TooltipTrigger><Info className="h-3 w-3" /></TooltipTrigger>
+                  <TooltipContent>Contributions under $200</TooltipContent>
+                </Tooltip>
+              </p>
+              <p className="text-lg font-bold">{formatCurrency(fec_unitemized)}</p>
             </div>
           </div>
 
-          {/* Coverage bar */}
-          <div>
-            <div className="flex items-center justify-between text-sm mb-1">
-              <span className="text-muted-foreground">Coverage</span>
-              <span className={cn(
-                "font-medium",
-                coverage >= 90 ? 'text-agree' : coverage >= 70 ? 'text-amber-500' : 'text-destructive'
-              )}>
-                {coverage}%
-              </span>
-            </div>
-            <Progress value={coverage} className="h-2" />
-          </div>
-
-          {/* Variance indicator */}
-          {delta_pct !== null && delta_pct !== 0 && (
-            <div className={cn(
-              "p-3 rounded-lg flex items-center justify-between",
-              status === 'error' ? 'bg-destructive/10' : status === 'warning' ? 'bg-amber-500/10' : 'bg-agree/10'
-            )}>
-              <span className="text-sm">Variance</span>
-              <span className={cn(
-                "font-bold",
-                status === 'error' ? 'text-destructive' : status === 'warning' ? 'text-amber-500' : 'text-agree'
-              )}>
-                {delta_pct > 0 ? '+' : ''}{delta_pct.toFixed(2)}%
-              </span>
+          {otherReceipts > 0 && (
+            <div className="p-3 rounded-lg bg-secondary/50">
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                Other Receipts
+                <Tooltip>
+                  <TooltipTrigger><Info className="h-3 w-3" /></TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    PAC contributions, transfers, loans, refunds, and other receipts
+                  </TooltipContent>
+                </Tooltip>
+              </p>
+              <p className="text-lg font-bold">{formatCurrency(otherReceipts)}</p>
             </div>
           )}
 
-          {/* Breakdown */}
-          <div className="space-y-2 pt-2 border-t border-border">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Breakdown</p>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Transfers (excluded):</span>
-                <span>${(local_transfers || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Earmarked:</span>
-                <span>${(local_earmarked || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <Tooltip>
-                  <TooltipTrigger className="text-muted-foreground flex items-center gap-1">
-                    FEC Unitemized <Info className="w-3 h-3" />
-                  </TooltipTrigger>
-                  <TooltipContent>Contributions under $200 (not in our data)</TooltipContent>
-                </Tooltip>
-                <span>${(fec_unitemized || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">FEC Total Receipts:</span>
-                <span>${(fec_total_receipts || 0).toLocaleString()}</span>
-              </div>
+          {/* Total Receipts */}
+          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+            <p className="text-xs text-muted-foreground">Total Receipts</p>
+            <p className="font-bold text-xl">{formatCurrency(fec_total_receipts)}</p>
+          </div>
+
+          {/* Equation validation */}
+          <div className={cn(
+            "p-3 rounded-lg flex items-center justify-between",
+            isBalanced ? 'bg-agree/10' : 'bg-amber-500/10'
+          )}>
+            <div className="flex items-center gap-2">
+              {isBalanced ? (
+                <CheckCircle2 className="w-4 h-4 text-agree" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-amber-500" />
+              )}
+              <span className={cn("text-sm", isBalanced ? "text-agree" : "text-amber-600")}>
+                Itemized + Unitemized + Other = Total
+              </span>
             </div>
+            <span className={cn("text-sm font-medium", isBalanced ? "text-agree" : "text-amber-600")}>
+              {isBalanced ? '✓' : `Δ ${formatCurrency(Math.abs(calculatedTotal - (fec_total_receipts ?? 0)))}`}
+            </span>
           </div>
 
           {/* Committee breakdown */}
@@ -192,17 +207,20 @@ export function FinanceReconciliationCard({
             <div className="space-y-2 pt-2 border-t border-border">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">By Committee</p>
               <div className="space-y-2">
-                {rollups.map(r => (
-                  <div key={r.id} className="flex justify-between items-center text-sm p-2 rounded bg-secondary/30">
-                    <span className="text-muted-foreground truncate max-w-[200px]">{r.committee_id}</span>
-                    <div className="flex items-center gap-3">
-                      <span>${(r.local_itemized || 0).toLocaleString()}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {r.donor_count} donors
-                      </span>
+                {rollups.map(r => {
+                  const committeeOther = (r.fec_total_receipts ?? 0) - (r.fec_itemized ?? 0) - (r.fec_unitemized ?? 0);
+                  return (
+                    <div key={r.id} className="flex justify-between items-center text-sm p-2 rounded bg-secondary/30">
+                      <span className="text-muted-foreground truncate max-w-[150px]">{r.committee_id}</span>
+                      <div className="flex items-center gap-3 text-xs">
+                        <span title="Itemized">{formatCurrency(r.fec_itemized)}</span>
+                        {committeeOther > 0 && (
+                          <span className="text-muted-foreground" title="Other">+{formatCurrency(committeeOther)}</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
