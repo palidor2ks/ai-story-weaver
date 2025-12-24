@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.nightly-finance-reconciliation]
 verify_jwt = false
+
+[functions.fetch-fec-committees]
+verify_jwt = false

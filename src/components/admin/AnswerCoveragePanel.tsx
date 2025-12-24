@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles } from "lucide-react";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { toast } from "sonner";
@@ -91,12 +91,14 @@ export function AnswerCoveragePanel() {
   const { recalculateAll, isRecalculatingAll } = useRecalculateCoverageTiers();
   const { 
     fetchFECCandidateId, 
+    fetchFECCommittees,
     fetchFECDonors, 
     batchFetchFECIds,
     batchFetchDonors,
     resumeAllPartialSyncs,
     isLoading: isFECLoading, 
     isDonorLoading,
+    isCommitteeLoading,
     hasPartialSync,
     batchProgress: fecBatchProgress,
     isBatchRunning: isFECBatchRunning
@@ -830,13 +832,23 @@ export function AnswerCoveragePanel() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            {hasFecId ? (
-                              <Badge variant="outline" className="text-xs font-mono">
-                                {candidate.fecCandidateId?.slice(0, 9)}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground/50 text-xs">—</span>
-                            )}
+                            <div className="flex flex-col gap-0.5">
+                              {hasFecId ? (
+                                <Badge variant="outline" className="text-xs font-mono">
+                                  {candidate.fecCandidateId?.slice(0, 9)}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground/50 text-xs">—</span>
+                              )}
+                              {hasFecId && candidate.fecCommitteeId && (
+                                <span className="text-[10px] text-green-600 font-mono">
+                                  {candidate.fecCommitteeId.slice(0, 9)}
+                                </span>
+                              )}
+                              {hasFecId && !candidate.fecCommitteeId && (
+                                <span className="text-[10px] text-amber-600">No committee</span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-1 justify-end">
@@ -874,8 +886,48 @@ export function AnswerCoveragePanel() {
                                   {fecLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
                                 </Button>
                               )}
+                              {/* Link Committees */}
+                              {hasFecId && !candidate.fecCommitteeId && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isCommitteeLoading(candidate.id) || anyBatchRunning}
+                                  onClick={() => {
+                                    void (async () => {
+                                      try {
+                                        const result = await fetchFECCommittees(
+                                          candidate.id,
+                                          candidate.fecCandidateId!
+                                        );
+                                        if (result.success && result.primaryCommitteeId) {
+                                          toast.success(`Linked committee: ${result.primaryCommitteeId}`);
+                                          refetch();
+                                        } else if (result.success) {
+                                          toast.info('No committees found for this candidate');
+                                        } else {
+                                          toast.error(result.error || 'Failed to link committees');
+                                        }
+                                      } catch (err) {
+                                        console.error('[Admin] Link committees failed:', err);
+                                        toast.error('Failed to link committees');
+                                      }
+                                    })();
+                                  }}
+                                  title="Link FEC Committee"
+                                  className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                >
+                                  {isCommitteeLoading(candidate.id) ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Building2 className="h-3 w-3 mr-1" />
+                                      Link Cmte
+                                    </>
+                                  )}
+                                </Button>
+                              )}
                               {/* Fetch/Resume Donors */}
-                              {hasFecId && (
+                              {hasFecId && candidate.fecCommitteeId && (
                                 <Button
                                   size="sm"
                                   variant={isPartialSync ? "default" : "ghost"}
