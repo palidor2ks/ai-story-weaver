@@ -717,12 +717,24 @@ export function AnswerCoveragePanel() {
                           <TableCell>
                             <div className="space-y-1 text-xs">
                               <div className="flex items-center justify-between">
-                                <span>Local</span>
+                                <span>Direct</span>
                                 <span className="font-semibold text-foreground">
                                   {formatCurrency(localItemized)}
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between">
+                              {candidate.localTransfers > 0 && (
+                                <div className="flex items-center justify-between text-muted-foreground">
+                                  <span>Transfers</span>
+                                  <span>{formatCurrency(candidate.localTransfers)}</span>
+                                </div>
+                              )}
+                              {candidate.earmarkedAmount > 0 && (
+                                <div className="flex items-center justify-between text-blue-600">
+                                  <span>Earmarked</span>
+                                  <span>{formatCurrency(candidate.earmarkedAmount)}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between border-t pt-1 mt-1">
                                 <span className="text-muted-foreground">FEC</span>
                                 <span className={financeStatus.mismatch ? 'text-amber-700 font-semibold' : 'text-muted-foreground'}>
                                   {financeStatus.fecItemized !== null 

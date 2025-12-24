@@ -50,7 +50,7 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
   return { isContribution, isTransfer };
 }
 
-// Generate a stable SHA-256 based ID for donor identity
+// Generate a stable SHA-256 based ID for donor identity (aggregated)
 async function generateDonorId(
   contributorName: string,
   entityType: string,
@@ -91,6 +91,82 @@ async function generateDonorId(
   const hashHex = new TextDecoder().decode(hexEncode(hashArray));
   
   return `fec-${hashHex.slice(0, 32)}`;
+}
+
+// Generate a unique identity hash for a single contribution transaction
+async function generateContributionHash(
+  contributorName: string,
+  amount: number,
+  receiptDate: string | null,
+  committeeId: string,
+  cycle: string,
+  fecSubId: string | null
+): Promise<string> {
+  // Use FEC sub_id if available (most unique), otherwise build from other fields
+  const identityKey = fecSubId 
+    ? `${fecSubId}|${cycle}`
+    : [
+        contributorName.toLowerCase().trim(),
+        amount.toString(),
+        receiptDate || '',
+        committeeId,
+        cycle
+      ].join('|');
+  
+  const encoder = new TextEncoder();
+  const data = encoder.encode(identityKey);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = new Uint8Array(hashBuffer);
+  const hashHex = new TextDecoder().decode(hexEncode(hashArray));
+  
+  return `contrib-${hashHex.slice(0, 32)}`;
+}
+
+// Parse earmark info from memo text
+interface EarmarkInfo {
+  isEarmarked: boolean;
+  earmarkedForName: string | null;
+  conduitCommitteeId: string | null;
+}
+
+function parseEarmarkInfo(memoText: string | null, memoCode: string | null): EarmarkInfo {
+  if (!memoText) {
+    return { isEarmarked: false, earmarkedForName: null, conduitCommitteeId: null };
+  }
+  
+  const upperMemo = memoText.toUpperCase();
+  
+  // Common earmark patterns
+  // "EARMARKED FOR [CANDIDATE NAME]"
+  // "CONTRIBUTION TO [COMMITTEE] EARMARKED FOR [CANDIDATE]"
+  // "* EARMARKED FOR [NAME]"
+  const earmarkPatterns = [
+    /EARMARKED\s+FOR\s+(.+?)(?:\s*\(|$|\.|,)/i,
+    /DESIGNATED\s+FOR\s+(.+?)(?:\s*\(|$|\.|,)/i,
+    /EAR\s*MARKED\s+FOR\s+(.+?)(?:\s*\(|$|\.|,)/i,
+  ];
+  
+  for (const pattern of earmarkPatterns) {
+    const match = memoText.match(pattern);
+    if (match) {
+      return {
+        isEarmarked: true,
+        earmarkedForName: match[1].trim(),
+        conduitCommitteeId: null // Could be extracted from memo if needed
+      };
+    }
+  }
+  
+  // Check for ActBlue/WinRed conduit patterns
+  if (upperMemo.includes('ACTBLUE') || upperMemo.includes('WINRED') || upperMemo.includes('CONDUIT')) {
+    return {
+      isEarmarked: true,
+      earmarkedForName: null, // Need to resolve from context
+      conduitCommitteeId: null
+    };
+  }
+  
+  return { isEarmarked: false, earmarkedForName: null, conduitCommitteeId: null };
 }
 
 interface AggregatedDonor {
@@ -266,9 +342,37 @@ serve(async (req) => {
       is_transfer: boolean;
     }> = [];
 
+    // Per-transaction contributions for detailed tracking
+    const contributions: Array<{
+      identity_hash: string;
+      fec_transaction_id: string | null;
+      candidate_id: string;
+      recipient_committee_id: string;
+      recipient_committee_name: string;
+      contributor_name: string;
+      contributor_type: string;
+      amount: number;
+      receipt_date: string | null;
+      cycle: string;
+      line_number: string;
+      is_contribution: boolean;
+      is_transfer: boolean;
+      is_earmarked: boolean;
+      earmarked_for_candidate_id: string | null;
+      conduit_committee_id: string | null;
+      memo_text: string | null;
+      contributor_city: string;
+      contributor_state: string;
+      contributor_zip: string;
+      employer: string;
+      occupation: string;
+    }> = [];
+
     let totalRaised = 0;
     let skippedNonContributions = 0;
     let committeesProcessed = 0;
+    let earmarkedCount = 0;
+    let transferCount = 0;
 
     for (const committee of committees) {
       const committeeId = committee.id;
@@ -343,7 +447,52 @@ serve(async (req) => {
           const employer = contribution.contributor_employer || '';
           const occupation = contribution.contributor_occupation || '';
           const receiptDate = contribution.contribution_receipt_date || null;
+          const memoText = contribution.memo_text || null;
+          const memoCode = contribution.memo_code || null;
+          const fecSubId = contribution.sub_id || null;
           
+          // Parse earmark information
+          const earmarkInfo = parseEarmarkInfo(memoText, memoCode);
+          if (earmarkInfo.isEarmarked) earmarkedCount++;
+          if (classification.isTransfer) transferCount++;
+          
+          // Generate contribution hash for deduplication
+          const contributionHash = await generateContributionHash(
+            name,
+            amount,
+            receiptDate,
+            committeeId,
+            cycle,
+            fecSubId
+          );
+          
+          // Add to per-transaction contributions
+          contributions.push({
+            identity_hash: contributionHash,
+            fec_transaction_id: fecSubId,
+            candidate_id: candidateId,
+            recipient_committee_id: committeeId,
+            recipient_committee_name: committeeName,
+            contributor_name: name,
+            contributor_type: type,
+            amount,
+            receipt_date: receiptDate,
+            cycle,
+            line_number: lineNumber,
+            is_contribution: classification.isContribution,
+            is_transfer: classification.isTransfer,
+            is_earmarked: earmarkInfo.isEarmarked,
+            earmarked_for_candidate_id: null, // Would need candidate lookup by name
+            conduit_committee_id: earmarkInfo.conduitCommitteeId,
+            memo_text: memoText,
+            contributor_city: city,
+            contributor_state: state,
+            contributor_zip: zip,
+            employer,
+            occupation
+          });
+          
+          // Generate donor ID for aggregated view
           const donorId = await generateDonorId(
             name,
             contribution.entity_type || '',
@@ -451,8 +600,10 @@ serve(async (req) => {
       );
     }
 
-    console.log('[FEC-DONORS] Aggregated to', donors.length, 'unique donors across', committeesProcessed, 'committees');
+    console.log('[FEC-DONORS] Aggregated to', donors.length, 'unique donors,', contributions.length, 'transactions across', committeesProcessed, 'committees');
+    console.log('[FEC-DONORS] Earmarked:', earmarkedCount, 'Transfers:', transferCount);
 
+    // Delete existing donors and contributions for this candidate/cycle
     const { error: deleteError } = await supabase
       .from('donors')
       .delete()
@@ -460,12 +611,23 @@ serve(async (req) => {
       .eq('cycle', cycle);
 
     if (deleteError) {
-      console.warn('[FEC-DONORS] Delete error (continuing):', deleteError);
+      console.warn('[FEC-DONORS] Delete donors error (continuing):', deleteError);
+    }
+
+    const { error: deleteContribError } = await supabase
+      .from('contributions')
+      .delete()
+      .eq('candidate_id', candidateId)
+      .eq('cycle', cycle);
+
+    if (deleteContribError) {
+      console.warn('[FEC-DONORS] Delete contributions error (continuing):', deleteContribError);
     }
 
     const batchSize = 500;
     let totalInserted = 0;
 
+    // Insert aggregated donors
     for (let i = 0; i < donors.length; i += batchSize) {
       const batch = donors.slice(i, i + batchSize);
 
@@ -487,6 +649,26 @@ serve(async (req) => {
 
     console.log('[FEC-DONORS] Successfully inserted', totalInserted, 'donors');
 
+    // Insert per-transaction contributions using upsert for deduplication
+    let contributionsInserted = 0;
+    for (let i = 0; i < contributions.length; i += batchSize) {
+      const batch = contributions.slice(i, i + batchSize);
+
+      const { data: insertedData, error: insertError } = await supabase
+        .from('contributions')
+        .upsert(batch, { onConflict: 'identity_hash,cycle', ignoreDuplicates: true })
+        .select();
+
+      if (insertError) {
+        console.error('[FEC-DONORS] Contribution insert error on batch', Math.floor(i / batchSize) + 1, ':', insertError);
+        // Continue with other batches, don't fail the whole import
+      } else {
+        contributionsInserted += insertedData?.length || 0;
+      }
+    }
+
+    console.log('[FEC-DONORS] Successfully inserted', contributionsInserted, 'contributions');
+
     const { error: updateError } = await supabase
       .from('candidates')
       .update({ last_donor_sync: new Date().toISOString() })
@@ -500,11 +682,14 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         imported: donors.length,
+        contributionsImported: contributionsInserted,
         totalRaised,
+        earmarkedCount,
+        transferCount,
         cycle,
         committees: committees.map(c => ({ id: c.id, name: c.name })),
         skippedNonContributions,
-        message: `Imported ${donors.length} contributors totaling $${totalRaised.toLocaleString()} across ${committeesProcessed} committees`
+        message: `Imported ${donors.length} contributors (${contributionsInserted} transactions) totaling $${totalRaised.toLocaleString()} across ${committeesProcessed} committees`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
