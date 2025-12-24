@@ -256,6 +256,87 @@ export type Database = {
         }
         Relationships: []
       }
+      contributions: {
+        Row: {
+          amount: number
+          candidate_id: string | null
+          conduit_committee_id: string | null
+          contributor_city: string | null
+          contributor_name: string
+          contributor_state: string | null
+          contributor_type: string
+          contributor_zip: string | null
+          created_at: string | null
+          cycle: string
+          earmarked_for_candidate_id: string | null
+          employer: string | null
+          fec_transaction_id: string | null
+          id: string
+          identity_hash: string
+          is_contribution: boolean | null
+          is_earmarked: boolean | null
+          is_transfer: boolean | null
+          line_number: string | null
+          memo_text: string | null
+          occupation: string | null
+          receipt_date: string | null
+          recipient_committee_id: string
+          recipient_committee_name: string | null
+        }
+        Insert: {
+          amount: number
+          candidate_id?: string | null
+          conduit_committee_id?: string | null
+          contributor_city?: string | null
+          contributor_name: string
+          contributor_state?: string | null
+          contributor_type?: string
+          contributor_zip?: string | null
+          created_at?: string | null
+          cycle: string
+          earmarked_for_candidate_id?: string | null
+          employer?: string | null
+          fec_transaction_id?: string | null
+          id?: string
+          identity_hash: string
+          is_contribution?: boolean | null
+          is_earmarked?: boolean | null
+          is_transfer?: boolean | null
+          line_number?: string | null
+          memo_text?: string | null
+          occupation?: string | null
+          receipt_date?: string | null
+          recipient_committee_id: string
+          recipient_committee_name?: string | null
+        }
+        Update: {
+          amount?: number
+          candidate_id?: string | null
+          conduit_committee_id?: string | null
+          contributor_city?: string | null
+          contributor_name?: string
+          contributor_state?: string | null
+          contributor_type?: string
+          contributor_zip?: string | null
+          created_at?: string | null
+          cycle?: string
+          earmarked_for_candidate_id?: string | null
+          employer?: string | null
+          fec_transaction_id?: string | null
+          id?: string
+          identity_hash?: string
+          is_contribution?: boolean | null
+          is_earmarked?: boolean | null
+          is_transfer?: boolean | null
+          line_number?: string | null
+          memo_text?: string | null
+          occupation?: string | null
+          receipt_date?: string | null
+          recipient_committee_id?: string
+          recipient_committee_name?: string | null
+        }
+        Relationships: []
+      }
       donors: {
         Row: {
           amount: number

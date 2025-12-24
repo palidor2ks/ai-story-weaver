@@ -17,8 +17,12 @@ export interface CandidateAnswerCoverage {
   donorCount: number;
   fecCandidateId: string | null;
   fecCommitteeId: string | null;
-  localItemizedContributions: number;
-  localTotalReceipts: number;
+  // Finance breakdown
+  localItemizedContributions: number; // Direct contributions (is_contribution=true, is_transfer=false)
+  localTransfers: number;              // Committee transfers (is_transfer=true)
+  localTotalReceipts: number;          // All receipts
+  transactionCount: number;            // Total number of transactions
+  earmarkedAmount: number;             // Earmarked contributions
 }
 
 interface Filters {
@@ -98,21 +102,48 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       });
 
       // Aggregate donor amounts for receipts and itemized contributions (current cycle only)
+      // Exclude transfers from itemized contributions unless earmarked
       const FINANCE_CYCLE = '2024';
       
       const { data: donorsWithAmount } = await supabase
         .from('donors')
-        .select('candidate_id, amount, is_contribution, cycle');
+        .select('candidate_id, amount, is_contribution, is_transfer, transaction_count, cycle');
 
       const itemizedTotalMap: Record<string, number> = {};
+      const transferTotalMap: Record<string, number> = {};
       const receiptTotalMap: Record<string, number> = {};
+      const transactionCountMap: Record<string, number> = {};
       
       (donorsWithAmount || []).forEach(row => {
         if (row.cycle === FINANCE_CYCLE) {
-          receiptTotalMap[row.candidate_id] = (receiptTotalMap[row.candidate_id] || 0) + (row.amount || 0);
-          if (row.is_contribution) {
-            itemizedTotalMap[row.candidate_id] = (itemizedTotalMap[row.candidate_id] || 0) + (row.amount || 0);
+          const amount = row.amount || 0;
+          const txCount = row.transaction_count || 1;
+          
+          // Total receipts = everything
+          receiptTotalMap[row.candidate_id] = (receiptTotalMap[row.candidate_id] || 0) + amount;
+          transactionCountMap[row.candidate_id] = (transactionCountMap[row.candidate_id] || 0) + txCount;
+          
+          if (row.is_transfer) {
+            // Transfers tracked separately
+            transferTotalMap[row.candidate_id] = (transferTotalMap[row.candidate_id] || 0) + amount;
+          } else if (row.is_contribution) {
+            // Direct contributions (not transfers)
+            itemizedTotalMap[row.candidate_id] = (itemizedTotalMap[row.candidate_id] || 0) + amount;
           }
+        }
+      });
+
+      // Get earmarked amounts from contributions table
+      const { data: earmarkedData } = await supabase
+        .from('contributions')
+        .select('candidate_id, amount')
+        .eq('cycle', FINANCE_CYCLE)
+        .eq('is_earmarked', true);
+
+      const earmarkedTotalMap: Record<string, number> = {};
+      (earmarkedData || []).forEach(row => {
+        if (row.candidate_id) {
+          earmarkedTotalMap[row.candidate_id] = (earmarkedTotalMap[row.candidate_id] || 0) + (row.amount || 0);
         }
       });
 
@@ -126,6 +157,9 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       const results: CandidateAnswerCoverage[] = (candidates || []).map(c => {
         const answerCount = answerCountMap[c.id] || 0;
         const percentage = totalQuestions ? Math.round((answerCount / totalQuestions) * 100) : 0;
+        const localItemized = itemizedTotalMap[c.id] || 0;
+        const localTransfers = transferTotalMap[c.id] || 0;
+        
         return {
           id: c.id,
           name: c.name,
@@ -141,8 +175,11 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           donorCount: donorCountMap[c.id] || 0,
           fecCandidateId: c.fec_candidate_id || null,
           fecCommitteeId: c.fec_committee_id || null,
-          localItemizedContributions: itemizedTotalMap[c.id] || 0,
-          localTotalReceipts: receiptTotalMap[c.id] || itemizedTotalMap[c.id] || 0,
+          localItemizedContributions: localItemized,
+          localTransfers,
+          localTotalReceipts: receiptTotalMap[c.id] || 0,
+          transactionCount: transactionCountMap[c.id] || 0,
+          earmarkedAmount: earmarkedTotalMap[c.id] || 0,
         };
       });
 
