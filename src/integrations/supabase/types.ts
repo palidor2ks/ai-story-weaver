@@ -242,9 +242,11 @@ export type Database = {
           line_number: string | null
           name: string
           occupation: string | null
+          receipt_type: string | null
           recipient_committee_id: string | null
           recipient_committee_name: string | null
           transaction_count: number | null
+          is_transfer: boolean | null
           type: Database["public"]["Enums"]["donor_type"]
         }
         Insert: {
@@ -262,9 +264,11 @@ export type Database = {
           line_number?: string | null
           name: string
           occupation?: string | null
+          receipt_type?: string | null
           recipient_committee_id?: string | null
           recipient_committee_name?: string | null
           transaction_count?: number | null
+          is_transfer?: boolean | null
           type: Database["public"]["Enums"]["donor_type"]
         }
         Update: {
@@ -282,9 +286,11 @@ export type Database = {
           line_number?: string | null
           name?: string
           occupation?: string | null
+          receipt_type?: string | null
           recipient_committee_id?: string | null
           recipient_committee_name?: string | null
           transaction_count?: number | null
+          is_transfer?: boolean | null
           type?: Database["public"]["Enums"]["donor_type"]
         }
         Relationships: [
