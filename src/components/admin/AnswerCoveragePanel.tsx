@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useSyncStats, TopicCoverage, CandidateCoverage } from "@/hooks/useSyncStats";
-import { useCandidatesAnswerCoverage, useCandidateAnswerStats, useUniqueStates, useRecalculateCoverageTiers } from "@/hooks/useCandidatesAnswerCoverage";
+import { useSyncStats, TopicCoverage } from "@/hooks/useSyncStats";
+import { useCandidatesAnswerCoverage, useCandidateAnswerStats, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
 import { useFECIntegration } from "@/hooks/useFECIntegration";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { CoverageTierBadge, ConfidenceBadge } from "@/components/CoverageTierBadge";
+import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { toast } from "sonner";
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
@@ -85,6 +85,9 @@ export function AnswerCoveragePanel() {
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [stateFilter, setStateFilter] = useState<string>('all');
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('none');
+  const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
+  const [fecTotalsMap, setFecTotalsMap] = useState<Record<string, { totalReceipts: number; itemizedContributions: number }>>({});
+  const [financeLoading, setFinanceLoading] = useState(false);
 
   const { data: candidates, isLoading: candidatesLoading } = useCandidatesAnswerCoverage({
     party: partyFilter,
@@ -105,10 +108,83 @@ export function AnswerCoveragePanel() {
     isBatchRunning: isFECBatchRunning
   } = useFECIntegration();
   
-  // Filter candidates by search query
-  const filteredCandidates = candidates?.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  const baseFilteredCandidates = useMemo(() => (
+    candidates?.filter(c =>
+      c.name.toLowerCase().includes(searchQuery.toLowerCase())
+    ) || []
+  ), [candidates, searchQuery]);
+
+  const calculateFinanceStatus = useCallback((candidate: CandidateAnswerCoverage) => {
+    const totals = fecTotalsMap[candidate.id];
+    const localItemized = candidate.localItemizedContributions || 0;
+    if (!totals) {
+      return { mismatch: false, difference: 0, fecItemized: null, receipts: null };
+    }
+    const difference = Math.abs((totals.itemizedContributions || 0) - localItemized);
+    const tolerance = Math.max(500, (totals.itemizedContributions || 0) * 0.02);
+    return {
+      mismatch: difference > tolerance,
+      difference,
+      fecItemized: totals.itemizedContributions,
+      receipts: totals.totalReceipts,
+    };
+  }, [fecTotalsMap]);
+
+  const formatCurrency = (value?: number | null) => {
+    if (value === null || value === undefined) return '—';
+    return `$${Math.round(value).toLocaleString()}`;
+  };
+
+  const filteredCandidates = useMemo(() => {
+    if (financeFilter === 'mismatch') {
+      return baseFilteredCandidates.filter(candidate => calculateFinanceStatus(candidate).mismatch);
+    }
+    return baseFilteredCandidates;
+  }, [baseFilteredCandidates, financeFilter, calculateFinanceStatus]);
+
+  useEffect(() => {
+    let isActive = true;
+    const fetchFecTotals = async () => {
+      const toFetch = baseFilteredCandidates
+        .filter(c => c.fecCommitteeId && !fecTotalsMap[c.id])
+        .slice(0, 100);
+
+      if (toFetch.length === 0) return;
+      setFinanceLoading(true);
+      const apiKey = import.meta.env.VITE_FEC_API_KEY || 'DEMO_KEY';
+      const results: Record<string, { totalReceipts: number; itemizedContributions: number }> = {};
+
+      for (const candidate of toFetch) {
+        try {
+          const response = await fetch(
+            `https://api.open.fec.gov/v1/committee/${candidate.fecCommitteeId}/totals/?api_key=${apiKey}&cycle=2024&per_page=1`
+          );
+
+          if (!response.ok) continue;
+          const data = await response.json();
+          const totalReceipts = data?.results?.[0]?.receipts || 0;
+          const itemizedContributions = data?.results?.[0]?.individual_itemized_contributions || 0;
+          results[candidate.id] = {
+            totalReceipts,
+            itemizedContributions,
+          };
+          // small delay to avoid hammering API
+          await new Promise(resolve => setTimeout(resolve, 150));
+        } catch (error) {
+          console.error('[FEC Totals] Failed to fetch totals for', candidate.name, error);
+        }
+      }
+
+      if (!isActive) return;
+      if (Object.keys(results).length > 0) {
+        setFecTotalsMap(prev => ({ ...prev, ...results }));
+      }
+      setFinanceLoading(false);
+    };
+
+    fetchFecTotals();
+    return () => { isActive = false; };
+  }, [baseFilteredCandidates, fecTotalsMap]);
 
   const handleFillAll = async () => {
     if (!candidates) return;
@@ -352,6 +428,16 @@ export function AnswerCoveragePanel() {
                 </SelectContent>
               </Select>
 
+              <Select value={financeFilter} onValueChange={(v) => setFinanceFilter(v as typeof financeFilter)}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Finance" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Finance</SelectItem>
+                  <SelectItem value="mismatch">FEC Mismatch</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Select value={partyFilter} onValueChange={setPartyFilter}>
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder="Party" />
@@ -378,6 +464,13 @@ export function AnswerCoveragePanel() {
               </Select>
 
               <div className="flex-1" />
+
+              {financeLoading && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground pr-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Syncing FEC totals...</span>
+                </div>
+              )}
 
               {noAnswersCount > 0 && (
                 <AlertDialog>
@@ -547,6 +640,8 @@ export function AnswerCoveragePanel() {
                       <TableHead className="text-center">Answers</TableHead>
                       <TableHead>Tier</TableHead>
                       <TableHead>Data</TableHead>
+                      <TableHead>FEC Receipts</TableHead>
+                      <TableHead>Itemized Contributions</TableHead>
                       <TableHead>FEC ID</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -558,6 +653,9 @@ export function AnswerCoveragePanel() {
                       const donorLoading = isDonorLoading(candidate.id);
                       const isComplete = candidate.percentage >= 100;
                       const hasFecId = !!candidate.fecCandidateId;
+                      const financeTotals = fecTotalsMap[candidate.id];
+                      const financeStatus = calculateFinanceStatus(candidate);
+                      const localItemized = candidate.localItemizedContributions || 0;
 
                       return (
                         <TableRow key={candidate.id}>
@@ -607,6 +705,39 @@ export function AnswerCoveragePanel() {
                               )}
                               {candidate.voteCount === 0 && candidate.donorCount === 0 && (
                                 <span className="text-muted-foreground/50">—</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm font-medium">
+                              {formatCurrency(financeTotals?.totalReceipts)}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">FEC totals</p>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1 text-xs">
+                              <div className="flex items-center justify-between">
+                                <span>Local</span>
+                                <span className="font-semibold text-foreground">
+                                  {formatCurrency(localItemized)}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">FEC</span>
+                                <span className={financeStatus.mismatch ? 'text-amber-700 font-semibold' : 'text-muted-foreground'}>
+                                  {financeStatus.fecItemized !== null 
+                                    ? formatCurrency(financeStatus.fecItemized) 
+                                    : '—'}
+                                </span>
+                              </div>
+                              {financeStatus.mismatch && (
+                                <div className="flex items-center justify-between text-amber-700">
+                                  <span className="flex items-center gap-1">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    Delta
+                                  </span>
+                                  <span>{formatCurrency(financeStatus.difference)}</span>
+                                </div>
                               )}
                             </div>
                           </TableCell>
