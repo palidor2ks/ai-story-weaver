@@ -17,15 +17,20 @@ export interface CandidateAnswerCoverage {
   donorCount: number;
   fecCandidateId: string | null;
   fecCommitteeId: string | null;
-  // Finance breakdown
-  localItemizedContributions: number; // Direct contributions (is_contribution=true, is_transfer=false)
-  localTransfers: number;              // Committee transfers (is_transfer=true)
-  localTotalReceipts: number;          // All receipts
-  transactionCount: number;            // Total number of transactions
-  earmarkedAmount: number;             // Earmarked contributions
+  // Finance breakdown - from finance_reconciliation (single source of truth)
+  localItemized: number;         // Local itemized contributions
+  localTransfers: number;        // Committee transfers
+  localEarmarked: number;        // Earmarked contributions
+  fecItemized: number | null;    // FEC itemized contributions
+  fecUnitemized: number | null;  // FEC unitemized contributions
+  fecTotalReceipts: number | null; // FEC total receipts
+  deltaAmount: number | null;    // Difference between local and FEC
+  deltaPct: number | null;       // Percentage difference
+  reconciliationStatus: string | null; // ok, warning, error
   // Sync status
-  hasPartialSync: boolean;             // True if any committee has last_index set (incomplete sync)
-  lastSyncDate: string | null;         // Last donor sync date
+  hasPartialSync: boolean;       // True if any committee has last_index set (incomplete sync)
+  lastSyncDate: string | null;   // Last donor sync date
+  reconciliationCheckedAt: string | null; // When reconciliation was last checked
 }
 
 interface Filters {
@@ -104,50 +109,31 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         donorCountMap[row.candidate_id] = (donorCountMap[row.candidate_id] || 0) + 1;
       });
 
-      // Aggregate donor amounts for receipts and itemized contributions (current cycle only)
-      // Exclude transfers from itemized contributions unless earmarked
+      // Get finance data from finance_reconciliation (single source of truth)
       const FINANCE_CYCLE = '2024';
       
-      const { data: donorsWithAmount } = await supabase
-        .from('donors')
-        .select('candidate_id, amount, is_contribution, is_transfer, transaction_count, cycle');
+      const { data: reconciliationData } = await supabase
+        .from('finance_reconciliation')
+        .select('*')
+        .eq('cycle', FINANCE_CYCLE);
 
-      const itemizedTotalMap: Record<string, number> = {};
-      const transferTotalMap: Record<string, number> = {};
-      const receiptTotalMap: Record<string, number> = {};
-      const transactionCountMap: Record<string, number> = {};
-      
-      (donorsWithAmount || []).forEach(row => {
-        if (row.cycle === FINANCE_CYCLE) {
-          const amount = row.amount || 0;
-          const txCount = row.transaction_count || 1;
-          
-          // Total receipts = everything
-          receiptTotalMap[row.candidate_id] = (receiptTotalMap[row.candidate_id] || 0) + amount;
-          transactionCountMap[row.candidate_id] = (transactionCountMap[row.candidate_id] || 0) + txCount;
-          
-          if (row.is_transfer) {
-            // Transfers tracked separately
-            transferTotalMap[row.candidate_id] = (transferTotalMap[row.candidate_id] || 0) + amount;
-          } else if (row.is_contribution) {
-            // Direct contributions (not transfers)
-            itemizedTotalMap[row.candidate_id] = (itemizedTotalMap[row.candidate_id] || 0) + amount;
-          }
-        }
-      });
+      interface ReconciliationRecord {
+        candidate_id: string;
+        local_itemized: number | null;
+        local_transfers: number | null;
+        local_earmarked: number | null;
+        fec_itemized: number | null;
+        fec_unitemized: number | null;
+        fec_total_receipts: number | null;
+        delta_amount: number | null;
+        delta_pct: number | null;
+        status: string | null;
+        checked_at: string | null;
+      }
 
-      // Get earmarked amounts from contributions table
-      const { data: earmarkedData } = await supabase
-        .from('contributions')
-        .select('candidate_id, amount')
-        .eq('cycle', FINANCE_CYCLE)
-        .eq('is_earmarked', true);
-
-      const earmarkedTotalMap: Record<string, number> = {};
-      (earmarkedData || []).forEach(row => {
-        if (row.candidate_id) {
-          earmarkedTotalMap[row.candidate_id] = (earmarkedTotalMap[row.candidate_id] || 0) + (row.amount || 0);
-        }
+      const reconciliationMap: Record<string, ReconciliationRecord> = {};
+      (reconciliationData || []).forEach(row => {
+        reconciliationMap[row.candidate_id] = row;
       });
 
       // Get partial sync status from candidate_committees (has last_index = incomplete sync)
@@ -177,8 +163,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       const results: CandidateAnswerCoverage[] = (candidates || []).map(c => {
         const answerCount = answerCountMap[c.id] || 0;
         const percentage = totalQuestions ? Math.round((answerCount / totalQuestions) * 100) : 0;
-        const localItemized = itemizedTotalMap[c.id] || 0;
-        const localTransfers = transferTotalMap[c.id] || 0;
+        const rec = reconciliationMap[c.id];
         
         return {
           id: c.id,
@@ -195,13 +180,19 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           donorCount: donorCountMap[c.id] || 0,
           fecCandidateId: c.fec_candidate_id || null,
           fecCommitteeId: c.fec_committee_id || null,
-          localItemizedContributions: localItemized,
-          localTransfers,
-          localTotalReceipts: receiptTotalMap[c.id] || 0,
-          transactionCount: transactionCountMap[c.id] || 0,
-          earmarkedAmount: earmarkedTotalMap[c.id] || 0,
+          // Finance data from reconciliation table (single source of truth)
+          localItemized: rec?.local_itemized || 0,
+          localTransfers: rec?.local_transfers || 0,
+          localEarmarked: rec?.local_earmarked || 0,
+          fecItemized: rec?.fec_itemized ?? null,
+          fecUnitemized: rec?.fec_unitemized ?? null,
+          fecTotalReceipts: rec?.fec_total_receipts ?? null,
+          deltaAmount: rec?.delta_amount ?? null,
+          deltaPct: rec?.delta_pct ?? null,
+          reconciliationStatus: rec?.status || null,
           hasPartialSync: partialSyncMap[c.id] || false,
           lastSyncDate: lastSyncMap[c.id] || null,
+          reconciliationCheckedAt: rec?.checked_at || null,
         };
       });
 

@@ -80,8 +80,6 @@ export function AnswerCoveragePanel() {
   const [stateFilter, setStateFilter] = useState<string>('all');
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('none');
   const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch' | 'partial'>('all');
-  const [fecTotalsMap, setFecTotalsMap] = useState<Record<string, { totalReceipts: number; itemizedContributions: number }>>({});
-  const [financeLoading, setFinanceLoading] = useState(false);
 
   const { data: candidates, isLoading: candidatesLoading } = useCandidatesAnswerCoverage({
     party: partyFilter,
@@ -112,21 +110,26 @@ export function AnswerCoveragePanel() {
     ) || []
   ), [candidates, searchQuery]);
 
+  // Finance status is now calculated from reconciliation data (single source of truth)
   const calculateFinanceStatus = useCallback((candidate: CandidateAnswerCoverage) => {
-    const totals = fecTotalsMap[candidate.id];
-    const localItemized = candidate.localItemizedContributions || 0;
-    if (!totals) {
-      return { mismatch: false, difference: 0, fecItemized: null, receipts: null };
+    const localItemized = candidate.localItemized || 0;
+    const fecItemized = candidate.fecItemized;
+    
+    if (fecItemized === null) {
+      return { mismatch: false, difference: 0, fecItemized: null, receipts: null, status: candidate.reconciliationStatus };
     }
-    const difference = Math.abs((totals.itemizedContributions || 0) - localItemized);
-    const tolerance = Math.max(500, (totals.itemizedContributions || 0) * 0.02);
+    
+    const difference = candidate.deltaAmount || Math.abs(fecItemized - localItemized);
+    const status = candidate.reconciliationStatus;
+    
     return {
-      mismatch: difference > tolerance,
+      mismatch: status === 'warning' || status === 'error',
       difference,
-      fecItemized: totals.itemizedContributions,
-      receipts: totals.totalReceipts,
+      fecItemized,
+      receipts: candidate.fecTotalReceipts,
+      status,
     };
-  }, [fecTotalsMap]);
+  }, []);
 
   const formatCurrency = (value?: number | null) => {
     if (value === null || value === undefined) return '—';
@@ -151,63 +154,16 @@ export function AnswerCoveragePanel() {
 
   const filteredCandidates = useMemo(() => {
     if (financeFilter === 'mismatch') {
-      return baseFilteredCandidates.filter(candidate => calculateFinanceStatus(candidate).mismatch);
+      return baseFilteredCandidates.filter(candidate => {
+        const status = candidate.reconciliationStatus;
+        return status === 'warning' || status === 'error';
+      });
     }
     if (financeFilter === 'partial') {
       return baseFilteredCandidates.filter(c => c.hasPartialSync || hasPartialSync(c.id));
     }
     return baseFilteredCandidates;
-  }, [baseFilteredCandidates, financeFilter, calculateFinanceStatus, hasPartialSync]);
-
-  useEffect(() => {
-    let isActive = true;
-    const fetchFecTotals = async () => {
-      const toFetch = baseFilteredCandidates
-        .filter(c => c.fecCommitteeId && !fecTotalsMap[c.id])
-        .slice(0, 100);
-
-      if (toFetch.length === 0) return;
-      setFinanceLoading(true);
-      const apiKey = 'DEMO_KEY'; // Use demo key to avoid rate limits with missing env var
-      const results: Record<string, { totalReceipts: number; itemizedContributions: number }> = {};
-
-      for (const candidate of toFetch) {
-        if (!isActive) break;
-        try {
-          const response = await fetch(
-            `https://api.open.fec.gov/v1/committee/${candidate.fecCommitteeId}/totals/?api_key=${apiKey}&cycle=2024&per_page=1`
-          );
-
-          if (!response.ok) continue;
-          const data = await response.json();
-          const totalReceipts = data?.results?.[0]?.receipts || 0;
-          const itemizedContributions = data?.results?.[0]?.individual_itemized_contributions || 0;
-          results[candidate.id] = {
-            totalReceipts,
-            itemizedContributions,
-          };
-          await new Promise(resolve => setTimeout(resolve, 150));
-        } catch (error) {
-          console.error('[FEC Totals] Failed to fetch totals for', candidate.name, error);
-        }
-      }
-
-      if (!isActive) return;
-      if (Object.keys(results).length > 0) {
-        setFecTotalsMap(prev => ({ ...prev, ...results }));
-      }
-      setFinanceLoading(false);
-    };
-
-    // Wrap in try-catch to prevent uncaught promise rejections
-    fetchFecTotals().catch(err => {
-      console.error('[FEC Totals] Unexpected error:', err);
-      if (isActive) setFinanceLoading(false);
-    });
-    
-    return () => { isActive = false; };
-  }, [baseFilteredCandidates, fecTotalsMap]);
-
+  }, [baseFilteredCandidates, financeFilter, hasPartialSync]);
   const handleFillAll = async () => {
     try {
       if (!candidates) return;
@@ -319,15 +275,7 @@ export function AnswerCoveragePanel() {
             </CardDescription>
           </div>
           
-          {/* Consolidated Toolbar */}
           <div className="flex items-center gap-2">
-            {/* Status indicators */}
-            {financeLoading && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground px-2">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>FEC totals...</span>
-              </div>
-            )}
             
             {/* AI Actions Dropdown */}
             <DropdownMenu>
@@ -752,7 +700,7 @@ export function AnswerCoveragePanel() {
                       const isComplete = candidate.percentage >= 100;
                       const hasFecId = !!candidate.fecCandidateId;
                       const financeStatus = calculateFinanceStatus(candidate);
-                      const localItemized = candidate.localItemizedContributions || 0;
+                      const localItemized = candidate.localItemized || 0;
                       const isPartialSync = candidate.hasPartialSync || hasPartialSync(candidate.id);
 
                       return (
