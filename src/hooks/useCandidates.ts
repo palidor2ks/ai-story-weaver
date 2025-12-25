@@ -49,6 +49,11 @@ interface Donor {
   employer: string | null;
   occupation: string | null;
   is_contribution: boolean;
+  is_transfer: boolean;
+  is_conduit_org: boolean;
+  line_number: string | null;
+  conduit_name: string | null;
+  conduit_committee_id: string | null;
 }
 
 export type { Donor };
