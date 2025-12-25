@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { parse as parseYaml } from "https://deno.land/std@0.224.0/yaml/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,10 +16,158 @@ interface FECCandidate {
   district?: string;
   cycles: number[];
   principal_committee_id?: string;
+  match_score?: number;
+  match_method?: 'crosswalk' | 'fec_api';
+}
+
+interface Legislator {
+  id: {
+    bioguide?: string;
+    fec?: string | string[];
+  };
+  name: {
+    first: string;
+    last: string;
+    official_full?: string;
+  };
+  terms?: Array<{
+    type: string;
+    state: string;
+    district?: number;
+  }>;
+}
+
+const CROSSWALK_URL = 'https://raw.githubusercontent.com/unitedstates/congress-legislators/main/legislators-current.yaml';
+
+// Cache crosswalk data for 1 hour
+let crosswalkCache: { data: Legislator[] | null; timestamp: number } = { data: null, timestamp: 0 };
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function fetchCrosswalk(): Promise<Legislator[]> {
+  const now = Date.now();
+  if (crosswalkCache.data && (now - crosswalkCache.timestamp) < CACHE_TTL_MS) {
+    console.log('[FEC] Using cached crosswalk data');
+    return crosswalkCache.data;
+  }
+
+  console.log('[FEC] Fetching crosswalk from GitHub...');
+  const response = await fetch(CROSSWALK_URL);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch crosswalk: ${response.status}`);
+  }
+
+  const yamlText = await response.text();
+  const legislators = parseYaml(yamlText) as Legislator[];
+  
+  crosswalkCache = { data: legislators, timestamp: now };
+  console.log('[FEC] Cached', legislators.length, 'legislators from crosswalk');
+  
+  return legislators;
+}
+
+async function lookupFECFromCrosswalk(bioguideId: string): Promise<{ fecIds: string[]; legislator: Legislator } | null> {
+  try {
+    const legislators = await fetchCrosswalk();
+    const match = legislators.find(l => l.id?.bioguide === bioguideId);
+    
+    if (match?.id?.fec) {
+      const fecIds = Array.isArray(match.id.fec) ? match.id.fec : [match.id.fec];
+      console.log('[FEC] Crosswalk match for', bioguideId, '→', fecIds);
+      return { fecIds, legislator: match };
+    }
+    
+    console.log('[FEC] No crosswalk match for bioguide:', bioguideId);
+    return null;
+  } catch (error) {
+    console.error('[FEC] Crosswalk lookup failed:', error);
+    return null;
+  }
+}
+
+// Calculate name similarity (0-1)
+function calculateNameSimilarity(fecName: string, ourName: string): number {
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+  const fecNorm = normalize(fecName);
+  const ourNorm = normalize(ourName);
+  
+  // Check if one contains the other
+  if (fecNorm.includes(ourNorm) || ourNorm.includes(fecNorm)) {
+    return 0.9;
+  }
+  
+  // Extract last name and check
+  const fecParts = fecName.toUpperCase().split(/[,\s]+/).filter(Boolean);
+  const ourParts = ourName.split(/\s+/).filter(Boolean);
+  const ourLastName = ourParts[ourParts.length - 1]?.toUpperCase();
+  
+  if (fecParts.includes(ourLastName)) {
+    return 0.8;
+  }
+  
+  // Simple character overlap ratio
+  const longer = fecNorm.length > ourNorm.length ? fecNorm : ourNorm;
+  const shorter = fecNorm.length > ourNorm.length ? ourNorm : fecNorm;
+  
+  let matches = 0;
+  for (const char of shorter) {
+    if (longer.includes(char)) matches++;
+  }
+  
+  return matches / longer.length;
+}
+
+// Score FEC API result against our candidate data
+function scoreCandidate(
+  fecResult: { name: string; state: string; office: string; district?: string; cycles?: number[]; principal_committee_id?: string },
+  ourCandidate: { name: string; state: string; office?: string; district?: string }
+): number {
+  let score = 0;
+  
+  // State match (required - return 0 if no match)
+  if (fecResult.state !== ourCandidate.state) {
+    console.log('[FEC] State mismatch:', fecResult.state, '≠', ourCandidate.state);
+    return 0;
+  }
+  score += 20;
+  
+  // Office type match
+  const isHouse = ourCandidate.office?.toLowerCase().includes('representative') || 
+                  ourCandidate.office?.toLowerCase().includes('house');
+  const isSenate = ourCandidate.office?.toLowerCase().includes('senator') || 
+                   ourCandidate.office?.toLowerCase().includes('senate');
+  
+  if (isHouse && fecResult.office === 'H') score += 25;
+  else if (isSenate && fecResult.office === 'S') score += 25;
+  else if (!isHouse && !isSenate) score += 10; // Unknown office, partial credit
+  
+  // District match (for House members)
+  if (isHouse && fecResult.district && ourCandidate.district) {
+    const fecDistrict = fecResult.district.replace(/^0+/, '');
+    const ourDistrict = ourCandidate.district.replace(/^0+/, '');
+    if (fecDistrict === ourDistrict) {
+      score += 20;
+    }
+  }
+  
+  // Recent election years (2024, 2026)
+  const recentYears = [2024, 2025, 2026];
+  if (fecResult.cycles?.some(y => recentYears.includes(y))) {
+    score += 15;
+  }
+  
+  // Has principal committee
+  if (fecResult.principal_committee_id) {
+    score += 10;
+  }
+  
+  // Name similarity (up to 10 points)
+  const nameSim = calculateNameSimilarity(fecResult.name, ourCandidate.name);
+  score += Math.round(nameSim * 10);
+  
+  return score;
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -33,8 +182,8 @@ serve(async (req) => {
       );
     }
 
-    const { candidateId, candidateName, state, updateDatabase } = await req.json();
-    console.log('[FEC] Looking up FEC candidate ID for:', { candidateId, candidateName, state });
+    const { candidateId, candidateName, state, office, district, updateDatabase } = await req.json();
+    console.log('[FEC] Looking up FEC candidate ID for:', { candidateId, candidateName, state, office, district });
 
     if (!candidateName && !candidateId) {
       return new Response(
@@ -43,132 +192,215 @@ serve(async (req) => {
       );
     }
 
-    // Build search query
-    const params = new URLSearchParams({
-      api_key: fecApiKey,
-      per_page: '5',
-      sort: '-election_years',
-    });
+    let candidates: FECCandidate[] = [];
+    let matchMethod: 'crosswalk' | 'fec_api' = 'fec_api';
 
-    if (candidateName) {
-      // Clean name - remove prefixes like "Rep.", "Sen.", etc.
+    // STEP 1: Try crosswalk lookup first (for bioguide IDs)
+    if (candidateId) {
+      const crosswalkResult = await lookupFECFromCrosswalk(candidateId);
+      
+      if (crosswalkResult) {
+        matchMethod = 'crosswalk';
+        console.log('[FEC] Found via crosswalk:', crosswalkResult.fecIds);
+        
+        // Fetch full details for each FEC ID from crosswalk
+        for (const fecId of crosswalkResult.fecIds) {
+          try {
+            const detailUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/?api_key=${fecApiKey}`;
+            const detailResp = await fetch(detailUrl);
+            
+            if (detailResp.ok) {
+              const detailData = await detailResp.json();
+              const r = detailData.results?.[0];
+              
+              if (r) {
+                const candidate: FECCandidate = {
+                  candidate_id: r.candidate_id,
+                  name: r.name,
+                  party: r.party_full || r.party,
+                  office: r.office_full || r.office,
+                  state: r.state,
+                  district: r.district,
+                  cycles: r.election_years || [],
+                  match_score: 100,
+                  match_method: 'crosswalk',
+                };
+                
+                // Fetch principal committee
+                const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&designation=P`;
+                const committeeResp = await fetch(committeeUrl);
+                if (committeeResp.ok) {
+                  const committeeData = await committeeResp.json();
+                  if (committeeData.results?.[0]?.committee_id) {
+                    candidate.principal_committee_id = committeeData.results[0].committee_id;
+                  }
+                }
+                
+                candidates.push(candidate);
+              }
+            }
+          } catch (err) {
+            console.warn('[FEC] Failed to fetch details for', fecId, err);
+          }
+        }
+      }
+    }
+
+    // STEP 2: Fallback to FEC API search with strict scoring
+    if (candidates.length === 0 && candidateName) {
+      console.log('[FEC] No crosswalk match, falling back to FEC API search');
+      
       const cleanName = candidateName
         .replace(/^(Rep\.|Sen\.|Hon\.|Dr\.|Mr\.|Mrs\.|Ms\.)\s*/i, '')
         .trim();
-      params.append('q', cleanName);
-    }
-    if (state) {
-      params.append('state', state);
-    }
-
-    const searchUrl = `https://api.open.fec.gov/v1/candidates/search/?${params.toString()}`;
-    console.log('[FEC] Searching:', searchUrl.replace(fecApiKey, 'REDACTED'));
-
-    const response = await fetch(searchUrl);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[FEC] API error:', response.status, errorText);
-      return new Response(
-        JSON.stringify({ error: `FEC API error: ${response.status}` }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const data = await response.json();
-    console.log('[FEC] Found', data.results?.length || 0, 'candidates');
-
-    if (!data.results || data.results.length === 0) {
-      return new Response(
-        JSON.stringify({ found: false, candidates: [] }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Map results to our format and fetch principal committee for each
-    const candidates: FECCandidate[] = [];
-    
-    for (const r of data.results) {
-      const candidate: FECCandidate = {
-        candidate_id: r.candidate_id,
-        name: r.name,
-        party: r.party_full || r.party,
-        office: r.office_full || r.office,
-        state: r.state,
-        district: r.district,
-        cycles: r.election_years || [],
-      };
-
-      // Fetch principal committee ID for this candidate using the committees endpoint
-      try {
-        const committeeUrl = `https://api.open.fec.gov/v1/candidate/${r.candidate_id}/committees/?api_key=${fecApiKey}&designation=P`;
-        console.log('[FEC] Fetching principal committee for:', r.candidate_id);
-        
-        const committeeResponse = await fetch(committeeUrl);
-        if (committeeResponse.ok) {
-          const committeeData = await committeeResponse.json();
-          console.log('[FEC] Committee response:', JSON.stringify(committeeData.results?.slice(0, 2)));
-          
-          // Find principal committee (designation P) - they're returned directly
-          const principalCommittee = committeeData.results?.[0];
-          if (principalCommittee?.committee_id) {
-            candidate.principal_committee_id = principalCommittee.committee_id;
-            console.log('[FEC] Found principal committee:', candidate.principal_committee_id);
-          }
-        } else {
-          console.warn('[FEC] Committee lookup failed:', committeeResponse.status);
-        }
-      } catch (err) {
-        console.warn('[FEC] Failed to fetch committee for', r.candidate_id, err);
-      }
-
-      candidates.push(candidate);
-    }
-
-    // If updateDatabase is true and we have a candidateId, update the candidates table
-    if (updateDatabase && candidateId && candidates.length > 0) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-      // Prefer a candidate with a committee ID, otherwise use the first match
-      const bestMatch = candidates.find(c => c.principal_committee_id) || candidates[0];
-      console.log('[FEC] Updating candidate', candidateId, 'with FEC ID:', bestMatch.candidate_id, 'committee:', bestMatch.principal_committee_id);
-
-      const updateData: Record<string, string | null> = { 
-        fec_candidate_id: bestMatch.candidate_id 
-      };
       
-      // Also store the principal committee ID if available
-      if (bestMatch.principal_committee_id) {
-        updateData.fec_committee_id = bestMatch.principal_committee_id;
+      const params = new URLSearchParams({
+        api_key: fecApiKey,
+        per_page: '10',
+        sort: '-election_years',
+      });
+      params.append('q', cleanName);
+      if (state) params.append('state', state);
+
+      const searchUrl = `https://api.open.fec.gov/v1/candidates/search/?${params.toString()}`;
+      console.log('[FEC] Searching:', searchUrl.replace(fecApiKey, 'REDACTED'));
+
+      const response = await fetch(searchUrl);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[FEC] API error:', response.status, errorText);
+        return new Response(
+          JSON.stringify({ error: `FEC API error: ${response.status}` }),
+          { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
-      const { error: updateError } = await supabase
-        .from('candidates')
-        .update(updateData)
-        .eq('id', candidateId);
+      const data = await response.json();
+      console.log('[FEC] Found', data.results?.length || 0, 'candidates from FEC API');
 
-      if (updateError) {
-        console.error('[FEC] Failed to update candidate:', updateError);
-      } else {
-        console.log('[FEC] Successfully updated candidate with FEC ID and committee ID');
+      // Score each result
+      for (const r of data.results || []) {
+        const score = scoreCandidate(
+          { 
+            name: r.name, 
+            state: r.state, 
+            office: r.office, 
+            district: r.district,
+            cycles: r.election_years,
+          },
+          { name: candidateName, state, office, district }
+        );
+        
+        console.log('[FEC] Scored', r.name, '(', r.candidate_id, '):', score);
+        
+        // Only include candidates with score >= 50
+        if (score >= 50) {
+          const candidate: FECCandidate = {
+            candidate_id: r.candidate_id,
+            name: r.name,
+            party: r.party_full || r.party,
+            office: r.office_full || r.office,
+            state: r.state,
+            district: r.district,
+            cycles: r.election_years || [],
+            match_score: score,
+            match_method: 'fec_api',
+          };
+
+          // Fetch principal committee
+          try {
+            const committeeUrl = `https://api.open.fec.gov/v1/candidate/${r.candidate_id}/committees/?api_key=${fecApiKey}&designation=P`;
+            const committeeResp = await fetch(committeeUrl);
+            if (committeeResp.ok) {
+              const committeeData = await committeeResp.json();
+              if (committeeData.results?.[0]?.committee_id) {
+                candidate.principal_committee_id = committeeData.results[0].committee_id;
+                candidate.match_score! += 10; // Bonus for having committee
+              }
+            }
+          } catch (err) {
+            console.warn('[FEC] Failed to fetch committee for', r.candidate_id, err);
+          }
+
+          candidates.push(candidate);
+        }
       }
+      
+      // Sort by score descending
+      candidates.sort((a, b) => (b.match_score || 0) - (a.match_score || 0));
+    }
 
+    if (candidates.length === 0) {
+      console.log('[FEC] No matches found');
       return new Response(
-        JSON.stringify({ 
-          found: true, 
-          updated: !updateError,
-          fecCandidateId: bestMatch.candidate_id,
-          fecCommitteeId: bestMatch.principal_committee_id,
-          candidates 
-        }),
+        JSON.stringify({ found: false, candidates: [], matchMethod }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // STEP 3: Update database if requested and we have a high-confidence match
+    if (updateDatabase && candidateId && candidates.length > 0) {
+      const bestMatch = candidates[0];
+      const minScoreForAutoUpdate = matchMethod === 'crosswalk' ? 0 : 80;
+      
+      if ((bestMatch.match_score || 0) >= minScoreForAutoUpdate) {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+        console.log('[FEC] Updating candidate', candidateId, 'with FEC ID:', bestMatch.candidate_id, 
+                    'committee:', bestMatch.principal_committee_id, 'score:', bestMatch.match_score, 'method:', matchMethod);
+
+        const updateData: Record<string, string | null> = { 
+          fec_candidate_id: bestMatch.candidate_id 
+        };
+        
+        if (bestMatch.principal_committee_id) {
+          updateData.fec_committee_id = bestMatch.principal_committee_id;
+        }
+
+        const { error: updateError } = await supabase
+          .from('candidates')
+          .update(updateData)
+          .eq('id', candidateId);
+
+        if (updateError) {
+          console.error('[FEC] Failed to update candidate:', updateError);
+        } else {
+          console.log('[FEC] Successfully updated candidate with FEC ID');
+        }
+
+        return new Response(
+          JSON.stringify({ 
+            found: true, 
+            updated: !updateError,
+            fecCandidateId: bestMatch.candidate_id,
+            fecCommitteeId: bestMatch.principal_committee_id,
+            matchScore: bestMatch.match_score,
+            matchMethod,
+            candidates 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } else {
+        console.log('[FEC] Best match score', bestMatch.match_score, 'below threshold', minScoreForAutoUpdate, '- not auto-updating');
+        return new Response(
+          JSON.stringify({ 
+            found: true, 
+            updated: false,
+            requiresConfirmation: true,
+            matchScore: bestMatch.match_score,
+            matchMethod,
+            candidates 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     return new Response(
-      JSON.stringify({ found: true, candidates }),
+      JSON.stringify({ found: true, matchMethod, candidates }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
