@@ -6,34 +6,38 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Fetch FEC totals for a committee
+// Fetch FEC totals for a committee with category-level data
 async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: string): Promise<{
   fecItemized: number | null;
   fecUnitemized: number | null;
   fecTotalReceipts: number | null;
+  fecPacContributions: number | null;
+  fecPartyContributions: number | null;
 }> {
   try {
     const url = `https://api.open.fec.gov/v1/committee/${committeeId}/totals/?api_key=${fecApiKey}&cycle=${cycle}`;
     const response = await fetch(url);
     
     if (!response.ok) {
-      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null };
+      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null };
     }
     
     const data = await response.json();
     const totals = data.results?.[0];
     
     if (!totals) {
-      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null };
+      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null };
     }
     
     return {
       fecItemized: Math.round(totals.individual_itemized_contributions || 0),
       fecUnitemized: Math.round(totals.individual_unitemized_contributions || 0),
-      fecTotalReceipts: Math.round(totals.receipts || 0)
+      fecTotalReceipts: Math.round(totals.receipts || 0),
+      fecPacContributions: Math.round(totals.other_political_committee_contributions || 0),
+      fecPartyContributions: Math.round(totals.political_party_committee_contributions || 0)
     };
   } catch {
-    return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null };
+    return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null };
   }
 }
 
@@ -101,7 +105,7 @@ serve(async (req) => {
       warning: 0,
       error: 0,
       skipped: 0,
-      details: [] as Array<{ candidateId: string; name: string; status: string; deltaPct: number }>
+      details: [] as Array<{ candidateId: string; name: string; status: string; deltaPct: number; individualDeltaPct: number; pacDeltaPct: number }>
     };
 
     for (const candidate of candidates || []) {
@@ -118,16 +122,19 @@ serve(async (req) => {
           continue;
         }
 
-        // Get local totals from rollups
+        // Get local totals from rollups (including new category-level columns)
         const { data: rollups } = await supabase
           .from('committee_finance_rollups')
-          .select('local_itemized, local_transfers, local_earmarked')
+          .select('local_itemized, local_transfers, local_earmarked, local_individual_itemized, local_pac_contributions, local_party_contributions')
           .eq('candidate_id', candidate.id)
           .eq('cycle', cycle);
 
         const localItemized = (rollups || []).reduce((sum, r) => sum + (r.local_itemized || 0), 0);
         const localTransfers = (rollups || []).reduce((sum, r) => sum + (r.local_transfers || 0), 0);
         const localEarmarked = (rollups || []).reduce((sum, r) => sum + (r.local_earmarked || 0), 0);
+        const localIndividualItemized = (rollups || []).reduce((sum, r) => sum + (r.local_individual_itemized || 0), 0);
+        const localPacContributions = (rollups || []).reduce((sum, r) => sum + (r.local_pac_contributions || 0), 0);
+        const localPartyContributions = (rollups || []).reduce((sum, r) => sum + (r.local_party_contributions || 0), 0);
         
         // Calculate local_itemized_net by querying contributions directly
         // Exclude earmark pass-throughs (contributions with "SEE BELOW" memo text)
@@ -142,16 +149,20 @@ serve(async (req) => {
         const passThroughTotal = (passThroughData || []).reduce((sum, c) => sum + (c.amount || 0), 0);
         const localItemizedNet = localItemized - passThroughTotal;
 
-        // Fetch fresh FEC totals for each committee
+        // Fetch fresh FEC totals for each committee (with category-level data)
         let fecItemized = 0;
         let fecUnitemized = 0;
         let fecTotalReceipts = 0;
+        let fecPacContributions = 0;
+        let fecPartyContributions = 0;
 
         for (const cmte of committees) {
           const totals = await fetchFECTotals(fecApiKey, cmte.fec_committee_id, cycle);
           fecItemized += totals.fecItemized || 0;
           fecUnitemized += totals.fecUnitemized || 0;
           fecTotalReceipts += totals.fecTotalReceipts || 0;
+          fecPacContributions += totals.fecPacContributions || 0;
+          fecPartyContributions += totals.fecPartyContributions || 0;
 
           // Update committee rollup with fresh FEC data
           await supabase
@@ -178,17 +189,30 @@ serve(async (req) => {
         const calculatedTotal = fecItemized + fecUnitemized + otherReceipts;
         const fecDataBalanced = Math.abs(calculatedTotal - fecTotalReceipts) < 1;
         
-        // Delta now measures FEC data integrity (should always be ~0 if balanced)
-        const deltaAmount = fecTotalReceipts - calculatedTotal;
-        const deltaPct = fecTotalReceipts > 0 
-          ? Math.round((deltaAmount / fecTotalReceipts) * 10000) / 100 
+        // Calculate category-level deltas (apples-to-apples comparisons)
+        // Individual: local_individual_itemized vs fec_itemized (both are Line 11A/11AI)
+        const individualDeltaAmount = localIndividualItemized - fecItemized;
+        const individualDeltaPct = fecItemized > 0 
+          ? Math.round((individualDeltaAmount / fecItemized) * 10000) / 100 
           : 0;
+        
+        // PAC: local_pac_contributions vs fec_pac_contributions (both are Line 11C)
+        const pacDeltaAmount = localPacContributions - fecPacContributions;
+        const pacDeltaPct = fecPacContributions > 0 
+          ? Math.round((pacDeltaAmount / fecPacContributions) * 10000) / 100 
+          : 0;
+        
+        // Overall delta now uses individual comparison (apples-to-apples)
+        const deltaAmount = individualDeltaAmount;
+        const deltaPct = individualDeltaPct;
 
+        // Status based on individual delta (the most important comparison)
         let status = 'ok';
-        if (!fecDataBalanced || Math.abs(deltaPct) > 10) status = 'error';
+        if (!fecDataBalanced) status = 'error';
+        else if (Math.abs(deltaPct) > 10) status = 'error';
         else if (Math.abs(deltaPct) > varianceThreshold) status = 'warning';
 
-        // Upsert reconciliation record
+        // Upsert reconciliation record with category-level data
         await supabase
           .from('finance_reconciliation')
           .upsert({
@@ -198,9 +222,22 @@ serve(async (req) => {
             local_itemized_net: localItemizedNet,
             local_transfers: localTransfers,
             local_earmarked: localEarmarked,
+            // Category-level local data
+            local_individual_itemized: localIndividualItemized,
+            local_pac_contributions: localPacContributions,
+            local_party_contributions: localPartyContributions,
+            // FEC data
             fec_itemized: fecItemized,
             fec_unitemized: fecUnitemized,
             fec_total_receipts: fecTotalReceipts,
+            fec_pac_contributions: fecPacContributions,
+            fec_party_contributions: fecPartyContributions,
+            // Category-level deltas
+            individual_delta_amount: individualDeltaAmount,
+            individual_delta_pct: individualDeltaPct,
+            pac_delta_amount: pacDeltaAmount,
+            pac_delta_pct: pacDeltaPct,
+            // Overall delta
             delta_amount: deltaAmount,
             delta_pct: deltaPct,
             status,
@@ -216,10 +253,12 @@ serve(async (req) => {
           candidateId: candidate.id,
           name: candidate.name,
           status,
-          deltaPct
+          deltaPct,
+          individualDeltaPct,
+          pacDeltaPct
         });
 
-        console.log(`[RECONCILIATION] ${candidate.name}: ${status} (${deltaPct.toFixed(1)}% variance)`);
+        console.log(`[RECONCILIATION] ${candidate.name}: ${status} (ind: ${individualDeltaPct.toFixed(1)}%, pac: ${pacDeltaPct.toFixed(1)}%)`);
 
       } catch (err) {
         console.error(`[RECONCILIATION] Error processing ${candidate.name}:`, err);

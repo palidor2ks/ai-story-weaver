@@ -307,8 +307,11 @@ export type Database = {
           last_fec_check: string | null
           last_sync: string | null
           local_earmarked: number | null
+          local_individual_itemized: number | null
           local_itemized: number | null
           local_other: number | null
+          local_pac_contributions: number | null
+          local_party_contributions: number | null
           local_transfers: number | null
           updated_at: string | null
         }
@@ -326,8 +329,11 @@ export type Database = {
           last_fec_check?: string | null
           last_sync?: string | null
           local_earmarked?: number | null
+          local_individual_itemized?: number | null
           local_itemized?: number | null
           local_other?: number | null
+          local_pac_contributions?: number | null
+          local_party_contributions?: number | null
           local_transfers?: number | null
           updated_at?: string | null
         }
@@ -345,8 +351,11 @@ export type Database = {
           last_fec_check?: string | null
           last_sync?: string | null
           local_earmarked?: number | null
+          local_individual_itemized?: number | null
           local_itemized?: number | null
           local_other?: number | null
+          local_pac_contributions?: number | null
+          local_party_contributions?: number | null
           local_transfers?: number | null
           updated_at?: string | null
         }
@@ -528,14 +537,23 @@ export type Database = {
           delta_amount: number | null
           delta_pct: number | null
           fec_itemized: number | null
+          fec_pac_contributions: number | null
+          fec_party_contributions: number | null
           fec_total_receipts: number | null
           fec_unitemized: number | null
           id: string
+          individual_delta_amount: number | null
+          individual_delta_pct: number | null
           local_earmarked: number | null
+          local_individual_itemized: number | null
           local_itemized: number | null
           local_itemized_net: number | null
+          local_pac_contributions: number | null
+          local_party_contributions: number | null
           local_transfers: number | null
           notes: string | null
+          pac_delta_amount: number | null
+          pac_delta_pct: number | null
           status: string | null
           updated_at: string | null
         }
@@ -547,14 +565,23 @@ export type Database = {
           delta_amount?: number | null
           delta_pct?: number | null
           fec_itemized?: number | null
+          fec_pac_contributions?: number | null
+          fec_party_contributions?: number | null
           fec_total_receipts?: number | null
           fec_unitemized?: number | null
           id?: string
+          individual_delta_amount?: number | null
+          individual_delta_pct?: number | null
           local_earmarked?: number | null
+          local_individual_itemized?: number | null
           local_itemized?: number | null
           local_itemized_net?: number | null
+          local_pac_contributions?: number | null
+          local_party_contributions?: number | null
           local_transfers?: number | null
           notes?: string | null
+          pac_delta_amount?: number | null
+          pac_delta_pct?: number | null
           status?: string | null
           updated_at?: string | null
         }
@@ -566,14 +593,23 @@ export type Database = {
           delta_amount?: number | null
           delta_pct?: number | null
           fec_itemized?: number | null
+          fec_pac_contributions?: number | null
+          fec_party_contributions?: number | null
           fec_total_receipts?: number | null
           fec_unitemized?: number | null
           id?: string
+          individual_delta_amount?: number | null
+          individual_delta_pct?: number | null
           local_earmarked?: number | null
+          local_individual_itemized?: number | null
           local_itemized?: number | null
           local_itemized_net?: number | null
+          local_pac_contributions?: number | null
+          local_party_contributions?: number | null
           local_transfers?: number | null
           notes?: string | null
+          pac_delta_amount?: number | null
+          pac_delta_pct?: number | null
           status?: string | null
           updated_at?: string | null
         }
