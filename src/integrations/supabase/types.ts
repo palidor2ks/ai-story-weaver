@@ -357,6 +357,7 @@ export type Database = {
           amount: number
           candidate_id: string | null
           conduit_committee_id: string | null
+          conduit_committee_name: string | null
           contributor_city: string | null
           contributor_name: string
           contributor_state: string | null
@@ -383,6 +384,7 @@ export type Database = {
           amount: number
           candidate_id?: string | null
           conduit_committee_id?: string | null
+          conduit_committee_name?: string | null
           contributor_city?: string | null
           contributor_name: string
           contributor_state?: string | null
@@ -409,6 +411,7 @@ export type Database = {
           amount?: number
           candidate_id?: string | null
           conduit_committee_id?: string | null
+          conduit_committee_name?: string | null
           contributor_city?: string | null
           contributor_name?: string
           contributor_state?: string | null
@@ -437,6 +440,8 @@ export type Database = {
         Row: {
           amount: number
           candidate_id: string
+          conduit_committee_id: string | null
+          conduit_name: string | null
           contributor_city: string | null
           contributor_state: string | null
           contributor_zip: string | null
@@ -444,6 +449,7 @@ export type Database = {
           employer: string | null
           first_receipt_date: string | null
           id: string
+          is_conduit_org: boolean | null
           is_contribution: boolean | null
           is_transfer: boolean | null
           last_receipt_date: string | null
@@ -458,6 +464,8 @@ export type Database = {
         Insert: {
           amount: number
           candidate_id: string
+          conduit_committee_id?: string | null
+          conduit_name?: string | null
           contributor_city?: string | null
           contributor_state?: string | null
           contributor_zip?: string | null
@@ -465,6 +473,7 @@ export type Database = {
           employer?: string | null
           first_receipt_date?: string | null
           id: string
+          is_conduit_org?: boolean | null
           is_contribution?: boolean | null
           is_transfer?: boolean | null
           last_receipt_date?: string | null
@@ -479,6 +488,8 @@ export type Database = {
         Update: {
           amount?: number
           candidate_id?: string
+          conduit_committee_id?: string | null
+          conduit_name?: string | null
           contributor_city?: string | null
           contributor_state?: string | null
           contributor_zip?: string | null
@@ -486,6 +497,7 @@ export type Database = {
           employer?: string | null
           first_receipt_date?: string | null
           id?: string
+          is_conduit_org?: boolean | null
           is_contribution?: boolean | null
           is_transfer?: boolean | null
           last_receipt_date?: string | null
