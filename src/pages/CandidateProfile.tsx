@@ -133,10 +133,23 @@ export const CandidateProfile = () => {
   const agreements = comparisons.filter(c => c.isAgreement).sort((a, b) => a.difference - b.difference).slice(0, 3);
   const disagreements = comparisons.filter(c => !c.isAgreement && c.score !== 0).sort((a, b) => b.difference - a.difference).slice(0, 3);
 
-  // Use finance_reconciliation as single source of truth for total donations
+  // Use finance_reconciliation as single source of truth for totals when available
   // Prefer local_itemized_net (excludes earmark pass-throughs) for accurate display
   const totalDonations = financeReconciliation?.local_itemized_net ?? financeReconciliation?.local_itemized ?? donors.reduce((sum, d) => sum + d.amount, 0);
   const earmarkPassThroughs = (financeReconciliation?.local_itemized ?? 0) - (financeReconciliation?.local_itemized_net ?? 0);
+
+  // Normalize FEC totals to use reconciliation first, then live API as a fallback
+  const fecItemized = financeReconciliation?.fec_itemized ?? fecTotals?.individual_itemized_contributions ?? null;
+  const fecUnitemized = financeReconciliation?.fec_unitemized ?? fecTotals?.individual_unitemized_contributions ?? null;
+  const fecTotalReceipts = financeReconciliation?.fec_total_receipts ?? fecTotals?.total_receipts ?? null;
+  const otherReceipts = (fecTotalReceipts ?? 0) - (fecItemized ?? 0) - (fecUnitemized ?? 0);
+  const hasFecBreakdown = fecTotalReceipts !== null && fecTotalReceipts > 0;
+  const fecSourceLabel = financeReconciliation ? 'Nightly reconciliation (cached)' : fecTotals ? 'Live FEC API (fallback)' : null;
+
+  const formatCurrency = (value: number | null | undefined) => {
+    if (value === null || value === undefined) return '—';
+    return `$${Math.round(value).toLocaleString()}`;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -428,12 +441,41 @@ export const CandidateProfile = () => {
                     {/* Finance Summary Card - visible to all users */}
                     <FinanceSummaryCard
                       data={{
-                        fecItemized: financeReconciliation?.fec_itemized ?? null,
-                        fecUnitemized: financeReconciliation?.fec_unitemized ?? fecTotals?.individual_unitemized_contributions ?? null,
-                        fecTotalReceipts: financeReconciliation?.fec_total_receipts ?? fecTotals?.total_receipts ?? null,
+                        fecItemized,
+                        fecUnitemized,
+                        fecTotalReceipts,
                       }}
                       className="mb-6"
                     />
+
+                    {/* FEC-derived aggregates to align list with summary */}
+                    {hasFecBreakdown && (
+                      <div className="mb-6 space-y-3">
+                        {fecSourceLabel && (
+                          <div className="text-xs text-muted-foreground flex items-center gap-2">
+                            <Info className="w-4 h-4" />
+                            <span>Totals shown below use {fecSourceLabel}.</span>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="p-3 rounded-lg border border-border/70 bg-secondary/40">
+                            <p className="text-xs text-muted-foreground">Itemized (FEC $200+)</p>
+                            <p className="text-lg font-semibold">{formatCurrency(fecItemized)}</p>
+                            <p className="text-[11px] text-muted-foreground mt-1">Matches visible donor rows; excludes earmark pass-through adjustments.</p>
+                          </div>
+                          <div className="p-3 rounded-lg border border-border/70 bg-secondary/40">
+                            <p className="text-xs text-muted-foreground">Unitemized (&lt;$200, not individually reported)</p>
+                            <p className="text-lg font-semibold">{formatCurrency(fecUnitemized)}</p>
+                            <p className="text-[11px] text-muted-foreground mt-1">FEC aggregate only; individual donors are not published by FEC.</p>
+                          </div>
+                          <div className="p-3 rounded-lg border border-border/70 bg-secondary/40">
+                            <p className="text-xs text-muted-foreground">Other Receipts (PAC/Transfers/Loans/etc.)</p>
+                            <p className="text-lg font-semibold">{formatCurrency(otherReceipts)}</p>
+                            <p className="text-[11px] text-muted-foreground mt-1">Keeps total receipts aligned with FEC summary and avoids double counting.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="mb-6 p-4 rounded-xl bg-secondary/50">
                       <p className="text-sm text-muted-foreground">Contributors</p>
