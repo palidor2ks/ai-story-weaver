@@ -60,6 +60,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { 
+      candidateId,          // Optional: reconcile a specific candidate
       cycle = '2024',
       limit = 50,
       onlyStale = true,      // Only check candidates with stale data (>7 days)
@@ -67,7 +68,7 @@ serve(async (req) => {
       varianceThreshold = 5  // % threshold to flag as warning
     } = await req.json().catch(() => ({}));
 
-    console.log('[RECONCILIATION] Starting nightly reconciliation:', { cycle, limit, onlyStale, onlyWithData });
+    console.log('[RECONCILIATION] Starting nightly reconciliation:', { candidateId, cycle, limit, onlyStale, onlyWithData });
 
     // Get candidates to reconcile
     let query = supabase
@@ -75,14 +76,19 @@ serve(async (req) => {
       .select('id, name, fec_candidate_id, last_donor_sync')
       .not('fec_candidate_id', 'is', null);
 
-    if (onlyWithData) {
-      query = query.not('last_donor_sync', 'is', null);
-    }
+    // If a specific candidate ID is provided, only reconcile that candidate
+    if (candidateId) {
+      query = query.eq('id', candidateId);
+    } else {
+      if (onlyWithData) {
+        query = query.not('last_donor_sync', 'is', null);
+      }
 
-    if (onlyStale) {
-      const staleDate = new Date();
-      staleDate.setDate(staleDate.getDate() - 7);
-      query = query.or(`last_donor_sync.is.null,last_donor_sync.lt.${staleDate.toISOString()}`);
+      if (onlyStale) {
+        const staleDate = new Date();
+        staleDate.setDate(staleDate.getDate() - 7);
+        query = query.or(`last_donor_sync.is.null,last_donor_sync.lt.${staleDate.toISOString()}`);
+      }
     }
 
     const { data: candidates, error: candidatesError } = await query
