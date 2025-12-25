@@ -856,8 +856,14 @@ serve(async (req) => {
         const existing = aggregatedDonors.get(donorId);
         const donorIsConduitOrg = isKnownConduitOrg(name);
         
+        // FIX: Conduit orgs should NOT aggregate amounts - they're pass-throughs
+        // The individual donors behind them are already counted separately
+        // Also skip earmark pass-throughs (SEE BELOW entries) to avoid double-counting
+        const shouldCountAmount = !donorIsConduitOrg && !earmarkInfo.isEarmarkPassThrough;
+        const amountToAggregate = shouldCountAmount ? amount : 0;
+        
         if (existing) {
-          existing.amount += amount;
+          existing.amount += amountToAggregate;
           existing.transactionCount++;
           if (receiptDate) {
             if (!existing.firstReceiptDate || receiptDate < existing.firstReceiptDate) {
@@ -875,7 +881,8 @@ serve(async (req) => {
         } else {
           aggregatedDonors.set(donorId, { 
             id: donorId,
-            name, type, amount,
+            name, type, 
+            amount: amountToAggregate,
             transactionCount: 1,
             firstReceiptDate: receiptDate,
             lastReceiptDate: receiptDate,

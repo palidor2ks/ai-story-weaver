@@ -142,13 +142,41 @@ export const CandidateProfile = () => {
   const fecItemized = financeReconciliation?.fec_itemized ?? fecTotals?.individual_itemized_contributions ?? null;
   const fecUnitemized = financeReconciliation?.fec_unitemized ?? fecTotals?.individual_unitemized_contributions ?? null;
   const fecTotalReceipts = financeReconciliation?.fec_total_receipts ?? fecTotals?.total_receipts ?? null;
-  const otherReceipts = (fecTotalReceipts ?? 0) - (fecItemized ?? 0) - (fecUnitemized ?? 0);
   const hasFecBreakdown = fecTotalReceipts !== null && fecTotalReceipts > 0;
   const fecSourceLabel = financeReconciliation ? 'Nightly reconciliation (cached)' : fecTotals ? 'Live FEC API (fallback)' : null;
 
-  // Variance check: compare donor list total to FEC reported itemized
-  const donorListTotal = donors.reduce((sum, d) => sum + d.amount, 0);
-  const contributionListTotal = donorListTotal + (fecUnitemized ?? 0) + (otherReceipts > 0 ? otherReceipts : 0);
+  // FIX: Properly categorize donors to match FEC categories and avoid double-counting
+  // Filter by is_contribution, is_transfer, and is_conduit_org flags from database
+  const conduitOrgNames = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
+  const isConduitDonor = (d: typeof donors[0]) => d.is_conduit_org || conduitOrgNames.some(c => d.name.toUpperCase().includes(c));
+  
+  // Itemized Individual = is_contribution && !is_transfer && !is_conduit_org (Line 11 contributions)
+  const itemizedIndividualDonors = donors.filter(d => d.is_contribution !== false && !d.is_transfer && !isConduitDonor(d));
+  const itemizedIndividualTotal = itemizedIndividualDonors.reduce((sum, d) => sum + d.amount, 0);
+  
+  // PAC/Committee contributions (Line 11C - typically type = 'PAC' or 'Organization')
+  const pacDonors = donors.filter(d => d.is_contribution !== false && !d.is_transfer && !isConduitDonor(d) && (d.type === 'PAC' || d.type === 'Organization'));
+  const pacTotal = pacDonors.reduce((sum, d) => sum + d.amount, 0);
+  
+  // Transfers (Line 12 - is_transfer = true)
+  const transferDonors = donors.filter(d => d.is_transfer);
+  const transferTotal = transferDonors.reduce((sum, d) => sum + d.amount, 0);
+  
+  // Conduit orgs (pass-throughs - should have $0 after fix, but display for transparency)
+  const conduitDonors = donors.filter(d => isConduitDonor(d));
+  const conduitTotal = conduitDonors.reduce((sum, d) => sum + d.amount, 0);
+  
+  // Other Receipts = FEC Total - Itemized - Unitemized (includes PACs, transfers, loans, etc.)
+  const otherReceipts = (fecTotalReceipts ?? 0) - (fecItemized ?? 0) - (fecUnitemized ?? 0);
+  
+  // Full donor list total (for display - but excluding conduits which are pass-throughs)
+  const donorListTotal = donors.filter(d => !isConduitDonor(d)).reduce((sum, d) => sum + d.amount, 0);
+  
+  // Contribution list total: itemized individuals + unitemized + other receipts (which includes transfers/PACs)
+  // This should match FEC total receipts
+  const contributionListTotal = itemizedIndividualTotal + (fecUnitemized ?? 0) + (otherReceipts > 0 ? otherReceipts : 0);
+  
+  // Variance check: compare our calculated list total to FEC reported total receipts
   const varianceAmount = fecTotalReceipts !== null ? contributionListTotal - fecTotalReceipts : 0;
   const varianceThreshold = fecTotalReceipts ? Math.max(1, fecTotalReceipts * 0.01) : 1;
   const hasVariance = fecTotalReceipts !== null && Math.abs(varianceAmount) > varianceThreshold;
@@ -465,21 +493,26 @@ export const CandidateProfile = () => {
                             <span>Totals shown below use {fecSourceLabel}.</span>
                           </div>
                         )}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           <div className="p-3 rounded-lg border border-border/70 bg-secondary/40">
-                            <p className="text-xs text-muted-foreground">Itemized (FEC $200+)</p>
+                            <p className="text-xs text-muted-foreground">Itemized Individual</p>
                             <p className="text-lg font-semibold">{formatCurrency(fecItemized)}</p>
-                            <p className="text-[11px] text-muted-foreground mt-1">Matches visible donor rows; excludes earmark pass-through adjustments.</p>
+                            <p className="text-[11px] text-muted-foreground mt-1">{itemizedIndividualDonors.length} donors (Line 11)</p>
                           </div>
                           <div className="p-3 rounded-lg border border-border/70 bg-secondary/40">
-                            <p className="text-xs text-muted-foreground">Unitemized (&lt;$200, not individually reported)</p>
+                            <p className="text-xs text-muted-foreground">Unitemized (Small Donors)</p>
                             <p className="text-lg font-semibold">{formatCurrency(fecUnitemized)}</p>
-                            <p className="text-[11px] text-muted-foreground mt-1">FEC aggregate only; individual donors are not published by FEC.</p>
+                            <p className="text-[11px] text-muted-foreground mt-1">&lt;$200, FEC aggregate</p>
                           </div>
                           <div className="p-3 rounded-lg border border-border/70 bg-secondary/40">
-                            <p className="text-xs text-muted-foreground">Other Receipts (PAC/Transfers/Loans/etc.)</p>
-                            <p className="text-lg font-semibold">{formatCurrency(otherReceipts)}</p>
-                            <p className="text-[11px] text-muted-foreground mt-1">Keeps total receipts aligned with FEC summary and avoids double counting.</p>
+                            <p className="text-xs text-muted-foreground">Transfers (Line 12)</p>
+                            <p className="text-lg font-semibold">{formatCurrency(transferTotal)}</p>
+                            <p className="text-[11px] text-muted-foreground mt-1">{transferDonors.length} committee transfers</p>
+                          </div>
+                          <div className="p-3 rounded-lg border border-border/70 bg-secondary/40">
+                            <p className="text-xs text-muted-foreground">Other Receipts</p>
+                            <p className="text-lg font-semibold">{formatCurrency(otherReceipts > 0 ? otherReceipts - transferTotal : 0)}</p>
+                            <p className="text-[11px] text-muted-foreground mt-1">PAC/Loans/Misc</p>
                           </div>
                         </div>
                       </div>
@@ -513,17 +546,20 @@ export const CandidateProfile = () => {
                     <div className="mb-6 p-4 rounded-xl bg-secondary/50">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm text-muted-foreground">Itemized Contributors</p>
+                          <p className="text-sm text-muted-foreground">Itemized Individual Contributors</p>
                           <p className="text-2xl font-bold text-foreground">
-                            {donors.length} donors
+                            {itemizedIndividualDonors.length} donors
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {donors.reduce((sum, d) => sum + (d.transaction_count || 1), 0)} total transactions
+                            Excludes {transferDonors.length} transfers, {conduitDonors.length} conduit pass-throughs
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-muted-foreground">List Total</p>
-                          <p className="text-xl font-bold text-foreground">{formatCurrency(donorListTotal)}</p>
+                          <p className="text-xs text-muted-foreground">Itemized List Total</p>
+                          <p className="text-xl font-bold text-foreground">{formatCurrency(itemizedIndividualTotal)}</p>
+                          {conduitTotal > 0 && (
+                            <p className="text-[10px] text-amber-600 mt-1">+${conduitTotal.toLocaleString()} conduit (excluded)</p>
+                          )}
                         </div>
                       </div>
                     </div>
