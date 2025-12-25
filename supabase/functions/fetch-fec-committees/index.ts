@@ -56,15 +56,16 @@ serve(async (req) => {
 
     console.log('[FEC-COMMITTEES] Fetching committees for:', { candidateId, fecCandidateId });
 
-    // Fetch committees from FEC API
-    const url = `https://api.open.fec.gov/v1/candidate/${fecCandidateId}/committees/?api_key=${fecApiKey}&designation=P,A&per_page=50`;
+    // Fetch committees from FEC API - use repeated params for multiple designations
+    const url = `https://api.open.fec.gov/v1/candidate/${fecCandidateId}/committees/?api_key=${fecApiKey}&designation=P&designation=A&per_page=50`;
     
     const response = await fetch(url);
     
     if (!response.ok) {
-      console.error('[FEC-COMMITTEES] FEC API error:', response.status);
+      const errorBody = await response.text();
+      console.error('[FEC-COMMITTEES] FEC API error:', response.status, errorBody);
       return new Response(
-        JSON.stringify({ error: `FEC API returned ${response.status}` }),
+        JSON.stringify({ error: `FEC API returned ${response.status}`, details: errorBody }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
