@@ -16,7 +16,7 @@ import { useFinanceReconciliation, useCommitteeRollups } from '@/hooks/useFinanc
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle } from 'lucide-react';
 import { ScoreText } from '@/components/ScoreText';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
@@ -145,6 +145,14 @@ export const CandidateProfile = () => {
   const otherReceipts = (fecTotalReceipts ?? 0) - (fecItemized ?? 0) - (fecUnitemized ?? 0);
   const hasFecBreakdown = fecTotalReceipts !== null && fecTotalReceipts > 0;
   const fecSourceLabel = financeReconciliation ? 'Nightly reconciliation (cached)' : fecTotals ? 'Live FEC API (fallback)' : null;
+
+  // Variance check: compare donor list total to FEC reported itemized
+  const donorListTotal = donors.reduce((sum, d) => sum + d.amount, 0);
+  const contributionListTotal = donorListTotal + (fecUnitemized ?? 0) + (otherReceipts > 0 ? otherReceipts : 0);
+  const varianceAmount = fecTotalReceipts !== null ? contributionListTotal - fecTotalReceipts : 0;
+  const varianceThreshold = fecTotalReceipts ? Math.max(1, fecTotalReceipts * 0.01) : 1;
+  const hasVariance = fecTotalReceipts !== null && Math.abs(varianceAmount) > varianceThreshold;
+  const variancePct = fecTotalReceipts ? ((varianceAmount / fecTotalReceipts) * 100).toFixed(1) : '0';
 
   const formatCurrency = (value: number | null | undefined) => {
     if (value === null || value === undefined) return '—';
@@ -476,15 +484,48 @@ export const CandidateProfile = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Variance Check Banner */}
+                    {hasVariance && fecTotalReceipts !== null && (
+                      <div className={cn(
+                        "mb-4 p-3 rounded-lg border flex items-start gap-2",
+                        Math.abs(Number(variancePct)) > 5 
+                          ? "bg-amber-500/10 border-amber-500/30" 
+                          : "bg-muted/50 border-border"
+                      )}>
+                        <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm">
+                          <span className="font-medium">Data Variance Detected</span>
+                          <div className="text-xs text-muted-foreground mt-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div>FEC Total: <strong>{formatCurrency(fecTotalReceipts)}</strong></div>
+                            <div>List Total: <strong>{formatCurrency(contributionListTotal)}</strong></div>
+                            <div>Delta: <strong className={varianceAmount > 0 ? "text-agree" : "text-disagree"}>
+                              {varianceAmount > 0 ? '+' : ''}{formatCurrency(varianceAmount)} ({variancePct}%)
+                            </strong></div>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-2">
+                            Variance may occur if donor list is incomplete or FEC totals include categories not shown here.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="mb-6 p-4 rounded-xl bg-secondary/50">
-                      <p className="text-sm text-muted-foreground">Contributors</p>
-                      <p className="text-2xl font-bold text-foreground">
-                        {donors.length} donors
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {donors.reduce((sum, d) => sum + (d.transaction_count || 1), 0)} total transactions
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Itemized Contributors</p>
+                          <p className="text-2xl font-bold text-foreground">
+                            {donors.length} donors
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {donors.reduce((sum, d) => sum + (d.transaction_count || 1), 0)} total transactions
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">List Total</p>
+                          <p className="text-xl font-bold text-foreground">{formatCurrency(donorListTotal)}</p>
+                        </div>
+                      </div>
                     </div>
                     <div className="space-y-3">
                       {donors.map(donor => {
