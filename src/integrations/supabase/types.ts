@@ -383,6 +383,7 @@ export type Database = {
           is_earmarked: boolean | null
           is_transfer: boolean | null
           line_number: string | null
+          memo_code: string | null
           memo_text: string | null
           occupation: string | null
           receipt_date: string | null
@@ -410,6 +411,7 @@ export type Database = {
           is_earmarked?: boolean | null
           is_transfer?: boolean | null
           line_number?: string | null
+          memo_code?: string | null
           memo_text?: string | null
           occupation?: string | null
           receipt_date?: string | null
@@ -437,6 +439,7 @@ export type Database = {
           is_earmarked?: boolean | null
           is_transfer?: boolean | null
           line_number?: string | null
+          memo_code?: string | null
           memo_text?: string | null
           occupation?: string | null
           receipt_date?: string | null

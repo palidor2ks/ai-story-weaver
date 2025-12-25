@@ -598,12 +598,13 @@ serve(async (req) => {
       line_number: string;
       is_contribution: boolean;
       is_transfer: boolean;
-      is_earmarked: boolean;
-      earmarked_for_candidate_id: string | null;
-      conduit_committee_id: string | null;
-      conduit_committee_name: string | null;
-      memo_text: string | null;
-      contributor_city: string;
+          is_earmarked: boolean;
+          earmarked_for_candidate_id: string | null;
+          conduit_committee_id: string | null;
+          conduit_committee_name: string | null;
+          memo_text: string | null;
+          memo_code: string | null;
+          contributor_city: string;
       contributor_state: string;
       contributor_zip: string;
       employer: string;
@@ -830,6 +831,10 @@ serve(async (req) => {
           transferCount++;
           committeeTransfers += amount;
         }
+        // CRITICAL: memo_code = 'X' indicates informational/memo transactions that are
+        // already included in another transaction. We must filter these out to avoid double-counting.
+        const isMemoTransaction = memoCode?.toUpperCase() === 'X';
+        
         if (classification.isContribution && !classification.isTransfer) {
           committeeItemized += amount;
           // Net = exclude earmark pass-throughs (SEE BELOW entries)
@@ -838,8 +843,8 @@ serve(async (req) => {
           }
           
           // Category-level tracking for apples-to-apples FEC comparison
-          // Only count non-pass-through contributions to avoid double-counting
-          if (!earmarkInfo.isEarmarkPassThrough) {
+          // Exclude both pass-through entries AND memo_code='X' transactions
+          if (!earmarkInfo.isEarmarkPassThrough && !isMemoTransaction) {
             switch (classification.contributionCategory) {
               case 'individual':
                 committeeIndividualItemized += amount;
@@ -881,6 +886,7 @@ serve(async (req) => {
           conduit_committee_id: conduitCommitteeId,
           conduit_committee_name: conduitCommitteeName,
           memo_text: memoText,
+          memo_code: memoCode,
           contributor_city: city,
           contributor_state: state,
           contributor_zip: zip,
