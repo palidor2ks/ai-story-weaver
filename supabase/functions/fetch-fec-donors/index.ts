@@ -252,6 +252,14 @@ function parseEarmarkInfo(memoText: string | null, _memoCode: string | null): Ea
   return { isEarmarked: false, isEarmarkPassThrough: false, earmarkedForName: null, conduitCommitteeId: null };
 }
 
+// Known conduit organizations that process individual donations
+const KNOWN_CONDUITS = ['ACTBLUE', 'WINRED', 'DEMOCRACY ENGINE'];
+
+function isKnownConduitOrg(name: string): boolean {
+  const upperName = name.toUpperCase();
+  return KNOWN_CONDUITS.some(c => upperName.includes(c));
+}
+
 interface AggregatedDonor {
   name: string;
   type: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
@@ -268,6 +276,9 @@ interface AggregatedDonor {
   isContribution: boolean;
   isTransfer: boolean;
   receiptType: 'contribution' | 'transfer' | 'other_receipt';
+  isConduitOrg: boolean;
+  conduitName: string | null;
+  conduitCommitteeId: string | null;
 }
 
 // Fetch FEC totals for a committee to compare with local data
@@ -567,6 +578,7 @@ serve(async (req) => {
       is_earmarked: boolean;
       earmarked_for_candidate_id: string | null;
       conduit_committee_id: string | null;
+      conduit_committee_name: string | null;
       memo_text: string | null;
       contributor_city: string;
       contributor_state: string;
@@ -629,7 +641,10 @@ serve(async (req) => {
         occupation: donor.occupation,
         line_number: donor.lineNumber,
         is_contribution: donor.isContribution,
-        is_transfer: donor.isTransfer
+        is_transfer: donor.isTransfer,
+        is_conduit_org: donor.isConduitOrg,
+        conduit_name: donor.conduitName,
+        conduit_committee_id: donor.conduitCommitteeId
       }));
 
       // Save in batches
@@ -799,6 +814,10 @@ serve(async (req) => {
           name, amount, receiptDate, committeeId, cycle, fecSubId
         );
         
+        // Extract conduit info from FEC API response
+        const conduitCommitteeId = contribution?.conduit_committee_id || earmarkInfo.conduitCommitteeId || null;
+        const conduitCommitteeName = contribution?.conduit_committee_name || null;
+        
         contributionBatch.push({
           identity_hash: contributionHash,
           fec_transaction_id: fecSubId,
@@ -815,7 +834,8 @@ serve(async (req) => {
           is_transfer: classification.isTransfer,
           is_earmarked: earmarkInfo.isEarmarked,
           earmarked_for_candidate_id: null,
-          conduit_committee_id: earmarkInfo.conduitCommitteeId,
+          conduit_committee_id: conduitCommitteeId,
+          conduit_committee_name: conduitCommitteeName,
           memo_text: memoText,
           contributor_city: city,
           contributor_state: state,
@@ -834,6 +854,7 @@ serve(async (req) => {
         );
         
         const existing = aggregatedDonors.get(donorId);
+        const donorIsConduitOrg = isKnownConduitOrg(name);
         
         if (existing) {
           existing.amount += amount;
@@ -846,6 +867,11 @@ serve(async (req) => {
               existing.lastReceiptDate = receiptDate;
             }
           }
+          // Track conduit info if present
+          if (conduitCommitteeName && !existing.conduitName) {
+            existing.conduitName = conduitCommitteeName;
+            existing.conduitCommitteeId = conduitCommitteeId;
+          }
         } else {
           aggregatedDonors.set(donorId, { 
             id: donorId,
@@ -857,7 +883,10 @@ serve(async (req) => {
             lineNumber,
             isContribution: classification.isContribution,
             isTransfer: classification.isTransfer,
-            receiptType: classification.receiptType
+            receiptType: classification.receiptType,
+            isConduitOrg: donorIsConduitOrg,
+            conduitName: conduitCommitteeName,
+            conduitCommitteeId: conduitCommitteeId
           });
         }
       }
