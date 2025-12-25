@@ -31,19 +31,33 @@ export function FinanceReconciliationCard({
     );
   }
 
-  const { fec_itemized, fec_unitemized, fec_total_receipts, status } = reconciliation;
+  const { 
+    fec_itemized, fec_unitemized, fec_total_receipts, status,
+    local_individual_itemized, local_pac_contributions, local_party_contributions,
+    fec_pac_contributions, fec_party_contributions,
+    individual_delta_pct, pac_delta_pct
+  } = reconciliation;
   
-  // Calculate Other Receipts using the standard formula
-  const otherReceipts = (fec_total_receipts ?? 0) - (fec_itemized ?? 0) - (fec_unitemized ?? 0);
-  
-  // Validate the equation: Total = Itemized + Unitemized + Other
-  const calculatedTotal = (fec_itemized ?? 0) + (fec_unitemized ?? 0) + otherReceipts;
-  const isBalanced = Math.abs(calculatedTotal - (fec_total_receipts ?? 0)) < 1;
+  const formatCurrency = (value: number | null) => {
+    if (value === null) return '—';
+    return `$${Math.round(value).toLocaleString()}`;
+  };
+
+  const formatDelta = (pct: number | null) => {
+    if (pct === null) return '';
+    const sign = pct > 0 ? '+' : '';
+    return `${sign}${pct.toFixed(1)}%`;
+  };
+
+  const getDeltaColor = (pct: number | null) => {
+    if (pct === null) return 'text-muted-foreground';
+    const abs = Math.abs(pct);
+    if (abs <= 5) return 'text-agree';
+    if (abs <= 10) return 'text-amber-500';
+    return 'text-destructive';
+  };
   
   const getStatusIcon = () => {
-    if (!isBalanced) {
-      return <AlertTriangle className="w-4 h-4 text-amber-500" />;
-    }
     switch (status) {
       case 'ok':
         return <CheckCircle2 className="w-4 h-4 text-agree" />;
@@ -57,24 +71,16 @@ export function FinanceReconciliationCard({
   };
 
   const getStatusBadge = () => {
-    if (!isBalanced) {
-      return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">Imbalanced</Badge>;
-    }
     switch (status) {
       case 'ok':
-        return <Badge variant="outline" className="bg-agree/10 text-agree border-agree/30">Balanced</Badge>;
+        return <Badge variant="outline" className="bg-agree/10 text-agree border-agree/30">Matched</Badge>;
       case 'warning':
-        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">Warning</Badge>;
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">Variance</Badge>;
       case 'error':
-        return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">Error</Badge>;
+        return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">Mismatch</Badge>;
       default:
         return <Badge variant="outline">Pending</Badge>;
     }
-  };
-
-  const formatCurrency = (value: number | null) => {
-    if (value === null) return '—';
-    return `$${Math.round(value).toLocaleString()}`;
   };
 
   if (compact) {
@@ -83,36 +89,23 @@ export function FinanceReconciliationCard({
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             {getStatusIcon()}
-            <span className="text-sm font-medium">FEC Data Integrity</span>
+            <span className="text-sm font-medium">FEC Reconciliation</span>
           </div>
           {getStatusBadge()}
         </div>
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div>
-            <span className="text-muted-foreground">Itemized:</span>
-            <span className="ml-1 font-medium">{formatCurrency(fec_itemized)}</span>
+            <span className="text-muted-foreground">Individual:</span>
+            <span className={cn("ml-1 font-medium", getDeltaColor(individual_delta_pct))}>
+              {formatDelta(individual_delta_pct)}
+            </span>
           </div>
           <div>
-            <span className="text-muted-foreground">Unitemized:</span>
-            <span className="ml-1 font-medium">{formatCurrency(fec_unitemized)}</span>
+            <span className="text-muted-foreground">PAC:</span>
+            <span className={cn("ml-1 font-medium", getDeltaColor(pac_delta_pct))}>
+              {formatDelta(pac_delta_pct)}
+            </span>
           </div>
-          {otherReceipts > 0 && (
-            <div>
-              <span className="text-muted-foreground">Other:</span>
-              <span className="ml-1 font-medium">{formatCurrency(otherReceipts)}</span>
-            </div>
-          )}
-          <div>
-            <span className="text-muted-foreground">Total:</span>
-            <span className="ml-1 font-semibold">{formatCurrency(fec_total_receipts)}</span>
-          </div>
-        </div>
-        <div className={cn(
-          "text-[10px] mt-2 p-1 rounded flex items-center gap-1",
-          isBalanced ? "bg-agree/10 text-agree" : "bg-amber-500/10 text-amber-600"
-        )}>
-          {isBalanced ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-          <span>I + U + O = Total</span>
         </div>
       </div>
     );
@@ -137,69 +130,75 @@ export function FinanceReconciliationCard({
           )}
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* FEC Breakdown Grid */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 rounded-lg bg-secondary/50">
-              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                Itemized
-                <Tooltip>
-                  <TooltipTrigger><Info className="h-3 w-3" /></TooltipTrigger>
-                  <TooltipContent>Individual contributions $200+</TooltipContent>
-                </Tooltip>
-              </p>
-              <p className="text-lg font-bold">{formatCurrency(fec_itemized)}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-secondary/50">
-              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                Unitemized
-                <Tooltip>
-                  <TooltipTrigger><Info className="h-3 w-3" /></TooltipTrigger>
-                  <TooltipContent>Contributions under $200</TooltipContent>
-                </Tooltip>
-              </p>
-              <p className="text-lg font-bold">{formatCurrency(fec_unitemized)}</p>
+          {/* Category Comparison Table */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Apples-to-Apples Comparison</p>
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50">
+                  <tr>
+                    <th className="text-left p-2 font-medium">Category</th>
+                    <th className="text-right p-2 font-medium">Local</th>
+                    <th className="text-right p-2 font-medium">FEC</th>
+                    <th className="text-right p-2 font-medium">Delta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-border">
+                    <td className="p-2 flex items-center gap-1">
+                      Individual
+                      <Tooltip>
+                        <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                        <TooltipContent>Line 11A/11AI - Individual itemized contributions $200+</TooltipContent>
+                      </Tooltip>
+                    </td>
+                    <td className="text-right p-2">{formatCurrency(local_individual_itemized)}</td>
+                    <td className="text-right p-2">{formatCurrency(fec_itemized)}</td>
+                    <td className={cn("text-right p-2 font-medium", getDeltaColor(individual_delta_pct))}>
+                      {formatDelta(individual_delta_pct)}
+                    </td>
+                  </tr>
+                  <tr className="border-t border-border">
+                    <td className="p-2 flex items-center gap-1">
+                      PAC
+                      <Tooltip>
+                        <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                        <TooltipContent>Line 11C - Other political committee contributions</TooltipContent>
+                      </Tooltip>
+                    </td>
+                    <td className="text-right p-2">{formatCurrency(local_pac_contributions)}</td>
+                    <td className="text-right p-2">{formatCurrency(fec_pac_contributions)}</td>
+                    <td className={cn("text-right p-2 font-medium", getDeltaColor(pac_delta_pct))}>
+                      {formatDelta(pac_delta_pct)}
+                    </td>
+                  </tr>
+                  <tr className="border-t border-border">
+                    <td className="p-2 flex items-center gap-1">
+                      Party
+                      <Tooltip>
+                        <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                        <TooltipContent>Line 11B - Political party committee contributions</TooltipContent>
+                      </Tooltip>
+                    </td>
+                    <td className="text-right p-2">{formatCurrency(local_party_contributions)}</td>
+                    <td className="text-right p-2">{formatCurrency(fec_party_contributions)}</td>
+                    <td className="text-right p-2 text-muted-foreground">—</td>
+                  </tr>
+                  <tr className="border-t border-border bg-secondary/30">
+                    <td className="p-2 font-medium">Unitemized</td>
+                    <td className="text-right p-2 text-muted-foreground">N/A</td>
+                    <td className="text-right p-2">{formatCurrency(fec_unitemized)}</td>
+                    <td className="text-right p-2 text-muted-foreground">—</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
-
-          {otherReceipts > 0 && (
-            <div className="p-3 rounded-lg bg-secondary/50">
-              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                Other Receipts
-                <Tooltip>
-                  <TooltipTrigger><Info className="h-3 w-3" /></TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    PAC contributions, transfers, loans, refunds, and other receipts
-                  </TooltipContent>
-                </Tooltip>
-              </p>
-              <p className="text-lg font-bold">{formatCurrency(otherReceipts)}</p>
-            </div>
-          )}
 
           {/* Total Receipts */}
           <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-            <p className="text-xs text-muted-foreground">Total Receipts</p>
+            <p className="text-xs text-muted-foreground">FEC Total Receipts</p>
             <p className="font-bold text-xl">{formatCurrency(fec_total_receipts)}</p>
-          </div>
-
-          {/* Equation validation */}
-          <div className={cn(
-            "p-3 rounded-lg flex items-center justify-between",
-            isBalanced ? 'bg-agree/10' : 'bg-amber-500/10'
-          )}>
-            <div className="flex items-center gap-2">
-              {isBalanced ? (
-                <CheckCircle2 className="w-4 h-4 text-agree" />
-              ) : (
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-              )}
-              <span className={cn("text-sm", isBalanced ? "text-agree" : "text-amber-600")}>
-                Itemized + Unitemized + Other = Total
-              </span>
-            </div>
-            <span className={cn("text-sm font-medium", isBalanced ? "text-agree" : "text-amber-600")}>
-              {isBalanced ? '✓' : `Δ ${formatCurrency(Math.abs(calculatedTotal - (fec_total_receipts ?? 0)))}`}
-            </span>
           </div>
 
           {/* Committee breakdown */}
@@ -207,20 +206,15 @@ export function FinanceReconciliationCard({
             <div className="space-y-2 pt-2 border-t border-border">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">By Committee</p>
               <div className="space-y-2">
-                {rollups.map(r => {
-                  const committeeOther = (r.fec_total_receipts ?? 0) - (r.fec_itemized ?? 0) - (r.fec_unitemized ?? 0);
-                  return (
-                    <div key={r.id} className="flex justify-between items-center text-sm p-2 rounded bg-secondary/30">
-                      <span className="text-muted-foreground truncate max-w-[150px]">{r.committee_id}</span>
-                      <div className="flex items-center gap-3 text-xs">
-                        <span title="Itemized">{formatCurrency(r.fec_itemized)}</span>
-                        {committeeOther > 0 && (
-                          <span className="text-muted-foreground" title="Other">+{formatCurrency(committeeOther)}</span>
-                        )}
-                      </div>
+                {rollups.map(r => (
+                  <div key={r.id} className="flex justify-between items-center text-sm p-2 rounded bg-secondary/30">
+                    <span className="text-muted-foreground truncate max-w-[150px]">{r.committee_id}</span>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span title="Individual">{formatCurrency(r.local_individual_itemized)}</span>
+                      <span className="text-muted-foreground" title="PAC">+{formatCurrency(r.local_pac_contributions)}</span>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </div>
           )}

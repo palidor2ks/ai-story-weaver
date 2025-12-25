@@ -100,26 +100,44 @@ interface LineClassification {
   isContribution: boolean;
   isTransfer: boolean;
   receiptType: 'contribution' | 'transfer' | 'other_receipt';
+  contributionCategory: 'individual' | 'pac' | 'party' | 'other'; // Line 11A/11AI, 11C, 11B, other
 }
 
-// Classify a line_number to determine receipt type
+// Classify a line_number to determine receipt type AND contribution category
 function classifyLineNumber(lineNumber: string | null): LineClassification {
-  if (!lineNumber) return { isContribution: true, isTransfer: false, receiptType: 'contribution' };
+  if (!lineNumber) return { isContribution: true, isTransfer: false, receiptType: 'contribution', contributionCategory: 'individual' };
   
   const line = lineNumber.toUpperCase();
   const isLine11 = line.startsWith('11'); // Individual contributions
   const isLine12 = line.startsWith('12'); // Authorized committee transfers
   const isLine17 = line.startsWith('17'); // Other federal receipts
   
-  if (isLine11) {
-    return { isContribution: true, isTransfer: false, receiptType: 'contribution' };
-  } else if (isLine12) {
-    return { isContribution: true, isTransfer: true, receiptType: 'transfer' };
-  } else if (isLine17) {
-    return { isContribution: true, isTransfer: false, receiptType: 'contribution' };
+  // Determine contribution category based on specific line number
+  // 11A/11AI = Individual itemized contributions (FEC individual_itemized_contributions)
+  // 11B = Political party contributions (FEC political_party_committee_contributions)
+  // 11C = Other political committee contributions / PACs (FEC other_political_committee_contributions)
+  let contributionCategory: 'individual' | 'pac' | 'party' | 'other' = 'other';
+  
+  if (line === '11A' || line === '11AI' || line.startsWith('11A')) {
+    contributionCategory = 'individual';
+  } else if (line === '11B' || line.startsWith('11B')) {
+    contributionCategory = 'party';
+  } else if (line === '11C' || line.startsWith('11C')) {
+    contributionCategory = 'pac';
+  } else if (isLine11) {
+    // Other Line 11 (11D, etc.) - treat as other
+    contributionCategory = 'other';
   }
   
-  return { isContribution: false, isTransfer: false, receiptType: 'other_receipt' };
+  if (isLine11) {
+    return { isContribution: true, isTransfer: false, receiptType: 'contribution', contributionCategory };
+  } else if (isLine12) {
+    return { isContribution: true, isTransfer: true, receiptType: 'transfer', contributionCategory: 'other' };
+  } else if (isLine17) {
+    return { isContribution: true, isTransfer: false, receiptType: 'contribution', contributionCategory: 'other' };
+  }
+  
+  return { isContribution: false, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
 }
 
 // Generate a stable SHA-256 based ID for donor identity (aggregated)
@@ -282,10 +300,13 @@ interface AggregatedDonor {
 }
 
 // Fetch FEC totals for a committee to compare with local data
+// Now fetches category-level totals for apples-to-apples comparisons
 async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: string): Promise<{
   fecItemized: number | null;
   fecUnitemized: number | null;
   fecTotalReceipts: number | null;
+  fecPacContributions: number | null;
+  fecPartyContributions: number | null;
 }> {
   try {
     const url = `https://api.open.fec.gov/v1/committee/${committeeId}/totals/?api_key=${fecApiKey}&cycle=${cycle}&per_page=1`;
@@ -294,7 +315,7 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
     // Defensive: check response exists and is ok
     if (!response?.ok) {
       console.warn('[FEC-DONORS] Could not fetch FEC totals:', response?.status);
-      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null };
+      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null };
     }
     
     // Defensive: safe JSON parse
@@ -303,23 +324,25 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
       data = await response.json();
     } catch {
       console.warn('[FEC-DONORS] Failed to parse FEC totals response');
-      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null };
+      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null };
     }
     
     const totals = data?.results?.[0];
     
     if (!totals) {
-      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null };
+      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null };
     }
     
     return {
       fecItemized: Math.round(totals.individual_itemized_contributions || 0),
       fecUnitemized: Math.round(totals.individual_unitemized_contributions || 0),
-      fecTotalReceipts: Math.round(totals.receipts || 0)
+      fecTotalReceipts: Math.round(totals.receipts || 0),
+      fecPacContributions: Math.round(totals.other_political_committee_contributions || 0),
+      fecPartyContributions: Math.round(totals.political_party_committee_contributions || 0)
     };
   } catch (err) {
     console.warn('[FEC-DONORS] Error fetching FEC totals:', err);
-    return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null };
+    return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null };
   }
 }
 
@@ -598,6 +621,11 @@ serve(async (req) => {
     let committeeEarmarked = 0;
     let committeeEarmarkPassThroughs = 0; // Pass-throughs to exclude from net
     let committeeContributionsSaved = 0;
+    
+    // Category-level tracking (for apples-to-apples FEC comparison)
+    let committeeIndividualItemized = 0;  // Line 11A/11AI only
+    let committeePacContributions = 0;    // Line 11C
+    let committeePartyContributions = 0;  // Line 11B
 
     console.log('[FEC-DONORS] Starting fetch for committee:', committeeId);
 
@@ -808,6 +836,22 @@ serve(async (req) => {
           if (!earmarkInfo.isEarmarkPassThrough) {
             committeeItemizedNet += amount;
           }
+          
+          // Category-level tracking for apples-to-apples FEC comparison
+          // Only count non-pass-through contributions to avoid double-counting
+          if (!earmarkInfo.isEarmarkPassThrough) {
+            switch (classification.contributionCategory) {
+              case 'individual':
+                committeeIndividualItemized += amount;
+                break;
+              case 'pac':
+                committeePacContributions += amount;
+                break;
+              case 'party':
+                committeePartyContributions += amount;
+                break;
+            }
+          }
         }
         
         const contributionHash = await generateContributionHash(
@@ -940,6 +984,10 @@ serve(async (req) => {
           local_itemized: committeeItemized,
           local_transfers: committeeTransfers,
           local_earmarked: committeeEarmarked,
+          // NEW: Category-level local tracking
+          local_individual_itemized: committeeIndividualItemized,
+          local_pac_contributions: committeePacContributions,
+          local_party_contributions: committeePartyContributions,
           fec_itemized: fecTotals.fecItemized,
           fec_unitemized: fecTotals.fecUnitemized,
           fec_total_receipts: fecTotals.fecTotalReceipts,
@@ -950,15 +998,15 @@ serve(async (req) => {
         }, { onConflict: 'committee_id,cycle' });
     }
 
-    console.log(`[FEC-DONORS] Completed ${committeeId}: ${totalDonors} donors, ${totalContributions} contributions, $${committeeItemized} itemized, hasMore=${committeeHasMore}`);
+    console.log(`[FEC-DONORS] Completed ${committeeId}: ${totalDonors} donors, ${totalContributions} contributions, $${committeeItemized} itemized (ind: $${committeeIndividualItemized}, pac: $${committeePacContributions}, party: $${committeePartyContributions}), hasMore=${committeeHasMore}`);
 
     // Determine if there are more committees to process
     const globalHasMore = committeeHasMore || remainingCommittees > 0;
 
-    // Update reconciliation record
+    // Update reconciliation record with category-level data
     const { data: rollups } = await supabase
       .from('committee_finance_rollups')
-      .select('local_itemized, local_transfers, local_earmarked, fec_itemized, fec_unitemized, fec_total_receipts')
+      .select('local_itemized, local_transfers, local_earmarked, local_individual_itemized, local_pac_contributions, local_party_contributions, fec_itemized, fec_unitemized, fec_total_receipts')
       .eq('candidate_id', candidateId)
       .eq('cycle', cycle);
     
@@ -966,6 +1014,9 @@ serve(async (req) => {
     let totalLocalItemizedNet = 0;
     let totalLocalTransfers = 0;
     let totalLocalEarmarked = 0;
+    let totalLocalIndividualItemized = 0;
+    let totalLocalPacContributions = 0;
+    let totalLocalPartyContributions = 0;
     let totalFecItemized = 0;
     let totalFecUnitemized = 0;
     let totalFecReceipts = 0;
@@ -974,6 +1025,9 @@ serve(async (req) => {
       totalLocalItemized += r.local_itemized || 0;
       totalLocalTransfers += r.local_transfers || 0;
       totalLocalEarmarked += r.local_earmarked || 0;
+      totalLocalIndividualItemized += r.local_individual_itemized || 0;
+      totalLocalPacContributions += r.local_pac_contributions || 0;
+      totalLocalPartyContributions += r.local_party_contributions || 0;
       totalFecItemized += r.fec_itemized || 0;
       totalFecUnitemized += r.fec_unitemized || 0;
       totalFecReceipts += r.fec_total_receipts || 0;
@@ -983,8 +1037,32 @@ serve(async (req) => {
     // This is comparable to FEC itemized (which doesn't double-count earmarks)
     totalLocalItemizedNet = committeeItemizedNet; // Use the freshly calculated net
     
-    const deltaAmount = totalLocalItemizedNet - totalFecItemized; // Compare NET to FEC
-    const deltaPct = totalFecItemized > 0 ? Math.round((deltaAmount / totalFecItemized) * 10000) / 100 : 0;
+    // Fetch FEC category-level totals for reconciliation
+    let totalFecPacContributions = 0;
+    let totalFecPartyContributions = 0;
+    
+    // If we just completed a sync, use the totals we already fetched
+    if (!committeeHasMore) {
+      const fecTotals = await fetchFECTotals(fecApiKey, committeeId, cycle);
+      totalFecPacContributions = fecTotals.fecPacContributions || 0;
+      totalFecPartyContributions = fecTotals.fecPartyContributions || 0;
+    }
+    
+    // Calculate category-level deltas (individual contributions)
+    const individualDeltaAmount = totalLocalIndividualItemized - totalFecItemized;
+    const individualDeltaPct = totalFecItemized > 0 
+      ? Math.round((individualDeltaAmount / totalFecItemized) * 10000) / 100 
+      : 0;
+    
+    // Calculate PAC delta
+    const pacDeltaAmount = totalLocalPacContributions - totalFecPacContributions;
+    const pacDeltaPct = totalFecPacContributions > 0 
+      ? Math.round((pacDeltaAmount / totalFecPacContributions) * 10000) / 100 
+      : 0;
+    
+    // Overall status based on individual comparison (apples-to-apples)
+    const deltaAmount = individualDeltaAmount; // Use individual delta for status
+    const deltaPct = individualDeltaPct;
     let status = 'ok';
     if (Math.abs(deltaPct) > 10) status = 'error';
     else if (Math.abs(deltaPct) > 5) status = 'warning';
@@ -999,9 +1077,21 @@ serve(async (req) => {
         local_itemized_net: totalLocalItemizedNet, // NEW: Net itemized for proper comparison
         local_transfers: totalLocalTransfers,
         local_earmarked: totalLocalEarmarked,
+        // NEW: Category-level tracking
+        local_individual_itemized: totalLocalIndividualItemized,
+        local_pac_contributions: totalLocalPacContributions,
+        local_party_contributions: totalLocalPartyContributions,
         fec_itemized: totalFecItemized,
         fec_unitemized: totalFecUnitemized,
         fec_total_receipts: totalFecReceipts,
+        // NEW: Category-level FEC data
+        fec_pac_contributions: totalFecPacContributions,
+        fec_party_contributions: totalFecPartyContributions,
+        // NEW: Category-level deltas
+        individual_delta_amount: individualDeltaAmount,
+        individual_delta_pct: individualDeltaPct,
+        pac_delta_amount: pacDeltaAmount,
+        pac_delta_pct: pacDeltaPct,
         delta_amount: deltaAmount,
         delta_pct: deltaPct,
         status,
@@ -1037,8 +1127,14 @@ serve(async (req) => {
         reconciliation: { 
           localItemized: totalLocalItemized,
           localItemizedNet: totalLocalItemizedNet,
+          localIndividualItemized: totalLocalIndividualItemized,
+          localPacContributions: totalLocalPacContributions,
           localTransfers: totalLocalTransfers,
-          fecItemized: totalFecItemized, 
+          fecItemized: totalFecItemized,
+          fecPacContributions: totalFecPacContributions,
+          fecPartyContributions: totalFecPartyContributions,
+          individualDeltaPct,
+          pacDeltaPct,
           deltaPct, 
           status 
         },

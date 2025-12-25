@@ -9,9 +9,22 @@ export interface FinanceReconciliation {
   local_itemized_net: number | null; // Excludes earmark pass-throughs - comparable to FEC
   local_transfers: number | null;
   local_earmarked: number | null;
+  // Category-level local tracking
+  local_individual_itemized: number | null;
+  local_pac_contributions: number | null;
+  local_party_contributions: number | null;
+  // FEC data
   fec_itemized: number | null;
   fec_unitemized: number | null;
   fec_total_receipts: number | null;
+  fec_pac_contributions: number | null;
+  fec_party_contributions: number | null;
+  // Category-level deltas
+  individual_delta_amount: number | null;
+  individual_delta_pct: number | null;
+  pac_delta_amount: number | null;
+  pac_delta_pct: number | null;
+  // Overall delta
   delta_amount: number | null;
   delta_pct: number | null;
   status: string | null;
@@ -27,6 +40,10 @@ export interface CommitteeRollup {
   local_transfers: number | null;
   local_earmarked: number | null;
   local_other: number | null;
+  // Category-level local tracking
+  local_individual_itemized: number | null;
+  local_pac_contributions: number | null;
+  local_party_contributions: number | null;
   fec_itemized: number | null;
   fec_unitemized: number | null;
   fec_total_receipts: number | null;
