@@ -81,7 +81,8 @@ export function AnswerCoveragePanel() {
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [stateFilter, setStateFilter] = useState<string>('all');
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('none');
-  const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch' | 'partial'>('all');
+  const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
+  const [syncFilter, setSyncFilter] = useState<'all' | 'needs_sync' | 'partial' | 'complete'>('all');
 
   const { data: candidates, isLoading: candidatesLoading } = useCandidatesAnswerCoverage({
     party: partyFilter,
@@ -160,8 +161,18 @@ export function AnswerCoveragePanel() {
 
   // Get counts for batch action buttons
   const partialSyncCandidates = useMemo(() => 
-    baseFilteredCandidates.filter(c => (c.hasPartialSync || hasPartialSync(c.id)) && c.fecCandidateId),
-    [baseFilteredCandidates, hasPartialSync]
+    baseFilteredCandidates.filter(c => c.syncStatus === 'partial' && c.fecCandidateId),
+    [baseFilteredCandidates]
+  );
+
+  const needsSyncCandidates = useMemo(() => 
+    baseFilteredCandidates.filter(c => (c.syncStatus === 'never' || c.syncStatus === 'partial') && c.fecCandidateId),
+    [baseFilteredCandidates]
+  );
+
+  const completeSyncCandidates = useMemo(() => 
+    baseFilteredCandidates.filter(c => c.syncStatus === 'complete'),
+    [baseFilteredCandidates]
   );
 
   const candidatesWithoutFecId = useMemo(() => 
@@ -175,17 +186,27 @@ export function AnswerCoveragePanel() {
   );
 
   const filteredCandidates = useMemo(() => {
+    let result = baseFilteredCandidates;
+    
+    // Apply finance filter
     if (financeFilter === 'mismatch') {
-      return baseFilteredCandidates.filter(candidate => {
+      result = result.filter(candidate => {
         const status = candidate.reconciliationStatus;
         return status === 'warning' || status === 'error';
       });
     }
-    if (financeFilter === 'partial') {
-      return baseFilteredCandidates.filter(c => c.hasPartialSync || hasPartialSync(c.id));
+    
+    // Apply sync filter
+    if (syncFilter === 'needs_sync') {
+      result = result.filter(c => (c.syncStatus === 'never' || c.syncStatus === 'partial') && c.fecCandidateId);
+    } else if (syncFilter === 'partial') {
+      result = result.filter(c => c.syncStatus === 'partial');
+    } else if (syncFilter === 'complete') {
+      result = result.filter(c => c.syncStatus === 'complete');
     }
-    return baseFilteredCandidates;
-  }, [baseFilteredCandidates, financeFilter, hasPartialSync]);
+    
+    return result;
+  }, [baseFilteredCandidates, financeFilter, syncFilter]);
   const handleFillAll = async () => {
     try {
       if (!candidates) return;
@@ -792,13 +813,24 @@ export function AnswerCoveragePanel() {
               </Select>
 
               <Select value={financeFilter} onValueChange={(v) => setFinanceFilter(v as typeof financeFilter)}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Finance" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Finance</SelectItem>
+                  <SelectItem value="mismatch">FEC Mismatch</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={syncFilter} onValueChange={(v) => setSyncFilter(v as typeof syncFilter)}>
                 <SelectTrigger className="w-[150px]">
                   <SelectValue placeholder="Sync Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Syncs</SelectItem>
-                  <SelectItem value="partial">Partial Syncs</SelectItem>
-                  <SelectItem value="mismatch">FEC Mismatch</SelectItem>
+                  <SelectItem value="all">All Sync Status</SelectItem>
+                  <SelectItem value="needs_sync">Needs Sync ({needsSyncCandidates.length})</SelectItem>
+                  <SelectItem value="partial">Partial ({partialSyncCandidates.length})</SelectItem>
+                  <SelectItem value="complete">Complete ({completeSyncCandidates.length})</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -858,7 +890,7 @@ export function AnswerCoveragePanel() {
                       const hasFecId = !!candidate.fecCandidateId;
                       const financeStatus = calculateFinanceStatus(candidate);
                       const localItemized = candidate.localItemized || 0;
-                      const isPartialSync = candidate.hasPartialSync || hasPartialSync(candidate.id);
+                      const syncStatus = candidate.syncStatus;
 
                       return (
                         <TableRow key={candidate.id}>
@@ -906,12 +938,20 @@ export function AnswerCoveragePanel() {
                                   {candidate.donorCount}
                                 </span>
                               )}
-                              {isPartialSync && (
+                              {syncStatus === 'partial' && (
                                 <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-amber-600 border-amber-300">
                                   Partial
                                 </Badge>
                               )}
-                              {candidate.voteCount === 0 && candidate.donorCount === 0 && !isPartialSync && (
+                              {syncStatus === 'never' && hasFecId && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-muted-foreground border-muted">
+                                  Never
+                                </Badge>
+                              )}
+                              {syncStatus === 'complete' && (
+                                <CheckCircle2 className="h-3 w-3 text-green-500" />
+                              )}
+                              {candidate.voteCount === 0 && candidate.donorCount === 0 && !hasFecId && (
                                 <span className="text-muted-foreground/50">—</span>
                               )}
                             </div>
@@ -1087,7 +1127,7 @@ export function AnswerCoveragePanel() {
                               {hasFecId && candidate.fecCommitteeId && (
                                 <Button
                                   size="sm"
-                                  variant={isPartialSync ? "default" : "ghost"}
+                                  variant={syncStatus === 'partial' ? "default" : "ghost"}
                                   disabled={donorLoading || anyBatchRunning}
                                   onClick={() => {
                                     void (async () => {
@@ -1113,12 +1153,12 @@ export function AnswerCoveragePanel() {
                                       }
                                     })();
                                   }}
-                                  title={isPartialSync ? "Resume sync" : "Fetch donors"}
-                                  className={isPartialSync ? "bg-amber-600 hover:bg-amber-700 h-7 text-xs" : "h-7"}
+                                  title={syncStatus === 'partial' ? "Resume sync" : "Fetch donors"}
+                                  className={syncStatus === 'partial' ? "bg-amber-600 hover:bg-amber-700 h-7 text-xs" : "h-7"}
                                 >
                                   {donorLoading ? (
                                     <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : isPartialSync ? (
+                                  ) : syncStatus === 'partial' ? (
                                     <>
                                       <RotateCcw className="h-3 w-3 mr-1" />
                                       Resume
