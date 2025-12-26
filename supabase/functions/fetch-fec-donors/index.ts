@@ -110,12 +110,14 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
   const line = lineNumber.toUpperCase();
   const isLine11 = line.startsWith('11'); // Individual contributions
   const isLine12 = line.startsWith('12'); // Authorized committee transfers
+  const isLine15 = line.startsWith('15'); // Other receipts (slate mailers, refunds, etc.)
   const isLine17 = line.startsWith('17'); // Other federal receipts
   
   // Determine contribution category based on specific line number
   // 11A/11AI = Individual itemized contributions (FEC individual_itemized_contributions)
   // 11B = Political party contributions (FEC political_party_committee_contributions)
   // 11C = Other political committee contributions / PACs (FEC other_political_committee_contributions)
+  // 15 = Other receipts (slate mailers, refunds, loan repayments, etc.)
   let contributionCategory: 'individual' | 'pac' | 'party' | 'other' = 'other';
   
   if (line === '11A' || line === '11AI' || line.startsWith('11A')) {
@@ -133,11 +135,15 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
     return { isContribution: true, isTransfer: false, receiptType: 'contribution', contributionCategory };
   } else if (isLine12) {
     return { isContribution: true, isTransfer: true, receiptType: 'transfer', contributionCategory: 'other' };
+  } else if (isLine15) {
+    // Line 15 = Other receipts (slate mailers, refunds, misc) - treat as contributions for display
+    return { isContribution: true, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
   } else if (isLine17) {
     return { isContribution: true, isTransfer: false, receiptType: 'contribution', contributionCategory: 'other' };
   }
   
-  return { isContribution: false, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
+  // Default: still mark as contribution so it appears in donor list
+  return { isContribution: true, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
 }
 
 // Generate a stable SHA-256 based ID for donor identity (aggregated)
