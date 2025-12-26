@@ -29,9 +29,11 @@ export interface CandidateAnswerCoverage {
   deltaPct: number | null;       // Percentage difference
   reconciliationStatus: string | null; // ok, warning, error
   // Sync status
-  hasPartialSync: boolean;       // True if any committee has last_index set (incomplete sync)
-  lastSyncDate: string | null;   // Last donor sync date
+  hasPartialSync: boolean;       // True if any committee has has_more = true (incomplete sync)
+  lastDonorSync: string | null;  // Last donor sync date from candidates table
+  lastSyncDate: string | null;   // Last sync date from committees
   reconciliationCheckedAt: string | null; // When reconciliation was last checked
+  syncStatus: 'never' | 'partial' | 'complete'; // Aggregated sync status
 }
 
 interface Filters {
@@ -54,7 +56,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       // Get all candidates with coverage tier and confidence
       let candidatesQuery = supabase
         .from('candidates')
-        .select('id, name, party, office, state, coverage_tier, confidence, fec_candidate_id, fec_committee_id')
+        .select('id, name, party, office, state, coverage_tier, confidence, fec_candidate_id, fec_committee_id, last_donor_sync')
         .order('name', { ascending: true });
 
       if (filters.party && filters.party !== 'all') {
@@ -138,20 +140,26 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         reconciliationMap[row.candidate_id] = row;
       });
 
-      // Get partial sync status from candidate_committees (has last_index = incomplete sync)
+      // Get partial sync status from candidate_committees (has_more = true means incomplete sync)
       const { data: partialSyncData } = await supabase
         .from('candidate_committees')
-        .select('candidate_id, last_index, last_sync_date')
-        .not('last_index', 'is', null);
+        .select('candidate_id, has_more, last_sync_date, last_sync_completed_at');
 
       const partialSyncMap: Record<string, boolean> = {};
       const lastSyncMap: Record<string, string | null> = {};
+      const completeSyncMap: Record<string, boolean> = {};
+      
       (partialSyncData || []).forEach(row => {
-        if (row.last_index) {
+        // has_more = true means incomplete sync
+        if (row.has_more === true) {
           partialSyncMap[row.candidate_id] = true;
         }
         if (row.last_sync_date) {
           lastSyncMap[row.candidate_id] = row.last_sync_date;
+        }
+        // If any committee has completed sync, mark it
+        if (row.last_sync_completed_at) {
+          completeSyncMap[row.candidate_id] = true;
         }
       });
 
@@ -166,6 +174,18 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         const answerCount = answerCountMap[c.id] || 0;
         const percentage = totalQuestions ? Math.round((answerCount / totalQuestions) * 100) : 0;
         const rec = reconciliationMap[c.id];
+        
+        // Determine sync status
+        const hasPartialSync = partialSyncMap[c.id] || false;
+        const hasCompletedAnySync = completeSyncMap[c.id] || false;
+        const hasLastDonorSync = !!c.last_donor_sync;
+        
+        let syncStatus: 'never' | 'partial' | 'complete' = 'never';
+        if (hasPartialSync) {
+          syncStatus = 'partial';
+        } else if (hasLastDonorSync || hasCompletedAnySync) {
+          syncStatus = 'complete';
+        }
         
         return {
           id: c.id,
@@ -193,9 +213,11 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           deltaAmount: rec?.delta_amount ?? null,
           deltaPct: rec?.delta_pct ?? null,
           reconciliationStatus: rec?.status || null,
-          hasPartialSync: partialSyncMap[c.id] || false,
+          hasPartialSync,
+          lastDonorSync: c.last_donor_sync || null,
           lastSyncDate: lastSyncMap[c.id] || null,
           reconciliationCheckedAt: rec?.checked_at || null,
+          syncStatus,
         };
       });
 
