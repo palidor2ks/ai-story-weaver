@@ -84,7 +84,7 @@ serve(async (req) => {
     // Get candidates to reconcile
     let query = supabase
       .from('candidates')
-      .select('id, name, fec_candidate_id, last_donor_sync')
+      .select('id, name, fec_candidate_id, fec_committee_id, last_donor_sync')
       .not('fec_candidate_id', 'is', null);
 
     // If a specific candidate ID is provided, only reconcile that candidate
@@ -128,11 +128,17 @@ serve(async (req) => {
     for (const candidate of candidates || []) {
       try {
         // Get all committees for this candidate
-        const { data: committees } = await supabase
+        let { data: committees } = await supabase
           .from('candidate_committees')
           .select('fec_committee_id')
           .eq('candidate_id', candidate.id)
           .eq('active', true);
+
+        // Fallback to candidates.fec_committee_id if no separate committee records exist
+        if ((!committees || committees.length === 0) && candidate.fec_committee_id) {
+          committees = [{ fec_committee_id: candidate.fec_committee_id }];
+          console.log(`[RECONCILIATION] ${candidate.name}: Using fallback fec_committee_id ${candidate.fec_committee_id}`);
+        }
 
         if (!committees || committees.length === 0) {
           results.skipped++;
