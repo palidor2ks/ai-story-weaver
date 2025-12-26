@@ -159,7 +159,17 @@ export function AnswerCoveragePanel() {
     return `$${Math.round(value).toLocaleString()}`;
   };
 
-  // Get counts for batch action buttons
+  // Sync stats from ALL candidates (not filtered)
+  const syncStats_ = useMemo(() => {
+    if (!candidates) return { withFecId: 0, neverSynced: 0, partial: 0, complete: 0 };
+    const withFecId = candidates.filter(c => !!c.fecCandidateId).length;
+    const neverSynced = candidates.filter(c => c.syncStatus === 'never' && c.fecCandidateId).length;
+    const partial = candidates.filter(c => c.syncStatus === 'partial').length;
+    const complete = candidates.filter(c => c.syncStatus === 'complete').length;
+    return { withFecId, neverSynced, partial, complete };
+  }, [candidates]);
+
+  // Get counts for batch action buttons (from filtered candidates)
   const partialSyncCandidates = useMemo(() => 
     baseFilteredCandidates.filter(c => c.syncStatus === 'partial' && c.fecCandidateId),
     [baseFilteredCandidates]
@@ -586,6 +596,41 @@ export function AnswerCoveragePanel() {
               Full Coverage
             </div>
             <div className="text-2xl font-bold text-green-600">{candidateStats?.fullCoverage || 0}</div>
+          </div>
+        </div>
+
+        {/* FEC Sync Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Link2 className="h-4 w-4" />
+              With FEC ID
+            </div>
+            <div className="text-2xl font-bold">{syncStats_.withFecId}</div>
+          </div>
+
+          <div className="bg-muted/30 rounded-lg p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              Never Synced
+            </div>
+            <div className="text-2xl font-bold text-muted-foreground">{syncStats_.neverSynced}</div>
+          </div>
+
+          <div className="bg-amber-500/10 rounded-lg p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <RotateCcw className="h-4 w-4 text-amber-600" />
+              Partial Sync
+            </div>
+            <div className="text-2xl font-bold text-amber-600">{syncStats_.partial}</div>
+          </div>
+
+          <div className="bg-green-500/10 rounded-lg p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              Complete
+            </div>
+            <div className="text-2xl font-bold text-green-600">{syncStats_.complete}</div>
           </div>
         </div>
 
