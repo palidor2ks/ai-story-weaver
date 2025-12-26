@@ -79,6 +79,7 @@ export function useFECIntegration() {
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const [donorLoadingIds, setDonorLoadingIds] = useState<Set<string>>(new Set());
   const [committeeLoadingIds, setCommitteeLoadingIds] = useState<Set<string>>(new Set());
+  const [reconcileLoadingIds, setReconcileLoadingIds] = useState<Set<string>>(new Set());
   const [partialSyncIds, setPartialSyncIds] = useState<Set<string>>(new Set());
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
@@ -92,6 +93,7 @@ export function useFECIntegration() {
   const isLoading = (candidateId: string) => loadingIds.has(candidateId);
   const isDonorLoading = (candidateId: string) => donorLoadingIds.has(candidateId);
   const isCommitteeLoading = (candidateId: string) => committeeLoadingIds.has(candidateId);
+  const isReconcileLoading = (candidateId: string) => reconcileLoadingIds.has(candidateId);
   const hasPartialSync = (candidateId: string) => partialSyncIds.has(candidateId);
 
   const fetchFECCandidateId = async (
@@ -300,10 +302,10 @@ export function useFECIntegration() {
           return next;
         });
         
-        // Trigger finance reconciliation when sync is complete
+        // Trigger finance reconciliation when sync is complete (use internal to avoid loading state)
         console.log(`[FEC-DONORS] Sync complete for ${candidateName}, triggering reconciliation...`);
         try {
-          const reconcileResult = await triggerReconciliation(candidateId, cycle);
+          const reconcileResult = await triggerReconciliationInternal(candidateId, cycle);
           if (reconcileResult.success) {
             console.log(`[FEC-DONORS] Reconciliation complete for ${candidateName}:`, reconcileResult.status);
           } else {
@@ -348,8 +350,8 @@ export function useFECIntegration() {
     }
   };
 
-  // Trigger finance reconciliation for a specific candidate
-  const triggerReconciliation = async (candidateId: string, cycle = '2024'): Promise<{ success: boolean; status?: string; error?: string }> => {
+  // Trigger finance reconciliation for a specific candidate (internal, no loading state)
+  const triggerReconciliationInternal = async (candidateId: string, cycle = '2024'): Promise<{ success: boolean; status?: string; error?: string }> => {
     try {
       const { data, error } = await supabase.functions.invoke('nightly-finance-reconciliation', {
         body: { candidateId, cycle, limit: 1, onlyStale: false, onlyWithData: false }
@@ -371,6 +373,20 @@ export function useFECIntegration() {
     } catch (err) {
       console.error('[RECONCILIATION] Exception:', err);
       return { success: false, error: 'Failed to trigger reconciliation' };
+    }
+  };
+
+  // Trigger finance reconciliation with loading state tracking (for UI buttons)
+  const triggerReconciliation = async (candidateId: string, cycle = '2024'): Promise<{ success: boolean; status?: string; error?: string }> => {
+    setReconcileLoadingIds(prev => new Set(prev).add(candidateId));
+    try {
+      return await triggerReconciliationInternal(candidateId, cycle);
+    } finally {
+      setReconcileLoadingIds(prev => {
+        const next = new Set(prev);
+        next.delete(candidateId);
+        return next;
+      });
     }
   };
 
@@ -673,9 +689,11 @@ export function useFECIntegration() {
     syncAllCandidatesComplete,
     cancelSyncAll,
     clearSyncAllProgress,
+    triggerReconciliation,
     isLoading,
     isDonorLoading,
     isCommitteeLoading,
+    isReconcileLoading,
     hasPartialSync,
     partialSyncIds,
     batchProgress,
