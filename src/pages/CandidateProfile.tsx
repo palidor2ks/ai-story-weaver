@@ -484,35 +484,88 @@ export const CandidateProfile = () => {
                       className="mb-6"
                     />
 
-                    {/* FEC-derived aggregates to align list with summary */}
+                    {/* FEC-derived aggregates to align list with FEC Total Receipts */}
                     {hasFecBreakdown && (
-                      <div className="mb-6 space-y-3">
+                      <div className="mb-6 space-y-4">
                         {fecSourceLabel && (
                           <div className="text-xs text-muted-foreground flex items-center gap-2">
                             <Info className="w-4 h-4" />
-                            <span>Totals shown below use {fecSourceLabel}.</span>
+                            <span>Totals from {fecSourceLabel}.</span>
                           </div>
                         )}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          <div className="p-3 rounded-lg border border-border/70 bg-secondary/40">
-                            <p className="text-xs text-muted-foreground">Itemized Individual</p>
-                            <p className="text-lg font-semibold">{formatCurrency(fecItemized)}</p>
-                            <p className="text-[11px] text-muted-foreground mt-1">{itemizedIndividualDonors.length} donors (Line 11)</p>
+                        
+                        {/* Contribution Breakdown Table */}
+                        <div className="rounded-lg border border-border overflow-hidden">
+                          <div className="bg-secondary/60 px-4 py-2 border-b border-border">
+                            <p className="text-sm font-medium text-foreground">FEC Contribution Breakdown</p>
                           </div>
-                          <div className="p-3 rounded-lg border border-border/70 bg-secondary/40">
-                            <p className="text-xs text-muted-foreground">Unitemized (Small Donors)</p>
-                            <p className="text-lg font-semibold">{formatCurrency(fecUnitemized)}</p>
-                            <p className="text-[11px] text-muted-foreground mt-1">&lt;$200, FEC aggregate</p>
-                          </div>
-                          <div className="p-3 rounded-lg border border-border/70 bg-secondary/40">
-                            <p className="text-xs text-muted-foreground">Transfers (Line 12)</p>
-                            <p className="text-lg font-semibold">{formatCurrency(transferTotal)}</p>
-                            <p className="text-[11px] text-muted-foreground mt-1">{transferDonors.length} committee transfers</p>
-                          </div>
-                          <div className="p-3 rounded-lg border border-border/70 bg-secondary/40">
-                            <p className="text-xs text-muted-foreground">Other Receipts</p>
-                            <p className="text-lg font-semibold">{formatCurrency(otherReceipts > 0 ? otherReceipts - transferTotal : 0)}</p>
-                            <p className="text-[11px] text-muted-foreground mt-1">PAC/Loans/Misc</p>
+                          <div className="divide-y divide-border">
+                            {/* Itemized Individual (Line 11A) */}
+                            <div className="flex items-center justify-between px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-medium text-foreground">Itemized Individual (Line 11A)</span>
+                                <Badge variant="outline" className="text-[10px]">{itemizedIndividualDonors.length} donors</Badge>
+                              </div>
+                              <span className="text-sm font-semibold">{formatCurrency(fecItemized)}</span>
+                            </div>
+                            
+                            {/* PAC/Committee (Line 11C) */}
+                            {(financeReconciliation?.fec_pac_contributions ?? 0) > 0 && (
+                              <div className="flex items-center justify-between px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-medium text-foreground">PAC/Committee (Line 11C)</span>
+                                  <Badge variant="outline" className="text-[10px]">{pacDonors.length} sources</Badge>
+                                </div>
+                                <span className="text-sm font-semibold">{formatCurrency(financeReconciliation?.fec_pac_contributions)}</span>
+                              </div>
+                            )}
+                            
+                            {/* Party Contributions (Line 11B) */}
+                            {(financeReconciliation?.fec_party_contributions ?? 0) > 0 && (
+                              <div className="flex items-center justify-between px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-medium text-foreground">Party Contributions (Line 11B)</span>
+                                </div>
+                                <span className="text-sm font-semibold">{formatCurrency(financeReconciliation?.fec_party_contributions)}</span>
+                              </div>
+                            )}
+                            
+                            {/* Transfers (Line 12) */}
+                            {transferTotal > 0 && (
+                              <div className="flex items-center justify-between px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-medium text-foreground">Transfers (Line 12)</span>
+                                  <Badge variant="outline" className="text-[10px]">{transferDonors.length} transfers</Badge>
+                                </div>
+                                <span className="text-sm font-semibold">{formatCurrency(transferTotal)}</span>
+                              </div>
+                            )}
+                            
+                            {/* Other Receipts (Line 15) */}
+                            {otherReceipts > 0 && (
+                              <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium text-foreground">Other Receipts (Line 15+)</span>
+                                  <span className="text-[11px] text-muted-foreground">Slate mailers, refunds, misc</span>
+                                </div>
+                                <span className="text-sm font-semibold">{formatCurrency(otherReceipts)}</span>
+                              </div>
+                            )}
+                            
+                            {/* Unitemized / Small Donors */}
+                            <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium text-foreground">Unitemized (Small Donors)</span>
+                                <span className="text-[11px] text-muted-foreground">Donations &lt;$200, FEC aggregate</span>
+                              </div>
+                              <span className="text-sm font-semibold">{formatCurrency(fecUnitemized)}</span>
+                            </div>
+                            
+                            {/* Total Row */}
+                            <div className="flex items-center justify-between px-4 py-3 bg-primary/5 border-t-2 border-primary/30">
+                              <span className="text-sm font-bold text-foreground">FEC Total Receipts</span>
+                              <span className="text-lg font-bold text-primary">{formatCurrency(fecTotalReceipts)}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
