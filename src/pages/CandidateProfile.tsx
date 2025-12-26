@@ -655,149 +655,201 @@ export const CandidateProfile = () => {
                       </div>
                     </div>
                     <div className="space-y-3">
-                      {donors.map(donor => {
-                        // Identify conduit organizations
-                        const conduitOrgs = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
-                        const isConduit = conduitOrgs.some(c => donor.name.toUpperCase().includes(c));
+                      {(() => {
+                        // Build unified funding sources array
+                        type FundingSource = {
+                          id: string;
+                          name: string;
+                          amount: number;
+                          sourceType: 'donor' | 'small_donors' | 'candidate_loan' | 'candidate_contribution' | 'committee_transfer';
+                          donor?: typeof donors[0];
+                          badgeLabel?: string;
+                          badgeStyle?: string;
+                          description?: string;
+                          subLabel?: string;
+                        };
+
+                        const allSources: FundingSource[] = [];
                         
-                        return (
-                          <div key={donor.id} className={cn(
-                            "flex items-center justify-between p-4 rounded-lg border",
-                            isConduit ? "border-amber-500/30 bg-amber-500/5" : "border-border"
-                          )}>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-foreground">{donor.name}</p>
-                                {isConduit && (
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger>
-                                        <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 bg-amber-500/10">
-                                          Conduit
-                                        </Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="max-w-xs">
-                                        <p className="font-medium mb-1">Pass-Through Organization</p>
-                                        <p className="text-xs">This organization processes donations on behalf of individual donors. 
-                                        The amount shown is the total routed through this conduit — individual donors are listed separately to avoid double-counting.</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
+                        // Add regular donors
+                        donors.forEach(d => {
+                          allSources.push({
+                            id: d.id,
+                            name: d.name,
+                            amount: d.amount,
+                            sourceType: 'donor',
+                            donor: d
+                          });
+                        });
+                        
+                        // Add FEC aggregate sources
+                        if (fecUnitemized && fecUnitemized > 0) {
+                          allSources.push({
+                            id: 'small-donors',
+                            name: 'Small Donors (Unitemized)',
+                            amount: fecUnitemized,
+                            sourceType: 'small_donors',
+                            badgeLabel: 'Aggregate',
+                            badgeStyle: 'border-primary/50 text-primary bg-primary/10',
+                            description: 'Individual donations under $200 — not itemized by FEC',
+                            subLabel: 'FEC aggregate'
+                          });
+                        }
+                        
+                        if (fecLoans > 0) {
+                          allSources.push({
+                            id: 'candidate-loan',
+                            name: candidate.name,
+                            amount: fecLoans,
+                            sourceType: 'candidate_loan',
+                            badgeLabel: 'Candidate Loan',
+                            badgeStyle: 'border-blue-500/50 text-blue-600 bg-blue-500/10',
+                            description: 'Loan from the candidate to their own campaign — may be repaid from future contributions',
+                            subLabel: 'Self-funded'
+                          });
+                        }
+                        
+                        if (fecCandidateContribution > 0) {
+                          allSources.push({
+                            id: 'candidate-contribution',
+                            name: candidate.name,
+                            amount: fecCandidateContribution,
+                            sourceType: 'candidate_contribution',
+                            badgeLabel: 'Candidate Contribution',
+                            badgeStyle: 'border-blue-500/50 text-blue-600 bg-blue-500/10',
+                            description: 'Direct contribution from the candidate (not a loan — non-repayable)',
+                            subLabel: 'Self-funded'
+                          });
+                        }
+                        
+                        if (fecTransfers > 0) {
+                          allSources.push({
+                            id: 'committee-transfers',
+                            name: 'Committee Transfers',
+                            amount: fecTransfers,
+                            sourceType: 'committee_transfer',
+                            badgeLabel: 'Line 12',
+                            badgeStyle: 'border-purple-500/50 text-purple-600 bg-purple-500/10',
+                            description: 'Transfers from other authorized campaign committees',
+                            subLabel: 'Inter-committee'
+                          });
+                        }
+                        
+                        // Sort by amount descending
+                        allSources.sort((a, b) => b.amount - a.amount);
+                        
+                        return allSources.map(source => {
+                          // Render donor-type sources
+                          if (source.sourceType === 'donor' && source.donor) {
+                            const donor = source.donor;
+                            const conduitOrgs = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
+                            const isConduit = conduitOrgs.some(c => donor.name.toUpperCase().includes(c));
+                            
+                            return (
+                              <div key={source.id} className={cn(
+                                "flex items-center justify-between p-4 rounded-lg border",
+                                isConduit ? "border-amber-500/30 bg-amber-500/5" : "border-border"
+                              )}>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-foreground">{donor.name}</p>
+                                    {isConduit && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger>
+                                            <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 bg-amber-500/10">
+                                              Conduit
+                                            </Badge>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="max-w-xs">
+                                            <p className="font-medium mb-1">Pass-Through Organization</p>
+                                            <p className="text-xs">This organization processes donations on behalf of individual donors. 
+                                            The amount shown is the total routed through this conduit — individual donors are listed separately to avoid double-counting.</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                                    <Badge variant="secondary">{donor.type}</Badge>
+                                    {isConduit && (
+                                      <span className="text-xs text-amber-600">Pass-through</span>
+                                    )}
+                                    {donor.contributor_city && donor.contributor_state && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {donor.contributor_city}, {donor.contributor_state}
+                                      </span>
+                                    )}
+                                    {donor.employer && (
+                                      <span className="text-xs text-muted-foreground">
+                                        • {donor.employer}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className={cn("font-bold", isConduit ? "text-amber-600" : "text-foreground")}>
+                                    ${donor.amount.toLocaleString()}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {donor.transaction_count > 1 ? `${donor.transaction_count} contributions` : donor.cycle}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          }
+                          
+                          // Render FEC aggregate sources
+                          const getBorderStyle = () => {
+                            switch (source.sourceType) {
+                              case 'small_donors': return 'border-primary/30 bg-primary/5';
+                              case 'candidate_loan':
+                              case 'candidate_contribution': return 'border-blue-500/30 bg-blue-500/5';
+                              case 'committee_transfer': return 'border-purple-500/30 bg-purple-500/5';
+                              default: return 'border-border';
+                            }
+                          };
+                          
+                          const getAmountColor = () => {
+                            switch (source.sourceType) {
+                              case 'candidate_loan':
+                              case 'candidate_contribution': return 'text-blue-600';
+                              case 'committee_transfer': return 'text-purple-600';
+                              default: return 'text-foreground';
+                            }
+                          };
+                          
+                          return (
+                            <div key={source.id} className={cn(
+                              "flex items-center justify-between p-4 rounded-lg border",
+                              getBorderStyle()
+                            )}>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-foreground">{source.name}</p>
+                                  {source.badgeLabel && (
+                                    <Badge variant="outline" className={cn("text-[10px]", source.badgeStyle)}>
+                                      {source.badgeLabel}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {source.description && (
+                                  <p className="text-xs text-muted-foreground mt-1">{source.description}</p>
                                 )}
                               </div>
-                              <div className="flex flex-wrap items-center gap-2 mt-1">
-                                <Badge variant="secondary">{donor.type}</Badge>
-                                {isConduit && (
-                                  <span className="text-xs text-amber-600">Pass-through</span>
-                                )}
-                                {donor.contributor_city && donor.contributor_state && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {donor.contributor_city}, {donor.contributor_state}
-                                  </span>
-                                )}
-                                {donor.employer && (
-                                  <span className="text-xs text-muted-foreground">
-                                    • {donor.employer}
-                                  </span>
+                              <div className="text-right">
+                                <p className={cn("font-bold", getAmountColor())}>
+                                  {formatCurrency(source.amount)}
+                                </p>
+                                {source.subLabel && (
+                                  <p className="text-xs text-muted-foreground">{source.subLabel}</p>
                                 )}
                               </div>
                             </div>
-                            <div className="text-right">
-                              <p className={cn("font-bold", isConduit ? "text-amber-600" : "text-foreground")}>
-                                ${donor.amount.toLocaleString()}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {donor.transaction_count > 1 ? `${donor.transaction_count} contributions` : donor.cycle}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        });
+                      })()}
                     </div>
-                    
-                    {/* Small Donors Aggregate Card */}
-                    {fecUnitemized && fecUnitemized > 0 && (
-                      <div className="mt-3 flex items-center justify-between p-4 rounded-lg border border-primary/30 bg-primary/5">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-foreground">Small Donors (Unitemized)</p>
-                            <Badge variant="outline" className="text-[10px] border-primary/50 text-primary bg-primary/10">
-                              Aggregate
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Individual donations under $200 — not itemized by FEC
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-foreground">{formatCurrency(fecUnitemized)}</p>
-                          <p className="text-xs text-muted-foreground">FEC aggregate</p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Candidate Loan Card */}
-                    {fecLoans > 0 && (
-                      <div className="mt-3 flex items-center justify-between p-4 rounded-lg border border-blue-500/30 bg-blue-500/5">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-foreground">{candidate.name}</p>
-                            <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-600 bg-blue-500/10">
-                              Candidate Loan
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Loan from the candidate to their own campaign — may be repaid from future contributions
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-blue-600">{formatCurrency(fecLoans)}</p>
-                          <p className="text-xs text-muted-foreground">Self-funded</p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Candidate Direct Contribution Card */}
-                    {fecCandidateContribution > 0 && (
-                      <div className="mt-3 flex items-center justify-between p-4 rounded-lg border border-blue-500/30 bg-blue-500/5">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-foreground">{candidate.name}</p>
-                            <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-600 bg-blue-500/10">
-                              Candidate Contribution
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Direct contribution from the candidate (not a loan — non-repayable)
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-blue-600">{formatCurrency(fecCandidateContribution)}</p>
-                          <p className="text-xs text-muted-foreground">Self-funded</p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Committee Transfers Card */}
-                    {fecTransfers > 0 && (
-                      <div className="mt-3 flex items-center justify-between p-4 rounded-lg border border-purple-500/30 bg-purple-500/5">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-foreground">Committee Transfers</p>
-                            <Badge variant="outline" className="text-[10px] border-purple-500/50 text-purple-600 bg-purple-500/10">
-                              Line 12
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Transfers from other authorized campaign committees
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-purple-600">{formatCurrency(fecTransfers)}</p>
-                          <p className="text-xs text-muted-foreground">Inter-committee</p>
-                        </div>
-                      </div>
-                    )}
                     
                     {/* Conduit explanation */}
                     {donors.some(d => ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'].some(c => d.name.toUpperCase().includes(c))) && (
