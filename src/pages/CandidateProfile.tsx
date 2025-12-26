@@ -630,19 +630,23 @@ export const CandidateProfile = () => {
                     <div className="mb-6 p-4 rounded-xl bg-secondary/50">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm text-muted-foreground">All Contributors</p>
+                          <p className="text-sm text-muted-foreground">All Contributors & Funding Sources</p>
                           <p className="text-2xl font-bold text-foreground">
-                            {donors.filter(d => !isConduitDonor(d)).length}{fecUnitemized && fecUnitemized > 0 ? ' + Small Donors' : ''} 
+                            {donors.filter(d => !isConduitDonor(d)).length}
+                            {fecUnitemized && fecUnitemized > 0 ? ' + Small Donors' : ''}
+                            {(fecLoans > 0 || fecCandidateContribution > 0 || fecTransfers > 0) ? ' + Self-Funding' : ''}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             Individuals, PACs, Organizations{fecUnitemized && fecUnitemized > 0 ? ', Unitemized' : ''}
+                            {(fecLoans > 0 || fecCandidateContribution > 0) && ', Candidate Self-Funding'}
+                            {fecTransfers > 0 && ', Committee Transfers'}
                             {conduitDonors.length > 0 && ` (${conduitDonors.length} conduits excluded)`}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-muted-foreground">Visible Contributions Total</p>
+                          <p className="text-xs text-muted-foreground">All Funding Sources Total</p>
                           <p className="text-xl font-bold text-foreground">
-                            {formatCurrency(visibleDonorsTotal + (fecUnitemized ?? 0))}
+                            {formatCurrency(visibleDonorsTotal + (fecUnitemized ?? 0) + fecLoans + fecCandidateContribution + fecTransfers)}
                           </p>
                           {conduitTotal > 0 && (
                             <p className="text-[10px] text-amber-600 mt-1">+${conduitTotal.toLocaleString()} conduit (excluded)</p>
@@ -728,6 +732,69 @@ export const CandidateProfile = () => {
                         <div className="text-right">
                           <p className="font-bold text-foreground">{formatCurrency(fecUnitemized)}</p>
                           <p className="text-xs text-muted-foreground">FEC aggregate</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Candidate Loan Card */}
+                    {fecLoans > 0 && (
+                      <div className="mt-3 flex items-center justify-between p-4 rounded-lg border border-blue-500/30 bg-blue-500/5">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-foreground">{candidate.name}</p>
+                            <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-600 bg-blue-500/10">
+                              Candidate Loan
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Loan from the candidate to their own campaign — may be repaid from future contributions
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-blue-600">{formatCurrency(fecLoans)}</p>
+                          <p className="text-xs text-muted-foreground">Self-funded</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Candidate Direct Contribution Card */}
+                    {fecCandidateContribution > 0 && (
+                      <div className="mt-3 flex items-center justify-between p-4 rounded-lg border border-blue-500/30 bg-blue-500/5">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-foreground">{candidate.name}</p>
+                            <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-600 bg-blue-500/10">
+                              Candidate Contribution
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Direct contribution from the candidate (not a loan — non-repayable)
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-blue-600">{formatCurrency(fecCandidateContribution)}</p>
+                          <p className="text-xs text-muted-foreground">Self-funded</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Committee Transfers Card */}
+                    {fecTransfers > 0 && (
+                      <div className="mt-3 flex items-center justify-between p-4 rounded-lg border border-purple-500/30 bg-purple-500/5">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-foreground">Committee Transfers</p>
+                            <Badge variant="outline" className="text-[10px] border-purple-500/50 text-purple-600 bg-purple-500/10">
+                              Line 12
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Transfers from other authorized campaign committees
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-purple-600">{formatCurrency(fecTransfers)}</p>
+                          <p className="text-xs text-muted-foreground">Inter-committee</p>
                         </div>
                       </div>
                     )}
