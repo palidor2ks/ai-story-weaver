@@ -6,38 +6,49 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Fetch FEC totals for a committee with category-level data
+// Fetch FEC totals for a committee with category-level data including loans, transfers, etc.
 async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: string): Promise<{
   fecItemized: number | null;
   fecUnitemized: number | null;
   fecTotalReceipts: number | null;
   fecPacContributions: number | null;
   fecPartyContributions: number | null;
+  fecLoans: number | null;
+  fecTransfers: number | null;
+  fecCandidateContribution: number | null;
+  fecOtherReceipts: number | null;
 }> {
+  const nullResult = { 
+    fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, 
+    fecPacContributions: null, fecPartyContributions: null,
+    fecLoans: null, fecTransfers: null, fecCandidateContribution: null, fecOtherReceipts: null 
+  };
+  
   try {
     const url = `https://api.open.fec.gov/v1/committee/${committeeId}/totals/?api_key=${fecApiKey}&cycle=${cycle}`;
     const response = await fetch(url);
     
-    if (!response.ok) {
-      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null };
-    }
+    if (!response.ok) return nullResult;
     
     const data = await response.json();
     const totals = data.results?.[0];
     
-    if (!totals) {
-      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null };
-    }
+    if (!totals) return nullResult;
     
     return {
       fecItemized: Math.round(totals.individual_itemized_contributions || 0),
       fecUnitemized: Math.round(totals.individual_unitemized_contributions || 0),
       fecTotalReceipts: Math.round(totals.receipts || 0),
       fecPacContributions: Math.round(totals.other_political_committee_contributions || 0),
-      fecPartyContributions: Math.round(totals.political_party_committee_contributions || 0)
+      fecPartyContributions: Math.round(totals.political_party_committee_contributions || 0),
+      // Additional breakdown fields
+      fecLoans: Math.round(totals.loans_made_by_candidate || 0),
+      fecTransfers: Math.round(totals.transfers_from_other_authorized_committee || 0),
+      fecCandidateContribution: Math.round(totals.candidate_contribution || 0),
+      fecOtherReceipts: Math.round(totals.other_receipts || 0),
     };
   } catch {
-    return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null };
+    return nullResult;
   }
 }
 
@@ -161,6 +172,10 @@ serve(async (req) => {
         let fecTotalReceipts = 0;
         let fecPacContributions = 0;
         let fecPartyContributions = 0;
+        let fecLoans = 0;
+        let fecTransfers = 0;
+        let fecCandidateContribution = 0;
+        let fecOtherReceipts = 0;
 
         for (const cmte of committees) {
           const totals = await fetchFECTotals(fecApiKey, cmte.fec_committee_id, cycle);
@@ -169,6 +184,10 @@ serve(async (req) => {
           fecTotalReceipts += totals.fecTotalReceipts || 0;
           fecPacContributions += totals.fecPacContributions || 0;
           fecPartyContributions += totals.fecPartyContributions || 0;
+          fecLoans += totals.fecLoans || 0;
+          fecTransfers += totals.fecTransfers || 0;
+          fecCandidateContribution += totals.fecCandidateContribution || 0;
+          fecOtherReceipts += totals.fecOtherReceipts || 0;
 
           // Update committee rollup with fresh FEC data
           await supabase
@@ -238,6 +257,11 @@ serve(async (req) => {
             fec_total_receipts: fecTotalReceipts,
             fec_pac_contributions: fecPacContributions,
             fec_party_contributions: fecPartyContributions,
+            // Additional FEC breakdown fields
+            fec_loans: fecLoans,
+            fec_transfers: fecTransfers,
+            fec_candidate_contribution: fecCandidateContribution,
+            fec_other_receipts: fecOtherReceipts,
             // Category-level deltas
             individual_delta_amount: individualDeltaAmount,
             individual_delta_pct: individualDeltaPct,
