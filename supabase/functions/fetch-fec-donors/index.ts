@@ -15,10 +15,10 @@ const MAX_RUNTIME_MS = 25000; // 25 seconds - safe margin to avoid WORKER_LIMIT
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_BASE_MS = 2000;
 
-// Batch sizes for streaming saves
-const CONTRIBUTION_BATCH_SIZE = 500;
-const DONOR_BATCH_SIZE = 500;
-const DONOR_FLUSH_PAGES = 10; // Flush donors to DB every N pages to avoid memory buildup
+// Batch sizes for streaming saves - keep small to avoid DB timeouts
+const CONTRIBUTION_BATCH_SIZE = 250;
+const DONOR_BATCH_SIZE = 100; // Reduced from 500 to avoid statement timeouts
+const DONOR_FLUSH_PAGES = 5; // Flush more often with smaller batches
 
 // Request tracking for rate limiting
 let requestCount = 0;
@@ -582,8 +582,52 @@ serve(async (req) => {
       console.log(`[FEC-DONORS] Resuming ${committeeId} from cursor: ${lastIndex}`);
     }
 
-    // Per-committee aggregation
-    const aggregatedDonors = new Map<string, AggregatedDonor & { id: string }>();
+    // Per-committee aggregation - accumulates across all pages
+    // CRITICAL: We keep donors in memory for the entire sync to properly aggregate
+    // Instead of clearing after flush, we track which donors have been flushed
+    const aggregatedDonors = new Map<string, AggregatedDonor & { id: string; flushedAmount?: number }>();
+    const donorIdsSeen = new Set<string>(); // Track unique donor IDs for accurate count
+    
+    // For resumable syncs, load existing donors from DB to continue accumulating
+    if (resumeFromCursor && targetCommittee.lastIndex && !forceFullSync) {
+      console.log(`[FEC-DONORS] Loading existing donors from DB to continue accumulation...`);
+      const { data: existingDonors } = await supabase
+        .from('donors')
+        .select('*')
+        .eq('candidate_id', candidateId)
+        .eq('recipient_committee_id', committeeId)
+        .eq('cycle', cycle);
+      
+      if (existingDonors && existingDonors.length > 0) {
+        for (const d of existingDonors) {
+          aggregatedDonors.set(d.id, {
+            id: d.id,
+            name: d.name,
+            type: d.type as 'Individual' | 'PAC' | 'Organization' | 'Unknown',
+            amount: d.amount || 0,
+            transactionCount: d.transaction_count || 1,
+            firstReceiptDate: d.first_receipt_date,
+            lastReceiptDate: d.last_receipt_date,
+            city: d.contributor_city || '',
+            state: d.contributor_state || '',
+            zip: d.contributor_zip || '',
+            employer: d.employer || '',
+            occupation: d.occupation || '',
+            lineNumber: d.line_number || '',
+            isContribution: d.is_contribution ?? true,
+            isTransfer: d.is_transfer ?? false,
+            receiptType: d.is_transfer ? 'transfer' : 'contribution',
+            isConduitOrg: d.is_conduit_org ?? false,
+            conduitName: d.conduit_name,
+            conduitCommitteeId: d.conduit_committee_id,
+            flushedAmount: d.amount || 0 // Track what's already saved to DB
+          });
+          donorIdsSeen.add(d.id);
+        }
+        console.log(`[FEC-DONORS] Loaded ${existingDonors.length} existing donors from DB`);
+      }
+    }
+    
     let contributionBatch: Array<{
       identity_hash: string;
       fec_transaction_id: string | null;
@@ -648,37 +692,51 @@ serve(async (req) => {
     };
 
     // Helper to save donors batch (for periodic flushing)
-    const saveDonorBatch = async () => {
+    // FIXED: Don't clear aggregatedDonors after flush - we need to keep accumulating
+    // Instead, we upsert all donors with their cumulative totals
+    const saveDonorBatch = async (isFinalFlush = false) => {
       if (aggregatedDonors.size === 0) return;
       
-      const donors = Array.from(aggregatedDonors.values()).map(donor => ({
-        id: donor.id,
-        candidate_id: candidateId,
-        name: donor.name,
-        type: donor.type,
-        amount: donor.amount,
-        cycle,
-        recipient_committee_id: committeeId,
-        recipient_committee_name: committeeName,
-        first_receipt_date: donor.firstReceiptDate,
-        last_receipt_date: donor.lastReceiptDate,
-        transaction_count: donor.transactionCount,
-        contributor_city: donor.city,
-        contributor_state: donor.state,
-        contributor_zip: donor.zip,
-        employer: donor.employer,
-        occupation: donor.occupation,
-        line_number: donor.lineNumber,
-        is_contribution: donor.isContribution,
-        is_transfer: donor.isTransfer,
-        is_conduit_org: donor.isConduitOrg,
-        conduit_name: donor.conduitName,
-        conduit_committee_id: donor.conduitCommitteeId
-      }));
+      // Only save donors that have changed since last flush (or all on final flush)
+      const donorsToSave = Array.from(aggregatedDonors.values())
+        .filter(donor => {
+          // Save if amount changed since last flush OR on final flush
+          const hasChanges = donor.amount !== (donor.flushedAmount ?? 0);
+          return isFinalFlush || hasChanges;
+        })
+        .map(donor => ({
+          id: donor.id,
+          candidate_id: candidateId,
+          name: donor.name,
+          type: donor.type,
+          amount: donor.amount, // Cumulative total
+          cycle,
+          recipient_committee_id: committeeId,
+          recipient_committee_name: committeeName,
+          first_receipt_date: donor.firstReceiptDate,
+          last_receipt_date: donor.lastReceiptDate,
+          transaction_count: donor.transactionCount,
+          contributor_city: donor.city,
+          contributor_state: donor.state,
+          contributor_zip: donor.zip,
+          employer: donor.employer,
+          occupation: donor.occupation,
+          line_number: donor.lineNumber,
+          is_contribution: donor.isContribution,
+          is_transfer: donor.isTransfer,
+          is_conduit_org: donor.isConduitOrg,
+          conduit_name: donor.conduitName,
+          conduit_committee_id: donor.conduitCommitteeId
+        }));
+
+      if (donorsToSave.length === 0) {
+        console.log(`[FEC-DONORS] No donor changes to flush`);
+        return;
+      }
 
       // Save in batches
-      for (let i = 0; i < donors.length; i += DONOR_BATCH_SIZE) {
-        const batch = donors.slice(i, i + DONOR_BATCH_SIZE);
+      for (let i = 0; i < donorsToSave.length; i += DONOR_BATCH_SIZE) {
+        const batch = donorsToSave.slice(i, i + DONOR_BATCH_SIZE);
         const { error } = await supabase
           .from('donors')
           .upsert(batch, { onConflict: 'id' });
@@ -688,9 +746,13 @@ serve(async (req) => {
         }
       }
       
-      totalDonors += donors.length;
-      console.log(`[FEC-DONORS] Flushed ${donors.length} donors to DB`);
-      aggregatedDonors.clear(); // Clear memory after flush
+      // Mark donors as flushed by updating their flushedAmount
+      for (const donor of aggregatedDonors.values()) {
+        donor.flushedAmount = donor.amount;
+      }
+      
+      console.log(`[FEC-DONORS] Flushed ${donorsToSave.length} donors to DB (total unique: ${aggregatedDonors.size})`);
+      // CRITICAL: Do NOT clear aggregatedDonors - we continue accumulating
     };
 
     // Save cursor to database for resumability
@@ -943,9 +1005,11 @@ serve(async (req) => {
             receiptType: classification.receiptType,
             isConduitOrg: donorIsConduitOrg,
             conduitName: conduitCommitteeName,
-            conduitCommitteeId: conduitCommitteeId
+            conduitCommitteeId: conduitCommitteeId,
+            flushedAmount: 0 // New donor, not yet flushed
           });
         }
+        donorIdsSeen.add(donorId); // Track unique donors
       }
 
       const pagination = data?.pagination;
@@ -967,10 +1031,11 @@ serve(async (req) => {
       await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY_MS));
     }
 
-    // Save remaining contributions and donors
+    // Save remaining contributions and donors (final flush)
     await saveContributionBatch();
-    await saveDonorBatch();
+    await saveDonorBatch(true); // Final flush - save all donors
 
+    totalDonors = aggregatedDonors.size; // Actual unique donor count
     totalContributions = committeeContributionsSaved;
     totalRaised = committeeItemized;
 
