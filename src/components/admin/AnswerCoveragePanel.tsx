@@ -98,12 +98,17 @@ export function AnswerCoveragePanel() {
     batchFetchFECIds,
     batchFetchDonors,
     resumeAllPartialSyncs,
+    syncAllCandidatesComplete,
+    cancelSyncAll,
+    clearSyncAllProgress,
     isLoading: isFECLoading, 
     isDonorLoading,
     isCommitteeLoading,
     hasPartialSync,
     batchProgress: fecBatchProgress,
-    isBatchRunning: isFECBatchRunning
+    isBatchRunning: isFECBatchRunning,
+    syncAllProgress,
+    isSyncAllRunning
   } = useFECIntegration();
   
   const baseFilteredCandidates = useMemo(() => (
@@ -266,7 +271,7 @@ export function AnswerCoveragePanel() {
   const lowCoverageCount = candidateStats?.lowCoverage || 0;
 
   const isLoading_ = syncLoading || statsLoading;
-  const anyBatchRunning = isBatchRunning || isFECBatchRunning;
+  const anyBatchRunning = isBatchRunning || isFECBatchRunning || isSyncAllRunning;
 
   if (isLoading_) {
     return (
@@ -468,6 +473,45 @@ export function AnswerCoveragePanel() {
                     </AlertDialog>
                   </>
                 )}
+                
+                <DropdownMenuSeparator />
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem 
+                      onSelect={(e) => e.preventDefault()}
+                      className="text-green-600 font-medium"
+                    >
+                      <Play className="h-4 w-4 mr-2" />
+                      Sync All Until Complete
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Sync All Candidates Until Complete?</AlertDialogTitle>
+                      <AlertDialogDescription className="space-y-2">
+                        <p>
+                          This will continuously sync ALL candidates with FEC IDs until their donor data is fully imported.
+                          The process will run in your browser until complete.
+                        </p>
+                        <ul className="list-disc pl-4 text-sm space-y-1">
+                          <li>Candidates without any sync will be synced from scratch</li>
+                          <li>Candidates with partial syncs will resume from where they stopped</li>
+                          <li>You can cancel at any time with the Stop button</li>
+                          <li>This may take a long time depending on the number of candidates</li>
+                        </ul>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={() => syncAllCandidatesComplete('2024')}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        Start Sync All
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -614,6 +658,102 @@ export function AnswerCoveragePanel() {
                     Cancel
                   </Button>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Sync All Progress */}
+        {syncAllProgress && (
+          <div className={cn(
+            "border rounded-lg p-4 space-y-3",
+            syncAllProgress.isRunning 
+              ? "bg-green-500/5 border-green-500/20" 
+              : syncAllProgress.errors.length > 0 
+                ? "bg-amber-500/5 border-amber-500/20"
+                : "bg-green-500/10 border-green-500/30"
+          )}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {syncAllProgress.isRunning ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-green-600" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                )}
+                <span className="text-sm font-medium">
+                  {syncAllProgress.isRunning 
+                    ? `Syncing: ${syncAllProgress.currentCandidate}`
+                    : syncAllProgress.currentCandidate}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span>{syncAllProgress.candidatesCompleted} / {syncAllProgress.candidatesTotal} candidates</span>
+                <span className="text-green-600 font-medium">
+                  {syncAllProgress.totalDonorsImported.toLocaleString()} donors
+                </span>
+                <span className="text-green-600">
+                  ${syncAllProgress.totalRaised.toLocaleString()}
+                </span>
+              </div>
+            </div>
+            
+            <Progress 
+              value={syncAllProgress.candidatesTotal > 0 
+                ? (syncAllProgress.candidatesCompleted / syncAllProgress.candidatesTotal) * 100 
+                : 0
+              } 
+              className="h-2" 
+            />
+            
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-muted-foreground">
+                {syncAllProgress.isRunning && syncAllProgress.startTime && (
+                  <span>
+                    Running for {Math.round((Date.now() - syncAllProgress.startTime) / 1000 / 60)} minutes
+                  </span>
+                )}
+                {syncAllProgress.errors.length > 0 && (
+                  <span className="text-amber-600 ml-2">
+                    {syncAllProgress.errors.length} error(s)
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {syncAllProgress.isRunning ? (
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={cancelSyncAll}
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Stop Sync
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      clearSyncAllProgress();
+                      refetch();
+                    }}
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Dismiss
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            {/* Show errors if any */}
+            {syncAllProgress.errors.length > 0 && !syncAllProgress.isRunning && (
+              <div className="mt-2 text-xs text-amber-600 max-h-32 overflow-y-auto">
+                <div className="font-medium mb-1">Errors encountered:</div>
+                {syncAllProgress.errors.slice(0, 10).map((err, i) => (
+                  <div key={i} className="truncate">{err}</div>
+                ))}
+                {syncAllProgress.errors.length > 10 && (
+                  <div className="text-muted-foreground">...and {syncAllProgress.errors.length - 10} more</div>
+                )}
               </div>
             )}
           </div>
