@@ -102,9 +102,11 @@ export function AnswerCoveragePanel() {
     syncAllCandidatesComplete,
     cancelSyncAll,
     clearSyncAllProgress,
+    triggerReconciliation,
     isLoading: isFECLoading, 
     isDonorLoading,
     isCommitteeLoading,
+    isReconcileLoading,
     hasPartialSync,
     batchProgress: fecBatchProgress,
     isBatchRunning: isFECBatchRunning,
@@ -1210,6 +1212,38 @@ export function AnswerCoveragePanel() {
                                     </>
                                   ) : (
                                     <DollarSign className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              )}
+                              {/* Refresh Finance Reconciliation */}
+                              {hasFecId && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={isReconcileLoading(candidate.id) || anyBatchRunning}
+                                  onClick={() => {
+                                    void (async () => {
+                                      try {
+                                        const result = await triggerReconciliation(candidate.id, '2024');
+                                        if (result.success) {
+                                          toast.success(`Finance refreshed: ${result.status}`);
+                                          refetch();
+                                        } else {
+                                          toast.error(result.error || 'Reconciliation failed');
+                                        }
+                                      } catch (err) {
+                                        console.error('[Admin] Reconciliation failed:', err);
+                                        toast.error('Failed to refresh finance');
+                                      }
+                                    })();
+                                  }}
+                                  title="Refresh finance reconciliation"
+                                  className="h-7"
+                                >
+                                  {isReconcileLoading(candidate.id) ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Calculator className="h-3 w-3" />
                                   )}
                                 </Button>
                               )}
