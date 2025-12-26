@@ -299,6 +299,19 @@ export function useFECIntegration() {
           next.delete(candidateId);
           return next;
         });
+        
+        // Trigger finance reconciliation when sync is complete
+        console.log(`[FEC-DONORS] Sync complete for ${candidateName}, triggering reconciliation...`);
+        try {
+          const reconcileResult = await triggerReconciliation(candidateId, cycle);
+          if (reconcileResult.success) {
+            console.log(`[FEC-DONORS] Reconciliation complete for ${candidateName}:`, reconcileResult.status);
+          } else {
+            console.warn(`[FEC-DONORS] Reconciliation failed for ${candidateName}:`, reconcileResult.error);
+          }
+        } catch (reconcileErr) {
+          console.warn(`[FEC-DONORS] Reconciliation error for ${candidateName}:`, reconcileErr);
+        }
       }
 
       setSyncProgress({
@@ -332,6 +345,32 @@ export function useFECIntegration() {
       });
       // Clear sync progress after a short delay so user sees final state
       setTimeout(() => setSyncProgress(null), 2000);
+    }
+  };
+
+  // Trigger finance reconciliation for a specific candidate
+  const triggerReconciliation = async (candidateId: string, cycle = '2024'): Promise<{ success: boolean; status?: string; error?: string }> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('nightly-finance-reconciliation', {
+        body: { candidateId, cycle, limit: 1, onlyStale: false, onlyWithData: false }
+      });
+
+      if (error) {
+        console.error('[RECONCILIATION] Invoke error:', error);
+        return { success: false, error: error.message };
+      }
+
+      if (data?.error) {
+        return { success: false, error: String(data.error) };
+      }
+
+      return { 
+        success: true, 
+        status: data?.details?.[0]?.status || 'completed'
+      };
+    } catch (err) {
+      console.error('[RECONCILIATION] Exception:', err);
+      return { success: false, error: 'Failed to trigger reconciliation' };
     }
   };
 
