@@ -644,9 +644,9 @@ export const CandidateProfile = () => {
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-muted-foreground">All Funding Sources Total</p>
+                          <p className="text-xs text-muted-foreground">FEC Total Receipts</p>
                           <p className="text-xl font-bold text-foreground">
-                            {formatCurrency(visibleDonorsTotal + (fecUnitemized ?? 0) + fecLoans + fecCandidateContribution + fecTransfers)}
+                            {formatCurrency(fecTotalReceipts ?? 0)}
                           </p>
                           {conduitTotal > 0 && (
                             <p className="text-[10px] text-amber-600 mt-1">+${conduitTotal.toLocaleString()} conduit (excluded)</p>
