@@ -166,8 +166,13 @@ export const CandidateProfile = () => {
   const conduitDonors = donors.filter(d => isConduitDonor(d));
   const conduitTotal = conduitDonors.reduce((sum, d) => sum + d.amount, 0);
   
-  // Other Receipts = FEC Total - Itemized - Unitemized (includes PACs, transfers, loans, etc.)
-  const otherReceipts = (fecTotalReceipts ?? 0) - (fecItemized ?? 0) - (fecUnitemized ?? 0);
+  // FEC PAC and Party contributions from reconciliation
+  const fecPacContributions = financeReconciliation?.fec_pac_contributions ?? 0;
+  const fecPartyContributions = financeReconciliation?.fec_party_contributions ?? 0;
+  
+  // Other Receipts (Line 15+) = FEC Total - Itemized Individual - PAC - Party - Unitemized
+  // This captures slate mailers, refunds, loans, and misc receipts
+  const otherReceipts = (fecTotalReceipts ?? 0) - (fecItemized ?? 0) - fecPacContributions - fecPartyContributions - (fecUnitemized ?? 0);
   
   // Full donor list total (for display - but excluding conduits which are pass-throughs)
   const donorListTotal = donors.filter(d => !isConduitDonor(d)).reduce((sum, d) => sum + d.amount, 0);
