@@ -605,17 +605,20 @@ export const CandidateProfile = () => {
                     <div className="mb-6 p-4 rounded-xl bg-secondary/50">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm text-muted-foreground">Itemized Individual Contributors</p>
+                          <p className="text-sm text-muted-foreground">All Contributors</p>
                           <p className="text-2xl font-bold text-foreground">
-                            {itemizedIndividualDonors.length} donors
+                            {donors.filter(d => !isConduitDonor(d)).length}{fecUnitemized && fecUnitemized > 0 ? ' + Small Donors' : ''} 
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Excludes {transferDonors.length} transfers, {conduitDonors.length} conduit pass-throughs
+                            Individuals, PACs, Organizations{fecUnitemized && fecUnitemized > 0 ? ', Unitemized' : ''}
+                            {conduitDonors.length > 0 && ` (${conduitDonors.length} conduits excluded)`}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-muted-foreground">Itemized List Total</p>
-                          <p className="text-xl font-bold text-foreground">{formatCurrency(itemizedIndividualTotal)}</p>
+                          <p className="text-xs text-muted-foreground">Visible Contributions Total</p>
+                          <p className="text-xl font-bold text-foreground">
+                            {formatCurrency(visibleDonorsTotal + (fecUnitemized ?? 0))}
+                          </p>
                           {conduitTotal > 0 && (
                             <p className="text-[10px] text-amber-600 mt-1">+${conduitTotal.toLocaleString()} conduit (excluded)</p>
                           )}
@@ -682,6 +685,27 @@ export const CandidateProfile = () => {
                         );
                       })}
                     </div>
+                    
+                    {/* Small Donors Aggregate Card */}
+                    {fecUnitemized && fecUnitemized > 0 && (
+                      <div className="mt-3 flex items-center justify-between p-4 rounded-lg border border-primary/30 bg-primary/5">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-foreground">Small Donors (Unitemized)</p>
+                            <Badge variant="outline" className="text-[10px] border-primary/50 text-primary bg-primary/10">
+                              Aggregate
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Individual donations under $200 — not itemized by FEC
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-foreground">{formatCurrency(fecUnitemized)}</p>
+                          <p className="text-xs text-muted-foreground">FEC aggregate</p>
+                        </div>
+                      </div>
+                    )}
                     
                     {/* Conduit explanation */}
                     {donors.some(d => ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'].some(c => d.name.toUpperCase().includes(c))) && (
