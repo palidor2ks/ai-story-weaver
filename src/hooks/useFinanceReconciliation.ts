@@ -19,6 +19,11 @@ export interface FinanceReconciliation {
   fec_total_receipts: number | null;
   fec_pac_contributions: number | null;
   fec_party_contributions: number | null;
+  // Additional FEC breakdown (for complete receipt accounting)
+  fec_loans: number | null;
+  fec_transfers: number | null;
+  fec_candidate_contribution: number | null;
+  fec_other_receipts: number | null;
   // Category-level deltas
   individual_delta_amount: number | null;
   individual_delta_pct: number | null;

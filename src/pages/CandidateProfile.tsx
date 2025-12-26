@@ -170,16 +170,19 @@ export const CandidateProfile = () => {
   const fecPacContributions = financeReconciliation?.fec_pac_contributions ?? 0;
   const fecPartyContributions = financeReconciliation?.fec_party_contributions ?? 0;
   
-  // Other Receipts (Line 15+) = FEC Total - Itemized Individual - PAC - Party - Unitemized
-  // This captures slate mailers, refunds, loans, and misc receipts
-  const otherReceipts = (fecTotalReceipts ?? 0) - (fecItemized ?? 0) - fecPacContributions - fecPartyContributions - (fecUnitemized ?? 0);
+  // Additional FEC breakdown fields (loans, transfers, candidate contributions, other receipts)
+  const fecLoans = financeReconciliation?.fec_loans ?? 0;
+  const fecTransfers = financeReconciliation?.fec_transfers ?? 0;
+  const fecCandidateContribution = financeReconciliation?.fec_candidate_contribution ?? 0;
+  const fecOtherReceipts = financeReconciliation?.fec_other_receipts ?? 0;
   
   // Visible donors total (from donors table - may be incomplete due to aggregation)
   const visibleDonorsTotal = donors.filter(d => !isConduitDonor(d)).reduce((sum, d) => sum + d.amount, 0);
   
   // Contribution list total: Sum of all FEC breakdown components (should exactly equal FEC Total Receipts)
   // This ensures our breakdown table rows always sum to the FEC total
-  const contributionListTotal = (fecItemized ?? 0) + fecPacContributions + fecPartyContributions + (fecUnitemized ?? 0) + (otherReceipts > 0 ? otherReceipts : 0);
+  const contributionListTotal = (fecItemized ?? 0) + fecPacContributions + fecPartyContributions + 
+    (fecUnitemized ?? 0) + fecLoans + fecTransfers + fecCandidateContribution + fecOtherReceipts;
   
   // Since we derive contributionListTotal from FEC components, it should match FEC Total exactly
   // Any variance indicates missing data in our FEC breakdown fields
@@ -537,24 +540,46 @@ export const CandidateProfile = () => {
                             )}
                             
                             {/* Transfers (Line 12) */}
-                            {transferTotal > 0 && (
+                            {fecTransfers > 0 && (
                               <div className="flex items-center justify-between px-4 py-3">
-                                <div className="flex items-center gap-3">
+                                <div className="flex flex-col">
                                   <span className="text-sm font-medium text-foreground">Transfers (Line 12)</span>
-                                  <Badge variant="outline" className="text-[10px]">{transferDonors.length} transfers</Badge>
+                                  <span className="text-[11px] text-muted-foreground">From other authorized committees</span>
                                 </div>
-                                <span className="text-sm font-semibold">{formatCurrency(transferTotal)}</span>
+                                <span className="text-sm font-semibold">{formatCurrency(fecTransfers)}</span>
+                              </div>
+                            )}
+                            
+                            {/* Candidate Loans */}
+                            {fecLoans > 0 && (
+                              <div className="flex items-center justify-between px-4 py-3 bg-amber-500/5">
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium text-foreground">Candidate Loans</span>
+                                  <span className="text-[11px] text-muted-foreground">Loans from the candidate to campaign</span>
+                                </div>
+                                <span className="text-sm font-semibold text-amber-700">{formatCurrency(fecLoans)}</span>
+                              </div>
+                            )}
+                            
+                            {/* Candidate Contribution */}
+                            {fecCandidateContribution > 0 && (
+                              <div className="flex items-center justify-between px-4 py-3">
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium text-foreground">Candidate Contribution</span>
+                                  <span className="text-[11px] text-muted-foreground">Direct contribution from candidate</span>
+                                </div>
+                                <span className="text-sm font-semibold">{formatCurrency(fecCandidateContribution)}</span>
                               </div>
                             )}
                             
                             {/* Other Receipts (Line 15) */}
-                            {otherReceipts > 0 && (
+                            {fecOtherReceipts > 0 && (
                               <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
                                 <div className="flex flex-col">
-                                  <span className="text-sm font-medium text-foreground">Other Receipts (Line 15+)</span>
+                                  <span className="text-sm font-medium text-foreground">Other Receipts (Line 15)</span>
                                   <span className="text-[11px] text-muted-foreground">Slate mailers, refunds, misc</span>
                                 </div>
-                                <span className="text-sm font-semibold">{formatCurrency(otherReceipts)}</span>
+                                <span className="text-sm font-semibold">{formatCurrency(fecOtherReceipts)}</span>
                               </div>
                             )}
                             
