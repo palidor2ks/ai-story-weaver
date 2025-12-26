@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -63,6 +63,17 @@ interface SyncProgress {
   isComplete: boolean;
 }
 
+interface SyncAllProgress {
+  candidatesCompleted: number;
+  candidatesTotal: number;
+  currentCandidate: string;
+  totalDonorsImported: number;
+  totalRaised: number;
+  errors: string[];
+  isRunning: boolean;
+  startTime: number;
+}
+
 export function useFECIntegration() {
   // All useState hooks must be in consistent order
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
@@ -75,6 +86,8 @@ export function useFECIntegration() {
     currentName: string;
   } | null>(null);
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const [syncAllProgress, setSyncAllProgress] = useState<SyncAllProgress | null>(null);
+  const cancelSyncAllRef = useRef(false);
 
   const isLoading = (candidateId: string) => loadingIds.has(candidateId);
   const isDonorLoading = (candidateId: string) => donorLoadingIds.has(candidateId);
@@ -467,6 +480,149 @@ export function useFECIntegration() {
     return results;
   };
 
+  // Sync All Candidates Until Complete - runs continuously until all donors imported
+  const syncAllCandidatesComplete = async (cycle = '2024') => {
+    if (syncAllProgress?.isRunning) {
+      console.warn('[FEC] syncAllCandidatesComplete already running');
+      return;
+    }
+
+    cancelSyncAllRef.current = false;
+    
+    const startTime = Date.now();
+    setSyncAllProgress({
+      candidatesCompleted: 0,
+      candidatesTotal: 0,
+      currentCandidate: 'Loading candidates...',
+      totalDonorsImported: 0,
+      totalRaised: 0,
+      errors: [],
+      isRunning: true,
+      startTime
+    });
+
+    try {
+      // Query candidates that need sync:
+      // 1. Has fec_candidate_id
+      // 2. Either: last_donor_sync is null OR has committees with has_more = true
+      const { data: candidatesNeedingSync, error } = await supabase
+        .from('candidates')
+        .select(`
+          id,
+          name,
+          fec_candidate_id,
+          last_donor_sync
+        `)
+        .not('fec_candidate_id', 'is', null)
+        .order('name');
+
+      if (error) {
+        console.error('[FEC] Error fetching candidates:', error);
+        setSyncAllProgress(prev => prev ? { ...prev, isRunning: false, errors: [...prev.errors, error.message] } : null);
+        return;
+      }
+
+      // Also get committees with has_more = true (incomplete syncs)
+      const { data: incompleteCommittees } = await supabase
+        .from('candidate_committees')
+        .select('candidate_id')
+        .eq('has_more', true);
+
+      const incompleteCandidateIds = new Set(incompleteCommittees?.map(c => c.candidate_id) || []);
+
+      // Filter to candidates that need work: never synced OR incomplete
+      const toProcess = (candidatesNeedingSync || []).filter(c => 
+        !c.last_donor_sync || incompleteCandidateIds.has(c.id)
+      );
+
+      if (toProcess.length === 0) {
+        toast.info('All candidates are already fully synced!');
+        setSyncAllProgress(null);
+        return;
+      }
+
+      setSyncAllProgress(prev => prev ? { ...prev, candidatesTotal: toProcess.length } : null);
+      
+      let totalDonors = 0;
+      let totalRaised = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < toProcess.length; i++) {
+        // Check cancel flag
+        if (cancelSyncAllRef.current) {
+          console.log('[FEC] Sync cancelled by user');
+          setSyncAllProgress(prev => prev ? { ...prev, isRunning: false, currentCandidate: 'Cancelled' } : null);
+          toast.info(`Sync cancelled after ${i} candidates`);
+          return;
+        }
+
+        const candidate = toProcess[i];
+        
+        setSyncAllProgress(prev => prev ? {
+          ...prev,
+          candidatesCompleted: i,
+          currentCandidate: candidate.name,
+        } : null);
+
+        try {
+          const result = await fetchFECDonorsComplete(
+            candidate.id,
+            candidate.fec_candidate_id!,
+            candidate.name,
+            cycle,
+            false // Don't force full sync - resume from where we left off
+          );
+
+          totalDonors += result.imported || 0;
+          totalRaised += result.totalRaised || 0;
+
+          setSyncAllProgress(prev => prev ? {
+            ...prev,
+            totalDonorsImported: totalDonors,
+            totalRaised: totalRaised,
+          } : null);
+
+          if (!result.success && result.error) {
+            errors.push(`${candidate.name}: ${result.error}`);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          errors.push(`${candidate.name}: ${msg}`);
+        }
+
+        // Small delay between candidates
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      setSyncAllProgress(prev => prev ? {
+        ...prev,
+        isRunning: false,
+        candidatesCompleted: toProcess.length,
+        currentCandidate: 'Complete!',
+        errors
+      } : null);
+
+      const elapsed = Math.round((Date.now() - startTime) / 1000 / 60);
+      toast.success(
+        `Sync complete! Imported ${totalDonors.toLocaleString()} donors ` +
+        `($${totalRaised.toLocaleString()}) for ${toProcess.length} candidates in ${elapsed} minutes`
+      );
+
+    } catch (err) {
+      console.error('[FEC] syncAllCandidatesComplete failed:', err);
+      setSyncAllProgress(prev => prev ? { ...prev, isRunning: false } : null);
+      toast.error('Sync all failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  };
+
+  const cancelSyncAll = () => {
+    cancelSyncAllRef.current = true;
+  };
+
+  const clearSyncAllProgress = () => {
+    setSyncAllProgress(null);
+  };
+
   return {
     fetchFECCandidateId,
     fetchFECCommittees,
@@ -475,6 +631,9 @@ export function useFECIntegration() {
     batchFetchFECIds,
     batchFetchDonors,
     resumeAllPartialSyncs,
+    syncAllCandidatesComplete,
+    cancelSyncAll,
+    clearSyncAllProgress,
     isLoading,
     isDonorLoading,
     isCommitteeLoading,
@@ -482,6 +641,8 @@ export function useFECIntegration() {
     partialSyncIds,
     batchProgress,
     syncProgress,
-    isBatchRunning: batchProgress !== null
+    syncAllProgress,
+    isBatchRunning: batchProgress !== null,
+    isSyncAllRunning: syncAllProgress?.isRunning === true
   };
 }
