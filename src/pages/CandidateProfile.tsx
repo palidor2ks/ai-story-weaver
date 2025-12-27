@@ -672,8 +672,12 @@ export const CandidateProfile = () => {
 
                         const allSources: FundingSource[] = [];
                         
-                        // Add regular donors
+                        // Add regular donors - but exclude line 13A (loans) if fecLoans is already shown
                         donors.forEach(d => {
+                          // Skip loan entries (line 13A) if fecLoans is already being shown as a separate category
+                          if (fecLoans > 0 && d.line_number === '13A') {
+                            return;
+                          }
                           allSources.push({
                             id: d.id,
                             name: d.name,
