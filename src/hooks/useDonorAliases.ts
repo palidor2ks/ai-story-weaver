@@ -7,6 +7,7 @@ export interface DonorAlias {
   canonical_name: string;
   alias_pattern: string;
   donor_type: string;
+  donor_types: string[];
   fec_committee_id: string | null;
   notes: string | null;
   is_active: boolean;
@@ -17,7 +18,7 @@ export interface DonorAlias {
 export interface DonorAliasInput {
   canonical_name: string;
   alias_pattern: string;
-  donor_type: string;
+  donor_types: string[];
   fec_committee_id?: string | null;
   notes?: string | null;
   is_active?: boolean;
@@ -43,9 +44,14 @@ export const useCreateDonorAlias = () => {
 
   return useMutation({
     mutationFn: async (input: DonorAliasInput) => {
+      // Include donor_type for backwards compatibility (use first type or 'PAC')
+      const insertData = {
+        ...input,
+        donor_type: input.donor_types[0] || 'PAC',
+      };
       const { data, error } = await supabase
         .from('donor_aliases')
-        .insert(input)
+        .insert(insertData)
         .select()
         .single();
 
@@ -55,6 +61,7 @@ export const useCreateDonorAlias = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
       queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
+      queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
       toast.success('Donor alias created');
     },
     onError: (error) => {
@@ -68,9 +75,14 @@ export const useUpdateDonorAlias = () => {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: DonorAliasInput & { id: string }) => {
+      // Include donor_type for backwards compatibility
+      const updateData = {
+        ...input,
+        donor_type: input.donor_types[0] || 'PAC',
+      };
       const { data, error } = await supabase
         .from('donor_aliases')
-        .update(input)
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
@@ -81,6 +93,7 @@ export const useUpdateDonorAlias = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
       queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
+      queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
       toast.success('Donor alias updated');
     },
     onError: (error) => {
@@ -112,25 +125,25 @@ export const useDeleteDonorAlias = () => {
   });
 };
 
-export const useMatchingDonorsCount = (pattern: string, donorType: string) => {
+export const useMatchingDonorsCount = (pattern: string, donorTypes: string[]) => {
   return useQuery({
-    queryKey: ['matching-donors-count', pattern, donorType],
+    queryKey: ['matching-donors-count', pattern, donorTypes],
     queryFn: async () => {
-      if (!pattern || !donorType) return 0;
+      if (!pattern || !donorTypes || donorTypes.length === 0) return 0;
       
       const validTypes = ['Individual', 'PAC', 'Organization', 'Unknown'] as const;
-      const typeValue = validTypes.find(t => t === donorType);
-      if (!typeValue) return 0;
+      const filteredTypes = donorTypes.filter(t => validTypes.includes(t as any));
+      if (filteredTypes.length === 0) return 0;
       
       const { count, error } = await supabase
         .from('donors')
         .select('*', { count: 'exact', head: true })
-        .eq('type', typeValue)
+        .in('type', filteredTypes as any)
         .ilike('name', pattern);
 
       if (error) throw error;
       return count || 0;
     },
-    enabled: !!pattern && !!donorType,
+    enabled: !!pattern && donorTypes.length > 0,
   });
 };
