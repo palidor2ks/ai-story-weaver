@@ -434,7 +434,36 @@ export function DonorAliasesPanel() {
                     ))}
                   </SelectContent>
                 </Select>
+                <Button 
+                  onClick={handleRefreshDisplayNames} 
+                  disabled={isRefreshing}
+                  variant="secondary"
+                  size="sm"
+                >
+                  {isRefreshing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  <span className="ml-1.5">Backfill</span>
+                </Button>
               </div>
+              
+              {/* Progress indicator for backfill */}
+              {refreshProgress && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Progress: {refreshProgress.processed.toLocaleString()} processed</span>
+                    <span>{refreshProgress.remaining.toLocaleString()} remaining</span>
+                  </div>
+                  <Progress 
+                    value={refreshProgress.total > 0 
+                      ? (refreshProgress.processed / refreshProgress.total) * 100 
+                      : 0
+                    } 
+                  />
+                </div>
+              )}
 
               {/* Search Results */}
               {donorSearch.length >= 2 && (
