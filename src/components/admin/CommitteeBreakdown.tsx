@@ -3,8 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Building2, RefreshCw } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Loader2, Building2, RefreshCw, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatDistanceToNow } from 'date-fns';
 
 interface Committee {
   id: string;
@@ -17,6 +19,9 @@ interface Committee {
   local_itemized_total: number | null;
   fec_itemized_total: number | null;
   last_sync_completed_at: string | null;
+  last_sync_started_at: string | null;
+  last_index: string | null;
+  has_more: boolean | null;
 }
 
 interface CommitteeBreakdownProps {
@@ -128,6 +133,77 @@ export function CommitteeBreakdown({
     return `$${Math.round(value).toLocaleString()}`;
   };
 
+  const getSyncStatusBadge = (committee: Committee) => {
+    if (committee.has_more) {
+      return (
+        <TooltipProvider>
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-amber-600 border-amber-300 gap-1">
+                <AlertTriangle className="h-2.5 w-2.5" />
+                Partial
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs">
+              <div className="space-y-1">
+                <div className="font-medium">Sync incomplete</div>
+                {committee.last_index && (
+                  <div className="text-muted-foreground font-mono">
+                    Cursor: {committee.last_index.slice(0, 20)}...
+                  </div>
+                )}
+                {committee.last_sync_started_at && (
+                  <div className="text-muted-foreground">
+                    Started: {formatDistanceToNow(new Date(committee.last_sync_started_at), { addSuffix: true })}
+                  </div>
+                )}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    if (committee.last_sync_completed_at) {
+      return (
+        <TooltipProvider>
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-green-600 border-green-300 gap-1">
+                <CheckCircle2 className="h-2.5 w-2.5" />
+                Synced
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs">
+              <div className="space-y-1">
+                <div className="font-medium">Sync complete</div>
+                <div className="text-muted-foreground">
+                  {formatDistanceToNow(new Date(committee.last_sync_completed_at), { addSuffix: true })}
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    return (
+      <TooltipProvider>
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-muted-foreground gap-1">
+              <Clock className="h-2.5 w-2.5" />
+              Never
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent className="text-xs">
+            Never synced
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-4">
@@ -155,6 +231,7 @@ export function CommitteeBreakdown({
   }
 
   const activeCount = committees.filter(c => c.active).length;
+  const totalItemized = committees.filter(c => c.active).reduce((sum, c) => sum + (c.local_itemized_total || 0), 0);
 
   return (
     <div className="space-y-3">
@@ -176,6 +253,14 @@ export function CommitteeBreakdown({
         </Button>
       </div>
 
+      {/* Simulated Total */}
+      <div className="p-2 bg-muted/50 rounded text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Active committees total:</span>
+          <span className="font-medium">{formatCurrency(totalItemized)}</span>
+        </div>
+      </div>
+
       <div className="space-y-2">
         {committees.map(committee => (
           <div 
@@ -185,11 +270,12 @@ export function CommitteeBreakdown({
             }`}
           >
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {getDesignationBadge(committee.designation)}
                 <span className="text-xs font-mono text-muted-foreground">
                   {committee.fec_committee_id}
                 </span>
+                {getSyncStatusBadge(committee)}
               </div>
               <p className="text-sm font-medium truncate mt-0.5">
                 {committee.name || 'Unknown Committee'}
@@ -198,9 +284,6 @@ export function CommitteeBreakdown({
                 <span>Local: {formatCurrency(committee.local_itemized_total)}</span>
                 {committee.fec_itemized_total !== null && (
                   <span>FEC: {formatCurrency(committee.fec_itemized_total)}</span>
-                )}
-                {committee.last_sync_completed_at && (
-                  <span className="text-green-600">✓ Synced</span>
                 )}
               </div>
             </div>

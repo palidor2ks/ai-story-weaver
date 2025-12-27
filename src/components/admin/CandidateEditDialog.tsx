@@ -6,8 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Loader2, RotateCcw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, RotateCcw, AlertCircle } from 'lucide-react';
 import { useUpsertCandidateOverride, useDeleteCandidateOverride, useCandidateOverride } from '@/hooks/useCandidateOverrides';
+import { formatDistanceToNow } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const PARTIES = ['Democrat', 'Republican', 'Independent', 'Other'] as const;
 const TIERS = ['tier_1', 'tier_2', 'tier_3'] as const;
@@ -68,6 +71,13 @@ export function CandidateEditDialog({
     notes: '',
   });
 
+  // Track which fields are overridden
+  const isFieldOverridden = (field: keyof typeof currentData) => {
+    if (!existingOverride) return false;
+    const overrideValue = existingOverride[field];
+    return overrideValue !== null && overrideValue !== undefined && overrideValue !== currentData[field];
+  };
+
   // Update form when dialog opens or override data changes
   useEffect(() => {
     if (open) {
@@ -111,40 +121,73 @@ export function CandidateEditDialog({
     onOpenChange(false);
   };
 
+  const FieldLabel = ({ field, label }: { field: keyof typeof currentData; label: string }) => (
+    <div className="flex items-center gap-2">
+      <Label htmlFor={field}>{label}</Label>
+      {isFieldOverridden(field) && (
+        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-primary/50 text-primary">
+          Overridden
+        </Badge>
+      )}
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Candidate: {candidateName}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            Edit Candidate: {candidateName}
+            {existingOverride && (
+              <Badge variant="outline" className="text-xs border-primary text-primary">
+                Has Overrides
+              </Badge>
+            )}
+          </DialogTitle>
           <DialogDescription>
             Override data from the API. Changes will persist through API syncs.
-            {existingOverride && (
-              <span className="block mt-1 text-primary">
-                This candidate has existing overrides.
-              </span>
-            )}
           </DialogDescription>
         </DialogHeader>
+
+        {existingOverride && (
+          <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/20 rounded text-sm">
+            <AlertCircle className="h-4 w-4 text-primary shrink-0" />
+            <div className="flex-1">
+              <span className="font-medium">Override active</span>
+              {existingOverride.updated_at && (
+                <span className="text-muted-foreground ml-2">
+                  Last updated {formatDistanceToNow(new Date(existingOverride.updated_at), { addSuffix: true })}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <FieldLabel field="name" label="Name" />
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Full name"
+                className={cn(isFieldOverridden('name') && 'border-primary/50')}
               />
+              {isFieldOverridden('name') && (
+                <p className="text-xs text-muted-foreground">
+                  API value: {currentData.name}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="party">Party</Label>
+              <FieldLabel field="party" label="Party" />
               <Select
                 value={formData.party}
                 onValueChange={(value) => setFormData({ ...formData, party: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger className={cn(isFieldOverridden('party') && 'border-primary/50')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -153,45 +196,53 @@ export function CandidateEditDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {isFieldOverridden('party') && (
+                <p className="text-xs text-muted-foreground">
+                  API value: {currentData.party}
+                </p>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="office">Office</Label>
+              <FieldLabel field="office" label="Office" />
               <Input
                 id="office"
                 value={formData.office}
                 onChange={(e) => setFormData({ ...formData, office: e.target.value })}
                 placeholder="e.g., U.S. Senator"
+                className={cn(isFieldOverridden('office') && 'border-primary/50')}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="state">State</Label>
+              <FieldLabel field="state" label="State" />
               <Input
                 id="state"
                 value={formData.state}
                 onChange={(e) => setFormData({ ...formData, state: e.target.value.toUpperCase() })}
                 placeholder="e.g., CA"
                 maxLength={2}
+                className={cn(isFieldOverridden('state') && 'border-primary/50')}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="district">District</Label>
+              <FieldLabel field="district" label="District" />
               <Input
                 id="district"
                 value={formData.district}
                 onChange={(e) => setFormData({ ...formData, district: e.target.value })}
                 placeholder="e.g., CA-12"
+                className={cn(isFieldOverridden('district') && 'border-primary/50')}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="overall_score">Overall Score (-10 to 10)</Label>
+              <FieldLabel field="overall_score" label="Overall Score (-10 to 10)" />
               <Input
                 id="overall_score"
                 type="number"
@@ -201,29 +252,31 @@ export function CandidateEditDialog({
                 value={formData.overall_score}
                 onChange={(e) => setFormData({ ...formData, overall_score: e.target.value })}
                 placeholder="e.g., 5.5"
+                className={cn(isFieldOverridden('overall_score') && 'border-primary/50')}
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="image_url">Image URL</Label>
+            <FieldLabel field="image_url" label="Image URL" />
             <Input
               id="image_url"
               type="url"
               value={formData.image_url}
               onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
               placeholder="https://..."
+              className={cn(isFieldOverridden('image_url') && 'border-primary/50')}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="coverage_tier">Coverage Tier</Label>
+              <FieldLabel field="coverage_tier" label="Coverage Tier" />
               <Select
                 value={formData.coverage_tier}
                 onValueChange={(value) => setFormData({ ...formData, coverage_tier: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger className={cn(isFieldOverridden('coverage_tier') && 'border-primary/50')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -235,12 +288,12 @@ export function CandidateEditDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confidence">Confidence</Label>
+              <FieldLabel field="confidence" label="Confidence" />
               <Select
                 value={formData.confidence}
                 onValueChange={(value) => setFormData({ ...formData, confidence: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger className={cn(isFieldOverridden('confidence') && 'border-primary/50')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
