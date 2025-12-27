@@ -545,6 +545,7 @@ export type Database = {
           contributor_state: string | null
           contributor_zip: string | null
           cycle: string
+          display_name: string | null
           employer: string | null
           first_receipt_date: string | null
           id: string
@@ -569,6 +570,7 @@ export type Database = {
           contributor_state?: string | null
           contributor_zip?: string | null
           cycle: string
+          display_name?: string | null
           employer?: string | null
           first_receipt_date?: string | null
           id: string
@@ -593,6 +595,7 @@ export type Database = {
           contributor_state?: string | null
           contributor_zip?: string | null
           cycle?: string
+          display_name?: string | null
           employer?: string | null
           first_receipt_date?: string | null
           id?: string
@@ -1396,6 +1399,11 @@ export type Database = {
           coverage_tier: Database["public"]["Enums"]["coverage_tier"]
           updated: boolean
         }[]
+      }
+      refresh_donor_display_names: { Args: never; Returns: undefined }
+      resolve_donor_display_name: {
+        Args: { p_donor_name: string; p_donor_type: string }
+        Returns: string
       }
       save_quiz_results: {
         Args: {
