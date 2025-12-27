@@ -530,18 +530,41 @@ async function generateAnswersInChunks(
         confidence: answer.confidence,
       }));
       
+      // Filter out answers with empty/invalid question_ids
+      const validAnswers = answersToInsert.filter(answer => {
+        if (!answer.question_id || answer.question_id.trim() === '') {
+          console.warn(`Filtered out answer with empty question_id in chunk ${i + 1}`);
+          return false;
+        }
+        // Also verify the question_id is in our expected set
+        const chunkQuestionIds = chunk.map(q => q.id);
+        if (!chunkQuestionIds.includes(answer.question_id)) {
+          console.warn(`Filtered out answer with unknown question_id: ${answer.question_id} in chunk ${i + 1}`);
+          return false;
+        }
+        return true;
+      });
+
       // Deduplicate by question_id - keep last occurrence (AI's final answer)
       const deduplicatedAnswers = Array.from(
-        answersToInsert.reduce((map, answer) => {
+        validAnswers.reduce((map, answer) => {
           map.set(answer.question_id, answer);
           return map;
         }, new Map()).values()
       );
 
       if (deduplicatedAnswers.length < answersToInsert.length) {
-        console.log(`Deduplicated ${answersToInsert.length - deduplicatedAnswers.length} duplicate question_ids in chunk ${i + 1}`);
+        const filtered = answersToInsert.length - validAnswers.length;
+        const deduplicated = validAnswers.length - deduplicatedAnswers.length;
+        console.log(`Chunk ${i + 1}: filtered ${filtered} invalid, deduplicated ${deduplicated} duplicates, saving ${deduplicatedAnswers.length} answers`);
       }
       
+      if (deduplicatedAnswers.length === 0) {
+        console.warn(`Chunk ${i + 1}: No valid answers to save after filtering`);
+        failedChunks++;
+        continue;
+      }
+
       const { error: insertError } = await supabase
         .from('candidate_answers')
         .upsert(deduplicatedAnswers, {
