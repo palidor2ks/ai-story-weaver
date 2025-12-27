@@ -196,55 +196,101 @@ function snapToValidValue(value: number): number {
   );
 }
 
+// Parse tool call arguments for structured output
+function parseToolCallResponse(toolCalls: any[]): any[] {
+  if (!toolCalls || toolCalls.length === 0) return [];
+  
+  const functionCall = toolCalls[0]?.function;
+  if (!functionCall?.arguments) return [];
+  
+  try {
+    const args = typeof functionCall.arguments === 'string' 
+      ? JSON.parse(functionCall.arguments) 
+      : functionCall.arguments;
+    return args.answers || [];
+  } catch (e) {
+    console.error('[AI] Failed to parse tool call arguments:', e);
+    return [];
+  }
+}
+
+// Extract individual answer objects from text using field-by-field extraction
+function extractAnswersFromText(content: string): any[] {
+  const recovered: any[] = [];
+  
+  // Split by "question_id" occurrences to find each object segment
+  const segments = content.split(/"question_id"\s*:/);
+  
+  for (let i = 1; i < segments.length; i++) { // Skip first segment (before first question_id)
+    const segment = segments[i];
+    
+    // Extract question_id value
+    const qidMatch = segment.match(/^\s*"([^"]+)"/);
+    if (!qidMatch) continue;
+    const question_id = qidMatch[1];
+    
+    // Extract answer_value - look for the pattern with or without sign
+    const valueMatch = segment.match(/"answer_value"\s*:\s*([+-]?\d+)/);
+    if (!valueMatch) continue;
+    const answer_value = parseInt(valueMatch[1], 10);
+    
+    // Extract confidence
+    const confMatch = segment.match(/"confidence"\s*:\s*"([^"]+)"/);
+    const confidence = confMatch ? confMatch[1] : 'medium';
+    
+    // Extract source_description (optional, may be truncated)
+    const srcMatch = segment.match(/"source_description"\s*:\s*"([^"]*)"/);
+    const source_description = srcMatch ? srcMatch[1].slice(0, 50) : 'Party position';
+    
+    recovered.push({
+      question_id,
+      answer_value,
+      confidence,
+      source_description
+    });
+  }
+  
+  return recovered;
+}
+
 // Clean and parse JSON from AI response - handles code fences, whitespace, and truncation
-function parseAIResponse(content: string): any[] {
+function parseAIResponse(content: string, finishReason?: string): any[] {
+  const contentLen = content?.length || 0;
+  console.log(`[AI] Parsing response: ${contentLen} chars, finish_reason: ${finishReason || 'unknown'}`);
+  
+  if (!content || contentLen === 0) {
+    throw new Error('Empty AI response');
+  }
+  
   let cleaned = content.trim();
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   
-  // First try normal parsing
+  // First try normal JSON parsing
   const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
   if (jsonMatch) {
     try {
-      return JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      console.log('[AI] JSON parse failed, attempting truncation recovery...');
-    }
-  }
-  
-  // Recovery: find all complete JSON objects in a truncated response
-  // Match complete answer objects with required fields
-  const objectPattern = /\{\s*"question_id"\s*:\s*"[^"]+"\s*,\s*"answer_value"\s*:\s*-?\d+\s*,\s*"confidence"\s*:\s*"[^"]+"\s*,\s*"source_description"\s*:\s*"(?:[^"\\]|\\.)*"\s*\}/g;
-  const objectMatches = [...cleaned.matchAll(objectPattern)];
-  
-  if (objectMatches.length > 0) {
-    const recovered = objectMatches.map(m => {
-      try {
-        return JSON.parse(m[0]);
-      } catch {
-        return null;
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        console.log(`[AI] Successfully parsed ${parsed.length} answers`);
+        return parsed;
       }
-    }).filter(Boolean);
-    
-    if (recovered.length > 0) {
-      console.log(`[AI] Recovered ${recovered.length} complete answers from truncated response`);
-      return recovered;
+    } catch (e) {
+      console.log('[AI] Standard JSON parse failed, trying recovery...');
     }
   }
   
-  // Try a more lenient pattern for partial objects
-  const lenientPattern = /\{\s*"question_id"\s*:\s*"([^"]+)"\s*,\s*"answer_value"\s*:\s*(-?\d+)\s*,\s*"confidence"\s*:\s*"([^"]+)"/g;
-  const lenientMatches = [...cleaned.matchAll(lenientPattern)];
+  // Recovery: use field-by-field extraction
+  console.log('[AI] Attempting field-by-field extraction...');
+  const recovered = extractAnswersFromText(cleaned);
   
-  if (lenientMatches.length > 0) {
-    const recovered = lenientMatches.map(m => ({
-      question_id: m[1],
-      answer_value: parseInt(m[2], 10),
-      confidence: m[3],
-      source_description: 'Party platform position'
-    }));
-    console.log(`[AI] Recovered ${recovered.length} partial answers from truncated response`);
+  if (recovered.length > 0) {
+    console.log(`[AI] Recovered ${recovered.length} answers via field extraction`);
     return recovered;
   }
+  
+  // Log first/last chars for debugging
+  console.error(`[AI] Parse failed. First 150 chars: ${cleaned.slice(0, 150)}`);
+  console.error(`[AI] Last 150 chars: ${cleaned.slice(-150)}`);
   
   throw new Error('No JSON array found in response');
 }
@@ -312,21 +358,50 @@ ${sourceInstructions}
 
 ONLY JSON array. No markdown.`;
 
+  // Use tool calling for structured output - more reliable than text parsing
+  const answerSchema = {
+    type: "function",
+    function: {
+      name: "submit_answers",
+      description: "Submit the political position answers for the candidate",
+      parameters: {
+        type: "object",
+        properties: {
+          answers: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                question_id: { type: "string", description: "The question ID (e.g., eco1)" },
+                answer_value: { type: "integer", enum: [-10, -5, 0, 5, 10], description: "Position on left-right scale" },
+                confidence: { type: "string", enum: ["high", "medium", "low"] },
+                source_description: { type: "string", description: "Brief source (max 30 chars)" }
+              },
+              required: ["question_id", "answer_value", "confidence"]
+            }
+          }
+        },
+        required: ["answers"]
+      }
+    }
+  };
+
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${LOVABLE_API_KEY}`,
       'Content-Type': 'application/json',
     },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.3,
-        max_tokens: 4000,
-      }),
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      tools: [answerSchema],
+      tool_choice: { type: "function", function: { name: "submit_answers" } },
+      max_tokens: 6000,
+    }),
   });
 
   if (!response.ok) {
@@ -342,41 +417,63 @@ ONLY JSON array. No markdown.`;
   }
 
   const aiResponse = await response.json();
-  const content = aiResponse.choices?.[0]?.message?.content || '';
+  const choice = aiResponse.choices?.[0];
+  const finishReason = choice?.finish_reason;
+  const toolCalls = choice?.message?.tool_calls;
+  const content = choice?.message?.content || '';
+  
+  console.log(`[AI] Response finish_reason: ${finishReason}, has_tool_calls: ${!!toolCalls}, content_len: ${content.length}`);
 
-  try {
-    const parsed = parseAIResponse(content);
-    return parsed.map((item: any) => {
-      const sourceDesc = (item.source_description || `${candidateParty} platform`).slice(0, 100);
-      
-      // For congressional members, try to extract bill info and build specific URL
-      let sourceUrl = congressGovUrl;
-      if (isCongressional) {
-        const billInfo = extractBillInfo(sourceDesc);
-        if (billInfo) {
-          // Find the bill in voting record to get congress number
-          const matchingBill = votingRecord.find(
-            v => v.type.toUpperCase() === billInfo.type && v.number === billInfo.number
-          );
-          const congress = matchingBill?.congress || 118;
-          sourceUrl = buildBillUrl(billInfo.type, billInfo.number, congress);
-        }
-      }
-      
-      return {
-        question_id: String(item.question_id || '').replace(/[\[\]]/g, ''),
-        answer_value: snapToValidValue(item.answer_value),
-        source_description: sourceDesc,
-        source_url: sourceUrl,
-        source_type: isCongressional ? 'voting_record' : 'other',
-        confidence: item.confidence || 'medium',
-      };
-    });
-  } catch (e) {
-    console.error('Failed to parse AI response:', e);
-    console.error('Raw content:', content.slice(0, 300));
+  let parsed: any[] = [];
+  
+  // Try tool call response first (preferred)
+  if (toolCalls && toolCalls.length > 0) {
+    parsed = parseToolCallResponse(toolCalls);
+    if (parsed.length > 0) {
+      console.log(`[AI] Got ${parsed.length} answers from tool call`);
+    }
+  }
+  
+  // Fallback to text parsing if tool call failed
+  if (parsed.length === 0 && content) {
+    try {
+      parsed = parseAIResponse(content, finishReason);
+    } catch (e) {
+      console.error('Failed to parse AI response:', e);
+      return [];
+    }
+  }
+  
+  if (parsed.length === 0) {
+    console.error('[AI] No answers extracted from response');
     return [];
   }
+
+  return parsed.map((item: any) => {
+    const sourceDesc = (item.source_description || `${candidateParty} platform`).slice(0, 50);
+    
+    // For congressional members, try to extract bill info and build specific URL
+    let sourceUrl = congressGovUrl;
+    if (isCongressional) {
+      const billInfo = extractBillInfo(sourceDesc);
+      if (billInfo) {
+        const matchingBill = votingRecord.find(
+          v => v.type.toUpperCase() === billInfo.type && v.number === billInfo.number
+        );
+        const congress = matchingBill?.congress || 118;
+        sourceUrl = buildBillUrl(billInfo.type, billInfo.number, congress);
+      }
+    }
+    
+    return {
+      question_id: String(item.question_id || '').replace(/[\[\]]/g, ''),
+      answer_value: snapToValidValue(item.answer_value),
+      source_description: sourceDesc,
+      source_url: sourceUrl,
+      source_type: isCongressional ? 'voting_record' : 'other',
+      confidence: item.confidence || 'medium',
+    };
+  });
 }
 
 async function generateAnswersInChunks(
@@ -392,8 +489,8 @@ async function generateAnswersInChunks(
   let totalGenerated = 0;
   let failedChunks = 0;
   
-  // Use moderate chunks to balance AI calls vs response truncation risk
-  const CHUNK_SIZE = 15;
+  // Use smaller chunks (10) for reliable structured output
+  const CHUNK_SIZE = 10;
   const chunks: Question[][] = [];
   for (let i = 0; i < questions.length; i += CHUNK_SIZE) {
     chunks.push(questions.slice(i, i + CHUNK_SIZE));
