@@ -79,7 +79,7 @@ function TopicCoverageItem({ topic }: { topic: TopicCoverage }) {
 }
 
 export function AnswerCoveragePanel() {
-  const { data: syncStats, isLoading: syncLoading, refetch, isRefetching } = useSyncStats();
+  const { data: syncStats, isLoading: syncLoading, refetch: refetchSyncStats, isRefetching } = useSyncStats();
   const { data: candidateStats, isLoading: statsLoading } = useCandidateAnswerStats();
   const { data: states } = useUniqueStates();
 
@@ -94,7 +94,7 @@ export function AnswerCoveragePanel() {
   // Edit dialog state
   const [editingCandidate, setEditingCandidate] = useState<CandidateAnswerCoverage | null>(null);
 
-  const { data: candidates, isLoading: candidatesLoading, refetch } = useCandidatesAnswerCoverage({
+  const { data: candidates, isLoading: candidatesLoading, refetch: refetchCandidates } = useCandidatesAnswerCoverage({
     party: partyFilter,
     state: stateFilter,
     coverageFilter,
@@ -271,7 +271,7 @@ export function AnswerCoveragePanel() {
       }
       const results = await batchFetchFECIds(toProcess);
       toast.success(`Linked ${results.success} FEC IDs (${results.failed} failed)`);
-      refetch();
+      refetchCandidates();
     } catch (err) {
       console.error('[Admin] Batch link FEC IDs failed:', err);
       toast.error('Failed to link FEC IDs');
@@ -294,7 +294,7 @@ export function AnswerCoveragePanel() {
         `Imported ${results.totalImported} donors for ${results.success} candidates ` +
         `($${results.totalRaised.toLocaleString()} total)`
       );
-      refetch();
+      refetchCandidates();
     } catch (err) {
       console.error('[Admin] Batch fetch donors failed:', err);
       toast.error('Failed to fetch donors batch');
@@ -314,7 +314,7 @@ export function AnswerCoveragePanel() {
         `${results.stillPartial} still partial. ` +
         `Imported ${results.totalImported} additional donors.`
       );
-      refetch();
+      refetchCandidates();
     } catch (err) {
       console.error('[Admin] Resume partial syncs failed:', err);
       toast.error('Failed to resume donor syncs');
@@ -573,7 +573,7 @@ export function AnswerCoveragePanel() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => refetch()}
+              onClick={() => refetchCandidates()}
               disabled={isRefetching}
             >
               {isRefetching || isRecalculatingAll ? (
@@ -823,7 +823,7 @@ export function AnswerCoveragePanel() {
                     size="sm" 
                     onClick={() => {
                       clearSyncAllProgress();
-                      refetch();
+                      refetchCandidates();
                     }}
                   >
                     <X className="h-4 w-4 mr-1" />
@@ -1101,7 +1101,7 @@ export function AnswerCoveragePanel() {
                                         candidateId={candidate.id}
                                         candidateName={candidate.name}
                                         fecCandidateId={candidate.fecCandidateId!}
-                                        onRefetch={refetch}
+                                        onRefetch={refetchCandidates}
                                       />
                                     </div>
                                   </PopoverContent>
@@ -1134,7 +1134,7 @@ export function AnswerCoveragePanel() {
                                         );
                                         if (result.found && result.updated) {
                                           toast.success(`Linked: ${result.fecCandidateId}`);
-                                          refetch();
+                                          refetchCandidates();
                                         } else if (result.found) {
                                           toast.info(`Found ${result.candidates?.length} matches`);
                                         } else {
@@ -1166,7 +1166,7 @@ export function AnswerCoveragePanel() {
                                         );
                                         if (result.success && result.primaryCommitteeId) {
                                           toast.success(`Linked committee: ${result.primaryCommitteeId}`);
-                                          refetch();
+                                          refetchCandidates();
                                         } else if (result.success) {
                                           toast.info('No committees found for this candidate');
                                         } else {
@@ -1211,7 +1211,7 @@ export function AnswerCoveragePanel() {
                                           } else {
                                             toast.success(result.message || `Imported ${result.imported} donors`);
                                           }
-                                          refetch();
+                                          refetchCandidates();
                                         } else {
                                           toast.error(result.error || 'Failed');
                                         }
@@ -1248,7 +1248,7 @@ export function AnswerCoveragePanel() {
                                         const result = await triggerReconciliation(candidate.id, '2024');
                                         if (result.success) {
                                           toast.success(`Finance refreshed: ${result.status}`);
-                                          refetch();
+                                          refetchCandidates();
                                         } else {
                                           toast.error(result.error || 'Reconciliation failed');
                                         }
