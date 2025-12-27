@@ -145,59 +145,33 @@ serve(async (req) => {
           continue;
         }
 
-        // Calculate local totals directly from contributions table (not stale rollups)
-        // This ensures accurate reconciliation by using the actual contribution data
-        const { data: contributions } = await supabase
-          .from('contributions')
-          .select('line_number, amount, memo_code, memo_text, is_transfer, is_earmarked')
-          .eq('candidate_id', candidate.id)
-          .eq('cycle', cycle)
-          .eq('is_contribution', true);
-
-        // Aggregate by category, excluding memo transactions (memo_code = 'X')
-        // These are informational records that shouldn't be counted as actual contributions
-        let localIndividualItemized = 0;  // Line 11A/11AI
-        let localPacContributions = 0;     // Line 11C
-        let localPartyContributions = 0;   // Line 11B
-        let localItemized = 0;             // All itemized contributions
-        let localTransfers = 0;            // Transfer transactions
-        let localEarmarked = 0;            // Earmarked contributions
-        let passThroughTotal = 0;          // Pass-through amounts (memo contains "SEE BELOW")
-
-        for (const c of contributions || []) {
-          const amount = c.amount || 0;
-          const line = (c.line_number || '').toUpperCase();
-          const isMemo = c.memo_code === 'X';
-          const isPassThrough = (c.memo_text || '').toUpperCase().includes('SEE BELOW');
-
-          // Track pass-throughs for net calculation
-          if (isPassThrough) {
-            passThroughTotal += amount;
-          }
-
-          // Skip memo transactions for category totals (they're informational only)
-          if (isMemo) continue;
-
-          // Aggregate all non-memo contributions
-          localItemized += amount;
-
-          // Track transfers and earmarks
-          if (c.is_transfer) localTransfers += amount;
-          if (c.is_earmarked) localEarmarked += amount;
-
-          // Categorize by line number
-          if (line.startsWith('11A')) {
-            localIndividualItemized += amount;
-          } else if (line === '11C') {
-            localPacContributions += amount;
-          } else if (line === '11B') {
-            localPartyContributions += amount;
-          }
+        // Calculate local totals using SQL aggregation via database function
+        // This avoids the 1000 row limit and handles null memo_code properly
+        const { data: categoryTotals, error: totalsError } = await supabase
+          .rpc('get_contribution_totals', {
+            p_candidate_id: candidate.id,
+            p_cycle: cycle
+          });
+        
+        if (totalsError) {
+          console.error(`[RECONCILIATION] ${candidate.name}: Error fetching contribution totals:`, totalsError);
+          results.skippedCount++;
+          continue;
         }
+
+        const totals = categoryTotals?.[0] || categoryTotals || {};
+        const localIndividualItemized = Number(totals.individual_total) || 0;
+        const localPacContributions = Number(totals.pac_total) || 0;
+        const localPartyContributions = Number(totals.party_total) || 0;
+        const localItemized = Number(totals.itemized_total) || 0;
+        const localTransfers = Number(totals.transfers_total) || 0;
+        const localEarmarked = Number(totals.earmarked_total) || 0;
+        const passThroughTotal = Number(totals.passthrough_total) || 0;
+        const contributionCount = Number(totals.contribution_count) || 0;
 
         const localItemizedNet = localItemized - passThroughTotal;
 
-        console.log(`[RECONCILIATION] ${candidate.name}: Calculated from ${(contributions || []).length} contributions - Individual: $${localIndividualItemized}, PAC: $${localPacContributions}, Party: $${localPartyContributions}`);
+        console.log(`[RECONCILIATION] ${candidate.name}: ${contributionCount} contributions - Individual: $${localIndividualItemized}, PAC: $${localPacContributions}, Party: $${localPartyContributions}`);
 
         // Fetch fresh FEC totals for each committee (with category-level data)
         let fecItemized = 0;
