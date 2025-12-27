@@ -309,16 +309,20 @@ async function generateChunkAnswers(
     ? buildCongressGovProfileUrl(candidateId, candidateName) 
     : null;
 
-  // Format questions with their specific answer options
+  // Build list of valid question IDs for this chunk
+  const validQuestionIds = questions.map(q => q.id);
+  const validIdsStr = validQuestionIds.join(', ');
+
+  // Format questions with MORE PROMINENT IDs to reduce empty question_id errors
   const questionsText = questions
     .map((q, i) => {
-      let questionStr = `${i + 1}. [${q.id}] ${q.text}`;
+      let questionStr = `Question ${i + 1}:\n  ID: "${q.id}"\n  Text: ${q.text}`;
       if (q.question_options && q.question_options.length > 0) {
         const sortedOptions = [...q.question_options].sort((a, b) => a.value - b.value);
         const optionsStr = sortedOptions
-          .map(opt => `   (${opt.value}) ${opt.text}`)
+          .map(opt => `    (${opt.value}) ${opt.text}`)
           .join('\n');
-        questionStr += `\n   Options:\n${optionsStr}`;
+        questionStr += `\n  Options:\n${optionsStr}`;
       }
       return questionStr;
     })
@@ -347,15 +351,18 @@ Return ONLY valid JSON array, no markdown fences, no extra text.`;
   const userPrompt = `Official: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
 ${votingContext}
 
+VALID QUESTION IDs (you MUST use EXACTLY one of these for each answer): [${validIdsStr}]
+
 Questions:
 ${questionsText}
 
 Return JSON array: [{question_id, answer_value, confidence, source_description}, ...]
-- question_id: ID in brackets (e.g. "eco1")
+- question_id: REQUIRED - Must be EXACTLY one of: ${validIdsStr}
 - answer_value: -10, -5, 0, 5, or 10
 - confidence: "high"/"medium"/"low"
 ${sourceInstructions}
 
+CRITICAL: Every answer MUST have a question_id matching one of the IDs listed above.
 ONLY JSON array. No markdown.`;
 
   // Use tool calling for structured output - more reliable than text parsing
@@ -363,16 +370,20 @@ ONLY JSON array. No markdown.`;
     type: "function",
     function: {
       name: "submit_answers",
-      description: "Submit the political position answers for the candidate",
+      description: "Submit the political position answers for the candidate. Each answer MUST have a valid question_id.",
       parameters: {
         type: "object",
         properties: {
           answers: {
             type: "array",
+            description: `Array of answers. Each MUST have question_id matching one of: ${validIdsStr}`,
             items: {
               type: "object",
               properties: {
-                question_id: { type: "string", description: "The question ID (e.g., eco1)" },
+                question_id: { 
+                  type: "string", 
+                  description: `REQUIRED: The exact question ID from the list: ${validIdsStr}. Must match exactly.`
+                },
                 answer_value: { type: "integer", enum: [-10, -5, 0, 5, 10], description: "Position on left-right scale" },
                 confidence: { type: "string", enum: ["high", "medium", "low"] },
                 source_description: { type: "string", description: "Brief source (max 30 chars)" }
@@ -449,6 +460,25 @@ ONLY JSON array. No markdown.`;
     return [];
   }
 
+  // FALLBACK: Map answers with empty question_ids by position
+  // AI typically returns answers in the same order as questions
+  const emptyIdCount = parsed.filter((item: any) => !item.question_id || String(item.question_id).trim() === '').length;
+  if (emptyIdCount > 0) {
+    // Map by position for answers within bounds of the questions array
+    const mappableCount = Math.min(parsed.length, questions.length);
+    let mapped = 0;
+    for (let idx = 0; idx < mappableCount; idx++) {
+      const item = parsed[idx];
+      if (!item.question_id || String(item.question_id).trim() === '') {
+        item.question_id = questions[idx].id;
+        mapped++;
+      }
+    }
+    if (mapped > 0) {
+      console.log(`[AI] Mapped ${mapped}/${emptyIdCount} empty question_ids by position (${parsed.length} answers, ${questions.length} questions)`);
+    }
+  }
+
   return parsed.map((item: any) => {
     const sourceDesc = (item.source_description || `${candidateParty} platform`).slice(0, 50);
     
@@ -502,7 +532,8 @@ async function generateAnswersInChunks(
     const chunk = chunks[i];
     console.log(`Generating chunk ${i + 1}/${chunks.length} (${chunk.length} questions)...`);
     
-    try {
+    // Helper function to process a chunk and return valid deduplicated answers
+    const processChunkAnswers = async (isRetry = false): Promise<any[]> => {
       const answers = await generateChunkAnswers(
         candidateName,
         candidateParty,
@@ -514,12 +545,9 @@ async function generateAnswersInChunks(
       );
       
       if (answers.length === 0) {
-        console.log(`Chunk ${i + 1} returned no answers`);
-        failedChunks++;
-        continue;
+        return [];
       }
       
-      // Save this chunk's answers immediately
       const answersToInsert = answers.map(answer => ({
         candidate_id: candidateId,
         question_id: answer.question_id,
@@ -531,36 +559,52 @@ async function generateAnswersInChunks(
       }));
       
       // Filter out answers with empty/invalid question_ids
+      const chunkQuestionIds = chunk.map(q => q.id);
       const validAnswers = answersToInsert.filter(answer => {
         if (!answer.question_id || answer.question_id.trim() === '') {
-          console.warn(`Filtered out answer with empty question_id in chunk ${i + 1}`);
+          if (!isRetry) console.warn(`Filtered out answer with empty question_id in chunk ${i + 1}`);
           return false;
         }
-        // Also verify the question_id is in our expected set
-        const chunkQuestionIds = chunk.map(q => q.id);
         if (!chunkQuestionIds.includes(answer.question_id)) {
-          console.warn(`Filtered out answer with unknown question_id: ${answer.question_id} in chunk ${i + 1}`);
+          if (!isRetry) console.warn(`Filtered out answer with unknown question_id: ${answer.question_id} in chunk ${i + 1}`);
           return false;
         }
         return true;
       });
 
       // Deduplicate by question_id - keep last occurrence (AI's final answer)
-      const deduplicatedAnswers = Array.from(
+      return Array.from(
         validAnswers.reduce((map, answer) => {
           map.set(answer.question_id, answer);
           return map;
         }, new Map()).values()
       );
-
-      if (deduplicatedAnswers.length < answersToInsert.length) {
-        const filtered = answersToInsert.length - validAnswers.length;
-        const deduplicated = validAnswers.length - deduplicatedAnswers.length;
-        console.log(`Chunk ${i + 1}: filtered ${filtered} invalid, deduplicated ${deduplicated} duplicates, saving ${deduplicatedAnswers.length} answers`);
+    };
+    
+    try {
+      let deduplicatedAnswers = await processChunkAnswers(false);
+      
+      // Retry logic: if we got less than 50% valid answers, retry once
+      if (deduplicatedAnswers.length < chunk.length * 0.5) {
+        console.log(`Chunk ${i + 1}: Only ${deduplicatedAnswers.length}/${chunk.length} valid answers, retrying...`);
+        await new Promise(resolve => setTimeout(resolve, 300)); // Brief delay before retry
+        
+        const retryAnswers = await processChunkAnswers(true);
+        
+        if (retryAnswers.length > deduplicatedAnswers.length) {
+          console.log(`Chunk ${i + 1} retry: improved from ${deduplicatedAnswers.length} to ${retryAnswers.length} valid answers`);
+          deduplicatedAnswers = retryAnswers;
+        } else {
+          console.log(`Chunk ${i + 1} retry: no improvement (${retryAnswers.length} answers)`);
+        }
+      }
+      
+      if (deduplicatedAnswers.length < chunk.length) {
+        console.log(`Chunk ${i + 1}: saving ${deduplicatedAnswers.length}/${chunk.length} valid answers`);
       }
       
       if (deduplicatedAnswers.length === 0) {
-        console.warn(`Chunk ${i + 1}: No valid answers to save after filtering`);
+        console.warn(`Chunk ${i + 1}: No valid answers to save after filtering and retry`);
         failedChunks++;
         continue;
       }
@@ -576,8 +620,8 @@ async function generateAnswersInChunks(
         console.error(`Error saving chunk ${i + 1}:`, insertError);
         failedChunks++;
       } else {
-        totalGenerated += answers.length;
-        console.log(`Saved chunk ${i + 1}: ${answers.length} answers (total: ${totalGenerated})`);
+        totalGenerated += deduplicatedAnswers.length;
+        console.log(`Saved chunk ${i + 1}: ${deduplicatedAnswers.length} answers (total: ${totalGenerated})`);
       }
       
       // Longer delay between chunks to reduce resource pressure
