@@ -248,7 +248,7 @@ async function fetchConsolidatedDonors(filters: DonorFilters) {
   }
 
   if (type && type !== 'all') {
-    query = query.eq('type', type);
+    query = query.eq('type', type as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
   }
 
   if (search) {
