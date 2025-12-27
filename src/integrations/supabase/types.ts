@@ -496,6 +496,42 @@ export type Database = {
         }
         Relationships: []
       }
+      donor_aliases: {
+        Row: {
+          alias_pattern: string
+          canonical_name: string
+          created_at: string | null
+          donor_type: string
+          fec_committee_id: string | null
+          id: string
+          is_active: boolean | null
+          notes: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          alias_pattern: string
+          canonical_name: string
+          created_at?: string | null
+          donor_type: string
+          fec_committee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          alias_pattern?: string
+          canonical_name?: string
+          created_at?: string | null
+          donor_type?: string
+          fec_committee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       donors: {
         Row: {
           amount: number
@@ -1291,6 +1327,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      donor_consolidated: {
+        Row: {
+          cycle: string | null
+          display_name: string | null
+          donor_ids: string[] | null
+          is_consolidated: boolean | null
+          name_variations: string[] | null
+          primary_id: string | null
+          recipient_count: number | null
+          total_amount: number | null
+          total_transactions: number | null
+          type: Database["public"]["Enums"]["donor_type"] | null
+        }
+        Relationships: []
       }
     }
     Functions: {

@@ -16,6 +16,7 @@ export interface DonorFilters {
   includeConduitOrgs: boolean;
   candidateId: string | null;
   party: string;
+  consolidated: boolean;
 }
 
 export interface DonorWithCandidate {
@@ -36,6 +37,10 @@ export interface DonorWithCandidate {
     name: string;
     party: string;
   };
+  // Consolidated view fields
+  is_consolidated?: boolean;
+  name_variations?: string[];
+  recipient_count?: number;
 }
 
 export interface UseDonorsPaginatedResult {
@@ -62,6 +67,7 @@ const DEFAULT_FILTERS: DonorFilters = {
   includeConduitOrgs: true,
   candidateId: null,
   party: 'all',
+  consolidated: false,
 };
 
 // Fetch available filter options
@@ -110,12 +116,18 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
     includeConduitOrgs,
     candidateId,
     party,
+    consolidated,
   } = mergedFilters;
 
   return useQuery({
     queryKey: ['donors-paginated', mergedFilters],
     queryFn: async () => {
-      // Build the query
+      // Use consolidated view when enabled
+      if (consolidated) {
+        return fetchConsolidatedDonors(mergedFilters);
+      }
+      
+      // Build the query for regular donors
       let query = supabase
         .from('donors')
         .select(`
@@ -141,7 +153,6 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
       }
 
       if (type && type !== 'all') {
-        // Cast to the expected enum type
         query = query.eq('type', type as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
       }
 
@@ -169,11 +180,7 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
         query = query.eq('candidate_id', candidateId);
       }
 
-      // Note: Filtering by party on the joined table requires a different approach
-      // We'll filter client-side or use a view if needed for party filtering
-
       if (search) {
-        // Search only on donors table - candidate name search requires a view
         query = query.ilike('name', `%${search}%`);
       }
 
@@ -193,7 +200,7 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
 
       if (error) throw error;
 
-      // Apply party filter client-side (Supabase doesn't support filtering on joined tables well)
+      // Apply party filter client-side
       let filteredData = data || [];
       if (party && party !== 'all') {
         filteredData = filteredData.filter(d => {
@@ -227,3 +234,68 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
     placeholderData: (prev) => prev,
   });
 };
+
+// Fetch from consolidated view
+async function fetchConsolidatedDonors(filters: DonorFilters) {
+  const { page, pageSize, sortBy, sortOrder, cycle, type, search, minAmount } = filters;
+
+  let query = supabase
+    .from('donor_consolidated')
+    .select('*', { count: 'exact' });
+
+  if (cycle && cycle !== 'all') {
+    query = query.eq('cycle', cycle);
+  }
+
+  if (type && type !== 'all') {
+    query = query.eq('type', type);
+  }
+
+  if (search) {
+    query = query.ilike('display_name', `%${search}%`);
+  }
+
+  if (minAmount !== null) {
+    query = query.gte('total_amount', minAmount);
+  }
+
+  // Apply sorting
+  if (sortBy === 'amount') {
+    query = query.order('total_amount', { ascending: sortOrder === 'asc' });
+  } else {
+    query = query.order('display_name', { ascending: sortOrder === 'asc' });
+  }
+
+  // Apply pagination
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
+
+  if (error) throw error;
+
+  const donors: DonorWithCandidate[] = (data || []).map((d: any) => ({
+    id: d.primary_id,
+    name: d.display_name,
+    amount: d.total_amount,
+    type: d.type,
+    cycle: d.cycle,
+    candidate_id: '',
+    contributor_state: null,
+    contributor_city: null,
+    employer: null,
+    occupation: null,
+    transaction_count: d.total_transactions,
+    is_transfer: null,
+    is_conduit_org: null,
+    is_consolidated: d.is_consolidated,
+    name_variations: d.name_variations,
+    recipient_count: d.recipient_count,
+  }));
+
+  return {
+    donors,
+    totalCount: count || 0,
+  };
+}

@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useState } from 'react';
 import type { DonorFilters as DonorFiltersType } from '@/hooks/useDonorsPaginated';
+import { Layers } from 'lucide-react';
 
 interface DonorFiltersProps {
   filters: Partial<DonorFiltersType>;
@@ -54,6 +55,7 @@ export const DonorFilters = ({
       includeConduitOrgs: true,
       candidateId: null,
       party: 'all',
+      consolidated: false,
     });
   };
 
@@ -137,6 +139,30 @@ export const DonorFilters = ({
               <SelectItem value="name">Name A-Z</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* Consolidated toggle */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={filters.consolidated ? "default" : "outline"}
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => updateFilter('consolidated', !filters.consolidated)}
+                  disabled={isLoading}
+                >
+                  <Layers className="h-4 w-4" />
+                  <span className="hidden sm:inline">Consolidated</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="max-w-xs text-sm">
+                  Merge similar donors (e.g., all AIPAC variations become one entry). 
+                  Managed by admins in the Donor Aliases section.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
