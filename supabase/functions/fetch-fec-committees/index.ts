@@ -16,6 +16,26 @@ interface CommitteeResult {
   cycles: number[];
 }
 
+// Retry fetch with exponential backoff for rate limits
+async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url);
+    
+    if (response.status === 429) {
+      const backoffMs = Math.min(2000 * Math.pow(2, attempt), 16000);
+      console.log(`[FEC-COMMITTEES] Rate limited (429), backing off ${backoffMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+      continue;
+    }
+    
+    return response;
+  }
+  
+  throw new Error('Max retries exceeded due to rate limiting');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -56,10 +76,19 @@ serve(async (req) => {
 
     console.log('[FEC-COMMITTEES] Fetching committees for:', { candidateId, fecCandidateId });
 
-    // Fetch committees from FEC API - use repeated params for multiple designations
+    // Fetch committees from FEC API with retry logic
     const url = `https://api.open.fec.gov/v1/candidate/${fecCandidateId}/committees/?api_key=${fecApiKey}&designation=P&designation=A&per_page=50`;
     
-    const response = await fetch(url);
+    let response: Response;
+    try {
+      response = await fetchWithRetry(url);
+    } catch (err) {
+      console.error('[FEC-COMMITTEES] Failed after retries:', err);
+      return new Response(
+        JSON.stringify({ error: 'FEC API rate limited - please try again later', retryable: true }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     if (!response.ok) {
       const errorBody = await response.text();
