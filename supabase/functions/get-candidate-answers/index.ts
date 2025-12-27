@@ -196,15 +196,56 @@ function snapToValidValue(value: number): number {
   );
 }
 
-// Clean and parse JSON from AI response - handles code fences and whitespace
+// Clean and parse JSON from AI response - handles code fences, whitespace, and truncation
 function parseAIResponse(content: string): any[] {
   let cleaned = content.trim();
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   
+  // First try normal parsing
   const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
   if (jsonMatch) {
-    return JSON.parse(jsonMatch[0]);
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      console.log('[AI] JSON parse failed, attempting truncation recovery...');
+    }
   }
+  
+  // Recovery: find all complete JSON objects in a truncated response
+  // Match complete answer objects with required fields
+  const objectPattern = /\{\s*"question_id"\s*:\s*"[^"]+"\s*,\s*"answer_value"\s*:\s*-?\d+\s*,\s*"confidence"\s*:\s*"[^"]+"\s*,\s*"source_description"\s*:\s*"(?:[^"\\]|\\.)*"\s*\}/g;
+  const objectMatches = [...cleaned.matchAll(objectPattern)];
+  
+  if (objectMatches.length > 0) {
+    const recovered = objectMatches.map(m => {
+      try {
+        return JSON.parse(m[0]);
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+    
+    if (recovered.length > 0) {
+      console.log(`[AI] Recovered ${recovered.length} complete answers from truncated response`);
+      return recovered;
+    }
+  }
+  
+  // Try a more lenient pattern for partial objects
+  const lenientPattern = /\{\s*"question_id"\s*:\s*"([^"]+)"\s*,\s*"answer_value"\s*:\s*(-?\d+)\s*,\s*"confidence"\s*:\s*"([^"]+)"/g;
+  const lenientMatches = [...cleaned.matchAll(lenientPattern)];
+  
+  if (lenientMatches.length > 0) {
+    const recovered = lenientMatches.map(m => ({
+      question_id: m[1],
+      answer_value: parseInt(m[2], 10),
+      confidence: m[3],
+      source_description: 'Party platform position'
+    }));
+    console.log(`[AI] Recovered ${recovered.length} partial answers from truncated response`);
+    return recovered;
+  }
+  
   throw new Error('No JSON array found in response');
 }
 
@@ -254,8 +295,8 @@ ONLY use: -10, -5, 0, +5, or +10. No intermediate values.
 Return ONLY valid JSON array, no markdown fences, no extra text.`;
 
   const sourceInstructions = isCongressional && votingRecord.length > 0
-    ? `- source_description: CITE SPECIFIC BILL when relevant (e.g., "Sponsored HR1234 Climate Act" or "Cosponsored S567 Tax Reform"). If no specific bill applies, use general party platform.`
-    : `- source_description: brief source (max 50 chars)`;
+    ? `- source_description: CITE SPECIFIC BILL briefly (e.g., "HR1234 Climate Act"). Max 40 chars.`
+    : `- source_description: brief source (max 30 chars)`;
 
   const userPrompt = `Official: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
 ${votingContext}
@@ -263,13 +304,13 @@ ${votingContext}
 Questions:
 ${questionsText}
 
-Return JSON array with objects: {question_id, answer_value, confidence, source_description}
-- question_id: the ID in brackets (e.g. "eco1")
+Return JSON array: [{question_id, answer_value, confidence, source_description}, ...]
+- question_id: ID in brackets (e.g. "eco1")
 - answer_value: -10, -5, 0, 5, or 10
 - confidence: "high"/"medium"/"low"
 ${sourceInstructions}
 
-CRITICAL: Return ONLY the JSON array. No markdown. No explanation.`;
+ONLY JSON array. No markdown.`;
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
@@ -277,15 +318,15 @@ CRITICAL: Return ONLY the JSON array. No markdown. No explanation.`;
       'Authorization': `Bearer ${LOVABLE_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 2000,
-    }),
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 4000,
+      }),
   });
 
   if (!response.ok) {
@@ -351,11 +392,11 @@ async function generateAnswersInChunks(
   let totalGenerated = 0;
   let failedChunks = 0;
   
-  // Use larger chunks to reduce AI calls (fewer requests = less resource usage)
-  const LARGE_CHUNK_SIZE = 25;
+  // Use moderate chunks to balance AI calls vs response truncation risk
+  const CHUNK_SIZE = 15;
   const chunks: Question[][] = [];
-  for (let i = 0; i < questions.length; i += LARGE_CHUNK_SIZE) {
-    chunks.push(questions.slice(i, i + LARGE_CHUNK_SIZE));
+  for (let i = 0; i < questions.length; i += CHUNK_SIZE) {
+    chunks.push(questions.slice(i, i + CHUNK_SIZE));
   }
   
   console.log(`Processing ${questions.length} questions in ${chunks.length} chunks for ${candidateName}`);
