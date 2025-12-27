@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Check, X, Search, Users, DollarSign, Link2, ArrowRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Search, Users, DollarSign, Link2, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -41,6 +42,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   useDonorAliases,
   useCreateDonorAlias,
   useUpdateDonorAlias,
@@ -73,7 +80,7 @@ export function DonorAliasesPanel() {
   const [formData, setFormData] = useState<DonorAliasInput>({
     canonical_name: '',
     alias_pattern: '',
-    donor_type: 'PAC',
+    donor_types: ['Individual', 'PAC', 'Organization', 'Unknown'],
     fec_committee_id: '',
     notes: '',
     is_active: true,
@@ -86,7 +93,7 @@ export function DonorAliasesPanel() {
 
   const { data: matchCount } = useMatchingDonorsCount(
     formData.alias_pattern,
-    formData.donor_type
+    formData.donor_types
   );
 
   const filteredAliases = aliases?.filter(
@@ -95,11 +102,13 @@ export function DonorAliasesPanel() {
       a.alias_pattern.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Find current alias for a donor name
+  // Find current alias for a donor name (checks all types now)
   const findAliasForDonor = (donorName: string, donorType: string) => {
     if (!aliases) return null;
     return aliases.find(alias => {
-      if (alias.donor_type !== donorType || !alias.is_active) return false;
+      if (!alias.is_active) return false;
+      // Check if the donor type is in the alias's donor_types array
+      if (!alias.donor_types?.includes(donorType)) return false;
       const pattern = alias.alias_pattern.replace(/%/g, '.*').replace(/_/g, '.');
       const regex = new RegExp(`^${pattern}$`, 'i');
       return regex.test(donorName);
@@ -111,7 +120,7 @@ export function DonorAliasesPanel() {
     setFormData({
       canonical_name: '',
       alias_pattern: '',
-      donor_type: 'PAC',
+      donor_types: ['Individual', 'PAC', 'Organization', 'Unknown'],
       fec_committee_id: '',
       notes: '',
       is_active: true,
@@ -126,7 +135,7 @@ export function DonorAliasesPanel() {
     setFormData({
       canonical_name: donorName,
       alias_pattern: `%${escapedName}%`,
-      donor_type: donorType,
+      donor_types: [donorType], // Start with just the donor's type
       fec_committee_id: '',
       notes: '',
       is_active: true,
@@ -137,16 +146,11 @@ export function DonorAliasesPanel() {
   const handleAddToExistingAlias = (donorName: string, alias: DonorAlias) => {
     // Pre-fill with existing alias data but suggest updating pattern to include new donor
     setSelectedAlias(alias);
-    const currentPattern = alias.alias_pattern;
-    // If pattern already uses OR, suggest adding to it; otherwise suggest broadening
-    const newPatternSuggestion = currentPattern.includes('|') 
-      ? currentPattern 
-      : currentPattern;
     
     setFormData({
       canonical_name: alias.canonical_name,
-      alias_pattern: newPatternSuggestion,
-      donor_type: alias.donor_type,
+      alias_pattern: alias.alias_pattern,
+      donor_types: alias.donor_types || [alias.donor_type],
       fec_committee_id: alias.fec_committee_id || '',
       notes: alias.notes ? `${alias.notes}\nAdded: ${donorName}` : `Added: ${donorName}`,
       is_active: alias.is_active,
@@ -159,12 +163,21 @@ export function DonorAliasesPanel() {
     setFormData({
       canonical_name: alias.canonical_name,
       alias_pattern: alias.alias_pattern,
-      donor_type: alias.donor_type,
+      donor_types: alias.donor_types || [alias.donor_type],
       fec_committee_id: alias.fec_committee_id || '',
       notes: alias.notes || '',
       is_active: alias.is_active,
     });
     setDialogOpen(true);
+  };
+
+  const handleToggleDonorType = (type: string, checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      donor_types: checked 
+        ? [...prev.donor_types, type]
+        : prev.donor_types.filter(t => t !== type)
+    }));
   };
 
   const handleSubmit = async () => {
@@ -225,7 +238,7 @@ export function DonorAliasesPanel() {
                 <TableRow>
                   <TableHead>Canonical Name</TableHead>
                   <TableHead>Pattern</TableHead>
-                  <TableHead>Type</TableHead>
+                  <TableHead>Types</TableHead>
                   <TableHead>Active</TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -248,7 +261,13 @@ export function DonorAliasesPanel() {
                         </code>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{alias.donor_type}</Badge>
+                        <div className="flex flex-wrap gap-1">
+                          {(alias.donor_types || [alias.donor_type]).map(type => (
+                            <Badge key={type} variant="outline" className="text-xs">
+                              {type}
+                            </Badge>
+                          ))}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {alias.is_active ? (
@@ -290,9 +309,9 @@ export function DonorAliasesPanel() {
         <TabsContent value="search" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Search Donors</CardTitle>
+              <CardTitle className="text-lg">Search Donors by Canonical Name</CardTitle>
               <CardDescription>
-                Search for donors and assign them to alias groups. Similar donors will be consolidated under the canonical name.
+                Search donors by their canonical name (alias or original name). Assign aliases to group similar donors across all types.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -300,7 +319,7 @@ export function DonorAliasesPanel() {
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search donor names (min 2 characters)..."
+                    placeholder="Search by canonical name (min 2 characters)..."
                     value={donorSearch}
                     onChange={(e) => setDonorSearch(e.target.value)}
                     className="pl-9"
@@ -323,7 +342,7 @@ export function DonorAliasesPanel() {
               {donorSearch.length >= 2 && (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    {searchLoading ? 'Searching...' : `Found ${searchResults.length} unique donor(s)`}
+                    {searchLoading ? 'Searching...' : `Found ${searchResults.length} donor(s)`}
                   </p>
                   
                   {searchResults.length > 0 && (
@@ -337,6 +356,29 @@ export function DonorAliasesPanel() {
                                 <div className="flex items-center gap-2 mb-1">
                                   <p className="font-medium text-foreground truncate">{donor.name}</p>
                                   <Badge variant="outline" className="shrink-0">{donor.type}</Badge>
+                                  {donor.isConsolidated && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <Badge variant="secondary" className="shrink-0">
+                                            <Layers className="h-3 w-3 mr-1" />
+                                            {donor.count} merged
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p className="text-xs font-medium mb-1">Merged names:</p>
+                                          <ul className="text-xs">
+                                            {donor.nameVariations?.slice(0, 10).map((name: string, i: number) => (
+                                              <li key={i}>{name}</li>
+                                            ))}
+                                            {(donor.nameVariations?.length || 0) > 10 && (
+                                              <li>...and {(donor.nameVariations?.length || 0) - 10} more</li>
+                                            )}
+                                          </ul>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                                   <span className="flex items-center gap-1">
@@ -345,7 +387,7 @@ export function DonorAliasesPanel() {
                                   </span>
                                   <span className="flex items-center gap-1">
                                     <Users className="h-3 w-3" />
-                                    {donor.count} record(s)
+                                    {donor.count} name(s)
                                   </span>
                                 </div>
                                 {existingAlias && (
@@ -353,6 +395,9 @@ export function DonorAliasesPanel() {
                                     <Link2 className="h-3 w-3 text-primary" />
                                     <span className="text-primary font-medium">
                                       Alias: {existingAlias.canonical_name}
+                                    </span>
+                                    <span className="text-muted-foreground">
+                                      ({(existingAlias.donor_types || [existingAlias.donor_type]).join(', ')})
                                     </span>
                                   </div>
                                 )}
@@ -377,7 +422,7 @@ export function DonorAliasesPanel() {
                                       <Plus className="h-3 w-3 mr-1" />
                                       New Alias
                                     </Button>
-                                    {aliases && aliases.filter(a => a.donor_type === donor.type && a.is_active).length > 0 && (
+                                    {aliases && aliases.filter(a => a.is_active).length > 0 && (
                                       <Select
                                         onValueChange={(aliasId) => {
                                           const alias = aliases.find(a => a.id === aliasId);
@@ -389,7 +434,7 @@ export function DonorAliasesPanel() {
                                         </SelectTrigger>
                                         <SelectContent>
                                           {aliases
-                                            .filter(a => a.donor_type === donor.type && a.is_active)
+                                            .filter(a => a.is_active)
                                             .map(alias => (
                                               <SelectItem key={alias.id} value={alias.id}>
                                                 {alias.canonical_name}
@@ -467,24 +512,30 @@ export function DonorAliasesPanel() {
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="donor_type">Donor Type</Label>
-              <Select
-                value={formData.donor_type}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, donor_type: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DONOR_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
+              <Label>Donor Types</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Select which donor types this alias applies to
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {DONOR_TYPES.map((type) => (
+                  <div key={type} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`type-${type}`}
+                      checked={formData.donor_types.includes(type)}
+                      onCheckedChange={(checked) => handleToggleDonorType(type, !!checked)}
+                    />
+                    <label
+                      htmlFor={`type-${type}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
                       {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    </label>
+                  </div>
+                ))}
+              </div>
+              {formData.donor_types.length === 0 && (
+                <p className="text-xs text-destructive">Select at least one type</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="fec_committee_id">FEC Committee ID (optional)</Label>
@@ -528,6 +579,7 @@ export function DonorAliasesPanel() {
               disabled={
                 !formData.canonical_name ||
                 !formData.alias_pattern ||
+                formData.donor_types.length === 0 ||
                 createMutation.isPending ||
                 updateMutation.isPending
               }

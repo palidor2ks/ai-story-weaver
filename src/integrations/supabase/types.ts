@@ -502,6 +502,7 @@ export type Database = {
           canonical_name: string
           created_at: string | null
           donor_type: string
+          donor_types: string[] | null
           fec_committee_id: string | null
           id: string
           is_active: boolean | null
@@ -513,6 +514,7 @@ export type Database = {
           canonical_name: string
           created_at?: string | null
           donor_type: string
+          donor_types?: string[] | null
           fec_committee_id?: string | null
           id?: string
           is_active?: boolean | null
@@ -524,6 +526,7 @@ export type Database = {
           canonical_name?: string
           created_at?: string | null
           donor_type?: string
+          donor_types?: string[] | null
           fec_committee_id?: string | null
           id?: string
           is_active?: boolean | null

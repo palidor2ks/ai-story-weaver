@@ -179,7 +179,7 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
   });
 };
 
-// Hook to search donors by name for admin alias assignment
+// Hook to search donors by canonical name (uses consolidated view)
 export const useSearchDonors = (searchTerm: string, donorType?: string) => {
   return useQuery({
     queryKey: ['donor-search', searchTerm, donorType],
@@ -187,10 +187,10 @@ export const useSearchDonors = (searchTerm: string, donorType?: string) => {
       if (!searchTerm || searchTerm.length < 2) return [];
       
       let query = supabase
-        .from('donors')
-        .select('id, name, type, amount, cycle, candidate_id')
-        .ilike('name', `%${searchTerm}%`)
-        .order('amount', { ascending: false })
+        .from('donor_consolidated')
+        .select('*')
+        .ilike('display_name', `%${searchTerm}%`)
+        .order('total_amount', { ascending: false })
         .limit(50);
       
       if (donorType && donorType !== 'all') {
@@ -200,26 +200,21 @@ export const useSearchDonors = (searchTerm: string, donorType?: string) => {
       const { data, error } = await query;
       if (error) throw error;
       
-      // Group by name to show unique donors
-      const uniqueDonors = new Map<string, { name: string; type: string; totalAmount: number; count: number }>();
-      (data || []).forEach(d => {
-        const key = `${d.name}|${d.type}`;
-        const existing = uniqueDonors.get(key);
-        if (existing) {
-          existing.totalAmount += d.amount;
-          existing.count += 1;
-        } else {
-          uniqueDonors.set(key, { name: d.name, type: d.type, totalAmount: d.amount, count: 1 });
-        }
-      });
-      
-      return Array.from(uniqueDonors.values()).sort((a, b) => b.totalAmount - a.totalAmount);
+      // Map to expected format
+      return (data || []).map(d => ({
+        name: d.display_name,
+        type: d.type,
+        totalAmount: d.total_amount,
+        count: d.name_variations?.length || 1,
+        isConsolidated: d.is_consolidated,
+        nameVariations: d.name_variations,
+      }));
     },
     enabled: searchTerm.length >= 2,
   });
 };
 
-// Hook to get alias for a specific donor name
+// Hook to get alias for a specific donor name (now uses donor_types array)
 export const useDonorAlias = (donorName: string, donorType: string) => {
   return useQuery({
     queryKey: ['donor-alias-for', donorName, donorType],
@@ -229,13 +224,14 @@ export const useDonorAlias = (donorName: string, donorType: string) => {
       const { data, error } = await supabase
         .from('donor_aliases')
         .select('*')
-        .eq('donor_type', donorType)
         .eq('is_active', true);
       
       if (error) throw error;
       
-      // Find matching alias using ILIKE pattern matching (client-side simulation)
+      // Find matching alias using ILIKE pattern matching and donor_types array
       const matchingAlias = (data || []).find(alias => {
+        // Check if the donor type is in the alias's donor_types array
+        if (!alias.donor_types?.includes(donorType)) return false;
         const pattern = alias.alias_pattern.replace(/%/g, '.*').replace(/_/g, '.');
         const regex = new RegExp(`^${pattern}$`, 'i');
         return regex.test(donorName);
