@@ -96,6 +96,26 @@ const formatAmount = (amount: number) => {
   }).format(amount);
 };
 
+const formatCompactAmount = (amount: number) => {
+  if (amount >= 1_000_000) {
+    return `$${(amount / 1_000_000).toFixed(1)}M`;
+  }
+  if (amount >= 1_000) {
+    return `$${(amount / 1_000).toFixed(0)}K`;
+  }
+  return formatAmount(amount);
+};
+
+const formatCompactNumber = (num: number) => {
+  if (num >= 1_000_000) {
+    return `${(num / 1_000_000).toFixed(1)}M`;
+  }
+  if (num >= 1_000) {
+    return `${(num / 1_000).toFixed(1)}K`;
+  }
+  return num.toLocaleString();
+};
+
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return null;
   const date = new Date(dateStr);
@@ -352,38 +372,38 @@ const DonorProfile = () => {
             </div>
 
             {/* Stats grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Card className="border-border">
-                <CardContent className="p-4 text-center">
-                  <DollarSign className="w-5 h-5 mx-auto mb-1 text-agree" />
-                  <p className="text-xl md:text-2xl font-bold text-foreground">
-                    {formatAmount(stats.totalAmount)}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 shrink-0">
+              <Card className="border-border min-w-0">
+                <CardContent className="p-3 text-center">
+                  <DollarSign className="w-4 h-4 mx-auto mb-1 text-agree" />
+                  <p className="text-base lg:text-lg font-bold text-foreground truncate">
+                    {formatCompactAmount(stats.totalAmount)}
                   </p>
                   <p className="text-xs text-muted-foreground">Total Given</p>
                 </CardContent>
               </Card>
-              <Card className="border-border">
-                <CardContent className="p-4 text-center">
-                  <Hash className="w-5 h-5 mx-auto mb-1 text-primary" />
-                  <p className="text-xl md:text-2xl font-bold text-foreground">
-                    {stats.totalTransactions}
+              <Card className="border-border min-w-0">
+                <CardContent className="p-3 text-center">
+                  <Hash className="w-4 h-4 mx-auto mb-1 text-primary" />
+                  <p className="text-base lg:text-lg font-bold text-foreground truncate">
+                    {formatCompactNumber(stats.totalTransactions)}
                   </p>
                   <p className="text-xs text-muted-foreground">Donations</p>
                 </CardContent>
               </Card>
-              <Card className="border-border">
-                <CardContent className="p-4 text-center">
-                  <Users className="w-5 h-5 mx-auto mb-1 text-primary" />
-                  <p className="text-xl md:text-2xl font-bold text-foreground">
-                    {stats.uniqueRecipients}
+              <Card className="border-border min-w-0">
+                <CardContent className="p-3 text-center">
+                  <Users className="w-4 h-4 mx-auto mb-1 text-primary" />
+                  <p className="text-base lg:text-lg font-bold text-foreground truncate">
+                    {formatCompactNumber(stats.uniqueRecipients)}
                   </p>
                   <p className="text-xs text-muted-foreground">Recipients</p>
                 </CardContent>
               </Card>
-              <Card className="border-border">
-                <CardContent className="p-4 text-center">
-                  <Calendar className="w-5 h-5 mx-auto mb-1 text-primary" />
-                  <p className="text-xl md:text-2xl font-bold text-foreground">
+              <Card className="border-border min-w-0">
+                <CardContent className="p-3 text-center">
+                  <Calendar className="w-4 h-4 mx-auto mb-1 text-primary" />
+                  <p className="text-base lg:text-lg font-bold text-foreground truncate">
                     {stats.uniqueCycles}
                   </p>
                   <p className="text-xs text-muted-foreground">Cycles</p>
