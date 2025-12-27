@@ -1308,6 +1308,19 @@ export type Database = {
           coverage_tier: Database["public"]["Enums"]["coverage_tier"]
         }[]
       }
+      get_contribution_totals: {
+        Args: { p_candidate_id: string; p_cycle: string }
+        Returns: {
+          contribution_count: number
+          earmarked_total: number
+          individual_total: number
+          itemized_total: number
+          pac_total: number
+          party_total: number
+          passthrough_total: number
+          transfers_total: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
