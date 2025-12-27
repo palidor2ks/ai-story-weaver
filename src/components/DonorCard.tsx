@@ -9,6 +9,9 @@ interface DonorCardProps {
   type: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
   amount: number;
   transactionCount: number;
+  isConsolidated?: boolean;
+  nameVariations?: string[];
+  recipientCount?: number;
 }
 
 const formatAmount = (amount: number) => {
@@ -52,9 +55,23 @@ const getTypeBadgeStyle = (type: string) => {
   }
 };
 
-export const DonorCard = ({ id, name, type, amount, transactionCount }: DonorCardProps) => {
+export const DonorCard = ({ 
+  id, 
+  name, 
+  type, 
+  amount, 
+  transactionCount,
+  isConsolidated,
+  nameVariations,
+  recipientCount,
+}: DonorCardProps) => {
+  // For consolidated donors with multiple variations, link to filtered search
+  const linkPath = isConsolidated && nameVariations && nameVariations.length > 1
+    ? `/donors?search=${encodeURIComponent(name)}&consolidated=false`
+    : `/donor/${id}`;
+
   return (
-    <Link to={`/donor/${id}`} className="block group">
+    <Link to={linkPath} className="block group">
       <Card className="h-full transition-all duration-200 hover:shadow-lg hover:border-primary/30 group-hover:scale-[1.01]">
         <CardContent className="p-5">
           {/* Header with type icon and badge */}
@@ -62,9 +79,16 @@ export const DonorCard = ({ id, name, type, amount, transactionCount }: DonorCar
             <div className={`p-2.5 rounded-lg ${getTypeBadgeStyle(type)}`}>
               {getTypeIcon(type)}
             </div>
-            <Badge variant="outline" className={`shrink-0 ${getTypeBadgeStyle(type)}`}>
-              {type}
-            </Badge>
+            <div className="flex items-center gap-2">
+              {isConsolidated && nameVariations && nameVariations.length > 1 && (
+                <Badge variant="secondary" className="text-xs">
+                  {nameVariations.length} merged
+                </Badge>
+              )}
+              <Badge variant="outline" className={`shrink-0 ${getTypeBadgeStyle(type)}`}>
+                {type}
+              </Badge>
+            </div>
           </div>
 
           {/* Donor name - clickable */}
@@ -76,10 +100,13 @@ export const DonorCard = ({ id, name, type, amount, transactionCount }: DonorCar
           <div className="flex items-end justify-between gap-4">
             <div className="space-y-1">
               <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
-                Donations
+                {isConsolidated && recipientCount ? 'Recipients' : 'Donations'}
               </p>
               <p className="text-xl font-bold text-foreground">
-                {transactionCount.toLocaleString()}
+                {isConsolidated && recipientCount 
+                  ? recipientCount.toLocaleString()
+                  : transactionCount.toLocaleString()
+                }
               </p>
             </div>
             <div className="text-right space-y-1">
