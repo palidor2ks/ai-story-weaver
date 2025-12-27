@@ -376,8 +376,8 @@ ONLY JSON array. No markdown.`;
                 answer_value: { type: "integer", enum: [-10, -5, 0, 5, 10], description: "Position on left-right scale" },
                 confidence: { type: "string", enum: ["high", "medium", "low"] },
                 source_description: { type: "string", description: "Brief source (max 30 chars)" }
-              },
-              required: ["question_id", "answer_value", "confidence"]
+              }
+              // Note: 'required' removed from items - Google Gemini doesn't support nested required arrays
             }
           }
         },
