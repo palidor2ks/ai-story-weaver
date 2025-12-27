@@ -145,32 +145,59 @@ serve(async (req) => {
           continue;
         }
 
-        // Get local totals from rollups (including new category-level columns)
-        const { data: rollups } = await supabase
-          .from('committee_finance_rollups')
-          .select('local_itemized, local_transfers, local_earmarked, local_individual_itemized, local_pac_contributions, local_party_contributions')
-          .eq('candidate_id', candidate.id)
-          .eq('cycle', cycle);
-
-        const localItemized = (rollups || []).reduce((sum, r) => sum + (r.local_itemized || 0), 0);
-        const localTransfers = (rollups || []).reduce((sum, r) => sum + (r.local_transfers || 0), 0);
-        const localEarmarked = (rollups || []).reduce((sum, r) => sum + (r.local_earmarked || 0), 0);
-        const localIndividualItemized = (rollups || []).reduce((sum, r) => sum + (r.local_individual_itemized || 0), 0);
-        const localPacContributions = (rollups || []).reduce((sum, r) => sum + (r.local_pac_contributions || 0), 0);
-        const localPartyContributions = (rollups || []).reduce((sum, r) => sum + (r.local_party_contributions || 0), 0);
-        
-        // Calculate local_itemized_net by querying contributions directly
-        // Exclude earmark pass-throughs (contributions with "SEE BELOW" memo text)
-        const { data: passThroughData } = await supabase
+        // Calculate local totals directly from contributions table (not stale rollups)
+        // This ensures accurate reconciliation by using the actual contribution data
+        const { data: contributions } = await supabase
           .from('contributions')
-          .select('amount')
+          .select('line_number, amount, memo_code, memo_text, is_transfer, is_earmarked')
           .eq('candidate_id', candidate.id)
           .eq('cycle', cycle)
-          .eq('is_contribution', true)
-          .ilike('memo_text', '%SEE BELOW%');
-        
-        const passThroughTotal = (passThroughData || []).reduce((sum, c) => sum + (c.amount || 0), 0);
+          .eq('is_contribution', true);
+
+        // Aggregate by category, excluding memo transactions (memo_code = 'X')
+        // These are informational records that shouldn't be counted as actual contributions
+        let localIndividualItemized = 0;  // Line 11A/11AI
+        let localPacContributions = 0;     // Line 11C
+        let localPartyContributions = 0;   // Line 11B
+        let localItemized = 0;             // All itemized contributions
+        let localTransfers = 0;            // Transfer transactions
+        let localEarmarked = 0;            // Earmarked contributions
+        let passThroughTotal = 0;          // Pass-through amounts (memo contains "SEE BELOW")
+
+        for (const c of contributions || []) {
+          const amount = c.amount || 0;
+          const line = (c.line_number || '').toUpperCase();
+          const isMemo = c.memo_code === 'X';
+          const isPassThrough = (c.memo_text || '').toUpperCase().includes('SEE BELOW');
+
+          // Track pass-throughs for net calculation
+          if (isPassThrough) {
+            passThroughTotal += amount;
+          }
+
+          // Skip memo transactions for category totals (they're informational only)
+          if (isMemo) continue;
+
+          // Aggregate all non-memo contributions
+          localItemized += amount;
+
+          // Track transfers and earmarks
+          if (c.is_transfer) localTransfers += amount;
+          if (c.is_earmarked) localEarmarked += amount;
+
+          // Categorize by line number
+          if (line.startsWith('11A')) {
+            localIndividualItemized += amount;
+          } else if (line === '11C') {
+            localPacContributions += amount;
+          } else if (line === '11B') {
+            localPartyContributions += amount;
+          }
+        }
+
         const localItemizedNet = localItemized - passThroughTotal;
+
+        console.log(`[RECONCILIATION] ${candidate.name}: Calculated from ${(contributions || []).length} contributions - Individual: $${localIndividualItemized}, PAC: $${localPacContributions}, Party: $${localPartyContributions}`);
 
         // Fetch fresh FEC totals for each committee (with category-level data)
         let fecItemized = 0;
@@ -195,17 +222,26 @@ serve(async (req) => {
           fecCandidateContribution += totals.fecCandidateContribution || 0;
           fecOtherReceipts += totals.fecOtherReceipts || 0;
 
-          // Update committee rollup with fresh FEC data
+          // Update committee rollup with fresh FEC data AND corrected local totals
           await supabase
             .from('committee_finance_rollups')
             .upsert({
               committee_id: cmte.fec_committee_id,
               candidate_id: candidate.id,
               cycle,
+              // FEC data
               fec_itemized: totals.fecItemized,
               fec_unitemized: totals.fecUnitemized,
               fec_total_receipts: totals.fecTotalReceipts,
-              last_fec_check: new Date().toISOString()
+              // Corrected local totals (calculated from contributions table)
+              local_itemized: localItemized,
+              local_individual_itemized: localIndividualItemized,
+              local_pac_contributions: localPacContributions,
+              local_party_contributions: localPartyContributions,
+              local_transfers: localTransfers,
+              local_earmarked: localEarmarked,
+              last_fec_check: new Date().toISOString(),
+              updated_at: new Date().toISOString()
             }, { onConflict: 'committee_id,cycle' });
 
           // Rate limit
