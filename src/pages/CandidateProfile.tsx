@@ -672,10 +672,18 @@ export const CandidateProfile = () => {
 
                         const allSources: FundingSource[] = [];
                         
-                        // Add regular donors - but exclude line 13A (loans) if fecLoans is already shown
+                        // Add regular donors - but exclude entries already shown as FEC summary categories
                         donors.forEach(d => {
-                          // Skip loan entries (line 13A) if fecLoans is already being shown as a separate category
+                          // Skip loan entries (line 13A) if fecLoans is already shown
                           if (fecLoans > 0 && d.line_number === '13A') {
+                            return;
+                          }
+                          // Skip candidate contributions (line 11AI) if fecCandidateContribution is already shown
+                          if (fecCandidateContribution > 0 && d.line_number === '11AI') {
+                            return;
+                          }
+                          // Skip committee transfers (line 12) if fecTransfers is already shown
+                          if (fecTransfers > 0 && d.line_number?.startsWith('12')) {
                             return;
                           }
                           allSources.push({
