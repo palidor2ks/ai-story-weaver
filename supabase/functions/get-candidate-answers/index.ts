@@ -530,9 +530,21 @@ async function generateAnswersInChunks(
         confidence: answer.confidence,
       }));
       
+      // Deduplicate by question_id - keep last occurrence (AI's final answer)
+      const deduplicatedAnswers = Array.from(
+        answersToInsert.reduce((map, answer) => {
+          map.set(answer.question_id, answer);
+          return map;
+        }, new Map()).values()
+      );
+
+      if (deduplicatedAnswers.length < answersToInsert.length) {
+        console.log(`Deduplicated ${answersToInsert.length - deduplicatedAnswers.length} duplicate question_ids in chunk ${i + 1}`);
+      }
+      
       const { error: insertError } = await supabase
         .from('candidate_answers')
-        .upsert(answersToInsert, {
+        .upsert(deduplicatedAnswers, {
           onConflict: 'candidate_id,question_id',
           ignoreDuplicates: false,
         });
