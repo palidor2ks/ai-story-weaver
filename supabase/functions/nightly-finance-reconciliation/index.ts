@@ -118,10 +118,10 @@ serve(async (req) => {
 
     const results = {
       checked: 0,
-      ok: 0,
-      warning: 0,
-      error: 0,
-      skipped: 0,
+      okCount: 0,
+      warningCount: 0,
+      errorCount: 0,
+      skippedCount: 0,
       details: [] as Array<{ candidateId: string; name: string; status: string; deltaPct: number; individualDeltaPct: number; pacDeltaPct: number }>
     };
 
@@ -141,7 +141,7 @@ serve(async (req) => {
         }
 
         if (!committees || committees.length === 0) {
-          results.skipped++;
+          results.skippedCount++;
           continue;
         }
 
@@ -281,9 +281,9 @@ serve(async (req) => {
           }, { onConflict: 'candidate_id,cycle' });
 
         results.checked++;
-        if (status === 'ok') results.ok++;
-        else if (status === 'warning') results.warning++;
-        else if (status === 'error') results.error++;
+        if (status === 'ok') results.okCount++;
+        else if (status === 'warning') results.warningCount++;
+        else if (status === 'error') results.errorCount++;
 
         results.details.push({
           candidateId: candidate.id,
@@ -298,7 +298,7 @@ serve(async (req) => {
 
       } catch (err) {
         console.error(`[RECONCILIATION] Error processing ${candidate.name}:`, err);
-        results.skipped++;
+        results.skippedCount++;
       }
     }
 
@@ -308,7 +308,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         ...results,
-        message: `Reconciled ${results.checked} candidates: ${results.ok} OK, ${results.warning} warnings, ${results.error} errors`
+        message: `Reconciled ${results.checked} candidates: ${results.okCount} OK, ${results.warningCount} warnings, ${results.errorCount} errors`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
