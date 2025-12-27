@@ -58,11 +58,14 @@ export const useCreateDonorAlias = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Refresh donor display_names to apply new alias
+      await supabase.rpc('refresh_donor_display_names');
       queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
       queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
       queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
-      toast.success('Donor alias created');
+      queryClient.invalidateQueries({ queryKey: ['candidate-donors'] });
+      toast.success('Donor alias created and applied');
     },
     onError: (error) => {
       toast.error(`Failed to create alias: ${error.message}`);
@@ -90,11 +93,14 @@ export const useUpdateDonorAlias = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Refresh donor display_names to apply updated alias
+      await supabase.rpc('refresh_donor_display_names');
       queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
       queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
       queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
-      toast.success('Donor alias updated');
+      queryClient.invalidateQueries({ queryKey: ['candidate-donors'] });
+      toast.success('Donor alias updated and applied');
     },
     onError: (error) => {
       toast.error(`Failed to update alias: ${error.message}`);
@@ -114,9 +120,13 @@ export const useDeleteDonorAlias = () => {
 
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Refresh donor display_names to remove alias
+      await supabase.rpc('refresh_donor_display_names');
       queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
       queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
+      queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['candidate-donors'] });
       toast.success('Donor alias deleted');
     },
     onError: (error) => {
