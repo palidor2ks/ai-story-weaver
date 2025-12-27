@@ -167,6 +167,16 @@ function scoreCandidate(
   return score;
 }
 
+// Determine office type from FEC office code
+function getOfficeFromCode(officeCode: string): string {
+  switch (officeCode) {
+    case 'P': return 'President';
+    case 'S': return 'Senator';
+    case 'H': return 'Representative';
+    default: return officeCode;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -339,19 +349,51 @@ serve(async (req) => {
       );
     }
 
-    // STEP 3: Update database if requested and we have a high-confidence match
+    // STEP 3: Update database if requested
     if (updateDatabase && candidateId && candidates.length > 0) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
       const bestMatch = candidates[0];
       const minScoreForAutoUpdate = matchMethod === 'crosswalk' ? 0 : 80;
       
       if ((bestMatch.match_score || 0) >= minScoreForAutoUpdate) {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        console.log('[FEC] Updating candidate', candidateId, 'with FEC data:', {
+          fecIds: candidates.map(c => c.candidate_id),
+          method: matchMethod
+        });
 
-        console.log('[FEC] Updating candidate', candidateId, 'with FEC ID:', bestMatch.candidate_id, 
-                    'committee:', bestMatch.principal_committee_id, 'score:', bestMatch.match_score, 'method:', matchMethod);
+        // Insert ALL found FEC IDs into candidate_fec_ids table
+        for (let i = 0; i < candidates.length; i++) {
+          const candidate = candidates[i];
+          const isPrimary = i === 0; // First one is primary (highest score)
+          
+          const { error: fecIdError } = await supabase
+            .from('candidate_fec_ids')
+            .upsert({
+              candidate_id: candidateId,
+              fec_candidate_id: candidate.candidate_id,
+              office: getOfficeFromCode(candidate.office),
+              state: candidate.state,
+              district: candidate.district,
+              is_primary: isPrimary,
+              cycle: candidate.cycles?.length > 0 ? String(Math.max(...candidate.cycles)) : null,
+              match_method: matchMethod,
+              match_score: candidate.match_score,
+              updated_at: new Date().toISOString()
+            }, {
+              onConflict: 'candidate_id,fec_candidate_id'
+            });
 
+          if (fecIdError) {
+            console.error('[FEC] Failed to insert FEC ID:', candidate.candidate_id, fecIdError);
+          } else {
+            console.log('[FEC] Inserted FEC ID:', candidate.candidate_id, 'isPrimary:', isPrimary);
+          }
+        }
+
+        // Still update the main candidates table with the primary FEC ID for backwards compatibility
         const updateData: Record<string, string | null> = { 
           fec_candidate_id: bestMatch.candidate_id 
         };
@@ -379,6 +421,7 @@ serve(async (req) => {
             fecCommitteeId: bestMatch.principal_committee_id,
             matchScore: bestMatch.match_score,
             matchMethod,
+            fecIdsStored: candidates.length,
             candidates 
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
