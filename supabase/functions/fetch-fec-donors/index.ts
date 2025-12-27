@@ -446,7 +446,25 @@ serve(async (req) => {
       .eq('id', candidateId)
       .maybeSingle();
 
-    const fecId = fecCandidateId || candidateData?.fec_candidate_id || null;
+    // Look up ALL FEC IDs from the candidate_fec_ids linking table
+    const { data: fecIds } = await supabase
+      .from('candidate_fec_ids')
+      .select('fec_candidate_id, office, is_primary')
+      .eq('candidate_id', candidateId);
+
+    // Collect all FEC candidate IDs (from param, legacy field, and linking table)
+    const allFecIds: string[] = [];
+    if (fecCandidateId) allFecIds.push(fecCandidateId);
+    if (candidateData?.fec_candidate_id && !allFecIds.includes(candidateData.fec_candidate_id)) {
+      allFecIds.push(candidateData.fec_candidate_id);
+    }
+    (fecIds || []).forEach(f => {
+      if (!allFecIds.includes(f.fec_candidate_id)) {
+        allFecIds.push(f.fec_candidate_id);
+      }
+    });
+
+    console.log('[FEC-DONORS] Found FEC candidate IDs:', allFecIds);
 
     if (fecCommitteeId) {
       const syncInfo = committeeSyncInfo.get(fecCommitteeId);
@@ -457,37 +475,39 @@ serve(async (req) => {
       pushCommittee(candidateData.fec_committee_id, '', 'stored', syncInfo);
     }
 
-    // Look up committees from FEC API if needed
-    if (!fecCommitteeId && fecId) {
-      try {
-        const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&designation=P,A&per_page=50`;
-        const committeeResponse = await fetchWithRetry(committeeUrl);
+    // Look up committees from FEC API for ALL FEC candidate IDs
+    if (!fecCommitteeId && allFecIds.length > 0) {
+      for (const fecId of allFecIds) {
+        try {
+          const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&designation=P,A&per_page=50`;
+          const committeeResponse = await fetchWithRetry(committeeUrl);
 
-        if (committeeResponse?.ok) {
-          let committeeData;
-          try {
-            committeeData = await committeeResponse.json();
-          } catch {
-            console.error('[FEC-DONORS] Failed to parse committee response');
-            committeeData = {};
-          }
-          const results = committeeData?.results || [];
-          results.forEach((cmte: { committee_id: string; name?: string; designation?: string }) => {
-            const role = cmte.designation === 'P' ? 'principal' : 'authorized';
-            const syncInfo = committeeSyncInfo.get(cmte.committee_id);
-            pushCommittee(cmte.committee_id, cmte.name || '', role, syncInfo);
-          });
+          if (committeeResponse?.ok) {
+            let committeeData;
+            try {
+              committeeData = await committeeResponse.json();
+            } catch {
+              console.error('[FEC-DONORS] Failed to parse committee response for', fecId);
+              committeeData = {};
+            }
+            const results = committeeData?.results || [];
+            results.forEach((cmte: { committee_id: string; name?: string; designation?: string }) => {
+              const role = cmte.designation === 'P' ? 'principal' : 'authorized';
+              const syncInfo = committeeSyncInfo.get(cmte.committee_id);
+              pushCommittee(cmte.committee_id, cmte.name || '', role, syncInfo);
+            });
 
-          const primary = results.find((cmte: { designation?: string }) => cmte.designation === 'P');
-          if (primary?.committee_id && !candidateData?.fec_committee_id) {
-            await supabase
-              .from('candidates')
-              .update({ fec_committee_id: primary.committee_id })
-              .eq('id', candidateId);
+            const primary = results.find((cmte: { designation?: string }) => cmte.designation === 'P');
+            if (primary?.committee_id && !candidateData?.fec_committee_id) {
+              await supabase
+                .from('candidates')
+                .update({ fec_committee_id: primary.committee_id })
+                .eq('id', candidateId);
+            }
           }
+        } catch (err) {
+          console.error('[FEC-DONORS] Committee lookup failed for', fecId, ':', err);
         }
-      } catch (err) {
-        console.error('[FEC-DONORS] Committee lookup failed:', err);
       }
     }
 
