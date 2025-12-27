@@ -117,7 +117,7 @@ export function AnswerCoveragePanel() {
   const { 
     fetchFECCandidateId, 
     fetchFECCommittees,
-    fetchFECDonors, 
+    fetchFECDonorsComplete, 
     batchFetchFECIds,
     batchFetchDonors,
     resumeAllPartialSyncs,
@@ -132,6 +132,7 @@ export function AnswerCoveragePanel() {
     hasPartialSync,
     batchProgress: fecBatchProgress,
     isBatchRunning: isFECBatchRunning,
+    syncProgress,
     syncAllProgress,
     isSyncAllRunning
   } = useFECIntegration();
@@ -909,6 +910,38 @@ export function AnswerCoveragePanel() {
           </div>
         )}
 
+        {/* Per-Candidate Sync Progress */}
+        {syncProgress && (
+          <div className="border rounded-lg p-4 space-y-2 bg-blue-500/5 border-blue-500/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                <span className="text-sm font-medium">
+                  Syncing: {syncProgress.candidateName}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span>
+                  Committee {syncProgress.committeesSynced}/{syncProgress.committeesTotal}
+                </span>
+                <span className="text-blue-600 font-medium">
+                  {syncProgress.donorsImported.toLocaleString()} donors
+                </span>
+              </div>
+            </div>
+            <Progress 
+              value={syncProgress.committeesTotal > 0 
+                ? (syncProgress.committeesSynced / syncProgress.committeesTotal) * 100 
+                : 0
+              } 
+              className="h-2" 
+            />
+            <div className="text-xs text-muted-foreground">
+              Auto-continues until all committees are synced. This may take several minutes for large campaigns.
+            </div>
+          </div>
+        )}
+
         {/* Tabs for Rep vs Topic view */}
         <Tabs defaultValue="representatives" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
@@ -1196,7 +1229,7 @@ export function AnswerCoveragePanel() {
                                   {fecLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
                                 </Button>
                               )}
-                              {/* Fetch/Resume Donors - now shown if has committee */}
+                              {/* Fetch/Resume Donors - uses fetchFECDonorsComplete for auto-looping */}
                               {hasFecId && candidate.fecCommitteeId && (
                                 <Button
                                   size="sm"
@@ -1205,16 +1238,19 @@ export function AnswerCoveragePanel() {
                                   onClick={() => {
                                     void (async () => {
                                       try {
-                                        const result = await fetchFECDonors(
+                                        toast.info(`Starting donor sync for ${candidate.name}...`);
+                                        const result = await fetchFECDonorsComplete(
                                           candidate.id,
                                           candidate.fecCandidateId!,
-                                          '2024'
+                                          candidate.name,
+                                          '2024',
+                                          false
                                         );
                                         if (result.success) {
                                           if (result.hasMore) {
-                                            toast.info(result.message || `Partial: ${result.imported} donors. Resume to continue.`);
+                                            toast.info(`Partial sync: ${result.imported} donors. Click Resume to continue.`);
                                           } else {
-                                            toast.success(result.message || `Imported ${result.imported} donors`);
+                                            toast.success(`Complete: imported ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
                                           }
                                           refetchCandidates();
                                         } else {
@@ -1226,7 +1262,7 @@ export function AnswerCoveragePanel() {
                                       }
                                     })();
                                   }}
-                                  title={syncStatus === 'partial' ? "Resume sync" : "Fetch donors"}
+                                  title={syncStatus === 'partial' ? "Resume sync (auto-continues until complete)" : "Fetch donors (auto-continues until complete)"}
                                   className={syncStatus === 'partial' ? "bg-amber-600 hover:bg-amber-700 h-7 text-xs" : "h-7"}
                                 >
                                   {donorLoading ? (
