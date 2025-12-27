@@ -943,8 +943,9 @@ export function AnswerCoveragePanel() {
                       <TableHead className="w-[60px]">State</TableHead>
                       <TableHead className="text-center w-[100px]">Answers</TableHead>
                       <TableHead className="w-[80px]">Tier</TableHead>
-                      <TableHead className="w-[90px]">Data</TableHead>
-                      <TableHead className="w-[120px]">Contributions</TableHead>
+                      <TableHead className="w-[70px]">Health</TableHead>
+                      <TableHead className="w-[80px]">Sync</TableHead>
+                      <TableHead className="w-[90px]">Finance</TableHead>
                       <TableHead className="w-[100px]">FEC ID</TableHead>
                       <TableHead className="text-right w-[140px]">Actions</TableHead>
                     </TableRow>
@@ -956,9 +957,21 @@ export function AnswerCoveragePanel() {
                       const donorLoading = isDonorLoading(candidate.id);
                       const isComplete = candidate.percentage >= 100;
                       const hasFecId = !!candidate.fecCandidateId;
+                      const hasCommittee = !!candidate.fecCommitteeId;
                       const financeStatus = calculateFinanceStatus(candidate);
                       const localItemized = candidate.localItemized || 0;
                       const syncStatus = candidate.syncStatus;
+                      const hasOverride = overrideMap.has(candidate.id);
+                      
+                      // Calculate finance badge status
+                      const getFinanceBadgeStatus = (): 'ok' | 'warning' | 'error' | null => {
+                        if (!financeStatus.hasData) return null;
+                        if (financeStatus.isBalanced) return 'ok';
+                        // Use otherReceipts as a rough proxy - if > 20% of total, warning, else error
+                        const otherPct = financeStatus.otherReceipts / (financeStatus.fecTotalReceipts || 1) * 100;
+                        if (otherPct <= 30) return 'warning';
+                        return 'error';
+                      };
 
                       return (
                         <TableRow key={candidate.id}>
@@ -992,73 +1005,36 @@ export function AnswerCoveragePanel() {
                           <TableCell>
                             <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} />
                           </TableCell>
+                          {/* Health Badge */}
                           <TableCell>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              {candidate.voteCount > 0 && (
-                                <span className="flex items-center gap-0.5" title="Voting records">
-                                  <Vote className="h-3 w-3" />
-                                  {candidate.voteCount}
-                                </span>
-                              )}
-                              {candidate.donorCount > 0 && (
-                                <span className="flex items-center gap-0.5 text-green-600" title="Donors">
-                                  <DollarSign className="h-3 w-3" />
-                                  {candidate.donorCount}
-                                </span>
-                              )}
-                              {syncStatus === 'partial' && (
-                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-amber-600 border-amber-300">
-                                  Partial
-                                </Badge>
-                              )}
-                              {syncStatus === 'never' && hasFecId && (
-                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-muted-foreground border-muted">
-                                  Never
-                                </Badge>
-                              )}
-                              {syncStatus === 'complete' && (
-                                <CheckCircle2 className="h-3 w-3 text-green-500" />
-                              )}
-                              {candidate.voteCount === 0 && candidate.donorCount === 0 && !hasFecId && (
-                                <span className="text-muted-foreground/50">—</span>
-                              )}
-                            </div>
+                            <CandidateHealthBadge
+                              hasFecId={hasFecId}
+                              hasCommittee={hasCommittee}
+                              syncStatus={syncStatus}
+                              financeStatus={getFinanceBadgeStatus() || 'none'}
+                              hasOverride={hasOverride}
+                            />
                           </TableCell>
+                          {/* Sync Status Badge */}
+                          <TableCell>
+                            <SyncStatusBadge
+                              status={syncStatus}
+                              lastSyncDate={candidate.lastDonorSync}
+                              reconciliationCheckedAt={candidate.reconciliationCheckedAt}
+                              hasFecId={hasFecId}
+                            />
+                          </TableCell>
+                          {/* Finance Status Badge */}
                           <TableCell>
                             <Popover>
                               <PopoverTrigger asChild>
-                                <button className="space-y-0.5 text-xs text-left hover:bg-muted/50 p-1 -m-1 rounded cursor-pointer">
-                                  {financeStatus.hasData ? (
-                                    <>
-                                      <div className="flex items-center justify-between gap-2">
-                                        <span className="text-muted-foreground">Total</span>
-                                        <span className="font-semibold">{formatCurrency(financeStatus.fecTotalReceipts)}</span>
-                                      </div>
-                                      <div className="flex items-center justify-between gap-2">
-                                        <span className="text-muted-foreground">Itemized</span>
-                                        <span>{formatCurrency(financeStatus.fecItemized)}</span>
-                                      </div>
-                                      {financeStatus.otherReceipts > 0 && (
-                                        <div className="flex items-center justify-between gap-2">
-                                          <span className="text-muted-foreground">Other</span>
-                                          <span>{formatCurrency(financeStatus.otherReceipts)}</span>
-                                        </div>
-                                      )}
-                                      <div className={cn(
-                                        "flex items-center gap-1 mt-0.5",
-                                        financeStatus.isBalanced ? "text-agree" : "text-amber-600"
-                                      )}>
-                                        {financeStatus.isBalanced ? (
-                                          <CheckCircle2 className="h-3 w-3" />
-                                        ) : (
-                                          <AlertTriangle className="h-3 w-3" />
-                                        )}
-                                        <span className="text-[10px]">I+U+O=T</span>
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <span className="text-muted-foreground">—</span>
-                                  )}
+                                <button className="hover:opacity-80 transition-opacity">
+                                  <FinanceStatusBadge
+                                    status={getFinanceBadgeStatus()}
+                                    fecTotalReceipts={financeStatus.fecTotalReceipts}
+                                    localItemized={localItemized}
+                                    reconciliationCheckedAt={candidate.reconciliationCheckedAt}
+                                  />
                                 </button>
                               </PopoverTrigger>
                               <PopoverContent className="w-72 p-3" align="start">
