@@ -18,8 +18,6 @@ interface CommitteeResult {
 
 // Retry fetch with exponential backoff for rate limits
 async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
-  let lastError: Error | null = null;
-  
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const response = await fetch(url);
     
@@ -65,120 +63,164 @@ serve(async (req) => {
       );
     }
 
-    const { candidateId, fecCandidateId } = body || {};
+    const { candidateId, fecCandidateId, fetchAllFecIds = false } = body || {};
 
-    if (!candidateId || !fecCandidateId) {
+    if (!candidateId) {
       return new Response(
-        JSON.stringify({ error: 'candidateId and fecCandidateId are required' }),
+        JSON.stringify({ error: 'candidateId is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('[FEC-COMMITTEES] Fetching committees for:', { candidateId, fecCandidateId });
+    // Determine which FEC IDs to fetch committees for
+    let fecIdsToFetch: Array<{ fecCandidateId: string; office: string; isPrimary: boolean }> = [];
 
-    // Fetch committees from FEC API with retry logic
-    const url = `https://api.open.fec.gov/v1/candidate/${fecCandidateId}/committees/?api_key=${fecApiKey}&designation=P&designation=A&per_page=50`;
-    
-    let response: Response;
-    try {
-      response = await fetchWithRetry(url);
-    } catch (err) {
-      console.error('[FEC-COMMITTEES] Failed after retries:', err);
-      return new Response(
-        JSON.stringify({ error: 'FEC API rate limited - please try again later', retryable: true }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error('[FEC-COMMITTEES] FEC API error:', response.status, errorBody);
-      return new Response(
-        JSON.stringify({ error: `FEC API returned ${response.status}`, details: errorBody }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    if (fetchAllFecIds) {
+      // Fetch all FEC IDs from the candidate_fec_ids table
+      const { data: fecIdRecords, error: fecIdError } = await supabase
+        .from('candidate_fec_ids')
+        .select('fec_candidate_id, office, is_primary')
+        .eq('candidate_id', candidateId);
 
-    let data;
-    try {
-      data = await response.json();
-    } catch {
-      return new Response(
-        JSON.stringify({ error: 'Failed to parse FEC API response' }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+      if (fecIdError) {
+        console.error('[FEC-COMMITTEES] Error fetching FEC IDs:', fecIdError);
+      }
 
-    const committees: CommitteeResult[] = data?.results || [];
-    
-    console.log('[FEC-COMMITTEES] Found', committees.length, 'committees');
-
-    if (committees.length === 0) {
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          committees: [], 
-          primaryCommitteeId: null,
-          message: 'No committees found for this candidate' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Find primary committee (designation P) or first authorized (A)
-    const primaryCommittee = committees.find(c => c.designation === 'P') || committees[0];
-    
-    // Store all committees in candidate_committees table with full metadata
-    for (const cmte of committees) {
-      const { error: upsertError } = await supabase
-        .from('candidate_committees')
-        .upsert({
-          candidate_id: candidateId,
-          fec_committee_id: cmte.committee_id,
-          name: cmte.name,
-          designation: cmte.designation,
-          designation_full: cmte.designation_full,
-          role: cmte.designation === 'P' ? 'principal' : 'authorized',
-          active: cmte.designation === 'P' || cmte.designation === 'A', // Only P and A active by default
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'candidate_id,fec_committee_id'
-        });
-
-      if (upsertError) {
-        console.warn('[FEC-COMMITTEES] Failed to upsert committee:', cmte.committee_id, upsertError);
+      if (fecIdRecords && fecIdRecords.length > 0) {
+        fecIdsToFetch = fecIdRecords.map(r => ({
+          fecCandidateId: r.fec_candidate_id,
+          office: r.office,
+          isPrimary: r.is_primary
+        }));
+        console.log('[FEC-COMMITTEES] Found', fecIdsToFetch.length, 'FEC IDs for candidate:', candidateId);
       }
     }
 
-    // Update candidate with primary committee ID
-    const { error: updateError } = await supabase
-      .from('candidates')
-      .update({ 
-        fec_committee_id: primaryCommittee.committee_id,
-        last_updated: new Date().toISOString()
-      })
-      .eq('id', candidateId);
-
-    if (updateError) {
-      console.error('[FEC-COMMITTEES] Failed to update candidate:', updateError);
+    // If no FEC IDs found in the table or fetchAllFecIds is false, use the provided fecCandidateId
+    if (fecIdsToFetch.length === 0) {
+      if (!fecCandidateId) {
+        return new Response(
+          JSON.stringify({ error: 'fecCandidateId is required when fetchAllFecIds is false or no FEC IDs exist' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      fecIdsToFetch = [{ fecCandidateId, office: 'Unknown', isPrimary: true }];
     }
 
-    console.log('[FEC-COMMITTEES] Linked primary committee:', primaryCommittee.committee_id);
+    console.log('[FEC-COMMITTEES] Fetching committees for:', { candidateId, fecIds: fecIdsToFetch.map(f => f.fecCandidateId) });
+
+    const allCommittees: Array<{
+      id: string;
+      name: string;
+      designation: string;
+      designationFull: string;
+      isPrimary: boolean;
+      active: boolean;
+      sourceFecCandidateId: string;
+      sourceOffice: string;
+    }> = [];
+    
+    let overallPrimaryCommittee: { id: string; name: string } | null = null;
+
+    // Fetch committees for each FEC candidate ID
+    for (const fecIdRecord of fecIdsToFetch) {
+      const url = `https://api.open.fec.gov/v1/candidate/${fecIdRecord.fecCandidateId}/committees/?api_key=${fecApiKey}&designation=P&designation=A&per_page=50`;
+      
+      let response: Response;
+      try {
+        response = await fetchWithRetry(url);
+      } catch (err) {
+        console.error('[FEC-COMMITTEES] Failed after retries for', fecIdRecord.fecCandidateId, ':', err);
+        continue; // Skip this FEC ID but continue with others
+      }
+      
+      if (!response.ok) {
+        const errorBody = await response.text();
+        console.error('[FEC-COMMITTEES] FEC API error for', fecIdRecord.fecCandidateId, ':', response.status, errorBody);
+        continue;
+      }
+
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        console.error('[FEC-COMMITTEES] Failed to parse response for', fecIdRecord.fecCandidateId);
+        continue;
+      }
+
+      const committees: CommitteeResult[] = data?.results || [];
+      console.log('[FEC-COMMITTEES] Found', committees.length, 'committees for', fecIdRecord.fecCandidateId);
+
+      // Find primary committee for this FEC ID
+      const primaryCommittee = committees.find(c => c.designation === 'P') || committees[0];
+      
+      // Track overall primary (from the primary FEC ID)
+      if (fecIdRecord.isPrimary && primaryCommittee && !overallPrimaryCommittee) {
+        overallPrimaryCommittee = { id: primaryCommittee.committee_id, name: primaryCommittee.name };
+      }
+
+      // Store all committees with source tracking
+      for (const cmte of committees) {
+        const isPrimary = cmte.committee_id === primaryCommittee?.committee_id && fecIdRecord.isPrimary;
+        
+        const { error: upsertError } = await supabase
+          .from('candidate_committees')
+          .upsert({
+            candidate_id: candidateId,
+            fec_committee_id: cmte.committee_id,
+            name: cmte.name,
+            designation: cmte.designation,
+            designation_full: cmte.designation_full,
+            role: cmte.designation === 'P' ? 'principal' : 'authorized',
+            active: cmte.designation === 'P' || cmte.designation === 'A',
+            source_fec_candidate_id: fecIdRecord.fecCandidateId,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'candidate_id,fec_committee_id'
+          });
+
+        if (upsertError) {
+          console.warn('[FEC-COMMITTEES] Failed to upsert committee:', cmte.committee_id, upsertError);
+        }
+
+        allCommittees.push({
+          id: cmte.committee_id,
+          name: cmte.name,
+          designation: cmte.designation,
+          designationFull: cmte.designation_full,
+          isPrimary,
+          active: cmte.designation === 'P' || cmte.designation === 'A',
+          sourceFecCandidateId: fecIdRecord.fecCandidateId,
+          sourceOffice: fecIdRecord.office
+        });
+      }
+    }
+
+    // Update candidate with primary committee ID (from primary FEC ID)
+    if (overallPrimaryCommittee) {
+      const { error: updateError } = await supabase
+        .from('candidates')
+        .update({ 
+          fec_committee_id: overallPrimaryCommittee.id,
+          last_updated: new Date().toISOString()
+        })
+        .eq('id', candidateId);
+
+      if (updateError) {
+        console.error('[FEC-COMMITTEES] Failed to update candidate:', updateError);
+      }
+    }
+
+    console.log('[FEC-COMMITTEES] Total committees linked:', allCommittees.length, 'Primary:', overallPrimaryCommittee?.id);
 
     return new Response(
       JSON.stringify({
         success: true,
-        committees: committees.map(c => ({
-          id: c.committee_id,
-          name: c.name,
-          designation: c.designation,
-          designationFull: c.designation_full,
-          isPrimary: c.committee_id === primaryCommittee.committee_id,
-          active: c.designation === 'P' || c.designation === 'A'
-        })),
-        primaryCommitteeId: primaryCommittee.committee_id,
-        primaryCommitteeName: primaryCommittee.name,
-        message: `Linked ${committees.length} committee(s), primary: ${primaryCommittee.committee_id}`
+        committees: allCommittees,
+        primaryCommitteeId: overallPrimaryCommittee?.id || null,
+        primaryCommitteeName: overallPrimaryCommittee?.name,
+        fecIdsProcessed: fecIdsToFetch.length,
+        message: `Linked ${allCommittees.length} committee(s) from ${fecIdsToFetch.length} FEC ID(s)`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

@@ -81,6 +81,7 @@ export type Database = {
           local_itemized_total: number | null
           name: string | null
           role: string
+          source_fec_candidate_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -102,6 +103,7 @@ export type Database = {
           local_itemized_total?: number | null
           name?: string | null
           role?: string
+          source_fec_candidate_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -123,6 +125,52 @@ export type Database = {
           local_itemized_total?: number | null
           name?: string | null
           role?: string
+          source_fec_candidate_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      candidate_fec_ids: {
+        Row: {
+          candidate_id: string
+          created_at: string | null
+          cycle: string | null
+          district: string | null
+          fec_candidate_id: string
+          id: string
+          is_primary: boolean | null
+          match_method: string | null
+          match_score: number | null
+          office: string
+          state: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string | null
+          cycle?: string | null
+          district?: string | null
+          fec_candidate_id: string
+          id?: string
+          is_primary?: boolean | null
+          match_method?: string | null
+          match_score?: number | null
+          office: string
+          state?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string | null
+          cycle?: string | null
+          district?: string | null
+          fec_candidate_id?: string
+          id?: string
+          is_primary?: boolean | null
+          match_method?: string | null
+          match_score?: number | null
+          office?: string
+          state?: string | null
           updated_at?: string | null
         }
         Relationships: []
