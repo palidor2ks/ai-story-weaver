@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Check, X, Search, Users, DollarSign, Link2, Layers } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Search, Users, DollarSign, Link2, Layers, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,9 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
@@ -95,6 +98,56 @@ export function DonorAliasesPanel() {
     formData.alias_pattern,
     formData.donor_types
   );
+
+  // Display name refresh state
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshProgress, setRefreshProgress] = useState<{
+    processed: number;
+    remaining: number;
+    total: number;
+  } | null>(null);
+
+  const handleRefreshDisplayNames = async () => {
+    setIsRefreshing(true);
+    let totalProcessed = 0;
+    let remaining = 1; // Start with non-zero to enter loop
+
+    try {
+      while (remaining > 0) {
+        const { data, error } = await supabase.functions.invoke('refresh-donor-display-names');
+        
+        if (error) {
+          console.error('Error refreshing display names:', error);
+          toast.error('Failed to refresh display names');
+          break;
+        }
+
+        if (!data.success) {
+          toast.error(data.error || 'Failed to refresh display names');
+          break;
+        }
+
+        totalProcessed += data.processed;
+        remaining = data.remaining;
+        
+        setRefreshProgress({
+          processed: totalProcessed,
+          remaining: remaining,
+          total: data.totalNull + totalProcessed - data.processed
+        });
+
+        if (remaining === 0) {
+          toast.success(`Completed! Updated ${totalProcessed} donor display names.`);
+        }
+      }
+    } catch (err) {
+      console.error('Error in refresh loop:', err);
+      toast.error('An error occurred during refresh');
+    } finally {
+      setIsRefreshing(false);
+      setRefreshProgress(null);
+    }
+  };
 
   const filteredAliases = aliases?.filter(
     (a) =>
@@ -216,6 +269,51 @@ export function DonorAliasesPanel() {
 
         {/* Aliases Tab */}
         <TabsContent value="aliases" className="space-y-4">
+          {/* Refresh Display Names Card */}
+          <Card className="bg-muted/50">
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="font-medium">Refresh Display Names</p>
+                  <p className="text-sm text-muted-foreground">
+                    Apply alias patterns to all donor display names. Required after adding new aliases.
+                  </p>
+                </div>
+                <Button 
+                  onClick={handleRefreshDisplayNames} 
+                  disabled={isRefreshing}
+                  variant="secondary"
+                >
+                  {isRefreshing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Refreshing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh Display Names
+                    </>
+                  )}
+                </Button>
+              </div>
+              {refreshProgress && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Progress: {refreshProgress.processed.toLocaleString()} processed</span>
+                    <span>{refreshProgress.remaining.toLocaleString()} remaining</span>
+                  </div>
+                  <Progress 
+                    value={refreshProgress.total > 0 
+                      ? (refreshProgress.processed / refreshProgress.total) * 100 
+                      : 0
+                    } 
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="flex items-center justify-between gap-4">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
