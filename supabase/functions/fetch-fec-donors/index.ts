@@ -476,44 +476,112 @@ serve(async (req) => {
     }
 
     // Look up committees from FEC API for ALL FEC candidate IDs
+    // (best-effort; may be rate limited)
+    const committeeLookupDiagnostics: Array<{ fecId: string; status?: number; resultsCount?: number; error?: string }> = [];
+
     if (!fecCommitteeId && allFecIds.length > 0) {
       for (const fecId of allFecIds) {
         try {
-          const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&designation=P,A&per_page=50`;
+          // NOTE: include cycle and repeat designation params (more compatible with FEC API)
+          const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&cycle=${cycle}&designation=P&designation=A&per_page=50`;
           const committeeResponse = await fetchWithRetry(committeeUrl);
 
-          if (committeeResponse?.ok) {
-            let committeeData;
-            try {
-              committeeData = await committeeResponse.json();
-            } catch {
-              console.error('[FEC-DONORS] Failed to parse committee response for', fecId);
-              committeeData = {};
-            }
-            const results = committeeData?.results || [];
-            results.forEach((cmte: { committee_id: string; name?: string; designation?: string }) => {
-              const role = cmte.designation === 'P' ? 'principal' : 'authorized';
-              const syncInfo = committeeSyncInfo.get(cmte.committee_id);
-              pushCommittee(cmte.committee_id, cmte.name || '', role, syncInfo);
-            });
+          if (!committeeResponse?.ok) {
+            committeeLookupDiagnostics.push({ fecId, status: committeeResponse?.status });
+            console.warn('[FEC-DONORS] Committee lookup non-OK for', fecId, 'status:', committeeResponse?.status);
+            continue;
+          }
 
-            const primary = results.find((cmte: { designation?: string }) => cmte.designation === 'P');
-            if (primary?.committee_id && !candidateData?.fec_committee_id) {
-              await supabase
-                .from('candidates')
-                .update({ fec_committee_id: primary.committee_id })
-                .eq('id', candidateId);
-            }
+          let committeeData;
+          try {
+            committeeData = await committeeResponse.json();
+          } catch {
+            committeeLookupDiagnostics.push({ fecId, status: committeeResponse.status, error: 'invalid_json' });
+            console.error('[FEC-DONORS] Failed to parse committee response for', fecId);
+            continue;
+          }
+
+          const results = committeeData?.results || [];
+          committeeLookupDiagnostics.push({ fecId, status: committeeResponse.status, resultsCount: results.length });
+
+          results.forEach((cmte: { committee_id: string; name?: string; designation?: string }) => {
+            const role = cmte.designation === 'P' ? 'principal' : 'authorized';
+            const syncInfo = committeeSyncInfo.get(cmte.committee_id);
+            pushCommittee(cmte.committee_id, cmte.name || '', role, syncInfo);
+          });
+
+          const primary = results.find((cmte: { designation?: string }) => cmte.designation === 'P');
+          if (primary?.committee_id && !candidateData?.fec_committee_id) {
+            await supabase
+              .from('candidates')
+              .update({ fec_committee_id: primary.committee_id })
+              .eq('id', candidateId);
           }
         } catch (err) {
+          committeeLookupDiagnostics.push({ fecId, error: err instanceof Error ? err.message : 'unknown_error' });
           console.error('[FEC-DONORS] Committee lookup failed for', fecId, ':', err);
         }
       }
     }
 
+    // Fallback: if we still have no committees, try the dedicated committee-linking function
+    // (this also persists candidate_committees + primary committee for future runs)
+    if (committees.length === 0 && allFecIds.length > 0) {
+      console.warn('[FEC-DONORS] No committees discovered; invoking fetch-fec-committees fallback...');
+
+      const { error: linkErr, data: linkData } = await supabase.functions.invoke('fetch-fec-committees', {
+        body: {
+          candidateId,
+          fecCandidateId: allFecIds[0],
+          fetchAllFecIds: true,
+        },
+      });
+
+      if (linkErr) {
+        console.warn('[FEC-DONORS] fetch-fec-committees fallback invoke error:', linkErr);
+      } else if (linkData?.error) {
+        console.warn('[FEC-DONORS] fetch-fec-committees fallback returned error:', linkData.error);
+      }
+
+      const { data: refreshedCandidate } = await supabase
+        .from('candidates')
+        .select('fec_committee_id')
+        .eq('id', candidateId)
+        .maybeSingle();
+
+      if (refreshedCandidate?.fec_committee_id) {
+        const syncInfo = committeeSyncInfo.get(refreshedCandidate.fec_committee_id);
+        pushCommittee(refreshedCandidate.fec_committee_id, '', 'stored', syncInfo);
+      }
+
+      const { data: refreshedCommittees } = await supabase
+        .from('candidate_committees')
+        .select('fec_committee_id, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
+        .eq('candidate_id', candidateId);
+
+      (refreshedCommittees || []).forEach(c => {
+        pushCommittee(c.fec_committee_id, '', 'linked', {
+          lastSyncDate: c.last_sync_date,
+          lastContributionDate: c.last_contribution_date,
+          lastIndex: c.last_index,
+          lastSyncCompletedAt: c.last_sync_completed_at,
+        });
+      });
+    }
+
     if (committees.length === 0) {
+      console.error('[FEC-DONORS] No committees available after lookup', {
+        candidateId,
+        allFecIds,
+        committeeLookupDiagnostics,
+      });
+
       return new Response(
-        JSON.stringify({ error: 'No FEC committee ID available. Please link FEC ID first.' }),
+        JSON.stringify({
+          error: `No FEC committees found for candidate IDs: ${allFecIds.join(', ') || '(none)'}. Try verifying the FEC ID and retry in a minute (rate limits can also cause this).`,
+          candidateId,
+          fecCandidateIds: allFecIds,
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
