@@ -288,6 +288,35 @@ export function AnswerCoveragePanel() {
     }
   };
 
+  const handleBatchLinkCommittees = async () => {
+    try {
+      const toProcess = noCommitteeCandidates.slice(0, 50);
+      if (toProcess.length === 0) {
+        toast.info('All candidates with FEC IDs already have committees linked');
+        return;
+      }
+      
+      let success = 0;
+      let failed = 0;
+      
+      for (const candidate of toProcess) {
+        try {
+          await fetchFECCommittees(candidate.id, candidate.fecCandidateId!);
+          success++;
+        } catch (err) {
+          console.error(`[Admin] Failed to link committees for ${candidate.name}:`, err);
+          failed++;
+        }
+      }
+      
+      toast.success(`Linked committees for ${success} candidates (${failed} failed)`);
+      refetchCandidates();
+    } catch (err) {
+      console.error('[Admin] Batch link committees failed:', err);
+      toast.error('Failed to link committees');
+    }
+  };
+
   const handleBatchFetchDonors = async () => {
     try {
       const toProcess = candidatesWithFecId.slice(0, 50).map(c => ({
@@ -482,6 +511,28 @@ export function AnswerCoveragePanel() {
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction onClick={handleBatchLinkFECIds}>Link FEC IDs</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <Building2 className="h-4 w-4 mr-2" />
+                      Link Committees ({noCommitteeCandidates.length})
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Bulk Link FEC Committees?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will fetch and link FEC committees for {noCommitteeCandidates.length} candidate(s) with FEC IDs but no committees yet.
+                        Up to 50 candidates will be processed.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleBatchLinkCommittees}>Link Committees</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
