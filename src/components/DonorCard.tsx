@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building2, User as UserIcon, Users, TrendingUp } from 'lucide-react';
+import { Building2, User as UserIcon, Users, TrendingUp, Layers } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface DonorCardProps {
   id: string;
@@ -21,12 +22,7 @@ const formatAmount = (amount: number) => {
   if (amount >= 1000) {
     return `$${(amount / 1000).toFixed(0)}K`;
   }
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
+  return `$${amount}`;
 };
 
 const getTypeIcon = (type: string) => {
@@ -45,11 +41,11 @@ const getTypeIcon = (type: string) => {
 const getTypeBadgeStyle = (type: string) => {
   switch (type) {
     case 'Individual':
-      return 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400';
+      return 'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-400';
     case 'PAC':
-      return 'bg-purple-500/10 text-purple-600 border-purple-500/20 dark:bg-purple-500/20 dark:text-purple-400';
+      return 'bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400';
     case 'Organization':
-      return 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-400';
+      return 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-400';
     default:
       return 'bg-muted text-muted-foreground';
   }
@@ -65,25 +61,40 @@ export const DonorCard = ({
   nameVariations,
   recipientCount,
 }: DonorCardProps) => {
-  // For consolidated donors with multiple variations, link to filtered search
-  const linkPath = isConsolidated && nameVariations && nameVariations.length > 1
-    ? `/donors?search=${encodeURIComponent(name)}&consolidated=false`
-    : `/donor/${id}`;
-
+  const hasMultipleVariations = nameVariations && nameVariations.length > 1;
+  
   return (
-    <Link to={linkPath} className="block group">
+    <Link to={`/donor/${id}`} className="block group">
       <Card className="h-full transition-all duration-200 hover:shadow-lg hover:border-primary/30 group-hover:scale-[1.01]">
         <CardContent className="p-5">
           {/* Header with type icon and badge */}
-          <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-start justify-between mb-4">
             <div className={`p-2.5 rounded-lg ${getTypeBadgeStyle(type)}`}>
               {getTypeIcon(type)}
             </div>
             <div className="flex items-center gap-2">
-              {isConsolidated && nameVariations && nameVariations.length > 1 && (
-                <Badge variant="secondary" className="text-xs">
-                  {nameVariations.length} merged
-                </Badge>
+              {hasMultipleVariations && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="secondary" className="text-xs gap-1">
+                        <Layers className="h-3 w-3" />
+                        {nameVariations.length} merged
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p className="font-medium mb-1">Merged donor names:</p>
+                      <ul className="text-xs space-y-0.5">
+                        {nameVariations.slice(0, 5).map((variation, i) => (
+                          <li key={i} className="text-muted-foreground">• {variation}</li>
+                        ))}
+                        {nameVariations.length > 5 && (
+                          <li className="text-muted-foreground">... and {nameVariations.length - 5} more</li>
+                        )}
+                      </ul>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
               <Badge variant="outline" className={`shrink-0 ${getTypeBadgeStyle(type)}`}>
                 {type}
@@ -92,18 +103,18 @@ export const DonorCard = ({
           </div>
 
           {/* Donor name - clickable */}
-          <h3 className="font-semibold text-lg text-foreground mb-4 line-clamp-2 group-hover:text-primary transition-colors">
+          <h3 className="font-semibold text-foreground mb-4 line-clamp-2 group-hover:text-primary transition-colors">
             {name}
           </h3>
 
-          {/* Stats row */}
+          {/* Stats */}
           <div className="flex items-end justify-between gap-4">
             <div className="space-y-1">
               <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
-                {isConsolidated && recipientCount ? 'Recipients' : 'Donations'}
+                {recipientCount ? 'Recipients' : 'Donations'}
               </p>
               <p className="text-xl font-bold text-foreground">
-                {isConsolidated && recipientCount 
+                {recipientCount 
                   ? recipientCount.toLocaleString()
                   : transactionCount.toLocaleString()
                 }
