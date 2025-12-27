@@ -13,6 +13,7 @@ import {
   Calendar, 
   DollarSign, 
   Hash, 
+  Layers,
   Loader2, 
   MapPin, 
   TrendingUp, 
@@ -125,16 +126,75 @@ const DonorProfile = () => {
     enabled: !!id,
   });
 
-  // Fetch all donor records with the same name (aggregated by candidate/cycle)
-  const { data: donorRecords = [], isLoading: recordsLoading } = useQuery({
-    queryKey: ['donor-records', donor?.name],
+  // Check if this donor has an alias (canonical name)
+  const { data: aliasInfo } = useQuery({
+    queryKey: ['donor-alias-info', donor?.name, donor?.type],
     queryFn: async () => {
-      if (!donor?.name) return [] as DonorRecord[];
+      if (!donor?.name || !donor?.type) return null;
+      
+      const { data, error } = await supabase
+        .from('donor_aliases')
+        .select('*')
+        .eq('donor_type', donor.type)
+        .eq('is_active', true);
+      
+      if (error) throw error;
+      
+      // Find matching alias using ILIKE pattern matching (client-side simulation)
+      const matchingAlias = (data || []).find(alias => {
+        const pattern = alias.alias_pattern.replace(/%/g, '.*').replace(/_/g, '.');
+        const regex = new RegExp(`^${pattern}$`, 'i');
+        return regex.test(donor.name);
+      });
+      
+      return matchingAlias || null;
+    },
+    enabled: !!donor?.name && !!donor?.type,
+  });
+
+  // Get all name variations if there's an alias
+  const { data: nameVariations = [] } = useQuery({
+    queryKey: ['donor-name-variations', aliasInfo?.alias_pattern, donor?.type],
+    queryFn: async () => {
+      if (!aliasInfo?.alias_pattern || !donor?.type) return [];
+      
       const { data, error } = await supabase
         .from('donors')
+        .select('name')
+        .eq('type', donor.type)
+        .ilike('name', aliasInfo.alias_pattern);
+      
+      if (error) throw error;
+      
+      // Get unique names
+      const uniqueNames = [...new Set((data || []).map(d => d.name))];
+      return uniqueNames.sort();
+    },
+    enabled: !!aliasInfo?.alias_pattern && !!donor?.type,
+  });
+
+  // The display name is the canonical name from alias, or the original name
+  const displayName = aliasInfo?.canonical_name || donor?.name || '';
+
+  // Fetch all donor records with the same name OR same alias pattern
+  const { data: donorRecords = [], isLoading: recordsLoading } = useQuery({
+    queryKey: ['donor-records', displayName, aliasInfo?.alias_pattern, donor?.type],
+    queryFn: async () => {
+      if (!donor?.name) return [] as DonorRecord[];
+      
+      let query = supabase
+        .from('donors')
         .select(`*, candidates (id, name, party, office, state, district, image_url)`)
-        .eq('name', donor.name)
         .order('amount', { ascending: false });
+      
+      // If there's an alias, get all donors matching the pattern
+      if (aliasInfo?.alias_pattern) {
+        query = query.ilike('name', aliasInfo.alias_pattern);
+      } else {
+        query = query.eq('name', donor.name);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return (data || []).map((row) => ({
         ...row,
@@ -146,15 +206,24 @@ const DonorProfile = () => {
 
   // Fetch individual contributions for detailed history
   const { data: contributions = [], isLoading: contributionsLoading } = useQuery({
-    queryKey: ['donor-contributions', donor?.name],
+    queryKey: ['donor-contributions', displayName, aliasInfo?.alias_pattern, donor?.type],
     queryFn: async () => {
       if (!donor?.name) return [] as ContributionRecord[];
-      const { data, error } = await supabase
+      
+      let query = supabase
         .from('contributions')
         .select(`*, candidates (id, name, party, office, state)`)
-        .ilike('contributor_name', donor.name)
         .order('receipt_date', { ascending: false })
         .limit(500);
+      
+      // If there's an alias, get all contributions matching the pattern
+      if (aliasInfo?.alias_pattern) {
+        query = query.ilike('contributor_name', aliasInfo.alias_pattern);
+      } else {
+        query = query.ilike('contributor_name', donor.name);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return (data || []).map((row) => ({
         ...row,
@@ -238,10 +307,16 @@ const DonorProfile = () => {
               </div>
               <div>
                 <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">
-                  {donor.name}
+                  {displayName}
                 </h1>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <Badge variant="outline">{donor.type}</Badge>
+                  {nameVariations.length > 1 && (
+                    <Badge variant="secondary" className="gap-1">
+                      <Layers className="h-3 w-3" />
+                      {nameVariations.length} name variations
+                    </Badge>
+                  )}
                   {donor.contributor_city && donor.contributor_state && (
                     <span className="flex items-center gap-1 text-sm text-muted-foreground">
                       <MapPin className="w-3.5 h-3.5" />
@@ -253,6 +328,25 @@ const DonorProfile = () => {
                   <p className="text-sm text-muted-foreground">
                     {donor.occupation}{donor.occupation && donor.employer && ' at '}{donor.employer}
                   </p>
+                )}
+                
+                {/* Show name variations if there are multiple */}
+                {nameVariations.length > 1 && (
+                  <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Name variations included:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {nameVariations.slice(0, 8).map((name, i) => (
+                        <Badge key={i} variant="outline" className="text-xs font-normal">
+                          {name}
+                        </Badge>
+                      ))}
+                      {nameVariations.length > 8 && (
+                        <Badge variant="outline" className="text-xs font-normal">
+                          +{nameVariations.length - 8} more
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

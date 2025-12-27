@@ -16,7 +16,6 @@ export interface DonorFilters {
   includeConduitOrgs: boolean;
   candidateId: string | null;
   party: string;
-  consolidated: boolean;
 }
 
 export interface DonorWithCandidate {
@@ -67,7 +66,6 @@ const DEFAULT_FILTERS: DonorFilters = {
   includeConduitOrgs: true,
   candidateId: null,
   party: 'all',
-  consolidated: false,
 };
 
 // Fetch available filter options
@@ -98,6 +96,7 @@ export const useAvailableDonorFilters = () => {
   });
 };
 
+// Always use consolidated view - aliases are always applied
 export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
   const mergedFilters = { ...DEFAULT_FILTERS, ...filters };
   
@@ -109,45 +108,17 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
     cycle,
     type,
     search,
-    state,
     minAmount,
-    maxAmount,
-    includeTransfers,
-    includeConduitOrgs,
-    candidateId,
-    party,
-    consolidated,
   } = mergedFilters;
 
   return useQuery({
     queryKey: ['donors-paginated', mergedFilters],
     queryFn: async () => {
-      // Use consolidated view when enabled
-      if (consolidated) {
-        return fetchConsolidatedDonors(mergedFilters);
-      }
-      
-      // Build the query for regular donors
+      // Always use consolidated view - aliases are applied automatically
       let query = supabase
-        .from('donors')
-        .select(`
-          id,
-          name,
-          amount,
-          type,
-          cycle,
-          candidate_id,
-          contributor_state,
-          contributor_city,
-          employer,
-          occupation,
-          transaction_count,
-          is_transfer,
-          is_conduit_org,
-          candidates!inner(name, party)
-        `, { count: 'exact' });
+        .from('donor_consolidated')
+        .select('*', { count: 'exact' });
 
-      // Apply filters
       if (cycle && cycle !== 'all') {
         query = query.eq('cycle', cycle);
       }
@@ -156,39 +127,19 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
         query = query.eq('type', type as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
       }
 
-      if (state && state !== 'all') {
-        query = query.eq('contributor_state', state);
+      if (search) {
+        query = query.ilike('display_name', `%${search}%`);
       }
 
       if (minAmount !== null) {
-        query = query.gte('amount', minAmount);
-      }
-
-      if (maxAmount !== null) {
-        query = query.lte('amount', maxAmount);
-      }
-
-      if (!includeTransfers) {
-        query = query.or('is_transfer.is.null,is_transfer.eq.false');
-      }
-
-      if (!includeConduitOrgs) {
-        query = query.or('is_conduit_org.is.null,is_conduit_org.eq.false');
-      }
-
-      if (candidateId) {
-        query = query.eq('candidate_id', candidateId);
-      }
-
-      if (search) {
-        query = query.ilike('name', `%${search}%`);
+        query = query.gte('total_amount', minAmount);
       }
 
       // Apply sorting
       if (sortBy === 'amount') {
-        query = query.order('amount', { ascending: sortOrder === 'asc' });
+        query = query.order('total_amount', { ascending: sortOrder === 'asc' });
       } else {
-        query = query.order('name', { ascending: sortOrder === 'asc' });
+        query = query.order('display_name', { ascending: sortOrder === 'asc' });
       }
 
       // Apply pagination
@@ -200,30 +151,23 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
 
       if (error) throw error;
 
-      // Apply party filter client-side
-      let filteredData = data || [];
-      if (party && party !== 'all') {
-        filteredData = filteredData.filter(d => {
-          const cand = d.candidates as { name: string; party: string } | null;
-          return cand?.party === party;
-        });
-      }
-
-      const donors: DonorWithCandidate[] = filteredData.map(d => ({
-        id: d.id,
-        name: d.name,
-        amount: d.amount,
+      const donors: DonorWithCandidate[] = (data || []).map((d: any) => ({
+        id: d.primary_id,
+        name: d.display_name,
+        amount: d.total_amount,
         type: d.type,
         cycle: d.cycle,
-        candidate_id: d.candidate_id,
-        contributor_state: d.contributor_state,
-        contributor_city: d.contributor_city,
-        employer: d.employer,
-        occupation: d.occupation,
-        transaction_count: d.transaction_count,
-        is_transfer: d.is_transfer,
-        is_conduit_org: d.is_conduit_org,
-        candidate: d.candidates as { name: string; party: string } | undefined,
+        candidate_id: '',
+        contributor_state: null,
+        contributor_city: null,
+        employer: null,
+        occupation: null,
+        transaction_count: d.total_transactions,
+        is_transfer: null,
+        is_conduit_org: null,
+        is_consolidated: d.is_consolidated,
+        name_variations: d.name_variations,
+        recipient_count: d.recipient_count,
       }));
 
       return {
@@ -235,67 +179,70 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
   });
 };
 
-// Fetch from consolidated view
-async function fetchConsolidatedDonors(filters: DonorFilters) {
-  const { page, pageSize, sortBy, sortOrder, cycle, type, search, minAmount } = filters;
+// Hook to search donors by name for admin alias assignment
+export const useSearchDonors = (searchTerm: string, donorType?: string) => {
+  return useQuery({
+    queryKey: ['donor-search', searchTerm, donorType],
+    queryFn: async () => {
+      if (!searchTerm || searchTerm.length < 2) return [];
+      
+      let query = supabase
+        .from('donors')
+        .select('id, name, type, amount, cycle, candidate_id')
+        .ilike('name', `%${searchTerm}%`)
+        .order('amount', { ascending: false })
+        .limit(50);
+      
+      if (donorType && donorType !== 'all') {
+        query = query.eq('type', donorType as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      // Group by name to show unique donors
+      const uniqueDonors = new Map<string, { name: string; type: string; totalAmount: number; count: number }>();
+      (data || []).forEach(d => {
+        const key = `${d.name}|${d.type}`;
+        const existing = uniqueDonors.get(key);
+        if (existing) {
+          existing.totalAmount += d.amount;
+          existing.count += 1;
+        } else {
+          uniqueDonors.set(key, { name: d.name, type: d.type, totalAmount: d.amount, count: 1 });
+        }
+      });
+      
+      return Array.from(uniqueDonors.values()).sort((a, b) => b.totalAmount - a.totalAmount);
+    },
+    enabled: searchTerm.length >= 2,
+  });
+};
 
-  let query = supabase
-    .from('donor_consolidated')
-    .select('*', { count: 'exact' });
-
-  if (cycle && cycle !== 'all') {
-    query = query.eq('cycle', cycle);
-  }
-
-  if (type && type !== 'all') {
-    query = query.eq('type', type as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
-  }
-
-  if (search) {
-    query = query.ilike('display_name', `%${search}%`);
-  }
-
-  if (minAmount !== null) {
-    query = query.gte('total_amount', minAmount);
-  }
-
-  // Apply sorting
-  if (sortBy === 'amount') {
-    query = query.order('total_amount', { ascending: sortOrder === 'asc' });
-  } else {
-    query = query.order('display_name', { ascending: sortOrder === 'asc' });
-  }
-
-  // Apply pagination
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-  query = query.range(from, to);
-
-  const { data, error, count } = await query;
-
-  if (error) throw error;
-
-  const donors: DonorWithCandidate[] = (data || []).map((d: any) => ({
-    id: d.primary_id,
-    name: d.display_name,
-    amount: d.total_amount,
-    type: d.type,
-    cycle: d.cycle,
-    candidate_id: '',
-    contributor_state: null,
-    contributor_city: null,
-    employer: null,
-    occupation: null,
-    transaction_count: d.total_transactions,
-    is_transfer: null,
-    is_conduit_org: null,
-    is_consolidated: d.is_consolidated,
-    name_variations: d.name_variations,
-    recipient_count: d.recipient_count,
-  }));
-
-  return {
-    donors,
-    totalCount: count || 0,
-  };
-}
+// Hook to get alias for a specific donor name
+export const useDonorAlias = (donorName: string, donorType: string) => {
+  return useQuery({
+    queryKey: ['donor-alias-for', donorName, donorType],
+    queryFn: async () => {
+      if (!donorName) return null;
+      
+      const { data, error } = await supabase
+        .from('donor_aliases')
+        .select('*')
+        .eq('donor_type', donorType)
+        .eq('is_active', true);
+      
+      if (error) throw error;
+      
+      // Find matching alias using ILIKE pattern matching (client-side simulation)
+      const matchingAlias = (data || []).find(alias => {
+        const pattern = alias.alias_pattern.replace(/%/g, '.*').replace(/_/g, '.');
+        const regex = new RegExp(`^${pattern}$`, 'i');
+        return regex.test(donorName);
+      });
+      
+      return matchingAlias || null;
+    },
+    enabled: !!donorName && !!donorType,
+  });
+};

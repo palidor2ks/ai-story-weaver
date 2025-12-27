@@ -86,7 +86,7 @@ export const Donors = () => {
             Campaign Donors
           </h1>
           <p className="text-muted-foreground">
-            Explore campaign contributions to political candidates.
+            Explore campaign contributions to political candidates. Similar donors are automatically grouped.
           </p>
         </div>
 
