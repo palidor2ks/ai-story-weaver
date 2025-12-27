@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Header } from '@/components/Header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DollarSign, Building2, User as UserIcon, ArrowUpRight, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { DonorFilters } from '@/components/DonorFilters';
+import { DonorCard } from '@/components/DonorCard';
 import { useDonorsPaginated, useAvailableDonorFilters, type DonorFilters as DonorFiltersType } from '@/hooks/useDonorsPaginated';
 
 export const Donors = () => {
@@ -13,10 +12,10 @@ export const Donors = () => {
   
   const [filters, setFilters] = useState<Partial<DonorFiltersType>>({
     page: 1,
-    pageSize: 50,
+    pageSize: 24,
     sortBy: 'amount',
     sortOrder: 'desc',
-    cycle: '', // Will be set once options load
+    cycle: '',
     type: 'all',
     search: '',
     state: 'all',
@@ -28,7 +27,6 @@ export const Donors = () => {
     party: 'all',
   });
 
-  // Set default cycle once options are loaded
   const effectiveCycle = filters.cycle || filterOptions?.cycles[0] || '';
   const effectiveFilters = { ...filters, cycle: effectiveCycle };
 
@@ -36,41 +34,9 @@ export const Donors = () => {
 
   const donors = data?.donors || [];
   const totalCount = data?.totalCount || 0;
-  const pageSize = filters.pageSize || 50;
+  const pageSize = filters.pageSize || 24;
   const currentPage = filters.page || 1;
   const totalPages = Math.ceil(totalCount / pageSize);
-
-  const formatAmount = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'Individual':
-        return <UserIcon className="w-4 h-4" />;
-      case 'PAC':
-      case 'Organization':
-        return <Building2 className="w-4 h-4" />;
-      default:
-        return <DollarSign className="w-4 h-4" />;
-    }
-  };
-
-  const getPartyColor = (party: string) => {
-    switch (party) {
-      case 'Democrat':
-        return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
-      case 'Republican':
-        return 'bg-red-500/10 text-red-600 border-red-500/20';
-      default:
-        return 'bg-muted text-muted-foreground';
-    }
-  };
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -79,7 +45,6 @@ export const Donors = () => {
     }
   };
 
-  // Generate page numbers to display
   const getPageNumbers = () => {
     const pages: (number | 'ellipsis')[] = [];
     const showPages = 5;
@@ -88,16 +53,11 @@ export const Donors = () => {
       for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
       pages.push(1);
-      
       if (currentPage > 3) pages.push('ellipsis');
-      
       const start = Math.max(2, currentPage - 1);
       const end = Math.min(totalPages - 1, currentPage + 1);
-      
       for (let i = start; i <= end; i++) pages.push(i);
-      
       if (currentPage < totalPages - 2) pages.push('ellipsis');
-      
       pages.push(totalPages);
     }
     
@@ -120,12 +80,13 @@ export const Donors = () => {
       <Header />
       
       <main className="container py-8 px-4">
+        {/* Page header */}
         <div className="mb-8">
           <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
             Campaign Donors
           </h1>
           <p className="text-muted-foreground">
-            View campaign contributions to political candidates.
+            Explore campaign contributions to political candidates.
           </p>
         </div>
 
@@ -140,8 +101,8 @@ export const Donors = () => {
           />
         </div>
 
-        {/* Results count and pagination info */}
-        <div className="flex items-center justify-between mb-4">
+        {/* Results count */}
+        <div className="flex items-center justify-between mb-6">
           <p className="text-sm text-muted-foreground">
             {isLoading ? (
               'Loading...'
@@ -153,7 +114,7 @@ export const Donors = () => {
             )}
           </p>
           {totalPages > 1 && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground hidden sm:block">
               Page {currentPage} of {totalPages}
             </p>
           )}
@@ -166,19 +127,26 @@ export const Donors = () => {
           </div>
         )}
 
-        {/* Loading state */}
+        {/* Loading state with skeleton cards */}
         {isLoading && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
               <Card key={i} className="animate-pulse">
-                <CardHeader className="pb-3">
-                  <div className="h-5 bg-muted rounded w-3/4" />
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="h-6 bg-muted rounded w-1/2" />
-                    <div className="h-4 bg-muted rounded w-1/3" />
-                    <div className="h-4 bg-muted rounded w-2/3" />
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="h-10 w-10 bg-muted rounded-lg" />
+                    <div className="h-5 w-16 bg-muted rounded" />
+                  </div>
+                  <div className="h-5 bg-muted rounded w-3/4 mb-4" />
+                  <div className="flex justify-between">
+                    <div className="space-y-2">
+                      <div className="h-3 w-16 bg-muted rounded" />
+                      <div className="h-6 w-12 bg-muted rounded" />
+                    </div>
+                    <div className="text-right space-y-2">
+                      <div className="h-3 w-12 bg-muted rounded ml-auto" />
+                      <div className="h-7 w-20 bg-muted rounded" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -186,66 +154,18 @@ export const Donors = () => {
           </div>
         )}
 
-        {/* Donor cards */}
+        {/* Donor cards grid */}
         {!isLoading && !error && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {donors.map((donor) => (
-              <Card key={donor.id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      {getTypeIcon(donor.type)}
-                      <CardTitle className="text-lg truncate">
-                        <Link to={`/donor/${donor.id}`} className="hover:underline">
-                          {donor.name}
-                        </Link>
-                      </CardTitle>
-                    </div>
-                    <Badge variant="outline" className="shrink-0 ml-2">{donor.type}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground text-sm">Amount</span>
-                      <span className="text-xl font-bold text-agree">{formatAmount(donor.amount)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground text-sm">Cycle</span>
-                      <span className="font-medium">{donor.cycle}</span>
-                    </div>
-                    {donor.contributor_state && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground text-sm">Location</span>
-                        <span className="font-medium">
-                          {donor.contributor_city ? `${donor.contributor_city}, ` : ''}{donor.contributor_state}
-                        </span>
-                      </div>
-                    )}
-                    {donor.candidate && (
-                      <div className="pt-2 border-t border-border">
-                        <span className="text-muted-foreground text-sm block mb-1">Donated to</span>
-                        <Link 
-                          to={`/candidate/${donor.candidate_id}`}
-                          className="flex items-center gap-2 hover:text-primary transition-colors"
-                        >
-                          <span className="font-medium truncate">{donor.candidate.name}</span>
-                          <Badge className={getPartyColor(donor.candidate.party)} variant="outline">
-                            {donor.candidate.party}
-                          </Badge>
-                        </Link>
-                      </div>
-                    )}
-                    <Link 
-                      to={`/donor/${donor.id}`}
-                      className="inline-flex items-center gap-1 text-primary text-sm hover:underline"
-                    >
-                      <ArrowUpRight className="w-4 h-4" />
-                      View donor profile
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
+              <DonorCard
+                key={donor.id}
+                id={donor.id}
+                name={donor.name}
+                type={donor.type as 'Individual' | 'PAC' | 'Organization' | 'Unknown'}
+                amount={donor.amount}
+                transactionCount={donor.transaction_count || 1}
+              />
             ))}
           </div>
         )}
@@ -267,7 +187,7 @@ export const Donors = () => {
               disabled={currentPage === 1}
             >
               <ChevronLeft className="h-4 w-4" />
-              Previous
+              <span className="hidden sm:inline ml-1">Previous</span>
             </Button>
             
             <div className="flex items-center gap-1">
@@ -294,7 +214,7 @@ export const Donors = () => {
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === totalPages}
             >
-              Next
+              <span className="hidden sm:inline mr-1">Next</span>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
