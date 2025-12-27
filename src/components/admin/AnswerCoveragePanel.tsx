@@ -4,6 +4,8 @@ import { useSyncStats, TopicCoverage } from "@/hooks/useSyncStats";
 import { useCandidatesAnswerCoverage, useCandidateAnswerStats, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
 import { useFECIntegration } from "@/hooks/useFECIntegration";
+import { useAdminErrors } from "@/hooks/useAdminErrors";
+import { useCandidateOverrides } from "@/hooks/useCandidateOverrides";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -15,11 +17,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2 } from "lucide-react";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { CommitteeBreakdown } from "@/components/admin/CommitteeBreakdown";
 import { FinanceSummaryCard, type FinanceSummaryData } from "@/components/FinanceSummaryCard";
+import { RecentErrorsPanel } from "@/components/admin/RecentErrorsPanel";
+import { SyncStatusBadge } from "@/components/admin/SyncStatusBadge";
+import { FinanceStatusBadge } from "@/components/admin/FinanceStatusBadge";
+import { CandidateHealthBadge } from "@/components/admin/CandidateHealthBadge";
+import { CandidateEditDialog } from "@/components/admin/CandidateEditDialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -82,13 +89,27 @@ export function AnswerCoveragePanel() {
   const [stateFilter, setStateFilter] = useState<string>('all');
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('none');
   const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
-  const [syncFilter, setSyncFilter] = useState<'all' | 'needs_sync' | 'partial' | 'complete'>('all');
+  const [syncFilter, setSyncFilter] = useState<'all' | 'needs_sync' | 'partial' | 'complete' | 'has_committee' | 'no_committee' | 'has_donors' | 'no_donors'>('all');
+  
+  // Edit dialog state
+  const [editingCandidate, setEditingCandidate] = useState<CandidateAnswerCoverage | null>(null);
 
-  const { data: candidates, isLoading: candidatesLoading } = useCandidatesAnswerCoverage({
+  const { data: candidates, isLoading: candidatesLoading, refetch } = useCandidatesAnswerCoverage({
     party: partyFilter,
     state: stateFilter,
     coverageFilter,
   });
+  
+  // Error tracking for Phase 2
+  const { errors: adminErrors, addError, dismissError, clearErrors, hasRecentError } = useAdminErrors();
+  
+  // Override tracking for Phase 3
+  const { data: allOverrides } = useCandidateOverrides();
+  const overrideMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    allOverrides?.forEach(o => map.set(o.candidate_id, true));
+    return map;
+  }, [allOverrides]);
 
   const { populateCandidate, populateBatch, pauseBatch, resumeBatch, cancelBatch, isLoading, isBatchRunning, batchProgress } = usePopulateCandidateAnswers();
   const { recalculateAll, isRecalculatingAll } = useRecalculateCoverageTiers();
