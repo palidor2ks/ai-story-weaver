@@ -28,11 +28,13 @@ export function useUnallocatedCommittees(cycle: string = '2024') {
   return useQuery({
     queryKey: ['unallocated-committees', cycle],
     queryFn: async (): Promise<UnallocatedCommittee[]> => {
-      // First, get all committees with J/U/B/D designations
+      // Fetch ALL committees that are either:
+      // 1. J/U/B/D designations (joint fundraising, leadership PACs, etc.)
+      // 2. OR have NULL candidate_id (orphan committees - externally imported)
       const { data: committees, error: committeeError } = await supabase
         .from('candidate_committees')
         .select('fec_committee_id, name, designation, designation_full, source_fec_candidate_id, candidate_id')
-        .in('designation', ['J', 'U', 'B', 'D'])
+        .or('designation.in.(J,U,B,D),candidate_id.is.null')
         .order('name');
 
       if (committeeError) throw committeeError;

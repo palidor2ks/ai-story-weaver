@@ -80,3 +80,9 @@ verify_jwt = false
 
 [functions.allocate-committee]
 verify_jwt = false
+
+[functions.import-external-committee]
+verify_jwt = false
+
+[functions.fetch-committee-donors]
+verify_jwt = false
