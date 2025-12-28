@@ -157,3 +157,32 @@ export function useAllocateCommittee() {
     },
   });
 }
+
+/**
+ * Batch allocate all J/U/B/D committees based on their candidate_committees links
+ */
+export function useBatchAllocateCommittees() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ cycle }: { cycle?: string }) => {
+      const { data, error } = await supabase.functions.invoke('allocate-committee', {
+        body: { batch: true, cycle: cycle || '2024' }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['unallocated-committees'] });
+      queryClient.invalidateQueries({ queryKey: ['donors'] });
+      toast.success(data.message || 'Batch allocation completed');
+    },
+    onError: (error: Error) => {
+      console.error('Error in batch allocation:', error);
+      toast.error(`Batch allocation failed: ${error.message}`);
+    },
+  });
+}

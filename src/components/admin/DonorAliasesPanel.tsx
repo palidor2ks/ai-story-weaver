@@ -60,7 +60,7 @@ import {
   DonorAliasInput,
 } from '@/hooks/useDonorAliases';
 import { useSearchDonors } from '@/hooks/useDonorsPaginated';
-import { useUnallocatedCommittees, useCandidatesForAllocation, useAllocateCommittee } from '@/hooks/useCommitteeAllocation';
+import { useUnallocatedCommittees, useCandidatesForAllocation, useAllocateCommittee, useBatchAllocateCommittees } from '@/hooks/useCommitteeAllocation';
 
 const DONOR_TYPES = ['Individual', 'PAC', 'Organization', 'Unknown'];
 
@@ -101,9 +101,10 @@ export function DonorAliasesPanel() {
   );
 
   // Committee allocation hooks - must be at top level of component
-  const { data: unallocatedCommittees, isLoading: committeesLoading } = useUnallocatedCommittees();
+  const { data: unallocatedCommittees, isLoading: committeesLoading, refetch: refetchCommittees } = useUnallocatedCommittees();
   const { data: allCandidates } = useCandidatesForAllocation();
   const allocateMutation = useAllocateCommittee();
+  const batchAllocateMutation = useBatchAllocateCommittees();
   const [selectedCommitteeForAllocation, setSelectedCommitteeForAllocation] = useState<string | null>(null);
 
   // Display name refresh state
@@ -623,14 +624,35 @@ export function DonorAliasesPanel() {
         <TabsContent value="committees" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                Committee Allocation
-              </CardTitle>
-              <CardDescription>
-                J/U/B/D committees (Joint Fundraising, Leadership PACs, etc.) have unallocated contributions.
-                Allocate them to a specific candidate to include their donors in that candidate's profile.
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    Committee Allocation
+                  </CardTitle>
+                  <CardDescription className="mt-1.5">
+                    J/U/B/D committees (Joint Fundraising, Leadership PACs, etc.) have unallocated contributions.
+                    Batch sync allocates all linked committees automatically.
+                  </CardDescription>
+                </div>
+                <Button
+                  onClick={() => batchAllocateMutation.mutate({ cycle: '2024' })}
+                  disabled={batchAllocateMutation.isPending}
+                  className="shrink-0"
+                >
+                  {batchAllocateMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Batch Sync All
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {committeesLoading ? (
