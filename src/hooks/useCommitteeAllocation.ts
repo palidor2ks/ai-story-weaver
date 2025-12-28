@@ -15,6 +15,12 @@ export interface UnallocatedCommittee {
   linked_candidate_name: string | null;
 }
 
+export interface CommitteeDiagnostics {
+  linkedJUBDCommittees: number;
+  unallocatedContributions: number;
+  totalContributions: number;
+}
+
 /**
  * Fetch J/U/B/D committees that have unallocated contributions (candidate_id = null)
  */
@@ -45,12 +51,11 @@ export function useUnallocatedCommittees(cycle: string = '2024') {
 
       if (contribError) throw contribError;
 
-      // Get donor count for these committees with null candidate_id
+      // Get donor count for these committees (all donors, not just unallocated)
       const { data: donorStats, error: donorError } = await supabase
         .from('donors')
         .select('recipient_committee_id')
         .in('recipient_committee_id', committeeIds)
-        .is('candidate_id', null)
         .eq('cycle', cycle);
 
       if (donorError) throw donorError;
@@ -85,7 +90,7 @@ export function useUnallocatedCommittees(cycle: string = '2024') {
         });
       }
 
-      // Map to response
+      // Map to response - show ALL J/U/B/D committees, not just those with unallocated
       return committees.map(c => {
         const stats = contribByCommittee.get(c.fec_committee_id) || { total: 0, count: 0 };
         const donorCount = donorCountByCommittee.get(c.fec_committee_id) || 0;
@@ -102,7 +107,64 @@ export function useUnallocatedCommittees(cycle: string = '2024') {
           linked_candidate_id: c.candidate_id,
           linked_candidate_name: c.candidate_id ? candidateNames.get(c.candidate_id) || null : null,
         };
-      }).filter(c => c.contribution_count > 0 || c.donor_count > 0); // Only show committees with data
+      });
+    },
+  });
+}
+
+/**
+ * Fetch diagnostics for committee allocation
+ */
+export function useCommitteeDiagnostics(cycle: string = '2024') {
+  return useQuery({
+    queryKey: ['committee-diagnostics', cycle],
+    queryFn: async (): Promise<CommitteeDiagnostics> => {
+      // Count linked J/U/B/D committees
+      const { count: linkedCount, error: linkedError } = await supabase
+        .from('candidate_committees')
+        .select('*', { count: 'exact', head: true })
+        .in('designation', ['J', 'U', 'B', 'D'])
+        .not('candidate_id', 'is', null);
+
+      if (linkedError) throw linkedError;
+
+      // Get all J/U/B/D committee IDs
+      const { data: committees } = await supabase
+        .from('candidate_committees')
+        .select('fec_committee_id')
+        .in('designation', ['J', 'U', 'B', 'D']);
+
+      const committeeIds = committees?.map(c => c.fec_committee_id) || [];
+
+      let unallocatedCount = 0;
+      let totalCount = 0;
+
+      if (committeeIds.length > 0) {
+        // Count unallocated contributions
+        const { count: unallocated } = await supabase
+          .from('contributions')
+          .select('*', { count: 'exact', head: true })
+          .in('recipient_committee_id', committeeIds)
+          .is('candidate_id', null)
+          .eq('cycle', cycle);
+
+        unallocatedCount = unallocated || 0;
+
+        // Count total contributions for these committees
+        const { count: total } = await supabase
+          .from('contributions')
+          .select('*', { count: 'exact', head: true })
+          .in('recipient_committee_id', committeeIds)
+          .eq('cycle', cycle);
+
+        totalCount = total || 0;
+      }
+
+      return {
+        linkedJUBDCommittees: linkedCount || 0,
+        unallocatedContributions: unallocatedCount,
+        totalContributions: totalCount,
+      };
     },
   });
 }
@@ -132,13 +194,14 @@ export function useAllocateCommittee() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ committeeId, candidateId, cycle }: { 
+    mutationFn: async ({ committeeId, candidateId, cycle, force }: { 
       committeeId: string; 
       candidateId: string | null; 
-      cycle?: string 
+      cycle?: string;
+      force?: boolean;
     }) => {
       const { data, error } = await supabase.functions.invoke('allocate-committee', {
-        body: { committeeId, candidateId, cycle: cycle || '2024' }
+        body: { committeeId, candidateId, cycle: cycle || '2024', force: force || false }
       });
 
       if (error) throw error;
@@ -148,6 +211,7 @@ export function useAllocateCommittee() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['unallocated-committees'] });
+      queryClient.invalidateQueries({ queryKey: ['committee-diagnostics'] });
       queryClient.invalidateQueries({ queryKey: ['donors'] });
       toast.success(data.message || 'Committee allocated successfully');
     },
@@ -158,6 +222,16 @@ export function useAllocateCommittee() {
   });
 }
 
+export interface BatchAllocateResult {
+  committeesFound: number;
+  committeesChanged: number;
+  committeesProcessed: number; // backwards compat
+  totalContributionsUpdated: number;
+  totalDonorsUpdated: number;
+  totalTransfersDeleted: number;
+  message: string;
+}
+
 /**
  * Batch allocate all J/U/B/D committees based on their candidate_committees links
  */
@@ -165,9 +239,9 @@ export function useBatchAllocateCommittees() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ cycle }: { cycle?: string }) => {
+    mutationFn: async ({ cycle, force }: { cycle?: string; force?: boolean }): Promise<BatchAllocateResult> => {
       const { data, error } = await supabase.functions.invoke('allocate-committee', {
-        body: { batch: true, cycle: cycle || '2024' }
+        body: { batch: true, cycle: cycle || '2024', force: force || false }
       });
 
       if (error) throw error;
@@ -177,6 +251,7 @@ export function useBatchAllocateCommittees() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['unallocated-committees'] });
+      queryClient.invalidateQueries({ queryKey: ['committee-diagnostics'] });
       queryClient.invalidateQueries({ queryKey: ['donors'] });
       toast.success(data.message || 'Batch allocation completed');
     },
