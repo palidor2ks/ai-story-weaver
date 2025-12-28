@@ -127,23 +127,28 @@ serve(async (req) => {
 
     for (const candidate of candidates || []) {
       try {
-        // Get all committees for this candidate
+        // Get only Principal (P) and Authorized (A) committees for this candidate
+        // Excludes: J (Joint Fundraising), U (Unauthorized/Super PACs), B (Bundler), D (Leadership PAC)
         let { data: committees } = await supabase
           .from('candidate_committees')
-          .select('fec_committee_id')
+          .select('fec_committee_id, designation')
           .eq('candidate_id', candidate.id)
-          .eq('active', true);
+          .eq('active', true)
+          .in('designation', ['P', 'A']);
 
         // Fallback to candidates.fec_committee_id if no separate committee records exist
         if ((!committees || committees.length === 0) && candidate.fec_committee_id) {
-          committees = [{ fec_committee_id: candidate.fec_committee_id }];
+          committees = [{ fec_committee_id: candidate.fec_committee_id, designation: 'P' }];
           console.log(`[RECONCILIATION] ${candidate.name}: Using fallback fec_committee_id ${candidate.fec_committee_id}`);
         }
 
         if (!committees || committees.length === 0) {
+          console.log(`[RECONCILIATION] ${candidate.name}: No P/A committees found, skipping`);
           results.skippedCount++;
           continue;
         }
+
+        console.log(`[RECONCILIATION] ${candidate.name}: Found ${committees.length} P/A committees`);
 
         // Calculate local totals using SQL aggregation via database function
         // This avoids the 1000 row limit and handles null memo_code properly

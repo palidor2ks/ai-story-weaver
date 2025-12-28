@@ -627,6 +627,72 @@ export type Database = {
           },
         ]
       }
+      external_committee_finance: {
+        Row: {
+          candidate_id: string | null
+          committee_id: string
+          committee_name: string | null
+          created_at: string | null
+          cycle: string
+          designation: string
+          designation_full: string | null
+          id: string
+          independent_expenditures: number | null
+          individual_contributions: number | null
+          last_fec_check: string | null
+          operating_expenses: number | null
+          oppose_total: number | null
+          pac_contributions: number | null
+          party_contributions: number | null
+          support_total: number | null
+          total_disbursed: number | null
+          total_raised: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          candidate_id?: string | null
+          committee_id: string
+          committee_name?: string | null
+          created_at?: string | null
+          cycle: string
+          designation: string
+          designation_full?: string | null
+          id?: string
+          independent_expenditures?: number | null
+          individual_contributions?: number | null
+          last_fec_check?: string | null
+          operating_expenses?: number | null
+          oppose_total?: number | null
+          pac_contributions?: number | null
+          party_contributions?: number | null
+          support_total?: number | null
+          total_disbursed?: number | null
+          total_raised?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          candidate_id?: string | null
+          committee_id?: string
+          committee_name?: string | null
+          created_at?: string | null
+          cycle?: string
+          designation?: string
+          designation_full?: string | null
+          id?: string
+          independent_expenditures?: number | null
+          individual_contributions?: number | null
+          last_fec_check?: string | null
+          operating_expenses?: number | null
+          oppose_total?: number | null
+          pac_contributions?: number | null
+          party_contributions?: number | null
+          support_total?: number | null
+          total_disbursed?: number | null
+          total_raised?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       finance_reconciliation: {
         Row: {
           candidate_id: string

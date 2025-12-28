@@ -47,7 +47,7 @@ export function CommitteeBreakdown({
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
   const [selectedCycle, setSelectedCycle] = useState<string>('2024');
   const [hideInactive, setHideInactive] = useState(true);
-  const [showPartyCommittees, setShowPartyCommittees] = useState(false);
+  const [designationFilter, setDesignationFilter] = useState<'campaign' | 'external' | 'all'>('campaign');
 
   // National party committee IDs to filter out by default
   const NATIONAL_PARTY_COMMITTEE_IDS = [
@@ -56,6 +56,11 @@ export function CommitteeBreakdown({
     'C00075820', // NRCC - National Republican Congressional Committee
     'C00000935', // DCCC - Democratic Congressional Campaign Committee
   ];
+
+  // Campaign committees (used in FEC reconciliation)
+  const CAMPAIGN_DESIGNATIONS = ['P', 'A'];
+  // External committees (tracked separately)
+  const EXTERNAL_DESIGNATIONS = ['J', 'U', 'B', 'D'];
 
   const fetchCommittees = async () => {
     const { data, error } = await supabase
@@ -78,13 +83,19 @@ export function CommitteeBreakdown({
     return NATIONAL_PARTY_COMMITTEE_IDS.includes(fecId);
   };
 
-  // Filter committees based on cycle, inactive status, and party committee toggle
+  // Filter committees based on cycle, inactive status, and designation filter
   const filteredCommittees = useMemo(() => {
     return committees.filter(c => {
-      // Filter out national party committees unless toggle is on
-      if (!showPartyCommittees && isNationalPartyCommittee(c.fec_committee_id)) {
-        return false;
+      // Designation filter
+      const designation = c.designation || '';
+      if (designationFilter === 'campaign') {
+        // Only show P and A committees
+        if (!CAMPAIGN_DESIGNATIONS.includes(designation)) return false;
+      } else if (designationFilter === 'external') {
+        // Only show J, U, B, D committees
+        if (!EXTERNAL_DESIGNATIONS.includes(designation)) return false;
       }
+      // 'all' shows everything
 
       // Cycle filter: skip if "all" selected, otherwise filter by cycle
       if (selectedCycle !== 'all') {
@@ -102,7 +113,7 @@ export function CommitteeBreakdown({
       
       return true;
     });
-  }, [committees, selectedCycle, hideInactive, showPartyCommittees]);
+  }, [committees, selectedCycle, hideInactive, designationFilter]);
 
   useEffect(() => {
     fetchCommittees();
@@ -166,9 +177,13 @@ export function CommitteeBreakdown({
       case 'A':
         return <Badge variant="secondary" className="text-[10px]">Authorized</Badge>;
       case 'J':
-        return <Badge variant="outline" className="text-[10px]">Joint</Badge>;
+        return <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-300">Joint Fundraising</Badge>;
       case 'U':
-        return <Badge variant="outline" className="text-[10px]">Unauthorized</Badge>;
+        return <Badge variant="outline" className="text-[10px] text-purple-600 border-purple-300">Unauthorized (Super PAC)</Badge>;
+      case 'B':
+        return <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">Lobbyist/Bundler</Badge>;
+      case 'D':
+        return <Badge variant="outline" className="text-[10px] text-teal-600 border-teal-300">Leadership PAC</Badge>;
       default:
         return <Badge variant="outline" className="text-[10px]">{designation || '?'}</Badge>;
     }
@@ -279,6 +294,14 @@ export function CommitteeBreakdown({
   const activeCount = filteredCommittees.filter(c => c.active).length;
   const totalItemized = filteredCommittees.filter(c => c.active).reduce((sum, c) => sum + (c.local_itemized_total || 0), 0);
   const hiddenCount = committees.length - filteredCommittees.length;
+  
+  // Calculate separate totals for campaign vs external
+  const campaignTotal = committees
+    .filter(c => c.active && CAMPAIGN_DESIGNATIONS.includes(c.designation || ''))
+    .reduce((sum, c) => sum + (c.local_itemized_total || 0), 0);
+  const externalTotal = committees
+    .filter(c => c.active && EXTERNAL_DESIGNATIONS.includes(c.designation || ''))
+    .reduce((sum, c) => sum + (c.local_itemized_total || 0), 0);
 
   return (
     <div className="space-y-3">
@@ -335,24 +358,38 @@ export function CommitteeBreakdown({
           </label>
         </div>
         <div className="flex items-center gap-2">
-          <Switch
-            id="show-party"
-            checked={showPartyCommittees}
-            onCheckedChange={setShowPartyCommittees}
-            className="h-4 w-7"
-          />
-          <label htmlFor="show-party" className="text-xs text-muted-foreground cursor-pointer">
-            Show party committees
-          </label>
+          <span className="text-xs text-muted-foreground">Type:</span>
+          <Select value={designationFilter} onValueChange={(v) => setDesignationFilter(v as 'campaign' | 'external' | 'all')}>
+            <SelectTrigger className="h-7 w-28 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="campaign">Campaign (P/A)</SelectItem>
+              <SelectItem value="external">External (J/U/B/D)</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      {/* Simulated Total */}
-      <div className="p-2 bg-muted/50 rounded text-xs">
+      {/* Totals Summary */}
+      <div className="p-2 bg-muted/50 rounded text-xs space-y-1">
         <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Active committees total:</span>
-          <span className="font-medium">{formatCurrency(totalItemized)}</span>
+          <span className="text-muted-foreground">Campaign (P/A) total:</span>
+          <span className="font-medium text-blue-600">{formatCurrency(campaignTotal)}</span>
         </div>
+        {externalTotal > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">External (J/U/B/D) total:</span>
+            <span className="font-medium text-purple-600">{formatCurrency(externalTotal)}</span>
+          </div>
+        )}
+        {designationFilter !== 'all' && (
+          <div className="flex items-center justify-between pt-1 border-t border-border/50">
+            <span className="text-muted-foreground">Filtered view total:</span>
+            <span className="font-medium">{formatCurrency(totalItemized)}</span>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -376,7 +413,7 @@ export function CommitteeBreakdown({
                   </Badge>
                 )}
                 {isNationalPartyCommittee(committee.fec_committee_id) && (
-                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-purple-600 border-purple-300 gap-1">
+                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-red-600 border-red-300 gap-1">
                     <Landmark className="h-2.5 w-2.5" />
                     National Party
                   </Badge>
