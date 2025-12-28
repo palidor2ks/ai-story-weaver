@@ -174,9 +174,14 @@ serve(async (req) => {
         else if (cmte.designation === 'B') role = 'lobbyist';
         else if (cmte.designation === 'D') role = 'delegate';
 
-        // J/U/B/D committees default to inactive - require admin activation
-        // P (Principal) and A (Authorized) committees are active by default
-        const shouldBeActive = !isNonPrimaryDesignation;
+        // Party committee types: Y=Party State, Z=Party National, X=Party Not Qualified
+        const isPartyCommittee = ['Y', 'Z', 'X'].includes(cmte.committee_type);
+
+        // J/U/B/D committees and party committees (Y/Z/X) default to inactive - require admin activation
+        // Only P (Principal) and A (Authorized) non-party committees are active by default
+        const shouldBeActive = !isNonPrimaryDesignation && !isPartyCommittee;
+        
+        console.log('[FEC-COMMITTEES] Committee:', cmte.committee_id, 'designation:', cmte.designation, 'type:', cmte.committee_type, 'active:', shouldBeActive);
 
         const { error: upsertError } = await supabase
           .from('candidate_committees')
