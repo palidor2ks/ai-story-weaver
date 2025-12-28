@@ -224,7 +224,8 @@ export function PacExpenditurePanel() {
               Super PACs
             </CardTitle>
             <CardDescription>
-              Import and manage Super PAC expenditures (Schedule E) and donors (Schedule A)
+              "Discover PACs" finds committees with Schedule E (independent expenditure) activity. 
+              PACs that only make contributions won't appear — use "Import by ID" to add any committee manually.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -83,17 +83,17 @@ serve(async (req) => {
     const existingIds = new Set((existingCommittees || []).map(c => c.fec_committee_id));
     console.log('[DISCOVER-SUPER-PACS] Found', existingIds.size, 'existing external committees');
 
-    // Use /schedules/schedule_e/eby_candidate/totals/ endpoint to find committees with actual spending
-    // This directly gives us committees that have made independent expenditures
+    // Use /schedules/schedule_e/totals/ endpoint - this aggregates spending BY committee
+    // This is the correct endpoint that returns committee-level totals for independent expenditures
     const committeeSpending: Map<string, number> = new Map();
     let page = 1;
     const maxPages = 20;
 
     while (page <= maxPages) {
-      // Query by cycle and sort by total spend descending
-      const url = `https://api.open.fec.gov/v1/schedules/schedule_e/eby_candidate/totals/?api_key=${fecApiKey}&cycle=${cycle}&per_page=100&page=${page}&sort_null_only=false&sort_nulls_last=true`;
+      // Query by cycle and sort by total descending to get biggest spenders first
+      const url = `https://api.open.fec.gov/v1/schedules/schedule_e/totals/?api_key=${fecApiKey}&cycle=${cycle}&per_page=100&page=${page}&sort=-total`;
 
-      console.log('[DISCOVER-SUPER-PACS] Fetching expenditure page', page);
+      console.log('[DISCOVER-SUPER-PACS] Fetching schedule_e/totals page', page);
       const response = await fetchWithRetry(url);
       
       if (!response.ok) {
@@ -112,14 +112,18 @@ serve(async (req) => {
         break;
       }
 
-      // Aggregate spending by committee
+      // Each result has committee_id and total (already aggregated by committee)
       for (const result of results) {
         const committeeId = result.committee_id;
         const total = result.total || 0;
         
-        if (committeeId) {
+        if (committeeId && total > 0) {
+          // The endpoint already aggregates, so we take the total directly
+          // but keep max in case there are duplicates
           const current = committeeSpending.get(committeeId) || 0;
-          committeeSpending.set(committeeId, current + total);
+          if (total > current) {
+            committeeSpending.set(committeeId, total);
+          }
         }
       }
 

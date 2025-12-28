@@ -74,31 +74,43 @@ serve(async (req) => {
 
     console.log('[IMPORT-COMMITTEE] Importing committee:', committeeId);
 
-    // Check if committee already exists - check ALL rows with this fec_committee_id
-    // (there can be duplicates with different candidate_ids due to unique constraint on candidate_id+fec_committee_id)
-    const { data: existingCommittees, error: existingError } = await supabase
+    // Check if committee already exists with role='external'
+    // We now allow importing even if it exists under a different role (like 'leadership_pac')
+    const { data: existingExternal, error: existingError } = await supabase
       .from('candidate_committees')
-      .select('id, fec_committee_id, name, candidate_id')
-      .eq('fec_committee_id', committeeId);
+      .select('id, fec_committee_id, name, candidate_id, role')
+      .eq('fec_committee_id', committeeId)
+      .eq('role', 'external');
 
     if (existingError) {
       console.error('[IMPORT-COMMITTEE] Error checking existing committees:', existingError);
     }
 
-    if (existingCommittees && existingCommittees.length > 0) {
-      console.log('[IMPORT-COMMITTEE] Committee already exists:', existingCommittees);
-      // Return the first one (or the one with null candidate_id if it exists)
-      const orphanCommittee = existingCommittees.find(c => c.candidate_id === null) || existingCommittees[0];
+    // If already exists with role='external', return that
+    if (existingExternal && existingExternal.length > 0) {
+      console.log('[IMPORT-COMMITTEE] Committee already exists as external:', existingExternal);
+      const orphanCommittee = existingExternal.find(c => c.candidate_id === null) || existingExternal[0];
       return new Response(
         JSON.stringify({ 
           success: true,
-          message: `Committee already exists (${existingCommittees.length} record${existingCommittees.length > 1 ? 's' : ''})`,
+          message: `Committee already exists as external PAC`,
           committee: orphanCommittee,
           alreadyExists: true,
-          existingCount: existingCommittees.length
+          existingCount: existingExternal.length
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Check if it exists under other roles (for logging purposes)
+    const { data: existingOtherRoles } = await supabase
+      .from('candidate_committees')
+      .select('id, name, role')
+      .eq('fec_committee_id', committeeId)
+      .neq('role', 'external');
+
+    if (existingOtherRoles && existingOtherRoles.length > 0) {
+      console.log('[IMPORT-COMMITTEE] Committee exists under other roles:', existingOtherRoles.map(c => c.role));
     }
 
     // Fetch committee details from FEC API
@@ -135,16 +147,16 @@ serve(async (req) => {
       committee_type_full: committee.committee_type_full
     });
 
-    // Insert committee into candidate_committees with NULL candidate_id
-    // External/imported committees start inactive - require admin activation
+    // Insert committee into candidate_committees with role='external'
+    // This creates a new external row even if the committee exists under another role
     const committeeRecord = {
       fec_committee_id: committee.committee_id,
       name: committee.name,
       designation: committee.designation || 'U', // Default to U (Unauthorized/Super PAC)
       designation_full: committee.designation_full || committee.committee_type_full,
-      candidate_id: null, // Orphan committee - will be allocated later
-      role: 'external', // Mark as externally imported
-      active: false, // Inactive by default - admin must activate
+      candidate_id: null, // External/orphan committee
+      role: 'external', // Mark as externally imported Super PAC
+      active: true, // Active by default so it appears in Super PACs table
       source_fec_candidate_id: null, // Not linked to any FEC candidate
     };
 
@@ -162,12 +174,16 @@ serve(async (req) => {
       );
     }
 
-    console.log('[IMPORT-COMMITTEE] Successfully imported committee:', insertedCommittee);
+    const otherRolesNote = existingOtherRoles && existingOtherRoles.length > 0
+      ? ` (also exists as ${existingOtherRoles.map(c => c.role).join(', ')})`
+      : '';
+
+    console.log('[IMPORT-COMMITTEE] Successfully imported committee as external:', insertedCommittee);
 
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: `Successfully imported ${committee.name}`,
+        message: `Successfully imported ${committee.name} as external PAC${otherRolesNote}`,
         committee: {
           id: insertedCommittee.id,
           fec_committee_id: committee.committee_id,
