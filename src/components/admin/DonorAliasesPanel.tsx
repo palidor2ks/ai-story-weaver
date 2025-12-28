@@ -100,6 +100,12 @@ export function DonorAliasesPanel() {
     formData.donor_types
   );
 
+  // Committee allocation hooks - must be at top level of component
+  const { data: unallocatedCommittees, isLoading: committeesLoading } = useUnallocatedCommittees();
+  const { data: allCandidates } = useCandidatesForAllocation();
+  const allocateMutation = useAllocateCommittee();
+  const [selectedCommitteeForAllocation, setSelectedCommitteeForAllocation] = useState<string | null>(null);
+
   // Display name refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState<{
@@ -289,12 +295,6 @@ export function DonorAliasesPanel() {
   if (isLoading) {
     return <div className="text-muted-foreground">Loading aliases...</div>;
   }
-
-  // Committee allocation hooks
-  const { data: unallocatedCommittees, isLoading: committeesLoading } = useUnallocatedCommittees();
-  const { data: allCandidates } = useCandidatesForAllocation();
-  const allocateMutation = useAllocateCommittee();
-  const [selectedCommitteeForAllocation, setSelectedCommitteeForAllocation] = useState<string | null>(null);
 
   return (
     <div className="space-y-6">
