@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, Building2, RefreshCw, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, Building2, RefreshCw, Clock, AlertTriangle, CheckCircle2, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -22,6 +23,9 @@ interface Committee {
   last_sync_started_at: string | null;
   last_index: string | null;
   has_more: boolean | null;
+  cycles: string[] | null;
+  is_terminated: boolean | null;
+  last_contribution_date: string | null;
 }
 
 interface CommitteeBreakdownProps {
@@ -41,11 +45,13 @@ export function CommitteeBreakdown({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
+  const [selectedCycle, setSelectedCycle] = useState<string>('2024');
+  const [hideInactive, setHideInactive] = useState(true);
 
   const fetchCommittees = async () => {
     const { data, error } = await supabase
       .from('candidate_committees')
-      .select('*')
+      .select('id, fec_committee_id, name, designation, designation_full, role, active, local_itemized_total, fec_itemized_total, last_sync_completed_at, last_sync_started_at, last_index, has_more, cycles, is_terminated, last_contribution_date')
       .eq('candidate_id', candidateId)
       .order('role', { ascending: true });
 
@@ -57,6 +63,27 @@ export function CommitteeBreakdown({
     setCommittees(data || []);
     setLoading(false);
   };
+
+  // Filter committees based on cycle and inactive status
+  const filteredCommittees = useMemo(() => {
+    return committees.filter(c => {
+      // Cycle filter: skip if "all" selected, otherwise filter by cycle
+      if (selectedCycle !== 'all') {
+        const matchesCycle = !c.cycles || c.cycles.length === 0 || c.cycles.includes(selectedCycle);
+        if (!matchesCycle) return false;
+      }
+      
+      // Hide inactive filter
+      if (hideInactive) {
+        // Hide if terminated
+        if (c.is_terminated) return false;
+        // Hide if no contributions at all
+        if ((c.local_itemized_total || 0) === 0 && !c.last_contribution_date) return false;
+      }
+      
+      return true;
+    });
+  }, [committees, selectedCycle, hideInactive]);
 
   useEffect(() => {
     fetchCommittees();
@@ -230,8 +257,9 @@ export function CommitteeBreakdown({
     );
   }
 
-  const activeCount = committees.filter(c => c.active).length;
-  const totalItemized = committees.filter(c => c.active).reduce((sum, c) => sum + (c.local_itemized_total || 0), 0);
+  const activeCount = filteredCommittees.filter(c => c.active).length;
+  const totalItemized = filteredCommittees.filter(c => c.active).reduce((sum, c) => sum + (c.local_itemized_total || 0), 0);
+  const hiddenCount = committees.length - filteredCommittees.length;
 
   return (
     <div className="space-y-3">
@@ -240,8 +268,14 @@ export function CommitteeBreakdown({
           <Building2 className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium">{candidateName}</span>
           <Badge variant="outline" className="text-xs">
-            {activeCount}/{committees.length} active
+            {activeCount}/{filteredCommittees.length} active
           </Badge>
+          {hiddenCount > 0 && (
+            <Badge variant="secondary" className="text-xs gap-1">
+              <EyeOff className="h-2.5 w-2.5" />
+              {hiddenCount} hidden
+            </Badge>
+          )}
         </div>
         <Button
           size="sm"
@@ -253,6 +287,36 @@ export function CommitteeBreakdown({
         </Button>
       </div>
 
+      {/* Filters */}
+      <div className="flex items-center gap-3 p-2 bg-muted/30 rounded-md">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Cycle:</span>
+          <Select value={selectedCycle} onValueChange={setSelectedCycle}>
+            <SelectTrigger className="h-7 w-20 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="2024">2024</SelectItem>
+              <SelectItem value="2022">2022</SelectItem>
+              <SelectItem value="2020">2020</SelectItem>
+              <SelectItem value="2018">2018</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="hide-inactive"
+            checked={hideInactive}
+            onCheckedChange={setHideInactive}
+            className="h-4 w-7"
+          />
+          <label htmlFor="hide-inactive" className="text-xs text-muted-foreground cursor-pointer">
+            Hide inactive
+          </label>
+        </div>
+      </div>
+
       {/* Simulated Total */}
       <div className="p-2 bg-muted/50 rounded text-xs">
         <div className="flex items-center justify-between">
@@ -262,8 +326,8 @@ export function CommitteeBreakdown({
       </div>
 
       <div className="space-y-2">
-        {committees.map(committee => (
-          <div 
+        {filteredCommittees.map(committee => (
+          <div
             key={committee.id} 
             className={`flex items-center justify-between p-2 rounded-md border ${
               committee.active ? 'bg-background' : 'bg-muted/50 opacity-60'
@@ -276,6 +340,16 @@ export function CommitteeBreakdown({
                   {committee.fec_committee_id}
                 </span>
                 {getSyncStatusBadge(committee)}
+                {committee.is_terminated && (
+                  <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">
+                    Terminated
+                  </Badge>
+                )}
+                {committee.cycles && committee.cycles.length > 0 && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {committee.cycles.slice(-3).join(', ')}
+                  </span>
+                )}
               </div>
               <p className="text-sm font-medium truncate mt-0.5">
                 {committee.name || 'Unknown Committee'}
@@ -301,7 +375,7 @@ export function CommitteeBreakdown({
         ))}
       </div>
 
-      {committees.some(c => c.designation === 'A') && (
+      {filteredCommittees.some(c => c.designation === 'A') && (
         <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-2 rounded">
           ⚠️ Authorized committees may include transfers from the Principal committee. 
           Enabling both could result in double-counted contributions.

@@ -66,12 +66,14 @@ export type Database = {
           active: boolean | null
           candidate_id: string | null
           created_at: string | null
+          cycles: string[] | null
           designation: string | null
           designation_full: string | null
           fec_committee_id: string
           fec_itemized_total: number | null
           has_more: boolean | null
           id: string
+          is_terminated: boolean | null
           last_contribution_date: string | null
           last_cycle: string | null
           last_index: string | null
@@ -88,12 +90,14 @@ export type Database = {
           active?: boolean | null
           candidate_id?: string | null
           created_at?: string | null
+          cycles?: string[] | null
           designation?: string | null
           designation_full?: string | null
           fec_committee_id: string
           fec_itemized_total?: number | null
           has_more?: boolean | null
           id?: string
+          is_terminated?: boolean | null
           last_contribution_date?: string | null
           last_cycle?: string | null
           last_index?: string | null
@@ -110,12 +114,14 @@ export type Database = {
           active?: boolean | null
           candidate_id?: string | null
           created_at?: string | null
+          cycles?: string[] | null
           designation?: string | null
           designation_full?: string | null
           fec_committee_id?: string
           fec_itemized_total?: number | null
           has_more?: boolean | null
           id?: string
+          is_terminated?: boolean | null
           last_contribution_date?: string | null
           last_cycle?: string | null
           last_index?: string | null
@@ -538,7 +544,7 @@ export type Database = {
       donors: {
         Row: {
           amount: number
-          candidate_id: string
+          candidate_id: string | null
           conduit_committee_id: string | null
           conduit_name: string | null
           contributor_city: string | null
@@ -563,7 +569,7 @@ export type Database = {
         }
         Insert: {
           amount: number
-          candidate_id: string
+          candidate_id?: string | null
           conduit_committee_id?: string | null
           conduit_name?: string | null
           contributor_city?: string | null
@@ -588,7 +594,7 @@ export type Database = {
         }
         Update: {
           amount?: number
-          candidate_id?: string
+          candidate_id?: string | null
           conduit_committee_id?: string | null
           conduit_name?: string | null
           contributor_city?: string | null
@@ -774,6 +780,102 @@ export type Database = {
           transition_type?: string
           updated_at?: string | null
           verified?: boolean | null
+        }
+        Relationships: []
+      }
+      pac_candidate_totals: {
+        Row: {
+          candidate_id: string
+          candidate_name: string | null
+          committee_id: string
+          committee_name: string | null
+          created_at: string | null
+          cycle: string
+          id: string
+          oppose_ratio: number | null
+          oppose_total: number
+          support_ratio: number | null
+          support_total: number
+          total_spent: number
+          updated_at: string | null
+        }
+        Insert: {
+          candidate_id: string
+          candidate_name?: string | null
+          committee_id: string
+          committee_name?: string | null
+          created_at?: string | null
+          cycle: string
+          id?: string
+          oppose_ratio?: number | null
+          oppose_total?: number
+          support_ratio?: number | null
+          support_total?: number
+          total_spent?: number
+          updated_at?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          candidate_name?: string | null
+          committee_id?: string
+          committee_name?: string | null
+          created_at?: string | null
+          cycle?: string
+          id?: string
+          oppose_ratio?: number | null
+          oppose_total?: number
+          support_ratio?: number | null
+          support_total?: number
+          total_spent?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      pac_expenditures: {
+        Row: {
+          candidate_id: string | null
+          candidate_name: string | null
+          committee_id: string
+          committee_name: string | null
+          created_at: string | null
+          cycle: string
+          expenditure_count: number
+          fec_candidate_id: string | null
+          id: string
+          last_expenditure_date: string | null
+          support_oppose: string
+          total_amount: number
+          updated_at: string | null
+        }
+        Insert: {
+          candidate_id?: string | null
+          candidate_name?: string | null
+          committee_id: string
+          committee_name?: string | null
+          created_at?: string | null
+          cycle: string
+          expenditure_count?: number
+          fec_candidate_id?: string | null
+          id?: string
+          last_expenditure_date?: string | null
+          support_oppose: string
+          total_amount?: number
+          updated_at?: string | null
+        }
+        Update: {
+          candidate_id?: string | null
+          candidate_name?: string | null
+          committee_id?: string
+          committee_name?: string | null
+          created_at?: string | null
+          cycle?: string
+          expenditure_count?: number
+          fec_candidate_id?: string | null
+          id?: string
+          last_expenditure_date?: string | null
+          support_oppose?: string
+          total_amount?: number
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -1333,6 +1435,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      donor_attributed_impact: {
+        Row: {
+          attributed_oppose_amount: number | null
+          attributed_support_amount: number | null
+          candidate_id: string | null
+          candidate_name: string | null
+          committee_id: string | null
+          cycle: string | null
+          display_name: string | null
+          donation_amount: number | null
+          donor_id: string | null
+          donor_name: string | null
+          donor_type: Database["public"]["Enums"]["donor_type"] | null
+          impact_type: string | null
+          oppose_ratio: number | null
+          support_ratio: number | null
+        }
+        Relationships: []
       }
       donor_consolidated: {
         Row: {
