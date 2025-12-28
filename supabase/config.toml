@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.fetch-pac-donors]
 verify_jwt = false
+
+[functions.discover-super-pacs]
+verify_jwt = false
