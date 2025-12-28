@@ -174,6 +174,10 @@ serve(async (req) => {
         else if (cmte.designation === 'B') role = 'lobbyist';
         else if (cmte.designation === 'D') role = 'delegate';
 
+        // J/U/B/D committees default to inactive - require admin activation
+        // P (Principal) and A (Authorized) committees are active by default
+        const shouldBeActive = !isNonPrimaryDesignation;
+
         const { error: upsertError } = await supabase
           .from('candidate_committees')
           .upsert({
@@ -183,7 +187,7 @@ serve(async (req) => {
             designation: cmte.designation,
             designation_full: cmte.designation_full,
             role,
-            active: true, // All committees are active
+            active: shouldBeActive,
             source_fec_candidate_id: fecIdRecord.fecCandidateId,
             updated_at: new Date().toISOString()
           }, {
@@ -200,7 +204,7 @@ serve(async (req) => {
           designation: cmte.designation,
           designationFull: cmte.designation_full,
           isPrimary,
-          active: true, // All committees are active
+          active: shouldBeActive,
           isNonPrimaryDesignation,
           sourceFecCandidateId: fecIdRecord.fecCandidateId,
           sourceOffice: fecIdRecord.office
