@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
+import { PacExpenditureBreakdown } from '@/components/PacExpenditureBreakdown';
 import { 
   ArrowLeft, 
   Building2, 
@@ -253,7 +254,25 @@ const DonorProfile = () => {
     enabled: !!donor?.name,
   });
 
-  // Get unique cycles for filter
+  // Check if this is a PAC donor - fetch the committee ID for PAC expenditure display
+  const { data: pacCommittee } = useQuery({
+    queryKey: ['donor-pac-committee', donor?.name, donor?.type],
+    queryFn: async () => {
+      if (!donor?.name || donor?.type !== 'PAC') return null;
+      
+      // Check if there's a candidate_committee with this name (external PAC)
+      const { data, error } = await supabase
+        .from('candidate_committees')
+        .select('*')
+        .eq('role', 'external')
+        .ilike('name', `%${donor.name}%`)
+        .limit(1);
+      
+      if (error || !data || data.length === 0) return null;
+      return data[0];
+    },
+    enabled: !!donor?.name && donor?.type === 'PAC',
+  });
   const availableCycles = useMemo(() => {
     const cycles = new Set<string>();
     contributions.forEach(c => cycles.add(c.cycle));
@@ -412,6 +431,16 @@ const DonorProfile = () => {
             </div>
           </div>
         </div>
+
+        {/* PAC Expenditure Breakdown - only for PAC donors with linked committee */}
+        {donor.type === 'PAC' && pacCommittee && (
+          <PacExpenditureBreakdown
+            committeeId={pacCommittee.fec_committee_id}
+            committeeName={pacCommittee.name || undefined}
+            cycle="2024"
+            showFetchButton={false}
+          />
+        )}
 
         {/* Top Recipients */}
         <section>

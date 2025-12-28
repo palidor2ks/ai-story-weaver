@@ -28,6 +28,7 @@ import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
 import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
 import { OfficialAvatar } from '@/components/OfficialAvatar';
+import { CandidatePacActivity } from '@/components/CandidatePacActivity';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -336,6 +337,15 @@ export const CandidateProfile = () => {
             <ContactInfoCard representative={representativeDetails} />
           </div>
         )}
+
+        {/* Super PAC Activity Section */}
+        <div className="mb-8">
+          <CandidatePacActivity 
+            candidateId={candidate.id} 
+            candidateName={candidate.name}
+            cycle="2024"
+          />
+        </div>
 
         {/* You vs Candidate */}
         <Card className="mb-8 shadow-elevated">
