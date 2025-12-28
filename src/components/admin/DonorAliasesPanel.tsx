@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Check, X, Search, Users, DollarSign, Link2, Layers, RefreshCw, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Search, Users, DollarSign, Link2, Layers, RefreshCw, Loader2, Building2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,6 +60,7 @@ import {
   DonorAliasInput,
 } from '@/hooks/useDonorAliases';
 import { useSearchDonors } from '@/hooks/useDonorsPaginated';
+import { useUnallocatedCommittees, useCandidatesForAllocation, useAllocateCommittee } from '@/hooks/useCommitteeAllocation';
 
 const DONOR_TYPES = ['Individual', 'PAC', 'Organization', 'Unknown'];
 
@@ -289,12 +290,19 @@ export function DonorAliasesPanel() {
     return <div className="text-muted-foreground">Loading aliases...</div>;
   }
 
+  // Committee allocation hooks
+  const { data: unallocatedCommittees, isLoading: committeesLoading } = useUnallocatedCommittees();
+  const { data: allCandidates } = useCandidatesForAllocation();
+  const allocateMutation = useAllocateCommittee();
+  const [selectedCommitteeForAllocation, setSelectedCommitteeForAllocation] = useState<string | null>(null);
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="aliases" className="w-full">
         <TabsList>
           <TabsTrigger value="aliases">Manage Aliases</TabsTrigger>
           <TabsTrigger value="search">Search Donors</TabsTrigger>
+          <TabsTrigger value="committees">Committee Allocation</TabsTrigger>
         </TabsList>
 
         {/* Aliases Tab */}
@@ -607,6 +615,131 @@ export function DonorAliasesPanel() {
               {donorSearch.length < 2 && donorSearch.length > 0 && (
                 <p className="text-sm text-muted-foreground">Type at least 2 characters to search</p>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Committee Allocation Tab */}
+        <TabsContent value="committees" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Committee Allocation
+              </CardTitle>
+              <CardDescription>
+                J/U/B/D committees (Joint Fundraising, Leadership PACs, etc.) have unallocated contributions.
+                Allocate them to a specific candidate to include their donors in that candidate's profile.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {committeesLoading ? (
+                <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading committees...
+                </div>
+              ) : !unallocatedCommittees || unallocatedCommittees.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>No J/U/B/D committees with unallocated contributions found.</p>
+                  <p className="text-sm mt-1">Sync committees first using the FEC integration.</p>
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Committee</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead className="text-right">Unallocated</TableHead>
+                        <TableHead className="text-right">Donors</TableHead>
+                        <TableHead>Linked Candidate</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {unallocatedCommittees.map((committee) => (
+                        <TableRow key={committee.fec_committee_id}>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p className="font-medium">{committee.name || committee.fec_committee_id}</p>
+                              <p className="text-xs text-muted-foreground">{committee.fec_committee_id}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge variant="outline">
+                                    {committee.designation === 'J' ? '(J) Joint' :
+                                     committee.designation === 'U' ? '(U) Leadership' :
+                                     committee.designation === 'B' ? '(B) Lobbyist' :
+                                     committee.designation === 'D' ? '(D) Delegate' :
+                                     committee.designation}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{committee.designation_full || 'Unknown designation'}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="font-medium">{formatAmount(committee.total_contributions)}</span>
+                            <span className="text-xs text-muted-foreground ml-1">
+                              ({committee.contribution_count})
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">{committee.donor_count}</TableCell>
+                          <TableCell>
+                            {committee.linked_candidate_name ? (
+                              <span className="text-sm">{committee.linked_candidate_name}</span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">Not linked</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Select
+                              value={selectedCommitteeForAllocation === committee.fec_committee_id ? 'selecting' : ''}
+                              onValueChange={(candidateId) => {
+                                if (candidateId && candidateId !== 'selecting') {
+                                  allocateMutation.mutate({
+                                    committeeId: committee.fec_committee_id,
+                                    candidateId: candidateId === 'none' ? null : candidateId,
+                                  });
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Allocate to..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">
+                                  <span className="text-muted-foreground">Deallocate</span>
+                                </SelectItem>
+                                {allCandidates?.map(candidate => (
+                                  <SelectItem key={candidate.id} value={candidate.id}>
+                                    {candidate.name} ({candidate.party?.[0]}-{candidate.state})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              
+              <div className="mt-4 p-3 bg-muted/50 rounded-md flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                <div className="text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">About Committee Allocation</p>
+                  <p>J (Joint Fundraising) and U (Leadership PAC) committees often collect donations for multiple candidates. 
+                  Allocating them to a specific candidate will associate all unallocated contributions with that candidate.</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
