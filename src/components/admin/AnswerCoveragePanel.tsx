@@ -117,7 +117,8 @@ export function AnswerCoveragePanel() {
   const { 
     fetchFECCandidateId, 
     fetchFECCommittees,
-    fetchFECDonorsComplete, 
+    fetchFECDonorsComplete,
+    autoResumeSingleCandidate,
     batchFetchFECIds,
     batchFetchDonors,
     resumeAllPartialSyncs,
@@ -910,34 +911,71 @@ export function AnswerCoveragePanel() {
           </div>
         )}
 
-        {/* Per-Candidate Sync Progress */}
+        {/* Per-Candidate Sync Progress with Estimated % */}
         {syncProgress && (
-          <div className="border rounded-lg p-4 space-y-2 bg-blue-500/5 border-blue-500/20">
+          <div className={cn(
+            "border rounded-lg p-4 space-y-2",
+            syncProgress.isAutoResuming 
+              ? "bg-purple-500/5 border-purple-500/20" 
+              : "bg-blue-500/5 border-blue-500/20"
+          )}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                {syncProgress.isComplete ? (
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                ) : (
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                )}
                 <span className="text-sm font-medium">
-                  Syncing: {syncProgress.candidateName}
+                  {syncProgress.isComplete ? 'Complete' : syncProgress.isAutoResuming ? 'Auto-Resuming' : 'Syncing'}: {syncProgress.candidateName}
                 </span>
+                {syncProgress.isAutoResuming && (
+                  <Badge variant="outline" className="text-xs bg-purple-100 text-purple-700 border-purple-300">
+                    Unlimited Mode
+                  </Badge>
+                )}
               </div>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span>
-                  Committee {syncProgress.committeesSynced}/{syncProgress.committeesTotal}
-                </span>
+                {syncProgress.attempts && (
+                  <span className="text-xs">
+                    Attempt {syncProgress.attempts}
+                  </span>
+                )}
                 <span className="text-blue-600 font-medium">
                   {syncProgress.donorsImported.toLocaleString()} donors
                 </span>
               </div>
             </div>
-            <Progress 
-              value={syncProgress.committeesTotal > 0 
-                ? (syncProgress.committeesSynced / syncProgress.committeesTotal) * 100 
-                : 0
-              } 
-              className="h-2" 
-            />
+            
+            {/* Progress bar based on estimated completion */}
+            <div className="space-y-1">
+              <Progress 
+                value={syncProgress.estimatedProgress || (syncProgress.committeesTotal > 0 
+                  ? (syncProgress.committeesSynced / syncProgress.committeesTotal) * 100 
+                  : 0)
+                } 
+                className="h-2" 
+              />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {syncProgress.estimatedProgress !== undefined 
+                    ? `~${syncProgress.estimatedProgress}% complete`
+                    : `Committee ${syncProgress.committeesSynced}/${syncProgress.committeesTotal}`
+                  }
+                </span>
+                {syncProgress.fecItemized && syncProgress.fecItemized > 0 && (
+                  <span>
+                    {formatCurrency(syncProgress.localItemized)} / {formatCurrency(syncProgress.fecItemized)} itemized
+                  </span>
+                )}
+              </div>
+            </div>
+            
             <div className="text-xs text-muted-foreground">
-              Auto-continues until all committees are synced. This may take several minutes for large campaigns.
+              {syncProgress.isAutoResuming 
+                ? 'Running until complete. For high-volume candidates this may take 10-30 minutes.'
+                : 'Auto-continues until all committees are synced. This may take several minutes for large campaigns.'
+              }
             </div>
           </div>
         )}
@@ -1229,53 +1267,137 @@ export function AnswerCoveragePanel() {
                                   {fecLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
                                 </Button>
                               )}
-                              {/* Fetch/Resume Donors - uses fetchFECDonorsComplete for auto-looping */}
+                              {/* Fetch/Resume Donors - with Auto-Complete option for partial syncs */}
                               {hasFecId && candidate.fecCommitteeId && (
-                                <Button
-                                  size="sm"
-                                  variant={syncStatus === 'partial' ? "default" : "ghost"}
-                                  disabled={donorLoading || anyBatchRunning}
-                                  onClick={() => {
-                                    void (async () => {
-                                      try {
-                                        toast.info(`Starting donor sync for ${candidate.name}...`);
-                                        const result = await fetchFECDonorsComplete(
-                                          candidate.id,
-                                          candidate.fecCandidateId!,
-                                          candidate.name,
-                                          '2024',
-                                          false
-                                        );
-                                        if (result.success) {
-                                          if (result.hasMore) {
-                                            toast.info(`Partial sync: ${result.imported} donors. Click Resume to continue.`);
+                                syncStatus === 'partial' ? (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="default"
+                                        disabled={donorLoading || anyBatchRunning}
+                                        className="bg-amber-600 hover:bg-amber-700 h-7 text-xs"
+                                        title="Resume options"
+                                      >
+                                        {donorLoading ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <>
+                                            <RotateCcw className="h-3 w-3 mr-1" />
+                                            Resume
+                                            <ChevronDown className="h-3 w-3 ml-1" />
+                                          </>
+                                        )}
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem
+                                        onClick={() => {
+                                          void (async () => {
+                                            try {
+                                              toast.info(`Resuming donor sync for ${candidate.name}...`);
+                                              const result = await fetchFECDonorsComplete(
+                                                candidate.id,
+                                                candidate.fecCandidateId!,
+                                                candidate.name,
+                                                '2024',
+                                                false
+                                              );
+                                              if (result.success) {
+                                                if (result.hasMore) {
+                                                  toast.info(`Partial sync: ${result.imported} donors. Click Resume to continue.`);
+                                                } else {
+                                                  toast.success(`Complete: imported ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
+                                                }
+                                                refetchCandidates();
+                                              } else {
+                                                toast.error(result.error || 'Failed');
+                                              }
+                                            } catch (err) {
+                                              console.error('[Admin] Fetch donors failed:', err);
+                                              toast.error('Failed to fetch donors');
+                                            }
+                                          })();
+                                        }}
+                                      >
+                                        <RotateCcw className="h-4 w-4 mr-2" />
+                                        Resume (1 batch)
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onClick={() => {
+                                          void (async () => {
+                                            try {
+                                              const result = await autoResumeSingleCandidate(
+                                                candidate.id,
+                                                candidate.fecCandidateId!,
+                                                candidate.name,
+                                                '2024'
+                                              );
+                                              if (result.success) {
+                                                if (result.hasMore) {
+                                                  toast.warning(`Still incomplete after max attempts. ${result.imported} donors imported.`);
+                                                } else {
+                                                  toast.success(`Complete: imported ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
+                                                }
+                                                refetchCandidates();
+                                              } else {
+                                                toast.error(result.error || 'Failed');
+                                              }
+                                            } catch (err) {
+                                              console.error('[Admin] Auto-resume failed:', err);
+                                              toast.error('Auto-resume failed');
+                                            }
+                                          })();
+                                        }}
+                                      >
+                                        <Sparkles className="h-4 w-4 mr-2 text-purple-600" />
+                                        Auto-Complete (until done)
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={donorLoading || anyBatchRunning}
+                                    onClick={() => {
+                                      void (async () => {
+                                        try {
+                                          toast.info(`Starting donor sync for ${candidate.name}...`);
+                                          const result = await fetchFECDonorsComplete(
+                                            candidate.id,
+                                            candidate.fecCandidateId!,
+                                            candidate.name,
+                                            '2024',
+                                            false
+                                          );
+                                          if (result.success) {
+                                            if (result.hasMore) {
+                                              toast.info(`Partial sync: ${result.imported} donors. Click Resume to continue.`);
+                                            } else {
+                                              toast.success(`Complete: imported ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
+                                            }
+                                            refetchCandidates();
                                           } else {
-                                            toast.success(`Complete: imported ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
+                                            toast.error(result.error || 'Failed');
                                           }
-                                          refetchCandidates();
-                                        } else {
-                                          toast.error(result.error || 'Failed');
+                                        } catch (err) {
+                                          console.error('[Admin] Fetch donors failed:', err);
+                                          toast.error('Failed to fetch donors');
                                         }
-                                      } catch (err) {
-                                        console.error('[Admin] Fetch donors failed:', err);
-                                        toast.error('Failed to fetch donors');
-                                      }
-                                    })();
-                                  }}
-                                  title={syncStatus === 'partial' ? "Resume sync (auto-continues until complete)" : "Fetch donors (auto-continues until complete)"}
-                                  className={syncStatus === 'partial' ? "bg-amber-600 hover:bg-amber-700 h-7 text-xs" : "h-7"}
-                                >
-                                  {donorLoading ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : syncStatus === 'partial' ? (
-                                    <>
-                                      <RotateCcw className="h-3 w-3 mr-1" />
-                                      Resume
-                                    </>
-                                  ) : (
-                                    <DollarSign className="h-3 w-3" />
-                                  )}
-                                </Button>
+                                      })();
+                                    }}
+                                    title="Fetch donors (auto-continues until complete)"
+                                    className="h-7"
+                                  >
+                                    {donorLoading ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <DollarSign className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                )
                               )}
                               {/* Refresh Finance Reconciliation */}
                               {hasFecId && (
