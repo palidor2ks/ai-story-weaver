@@ -646,14 +646,29 @@ serve(async (req) => {
       }
     }
 
-    // Upsert committee mapping
+    // Upsert committee mapping - preserve existing active status
+    // Only P/A committees default to active; J/U/B/D default to inactive
+    const isCampaignCommittee = ['P', 'A'].includes(targetCommittee.designation || '');
+    
+    const { data: existingCommittee } = await supabase
+      .from('candidate_committees')
+      .select('active')
+      .eq('candidate_id', candidateId)
+      .eq('fec_committee_id', targetCommittee.id)
+      .maybeSingle();
+    
+    const activeStatus = existingCommittee !== null 
+      ? existingCommittee.active 
+      : isCampaignCommittee; // Default: P/A = true, J/U/B/D = false
+    
     await supabase
       .from('candidate_committees')
       .upsert({
         candidate_id: candidateId,
         fec_committee_id: targetCommittee.id,
         role: targetCommittee.role,
-        active: true,
+        active: activeStatus,
+        designation: targetCommittee.designation,
       }, { onConflict: 'candidate_id,fec_committee_id' });
 
     let totalRaised = 0;
@@ -669,14 +684,16 @@ serve(async (req) => {
     const committeeId = targetCommittee.id;
     const committeeName = targetCommittee.name || targetCommittee.id;
     
-    // CRITICAL: J/U/B/D committees store contributions with candidate_id = null
-    // These are non-primary committees (Joint Fundraising, Leadership PACs, etc.)
-    // Their donations should NOT be associated with a candidate until manually allocated by admin
-    const isNonPrimaryDesignation = ['J', 'U', 'B', 'D'].includes(targetCommittee.designation || '');
-    const effectiveCandidateId = isNonPrimaryDesignation ? null : candidateId;
+    // CRITICAL: J/U/B/D committees are external - do NOT include in candidate rollups/reconciliation
+    // P (Principal) and A (Authorized) are campaign committees - include in candidate totals
+    const isExternalCommittee = ['J', 'U', 'B', 'D'].includes(targetCommittee.designation || '');
     
-    if (isNonPrimaryDesignation) {
-      console.log(`[FEC-DONORS] Committee ${committeeId} has designation '${targetCommittee.designation}' - storing with candidate_id = null`);
+    // For external committees, store with candidate_id = null
+    // Their donations should NOT be associated with a candidate until manually allocated by admin
+    const effectiveCandidateId = isExternalCommittee ? null : candidateId;
+    
+    if (isExternalCommittee) {
+      console.log(`[FEC-DONORS] Committee ${committeeId} has designation '${targetCommittee.designation}' - external committee, storing with candidate_id = null`);
     }
     
     // Determine starting cursor for resumable sync
@@ -1159,7 +1176,9 @@ serve(async (req) => {
     await saveCursor(committeeHasMore);
 
     // Fetch FEC totals and store rollup (only if we completed the committee)
-    if (!committeeHasMore) {
+    // CRITICAL: Only store rollups for P/A (campaign) committees with the candidate_id
+    // External committees (J/U/B/D) should NOT contribute to candidate totals
+    if (!committeeHasMore && !isExternalCommittee) {
       const fecTotals = await fetchFECTotals(fecApiKey, committeeId, cycle);
       
       await supabase
@@ -1171,7 +1190,7 @@ serve(async (req) => {
           local_itemized: committeeItemized,
           local_transfers: committeeTransfers,
           local_earmarked: committeeEarmarked,
-          // NEW: Category-level local tracking
+          // Category-level local tracking
           local_individual_itemized: committeeIndividualItemized,
           local_pac_contributions: committeePacContributions,
           local_party_contributions: committeePartyContributions,
@@ -1183,6 +1202,34 @@ serve(async (req) => {
           last_sync: new Date().toISOString(),
           last_fec_check: new Date().toISOString()
         }, { onConflict: 'committee_id,cycle' });
+    } else if (!committeeHasMore && isExternalCommittee) {
+      // For external committees, store in external_committee_finance table instead
+      const fecTotals = await fetchFECTotals(fecApiKey, committeeId, cycle);
+      
+      const designationFullMap: Record<string, string> = {
+        'J': 'Joint Fundraising Committee',
+        'U': 'Unauthorized (Super PAC/Party)',
+        'B': 'Lobbyist/Bundler',
+        'D': 'Leadership PAC'
+      };
+      
+      await supabase
+        .from('external_committee_finance')
+        .upsert({
+          committee_id: committeeId,
+          committee_name: committeeName,
+          designation: targetCommittee.designation || 'U',
+          designation_full: designationFullMap[targetCommittee.designation || 'U'] || 'Unknown',
+          candidate_id: candidateId, // Link to candidate for reference
+          cycle,
+          total_raised: fecTotals.fecTotalReceipts || 0,
+          individual_contributions: fecTotals.fecItemized || 0,
+          pac_contributions: fecTotals.fecPacContributions || 0,
+          party_contributions: fecTotals.fecPartyContributions || 0,
+          last_fec_check: new Date().toISOString()
+        }, { onConflict: 'committee_id,cycle' });
+      
+      console.log(`[FEC-DONORS] External committee ${committeeId} stored in external_committee_finance (not included in candidate totals)`);
     }
 
     console.log(`[FEC-DONORS] Completed ${committeeId}: ${totalDonors} donors, ${totalContributions} contributions, $${committeeItemized} itemized (ind: $${committeeIndividualItemized}, pac: $${committeePacContributions}, party: $${committeePartyContributions}), hasMore=${committeeHasMore}`);
@@ -1191,11 +1238,23 @@ serve(async (req) => {
     const globalHasMore = committeeHasMore || remainingCommittees > 0;
 
     // Update reconciliation record with category-level data
+    // CRITICAL: Only include P/A (campaign) committees in the reconciliation totals
+    // First, get the list of campaign committee IDs for this candidate
+    const { data: campaignCommittees } = await supabase
+      .from('candidate_committees')
+      .select('fec_committee_id')
+      .eq('candidate_id', candidateId)
+      .in('designation', ['P', 'A']);
+    
+    const campaignCommitteeIds = (campaignCommittees || []).map(c => c.fec_committee_id);
+    
+    // Only fetch rollups for campaign committees
     const { data: rollups } = await supabase
       .from('committee_finance_rollups')
       .select('local_itemized, local_transfers, local_earmarked, local_individual_itemized, local_pac_contributions, local_party_contributions, fec_itemized, fec_unitemized, fec_total_receipts')
       .eq('candidate_id', candidateId)
-      .eq('cycle', cycle);
+      .eq('cycle', cycle)
+      .in('committee_id', campaignCommitteeIds.length > 0 ? campaignCommitteeIds : ['__none__']);
     
     let totalLocalItemized = 0;
     let totalLocalItemizedNet = 0;

@@ -182,6 +182,24 @@ serve(async (req) => {
         // FEC considers a committee terminated if is_active is false
         const isTerminated = cmte.is_active === false;
 
+        // CRITICAL: Only P (Principal) and A (Authorized) committees should default to active
+        // J, U, B, D committees default to inactive and require manual activation
+        const isCampaignCommittee = ['P', 'A'].includes(cmte.designation);
+        const defaultActive = isCampaignCommittee;
+        
+        // Check if committee already exists to preserve existing active status
+        const { data: existingCommittee } = await supabase
+          .from('candidate_committees')
+          .select('active')
+          .eq('candidate_id', candidateId)
+          .eq('fec_committee_id', cmte.committee_id)
+          .maybeSingle();
+        
+        // Preserve existing active status if committee exists, otherwise use default
+        const activeStatus = existingCommittee !== null 
+          ? existingCommittee.active 
+          : defaultActive;
+        
         const { error: upsertError } = await supabase
           .from('candidate_committees')
           .upsert({
@@ -191,7 +209,7 @@ serve(async (req) => {
             designation: cmte.designation,
             designation_full: cmte.designation_full,
             role,
-            active: true, // Default to active for sync purposes
+            active: activeStatus, // Preserve existing or default based on designation
             cycles: cyclesAsStrings,
             is_terminated: isTerminated,
             source_fec_candidate_id: fecIdRecord.fecCandidateId,
