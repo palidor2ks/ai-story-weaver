@@ -426,11 +426,14 @@ serve(async (req) => {
       committees.push({ id, name, role, designation, ...syncInfo });
     };
 
-    // Fetch existing committee sync info from database
+    // Fetch ONLY ACTIVE committees from database - admins control which committees sync
     const { data: existingCommittees } = await supabase
       .from('candidate_committees')
-      .select('fec_committee_id, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
-      .eq('candidate_id', candidateId);
+      .select('fec_committee_id, name, role, designation, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
+      .eq('candidate_id', candidateId)
+      .eq('active', true);  // Only sync active committees
+
+    console.log('[FEC-DONORS] Found', existingCommittees?.length || 0, 'ACTIVE committees in database for candidate', candidateId);
 
     const committeeSyncInfo = new Map(
       (existingCommittees || []).map(c => [c.fec_committee_id, {
@@ -440,6 +443,16 @@ serve(async (req) => {
         lastSyncCompletedAt: c.last_sync_completed_at
       }])
     );
+    
+    // Pre-populate committees array from active database records
+    (existingCommittees || []).forEach(c => {
+      pushCommittee(c.fec_committee_id, c.name || '', c.role || 'authorized', c.designation || undefined, {
+        lastSyncDate: c.last_sync_date,
+        lastContributionDate: c.last_contribution_date,
+        lastIndex: c.last_index,
+        lastSyncCompletedAt: c.last_sync_completed_at,
+      });
+    });
 
     const { data: candidateData } = await supabase
       .from('candidates')
@@ -480,57 +493,16 @@ serve(async (req) => {
     // (best-effort; may be rate limited)
     const committeeLookupDiagnostics: Array<{ fecId: string; status?: number; resultsCount?: number; error?: string }> = [];
 
-    if (!fecCommitteeId && allFecIds.length > 0) {
-      for (const fecId of allFecIds) {
-        try {
-          // Include ALL committee designations: P, A, J, U, B, D
-          const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&cycle=${cycle}&designation=P&designation=A&designation=J&designation=U&designation=B&designation=D&per_page=50`;
-          const committeeResponse = await fetchWithRetry(committeeUrl);
+    // NOTE: We no longer auto-discover committees from FEC API here.
+    // Committees must be added via fetch-fec-committees first, then activated by admin.
+    // This ensures admins have full control over which committees get synced.
+    // If no active committees exist, we'll invoke fetch-fec-committees to populate the table,
+    // but only sync committees that are marked active.
 
-          if (!committeeResponse?.ok) {
-            committeeLookupDiagnostics.push({ fecId, status: committeeResponse?.status });
-            console.warn('[FEC-DONORS] Committee lookup non-OK for', fecId, 'status:', committeeResponse?.status);
-            continue;
-          }
-
-          let committeeData;
-          try {
-            committeeData = await committeeResponse.json();
-          } catch {
-            committeeLookupDiagnostics.push({ fecId, status: committeeResponse.status, error: 'invalid_json' });
-            console.error('[FEC-DONORS] Failed to parse committee response for', fecId);
-            continue;
-          }
-
-          const results = committeeData?.results || [];
-          committeeLookupDiagnostics.push({ fecId, status: committeeResponse.status, resultsCount: results.length });
-
-          results.forEach((cmte: { committee_id: string; name?: string; designation?: string }) => {
-            const role = cmte.designation === 'P' ? 'principal' : 
-                         cmte.designation === 'J' ? 'joint_fundraising' :
-                         cmte.designation === 'U' ? 'leadership_pac' : 'authorized';
-            const syncInfo = committeeSyncInfo.get(cmte.committee_id);
-            pushCommittee(cmte.committee_id, cmte.name || '', role, cmte.designation, syncInfo);
-          });
-
-          const primary = results.find((cmte: { designation?: string }) => cmte.designation === 'P');
-          if (primary?.committee_id && !candidateData?.fec_committee_id) {
-            await supabase
-              .from('candidates')
-              .update({ fec_committee_id: primary.committee_id })
-              .eq('id', candidateId);
-          }
-        } catch (err) {
-          committeeLookupDiagnostics.push({ fecId, error: err instanceof Error ? err.message : 'unknown_error' });
-          console.error('[FEC-DONORS] Committee lookup failed for', fecId, ':', err);
-        }
-      }
-    }
-
-    // Fallback: if we still have no committees, try the dedicated committee-linking function
-    // (this also persists candidate_committees + primary committee for future runs)
+    // Fallback: if we still have no ACTIVE committees, invoke fetch-fec-committees to populate the table
+    // Then re-check for active committees. If still none, return helpful error.
     if (committees.length === 0 && allFecIds.length > 0) {
-      console.warn('[FEC-DONORS] No committees discovered; invoking fetch-fec-committees fallback...');
+      console.warn('[FEC-DONORS] No ACTIVE committees found; invoking fetch-fec-committees to populate committee table...');
 
       const { error: linkErr, data: linkData } = await supabase.functions.invoke('fetch-fec-committees', {
         body: {
@@ -546,24 +518,17 @@ serve(async (req) => {
         console.warn('[FEC-DONORS] fetch-fec-committees fallback returned error:', linkData.error);
       }
 
-      const { data: refreshedCandidate } = await supabase
-        .from('candidates')
-        .select('fec_committee_id')
-        .eq('id', candidateId)
-        .maybeSingle();
-
-      if (refreshedCandidate?.fec_committee_id) {
-        const syncInfo = committeeSyncInfo.get(refreshedCandidate.fec_committee_id);
-        pushCommittee(refreshedCandidate.fec_committee_id, '', 'stored', undefined, syncInfo);
-      }
-
+      // Re-query for ACTIVE committees only
       const { data: refreshedCommittees } = await supabase
         .from('candidate_committees')
-        .select('fec_committee_id, designation, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
-        .eq('candidate_id', candidateId);
+        .select('fec_committee_id, name, role, designation, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
+        .eq('candidate_id', candidateId)
+        .eq('active', true);  // Only sync active committees
+
+      console.log('[FEC-DONORS] After fallback, found', refreshedCommittees?.length || 0, 'ACTIVE committees');
 
       (refreshedCommittees || []).forEach(c => {
-        pushCommittee(c.fec_committee_id, '', 'linked', c.designation || undefined, {
+        pushCommittee(c.fec_committee_id, c.name || '', c.role || 'linked', c.designation || undefined, {
           lastSyncDate: c.last_sync_date,
           lastContributionDate: c.last_contribution_date,
           lastIndex: c.last_index,
@@ -573,15 +538,37 @@ serve(async (req) => {
     }
 
     if (committees.length === 0) {
-      console.error('[FEC-DONORS] No committees available after lookup', {
+      // Check if there ARE committees, just none active
+      const { data: allCommittees } = await supabase
+        .from('candidate_committees')
+        .select('fec_committee_id, name, active')
+        .eq('candidate_id', candidateId);
+      
+      const totalCommittees = allCommittees?.length || 0;
+      const inactiveCommittees = allCommittees?.filter(c => !c.active) || [];
+      
+      console.error('[FEC-DONORS] No ACTIVE committees available', {
         candidateId,
         allFecIds,
-        committeeLookupDiagnostics,
+        totalCommittees,
+        inactiveCount: inactiveCommittees.length,
       });
+
+      if (totalCommittees > 0) {
+        return new Response(
+          JSON.stringify({
+            error: `No ACTIVE committees to sync. Found ${totalCommittees} committee(s) but none are marked active. Use the Committee Allocation panel to activate committees before syncing.`,
+            candidateId,
+            fecCandidateIds: allFecIds,
+            inactiveCommittees: inactiveCommittees.map(c => ({ id: c.fec_committee_id, name: c.name })),
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
       return new Response(
         JSON.stringify({
-          error: `No FEC committees found for candidate IDs: ${allFecIds.join(', ') || '(none)'}. Try verifying the FEC ID and retry in a minute (rate limits can also cause this).`,
+          error: `No FEC committees found for candidate IDs: ${allFecIds.join(', ') || '(none)'}. Try fetching committees first, then activate them in the Committee Allocation panel.`,
           candidateId,
           fecCandidateIds: allFecIds,
         }),
