@@ -106,6 +106,36 @@ export function DonorAliasesPanel() {
     remaining: number;
     total: number;
   } | null>(null);
+  
+  // Per-alias backfill state
+  const [backfillingAliasId, setBackfillingAliasId] = useState<string | null>(null);
+
+  const handleBackfillAlias = async (aliasId: string) => {
+    setBackfillingAliasId(aliasId);
+    try {
+      const { data, error } = await supabase.functions.invoke('refresh-donor-display-names', {
+        body: { alias_id: aliasId }
+      });
+      
+      if (error) {
+        console.error('Error backfilling alias:', error);
+        toast.error('Failed to backfill alias');
+        return;
+      }
+
+      if (!data.success) {
+        toast.error(data.error || 'Failed to backfill alias');
+        return;
+      }
+
+      toast.success(data.message || `Updated ${data.processed} donor(s)`);
+    } catch (err) {
+      console.error('Error backfilling alias:', err);
+      toast.error('An error occurred during backfill');
+    } finally {
+      setBackfillingAliasId(null);
+    }
+  };
 
   const handleRefreshDisplayNames = async () => {
     setIsRefreshing(true);
@@ -434,36 +464,7 @@ export function DonorAliasesPanel() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button 
-                  onClick={handleRefreshDisplayNames} 
-                  disabled={isRefreshing}
-                  variant="secondary"
-                  size="sm"
-                >
-                  {isRefreshing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  <span className="ml-1.5">Backfill</span>
-                </Button>
               </div>
-              
-              {/* Progress indicator for backfill */}
-              {refreshProgress && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Progress: {refreshProgress.processed.toLocaleString()} processed</span>
-                    <span>{refreshProgress.remaining.toLocaleString()} remaining</span>
-                  </div>
-                  <Progress 
-                    value={refreshProgress.total > 0 
-                      ? (refreshProgress.processed / refreshProgress.total) * 100 
-                      : 0
-                    } 
-                  />
-                </div>
-              )}
 
               {/* Search Results */}
               {donorSearch.length >= 2 && (
@@ -531,14 +532,29 @@ export function DonorAliasesPanel() {
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
                                 {existingAlias ? (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleOpenEdit(existingAlias)}
-                                  >
-                                    <Pencil className="h-3 w-3 mr-1" />
-                                    Edit Alias
-                                  </Button>
+                                  <>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleOpenEdit(existingAlias)}
+                                    >
+                                      <Pencil className="h-3 w-3 mr-1" />
+                                      Edit Alias
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleBackfillAlias(existingAlias.id)}
+                                      disabled={backfillingAliasId === existingAlias.id}
+                                      title="Apply this alias to all matching donors"
+                                    >
+                                      {backfillingAliasId === existingAlias.id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <RefreshCw className="h-3 w-3" />
+                                      )}
+                                    </Button>
+                                  </>
                                 ) : (
                                   <>
                                     <Button
