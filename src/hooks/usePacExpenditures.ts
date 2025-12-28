@@ -73,11 +73,52 @@ export function useFetchPacExpenditures() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['pac-expenditures'] });
       queryClient.invalidateQueries({ queryKey: ['pac-candidate-totals'] });
+      queryClient.invalidateQueries({ queryKey: ['pac-expenditure-summary'] });
       toast.success(data.message);
     },
     onError: (error: Error) => {
       console.error('Error fetching PAC expenditures:', error);
       toast.error(`Failed to fetch expenditures: ${error.message}`);
+    },
+  });
+}
+
+interface FetchDonorsResult {
+  success: boolean;
+  message: string;
+  stats?: {
+    receipts: number;
+    donors: number;
+    totalAmount: number;
+    pagesFetched: number;
+    topDonors?: Array<{ name: string; type: string; amount: number }>;
+  };
+  error?: string;
+}
+
+export function useFetchPacDonors() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ committeeId, cycle = '2024' }: { committeeId: string; cycle?: string }): Promise<FetchDonorsResult> => {
+      const { data, error } = await supabase.functions.invoke('fetch-pac-donors', {
+        body: { committeeId, cycle }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pac-donors'] });
+      queryClient.invalidateQueries({ queryKey: ['attributed-donors'] });
+      queryClient.invalidateQueries({ queryKey: ['donor-attributed-impact'] });
+      toast.success(data.message);
+    },
+    onError: (error: Error) => {
+      console.error('Error fetching PAC donors:', error);
+      toast.error(`Failed to fetch donors: ${error.message}`);
     },
   });
 }

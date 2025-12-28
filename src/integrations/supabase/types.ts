@@ -538,7 +538,7 @@ export type Database = {
       donors: {
         Row: {
           amount: number
-          candidate_id: string
+          candidate_id: string | null
           conduit_committee_id: string | null
           conduit_name: string | null
           contributor_city: string | null
@@ -563,7 +563,7 @@ export type Database = {
         }
         Insert: {
           amount: number
-          candidate_id: string
+          candidate_id?: string | null
           conduit_committee_id?: string | null
           conduit_name?: string | null
           contributor_city?: string | null
@@ -588,7 +588,7 @@ export type Database = {
         }
         Update: {
           amount?: number
-          candidate_id?: string
+          candidate_id?: string | null
           conduit_committee_id?: string | null
           conduit_name?: string | null
           contributor_city?: string | null
