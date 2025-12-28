@@ -106,6 +106,12 @@ export function DonorAliasesPanel() {
   const allocateMutation = useAllocateCommittee();
   const batchAllocateMutation = useBatchAllocateCommittees();
   const [selectedCommitteeForAllocation, setSelectedCommitteeForAllocation] = useState<string | null>(null);
+  const [lastBatchResult, setLastBatchResult] = useState<{
+    committeesProcessed: number;
+    totalContributionsUpdated: number;
+    totalDonorsUpdated: number;
+    totalTransfersDeleted: number;
+  } | null>(null);
 
   // Display name refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -636,7 +642,19 @@ export function DonorAliasesPanel() {
                   </CardDescription>
                 </div>
                 <Button
-                  onClick={() => batchAllocateMutation.mutate({ cycle: '2024' })}
+                  onClick={() => {
+                    setLastBatchResult(null);
+                    batchAllocateMutation.mutate({ cycle: '2024' }, {
+                      onSuccess: (data) => {
+                        setLastBatchResult({
+                          committeesProcessed: data.committeesProcessed || 0,
+                          totalContributionsUpdated: data.totalContributionsUpdated || 0,
+                          totalDonorsUpdated: data.totalDonorsUpdated || 0,
+                          totalTransfersDeleted: data.totalTransfersDeleted || 0,
+                        });
+                      }
+                    });
+                  }}
                   disabled={batchAllocateMutation.isPending}
                   className="shrink-0"
                 >
@@ -654,7 +672,35 @@ export function DonorAliasesPanel() {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Batch sync result summary */}
+              {lastBatchResult && (
+                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="font-medium text-green-700 dark:text-green-400">Batch Sync Complete</span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Committees</p>
+                      <p className="text-lg font-semibold">{lastBatchResult.committeesProcessed}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Contributions</p>
+                      <p className="text-lg font-semibold">{lastBatchResult.totalContributionsUpdated.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Donors</p>
+                      <p className="text-lg font-semibold">{lastBatchResult.totalDonorsUpdated.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Transfers Removed</p>
+                      <p className="text-lg font-semibold">{lastBatchResult.totalTransfersDeleted.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {committeesLoading ? (
                 <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
                   <Loader2 className="h-4 w-4 animate-spin" />
