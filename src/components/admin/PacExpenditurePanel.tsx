@@ -6,11 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFetchPacExpenditures, useFetchPacDonors } from '@/hooks/usePacExpenditures';
 import { useImportExternalCommittee } from '@/hooks/useImportExternalCommittee';
+import { useDiscoverSuperPacs } from '@/hooks/useDiscoverSuperPacs';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { DollarSign, RefreshCw, Loader2, Users, Search, Plus, Download, Clock } from 'lucide-react';
+import { DollarSign, RefreshCw, Loader2, Users, Search, Plus, Download, Clock, Sparkles } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 const formatCurrency = (value: number) => {
@@ -36,10 +38,12 @@ export function PacExpenditurePanel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importCommitteeId, setImportCommitteeId] = useState('');
+  const [discoverCycle, setDiscoverCycle] = useState('2024');
   
   const fetchMutation = useFetchPacExpenditures();
   const fetchDonorsMutation = useFetchPacDonors();
   const importMutation = useImportExternalCommittee();
+  const discoverMutation = useDiscoverSuperPacs();
 
   // Fetch external committees (Super PACs) with donor counts
   const { data: externalCommittees = [], isLoading } = useQuery({
@@ -187,13 +191,21 @@ export function PacExpenditurePanel() {
     }
   };
 
+  const handleDiscover = async () => {
+    try {
+      await discoverMutation.mutateAsync({ cycle: discoverCycle, minSpend: 100000 });
+    } catch (error) {
+      // Error is handled by the mutation
+    }
+  };
+
   const filteredCommittees = externalCommittees.filter(c => 
     !searchQuery || 
     c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.fec_committee_id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const isSyncing = syncingAllDonors || syncingAllExpenditures;
+  const isSyncing = syncingAllDonors || syncingAllExpenditures || discoverMutation.isPending;
 
   return (
     <Card>
@@ -209,18 +221,50 @@ export function PacExpenditurePanel() {
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
+            {/* Discover Super PACs - Primary action */}
+            <Button
+              onClick={handleDiscover}
+              disabled={isSyncing}
+              className="gap-2"
+            >
+              {discoverMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Discovering...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Discover PACs ({discoverCycle})
+                </>
+              )}
+            </Button>
+
+            {/* Cycle selector */}
+            <Select value={discoverCycle} onValueChange={setDiscoverCycle}>
+              <SelectTrigger className="w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2024">2024</SelectItem>
+                <SelectItem value="2022">2022</SelectItem>
+                <SelectItem value="2020">2020</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Manual import fallback */}
             <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" size="sm" className="gap-2">
                   <Plus className="h-4 w-4" />
-                  Import Super PAC
+                  Import by ID
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Import Super PAC</DialogTitle>
+                  <DialogTitle>Import Super PAC by ID</DialogTitle>
                   <DialogDescription>
-                    Enter the FEC Committee ID to import a Super PAC. You can find these on fec.gov.
+                    Manually import a specific Super PAC by its FEC Committee ID.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
