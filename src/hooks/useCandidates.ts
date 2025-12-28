@@ -315,21 +315,84 @@ export const useCandidate = (id: string | undefined) => {
   });
 };
 
+// Extended donor interface with canonical name support
+export interface DonorWithCanonical extends Donor {
+  display_name: string;
+  is_consolidated: boolean;
+  name_variations?: string[];
+}
+
 export const useCandidateDonors = (candidateId: string | undefined) => {
   return useQuery({
     queryKey: ['donors', candidateId],
     queryFn: async () => {
       if (!candidateId) return [];
       
-      const { data, error } = await supabase
+      // First get raw donors
+      const { data: rawDonors, error: donorError } = await supabase
         .from('donors')
         .select('*')
         .eq('candidate_id', candidateId)
         .order('amount', { ascending: false })
-        .limit(10000); // Override Supabase default 1000 limit
+        .limit(10000);
       
-      if (error) throw error;
-      return data as Donor[];
+      if (donorError) throw donorError;
+      if (!rawDonors || rawDonors.length === 0) return [];
+      
+      // Get all active aliases
+      const { data: aliases, error: aliasError } = await supabase
+        .from('donor_aliases')
+        .select('*')
+        .eq('is_active', true);
+      
+      if (aliasError) {
+        console.warn('Failed to fetch donor aliases:', aliasError);
+        // Return donors without alias resolution
+        return rawDonors.map(d => ({
+          ...d,
+          display_name: d.name,
+          is_consolidated: false,
+        })) as DonorWithCanonical[];
+      }
+      
+      // Group donors by canonical name
+      const canonicalGroups = new Map<string, DonorWithCanonical>();
+      
+      rawDonors.forEach(donor => {
+        // Find matching alias
+        const matchingAlias = (aliases || []).find(alias => {
+          if (!alias.donor_types?.includes(donor.type)) return false;
+          const pattern = alias.alias_pattern.replace(/%/g, '.*').replace(/_/g, '.');
+          const regex = new RegExp(`^${pattern}$`, 'i');
+          return regex.test(donor.name);
+        });
+        
+        const canonicalName = matchingAlias?.canonical_name || donor.name;
+        const groupKey = `${canonicalName}|${donor.type}|${donor.cycle}`;
+        
+        const existing = canonicalGroups.get(groupKey);
+        if (existing) {
+          // Merge with existing donor
+          existing.amount += donor.amount;
+          existing.transaction_count += donor.transaction_count;
+          if (!existing.name_variations) existing.name_variations = [existing.name];
+          if (!existing.name_variations.includes(donor.name)) {
+            existing.name_variations.push(donor.name);
+          }
+          existing.is_consolidated = true;
+        } else {
+          canonicalGroups.set(groupKey, {
+            ...donor,
+            display_name: canonicalName,
+            is_consolidated: !!matchingAlias,
+            name_variations: matchingAlias ? [donor.name] : undefined,
+          });
+        }
+      });
+      
+      // Sort by amount descending
+      return Array.from(canonicalGroups.values())
+        .sort((a, b) => b.amount - a.amount);
     },
     enabled: !!candidateId,
   });

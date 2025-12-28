@@ -17,6 +17,7 @@ export interface CandidateAnswerCoverage {
   donorCount: number;
   fecCandidateId: string | null;
   fecCommitteeId: string | null;
+  committeeCount: number;         // Number of linked committees
   // Finance breakdown - from finance_reconciliation (single source of truth)
   localItemized: number;         // Local itemized contributions (gross)
   localItemizedNet: number;      // Local itemized NET (excluding earmark pass-throughs) - comparable to FEC
@@ -148,8 +149,11 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       const partialSyncMap: Record<string, boolean> = {};
       const lastSyncMap: Record<string, string | null> = {};
       const completeSyncMap: Record<string, boolean> = {};
+      const committeeCountMap: Record<string, number> = {};
       
       (partialSyncData || []).forEach(row => {
+        // Count committees per candidate
+        committeeCountMap[row.candidate_id] = (committeeCountMap[row.candidate_id] || 0) + 1;
         // has_more = true means incomplete sync
         if (row.has_more === true) {
           partialSyncMap[row.candidate_id] = true;
@@ -202,6 +206,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           donorCount: donorCountMap[c.id] || 0,
           fecCandidateId: c.fec_candidate_id || null,
           fecCommitteeId: c.fec_committee_id || null,
+          committeeCount: committeeCountMap[c.id] || 0,
           // Finance data from reconciliation table (single source of truth)
           localItemized: rec?.local_itemized || 0,
           localItemizedNet: rec?.local_itemized_net || 0, // NET for proper comparison

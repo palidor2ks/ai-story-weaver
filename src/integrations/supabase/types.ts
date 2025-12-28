@@ -496,6 +496,45 @@ export type Database = {
         }
         Relationships: []
       }
+      donor_aliases: {
+        Row: {
+          alias_pattern: string
+          canonical_name: string
+          created_at: string | null
+          donor_type: string
+          donor_types: string[] | null
+          fec_committee_id: string | null
+          id: string
+          is_active: boolean | null
+          notes: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          alias_pattern: string
+          canonical_name: string
+          created_at?: string | null
+          donor_type: string
+          donor_types?: string[] | null
+          fec_committee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          alias_pattern?: string
+          canonical_name?: string
+          created_at?: string | null
+          donor_type?: string
+          donor_types?: string[] | null
+          fec_committee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       donors: {
         Row: {
           amount: number
@@ -506,6 +545,7 @@ export type Database = {
           contributor_state: string | null
           contributor_zip: string | null
           cycle: string
+          display_name: string | null
           employer: string | null
           first_receipt_date: string | null
           id: string
@@ -530,6 +570,7 @@ export type Database = {
           contributor_state?: string | null
           contributor_zip?: string | null
           cycle: string
+          display_name?: string | null
           employer?: string | null
           first_receipt_date?: string | null
           id: string
@@ -554,6 +595,7 @@ export type Database = {
           contributor_state?: string | null
           contributor_zip?: string | null
           cycle?: string
+          display_name?: string | null
           employer?: string | null
           first_receipt_date?: string | null
           id?: string
@@ -1292,6 +1334,21 @@ export type Database = {
           },
         ]
       }
+      donor_consolidated: {
+        Row: {
+          cycle: string | null
+          display_name: string | null
+          donor_ids: string[] | null
+          is_consolidated: boolean | null
+          name_variations: string[] | null
+          primary_id: string | null
+          recipient_count: number | null
+          total_amount: number | null
+          total_transactions: number | null
+          type: Database["public"]["Enums"]["donor_type"] | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       backfill_candidate_scores: {
@@ -1306,6 +1363,19 @@ export type Database = {
         Returns: {
           confidence: Database["public"]["Enums"]["confidence_level"]
           coverage_tier: Database["public"]["Enums"]["coverage_tier"]
+        }[]
+      }
+      get_contribution_totals: {
+        Args: { p_candidate_id: string; p_cycle: string }
+        Returns: {
+          contribution_count: number
+          earmarked_total: number
+          individual_total: number
+          itemized_total: number
+          pac_total: number
+          party_total: number
+          passthrough_total: number
+          transfers_total: number
         }[]
       }
       has_role: {
@@ -1329,6 +1399,11 @@ export type Database = {
           coverage_tier: Database["public"]["Enums"]["coverage_tier"]
           updated: boolean
         }[]
+      }
+      refresh_donor_display_names: { Args: never; Returns: undefined }
+      resolve_donor_display_name: {
+        Args: { p_donor_name: string; p_donor_type: string }
+        Returns: string
       }
       save_quiz_results: {
         Args: {

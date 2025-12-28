@@ -362,14 +362,29 @@ export function useFECIntegration() {
         return { success: false, error: error.message };
       }
 
-      if (data?.error) {
-        return { success: false, error: String(data.error) };
+      // Check for success flag first - if present, the function completed successfully
+      if (data?.success) {
+        const detail = data?.details?.[0];
+        const status = detail?.status || 'completed';
+        
+        // Return status with variance info if there was a data issue (not a function failure)
+        if (status === 'error' && detail) {
+          return { 
+            success: true, 
+            status: `Variance: ${detail.individualDeltaPct?.toFixed(1) || 0}% individual, ${detail.pacDeltaPct?.toFixed(1) || 0}% PAC`
+          };
+        }
+        
+        return { success: true, status };
       }
 
-      return { 
-        success: true, 
-        status: data?.details?.[0]?.status || 'completed'
-      };
+      // Only treat as error if no success flag and there's a string error message
+      if (data?.error && typeof data.error === 'string') {
+        return { success: false, error: data.error };
+      }
+
+      // Fallback for unexpected response format
+      return { success: false, error: 'Unexpected response format' };
     } catch (err) {
       console.error('[RECONCILIATION] Exception:', err);
       return { success: false, error: 'Failed to trigger reconciliation' };

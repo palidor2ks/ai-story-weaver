@@ -74,3 +74,9 @@ verify_jwt = false
 
 [functions.cleanup-donor-aggregations]
 verify_jwt = false
+
+[functions.refresh-donor-display-names]
+verify_jwt = false
+
+[functions.allocate-committee]
+verify_jwt = false

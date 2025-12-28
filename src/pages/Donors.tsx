@@ -1,116 +1,75 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Header } from '@/components/Header';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Search, DollarSign, Building2, User as UserIcon, ArrowUpRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
-
-interface Donor {
-  id: string;
-  name: string;
-  amount: number;
-  type: string;
-  cycle: string;
-  candidate_id: string;
-  candidate?: {
-    name: string;
-    party: string;
-  };
-}
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { DonorFilters } from '@/components/DonorFilters';
+import { DonorCard } from '@/components/DonorCard';
+import { useDonorsPaginated, useAvailableDonorFilters, type DonorFilters as DonorFiltersType } from '@/hooks/useDonorsPaginated';
 
 export const Donors = () => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'amount' | 'name'>('amount');
-
-  const { data: donors = [], isLoading } = useQuery({
-    queryKey: ['all-donors'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('donors')
-        .select(`
-          *,
-          candidates(name, party)
-        `)
-        .order('amount', { ascending: false });
-      
-      if (error) throw error;
-      return data.map(d => ({
-        ...d,
-        candidate: d.candidates
-      })) as Donor[];
-    },
+  const { data: filterOptions, isLoading: optionsLoading } = useAvailableDonorFilters();
+  
+  const [filters, setFilters] = useState<Partial<DonorFiltersType>>({
+    page: 1,
+    pageSize: 24,
+    sortBy: 'amount',
+    sortOrder: 'desc',
+    cycle: '',
+    type: 'all',
+    search: '',
+    state: 'all',
+    minAmount: null,
+    maxAmount: null,
+    includeTransfers: true,
+    includeConduitOrgs: true,
+    candidateId: null,
+    party: 'all',
   });
 
-  const filteredDonors = useMemo(() => {
-    let result = [...donors];
+  const effectiveCycle = filters.cycle || filterOptions?.cycles[0] || '';
+  const effectiveFilters = { ...filters, cycle: effectiveCycle };
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(d => 
-        d.name.toLowerCase().includes(query) ||
-        d.candidate?.name?.toLowerCase().includes(query)
-      );
-    }
+  const { data, isLoading, error } = useDonorsPaginated(effectiveFilters);
 
-    if (typeFilter !== 'all') {
-      result = result.filter(d => d.type === typeFilter);
-    }
+  const donors = data?.donors || [];
+  const totalCount = data?.totalCount || 0;
+  const pageSize = filters.pageSize || 24;
+  const currentPage = filters.page || 1;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
-    switch (sortBy) {
-      case 'amount':
-        result.sort((a, b) => b.amount - a.amount);
-        break;
-      case 'name':
-        result.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-    }
-
-    return result;
-  }, [searchQuery, typeFilter, sortBy, donors]);
-
-  const formatAmount = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'Individual':
-        return <UserIcon className="w-4 h-4" />;
-      case 'PAC':
-      case 'Organization':
-        return <Building2 className="w-4 h-4" />;
-      default:
-        return <DollarSign className="w-4 h-4" />;
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setFilters(prev => ({ ...prev, page }));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
-  const getPartyColor = (party: string) => {
-    switch (party) {
-      case 'Democrat':
-        return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
-      case 'Republican':
-        return 'bg-red-500/10 text-red-600 border-red-500/20';
-      default:
-        return 'bg-muted text-muted-foreground';
+  const getPageNumbers = () => {
+    const pages: (number | 'ellipsis')[] = [];
+    const showPages = 5;
+    
+    if (totalPages <= showPages + 2) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push('ellipsis');
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push('ellipsis');
+      pages.push(totalPages);
     }
+    
+    return pages;
   };
 
-  if (isLoading) {
+  if (optionsLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
         <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       </div>
     );
@@ -121,110 +80,146 @@ export const Donors = () => {
       <Header />
       
       <main className="container py-8 px-4">
+        {/* Page header */}
         <div className="mb-8">
           <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
             Campaign Donors
           </h1>
           <p className="text-muted-foreground">
-            View campaign contributions to political candidates.
+            Explore campaign contributions to political candidates. Similar donors are automatically grouped.
           </p>
         </div>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              placeholder="Search donors or candidates..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Select value={sortBy} onValueChange={(v: 'amount' | 'name') => setSortBy(v)}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="amount">Amount</SelectItem>
-                <SelectItem value="name">Name</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="Individual">Individual</SelectItem>
-                <SelectItem value="PAC">PAC</SelectItem>
-                <SelectItem value="Organization">Organization</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="mb-6">
+          <DonorFilters
+            filters={effectiveFilters}
+            onFiltersChange={setFilters}
+            availableCycles={filterOptions?.cycles || []}
+            availableStates={filterOptions?.states || []}
+            isLoading={isLoading}
+          />
         </div>
 
-        <p className="text-sm text-muted-foreground mb-4">
-          Showing {filteredDonors.length} donor{filteredDonors.length !== 1 ? 's' : ''}
-        </p>
-
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredDonors.map((donor) => (
-            <Card key={donor.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    {getTypeIcon(donor.type)}
-                    <CardTitle className="text-lg">
-                      <Link to={`/donor/${donor.id}`} className="hover:underline">
-                        {donor.name}
-                      </Link>
-                    </CardTitle>
-                  </div>
-                  <Badge variant="outline">{donor.type}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-sm">Amount</span>
-                    <span className="text-xl font-bold text-agree">{formatAmount(donor.amount)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-sm">Cycle</span>
-                    <span className="font-medium">{donor.cycle}</span>
-                  </div>
-                  {donor.candidate && (
-                    <div className="pt-2 border-t border-border">
-                      <span className="text-muted-foreground text-sm block mb-1">Donated to</span>
-                      <Link 
-                        to={`/candidate/${donor.candidate_id}`}
-                        className="flex items-center gap-2 hover:text-primary transition-colors"
-                      >
-                        <span className="font-medium">{donor.candidate.name}</span>
-                        <Badge className={getPartyColor(donor.candidate.party)} variant="outline">
-                          {donor.candidate.party}
-                        </Badge>
-                      </Link>
-                    </div>
-                  )}
-                  <Link 
-                    to={`/donor/${donor.id}`}
-                    className="inline-flex items-center gap-1 text-primary text-sm hover:underline"
-                  >
-                    <ArrowUpRight className="w-4 h-4" />
-                    View donor profile
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        {/* Results count */}
+        <div className="flex items-center justify-between mb-6">
+          <p className="text-sm text-muted-foreground">
+            {isLoading ? (
+              'Loading...'
+            ) : (
+              <>
+                Showing {((currentPage - 1) * pageSize) + 1}–{Math.min(currentPage * pageSize, totalCount)} of{' '}
+                <span className="font-medium text-foreground">{totalCount.toLocaleString()}</span> donors
+              </>
+            )}
+          </p>
+          {totalPages > 1 && (
+            <p className="text-sm text-muted-foreground hidden sm:block">
+              Page {currentPage} of {totalPages}
+            </p>
+          )}
         </div>
 
-        {filteredDonors.length === 0 && (
+        {/* Error state */}
+        {error && (
           <div className="text-center py-16">
-            <p className="text-muted-foreground">No donors found.</p>
+            <p className="text-destructive">Error loading donors: {error.message}</p>
+          </div>
+        )}
+
+        {/* Loading state with skeleton cards */}
+        {isLoading && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="h-10 w-10 bg-muted rounded-lg" />
+                    <div className="h-5 w-16 bg-muted rounded" />
+                  </div>
+                  <div className="h-5 bg-muted rounded w-3/4 mb-4" />
+                  <div className="flex justify-between">
+                    <div className="space-y-2">
+                      <div className="h-3 w-16 bg-muted rounded" />
+                      <div className="h-6 w-12 bg-muted rounded" />
+                    </div>
+                    <div className="text-right space-y-2">
+                      <div className="h-3 w-12 bg-muted rounded ml-auto" />
+                      <div className="h-7 w-20 bg-muted rounded" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Donor cards grid */}
+        {!isLoading && !error && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {donors.map((donor) => (
+              <DonorCard
+                key={donor.id}
+                id={donor.id}
+                name={donor.name}
+                type={donor.type as 'Individual' | 'PAC' | 'Organization' | 'Unknown'}
+                amount={donor.amount}
+                transactionCount={donor.transaction_count || 1}
+                isConsolidated={donor.is_consolidated}
+                nameVariations={donor.name_variations}
+                recipientCount={donor.recipient_count}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!isLoading && !error && donors.length === 0 && (
+          <div className="text-center py-16">
+            <p className="text-muted-foreground">No donors found matching your filters.</p>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!isLoading && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-8">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">Previous</span>
+            </Button>
+            
+            <div className="flex items-center gap-1">
+              {getPageNumbers().map((page, i) => (
+                page === 'ellipsis' ? (
+                  <span key={`ellipsis-${i}`} className="px-2 text-muted-foreground">…</span>
+                ) : (
+                  <Button
+                    key={page}
+                    variant={page === currentPage ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => goToPage(page)}
+                    className="w-9"
+                  >
+                    {page}
+                  </Button>
+                )
+              ))}
+            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              <span className="hidden sm:inline mr-1">Next</span>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
         )}
       </main>

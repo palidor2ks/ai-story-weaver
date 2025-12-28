@@ -118,10 +118,10 @@ serve(async (req) => {
 
     const results = {
       checked: 0,
-      ok: 0,
-      warning: 0,
-      error: 0,
-      skipped: 0,
+      okCount: 0,
+      warningCount: 0,
+      errorCount: 0,
+      skippedCount: 0,
       details: [] as Array<{ candidateId: string; name: string; status: string; deltaPct: number; individualDeltaPct: number; pacDeltaPct: number }>
     };
 
@@ -141,36 +141,37 @@ serve(async (req) => {
         }
 
         if (!committees || committees.length === 0) {
-          results.skipped++;
+          results.skippedCount++;
           continue;
         }
 
-        // Get local totals from rollups (including new category-level columns)
-        const { data: rollups } = await supabase
-          .from('committee_finance_rollups')
-          .select('local_itemized, local_transfers, local_earmarked, local_individual_itemized, local_pac_contributions, local_party_contributions')
-          .eq('candidate_id', candidate.id)
-          .eq('cycle', cycle);
+        // Calculate local totals using SQL aggregation via database function
+        // This avoids the 1000 row limit and handles null memo_code properly
+        const { data: categoryTotals, error: totalsError } = await supabase
+          .rpc('get_contribution_totals', {
+            p_candidate_id: candidate.id,
+            p_cycle: cycle
+          });
+        
+        if (totalsError) {
+          console.error(`[RECONCILIATION] ${candidate.name}: Error fetching contribution totals:`, totalsError);
+          results.skippedCount++;
+          continue;
+        }
 
-        const localItemized = (rollups || []).reduce((sum, r) => sum + (r.local_itemized || 0), 0);
-        const localTransfers = (rollups || []).reduce((sum, r) => sum + (r.local_transfers || 0), 0);
-        const localEarmarked = (rollups || []).reduce((sum, r) => sum + (r.local_earmarked || 0), 0);
-        const localIndividualItemized = (rollups || []).reduce((sum, r) => sum + (r.local_individual_itemized || 0), 0);
-        const localPacContributions = (rollups || []).reduce((sum, r) => sum + (r.local_pac_contributions || 0), 0);
-        const localPartyContributions = (rollups || []).reduce((sum, r) => sum + (r.local_party_contributions || 0), 0);
-        
-        // Calculate local_itemized_net by querying contributions directly
-        // Exclude earmark pass-throughs (contributions with "SEE BELOW" memo text)
-        const { data: passThroughData } = await supabase
-          .from('contributions')
-          .select('amount')
-          .eq('candidate_id', candidate.id)
-          .eq('cycle', cycle)
-          .eq('is_contribution', true)
-          .ilike('memo_text', '%SEE BELOW%');
-        
-        const passThroughTotal = (passThroughData || []).reduce((sum, c) => sum + (c.amount || 0), 0);
+        const totals = categoryTotals?.[0] || categoryTotals || {};
+        const localIndividualItemized = Number(totals.individual_total) || 0;
+        const localPacContributions = Number(totals.pac_total) || 0;
+        const localPartyContributions = Number(totals.party_total) || 0;
+        const localItemized = Number(totals.itemized_total) || 0;
+        const localTransfers = Number(totals.transfers_total) || 0;
+        const localEarmarked = Number(totals.earmarked_total) || 0;
+        const passThroughTotal = Number(totals.passthrough_total) || 0;
+        const contributionCount = Number(totals.contribution_count) || 0;
+
         const localItemizedNet = localItemized - passThroughTotal;
+
+        console.log(`[RECONCILIATION] ${candidate.name}: ${contributionCount} contributions - Individual: $${localIndividualItemized}, PAC: $${localPacContributions}, Party: $${localPartyContributions}`);
 
         // Fetch fresh FEC totals for each committee (with category-level data)
         let fecItemized = 0;
@@ -195,17 +196,26 @@ serve(async (req) => {
           fecCandidateContribution += totals.fecCandidateContribution || 0;
           fecOtherReceipts += totals.fecOtherReceipts || 0;
 
-          // Update committee rollup with fresh FEC data
+          // Update committee rollup with fresh FEC data AND corrected local totals
           await supabase
             .from('committee_finance_rollups')
             .upsert({
               committee_id: cmte.fec_committee_id,
               candidate_id: candidate.id,
               cycle,
+              // FEC data
               fec_itemized: totals.fecItemized,
               fec_unitemized: totals.fecUnitemized,
               fec_total_receipts: totals.fecTotalReceipts,
-              last_fec_check: new Date().toISOString()
+              // Corrected local totals (calculated from contributions table)
+              local_itemized: localItemized,
+              local_individual_itemized: localIndividualItemized,
+              local_pac_contributions: localPacContributions,
+              local_party_contributions: localPartyContributions,
+              local_transfers: localTransfers,
+              local_earmarked: localEarmarked,
+              last_fec_check: new Date().toISOString(),
+              updated_at: new Date().toISOString()
             }, { onConflict: 'committee_id,cycle' });
 
           // Rate limit
@@ -281,9 +291,9 @@ serve(async (req) => {
           }, { onConflict: 'candidate_id,cycle' });
 
         results.checked++;
-        if (status === 'ok') results.ok++;
-        else if (status === 'warning') results.warning++;
-        else if (status === 'error') results.error++;
+        if (status === 'ok') results.okCount++;
+        else if (status === 'warning') results.warningCount++;
+        else if (status === 'error') results.errorCount++;
 
         results.details.push({
           candidateId: candidate.id,
@@ -298,7 +308,7 @@ serve(async (req) => {
 
       } catch (err) {
         console.error(`[RECONCILIATION] Error processing ${candidate.name}:`, err);
-        results.skipped++;
+        results.skippedCount++;
       }
     }
 
@@ -308,7 +318,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         ...results,
-        message: `Reconciled ${results.checked} candidates: ${results.ok} OK, ${results.warning} warnings, ${results.error} errors`
+        message: `Reconciled ${results.checked} candidates: ${results.okCount} OK, ${results.warningCount} warnings, ${results.errorCount} errors`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
