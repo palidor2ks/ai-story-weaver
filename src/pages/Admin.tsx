@@ -8,6 +8,7 @@ import { Header } from "@/components/Header";
 import { AnswerCoveragePanel } from "@/components/admin/AnswerCoveragePanel";
 import { ClaimReviewPanel } from "@/components/admin/ClaimReviewPanel";
 import { DonorAliasesPanel } from "@/components/admin/DonorAliasesPanel";
+import { PacExpenditurePanel } from "@/components/admin/PacExpenditurePanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit, UserCheck, Building2, RefreshCw, CheckCircle2, AlertTriangle, BarChart3, DollarSign } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit, UserCheck, Building2, RefreshCw, CheckCircle2, AlertTriangle, BarChart3, DollarSign, TrendingUp } from "lucide-react";
 import { usePopulatePartyAnswers } from "@/hooks/usePopulatePartyAnswers";
 import { usePartyAnswerStats } from "@/hooks/usePartyAnswerStats";
 import { Progress } from "@/components/ui/progress";
@@ -450,6 +451,10 @@ export default function Admin() {
             <TabsTrigger value="donor-aliases" className="gap-2">
               <DollarSign className="h-4 w-4" />
               Donor Aliases
+            </TabsTrigger>
+            <TabsTrigger value="pac-expenditures" className="gap-2">
+              <TrendingUp className="h-4 w-4" />
+              PAC Expenditures
             </TabsTrigger>
           </TabsList>
 
@@ -922,6 +927,11 @@ export default function Admin() {
                 <DonorAliasesPanel />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* PAC Expenditures Tab */}
+          <TabsContent value="pac-expenditures">
+            <PacExpenditurePanel />
           </TabsContent>
 
         </Tabs>
