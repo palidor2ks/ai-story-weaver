@@ -51,6 +51,12 @@ serve(async (req) => {
         .in('designation', ['J', 'U', 'B', 'D'])
         .not('candidate_id', 'is', null);
       
+      console.log('[ALLOCATE-COMMITTEE] Query result:', {
+        count: linkedCommittees?.length,
+        error: fetchError,
+        firstFew: linkedCommittees?.slice(0, 3)
+      });
+      
       if (fetchError) {
         console.error('[ALLOCATE-COMMITTEE] Error fetching linked committees:', fetchError);
         return new Response(
