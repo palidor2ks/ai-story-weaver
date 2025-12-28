@@ -74,21 +74,28 @@ serve(async (req) => {
 
     console.log('[IMPORT-COMMITTEE] Importing committee:', committeeId);
 
-    // Check if committee already exists
-    const { data: existingCommittee } = await supabase
+    // Check if committee already exists - check ALL rows with this fec_committee_id
+    // (there can be duplicates with different candidate_ids due to unique constraint on candidate_id+fec_committee_id)
+    const { data: existingCommittees, error: existingError } = await supabase
       .from('candidate_committees')
       .select('id, fec_committee_id, name, candidate_id')
-      .eq('fec_committee_id', committeeId)
-      .maybeSingle();
+      .eq('fec_committee_id', committeeId);
 
-    if (existingCommittee) {
-      console.log('[IMPORT-COMMITTEE] Committee already exists:', existingCommittee);
+    if (existingError) {
+      console.error('[IMPORT-COMMITTEE] Error checking existing committees:', existingError);
+    }
+
+    if (existingCommittees && existingCommittees.length > 0) {
+      console.log('[IMPORT-COMMITTEE] Committee already exists:', existingCommittees);
+      // Return the first one (or the one with null candidate_id if it exists)
+      const orphanCommittee = existingCommittees.find(c => c.candidate_id === null) || existingCommittees[0];
       return new Response(
         JSON.stringify({ 
           success: true,
-          message: 'Committee already exists',
-          committee: existingCommittee,
-          alreadyExists: true
+          message: `Committee already exists (${existingCommittees.length} record${existingCommittees.length > 1 ? 's' : ''})`,
+          committee: orphanCommittee,
+          alreadyExists: true,
+          existingCount: existingCommittees.length
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
