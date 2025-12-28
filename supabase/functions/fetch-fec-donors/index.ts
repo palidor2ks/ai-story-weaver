@@ -392,7 +392,8 @@ serve(async (req) => {
       maxPages = 100,
       includeOtherReceipts = false,
       forceFullSync = false,
-      resumeFromCursor = true // Use saved cursors by default
+      resumeFromCursor = true, // Use saved cursors by default
+      includeExternalCommittees = false // NEW: Only sync P/A committees by default
     } = body || {};
     
     console.log('[FEC-DONORS] Starting sync for:', { candidateId, fecCandidateId, fecCommitteeId, cycle, forceFullSync, resumeFromCursor });
@@ -589,12 +590,60 @@ serve(async (req) => {
       );
     }
 
+    // FILTER COMMITTEES: Only sync P/A (campaign) committees by default
+    // External committees (J/U/B/D) are saved to DB but NOT synced unless explicitly requested
+    const campaignCommittees = committees.filter(c => ['P', 'A'].includes(c.designation || ''));
+    const externalCommittees = committees.filter(c => ['J', 'U', 'B', 'D'].includes(c.designation || ''));
+    
+    console.log(`[FEC-DONORS] Found ${campaignCommittees.length} campaign (P/A) and ${externalCommittees.length} external (J/U/B/D) committees`);
+    
+    // Save external committees to DB with active=false but DON'T sync their donors
+    for (const ext of externalCommittees) {
+      const { data: existingExt } = await supabase
+        .from('candidate_committees')
+        .select('active')
+        .eq('candidate_id', candidateId)
+        .eq('fec_committee_id', ext.id)
+        .maybeSingle();
+      
+      await supabase
+        .from('candidate_committees')
+        .upsert({
+          candidate_id: candidateId,
+          fec_committee_id: ext.id,
+          name: ext.name,
+          role: ext.role,
+          designation: ext.designation,
+          active: existingExt?.active ?? false, // Preserve existing or default to false
+        }, { onConflict: 'candidate_id,fec_committee_id' });
+    }
+    
+    // Decide which committees to sync
+    const committeesToSync = includeExternalCommittees ? committees : campaignCommittees;
+    
+    if (committeesToSync.length === 0) {
+      console.log('[FEC-DONORS] No campaign committees to sync (only external committees found)');
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          imported: 0,
+          contributionsImported: 0,
+          totalRaised: 0,
+          hasMore: false,
+          message: `Found ${externalCommittees.length} external committees (J/U/B/D) but no campaign committees (P/A). External committees are not synced by default.`,
+          committees: committees.map(c => ({ id: c.id, name: c.name, designation: c.designation })),
+          externalCommitteesSaved: externalCommittees.length
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // CRITICAL: Process only ONE committee per invocation to avoid worker limits
     // Find the first committee that needs syncing (has cursor OR not completed yet)
     let targetCommittee: CommitteeInfo | null = null;
     let remainingCommittees = 0;
     
-    for (const cmte of committees) {
+    for (const cmte of committeesToSync) {
       const hasIncompleteSync = cmte.lastIndex && !cmte.lastSyncCompletedAt;
       const neverSynced = !cmte.lastSyncCompletedAt;
       const needsSync = forceFullSync || hasIncompleteSync || neverSynced;
@@ -1240,13 +1289,13 @@ serve(async (req) => {
     // Update reconciliation record with category-level data
     // CRITICAL: Only include P/A (campaign) committees in the reconciliation totals
     // First, get the list of campaign committee IDs for this candidate
-    const { data: campaignCommittees } = await supabase
+    const { data: campaignCommitteesForRecon } = await supabase
       .from('candidate_committees')
       .select('fec_committee_id')
       .eq('candidate_id', candidateId)
       .in('designation', ['P', 'A']);
     
-    const campaignCommitteeIds = (campaignCommittees || []).map(c => c.fec_committee_id);
+    const campaignCommitteeIds = (campaignCommitteesForRecon || []).map(c => c.fec_committee_id);
     
     // Only fetch rollups for campaign committees
     const { data: rollups } = await supabase
