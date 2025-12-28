@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Check, X, Search, Users, DollarSign, Link2, Layers, RefreshCw, Loader2, Building2, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Search, Users, DollarSign, Link2, Layers, RefreshCw, Loader2, Building2, AlertTriangle, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,6 +61,7 @@ import {
 } from '@/hooks/useDonorAliases';
 import { useSearchDonors } from '@/hooks/useDonorsPaginated';
 import { useUnallocatedCommittees, useCandidatesForAllocation, useAllocateCommittee, useBatchAllocateCommittees, useCommitteeDiagnostics, type BatchAllocateResult } from '@/hooks/useCommitteeAllocation';
+import { useImportExternalCommittee, useFetchCommitteeDonors } from '@/hooks/useImportExternalCommittee';
 
 const DONOR_TYPES = ['Individual', 'PAC', 'Organization', 'Unknown'];
 
@@ -115,6 +116,12 @@ export function DonorAliasesPanel() {
     totalDonorsUpdated: number;
     totalTransfersDeleted: number;
   } | null>(null);
+
+  // Import external committee hooks
+  const importCommitteeMutation = useImportExternalCommittee();
+  const fetchCommitteeDonorsMutation = useFetchCommitteeDonors();
+  const [importCommitteeId, setImportCommitteeId] = useState('');
+  const [fetchingDonorsForCommittee, setFetchingDonorsForCommittee] = useState<string | null>(null);
 
   // Display name refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -631,6 +638,60 @@ export function DonorAliasesPanel() {
 
         {/* Committee Allocation Tab */}
         <TabsContent value="committees" className="space-y-4">
+          {/* Import External Committee Card */}
+          <Card className="bg-muted/50">
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="font-medium flex items-center gap-2">
+                    <Upload className="h-4 w-4" />
+                    Import External Committee
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Import a Super PAC or other committee by FEC Committee ID (e.g., C00879510 for AMERICA PAC)
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="FEC Committee ID (e.g., C00879510)"
+                    value={importCommitteeId}
+                    onChange={(e) => setImportCommitteeId(e.target.value.toUpperCase())}
+                    className="w-[280px]"
+                  />
+                  <Button
+                    onClick={async () => {
+                      if (!importCommitteeId.trim()) {
+                        toast.error('Please enter a committee ID');
+                        return;
+                      }
+                      const result = await importCommitteeMutation.mutateAsync(importCommitteeId.trim());
+                      if (result.success && !result.alreadyExists) {
+                        // Automatically fetch donors for the newly imported committee
+                        setFetchingDonorsForCommittee(importCommitteeId.trim());
+                        await fetchCommitteeDonorsMutation.mutateAsync({ committeeId: importCommitteeId.trim() });
+                        setFetchingDonorsForCommittee(null);
+                        setImportCommitteeId('');
+                      }
+                    }}
+                    disabled={importCommitteeMutation.isPending || fetchCommitteeDonorsMutation.isPending}
+                  >
+                    {importCommitteeMutation.isPending || fetchCommitteeDonorsMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        {fetchCommitteeDonorsMutation.isPending ? 'Fetching Donors...' : 'Importing...'}
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4 mr-2" />
+                        Import & Fetch
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -640,8 +701,7 @@ export function DonorAliasesPanel() {
                     Committee Allocation
                   </CardTitle>
                   <CardDescription className="mt-1.5">
-                    J/U/B/D committees (Joint Fundraising, Leadership PACs, etc.) collect donations for multiple candidates.
-                    Batch sync allocates all linked committees automatically.
+                    J/U/B/D committees and imported external committees. Allocate them to candidates to associate their contributions.
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-3">
@@ -852,6 +912,26 @@ export function DonorAliasesPanel() {
                                 ))}
                               </SelectContent>
                             </Select>
+                            {/* Fetch donors button for committees without data */}
+                            {committee.contribution_count === 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="ml-2"
+                                onClick={async () => {
+                                  setFetchingDonorsForCommittee(committee.fec_committee_id);
+                                  await fetchCommitteeDonorsMutation.mutateAsync({ committeeId: committee.fec_committee_id });
+                                  setFetchingDonorsForCommittee(null);
+                                }}
+                                disabled={fetchingDonorsForCommittee === committee.fec_committee_id}
+                              >
+                                {fetchingDonorsForCommittee === committee.fec_committee_id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Download className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}

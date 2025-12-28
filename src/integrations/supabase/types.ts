@@ -64,7 +64,7 @@ export type Database = {
       candidate_committees: {
         Row: {
           active: boolean | null
-          candidate_id: string
+          candidate_id: string | null
           created_at: string | null
           designation: string | null
           designation_full: string | null
@@ -86,7 +86,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean | null
-          candidate_id: string
+          candidate_id?: string | null
           created_at?: string | null
           designation?: string | null
           designation_full?: string | null
@@ -108,7 +108,7 @@ export type Database = {
         }
         Update: {
           active?: boolean | null
-          candidate_id?: string
+          candidate_id?: string | null
           created_at?: string | null
           designation?: string | null
           designation_full?: string | null
