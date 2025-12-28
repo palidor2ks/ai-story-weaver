@@ -64,6 +64,45 @@ serve(async (req) => {
       previousCandidateId
     });
 
+    // When allocating a J/U/B/D committee, delete any transfer contributions FROM this committee
+    // to the candidate to prevent double-counting (we want the original donations, not the transfers)
+    let transfersDeleted = 0;
+    let transferDonorsDeleted = 0;
+    
+    if (candidateId && committeeData?.name) {
+      const committeeName = committeeData.name;
+      
+      // Delete transfer contributions from this committee to the target candidate
+      const { count: contribDeleteCount, error: contribDeleteError } = await supabase
+        .from('contributions')
+        .delete()
+        .eq('candidate_id', candidateId)
+        .eq('is_transfer', true)
+        .or(`contributor_name.ilike.%${committeeName}%,conduit_committee_name.ilike.%${committeeName}%`);
+      
+      if (contribDeleteError) {
+        console.error('[ALLOCATE-COMMITTEE] Error deleting transfer contributions:', contribDeleteError);
+      } else {
+        transfersDeleted = contribDeleteCount || 0;
+        console.log('[ALLOCATE-COMMITTEE] Deleted transfer contributions:', transfersDeleted);
+      }
+      
+      // Delete the committee from donors table for this candidate (transfer entries)
+      const { count: donorDeleteCount, error: donorDeleteError } = await supabase
+        .from('donors')
+        .delete()
+        .eq('candidate_id', candidateId)
+        .eq('is_transfer', true)
+        .ilike('name', `%${committeeName}%`);
+      
+      if (donorDeleteError) {
+        console.error('[ALLOCATE-COMMITTEE] Error deleting transfer donors:', donorDeleteError);
+      } else {
+        transferDonorsDeleted = donorDeleteCount || 0;
+        console.log('[ALLOCATE-COMMITTEE] Deleted transfer donors:', transferDonorsDeleted);
+      }
+    }
+
     // Update contributions
     let contributionsUpdated = 0;
     if (candidateId) {
@@ -154,6 +193,8 @@ serve(async (req) => {
     }
 
     console.log('[ALLOCATE-COMMITTEE] Complete:', {
+      transfersDeleted,
+      transferDonorsDeleted,
       contributionsUpdated,
       donorsUpdated,
       candidateId: candidateId || '(deallocated)'
@@ -165,10 +206,12 @@ serve(async (req) => {
         committeeId,
         candidateId: candidateId || null,
         cycle,
+        transfersDeleted,
+        transferDonorsDeleted,
         contributionsUpdated,
         donorsUpdated,
         message: candidateId 
-          ? `Allocated committee to candidate: ${contributionsUpdated} contributions, ${donorsUpdated} donors updated`
+          ? `Allocated committee: ${transfersDeleted} transfers removed, ${contributionsUpdated} contributions + ${donorsUpdated} donors assigned`
           : `Deallocated committee: ${contributionsUpdated} contributions, ${donorsUpdated} donors cleared`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
