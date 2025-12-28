@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFetchPacExpenditures, useFetchPacDonors } from '@/hooks/usePacExpenditures';
 import { useImportExternalCommittee } from '@/hooks/useImportExternalCommittee';
@@ -39,6 +40,7 @@ export function PacExpenditurePanel() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importCommitteeId, setImportCommitteeId] = useState('');
   const [discoverCycle, setDiscoverCycle] = useState('2024');
+  const [minSpendThreshold, setMinSpendThreshold] = useState(100000);
   
   const fetchMutation = useFetchPacExpenditures();
   const fetchDonorsMutation = useFetchPacDonors();
@@ -193,10 +195,15 @@ export function PacExpenditurePanel() {
 
   const handleDiscover = async () => {
     try {
-      await discoverMutation.mutateAsync({ cycle: discoverCycle, minSpend: 100000 });
+      await discoverMutation.mutateAsync({ cycle: discoverCycle, minSpend: minSpendThreshold });
     } catch (error) {
       // Error is handled by the mutation
     }
+  };
+
+  const formatThreshold = (value: number) => {
+    if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+    return `$${Math.round(value / 1_000)}K`;
   };
 
   const filteredCommittees = externalCommittees.filter(c => 
@@ -251,6 +258,20 @@ export function PacExpenditurePanel() {
                 <SelectItem value="2020">2020</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* Minimum spend threshold slider */}
+            <div className="flex items-center gap-3 bg-muted/50 px-3 py-1.5 rounded-md">
+              <Label className="text-xs text-muted-foreground whitespace-nowrap">Min Spend:</Label>
+              <Slider
+                value={[minSpendThreshold]}
+                onValueChange={(v) => setMinSpendThreshold(v[0])}
+                min={10000}
+                max={1000000}
+                step={10000}
+                className="w-24"
+              />
+              <span className="text-sm font-medium w-14">{formatThreshold(minSpendThreshold)}</span>
+            </div>
 
             {/* Manual import fallback */}
             <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
