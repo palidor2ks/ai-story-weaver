@@ -13,6 +13,7 @@ export interface UnallocatedCommittee {
   donor_count: number;
   linked_candidate_id: string | null;
   linked_candidate_name: string | null;
+  active: boolean;
 }
 
 export interface CommitteeDiagnostics {
@@ -33,7 +34,7 @@ export function useUnallocatedCommittees(cycle: string = '2024') {
       // 2. OR have NULL candidate_id (orphan committees - externally imported)
       const { data: committees, error: committeeError } = await supabase
         .from('candidate_committees')
-        .select('fec_committee_id, name, designation, designation_full, source_fec_candidate_id, candidate_id')
+        .select('fec_committee_id, name, designation, designation_full, source_fec_candidate_id, candidate_id, active')
         .or('designation.in.(J,U,B,D),candidate_id.is.null')
         .order('name');
 
@@ -108,6 +109,7 @@ export function useUnallocatedCommittees(cycle: string = '2024') {
           donor_count: donorCount,
           linked_candidate_id: c.candidate_id,
           linked_candidate_name: c.candidate_id ? candidateNames.get(c.candidate_id) || null : null,
+          active: c.active ?? true,
         };
       });
     },
@@ -260,6 +262,36 @@ export function useBatchAllocateCommittees() {
     onError: (error: Error) => {
       console.error('Error in batch allocation:', error);
       toast.error(`Batch allocation failed: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * Toggle committee active status
+ */
+export function useToggleCommitteeActive() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ fecCommitteeId, active }: { fecCommitteeId: string; active: boolean }) => {
+      const { data, error } = await supabase
+        .from('candidate_committees')
+        .update({ active, updated_at: new Date().toISOString() })
+        .eq('fec_committee_id', fecCommitteeId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['unallocated-committees'] });
+      queryClient.invalidateQueries({ queryKey: ['committee-diagnostics'] });
+      toast.success(`Committee ${data.active ? 'activated' : 'deactivated'}`);
+    },
+    onError: (error: Error) => {
+      console.error('Error toggling committee status:', error);
+      toast.error(`Failed to update committee: ${error.message}`);
     },
   });
 }

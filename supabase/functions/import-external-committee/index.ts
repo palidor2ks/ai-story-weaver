@@ -129,6 +129,7 @@ serve(async (req) => {
     });
 
     // Insert committee into candidate_committees with NULL candidate_id
+    // External/imported committees start inactive - require admin activation
     const committeeRecord = {
       fec_committee_id: committee.committee_id,
       name: committee.name,
@@ -136,7 +137,7 @@ serve(async (req) => {
       designation_full: committee.designation_full || committee.committee_type_full,
       candidate_id: null, // Orphan committee - will be allocated later
       role: 'external', // Mark as externally imported
-      active: true,
+      active: false, // Inactive by default - admin must activate
       source_fec_candidate_id: null, // Not linked to any FEC candidate
     };
 

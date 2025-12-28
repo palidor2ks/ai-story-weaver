@@ -60,7 +60,7 @@ import {
   DonorAliasInput,
 } from '@/hooks/useDonorAliases';
 import { useSearchDonors } from '@/hooks/useDonorsPaginated';
-import { useUnallocatedCommittees, useCandidatesForAllocation, useAllocateCommittee, useBatchAllocateCommittees, useCommitteeDiagnostics, type BatchAllocateResult } from '@/hooks/useCommitteeAllocation';
+import { useUnallocatedCommittees, useCandidatesForAllocation, useAllocateCommittee, useBatchAllocateCommittees, useCommitteeDiagnostics, useToggleCommitteeActive, type BatchAllocateResult } from '@/hooks/useCommitteeAllocation';
 import { useImportExternalCommittee, useFetchCommitteeDonors } from '@/hooks/useImportExternalCommittee';
 
 const DONOR_TYPES = ['Individual', 'PAC', 'Organization', 'Unknown'];
@@ -107,6 +107,7 @@ export function DonorAliasesPanel() {
   const { data: allCandidates } = useCandidatesForAllocation();
   const allocateMutation = useAllocateCommittee();
   const batchAllocateMutation = useBatchAllocateCommittees();
+  const toggleActiveMutation = useToggleCommitteeActive();
   const [selectedCommitteeForAllocation, setSelectedCommitteeForAllocation] = useState<string | null>(null);
   const [forceReallocate, setForceReallocate] = useState(false);
   const [lastBatchResult, setLastBatchResult] = useState<{
@@ -839,6 +840,7 @@ export function DonorAliasesPanel() {
                       <TableRow>
                         <TableHead>Committee</TableHead>
                         <TableHead>Type</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead className="text-right">Unallocated</TableHead>
                         <TableHead className="text-right">Donors</TableHead>
                         <TableHead>Linked Candidate</TableHead>
@@ -868,6 +870,39 @@ export function DonorAliasesPanel() {
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <p>{committee.designation_full || 'Unknown designation'}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableCell>
+                          <TableCell>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2"
+                                    onClick={() => toggleActiveMutation.mutate({
+                                      fecCommitteeId: committee.fec_committee_id,
+                                      active: !committee.active
+                                    })}
+                                    disabled={toggleActiveMutation.isPending}
+                                  >
+                                    {committee.active ? (
+                                      <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                                        <Check className="h-3 w-3 mr-1" />
+                                        Active
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="text-muted-foreground">
+                                        <X className="h-3 w-3 mr-1" />
+                                        Inactive
+                                      </Badge>
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Click to {committee.active ? 'deactivate' : 'activate'} committee</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
