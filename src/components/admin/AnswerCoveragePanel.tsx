@@ -21,7 +21,6 @@ import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plu
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { CommitteeBreakdown } from "@/components/admin/CommitteeBreakdown";
-import { CommitteeLinkStatusBadge } from "@/components/admin/CommitteeLinkStatusBadge";
 import { FinanceSummaryCard, type FinanceSummaryData } from "@/components/FinanceSummaryCard";
 import { RecentErrorsPanel } from "@/components/admin/RecentErrorsPanel";
 import { SyncStatusBadge } from "@/components/admin/SyncStatusBadge";
@@ -117,7 +116,7 @@ export function AnswerCoveragePanel() {
   const { 
     fetchFECCandidateId, 
     fetchFECCommittees,
-    fetchFECDonorsComplete, 
+    fetchFECDonors, 
     batchFetchFECIds,
     batchFetchDonors,
     resumeAllPartialSyncs,
@@ -132,7 +131,6 @@ export function AnswerCoveragePanel() {
     hasPartialSync,
     batchProgress: fecBatchProgress,
     isBatchRunning: isFECBatchRunning,
-    syncProgress,
     syncAllProgress,
     isSyncAllRunning
   } = useFECIntegration();
@@ -210,11 +208,6 @@ export function AnswerCoveragePanel() {
     [baseFilteredCandidates]
   );
 
-  const noCommitteeCandidates = useMemo(() => 
-    baseFilteredCandidates.filter(c => c.fecCandidateId && !c.fecCommitteeId),
-    [baseFilteredCandidates]
-  );
-
   const candidatesWithoutFecId = useMemo(() => 
     baseFilteredCandidates.filter(c => !c.fecCandidateId),
     [baseFilteredCandidates]
@@ -243,10 +236,6 @@ export function AnswerCoveragePanel() {
       result = result.filter(c => c.syncStatus === 'partial');
     } else if (syncFilter === 'complete') {
       result = result.filter(c => c.syncStatus === 'complete');
-    } else if (syncFilter === 'no_committee') {
-      result = result.filter(c => c.fecCandidateId && !c.fecCommitteeId);
-    } else if (syncFilter === 'has_committee') {
-      result = result.filter(c => !!c.fecCommitteeId);
     }
     
     return result;
@@ -286,35 +275,6 @@ export function AnswerCoveragePanel() {
     } catch (err) {
       console.error('[Admin] Batch link FEC IDs failed:', err);
       toast.error('Failed to link FEC IDs');
-    }
-  };
-
-  const handleBatchLinkCommittees = async () => {
-    try {
-      const toProcess = noCommitteeCandidates.slice(0, 50);
-      if (toProcess.length === 0) {
-        toast.info('All candidates with FEC IDs already have committees linked');
-        return;
-      }
-      
-      let success = 0;
-      let failed = 0;
-      
-      for (const candidate of toProcess) {
-        try {
-          await fetchFECCommittees(candidate.id, candidate.fecCandidateId!);
-          success++;
-        } catch (err) {
-          console.error(`[Admin] Failed to link committees for ${candidate.name}:`, err);
-          failed++;
-        }
-      }
-      
-      toast.success(`Linked committees for ${success} candidates (${failed} failed)`);
-      refetchCandidates();
-    } catch (err) {
-      console.error('[Admin] Batch link committees failed:', err);
-      toast.error('Failed to link committees');
     }
   };
 
@@ -512,28 +472,6 @@ export function AnswerCoveragePanel() {
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction onClick={handleBatchLinkFECIds}>Link FEC IDs</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-                
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                      <Building2 className="h-4 w-4 mr-2" />
-                      Link Committees ({noCommitteeCandidates.length})
-                    </DropdownMenuItem>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Bulk Link FEC Committees?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will fetch and link FEC committees for {noCommitteeCandidates.length} candidate(s) with FEC IDs but no committees yet.
-                        Up to 50 candidates will be processed.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleBatchLinkCommittees}>Link Committees</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -910,38 +848,6 @@ export function AnswerCoveragePanel() {
           </div>
         )}
 
-        {/* Per-Candidate Sync Progress */}
-        {syncProgress && (
-          <div className="border rounded-lg p-4 space-y-2 bg-blue-500/5 border-blue-500/20">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                <span className="text-sm font-medium">
-                  Syncing: {syncProgress.candidateName}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span>
-                  Committee {syncProgress.committeesSynced}/{syncProgress.committeesTotal}
-                </span>
-                <span className="text-blue-600 font-medium">
-                  {syncProgress.donorsImported.toLocaleString()} donors
-                </span>
-              </div>
-            </div>
-            <Progress 
-              value={syncProgress.committeesTotal > 0 
-                ? (syncProgress.committeesSynced / syncProgress.committeesTotal) * 100 
-                : 0
-              } 
-              className="h-2" 
-            />
-            <div className="text-xs text-muted-foreground">
-              Auto-continues until all committees are synced. This may take several minutes for large campaigns.
-            </div>
-          </div>
-        )}
-
         {/* Tabs for Rep vs Topic view */}
         <Tabs defaultValue="representatives" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
@@ -990,7 +896,6 @@ export function AnswerCoveragePanel() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Sync Status</SelectItem>
-                  <SelectItem value="no_committee">No Committee ({noCommitteeCandidates.length})</SelectItem>
                   <SelectItem value="needs_sync">Needs Sync ({needsSyncCandidates.length})</SelectItem>
                   <SelectItem value="partial">Partial ({partialSyncCandidates.length})</SelectItem>
                   <SelectItem value="complete">Complete ({completeSyncCandidates.length})</SelectItem>
@@ -1039,11 +944,10 @@ export function AnswerCoveragePanel() {
                       <TableHead className="text-center w-[100px]">Answers</TableHead>
                       <TableHead className="w-[80px]">Tier</TableHead>
                       <TableHead className="w-[70px]">Health</TableHead>
-                      <TableHead className="w-[100px]">Committee</TableHead>
                       <TableHead className="w-[80px]">Sync</TableHead>
                       <TableHead className="w-[90px]">Finance</TableHead>
                       <TableHead className="w-[100px]">FEC ID</TableHead>
-                      <TableHead className="text-right w-[120px]">Actions</TableHead>
+                      <TableHead className="text-right w-[140px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1111,44 +1015,6 @@ export function AnswerCoveragePanel() {
                               hasOverride={hasOverride}
                             />
                           </TableCell>
-                          {/* Committee Status Badge - NEW COLUMN */}
-                          <TableCell>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <div className="cursor-pointer">
-                                  <CommitteeLinkStatusBadge
-                                    candidateId={candidate.id}
-                                    candidateName={candidate.name}
-                                    fecCandidateId={candidate.fecCandidateId}
-                                    fecCommitteeId={candidate.fecCommitteeId}
-                                    committeeCount={candidate.committeeCount}
-                                    lastSyncDate={candidate.lastSyncDate}
-                                    onLinkCommittees={fetchFECCommittees}
-                                    onRefetch={refetchCandidates}
-                                    disabled={anyBatchRunning}
-                                  />
-                                </div>
-                              </PopoverTrigger>
-                              {hasCommittee && (
-                                <PopoverContent className="w-96 p-0" align="start">
-                                  <div className="p-3 border-b">
-                                    <h4 className="font-medium text-sm">Committee Management</h4>
-                                    <p className="text-xs text-muted-foreground">
-                                      Toggle which committees to include in donor sync
-                                    </p>
-                                  </div>
-                                  <div className="p-3">
-                                    <CommitteeBreakdown
-                                      candidateId={candidate.id}
-                                      candidateName={candidate.name}
-                                      fecCandidateId={candidate.fecCandidateId!}
-                                      onRefetch={refetchCandidates}
-                                    />
-                                  </div>
-                                </PopoverContent>
-                              )}
-                            </Popover>
-                          </TableCell>
                           {/* Sync Status Badge */}
                           <TableCell>
                             <SyncStatusBadge
@@ -1183,15 +1049,47 @@ export function AnswerCoveragePanel() {
                               </PopoverContent>
                             </Popover>
                           </TableCell>
-                          {/* FEC ID column - simplified */}
                           <TableCell>
-                            {hasFecId ? (
-                              <Badge variant="outline" className="text-xs font-mono">
-                                {candidate.fecCandidateId?.slice(0, 9)}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground/50 text-xs">—</span>
-                            )}
+                            <div className="flex flex-col gap-0.5">
+                              {hasFecId ? (
+                                <Badge variant="outline" className="text-xs font-mono">
+                                  {candidate.fecCandidateId?.slice(0, 9)}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground/50 text-xs">—</span>
+                              )}
+                              {hasFecId && candidate.fecCommitteeId && (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="text-[10px] text-green-600 font-mono hover:underline cursor-pointer text-left">
+                                      {candidate.fecCommitteeId.slice(0, 9)} ▾
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-96 p-0" align="start">
+                                    <div className="p-3 border-b">
+                                      <h4 className="font-medium text-sm">Committee Management</h4>
+                                      <p className="text-xs text-muted-foreground">
+                                        Toggle which committees to include in donor sync
+                                      </p>
+                                    </div>
+                                    <div className="p-3">
+                                      <CommitteeBreakdown
+                                        candidateId={candidate.id}
+                                        candidateName={candidate.name}
+                                        fecCandidateId={candidate.fecCandidateId!}
+                                        onRefetch={refetchCandidates}
+                                      />
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              )}
+                              {hasFecId && !candidate.fecCommitteeId && (
+                                <div className="flex items-center gap-1 text-[10px] text-amber-600">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  <span>No committee</span>
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-1 justify-end">
@@ -1229,7 +1127,47 @@ export function AnswerCoveragePanel() {
                                   {fecLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
                                 </Button>
                               )}
-                              {/* Fetch/Resume Donors - uses fetchFECDonorsComplete for auto-looping */}
+                              {/* Link Committees */}
+                              {hasFecId && !candidate.fecCommitteeId && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isCommitteeLoading(candidate.id) || anyBatchRunning}
+                                  onClick={() => {
+                                    void (async () => {
+                                      try {
+                                        const result = await fetchFECCommittees(
+                                          candidate.id,
+                                          candidate.fecCandidateId!
+                                        );
+                                        if (result.success && result.primaryCommitteeId) {
+                                          toast.success(`Linked committee: ${result.primaryCommitteeId}`);
+                                          refetchCandidates();
+                                        } else if (result.success) {
+                                          toast.info('No committees found for this candidate');
+                                        } else {
+                                          toast.error(result.error || 'Failed to link committees');
+                                        }
+                                      } catch (err) {
+                                        console.error('[Admin] Link committees failed:', err);
+                                        toast.error('Failed to link committees');
+                                      }
+                                    })();
+                                  }}
+                                  title="Link FEC Committee"
+                                  className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                >
+                                  {isCommitteeLoading(candidate.id) ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Building2 className="h-3 w-3 mr-1" />
+                                      Link Cmte
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                              {/* Fetch/Resume Donors */}
                               {hasFecId && candidate.fecCommitteeId && (
                                 <Button
                                   size="sm"
@@ -1238,19 +1176,16 @@ export function AnswerCoveragePanel() {
                                   onClick={() => {
                                     void (async () => {
                                       try {
-                                        toast.info(`Starting donor sync for ${candidate.name}...`);
-                                        const result = await fetchFECDonorsComplete(
+                                        const result = await fetchFECDonors(
                                           candidate.id,
                                           candidate.fecCandidateId!,
-                                          candidate.name,
-                                          '2024',
-                                          false
+                                          '2024'
                                         );
                                         if (result.success) {
                                           if (result.hasMore) {
-                                            toast.info(`Partial sync: ${result.imported} donors. Click Resume to continue.`);
+                                            toast.info(result.message || `Partial: ${result.imported} donors. Resume to continue.`);
                                           } else {
-                                            toast.success(`Complete: imported ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
+                                            toast.success(result.message || `Imported ${result.imported} donors`);
                                           }
                                           refetchCandidates();
                                         } else {
@@ -1262,7 +1197,7 @@ export function AnswerCoveragePanel() {
                                       }
                                     })();
                                   }}
-                                  title={syncStatus === 'partial' ? "Resume sync (auto-continues until complete)" : "Fetch donors (auto-continues until complete)"}
+                                  title={syncStatus === 'partial' ? "Resume sync" : "Fetch donors"}
                                   className={syncStatus === 'partial' ? "bg-amber-600 hover:bg-amber-700 h-7 text-xs" : "h-7"}
                                 >
                                   {donorLoading ? (

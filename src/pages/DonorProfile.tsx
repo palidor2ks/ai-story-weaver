@@ -1,26 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { PacExpenditureBreakdown } from '@/components/PacExpenditureBreakdown';
-import { 
-  ArrowLeft, 
-  Building2, 
-  Calendar, 
-  DollarSign, 
-  Hash, 
-  Layers,
-  Loader2, 
-  MapPin, 
-  TrendingUp, 
-  User as UserIcon, 
-  Users 
-} from 'lucide-react';
+import { ArrowLeft, Building2, DollarSign, MapPin, Sparkles, User as UserIcon } from 'lucide-react';
 
 interface DonorRecord {
   id: string;
@@ -29,11 +14,6 @@ interface DonorRecord {
   amount: number;
   cycle: string;
   candidate_id: string;
-  employer?: string | null;
-  occupation?: string | null;
-  contributor_city?: string | null;
-  contributor_state?: string | null;
-  transaction_count?: number | null;
   candidates?: {
     id: string;
     name: string;
@@ -45,177 +25,60 @@ interface DonorRecord {
   };
 }
 
-interface ContributionRecord {
-  id: string;
-  contributor_name: string;
-  amount: number;
-  cycle: string;
-  receipt_date: string | null;
-  candidate_id: string | null;
-  recipient_committee_name: string | null;
-  candidates?: {
-    id: string;
-    name: string;
-    party: string;
-    office: string;
-    state: string;
-  } | null;
+interface RecipientAggregate {
+  candidateId: string;
+  total: number;
+  cycles: Set<string>;
+  candidate?: DonorRecord['candidates'];
 }
 
 const getPartyColor = (party: string) => {
   switch (party) {
     case 'Democrat':
-      return 'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:bg-blue-500/20 dark:text-blue-400';
+      return 'bg-blue-500/10 text-blue-700 border-blue-500/30';
     case 'Republican':
-      return 'bg-red-500/10 text-red-700 border-red-500/30 dark:bg-red-500/20 dark:text-red-400';
+      return 'bg-red-500/10 text-red-700 border-red-500/30';
     case 'Independent':
-      return 'bg-purple-500/10 text-purple-700 border-purple-500/30 dark:bg-purple-500/20 dark:text-purple-400';
+      return 'bg-purple-500/10 text-purple-700 border-purple-500/30';
     default:
       return 'bg-muted text-muted-foreground';
   }
 };
 
-const getTypeIcon = (type: string) => {
-  switch (type) {
-    case 'Individual':
-      return <UserIcon className="w-6 h-6" />;
-    case 'PAC':
-      return <Users className="w-6 h-6" />;
-    case 'Organization':
-      return <Building2 className="w-6 h-6" />;
-    default:
-      return <TrendingUp className="w-6 h-6" />;
-  }
-};
-
-const formatAmount = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
-
-const formatCompactAmount = (amount: number) => {
-  if (amount >= 1_000_000) {
-    return `$${(amount / 1_000_000).toFixed(1)}M`;
-  }
-  if (amount >= 1_000) {
-    return `$${(amount / 1_000).toFixed(0)}K`;
-  }
-  return formatAmount(amount);
-};
-
-const formatCompactNumber = (num: number) => {
-  if (num >= 1_000_000) {
-    return `${(num / 1_000_000).toFixed(1)}M`;
-  }
-  if (num >= 1_000) {
-    return `${(num / 1_000).toFixed(1)}K`;
-  }
-  return num.toLocaleString();
-};
-
-const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return null;
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    year: 'numeric' 
-  });
-};
-
 const DonorProfile = () => {
   const { id } = useParams<{ id: string }>();
-  const [cycleFilter, setCycleFilter] = useState<string>('all');
 
-  // Fetch the specific donor record
   const { data: donor, isLoading: donorLoading } = useQuery({
     queryKey: ['donor', id],
     queryFn: async () => {
       if (!id) return null;
+
       const { data, error } = await supabase
         .from('donors')
         .select('*')
         .eq('id', id)
         .single();
+
       if (error) throw error;
       return data as DonorRecord;
     },
     enabled: !!id,
   });
 
-  // Check if this donor has an alias (canonical name)
-  const { data: aliasInfo } = useQuery({
-    queryKey: ['donor-alias-info', donor?.name, donor?.type],
-    queryFn: async () => {
-      if (!donor?.name || !donor?.type) return null;
-      
-      const { data, error } = await supabase
-        .from('donor_aliases')
-        .select('*')
-        .eq('donor_type', donor.type)
-        .eq('is_active', true);
-      
-      if (error) throw error;
-      
-      // Find matching alias using ILIKE pattern matching (client-side simulation)
-      const matchingAlias = (data || []).find(alias => {
-        const pattern = alias.alias_pattern.replace(/%/g, '.*').replace(/_/g, '.');
-        const regex = new RegExp(`^${pattern}$`, 'i');
-        return regex.test(donor.name);
-      });
-      
-      return matchingAlias || null;
-    },
-    enabled: !!donor?.name && !!donor?.type,
-  });
-
-  // Get all name variations if there's an alias
-  const { data: nameVariations = [] } = useQuery({
-    queryKey: ['donor-name-variations', aliasInfo?.alias_pattern, donor?.type],
-    queryFn: async () => {
-      if (!aliasInfo?.alias_pattern || !donor?.type) return [];
-      
-      const { data, error } = await supabase
-        .from('donors')
-        .select('name')
-        .eq('type', donor.type)
-        .ilike('name', aliasInfo.alias_pattern);
-      
-      if (error) throw error;
-      
-      // Get unique names
-      const uniqueNames = [...new Set((data || []).map(d => d.name))];
-      return uniqueNames.sort();
-    },
-    enabled: !!aliasInfo?.alias_pattern && !!donor?.type,
-  });
-
-  // The display name is the canonical name from alias, or the original name
-  const displayName = aliasInfo?.canonical_name || donor?.name || '';
-
-  // Fetch all donor records with the same name OR same alias pattern
-  const { data: donorRecords = [], isLoading: recordsLoading } = useQuery({
-    queryKey: ['donor-records', displayName, aliasInfo?.alias_pattern, donor?.type],
+  const { data: contributions = [], isLoading: contributionsLoading } = useQuery({
+    queryKey: ['donor-contributions', donor?.name],
     queryFn: async () => {
       if (!donor?.name) return [] as DonorRecord[];
-      
-      let query = supabase
+
+      const { data, error } = await supabase
         .from('donors')
-        .select(`*, candidates (id, name, party, office, state, district, image_url)`)
+        .select(`
+          *,
+          candidates (id, name, party, office, state, district, image_url)
+        `)
+        .eq('name', donor.name)
         .order('amount', { ascending: false });
-      
-      // If there's an alias, get all donors matching the pattern
-      if (aliasInfo?.alias_pattern) {
-        query = query.ilike('name', aliasInfo.alias_pattern);
-      } else {
-        query = query.eq('name', donor.name);
-      }
-      
-      const { data, error } = await query;
+
       if (error) throw error;
       return (data || []).map((row) => ({
         ...row,
@@ -225,84 +88,34 @@ const DonorProfile = () => {
     enabled: !!donor?.name,
   });
 
-  // Fetch individual contributions for detailed history
-  const { data: contributions = [], isLoading: contributionsLoading } = useQuery({
-    queryKey: ['donor-contributions', displayName, aliasInfo?.alias_pattern, donor?.type],
-    queryFn: async () => {
-      if (!donor?.name) return [] as ContributionRecord[];
-      
-      let query = supabase
-        .from('contributions')
-        .select(`*, candidates (id, name, party, office, state)`)
-        .order('receipt_date', { ascending: false })
-        .limit(500);
-      
-      // If there's an alias, get all contributions matching the pattern
-      if (aliasInfo?.alias_pattern) {
-        query = query.ilike('contributor_name', aliasInfo.alias_pattern);
-      } else {
-        query = query.ilike('contributor_name', donor.name);
-      }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []).map((row) => ({
-        ...row,
-        candidates: (row as any).candidates,
-      })) as ContributionRecord[];
-    },
-    enabled: !!donor?.name,
-  });
+  const topRecipients = useMemo(() => {
+    const aggregates: Record<string, RecipientAggregate> = {};
 
-  // Check if this is a PAC donor - fetch the committee ID for PAC expenditure display
-  const { data: pacCommittee } = useQuery({
-    queryKey: ['donor-pac-committee', donor?.name, donor?.type],
-    queryFn: async () => {
-      if (!donor?.name || donor?.type !== 'PAC') return null;
-      
-      // Check if there's a candidate_committee with this name (external PAC)
-      const { data, error } = await supabase
-        .from('candidate_committees')
-        .select('*')
-        .eq('role', 'external')
-        .ilike('name', `%${donor.name}%`)
-        .limit(1);
-      
-      if (error || !data || data.length === 0) return null;
-      return data[0];
-    },
-    enabled: !!donor?.name && donor?.type === 'PAC',
-  });
-  const availableCycles = useMemo(() => {
-    const cycles = new Set<string>();
-    contributions.forEach(c => cycles.add(c.cycle));
-    donorRecords.forEach(r => cycles.add(r.cycle));
-    return Array.from(cycles).sort().reverse();
-  }, [contributions, donorRecords]);
+    contributions.forEach((contribution) => {
+      const existing = aggregates[contribution.candidate_id] ?? {
+        candidateId: contribution.candidate_id,
+        total: 0,
+        cycles: new Set<string>(),
+        candidate: contribution.candidates,
+      };
 
-  // Filter contributions by cycle
-  const filteredContributions = useMemo(() => {
-    if (cycleFilter === 'all') return contributions;
-    return contributions.filter(c => c.cycle === cycleFilter);
-  }, [contributions, cycleFilter]);
+      existing.total += contribution.amount;
+      existing.cycles.add(contribution.cycle);
+      existing.candidate = contribution.candidates || existing.candidate;
+      aggregates[contribution.candidate_id] = existing;
+    });
 
-  // Aggregate stats
-  const stats = useMemo(() => {
-    const totalAmount = donorRecords.reduce((sum, r) => sum + r.amount, 0);
-    const totalTransactions = donorRecords.reduce((sum, r) => sum + (r.transaction_count || 1), 0);
-    const uniqueRecipients = new Set(donorRecords.map(r => r.candidate_id)).size;
-    const uniqueCycles = new Set(donorRecords.map(r => r.cycle)).size;
-    return { totalAmount, totalTransactions, uniqueRecipients, uniqueCycles };
-  }, [donorRecords]);
+    return Object.values(aggregates).sort((a, b) => b.total - a.total);
+  }, [contributions]);
 
-  const isLoading = donorLoading || recordsLoading || contributionsLoading;
+  const totalContributed = contributions.reduce((sum, c) => sum + c.amount, 0);
 
-  if (isLoading) {
+  if (donorLoading || contributionsLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         </div>
       </div>
     );
@@ -313,9 +126,9 @@ const DonorProfile = () => {
       <div className="min-h-screen bg-background">
         <Header />
         <main className="container py-8 px-4 text-center">
-          <p className="text-muted-foreground mb-4">Donor not found.</p>
-          <Link to="/donors" className="text-primary hover:underline">
-            Back to Donors
+          <p className="text-muted-foreground">Donor not found.</p>
+          <Link to="/donors">
+            <span className="inline-flex items-center text-primary mt-3">Back to Donors</span>
           </Link>
         </main>
       </div>
@@ -327,272 +140,171 @@ const DonorProfile = () => {
       <Header />
 
       <main className="container py-8 px-4 space-y-8">
-        {/* Back link */}
         <Link
           to="/donors"
           className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Donors
+          Back to Donor Directory
         </Link>
 
-        {/* Header card */}
         <div className="bg-card rounded-2xl border border-border p-6 md:p-8 shadow-elevated">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-            {/* Donor info */}
-            <div className="flex items-start gap-4">
-              <div className="p-3 rounded-xl bg-primary/10 text-primary">
-                {getTypeIcon(donor.type)}
-              </div>
-              <div>
-                <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">
-                  {displayName}
-                </h1>
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <Badge variant="outline">{donor.type}</Badge>
-                  {nameVariations.length > 1 && (
-                    <Badge variant="secondary" className="gap-1">
-                      <Layers className="h-3 w-3" />
-                      {nameVariations.length} name variations
-                    </Badge>
-                  )}
-                  {donor.contributor_city && donor.contributor_state && (
-                    <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <MapPin className="w-3.5 h-3.5" />
-                      {donor.contributor_city}, {donor.contributor_state}
-                    </span>
-                  )}
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                {donor.type === 'Individual' ? (
+                  <UserIcon className="w-10 h-10 text-primary" />
+                ) : (
+                  <Building2 className="w-10 h-10 text-primary" />
+                )}
+                <div>
+                  <h1 className="font-display text-3xl font-bold text-foreground">{donor.name}</h1>
+                  <Badge variant="outline" className="mt-2">{donor.type}</Badge>
                 </div>
-                {(donor.employer || donor.occupation) && (
-                  <p className="text-sm text-muted-foreground">
-                    {donor.occupation}{donor.occupation && donor.employer && ' at '}{donor.employer}
-                  </p>
-                )}
-                
-                {/* Show name variations if there are multiple */}
-                {nameVariations.length > 1 && (
-                  <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Name variations included:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {nameVariations.slice(0, 8).map((name, i) => (
-                        <Badge key={i} variant="outline" className="text-xs font-normal">
-                          {name}
-                        </Badge>
-                      ))}
-                      {nameVariations.length > 8 && (
-                        <Badge variant="outline" className="text-xs font-normal">
-                          +{nameVariations.length - 8} more
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
+              <p className="text-muted-foreground">
+                Showing contribution history and top campaign recipients for this donor.
+              </p>
             </div>
 
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 shrink-0">
-              <Card className="border-border min-w-0">
-                <CardContent className="p-3 text-center">
-                  <DollarSign className="w-4 h-4 mx-auto mb-1 text-agree" />
-                  <p className="text-base lg:text-lg font-bold text-foreground truncate">
-                    {formatCompactAmount(stats.totalAmount)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Total Given</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Card className="border-border">
+                <CardHeader className="pb-2">
+                  <p className="text-sm text-muted-foreground">Total Contributed</p>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-agree">${totalContributed.toLocaleString()}</p>
                 </CardContent>
               </Card>
-              <Card className="border-border min-w-0">
-                <CardContent className="p-3 text-center">
-                  <Hash className="w-4 h-4 mx-auto mb-1 text-primary" />
-                  <p className="text-base lg:text-lg font-bold text-foreground truncate">
-                    {formatCompactNumber(stats.totalTransactions)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Donations</p>
-                </CardContent>
-              </Card>
-              <Card className="border-border min-w-0">
-                <CardContent className="p-3 text-center">
-                  <Users className="w-4 h-4 mx-auto mb-1 text-primary" />
-                  <p className="text-base lg:text-lg font-bold text-foreground truncate">
-                    {formatCompactNumber(stats.uniqueRecipients)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Recipients</p>
-                </CardContent>
-              </Card>
-              <Card className="border-border min-w-0">
-                <CardContent className="p-3 text-center">
-                  <Calendar className="w-4 h-4 mx-auto mb-1 text-primary" />
-                  <p className="text-base lg:text-lg font-bold text-foreground truncate">
-                    {stats.uniqueCycles}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Cycles</p>
+              <Card className="border-border">
+                <CardHeader className="pb-2">
+                  <p className="text-sm text-muted-foreground">Recipients</p>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-foreground">{topRecipients.length}</p>
                 </CardContent>
               </Card>
             </div>
           </div>
         </div>
 
-        {/* PAC Expenditure Breakdown - only for PAC donors with linked committee */}
-        {donor.type === 'PAC' && pacCommittee && (
-          <PacExpenditureBreakdown
-            committeeId={pacCommittee.fec_committee_id}
-            committeeName={pacCommittee.name || undefined}
-            cycle="2024"
-            showFetchButton={false}
-          />
-        )}
-
-        {/* Top Recipients */}
         <section>
           <div className="flex items-center gap-3 mb-4">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            <h2 className="font-display text-xl font-bold">Top Recipients</h2>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {donorRecords.slice(0, 6).map((record) => (
-              <Link
-                key={record.id}
-                to={`/candidate/${record.candidate_id}`}
-                className="block group"
-              >
-                <Card className="h-full transition-all hover:shadow-md hover:border-primary/30">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-                          {record.candidates?.name || 'Unknown'}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {record.candidates?.office} • {record.candidates?.state}
-                        </p>
-                      </div>
-                      {record.candidates?.party && (
-                        <Badge variant="outline" className={getPartyColor(record.candidates.party)}>
-                          {record.candidates.party.slice(0, 1)}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between pt-2 border-t border-border">
-                      <Badge variant="secondary" className="text-xs">{record.cycle}</Badge>
-                      <span className="font-bold text-agree">{formatAmount(record.amount)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-
-          {donorRecords.length === 0 && (
-            <Card>
-              <CardContent className="py-10 text-center text-muted-foreground">
-                No recipients found for this donor.
-              </CardContent>
-            </Card>
-          )}
-        </section>
-
-        {/* Detailed Contribution History */}
-        <section>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <div className="flex items-center gap-3">
-              <DollarSign className="w-5 h-5 text-primary" />
-              <h2 className="font-display text-xl font-bold">Contribution History</h2>
-              <span className="text-sm text-muted-foreground">
-                ({filteredContributions.length} records)
-              </span>
+            <Sparkles className="w-5 h-5 text-primary" />
+            <div>
+              <h2 className="font-display text-2xl font-bold">Top Recipients</h2>
+              <p className="text-sm text-muted-foreground">Campaigns receiving the largest totals from this donor.</p>
             </div>
-            
-            {availableCycles.length > 1 && (
-              <Select value={cycleFilter} onValueChange={setCycleFilter}>
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="Filter cycle" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Cycles</SelectItem>
-                  {availableCycles.map(cycle => (
-                    <SelectItem key={cycle} value={cycle}>{cycle}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {topRecipients.map((recipient) => (
+              <Card key={recipient.candidateId} className="hover:shadow-md transition-shadow">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-lg font-semibold text-foreground">
+                        {recipient.candidate?.name || 'Unknown Candidate'}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                        {recipient.candidate?.office && <span>{recipient.candidate.office}</span>}
+                        {recipient.candidate?.state && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-4 h-4" />
+                            {recipient.candidate.state}
+                            {recipient.candidate.district && ` (${recipient.candidate.district})`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {recipient.candidate?.party && (
+                      <Badge variant="outline" className={getPartyColor(recipient.candidate.party)}>
+                        {recipient.candidate.party}
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-sm">Total Received</span>
+                    <span className="text-xl font-bold text-foreground">
+                      ${recipient.total.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-sm">Cycles</span>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from(recipient.cycles).map((cycle) => (
+                        <Badge key={cycle} variant="secondary" className="text-xs">
+                          {cycle}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <Link
+                    to={`/candidate/${recipient.candidateId}`}
+                    className="inline-flex items-center gap-2 text-primary text-sm hover:underline"
+                  >
+                    <DollarSign className="w-4 h-4" />
+                    View candidate profile
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
+
+            {topRecipients.length === 0 && (
+              <Card className="col-span-2">
+                <CardContent className="py-10 text-center text-muted-foreground">
+                  No recipients found for this donor.
+                </CardContent>
+              </Card>
             )}
           </div>
+        </section>
 
-          {/* Contributions table */}
-          <div className="border border-border rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-muted/50 border-b border-border">
-                    <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3">
-                      Recipient
-                    </th>
-                    <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3 hidden sm:table-cell">
-                      Date
-                    </th>
-                    <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3">
-                      Cycle
-                    </th>
-                    <th className="text-right text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3">
-                      Amount
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredContributions.map((contribution) => (
-                    <tr key={contribution.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {contribution.candidates ? (
-                            <Link 
-                              to={`/candidate/${contribution.candidate_id}`}
-                              className="hover:text-primary transition-colors"
-                            >
-                              <p className="font-medium text-foreground">
-                                {contribution.candidates.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {contribution.candidates.office} • {contribution.candidates.state}
-                              </p>
-                            </Link>
-                          ) : (
-                            <p className="font-medium text-foreground">
-                              {contribution.recipient_committee_name || 'Unknown'}
-                            </p>
-                          )}
-                          {contribution.candidates?.party && (
-                            <Badge 
-                              variant="outline" 
-                              className={`shrink-0 text-xs ${getPartyColor(contribution.candidates.party)}`}
-                            >
-                              {contribution.candidates.party.slice(0, 1)}
-                            </Badge>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground hidden sm:table-cell">
-                        {formatDate(contribution.receipt_date) || '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="secondary" className="text-xs">
-                          {contribution.cycle}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="font-semibold text-foreground">
-                          {formatAmount(contribution.amount)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <section>
+          <div className="flex items-center gap-3 mb-4">
+            <DollarSign className="w-5 h-5 text-primary" />
+            <div>
+              <h2 className="font-display text-2xl font-bold">Contribution History</h2>
+              <p className="text-sm text-muted-foreground">All recorded donations associated with this donor.</p>
             </div>
+          </div>
 
-            {filteredContributions.length === 0 && (
-              <div className="py-10 text-center text-muted-foreground">
-                No contribution records found.
-              </div>
+          <div className="grid gap-3">
+            {contributions.map((contribution) => (
+              <Card key={contribution.id} className="border-border">
+                <CardContent className="py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-foreground">
+                        {contribution.candidates?.name || 'Unknown Candidate'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {contribution.candidates?.office} {contribution.candidates?.state && `• ${contribution.candidates.state}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Amount</p>
+                        <p className="text-lg font-bold text-foreground">${contribution.amount.toLocaleString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Cycle</p>
+                        <Badge variant="secondary">{contribution.cycle}</Badge>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {contributions.length === 0 && (
+              <Card>
+                <CardContent className="py-10 text-center text-muted-foreground">
+                  No contributions recorded for this donor.
+                </CardContent>
+              </Card>
             )}
           </div>
         </section>

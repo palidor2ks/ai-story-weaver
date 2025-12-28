@@ -196,102 +196,15 @@ function snapToValidValue(value: number): number {
   );
 }
 
-// Parse tool call arguments for structured output
-function parseToolCallResponse(toolCalls: any[]): any[] {
-  if (!toolCalls || toolCalls.length === 0) return [];
-  
-  const functionCall = toolCalls[0]?.function;
-  if (!functionCall?.arguments) return [];
-  
-  try {
-    const args = typeof functionCall.arguments === 'string' 
-      ? JSON.parse(functionCall.arguments) 
-      : functionCall.arguments;
-    return args.answers || [];
-  } catch (e) {
-    console.error('[AI] Failed to parse tool call arguments:', e);
-    return [];
-  }
-}
-
-// Extract individual answer objects from text using field-by-field extraction
-function extractAnswersFromText(content: string): any[] {
-  const recovered: any[] = [];
-  
-  // Split by "question_id" occurrences to find each object segment
-  const segments = content.split(/"question_id"\s*:/);
-  
-  for (let i = 1; i < segments.length; i++) { // Skip first segment (before first question_id)
-    const segment = segments[i];
-    
-    // Extract question_id value
-    const qidMatch = segment.match(/^\s*"([^"]+)"/);
-    if (!qidMatch) continue;
-    const question_id = qidMatch[1];
-    
-    // Extract answer_value - look for the pattern with or without sign
-    const valueMatch = segment.match(/"answer_value"\s*:\s*([+-]?\d+)/);
-    if (!valueMatch) continue;
-    const answer_value = parseInt(valueMatch[1], 10);
-    
-    // Extract confidence
-    const confMatch = segment.match(/"confidence"\s*:\s*"([^"]+)"/);
-    const confidence = confMatch ? confMatch[1] : 'medium';
-    
-    // Extract source_description (optional, may be truncated)
-    const srcMatch = segment.match(/"source_description"\s*:\s*"([^"]*)"/);
-    const source_description = srcMatch ? srcMatch[1].slice(0, 50) : 'Party position';
-    
-    recovered.push({
-      question_id,
-      answer_value,
-      confidence,
-      source_description
-    });
-  }
-  
-  return recovered;
-}
-
-// Clean and parse JSON from AI response - handles code fences, whitespace, and truncation
-function parseAIResponse(content: string, finishReason?: string): any[] {
-  const contentLen = content?.length || 0;
-  console.log(`[AI] Parsing response: ${contentLen} chars, finish_reason: ${finishReason || 'unknown'}`);
-  
-  if (!content || contentLen === 0) {
-    throw new Error('Empty AI response');
-  }
-  
+// Clean and parse JSON from AI response - handles code fences and whitespace
+function parseAIResponse(content: string): any[] {
   let cleaned = content.trim();
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   
-  // First try normal JSON parsing
   const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
   if (jsonMatch) {
-    try {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        console.log(`[AI] Successfully parsed ${parsed.length} answers`);
-        return parsed;
-      }
-    } catch (e) {
-      console.log('[AI] Standard JSON parse failed, trying recovery...');
-    }
+    return JSON.parse(jsonMatch[0]);
   }
-  
-  // Recovery: use field-by-field extraction
-  console.log('[AI] Attempting field-by-field extraction...');
-  const recovered = extractAnswersFromText(cleaned);
-  
-  if (recovered.length > 0) {
-    console.log(`[AI] Recovered ${recovered.length} answers via field extraction`);
-    return recovered;
-  }
-  
-  // Log first/last chars for debugging
-  console.error(`[AI] Parse failed. First 150 chars: ${cleaned.slice(0, 150)}`);
-  console.error(`[AI] Last 150 chars: ${cleaned.slice(-150)}`);
-  
   throw new Error('No JSON array found in response');
 }
 
@@ -309,20 +222,16 @@ async function generateChunkAnswers(
     ? buildCongressGovProfileUrl(candidateId, candidateName) 
     : null;
 
-  // Build list of valid question IDs for this chunk
-  const validQuestionIds = questions.map(q => q.id);
-  const validIdsStr = validQuestionIds.join(', ');
-
-  // Format questions with MORE PROMINENT IDs to reduce empty question_id errors
+  // Format questions with their specific answer options
   const questionsText = questions
     .map((q, i) => {
-      let questionStr = `Question ${i + 1}:\n  ID: "${q.id}"\n  Text: ${q.text}`;
+      let questionStr = `${i + 1}. [${q.id}] ${q.text}`;
       if (q.question_options && q.question_options.length > 0) {
         const sortedOptions = [...q.question_options].sort((a, b) => a.value - b.value);
         const optionsStr = sortedOptions
-          .map(opt => `    (${opt.value}) ${opt.text}`)
+          .map(opt => `   (${opt.value}) ${opt.text}`)
           .join('\n');
-        questionStr += `\n  Options:\n${optionsStr}`;
+        questionStr += `\n   Options:\n${optionsStr}`;
       }
       return questionStr;
     })
@@ -345,57 +254,22 @@ ONLY use: -10, -5, 0, +5, or +10. No intermediate values.
 Return ONLY valid JSON array, no markdown fences, no extra text.`;
 
   const sourceInstructions = isCongressional && votingRecord.length > 0
-    ? `- source_description: CITE SPECIFIC BILL briefly (e.g., "HR1234 Climate Act"). Max 40 chars.`
-    : `- source_description: brief source (max 30 chars)`;
+    ? `- source_description: CITE SPECIFIC BILL when relevant (e.g., "Sponsored HR1234 Climate Act" or "Cosponsored S567 Tax Reform"). If no specific bill applies, use general party platform.`
+    : `- source_description: brief source (max 50 chars)`;
 
   const userPrompt = `Official: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
 ${votingContext}
 
-VALID QUESTION IDs (you MUST use EXACTLY one of these for each answer): [${validIdsStr}]
-
 Questions:
 ${questionsText}
 
-Return JSON array: [{question_id, answer_value, confidence, source_description}, ...]
-- question_id: REQUIRED - Must be EXACTLY one of: ${validIdsStr}
+Return JSON array with objects: {question_id, answer_value, confidence, source_description}
+- question_id: the ID in brackets (e.g. "eco1")
 - answer_value: -10, -5, 0, 5, or 10
 - confidence: "high"/"medium"/"low"
 ${sourceInstructions}
 
-CRITICAL: Every answer MUST have a question_id matching one of the IDs listed above.
-ONLY JSON array. No markdown.`;
-
-  // Use tool calling for structured output - more reliable than text parsing
-  const answerSchema = {
-    type: "function",
-    function: {
-      name: "submit_answers",
-      description: "Submit the political position answers for the candidate. Each answer MUST have a valid question_id.",
-      parameters: {
-        type: "object",
-        properties: {
-          answers: {
-            type: "array",
-            description: `Array of answers. Each MUST have question_id matching one of: ${validIdsStr}`,
-            items: {
-              type: "object",
-              properties: {
-                question_id: { 
-                  type: "string", 
-                  description: `REQUIRED: The exact question ID from the list: ${validIdsStr}. Must match exactly.`
-                },
-                answer_value: { type: "integer", enum: [-10, -5, 0, 5, 10], description: "Position on left-right scale" },
-                confidence: { type: "string", enum: ["high", "medium", "low"] },
-                source_description: { type: "string", description: "Brief source (max 30 chars)" }
-              }
-              // Note: 'required' removed from items - Google Gemini doesn't support nested required arrays
-            }
-          }
-        },
-        required: ["answers"]
-      }
-    }
-  };
+CRITICAL: Return ONLY the JSON array. No markdown. No explanation.`;
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
@@ -409,9 +283,8 @@ ONLY JSON array. No markdown.`;
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      tools: [answerSchema],
-      tool_choice: { type: "function", function: { name: "submit_answers" } },
-      max_tokens: 6000,
+      temperature: 0.3,
+      max_tokens: 2000,
     }),
   });
 
@@ -428,82 +301,41 @@ ONLY JSON array. No markdown.`;
   }
 
   const aiResponse = await response.json();
-  const choice = aiResponse.choices?.[0];
-  const finishReason = choice?.finish_reason;
-  const toolCalls = choice?.message?.tool_calls;
-  const content = choice?.message?.content || '';
-  
-  console.log(`[AI] Response finish_reason: ${finishReason}, has_tool_calls: ${!!toolCalls}, content_len: ${content.length}`);
+  const content = aiResponse.choices?.[0]?.message?.content || '';
 
-  let parsed: any[] = [];
-  
-  // Try tool call response first (preferred)
-  if (toolCalls && toolCalls.length > 0) {
-    parsed = parseToolCallResponse(toolCalls);
-    if (parsed.length > 0) {
-      console.log(`[AI] Got ${parsed.length} answers from tool call`);
-    }
-  }
-  
-  // Fallback to text parsing if tool call failed
-  if (parsed.length === 0 && content) {
-    try {
-      parsed = parseAIResponse(content, finishReason);
-    } catch (e) {
-      console.error('Failed to parse AI response:', e);
-      return [];
-    }
-  }
-  
-  if (parsed.length === 0) {
-    console.error('[AI] No answers extracted from response');
+  try {
+    const parsed = parseAIResponse(content);
+    return parsed.map((item: any) => {
+      const sourceDesc = (item.source_description || `${candidateParty} platform`).slice(0, 100);
+      
+      // For congressional members, try to extract bill info and build specific URL
+      let sourceUrl = congressGovUrl;
+      if (isCongressional) {
+        const billInfo = extractBillInfo(sourceDesc);
+        if (billInfo) {
+          // Find the bill in voting record to get congress number
+          const matchingBill = votingRecord.find(
+            v => v.type.toUpperCase() === billInfo.type && v.number === billInfo.number
+          );
+          const congress = matchingBill?.congress || 118;
+          sourceUrl = buildBillUrl(billInfo.type, billInfo.number, congress);
+        }
+      }
+      
+      return {
+        question_id: String(item.question_id || '').replace(/[\[\]]/g, ''),
+        answer_value: snapToValidValue(item.answer_value),
+        source_description: sourceDesc,
+        source_url: sourceUrl,
+        source_type: isCongressional ? 'voting_record' : 'other',
+        confidence: item.confidence || 'medium',
+      };
+    });
+  } catch (e) {
+    console.error('Failed to parse AI response:', e);
+    console.error('Raw content:', content.slice(0, 300));
     return [];
   }
-
-  // FALLBACK: Map answers with empty question_ids by position
-  // AI typically returns answers in the same order as questions
-  const emptyIdCount = parsed.filter((item: any) => !item.question_id || String(item.question_id).trim() === '').length;
-  if (emptyIdCount > 0) {
-    // Map by position for answers within bounds of the questions array
-    const mappableCount = Math.min(parsed.length, questions.length);
-    let mapped = 0;
-    for (let idx = 0; idx < mappableCount; idx++) {
-      const item = parsed[idx];
-      if (!item.question_id || String(item.question_id).trim() === '') {
-        item.question_id = questions[idx].id;
-        mapped++;
-      }
-    }
-    if (mapped > 0) {
-      console.log(`[AI] Mapped ${mapped}/${emptyIdCount} empty question_ids by position (${parsed.length} answers, ${questions.length} questions)`);
-    }
-  }
-
-  return parsed.map((item: any) => {
-    const sourceDesc = (item.source_description || `${candidateParty} platform`).slice(0, 50);
-    
-    // For congressional members, try to extract bill info and build specific URL
-    let sourceUrl = congressGovUrl;
-    if (isCongressional) {
-      const billInfo = extractBillInfo(sourceDesc);
-      if (billInfo) {
-        const matchingBill = votingRecord.find(
-          v => v.type.toUpperCase() === billInfo.type && v.number === billInfo.number
-        );
-        const congress = matchingBill?.congress || 118;
-        sourceUrl = buildBillUrl(billInfo.type, billInfo.number, congress);
-      }
-    }
-    
-    return {
-      question_id: String(item.question_id || '').replace(/[\[\]]/g, ''),
-      answer_value: snapToValidValue(item.answer_value),
-      source_description: sourceDesc,
-      source_url: sourceUrl,
-      source_type: isCongressional ? 'voting_record' : 'other',
-      confidence: item.confidence || 'medium',
-    };
-  });
 }
 
 async function generateAnswersInChunks(
@@ -519,11 +351,11 @@ async function generateAnswersInChunks(
   let totalGenerated = 0;
   let failedChunks = 0;
   
-  // Use smaller chunks (10) for reliable structured output
-  const CHUNK_SIZE = 10;
+  // Use larger chunks to reduce AI calls (fewer requests = less resource usage)
+  const LARGE_CHUNK_SIZE = 25;
   const chunks: Question[][] = [];
-  for (let i = 0; i < questions.length; i += CHUNK_SIZE) {
-    chunks.push(questions.slice(i, i + CHUNK_SIZE));
+  for (let i = 0; i < questions.length; i += LARGE_CHUNK_SIZE) {
+    chunks.push(questions.slice(i, i + LARGE_CHUNK_SIZE));
   }
   
   console.log(`Processing ${questions.length} questions in ${chunks.length} chunks for ${candidateName}`);
@@ -532,8 +364,7 @@ async function generateAnswersInChunks(
     const chunk = chunks[i];
     console.log(`Generating chunk ${i + 1}/${chunks.length} (${chunk.length} questions)...`);
     
-    // Helper function to process a chunk and return valid deduplicated answers
-    const processChunkAnswers = async (isRetry = false): Promise<any[]> => {
+    try {
       const answers = await generateChunkAnswers(
         candidateName,
         candidateParty,
@@ -545,9 +376,12 @@ async function generateAnswersInChunks(
       );
       
       if (answers.length === 0) {
-        return [];
+        console.log(`Chunk ${i + 1} returned no answers`);
+        failedChunks++;
+        continue;
       }
       
+      // Save this chunk's answers immediately
       const answersToInsert = answers.map(answer => ({
         candidate_id: candidateId,
         question_id: answer.question_id,
@@ -558,60 +392,9 @@ async function generateAnswersInChunks(
         confidence: answer.confidence,
       }));
       
-      // Filter out answers with empty/invalid question_ids
-      const chunkQuestionIds = chunk.map(q => q.id);
-      const validAnswers = answersToInsert.filter(answer => {
-        if (!answer.question_id || answer.question_id.trim() === '') {
-          if (!isRetry) console.warn(`Filtered out answer with empty question_id in chunk ${i + 1}`);
-          return false;
-        }
-        if (!chunkQuestionIds.includes(answer.question_id)) {
-          if (!isRetry) console.warn(`Filtered out answer with unknown question_id: ${answer.question_id} in chunk ${i + 1}`);
-          return false;
-        }
-        return true;
-      });
-
-      // Deduplicate by question_id - keep last occurrence (AI's final answer)
-      return Array.from(
-        validAnswers.reduce((map, answer) => {
-          map.set(answer.question_id, answer);
-          return map;
-        }, new Map()).values()
-      );
-    };
-    
-    try {
-      let deduplicatedAnswers = await processChunkAnswers(false);
-      
-      // Retry logic: if we got less than 50% valid answers, retry once
-      if (deduplicatedAnswers.length < chunk.length * 0.5) {
-        console.log(`Chunk ${i + 1}: Only ${deduplicatedAnswers.length}/${chunk.length} valid answers, retrying...`);
-        await new Promise(resolve => setTimeout(resolve, 300)); // Brief delay before retry
-        
-        const retryAnswers = await processChunkAnswers(true);
-        
-        if (retryAnswers.length > deduplicatedAnswers.length) {
-          console.log(`Chunk ${i + 1} retry: improved from ${deduplicatedAnswers.length} to ${retryAnswers.length} valid answers`);
-          deduplicatedAnswers = retryAnswers;
-        } else {
-          console.log(`Chunk ${i + 1} retry: no improvement (${retryAnswers.length} answers)`);
-        }
-      }
-      
-      if (deduplicatedAnswers.length < chunk.length) {
-        console.log(`Chunk ${i + 1}: saving ${deduplicatedAnswers.length}/${chunk.length} valid answers`);
-      }
-      
-      if (deduplicatedAnswers.length === 0) {
-        console.warn(`Chunk ${i + 1}: No valid answers to save after filtering and retry`);
-        failedChunks++;
-        continue;
-      }
-
       const { error: insertError } = await supabase
         .from('candidate_answers')
-        .upsert(deduplicatedAnswers, {
+        .upsert(answersToInsert, {
           onConflict: 'candidate_id,question_id',
           ignoreDuplicates: false,
         });
@@ -620,8 +403,8 @@ async function generateAnswersInChunks(
         console.error(`Error saving chunk ${i + 1}:`, insertError);
         failedChunks++;
       } else {
-        totalGenerated += deduplicatedAnswers.length;
-        console.log(`Saved chunk ${i + 1}: ${deduplicatedAnswers.length} answers (total: ${totalGenerated})`);
+        totalGenerated += answers.length;
+        console.log(`Saved chunk ${i + 1}: ${answers.length} answers (total: ${totalGenerated})`);
       }
       
       // Longer delay between chunks to reduce resource pressure

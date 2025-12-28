@@ -28,7 +28,6 @@ import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
 import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
 import { OfficialAvatar } from '@/components/OfficialAvatar';
-import { CandidatePacActivity } from '@/components/CandidatePacActivity';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -148,9 +147,8 @@ export const CandidateProfile = () => {
 
   // FIX: Properly categorize donors to match FEC categories and avoid double-counting
   // Filter by is_contribution, is_transfer, and is_conduit_org flags from database
-  // Use display_name (canonical name) for conduit detection
   const conduitOrgNames = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
-  const isConduitDonor = (d: typeof donors[0]) => d.is_conduit_org || conduitOrgNames.some(c => (d.display_name || d.name).toUpperCase().includes(c));
+  const isConduitDonor = (d: typeof donors[0]) => d.is_conduit_org || conduitOrgNames.some(c => d.name.toUpperCase().includes(c));
   
   // Itemized Individual = is_contribution && !is_transfer && !is_conduit_org (Line 11 contributions)
   const itemizedIndividualDonors = donors.filter(d => d.is_contribution !== false && !d.is_transfer && !isConduitDonor(d));
@@ -337,15 +335,6 @@ export const CandidateProfile = () => {
             <ContactInfoCard representative={representativeDetails} />
           </div>
         )}
-
-        {/* Super PAC Activity Section */}
-        <div className="mb-8">
-          <CandidatePacActivity 
-            candidateId={candidate.id} 
-            candidateName={candidate.name}
-            cycle="2024"
-          />
-        </div>
 
         {/* You vs Candidate */}
         <Card className="mb-8 shadow-elevated">
@@ -682,20 +671,8 @@ export const CandidateProfile = () => {
 
                         const allSources: FundingSource[] = [];
                         
-                        // Add regular donors - but exclude entries already shown as FEC summary categories
+                        // Add regular donors
                         donors.forEach(d => {
-                          // Skip loan entries (line 13A) if fecLoans is already shown
-                          if (fecLoans > 0 && d.line_number === '13A') {
-                            return;
-                          }
-                          // Skip candidate contributions (line 11AI) if fecCandidateContribution is already shown
-                          if (fecCandidateContribution > 0 && d.line_number === '11AI') {
-                            return;
-                          }
-                          // Skip committee transfers (line 12) if fecTransfers is already shown
-                          if (fecTransfers > 0 && d.line_number?.startsWith('12')) {
-                            return;
-                          }
                           allSources.push({
                             id: d.id,
                             name: d.name,
@@ -765,9 +742,8 @@ export const CandidateProfile = () => {
                           // Render donor-type sources
                           if (source.sourceType === 'donor' && source.donor) {
                             const donor = source.donor;
-                            const displayName = donor.display_name || donor.name;
                             const conduitOrgs = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
-                            const isConduit = conduitOrgs.some(c => displayName.toUpperCase().includes(c));
+                            const isConduit = conduitOrgs.some(c => donor.name.toUpperCase().includes(c));
                             
                             return (
                               <div key={source.id} className={cn(
@@ -776,7 +752,7 @@ export const CandidateProfile = () => {
                               )}>
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    <p className="font-medium text-foreground">{displayName}</p>
+                                    <p className="font-medium text-foreground">{donor.name}</p>
                                     {isConduit && (
                                       <TooltipProvider>
                                         <Tooltip>
@@ -789,28 +765,6 @@ export const CandidateProfile = () => {
                                             <p className="font-medium mb-1">Pass-Through Organization</p>
                                             <p className="text-xs">This organization processes donations on behalf of individual donors. 
                                             The amount shown is the total routed through this conduit — individual donors are listed separately to avoid double-counting.</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    )}
-                                    {donor.is_consolidated && donor.name_variations && donor.name_variations.length > 1 && (
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger>
-                                            <Badge variant="outline" className="text-[10px] border-primary/50 text-primary bg-primary/10">
-                                              {donor.name_variations.length} merged
-                                            </Badge>
-                                          </TooltipTrigger>
-                                          <TooltipContent className="max-w-xs">
-                                            <p className="font-medium mb-1">Merged Names</p>
-                                            <ul className="text-xs space-y-0.5">
-                                              {donor.name_variations.slice(0, 10).map((name, i) => (
-                                                <li key={i}>{name}</li>
-                                              ))}
-                                              {donor.name_variations.length > 10 && (
-                                                <li>...and {donor.name_variations.length - 10} more</li>
-                                              )}
-                                            </ul>
                                           </TooltipContent>
                                         </Tooltip>
                                       </TooltipProvider>
@@ -898,7 +852,7 @@ export const CandidateProfile = () => {
                     </div>
                     
                     {/* Conduit explanation */}
-                    {donors.some(d => ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'].some(c => (d.display_name || d.name).toUpperCase().includes(c))) && (
+                    {donors.some(d => ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'].some(c => d.name.toUpperCase().includes(c))) && (
                       <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs">
                         <div className="flex items-start gap-2">
                           <Info className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />

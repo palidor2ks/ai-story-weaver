@@ -409,7 +409,6 @@ serve(async (req) => {
       id: string;
       name: string;
       role: string;
-      designation?: string; // P, A, J, U, B, D
       lastSyncDate?: string;
       lastContributionDate?: string;
       lastIndex?: string;
@@ -420,20 +419,17 @@ serve(async (req) => {
     const committees: CommitteeInfo[] = [];
     const committeeSet = new Set<string>();
 
-    const pushCommittee = (id: string, name = '', role = 'authorized', designation?: string, syncInfo?: Partial<CommitteeInfo>) => {
+    const pushCommittee = (id: string, name = '', role = 'authorized', syncInfo?: Partial<CommitteeInfo>) => {
       if (!id || committeeSet.has(id)) return;
       committeeSet.add(id);
-      committees.push({ id, name, role, designation, ...syncInfo });
+      committees.push({ id, name, role, ...syncInfo });
     };
 
-    // Fetch ONLY ACTIVE committees from database - admins control which committees sync
+    // Fetch existing committee sync info from database
     const { data: existingCommittees } = await supabase
       .from('candidate_committees')
-      .select('fec_committee_id, name, role, designation, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
-      .eq('candidate_id', candidateId)
-      .eq('active', true);  // Only sync active committees
-
-    console.log('[FEC-DONORS] Found', existingCommittees?.length || 0, 'ACTIVE committees in database for candidate', candidateId);
+      .select('fec_committee_id, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
+      .eq('candidate_id', candidateId);
 
     const committeeSyncInfo = new Map(
       (existingCommittees || []).map(c => [c.fec_committee_id, {
@@ -443,16 +439,6 @@ serve(async (req) => {
         lastSyncCompletedAt: c.last_sync_completed_at
       }])
     );
-    
-    // Pre-populate committees array from active database records
-    (existingCommittees || []).forEach(c => {
-      pushCommittee(c.fec_committee_id, c.name || '', c.role || 'authorized', c.designation || undefined, {
-        lastSyncDate: c.last_sync_date,
-        lastContributionDate: c.last_contribution_date,
-        lastIndex: c.last_index,
-        lastSyncCompletedAt: c.last_sync_completed_at,
-      });
-    });
 
     const { data: candidateData } = await supabase
       .from('candidates')
@@ -460,118 +446,54 @@ serve(async (req) => {
       .eq('id', candidateId)
       .maybeSingle();
 
-    // Look up ALL FEC IDs from the candidate_fec_ids linking table
-    const { data: fecIds } = await supabase
-      .from('candidate_fec_ids')
-      .select('fec_candidate_id, office, is_primary')
-      .eq('candidate_id', candidateId);
-
-    // Collect all FEC candidate IDs (from param, legacy field, and linking table)
-    const allFecIds: string[] = [];
-    if (fecCandidateId) allFecIds.push(fecCandidateId);
-    if (candidateData?.fec_candidate_id && !allFecIds.includes(candidateData.fec_candidate_id)) {
-      allFecIds.push(candidateData.fec_candidate_id);
-    }
-    (fecIds || []).forEach(f => {
-      if (!allFecIds.includes(f.fec_candidate_id)) {
-        allFecIds.push(f.fec_candidate_id);
-      }
-    });
-
-    console.log('[FEC-DONORS] Found FEC candidate IDs:', allFecIds);
+    const fecId = fecCandidateId || candidateData?.fec_candidate_id || null;
 
     if (fecCommitteeId) {
       const syncInfo = committeeSyncInfo.get(fecCommitteeId);
-      pushCommittee(fecCommitteeId, '', 'manual', undefined, syncInfo);
+      pushCommittee(fecCommitteeId, '', 'manual', syncInfo);
     }
     if (candidateData?.fec_committee_id) {
       const syncInfo = committeeSyncInfo.get(candidateData.fec_committee_id);
-      pushCommittee(candidateData.fec_committee_id, '', 'stored', undefined, syncInfo);
+      pushCommittee(candidateData.fec_committee_id, '', 'stored', syncInfo);
     }
 
-    // Look up committees from FEC API for ALL FEC candidate IDs
-    // (best-effort; may be rate limited)
-    const committeeLookupDiagnostics: Array<{ fecId: string; status?: number; resultsCount?: number; error?: string }> = [];
+    // Look up committees from FEC API if needed
+    if (!fecCommitteeId && fecId) {
+      try {
+        const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&designation=P,A&per_page=50`;
+        const committeeResponse = await fetchWithRetry(committeeUrl);
 
-    // NOTE: We no longer auto-discover committees from FEC API here.
-    // Committees must be added via fetch-fec-committees first, then activated by admin.
-    // This ensures admins have full control over which committees get synced.
-    // If no active committees exist, we'll invoke fetch-fec-committees to populate the table,
-    // but only sync committees that are marked active.
+        if (committeeResponse?.ok) {
+          let committeeData;
+          try {
+            committeeData = await committeeResponse.json();
+          } catch {
+            console.error('[FEC-DONORS] Failed to parse committee response');
+            committeeData = {};
+          }
+          const results = committeeData?.results || [];
+          results.forEach((cmte: { committee_id: string; name?: string; designation?: string }) => {
+            const role = cmte.designation === 'P' ? 'principal' : 'authorized';
+            const syncInfo = committeeSyncInfo.get(cmte.committee_id);
+            pushCommittee(cmte.committee_id, cmte.name || '', role, syncInfo);
+          });
 
-    // Fallback: if we still have no ACTIVE committees, invoke fetch-fec-committees to populate the table
-    // Then re-check for active committees. If still none, return helpful error.
-    if (committees.length === 0 && allFecIds.length > 0) {
-      console.warn('[FEC-DONORS] No ACTIVE committees found; invoking fetch-fec-committees to populate committee table...');
-
-      const { error: linkErr, data: linkData } = await supabase.functions.invoke('fetch-fec-committees', {
-        body: {
-          candidateId,
-          fecCandidateId: allFecIds[0],
-          fetchAllFecIds: true,
-        },
-      });
-
-      if (linkErr) {
-        console.warn('[FEC-DONORS] fetch-fec-committees fallback invoke error:', linkErr);
-      } else if (linkData?.error) {
-        console.warn('[FEC-DONORS] fetch-fec-committees fallback returned error:', linkData.error);
+          const primary = results.find((cmte: { designation?: string }) => cmte.designation === 'P');
+          if (primary?.committee_id && !candidateData?.fec_committee_id) {
+            await supabase
+              .from('candidates')
+              .update({ fec_committee_id: primary.committee_id })
+              .eq('id', candidateId);
+          }
+        }
+      } catch (err) {
+        console.error('[FEC-DONORS] Committee lookup failed:', err);
       }
-
-      // Re-query for ACTIVE committees only
-      const { data: refreshedCommittees } = await supabase
-        .from('candidate_committees')
-        .select('fec_committee_id, name, role, designation, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
-        .eq('candidate_id', candidateId)
-        .eq('active', true);  // Only sync active committees
-
-      console.log('[FEC-DONORS] After fallback, found', refreshedCommittees?.length || 0, 'ACTIVE committees');
-
-      (refreshedCommittees || []).forEach(c => {
-        pushCommittee(c.fec_committee_id, c.name || '', c.role || 'linked', c.designation || undefined, {
-          lastSyncDate: c.last_sync_date,
-          lastContributionDate: c.last_contribution_date,
-          lastIndex: c.last_index,
-          lastSyncCompletedAt: c.last_sync_completed_at,
-        });
-      });
     }
 
     if (committees.length === 0) {
-      // Check if there ARE committees, just none active
-      const { data: allCommittees } = await supabase
-        .from('candidate_committees')
-        .select('fec_committee_id, name, active')
-        .eq('candidate_id', candidateId);
-      
-      const totalCommittees = allCommittees?.length || 0;
-      const inactiveCommittees = allCommittees?.filter(c => !c.active) || [];
-      
-      console.error('[FEC-DONORS] No ACTIVE committees available', {
-        candidateId,
-        allFecIds,
-        totalCommittees,
-        inactiveCount: inactiveCommittees.length,
-      });
-
-      if (totalCommittees > 0) {
-        return new Response(
-          JSON.stringify({
-            error: `No ACTIVE committees to sync. Found ${totalCommittees} committee(s) but none are marked active. Use the Committee Allocation panel to activate committees before syncing.`,
-            candidateId,
-            fecCandidateIds: allFecIds,
-            inactiveCommittees: inactiveCommittees.map(c => ({ id: c.fec_committee_id, name: c.name })),
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
       return new Response(
-        JSON.stringify({
-          error: `No FEC committees found for candidate IDs: ${allFecIds.join(', ') || '(none)'}. Try fetching committees first, then activate them in the Committee Allocation panel.`,
-          candidateId,
-          fecCandidateIds: allFecIds,
-        }),
+        JSON.stringify({ error: 'No FEC committee ID available. Please link FEC ID first.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -656,16 +578,6 @@ serve(async (req) => {
     const committeeId = targetCommittee.id;
     const committeeName = targetCommittee.name || targetCommittee.id;
     
-    // CRITICAL: J/U/B/D committees store contributions with candidate_id = null
-    // These are non-primary committees (Joint Fundraising, Leadership PACs, etc.)
-    // Their donations should NOT be associated with a candidate until manually allocated by admin
-    const isNonPrimaryDesignation = ['J', 'U', 'B', 'D'].includes(targetCommittee.designation || '');
-    const effectiveCandidateId = isNonPrimaryDesignation ? null : candidateId;
-    
-    if (isNonPrimaryDesignation) {
-      console.log(`[FEC-DONORS] Committee ${committeeId} has designation '${targetCommittee.designation}' - storing with candidate_id = null`);
-    }
-    
     // Determine starting cursor for resumable sync
     let lastIndex: string | null = null;
     let lastContributionDate: string | null = null;
@@ -683,23 +595,14 @@ serve(async (req) => {
     const donorIdsSeen = new Set<string>(); // Track unique donor IDs for accurate count
     
     // For resumable syncs, load existing donors from DB to continue accumulating
-    // NOTE: For J/U/B/D committees, we load donors with candidate_id = null
     if (resumeFromCursor && targetCommittee.lastIndex && !forceFullSync) {
       console.log(`[FEC-DONORS] Loading existing donors from DB to continue accumulation...`);
-      
-      let existingDonorsQuery = supabase
+      const { data: existingDonors } = await supabase
         .from('donors')
         .select('*')
+        .eq('candidate_id', candidateId)
         .eq('recipient_committee_id', committeeId)
         .eq('cycle', cycle);
-      
-      if (effectiveCandidateId) {
-        existingDonorsQuery = existingDonorsQuery.eq('candidate_id', effectiveCandidateId);
-      } else {
-        existingDonorsQuery = existingDonorsQuery.is('candidate_id', null);
-      }
-      
-      const { data: existingDonors } = await existingDonorsQuery;
       
       if (existingDonors && existingDonors.length > 0) {
         for (const d of existingDonors) {
@@ -734,7 +637,7 @@ serve(async (req) => {
     let contributionBatch: Array<{
       identity_hash: string;
       fec_transaction_id: string | null;
-      candidate_id: string | null;
+      candidate_id: string;
       recipient_committee_id: string;
       recipient_committee_name: string;
       contributor_name: string;
@@ -809,7 +712,7 @@ serve(async (req) => {
         })
         .map(donor => ({
           id: donor.id,
-          candidate_id: effectiveCandidateId, // null for J/U/B/D committees
+          candidate_id: candidateId,
           name: donor.name,
           type: donor.type,
           amount: donor.amount, // Cumulative total
@@ -1035,7 +938,7 @@ serve(async (req) => {
         contributionBatch.push({
           identity_hash: contributionHash,
           fec_transaction_id: fecSubId,
-          candidate_id: effectiveCandidateId, // null for J/U/B/D committees
+          candidate_id: candidateId,
           recipient_committee_id: committeeId,
           recipient_committee_name: committeeName,
           contributor_name: name,
