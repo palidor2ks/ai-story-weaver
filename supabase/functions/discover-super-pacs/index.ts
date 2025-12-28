@@ -164,8 +164,8 @@ serve(async (req) => {
 
     for (const { id: committeeId, name, type } of discoveredCommittees) {
       try {
-        // Fetch Schedule E totals for this committee
-        const scheduleEUrl = `https://api.open.fec.gov/v1/schedules/schedule_e/totals/?api_key=${fecApiKey}&committee_id=${committeeId}&cycle=${cycle}`;
+        // Fetch Schedule E eby_candidate totals - this endpoint aggregates spending by committee
+        const scheduleEUrl = `https://api.open.fec.gov/v1/schedules/schedule_e/eby_candidate/totals/?api_key=${fecApiKey}&committee_id=${committeeId}&cycle=${cycle}&per_page=100`;
         const scheduleEResponse = await fetchWithRetry(scheduleEUrl);
         
         let totalSpend = 0;
@@ -174,7 +174,7 @@ serve(async (req) => {
           const scheduleEData = await scheduleEResponse.json();
           const totals = scheduleEData?.results || [];
           
-          // Sum up all expenditures for this committee
+          // Sum up all expenditures for this committee across all candidates
           for (const total of totals) {
             totalSpend += (total.total || 0);
           }
