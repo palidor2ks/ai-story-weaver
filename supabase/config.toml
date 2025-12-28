@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.fetch-pac-expenditures]
 verify_jwt = false
+
+[functions.fetch-pac-donors]
+verify_jwt = false

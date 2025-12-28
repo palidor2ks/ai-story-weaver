@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { useCandidatePacActivity } from '@/hooks/usePacExpenditures';
-import { ThumbsUp, ThumbsDown, Users, Loader2 } from 'lucide-react';
+import { useAttributedDonors } from '@/hooks/useAttributedDonors';
+import { ThumbsUp, ThumbsDown, Users, Loader2, ChevronDown, ChevronUp, User } from 'lucide-react';
 
 interface CandidatePacActivityProps {
   candidateId: string;
@@ -28,6 +31,9 @@ export function CandidatePacActivity({
   className,
 }: CandidatePacActivityProps) {
   const { data, isLoading } = useCandidatePacActivity(candidateId, cycle);
+  const { data: attributedData, isLoading: loadingDonors } = useAttributedDonors(candidateId, cycle);
+  const [showSupportDonors, setShowSupportDonors] = useState(false);
+  const [showOpposeDonors, setShowOpposeDonors] = useState(false);
 
   if (isLoading) {
     return (
@@ -47,6 +53,9 @@ export function CandidatePacActivity({
 
   const totalSupport = supporting.reduce((sum, p) => sum + p.support_total, 0);
   const totalOppose = opposing.reduce((sum, p) => sum + p.oppose_total, 0);
+
+  const supportingDonors = attributedData?.supporting || [];
+  const opposingDonors = attributedData?.opposing || [];
 
   return (
     <Card className={className}>
@@ -105,6 +114,53 @@ export function CandidatePacActivity({
                 </div>
               ))}
             </div>
+
+            {/* Attributed Supporting Donors */}
+            {supportingDonors.length > 0 && (
+              <div className="mt-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-between text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowSupportDonors(!showSupportDonors)}
+                >
+                  <span className="flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    Top Donors Funding Support ({supportingDonors.length})
+                  </span>
+                  {showSupportDonors ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </Button>
+                
+                {showSupportDonors && (
+                  <div className="mt-2 space-y-1 pl-2 border-l-2 border-agree/20">
+                    {supportingDonors.slice(0, 10).map((donor) => (
+                      <Link
+                        key={donor.donor_id}
+                        to={`/donor/${encodeURIComponent(donor.donor_name)}?type=${donor.donor_type}`}
+                        className="flex items-center justify-between py-2 px-2 rounded text-sm hover:bg-agree/10 transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground truncate">
+                            {donor.display_name || donor.donor_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatCurrency(donor.donation_amount)} donated → {formatCurrency(donor.totalAttributed)} attributed
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="ml-2 text-xs border-agree/30 text-agree">
+                          {donor.donor_type}
+                        </Badge>
+                      </Link>
+                    ))}
+                    {supportingDonors.length > 10 && (
+                      <p className="text-xs text-muted-foreground text-center py-2">
+                        + {supportingDonors.length - 10} more donors
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -133,12 +189,59 @@ export function CandidatePacActivity({
                 </div>
               ))}
             </div>
+
+            {/* Attributed Opposing Donors */}
+            {opposingDonors.length > 0 && (
+              <div className="mt-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-between text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowOpposeDonors(!showOpposeDonors)}
+                >
+                  <span className="flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    Top Donors Funding Opposition ({opposingDonors.length})
+                  </span>
+                  {showOpposeDonors ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </Button>
+                
+                {showOpposeDonors && (
+                  <div className="mt-2 space-y-1 pl-2 border-l-2 border-disagree/20">
+                    {opposingDonors.slice(0, 10).map((donor) => (
+                      <Link
+                        key={donor.donor_id}
+                        to={`/donor/${encodeURIComponent(donor.donor_name)}?type=${donor.donor_type}`}
+                        className="flex items-center justify-between py-2 px-2 rounded text-sm hover:bg-disagree/10 transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground truncate">
+                            {donor.display_name || donor.donor_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatCurrency(donor.donation_amount)} donated → {formatCurrency(donor.totalAttributed)} attributed
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="ml-2 text-xs border-disagree/30 text-disagree">
+                          {donor.donor_type}
+                        </Badge>
+                      </Link>
+                    ))}
+                    {opposingDonors.length > 10 && (
+                      <p className="text-xs text-muted-foreground text-center py-2">
+                        + {opposingDonors.length - 10} more donors
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         <p className="text-xs text-muted-foreground border-t border-border pt-4">
           Super PACs make independent expenditures and are not coordinated with campaigns. 
-          Data from FEC Schedule E filings.
+          Donor attribution is proportional to PAC spending ratios. Data from FEC Schedule A & E filings.
         </p>
       </CardContent>
     </Card>

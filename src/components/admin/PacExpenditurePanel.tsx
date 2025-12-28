@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useFetchPacExpenditures } from '@/hooks/usePacExpenditures';
+import { useFetchPacExpenditures, useFetchPacDonors } from '@/hooks/usePacExpenditures';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { DollarSign, RefreshCw, Loader2, ThumbsUp, ThumbsDown, Search } from 'lucide-react';
+import { DollarSign, RefreshCw, Loader2, Users, Search } from 'lucide-react';
 
 const formatCurrency = (value: number) => {
   if (value >= 1_000_000) {
@@ -21,8 +21,10 @@ const formatCurrency = (value: number) => {
 
 export function PacExpenditurePanel() {
   const [fetchingId, setFetchingId] = useState<string | null>(null);
+  const [fetchingDonorsId, setFetchingDonorsId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const fetchMutation = useFetchPacExpenditures();
+  const fetchDonorsMutation = useFetchPacDonors();
 
   // Fetch external committees (Super PACs)
   const { data: externalCommittees = [], isLoading } = useQuery({
@@ -76,6 +78,15 @@ export function PacExpenditurePanel() {
       await fetchMutation.mutateAsync({ committeeId, cycle: '2024' });
     } finally {
       setFetchingId(null);
+    }
+  };
+
+  const handleFetchDonors = async (committeeId: string) => {
+    setFetchingDonorsId(committeeId);
+    try {
+      await fetchDonorsMutation.mutateAsync({ committeeId, cycle: '2024' });
+    } finally {
+      setFetchingDonorsId(null);
     }
   };
 
@@ -185,19 +196,36 @@ export function PacExpenditurePanel() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleFetch(committee.fec_committee_id)}
-                          disabled={fetchingId === committee.fec_committee_id}
-                        >
-                          {fetchingId === committee.fec_committee_id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <RefreshCw className="h-4 w-4" />
-                          )}
-                          <span className="ml-2">{hasData ? 'Refresh' : 'Fetch'}</span>
-                        </Button>
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleFetch(committee.fec_committee_id)}
+                            disabled={fetchingId === committee.fec_committee_id}
+                            title="Fetch expenditures (Schedule E)"
+                          >
+                            {fetchingId === committee.fec_committee_id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                            <span className="ml-1 hidden sm:inline">{hasData ? 'Refresh' : 'Fetch'}</span>
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleFetchDonors(committee.fec_committee_id)}
+                            disabled={fetchingDonorsId === committee.fec_committee_id}
+                            title="Fetch donors (Schedule A)"
+                          >
+                            {fetchingDonorsId === committee.fec_committee_id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Users className="h-4 w-4" />
+                            )}
+                            <span className="ml-1 hidden sm:inline">Donors</span>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
