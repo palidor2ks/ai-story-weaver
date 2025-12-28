@@ -11,12 +11,15 @@ const corsHeaders = {
  * 
  * Modes:
  * 1. Single allocation: { committeeId, candidateId, cycle }
- * 2. Batch allocation: { batch: true, cycle } - allocates ALL J/U/B/D committees based on their candidate_committees links
+ * 2. Batch allocation: { batch: true, cycle, force?: boolean } - allocates ALL J/U/B/D committees based on their candidate_committees links
  * 
  * When allocating:
  *   - Updates contributions with recipient_committee_id to have candidate_id
  *   - Updates donors with recipient_committee_id to have candidate_id
  *   - Deletes any transfer records FROM the J/U/B/D committee TO the candidate (prevents double-counting)
+ * 
+ * When force=true:
+ *   - Also reassigns contributions/donors that are already assigned (useful if you changed mappings after importing)
  */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -38,11 +41,11 @@ serve(async (req) => {
       );
     }
 
-    const { committeeId, candidateId, cycle = '2024', batch = false } = body || {};
+    const { committeeId, candidateId, cycle = '2024', batch = false, force = false } = body || {};
 
     // Batch mode: allocate all J/U/B/D committees based on their candidate_committees links
     if (batch) {
-      console.log('[ALLOCATE-COMMITTEE] Starting batch allocation for cycle:', cycle);
+      console.log('[ALLOCATE-COMMITTEE] Starting batch allocation for cycle:', cycle, 'force:', force);
       
       // Get all J/U/B/D committees that are linked to candidates
       const { data: linkedCommittees, error: fetchError } = await supabase
@@ -65,13 +68,14 @@ serve(async (req) => {
         );
       }
       
-      console.log('[ALLOCATE-COMMITTEE] Found', linkedCommittees?.length || 0, 'J/U/B/D committees to process');
+      const committeesFound = linkedCommittees?.length || 0;
+      console.log('[ALLOCATE-COMMITTEE] Found', committeesFound, 'J/U/B/D committees to process');
       
       let totalContributionsUpdated = 0;
       let totalDonorsUpdated = 0;
       let totalTransfersDeleted = 0;
       let totalTransferDonorsDeleted = 0;
-      let committeesProcessed = 0;
+      let committeesChanged = 0;
       
       for (const committee of linkedCommittees || []) {
         const result = await allocateSingleCommittee(
@@ -79,7 +83,8 @@ serve(async (req) => {
           committee.fec_committee_id, 
           committee.candidate_id, 
           cycle,
-          committee.name
+          committee.name,
+          force
         );
         
         totalContributionsUpdated += result.contributionsUpdated;
@@ -88,12 +93,13 @@ serve(async (req) => {
         totalTransferDonorsDeleted += result.transferDonorsDeleted;
         
         if (result.contributionsUpdated > 0 || result.donorsUpdated > 0 || result.transfersDeleted > 0) {
-          committeesProcessed++;
+          committeesChanged++;
         }
       }
       
       console.log('[ALLOCATE-COMMITTEE] Batch complete:', {
-        committeesProcessed,
+        committeesFound,
+        committeesChanged,
         totalContributionsUpdated,
         totalDonorsUpdated,
         totalTransfersDeleted,
@@ -105,12 +111,18 @@ serve(async (req) => {
           success: true,
           batch: true,
           cycle,
-          committeesProcessed,
+          force,
+          committeesFound,
+          committeesChanged,
+          // Keep old field for backwards compat
+          committeesProcessed: committeesChanged,
           totalContributionsUpdated,
           totalDonorsUpdated,
           totalTransfersDeleted,
           totalTransferDonorsDeleted,
-          message: `Batch allocated ${committeesProcessed} committees: ${totalTransfersDeleted} transfers removed, ${totalContributionsUpdated} contributions + ${totalDonorsUpdated} donors assigned`
+          message: committeesChanged > 0 
+            ? `Scanned ${committeesFound} committees, updated ${committeesChanged}: ${totalTransfersDeleted} transfers removed, ${totalContributionsUpdated} contributions + ${totalDonorsUpdated} donors assigned`
+            : `Scanned ${committeesFound} linked J/U/B/D committees. No unassigned contributions found.`
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -124,7 +136,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('[ALLOCATE-COMMITTEE] Single allocation:', { committeeId, candidateId, cycle });
+    console.log('[ALLOCATE-COMMITTEE] Single allocation:', { committeeId, candidateId, cycle, force });
 
     // Get committee info
     const { data: committeeData } = await supabase
@@ -138,7 +150,8 @@ serve(async (req) => {
       committeeId,
       candidateId,
       cycle,
-      committeeData?.name
+      committeeData?.name,
+      force
     );
 
     // Update candidate_committees if allocating
@@ -199,7 +212,8 @@ async function allocateSingleCommittee(
   committeeId: string,
   candidateId: string | null,
   cycle: string,
-  committeeName: string | null
+  committeeName: string | null,
+  force: boolean = false
 ): Promise<{
   contributionsUpdated: number;
   donorsUpdated: number;
@@ -244,12 +258,22 @@ async function allocateSingleCommittee(
 
   // Update contributions
   if (candidateId) {
-    const { count: contribCount, error: contribError } = await supabase
+    // Build query: always update where recipient_committee_id matches
+    let query = supabase
       .from('contributions')
       .update({ candidate_id: candidateId })
       .eq('recipient_committee_id', committeeId)
-      .eq('cycle', cycle)
-      .is('candidate_id', null);
+      .eq('cycle', cycle);
+    
+    // If not forcing, only update rows with null candidate_id
+    if (!force) {
+      query = query.is('candidate_id', null);
+    } else {
+      // If forcing, update rows that don't already have this candidate_id
+      query = query.neq('candidate_id', candidateId);
+    }
+
+    const { count: contribCount, error: contribError } = await query;
 
     if (contribError) {
       console.error('[ALLOCATE-COMMITTEE] Error updating contributions:', contribError);
@@ -274,12 +298,19 @@ async function allocateSingleCommittee(
 
   // Update donors
   if (candidateId) {
-    const { count: donorCount, error: donorError } = await supabase
+    let donorQuery = supabase
       .from('donors')
       .update({ candidate_id: candidateId })
       .eq('recipient_committee_id', committeeId)
-      .eq('cycle', cycle)
-      .is('candidate_id', null);
+      .eq('cycle', cycle);
+    
+    if (!force) {
+      donorQuery = donorQuery.is('candidate_id', null);
+    } else {
+      donorQuery = donorQuery.neq('candidate_id', candidateId);
+    }
+
+    const { count: donorCount, error: donorError } = await donorQuery;
 
     if (donorError) {
       console.error('[ALLOCATE-COMMITTEE] Error updating donors:', donorError);

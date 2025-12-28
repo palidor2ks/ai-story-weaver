@@ -60,7 +60,7 @@ import {
   DonorAliasInput,
 } from '@/hooks/useDonorAliases';
 import { useSearchDonors } from '@/hooks/useDonorsPaginated';
-import { useUnallocatedCommittees, useCandidatesForAllocation, useAllocateCommittee, useBatchAllocateCommittees } from '@/hooks/useCommitteeAllocation';
+import { useUnallocatedCommittees, useCandidatesForAllocation, useAllocateCommittee, useBatchAllocateCommittees, useCommitteeDiagnostics, type BatchAllocateResult } from '@/hooks/useCommitteeAllocation';
 
 const DONOR_TYPES = ['Individual', 'PAC', 'Organization', 'Unknown'];
 
@@ -102,12 +102,15 @@ export function DonorAliasesPanel() {
 
   // Committee allocation hooks - must be at top level of component
   const { data: unallocatedCommittees, isLoading: committeesLoading, refetch: refetchCommittees } = useUnallocatedCommittees();
+  const { data: diagnostics } = useCommitteeDiagnostics();
   const { data: allCandidates } = useCandidatesForAllocation();
   const allocateMutation = useAllocateCommittee();
   const batchAllocateMutation = useBatchAllocateCommittees();
   const [selectedCommitteeForAllocation, setSelectedCommitteeForAllocation] = useState<string | null>(null);
+  const [forceReallocate, setForceReallocate] = useState(false);
   const [lastBatchResult, setLastBatchResult] = useState<{
-    committeesProcessed: number;
+    committeesFound: number;
+    committeesChanged: number;
     totalContributionsUpdated: number;
     totalDonorsUpdated: number;
     totalTransfersDeleted: number;
@@ -637,42 +640,74 @@ export function DonorAliasesPanel() {
                     Committee Allocation
                   </CardTitle>
                   <CardDescription className="mt-1.5">
-                    J/U/B/D committees (Joint Fundraising, Leadership PACs, etc.) have unallocated contributions.
+                    J/U/B/D committees (Joint Fundraising, Leadership PACs, etc.) collect donations for multiple candidates.
                     Batch sync allocates all linked committees automatically.
                   </CardDescription>
                 </div>
-                <Button
-                  onClick={() => {
-                    setLastBatchResult(null);
-                    batchAllocateMutation.mutate({ cycle: '2024' }, {
-                      onSuccess: (data) => {
-                        setLastBatchResult({
-                          committeesProcessed: data.committeesProcessed || 0,
-                          totalContributionsUpdated: data.totalContributionsUpdated || 0,
-                          totalDonorsUpdated: data.totalDonorsUpdated || 0,
-                          totalTransfersDeleted: data.totalTransfersDeleted || 0,
-                        });
-                      }
-                    });
-                  }}
-                  disabled={batchAllocateMutation.isPending}
-                  className="shrink-0"
-                >
-                  {batchAllocateMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Syncing...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Batch Sync All
-                    </>
-                  )}
-                </Button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Checkbox 
+                      id="force-reallocate" 
+                      checked={forceReallocate} 
+                      onCheckedChange={(checked) => setForceReallocate(!!checked)} 
+                    />
+                    <Label htmlFor="force-reallocate" className="text-sm cursor-pointer">
+                      Force Reallocate
+                    </Label>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setLastBatchResult(null);
+                      batchAllocateMutation.mutate({ cycle: '2024', force: forceReallocate }, {
+                        onSuccess: (data) => {
+                          setLastBatchResult({
+                            committeesFound: data.committeesFound || 0,
+                            committeesChanged: data.committeesChanged || 0,
+                            totalContributionsUpdated: data.totalContributionsUpdated || 0,
+                            totalDonorsUpdated: data.totalDonorsUpdated || 0,
+                            totalTransfersDeleted: data.totalTransfersDeleted || 0,
+                          });
+                        }
+                      });
+                    }}
+                    disabled={batchAllocateMutation.isPending}
+                    className="shrink-0"
+                  >
+                    {batchAllocateMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Batch Sync All
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Diagnostics line */}
+              {diagnostics && (
+                <div className="flex flex-wrap gap-4 text-sm p-3 bg-muted/50 rounded-md">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Linked J/U/B/D Committees:</span>
+                    <Badge variant="secondary">{diagnostics.linkedJUBDCommittees}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Unallocated Contributions:</span>
+                    <Badge variant={diagnostics.unallocatedContributions > 0 ? "default" : "secondary"}>
+                      {diagnostics.unallocatedContributions.toLocaleString()}
+                    </Badge>
+                    <span className="text-muted-foreground text-xs">of {diagnostics.totalContributions.toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Batch sync result summary */}
               {lastBatchResult && (
                 <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
@@ -680,10 +715,14 @@ export function DonorAliasesPanel() {
                     <Check className="h-4 w-4 text-green-500" />
                     <span className="font-medium text-green-700 dark:text-green-400">Batch Sync Complete</span>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                     <div>
-                      <p className="text-muted-foreground">Committees</p>
-                      <p className="text-lg font-semibold">{lastBatchResult.committeesProcessed}</p>
+                      <p className="text-muted-foreground">Scanned</p>
+                      <p className="text-lg font-semibold">{lastBatchResult.committeesFound}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Changed</p>
+                      <p className="text-lg font-semibold">{lastBatchResult.committeesChanged}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Contributions</p>
@@ -707,10 +746,31 @@ export function DonorAliasesPanel() {
                   Loading committees...
                 </div>
               ) : !unallocatedCommittees || unallocatedCommittees.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">
-                  <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No J/U/B/D committees with unallocated contributions found.</p>
-                  <p className="text-sm mt-1">Sync committees first using the FEC integration.</p>
+                <div className="py-8 text-center space-y-4">
+                  <Building2 className="h-8 w-8 mx-auto opacity-50 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">No J/U/B/D Committees Found</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      To populate this table, follow the data pipeline:
+                    </p>
+                  </div>
+                  <div className="inline-flex flex-col items-start text-left text-sm bg-muted/50 p-4 rounded-md">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="w-6 h-6 p-0 justify-center">1</Badge>
+                      <span>Link FEC IDs to candidates (Admin → Coverage Dashboard)</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge variant="outline" className="w-6 h-6 p-0 justify-center">2</Badge>
+                      <span>Fetch committees for linked candidates</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge variant="outline" className="w-6 h-6 p-0 justify-center">3</Badge>
+                      <span>Fetch donors/contributions from FEC</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    This table shows J/U/B/D committees with contribution data.
+                  </p>
                 </div>
               ) : (
                 <div className="rounded-md border">
