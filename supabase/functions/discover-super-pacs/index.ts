@@ -92,7 +92,7 @@ serve(async (req) => {
 
     while (page <= maxPages) {
       // Query /committees/ endpoint with Super PAC type filters
-      const url = `https://api.open.fec.gov/v1/committees/?api_key=${fecApiKey}&cycle=${cycle}&committee_type=O&committee_type=W&per_page=100&page=${page}&sort=-receipts`;
+      const url = `https://api.open.fec.gov/v1/committees/?api_key=${fecApiKey}&cycle=${cycle}&committee_type=O&committee_type=W&per_page=100&page=${page}`;
 
       console.log('[DISCOVER-SUPER-PACS] Fetching page', page);
       const response = await fetchWithRetry(url);
