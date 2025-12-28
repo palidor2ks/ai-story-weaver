@@ -20,7 +20,71 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const startTime = Date.now();
+    
+    // Check if this is a single-alias backfill request
+    let body: { alias_id?: string } = {};
+    if (req.method === 'POST') {
+      try {
+        body = await req.json();
+      } catch {
+        // No body or invalid JSON, continue with full backfill
+      }
+    }
 
+    // SINGLE ALIAS MODE: Update all donors matching a specific alias
+    if (body.alias_id) {
+      console.log(`Single alias mode: processing alias_id=${body.alias_id}`);
+      
+      // Get the specific alias
+      const { data: alias, error: aliasError } = await supabase
+        .from('donor_aliases')
+        .select('canonical_name, alias_pattern, donor_types')
+        .eq('id', body.alias_id)
+        .eq('is_active', true)
+        .single();
+
+      if (aliasError || !alias) {
+        console.error('Error fetching alias:', aliasError);
+        return new Response(JSON.stringify({
+          success: false,
+          error: aliasError?.message || 'Alias not found'
+        }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log(`Found alias: pattern="${alias.alias_pattern}", canonical="${alias.canonical_name}"`);
+
+      // Update all donors matching this alias pattern using SQL ILIKE
+      const { data: updated, error: updateError } = await supabase
+        .from('donors')
+        .update({ display_name: alias.canonical_name })
+        .ilike('name', alias.alias_pattern)
+        .in('type', alias.donor_types || [])
+        .select('id');
+
+      if (updateError) {
+        console.error('Error updating donors:', updateError);
+        throw updateError;
+      }
+
+      const updatedCount = updated?.length || 0;
+      console.log(`Updated ${updatedCount} donors to display_name="${alias.canonical_name}"`);
+
+      return new Response(JSON.stringify({
+        success: true,
+        processed: updatedCount,
+        alias: alias.canonical_name,
+        pattern: alias.alias_pattern,
+        message: `Updated ${updatedCount} donor(s) to "${alias.canonical_name}"`,
+        elapsedMs: Date.now() - startTime
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // FULL BACKFILL MODE: Process all donors with NULL display_name
     // Get count of donors with NULL display_name
     const { count: nullCount, error: countError } = await supabase
       .from('donors')
