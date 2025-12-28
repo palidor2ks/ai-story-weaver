@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export interface UnallocatedCommittee {
+  id: string; // Primary key for reliable updates
   fec_committee_id: string;
   name: string | null;
   designation: string | null;
@@ -34,7 +35,7 @@ export function useUnallocatedCommittees(cycle: string = '2024') {
       // 2. OR have NULL candidate_id (orphan committees - externally imported)
       const { data: committees, error: committeeError } = await supabase
         .from('candidate_committees')
-        .select('fec_committee_id, name, designation, designation_full, source_fec_candidate_id, candidate_id, active')
+        .select('id, fec_committee_id, name, designation, designation_full, source_fec_candidate_id, candidate_id, active')
         .or('designation.in.(J,U,B,D),candidate_id.is.null')
         .order('name');
 
@@ -99,6 +100,7 @@ export function useUnallocatedCommittees(cycle: string = '2024') {
         const donorCount = donorCountByCommittee.get(c.fec_committee_id) || 0;
         
         return {
+          id: c.id, // Include primary key for reliable updates
           fec_committee_id: c.fec_committee_id,
           name: c.name,
           designation: c.designation,
@@ -273,11 +275,12 @@ export function useToggleCommitteeActive() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ fecCommitteeId, active }: { fecCommitteeId: string; active: boolean }) => {
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      // Use primary key 'id' for reliable update (avoids issues with duplicate fec_committee_id)
       const { data, error } = await supabase
         .from('candidate_committees')
         .update({ active, updated_at: new Date().toISOString() })
-        .eq('fec_committee_id', fecCommitteeId)
+        .eq('id', id)
         .select()
         .single();
 

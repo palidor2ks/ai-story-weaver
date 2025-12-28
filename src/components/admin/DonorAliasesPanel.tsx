@@ -849,7 +849,7 @@ export function DonorAliasesPanel() {
                     </TableHeader>
                     <TableBody>
                       {unallocatedCommittees.map((committee) => (
-                        <TableRow key={committee.fec_committee_id}>
+                        <TableRow key={committee.id}>
                           <TableCell>
                             <div className="space-y-1">
                               <p className="font-medium">{committee.name || committee.fec_committee_id}</p>
@@ -883,7 +883,7 @@ export function DonorAliasesPanel() {
                                     size="sm"
                                     className="h-7 px-2"
                                     onClick={() => toggleActiveMutation.mutate({
-                                      fecCommitteeId: committee.fec_committee_id,
+                                      id: committee.id,
                                       active: !committee.active
                                     })}
                                     disabled={toggleActiveMutation.isPending}
