@@ -419,12 +419,29 @@ serve(async (req) => {
     }
     
     const committees: CommitteeInfo[] = [];
-    const committeeSet = new Set<string>();
+    const committeeMap = new Map<string, CommitteeInfo>();
 
+    // Push or MERGE committee info - later calls with more info will update existing entries
     const pushCommittee = (id: string, name = '', role = 'authorized', designation?: string, syncInfo?: Partial<CommitteeInfo>) => {
-      if (!id || committeeSet.has(id)) return;
-      committeeSet.add(id);
-      committees.push({ id, name, role, designation, ...syncInfo });
+      if (!id) return;
+      
+      const existing = committeeMap.get(id);
+      if (existing) {
+        // MERGE: update fields if the new source has better info
+        if (designation && !existing.designation) existing.designation = designation;
+        if (name && !existing.name) existing.name = name;
+        if (role !== 'authorized' && existing.role === 'authorized') existing.role = role;
+        // Merge sync info fields if new source has them
+        if (syncInfo?.lastIndex && !existing.lastIndex) existing.lastIndex = syncInfo.lastIndex;
+        if (syncInfo?.lastSyncDate && !existing.lastSyncDate) existing.lastSyncDate = syncInfo.lastSyncDate;
+        if (syncInfo?.lastContributionDate && !existing.lastContributionDate) existing.lastContributionDate = syncInfo.lastContributionDate;
+        if (syncInfo?.lastSyncCompletedAt && !existing.lastSyncCompletedAt) existing.lastSyncCompletedAt = syncInfo.lastSyncCompletedAt;
+        return;
+      }
+      
+      const newCommittee: CommitteeInfo = { id, name, role, designation, ...syncInfo };
+      committeeMap.set(id, newCommittee);
+      committees.push(newCommittee);
     };
 
     // Fetch existing committee sync info from database
@@ -590,6 +607,9 @@ serve(async (req) => {
       );
     }
 
+    // Log normalized committees for debugging
+    console.log('[FEC-DONORS] Committees normalized:', committees.map(c => ({ id: c.id, designation: c.designation, role: c.role, name: c.name?.slice(0, 30) })));
+    
     // FILTER COMMITTEES: Only sync P/A (campaign) committees by default
     // External committees (J/U/B/D) are saved to DB but NOT synced unless explicitly requested
     const campaignCommittees = committees.filter(c => ['P', 'A'].includes(c.designation || ''));
