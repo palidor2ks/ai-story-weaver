@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Building2, RefreshCw, Clock, AlertTriangle, CheckCircle2, EyeOff } from 'lucide-react';
+import { Loader2, Building2, RefreshCw, Clock, AlertTriangle, CheckCircle2, EyeOff, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -47,6 +47,15 @@ export function CommitteeBreakdown({
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
   const [selectedCycle, setSelectedCycle] = useState<string>('2024');
   const [hideInactive, setHideInactive] = useState(true);
+  const [showPartyCommittees, setShowPartyCommittees] = useState(false);
+
+  // National party committee IDs to filter out by default
+  const NATIONAL_PARTY_COMMITTEE_IDS = [
+    'C00027466', // NRSC - National Republican Senatorial Committee
+    'C00042366', // DSCC - Democratic Senatorial Campaign Committee
+    'C00075820', // NRCC - National Republican Congressional Committee
+    'C00000935', // DCCC - Democratic Congressional Campaign Committee
+  ];
 
   const fetchCommittees = async () => {
     const { data, error } = await supabase
@@ -64,9 +73,19 @@ export function CommitteeBreakdown({
     setLoading(false);
   };
 
-  // Filter committees based on cycle and inactive status
+  // Check if a committee is a national party committee
+  const isNationalPartyCommittee = (fecId: string) => {
+    return NATIONAL_PARTY_COMMITTEE_IDS.includes(fecId);
+  };
+
+  // Filter committees based on cycle, inactive status, and party committee toggle
   const filteredCommittees = useMemo(() => {
     return committees.filter(c => {
+      // Filter out national party committees unless toggle is on
+      if (!showPartyCommittees && isNationalPartyCommittee(c.fec_committee_id)) {
+        return false;
+      }
+
       // Cycle filter: skip if "all" selected, otherwise filter by cycle
       if (selectedCycle !== 'all') {
         const matchesCycle = !c.cycles || c.cycles.length === 0 || c.cycles.includes(selectedCycle);
@@ -83,7 +102,7 @@ export function CommitteeBreakdown({
       
       return true;
     });
-  }, [committees, selectedCycle, hideInactive]);
+  }, [committees, selectedCycle, hideInactive, showPartyCommittees]);
 
   useEffect(() => {
     fetchCommittees();
@@ -315,6 +334,17 @@ export function CommitteeBreakdown({
             Hide inactive
           </label>
         </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id="show-party"
+            checked={showPartyCommittees}
+            onCheckedChange={setShowPartyCommittees}
+            className="h-4 w-7"
+          />
+          <label htmlFor="show-party" className="text-xs text-muted-foreground cursor-pointer">
+            Show party committees
+          </label>
+        </div>
       </div>
 
       {/* Simulated Total */}
@@ -343,6 +373,12 @@ export function CommitteeBreakdown({
                 {committee.is_terminated && (
                   <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">
                     Terminated
+                  </Badge>
+                )}
+                {isNationalPartyCommittee(committee.fec_committee_id) && (
+                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-purple-600 border-purple-300 gap-1">
+                    <Landmark className="h-2.5 w-2.5" />
+                    National Party
                   </Badge>
                 )}
                 {committee.cycles && committee.cycles.length > 0 && (
