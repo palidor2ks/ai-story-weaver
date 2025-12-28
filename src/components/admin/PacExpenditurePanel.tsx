@@ -22,6 +22,8 @@ const formatCurrency = (value: number) => {
 export function PacExpenditurePanel() {
   const [fetchingId, setFetchingId] = useState<string | null>(null);
   const [fetchingDonorsId, setFetchingDonorsId] = useState<string | null>(null);
+  const [syncingAllDonors, setSyncingAllDonors] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const fetchMutation = useFetchPacExpenditures();
   const fetchDonorsMutation = useFetchPacDonors();
@@ -90,6 +92,30 @@ export function PacExpenditurePanel() {
     }
   };
 
+  const handleSyncAllDonors = async () => {
+    if (externalCommittees.length === 0) return;
+    
+    setSyncingAllDonors(true);
+    setSyncProgress({ current: 0, total: externalCommittees.length });
+    
+    for (let i = 0; i < externalCommittees.length; i++) {
+      const committee = externalCommittees[i];
+      setSyncProgress({ current: i + 1, total: externalCommittees.length });
+      setFetchingDonorsId(committee.fec_committee_id);
+      
+      try {
+        await fetchDonorsMutation.mutateAsync({ committeeId: committee.fec_committee_id, cycle: '2024' });
+      } catch (error) {
+        console.error(`Failed to fetch donors for ${committee.name}:`, error);
+        // Continue with next PAC even if one fails
+      }
+    }
+    
+    setFetchingDonorsId(null);
+    setSyncingAllDonors(false);
+    setSyncProgress(null);
+  };
+
   const filteredCommittees = externalCommittees.filter(c => 
     !searchQuery || 
     c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -99,7 +125,7 @@ export function PacExpenditurePanel() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-primary" />
@@ -109,6 +135,25 @@ export function PacExpenditurePanel() {
               Fetch and manage Schedule E independent expenditure data for external PACs
             </CardDescription>
           </div>
+          {externalCommittees.length > 0 && (
+            <Button
+              onClick={handleSyncAllDonors}
+              disabled={syncingAllDonors}
+              className="gap-2"
+            >
+              {syncingAllDonors ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Syncing {syncProgress?.current}/{syncProgress?.total}...
+                </>
+              ) : (
+                <>
+                  <Users className="h-4 w-4" />
+                  Sync All PAC Donors
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
