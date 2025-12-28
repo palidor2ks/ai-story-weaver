@@ -116,6 +116,7 @@ serve(async (req) => {
       designationFull: string;
       isPrimary: boolean;
       active: boolean;
+      isNonPrimaryDesignation: boolean;
       sourceFecCandidateId: string;
       sourceOffice: string;
     }> = [];
@@ -124,7 +125,8 @@ serve(async (req) => {
 
     // Fetch committees for each FEC candidate ID
     for (const fecIdRecord of fecIdsToFetch) {
-      const url = `https://api.open.fec.gov/v1/candidate/${fecIdRecord.fecCandidateId}/committees/?api_key=${fecApiKey}&designation=P&designation=A&per_page=50`;
+      // Fetch ALL committee designations: P=Principal, A=Authorized, J=Joint Fundraising, U=Unauthorized/Leadership, B=Lobbyist, D=Delegate
+      const url = `https://api.open.fec.gov/v1/candidate/${fecIdRecord.fecCandidateId}/committees/?api_key=${fecApiKey}&designation=P&designation=A&designation=J&designation=U&designation=B&designation=D&per_page=50`;
       
       let response: Response;
       try {
@@ -163,6 +165,15 @@ serve(async (req) => {
       for (const cmte of committees) {
         const isPrimary = cmte.committee_id === primaryCommittee?.committee_id && fecIdRecord.isPrimary;
         
+        // Determine role based on designation
+        const isNonPrimaryDesignation = ['J', 'U', 'B', 'D'].includes(cmte.designation);
+        let role = 'authorized';
+        if (cmte.designation === 'P') role = 'principal';
+        else if (cmte.designation === 'J') role = 'joint_fundraising';
+        else if (cmte.designation === 'U') role = 'leadership_pac';
+        else if (cmte.designation === 'B') role = 'lobbyist';
+        else if (cmte.designation === 'D') role = 'delegate';
+
         const { error: upsertError } = await supabase
           .from('candidate_committees')
           .upsert({
@@ -171,8 +182,8 @@ serve(async (req) => {
             name: cmte.name,
             designation: cmte.designation,
             designation_full: cmte.designation_full,
-            role: cmte.designation === 'P' ? 'principal' : 'authorized',
-            active: cmte.designation === 'P' || cmte.designation === 'A',
+            role,
+            active: true, // All committees are active
             source_fec_candidate_id: fecIdRecord.fecCandidateId,
             updated_at: new Date().toISOString()
           }, {
@@ -189,7 +200,8 @@ serve(async (req) => {
           designation: cmte.designation,
           designationFull: cmte.designation_full,
           isPrimary,
-          active: cmte.designation === 'P' || cmte.designation === 'A',
+          active: true, // All committees are active
+          isNonPrimaryDesignation,
           sourceFecCandidateId: fecIdRecord.fecCandidateId,
           sourceOffice: fecIdRecord.office
         });
