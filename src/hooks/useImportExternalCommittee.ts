@@ -46,6 +46,7 @@ export function useImportExternalCommittee() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['unallocated-committees'] });
       queryClient.invalidateQueries({ queryKey: ['committee-diagnostics'] });
+      queryClient.invalidateQueries({ queryKey: ['external-committees'] });
       
       if (data.alreadyExists) {
         toast.info(data.message);
