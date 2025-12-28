@@ -61,6 +61,12 @@ interface SyncProgress {
   committeesTotal: number;
   donorsImported: number;
   isComplete: boolean;
+  // Progress tracking for auto-resume
+  localItemized?: number;
+  fecItemized?: number;
+  estimatedProgress?: number;
+  attempts?: number;
+  isAutoResuming?: boolean;
 }
 
 interface SyncAllProgress {
@@ -235,13 +241,14 @@ export function useFECIntegration() {
     }
   };
 
-  // Complete fetch: loops until hasMore=false
+  // Complete fetch: loops until hasMore=false with optional unlimited auto-resume
   const fetchFECDonorsComplete = async (
     candidateId: string,
     fecCandidateId: string,
     candidateName: string,
     cycle = '2024',
-    forceFullSync = false
+    forceFullSync = false,
+    unlimitedAutoResume = false // When true, keeps retrying indefinitely until complete
   ): Promise<FetchDonorsResult> => {
     setDonorLoadingIds(prev => new Set(prev).add(candidateId));
     
@@ -249,13 +256,32 @@ export function useFECIntegration() {
     let totalRaised = 0;
     let hasMore = true;
     let attempts = 0;
-    const maxAttempts = 50; // Safety limit (50 * 25s = ~20min max per candidate)
+    // Safety limit: 50 attempts for normal mode, 500 for unlimited (would be ~2 hours max)
+    const maxAttempts = unlimitedAutoResume ? 500 : 50;
     let lastResult: FetchDonorsResult = { success: false, imported: 0 };
     let committeesSynced = 0;
+    let fecItemizedTotal = 0;
+    let localItemizedTotal = 0;
     
     try {
+      // First, try to get FEC totals for progress estimation
+      const { data: reconcData } = await supabase
+        .from('finance_reconciliation')
+        .select('fec_itemized, local_itemized')
+        .eq('candidate_id', candidateId)
+        .eq('cycle', cycle)
+        .maybeSingle();
+      
+      fecItemizedTotal = reconcData?.fec_itemized || 0;
+      localItemizedTotal = reconcData?.local_itemized || 0;
+      
       while (hasMore && attempts < maxAttempts) {
         attempts++;
+        
+        // Calculate estimated progress based on local vs FEC itemized
+        const estimatedProgress = fecItemizedTotal > 0 
+          ? Math.min(95, Math.round((localItemizedTotal / fecItemizedTotal) * 100))
+          : 0;
         
         setSyncProgress({
           candidateId,
@@ -263,7 +289,12 @@ export function useFECIntegration() {
           committeesSynced,
           committeesTotal: committeesSynced + (lastResult.committeesRemaining || 1),
           donorsImported: totalImported,
-          isComplete: false
+          isComplete: false,
+          localItemized: localItemizedTotal,
+          fecItemized: fecItemizedTotal,
+          estimatedProgress,
+          attempts,
+          isAutoResuming: unlimitedAutoResume
         });
         
         const result = await fetchFECDonorsSingle(candidateId, fecCandidateId, cycle, forceFullSync && attempts === 1);
@@ -280,11 +311,16 @@ export function useFECIntegration() {
         totalRaised += result.totalRaised || 0;
         hasMore = result.hasMore === true;
         
+        // Update local itemized from reconciliation data if available
+        if (result.reconciliation?.localItemized) {
+          localItemizedTotal = result.reconciliation.localItemized;
+        }
+        
         if (result.committeesSynced) {
           committeesSynced++;
         }
         
-        console.log(`[FEC-DONORS] Attempt ${attempts}: imported ${result.imported}, hasMore=${hasMore}, remaining=${result.committeesRemaining}`);
+        console.log(`[FEC-DONORS] Attempt ${attempts}: imported ${result.imported}, hasMore=${hasMore}, progress=${fecItemizedTotal > 0 ? Math.round((localItemizedTotal / fecItemizedTotal) * 100) : 0}%`);
         
         // Small delay between calls to be nice to the API
         if (hasMore) {
@@ -316,13 +352,22 @@ export function useFECIntegration() {
         }
       }
 
+      const finalProgress = fecItemizedTotal > 0 
+        ? Math.round((localItemizedTotal / fecItemizedTotal) * 100)
+        : (hasMore ? 50 : 100);
+
       setSyncProgress({
         candidateId,
         candidateName,
         committeesSynced,
         committeesTotal: committeesSynced,
         donorsImported: totalImported,
-        isComplete: !hasMore
+        isComplete: !hasMore,
+        localItemized: localItemizedTotal,
+        fecItemized: fecItemizedTotal,
+        estimatedProgress: hasMore ? finalProgress : 100,
+        attempts,
+        isAutoResuming: unlimitedAutoResume
       });
 
       return {
@@ -331,7 +376,7 @@ export function useFECIntegration() {
         totalRaised,
         hasMore,
         message: hasMore 
-          ? `Partial sync: ${totalImported} donors imported so far. Call again to continue.`
+          ? `Partial sync: ${totalImported} donors (~${finalProgress}% complete). ${unlimitedAutoResume ? 'Auto-resuming...' : 'Call again to continue.'}`
           : `Complete: imported ${totalImported} donors totaling $${totalRaised.toLocaleString()}`,
         reconciliation: lastResult.reconciliation
       };
@@ -348,6 +393,17 @@ export function useFECIntegration() {
       // Clear sync progress after a short delay so user sees final state
       setTimeout(() => setSyncProgress(null), 2000);
     }
+  };
+
+  // Auto-resume a single candidate until truly complete (wrapper that calls fetchFECDonorsComplete in unlimited mode)
+  const autoResumeSingleCandidate = async (
+    candidateId: string,
+    fecCandidateId: string,
+    candidateName: string,
+    cycle = '2024'
+  ): Promise<FetchDonorsResult> => {
+    toast.info(`Starting auto-resume for ${candidateName}. This may take several minutes for high-volume candidates.`);
+    return fetchFECDonorsComplete(candidateId, fecCandidateId, candidateName, cycle, false, true);
   };
 
   // Trigger finance reconciliation for a specific candidate (internal, no loading state)
@@ -698,6 +754,7 @@ export function useFECIntegration() {
     fetchFECCommittees,
     fetchFECDonors,
     fetchFECDonorsComplete,
+    autoResumeSingleCandidate,
     batchFetchFECIds,
     batchFetchDonors,
     resumeAllPartialSyncs,
