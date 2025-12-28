@@ -14,6 +14,8 @@ interface CommitteeResult {
   committee_type: string;
   treasurer_name: string;
   cycles: number[];
+  is_active: boolean;
+  last_file_date: string | null;
 }
 
 // Retry fetch with exponential backoff for rate limits
@@ -174,6 +176,12 @@ serve(async (req) => {
         else if (cmte.designation === 'B') role = 'lobbyist';
         else if (cmte.designation === 'D') role = 'delegate';
 
+        // Convert cycles array to string array for storage
+        const cyclesAsStrings = cmte.cycles?.map(c => String(c)) || [];
+        
+        // FEC considers a committee terminated if is_active is false
+        const isTerminated = cmte.is_active === false;
+
         const { error: upsertError } = await supabase
           .from('candidate_committees')
           .upsert({
@@ -183,7 +191,9 @@ serve(async (req) => {
             designation: cmte.designation,
             designation_full: cmte.designation_full,
             role,
-            active: true, // All committees are active
+            active: true, // Default to active for sync purposes
+            cycles: cyclesAsStrings,
+            is_terminated: isTerminated,
             source_fec_candidate_id: fecIdRecord.fecCandidateId,
             updated_at: new Date().toISOString()
           }, {
