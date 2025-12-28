@@ -142,9 +142,10 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       });
 
       // Get partial sync status from candidate_committees (has_more = true means incomplete sync)
+      // Include designation to filter: only P/A (campaign) committees count for sync status
       const { data: partialSyncData } = await supabase
         .from('candidate_committees')
-        .select('candidate_id, has_more, last_sync_date, last_sync_completed_at');
+        .select('candidate_id, has_more, last_sync_date, last_sync_completed_at, designation');
 
       const partialSyncMap: Record<string, boolean> = {};
       const lastSyncMap: Record<string, string | null> = {};
@@ -152,16 +153,22 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       const committeeCountMap: Record<string, number> = {};
       
       (partialSyncData || []).forEach(row => {
-        // Count committees per candidate
+        // Count ALL committees per candidate (for display purposes)
         committeeCountMap[row.candidate_id] = (committeeCountMap[row.candidate_id] || 0) + 1;
-        // has_more = true means incomplete sync
+        
+        // Only consider P/A (campaign) committees for sync status
+        // External committees (J/U/B/D) are ignored for sync status calculation
+        const isCampaignCommittee = ['P', 'A'].includes(row.designation || '');
+        if (!isCampaignCommittee) return;
+        
+        // has_more = true means incomplete sync (only for P/A committees)
         if (row.has_more === true) {
           partialSyncMap[row.candidate_id] = true;
         }
         if (row.last_sync_date) {
           lastSyncMap[row.candidate_id] = row.last_sync_date;
         }
-        // If any committee has completed sync, mark it
+        // If any P/A committee has completed sync, mark it
         if (row.last_sync_completed_at) {
           completeSyncMap[row.candidate_id] = true;
         }
