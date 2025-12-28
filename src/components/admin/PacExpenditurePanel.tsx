@@ -4,10 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { useFetchPacExpenditures, useFetchPacDonors } from '@/hooks/usePacExpenditures';
+import { useImportExternalCommittee } from '@/hooks/useImportExternalCommittee';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { DollarSign, RefreshCw, Loader2, Users, Search } from 'lucide-react';
+import { DollarSign, RefreshCw, Loader2, Users, Search, Plus, Download, Clock } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
 const formatCurrency = (value: number) => {
   if (value >= 1_000_000) {
@@ -19,25 +23,31 @@ const formatCurrency = (value: number) => {
   return `$${value.toLocaleString()}`;
 };
 
+const formatPercent = (value: number) => {
+  return `${Math.round(value)}%`;
+};
+
 export function PacExpenditurePanel() {
   const [fetchingId, setFetchingId] = useState<string | null>(null);
   const [fetchingDonorsId, setFetchingDonorsId] = useState<string | null>(null);
   const [syncingAllDonors, setSyncingAllDonors] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
+  const [syncingAllExpenditures, setSyncingAllExpenditures] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; type: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importCommitteeId, setImportCommitteeId] = useState('');
+  
   const fetchMutation = useFetchPacExpenditures();
   const fetchDonorsMutation = useFetchPacDonors();
+  const importMutation = useImportExternalCommittee();
 
-  // Fetch external committees (Super PACs)
+  // Fetch external committees (Super PACs) with donor counts
   const { data: externalCommittees = [], isLoading } = useQuery({
     queryKey: ['external-committees'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('candidate_committees')
-        .select(`
-          *,
-          pac_candidate_totals:pac_candidate_totals(count)
-        `)
+        .select('*')
         .eq('role', 'external')
         .eq('active', true)
         .order('name');
@@ -47,8 +57,30 @@ export function PacExpenditurePanel() {
     },
   });
 
+  // Fetch donor counts per PAC
+  const { data: donorCounts = {} } = useQuery({
+    queryKey: ['pac-donor-counts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('donors')
+        .select('recipient_committee_id')
+        .is('candidate_id', null);
+      
+      if (error) throw error;
+      
+      // Count donors per committee
+      const counts: Record<string, number> = {};
+      (data || []).forEach(d => {
+        if (d.recipient_committee_id) {
+          counts[d.recipient_committee_id] = (counts[d.recipient_committee_id] || 0) + 1;
+        }
+      });
+      return counts;
+    },
+  });
+
   // Fetch pac_expenditures summary
-  const { data: expenditureSummary = [] } = useQuery({
+  const { data: expenditureSummary = {} } = useQuery({
     queryKey: ['pac-expenditure-summary'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -96,18 +128,17 @@ export function PacExpenditurePanel() {
     if (externalCommittees.length === 0) return;
     
     setSyncingAllDonors(true);
-    setSyncProgress({ current: 0, total: externalCommittees.length });
+    setSyncProgress({ current: 0, total: externalCommittees.length, type: 'donors' });
     
     for (let i = 0; i < externalCommittees.length; i++) {
       const committee = externalCommittees[i];
-      setSyncProgress({ current: i + 1, total: externalCommittees.length });
+      setSyncProgress({ current: i + 1, total: externalCommittees.length, type: 'donors' });
       setFetchingDonorsId(committee.fec_committee_id);
       
       try {
         await fetchDonorsMutation.mutateAsync({ committeeId: committee.fec_committee_id, cycle: '2024' });
       } catch (error) {
         console.error(`Failed to fetch donors for ${committee.name}:`, error);
-        // Continue with next PAC even if one fails
       }
     }
     
@@ -116,11 +147,53 @@ export function PacExpenditurePanel() {
     setSyncProgress(null);
   };
 
+  const handleSyncAllExpenditures = async () => {
+    if (externalCommittees.length === 0) return;
+    
+    setSyncingAllExpenditures(true);
+    setSyncProgress({ current: 0, total: externalCommittees.length, type: 'expenditures' });
+    
+    for (let i = 0; i < externalCommittees.length; i++) {
+      const committee = externalCommittees[i];
+      setSyncProgress({ current: i + 1, total: externalCommittees.length, type: 'expenditures' });
+      setFetchingId(committee.fec_committee_id);
+      
+      try {
+        await fetchMutation.mutateAsync({ committeeId: committee.fec_committee_id, cycle: '2024' });
+      } catch (error) {
+        console.error(`Failed to fetch expenditures for ${committee.name}:`, error);
+      }
+    }
+    
+    setFetchingId(null);
+    setSyncingAllExpenditures(false);
+    setSyncProgress(null);
+  };
+
+  const handleFullSync = async () => {
+    await handleSyncAllExpenditures();
+    await handleSyncAllDonors();
+  };
+
+  const handleImport = async () => {
+    if (!importCommitteeId.trim()) return;
+    
+    try {
+      await importMutation.mutateAsync(importCommitteeId.trim());
+      setImportCommitteeId('');
+      setImportDialogOpen(false);
+    } catch (error) {
+      // Error is handled by the mutation
+    }
+  };
+
   const filteredCommittees = externalCommittees.filter(c => 
     !searchQuery || 
     c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.fec_committee_id.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const isSyncing = syncingAllDonors || syncingAllExpenditures;
 
   return (
     <Card>
@@ -129,31 +202,114 @@ export function PacExpenditurePanel() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-primary" />
-              Super PAC Expenditures
+              Super PACs
             </CardTitle>
             <CardDescription>
-              Fetch and manage Schedule E independent expenditure data for external PACs
+              Import and manage Super PAC expenditures (Schedule E) and donors (Schedule A)
             </CardDescription>
           </div>
-          {externalCommittees.length > 0 && (
-            <Button
-              onClick={handleSyncAllDonors}
-              disabled={syncingAllDonors}
-              className="gap-2"
-            >
-              {syncingAllDonors ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Syncing {syncProgress?.current}/{syncProgress?.total}...
-                </>
-              ) : (
-                <>
-                  <Users className="h-4 w-4" />
-                  Sync All PAC Donors
-                </>
-              )}
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-2">
+            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Import Super PAC
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Import Super PAC</DialogTitle>
+                  <DialogDescription>
+                    Enter the FEC Committee ID to import a Super PAC. You can find these on fec.gov.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="committee-id">FEC Committee ID</Label>
+                    <Input
+                      id="committee-id"
+                      placeholder="e.g., C00637512"
+                      value={importCommitteeId}
+                      onChange={(e) => setImportCommitteeId(e.target.value.toUpperCase())}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Committee IDs start with "C" followed by 8 digits
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleImport} 
+                    disabled={importMutation.isPending || !importCommitteeId.trim()}
+                  >
+                    {importMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Import
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {externalCommittees.length > 0 && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleSyncAllExpenditures}
+                  disabled={isSyncing}
+                  className="gap-2"
+                >
+                  {syncingAllExpenditures ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {syncProgress?.current}/{syncProgress?.total}
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4" />
+                      Sync All Expenditures
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleSyncAllDonors}
+                  disabled={isSyncing}
+                  className="gap-2"
+                >
+                  {syncingAllDonors ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {syncProgress?.current}/{syncProgress?.total}
+                    </>
+                  ) : (
+                    <>
+                      <Users className="h-4 w-4" />
+                      Sync All Donors
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={handleFullSync}
+                  disabled={isSyncing}
+                  className="gap-2"
+                >
+                  {isSyncing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      Full Sync All
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -161,7 +317,7 @@ export function PacExpenditurePanel() {
         <div className="mb-4 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search PACs..."
+            placeholder="Search PACs by name or FEC ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -174,8 +330,14 @@ export function PacExpenditurePanel() {
           </div>
         ) : filteredCommittees.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            <p>No external PACs found.</p>
-            <p className="text-sm mt-1">Import a Super PAC via the Committee Allocation panel first.</p>
+            {searchQuery ? (
+              <p>No PACs match your search.</p>
+            ) : (
+              <>
+                <p>No Super PACs imported yet.</p>
+                <p className="text-sm mt-1">Click "Import Super PAC" to add one.</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -184,10 +346,12 @@ export function PacExpenditurePanel() {
                 <TableRow>
                   <TableHead>PAC Name</TableHead>
                   <TableHead>FEC ID</TableHead>
+                  <TableHead className="text-center">Donors</TableHead>
                   <TableHead className="text-right">Support</TableHead>
                   <TableHead className="text-right">Oppose</TableHead>
                   <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-center">Candidates</TableHead>
+                  <TableHead className="text-center">Split</TableHead>
+                  <TableHead className="text-center">Last Synced</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -195,6 +359,10 @@ export function PacExpenditurePanel() {
                 {filteredCommittees.map((committee) => {
                   const summary = expenditureSummary[committee.fec_committee_id];
                   const hasData = !!summary;
+                  const donorCount = donorCounts[committee.fec_committee_id] || 0;
+                  const supportPct = hasData && summary.total > 0 ? (summary.support / summary.total) * 100 : 0;
+                  const opposePct = hasData && summary.total > 0 ? (summary.oppose / summary.total) * 100 : 0;
+                  const lastSync = committee.last_sync_completed_at;
                   
                   return (
                     <TableRow key={committee.id}>
@@ -205,6 +373,13 @@ export function PacExpenditurePanel() {
                         <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
                           {committee.fec_committee_id}
                         </code>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {donorCount > 0 ? (
+                          <Badge variant="secondary">{donorCount.toLocaleString()}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {hasData ? (
@@ -234,10 +409,24 @@ export function PacExpenditurePanel() {
                         )}
                       </TableCell>
                       <TableCell className="text-center">
-                        {hasData ? (
-                          <Badge variant="secondary">{summary.candidates}</Badge>
+                        {hasData && summary.total > 0 ? (
+                          <div className="flex items-center gap-1 justify-center">
+                            <span className="text-xs text-agree">{formatPercent(supportPct)}</span>
+                            <span className="text-xs text-muted-foreground">/</span>
+                            <span className="text-xs text-disagree">{formatPercent(opposePct)}</span>
+                          </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {lastSync ? (
+                          <div className="flex items-center gap-1 justify-center text-xs text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            {formatDistanceToNow(new Date(lastSync), { addSuffix: true })}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">Never</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -246,7 +435,7 @@ export function PacExpenditurePanel() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleFetch(committee.fec_committee_id)}
-                            disabled={fetchingId === committee.fec_committee_id}
+                            disabled={fetchingId === committee.fec_committee_id || isSyncing}
                             title="Fetch expenditures (Schedule E)"
                           >
                             {fetchingId === committee.fec_committee_id ? (
@@ -254,13 +443,12 @@ export function PacExpenditurePanel() {
                             ) : (
                               <RefreshCw className="h-4 w-4" />
                             )}
-                            <span className="ml-1 hidden sm:inline">{hasData ? 'Refresh' : 'Fetch'}</span>
                           </Button>
                           <Button
                             variant="secondary"
                             size="sm"
                             onClick={() => handleFetchDonors(committee.fec_committee_id)}
-                            disabled={fetchingDonorsId === committee.fec_committee_id}
+                            disabled={fetchingDonorsId === committee.fec_committee_id || isSyncing}
                             title="Fetch donors (Schedule A)"
                           >
                             {fetchingDonorsId === committee.fec_committee_id ? (
@@ -268,7 +456,6 @@ export function PacExpenditurePanel() {
                             ) : (
                               <Users className="h-4 w-4" />
                             )}
-                            <span className="ml-1 hidden sm:inline">Donors</span>
                           </Button>
                         </div>
                       </TableCell>

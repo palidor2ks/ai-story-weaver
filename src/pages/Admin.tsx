@@ -454,7 +454,7 @@ export default function Admin() {
             </TabsTrigger>
             <TabsTrigger value="pac-expenditures" className="gap-2">
               <TrendingUp className="h-4 w-4" />
-              PAC Expenditures
+              Super PACs
             </TabsTrigger>
           </TabsList>
 
