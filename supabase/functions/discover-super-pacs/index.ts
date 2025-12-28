@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Rate-limited fetch with retries (matches import-external-committee pattern)
+// Rate-limited fetch with retries
 async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -34,7 +34,7 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
   throw new Error('Max retries exceeded');
 }
 
-// Delay between API calls to avoid rate limiting (matches sync-all-donors)
+// Delay between API calls to avoid rate limiting
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -66,7 +66,7 @@ serve(async (req) => {
     }
 
     const cycle = body.cycle || '2024';
-    const minSpend = body.minSpend || 100000; // Default $100k minimum to filter small PACs
+    const minSpend = body.minSpend || 100000; // Default $100k minimum
 
     console.log('[DISCOVER-SUPER-PACS] Starting discovery for cycle:', cycle, 'minSpend:', minSpend);
 
@@ -83,21 +83,18 @@ serve(async (req) => {
     const existingIds = new Set((existingCommittees || []).map(c => c.fec_committee_id));
     console.log('[DISCOVER-SUPER-PACS] Found', existingIds.size, 'existing external committees');
 
-    // Fetch Schedule E totals BY COMMITTEE (not by_candidate)
-    // This gives us committees that have made independent expenditures in this cycle
-    const discoveredCommittees: Array<{ id: string; total: number }> = [];
-    let lastIndex: string | null = null;
-    let pageCount = 0;
-    const maxPages = 50; // Increase page limit for thorough discovery
+    // Use /committees/ endpoint with committee_type filter for Super PACs
+    // O = Independent Expenditure-Only Committee (Super PAC)
+    // W = Independent Expenditure-Only PAC with Non-Contribution Account (Hybrid Super PAC)
+    const discoveredCommittees: Array<{ id: string; name: string; type: string }> = [];
+    let page = 1;
+    const maxPages = 50;
 
-    while (pageCount < maxPages) {
-      // Use /totals/by_committee/ endpoint - returns committee_id and total for each PAC
-      let url = `https://api.open.fec.gov/v1/schedules/schedule_e/totals/by_committee/?api_key=${fecApiKey}&cycle=${cycle}&per_page=100&sort=-total&min_total=${minSpend}`;
-      if (lastIndex) {
-        url += `&last_index=${lastIndex}`;
-      }
+    while (page <= maxPages) {
+      // Query /committees/ endpoint with Super PAC type filters
+      const url = `https://api.open.fec.gov/v1/committees/?api_key=${fecApiKey}&cycle=${cycle}&committee_type=O&committee_type=W&per_page=100&page=${page}&sort=-receipts`;
 
-      console.log('[DISCOVER-SUPER-PACS] Fetching page', pageCount + 1);
+      console.log('[DISCOVER-SUPER-PACS] Fetching page', page);
       const response = await fetchWithRetry(url);
       
       if (!response.ok) {
@@ -109,107 +106,107 @@ serve(async (req) => {
       const data = await response.json();
       const results = data?.results || [];
       
-      console.log('[DISCOVER-SUPER-PACS] Page', pageCount + 1, 'returned', results.length, 'results');
+      console.log('[DISCOVER-SUPER-PACS] Page', page, 'returned', results.length, 'committees');
       
       if (results.length === 0) {
         console.log('[DISCOVER-SUPER-PACS] No more results');
         break;
       }
 
-      // Extract unique committee IDs - the endpoint returns committee_id directly
-      for (const result of results) {
-        const committeeId = result.committee_id;
-        const total = result.total || 0;
+      // Process each committee
+      for (const committee of results) {
+        const committeeId = committee.committee_id;
         
-        if (committeeId && !existingIds.has(committeeId) && !discoveredCommittees.find(c => c.id === committeeId)) {
-          discoveredCommittees.push({ id: committeeId, total });
-          console.log('[DISCOVER-SUPER-PACS] Found new committee:', committeeId, 'with total:', total);
+        // Skip if already exists
+        if (existingIds.has(committeeId)) {
+          continue;
         }
+        
+        // Skip if already discovered in this run
+        if (discoveredCommittees.find(c => c.id === committeeId)) {
+          continue;
+        }
+
+        discoveredCommittees.push({
+          id: committeeId,
+          name: committee.name,
+          type: committee.committee_type,
+        });
+        
+        console.log('[DISCOVER-SUPER-PACS] Found new Super PAC:', committeeId, committee.name);
       }
 
-      // Check pagination
+      // Check if there are more pages
       const pagination = data?.pagination;
-      if (!pagination?.last_indexes?.last_index) {
-        console.log('[DISCOVER-SUPER-PACS] No more pages');
+      if (!pagination || page >= pagination.pages) {
+        console.log('[DISCOVER-SUPER-PACS] Reached last page');
         break;
       }
       
-      lastIndex = pagination.last_indexes.last_index;
-      pageCount++;
+      page++;
       
       // Rate limit between pages
       await delay(500);
     }
 
-    console.log('[DISCOVER-SUPER-PACS] Discovered', discoveredCommittees.length, 'new committees');
+    console.log('[DISCOVER-SUPER-PACS] Discovered', discoveredCommittees.length, 'new Super PACs');
 
-    // Import each discovered committee
+    // Now check Schedule E totals for each discovered committee to filter by minimum spend
     const results = {
       discovered: discoveredCommittees.length,
       imported: 0,
       skipped: 0,
       failed: 0,
+      belowThreshold: 0,
       errors: [] as string[],
       committees: [] as Array<{ id: string; name: string; total: number }>,
     };
 
-    for (const { id: committeeId, total } of discoveredCommittees) {
+    for (const { id: committeeId, name, type } of discoveredCommittees) {
       try {
-        console.log('[DISCOVER-SUPER-PACS] Importing committee:', committeeId);
+        // Fetch Schedule E totals for this committee
+        const scheduleEUrl = `https://api.open.fec.gov/v1/schedules/schedule_e/totals/?api_key=${fecApiKey}&committee_id=${committeeId}&cycle=${cycle}`;
+        const scheduleEResponse = await fetchWithRetry(scheduleEUrl);
         
-        // Fetch committee details
-        const detailUrl = `https://api.open.fec.gov/v1/committee/${committeeId}/?api_key=${fecApiKey}`;
-        const detailResponse = await fetchWithRetry(detailUrl);
+        let totalSpend = 0;
         
-        if (!detailResponse.ok) {
-          console.error('[DISCOVER-SUPER-PACS] Failed to fetch committee details:', committeeId);
-          results.failed++;
-          results.errors.push(`${committeeId}: Failed to fetch details`);
-          await delay(1000);
-          continue;
+        if (scheduleEResponse.ok) {
+          const scheduleEData = await scheduleEResponse.json();
+          const totals = scheduleEData?.results || [];
+          
+          // Sum up all expenditures for this committee
+          for (const total of totals) {
+            totalSpend += (total.total || 0);
+          }
         }
 
-        const detailData = await detailResponse.json();
-        const committee = detailData?.results?.[0];
-        
-        if (!committee) {
-          console.error('[DISCOVER-SUPER-PACS] Committee not found:', committeeId);
-          results.failed++;
-          results.errors.push(`${committeeId}: Not found in FEC database`);
-          await delay(1000);
-          continue;
-        }
+        console.log('[DISCOVER-SUPER-PACS] Committee', committeeId, 'total spend:', totalSpend);
 
-        // Only import Super PACs (committee_type O = Independent Expenditure-Only Committee)
-        // Also include Hybrid PACs (committee_type W or V)
-        const validTypes = ['O', 'W', 'V', 'U'];
-        if (!validTypes.includes(committee.committee_type)) {
-          console.log('[DISCOVER-SUPER-PACS] Skipping non-Super PAC:', committeeId, committee.committee_type);
-          results.skipped++;
-          await delay(500);
+        // Check minimum spend threshold
+        if (totalSpend < minSpend) {
+          console.log('[DISCOVER-SUPER-PACS] Skipping', committeeId, '- below threshold:', totalSpend, '<', minSpend);
+          results.belowThreshold++;
+          await delay(300);
           continue;
         }
 
         // Insert committee
         const committeeRecord = {
-          fec_committee_id: committee.committee_id,
-          name: committee.name,
-          designation: committee.designation || 'U',
-          designation_full: committee.designation_full || committee.committee_type_full,
+          fec_committee_id: committeeId,
+          name: name,
+          designation: type === 'O' ? 'U' : type === 'W' ? 'U' : 'U',
+          designation_full: type === 'O' ? 'Independent Expenditure-Only Committee' : 'Hybrid Super PAC',
           candidate_id: null,
           role: 'external',
-          active: true, // Active by default since we discovered them with meaningful spend
+          active: true,
           source_fec_candidate_id: null,
         };
 
-        const { data: inserted, error: insertError } = await supabase
+        const { error: insertError } = await supabase
           .from('candidate_committees')
-          .insert(committeeRecord)
-          .select()
-          .single();
+          .insert(committeeRecord);
 
         if (insertError) {
-          // Check if it's a duplicate error (unique constraint)
           if (insertError.code === '23505') {
             console.log('[DISCOVER-SUPER-PACS] Committee already exists:', committeeId);
             results.skipped++;
@@ -219,13 +216,13 @@ serve(async (req) => {
             results.errors.push(`${committeeId}: ${insertError.message}`);
           }
         } else {
-          console.log('[DISCOVER-SUPER-PACS] Imported:', committee.name, 'with spend:', total);
+          console.log('[DISCOVER-SUPER-PACS] Imported:', name, 'with spend:', totalSpend);
           results.imported++;
-          results.committees.push({ id: committee.committee_id, name: committee.name, total });
+          results.committees.push({ id: committeeId, name, total: totalSpend });
         }
 
         // Rate limit between imports
-        await delay(1000);
+        await delay(500);
 
       } catch (err) {
         console.error('[DISCOVER-SUPER-PACS] Error importing:', committeeId, err);
@@ -244,10 +241,11 @@ serve(async (req) => {
         discovered: results.discovered,
         imported: results.imported,
         skipped: results.skipped,
+        belowThreshold: results.belowThreshold,
         failed: results.failed,
-        errors: results.errors.slice(0, 10), // Limit errors in response
-        committees: results.committees.slice(0, 20), // Limit list in response
-        message: `Discovered ${results.discovered} Super PACs. Imported ${results.imported}, skipped ${results.skipped}, failed ${results.failed}.`,
+        errors: results.errors.slice(0, 10),
+        committees: results.committees.slice(0, 20),
+        message: `Discovered ${results.discovered} Super PACs. Imported ${results.imported}, skipped ${results.skipped} (${results.belowThreshold} below $${minSpend / 1000}K threshold), failed ${results.failed}.`,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
