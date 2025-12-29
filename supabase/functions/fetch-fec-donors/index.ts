@@ -15,6 +15,22 @@ const MAX_RUNTIME_MS = 25000; // 25 seconds - safe margin to avoid WORKER_LIMIT
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_BASE_MS = 2000;
 
+/**
+ * Get the date range for a given FEC election cycle.
+ * FEC cycles are 2-year periods ending in even years:
+ * - Cycle 2024 = Jan 1, 2023 - Dec 31, 2024
+ * - Cycle 2022 = Jan 1, 2021 - Dec 31, 2022
+ * This ensures we only import contributions that belong to the requested cycle.
+ */
+function getCycleDateRange(cycle: string): { minDate: string; maxDate: string } {
+  const cycleYear = parseInt(cycle);
+  // FEC cycles start on Jan 1 of the odd year before the election year
+  return {
+    minDate: `${cycleYear - 1}-01-01`,
+    maxDate: `${cycleYear}-12-31`
+  };
+}
+
 // Batch sizes for streaming saves - keep small to avoid DB timeouts
 const CONTRIBUTION_BATCH_SIZE = 250;
 const DONOR_BATCH_SIZE = 100; // Reduced from 500 to avoid statement timeouts
@@ -992,6 +1008,10 @@ serve(async (req) => {
         break;
       }
 
+      // Get proper date range for the cycle to ensure we only import contributions
+      // that actually belong to this cycle (prevents cross-cycle data contamination)
+      const { minDate, maxDate } = getCycleDateRange(cycle);
+      
       const params = new URLSearchParams({
         api_key: fecApiKey,
         committee_id: committeeId,
@@ -999,6 +1019,11 @@ serve(async (req) => {
         per_page: String(PAGE_SIZE),
         sort: '-contribution_receipt_date',
         sort_null_only: 'false',
+        // CRITICAL: Explicit date filtering ensures we only get contributions
+        // within the requested cycle, preventing the Katie Boyd Britt issue
+        // where 2022 cycle contributions were tagged as 2024
+        min_date: minDate,
+        max_date: maxDate,
       });
 
       if (lastIndex && lastContributionDate) {
