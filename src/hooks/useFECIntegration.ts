@@ -87,6 +87,7 @@ export function useFECIntegration() {
   const [committeeLoadingIds, setCommitteeLoadingIds] = useState<Set<string>>(new Set());
   const [reconcileLoadingIds, setReconcileLoadingIds] = useState<Set<string>>(new Set());
   const [partialSyncIds, setPartialSyncIds] = useState<Set<string>>(new Set());
+  const [highVolumeMode, setHighVolumeMode] = useState<boolean>(false); // Smaller batches for massive candidates
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
     total: number;
@@ -189,8 +190,10 @@ export function useFECIntegration() {
     candidateId: string,
     fecCandidateId: string,
     cycle = '2024',
-    forceFullSync = false
+    forceFullSync = false,
+    useHighVolumeMode?: boolean // Override hook state if provided
   ): Promise<FetchDonorsResult> => {
+    const effectiveHighVolumeMode = useHighVolumeMode ?? highVolumeMode;
     const normalizeInvokeError = (raw: unknown) => {
       const msg = typeof raw === 'string'
         ? raw
@@ -218,7 +221,7 @@ export function useFECIntegration() {
 
       const invokeOnce = () =>
         supabase.functions.invoke('fetch-fec-donors', {
-          body: { candidateId, fecCandidateId, cycle, forceFullSync }
+          body: { candidateId, fecCandidateId, cycle, forceFullSync, highVolumeMode: effectiveHighVolumeMode }
         });
 
       const isRetryableNetworkError = (raw: unknown) => {
@@ -798,6 +801,8 @@ export function useFECIntegration() {
     syncProgress,
     syncAllProgress,
     isBatchRunning: batchProgress !== null,
-    isSyncAllRunning: syncAllProgress?.isRunning === true
+    isSyncAllRunning: syncAllProgress?.isRunning === true,
+    highVolumeMode,
+    setHighVolumeMode
   };
 }

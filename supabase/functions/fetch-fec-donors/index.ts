@@ -393,8 +393,12 @@ serve(async (req) => {
       includeOtherReceipts = false,
       forceFullSync = false,
       resumeFromCursor = true, // Use saved cursors by default
-      includeExternalCommittees = false // NEW: Only sync P/A committees by default
+      includeExternalCommittees = false, // Only sync P/A committees by default
+      highVolumeMode = false // When true, use smaller page sizes (25) for faster returns
     } = body || {};
+    
+    // High-volume mode uses smaller batches for massive candidates
+    const PAGE_SIZE = highVolumeMode ? 25 : 100;
     
     console.log('[FEC-DONORS] Starting sync for:', { candidateId, fecCandidateId, fecCommitteeId, cycle, forceFullSync, resumeFromCursor });
 
@@ -992,7 +996,7 @@ serve(async (req) => {
         api_key: fecApiKey,
         committee_id: committeeId,
         two_year_transaction_period: cycle,
-        per_page: '100',
+        per_page: String(PAGE_SIZE),
         sort: '-contribution_receipt_date',
         sort_null_only: 'false',
       });
