@@ -1244,7 +1244,7 @@ serve(async (req) => {
       }
 
       const pagination = data?.pagination;
-      if (!pagination?.last_indexes || results.length < 100) {
+      if (!pagination?.last_indexes || results.length < PAGE_SIZE) {
         break;
       }
 
