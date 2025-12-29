@@ -133,6 +133,7 @@ export function AnswerCoveragePanel() {
     fetchFECCommittees,
     fetchFECDonorsComplete,
     autoResumeSingleCandidate,
+    forceResyncDonors,
     batchFetchFECIds,
     batchFetchDonors,
     resumeAllPartialSyncs,
@@ -1462,6 +1463,94 @@ export function AnswerCoveragePanel() {
                                       >
                                         <Sparkles className="h-4 w-4 mr-2 text-purple-600" />
                                         Auto-Complete (until done)
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onSelect={(e) => {
+                                          e.preventDefault();
+                                          void (async () => {
+                                            try {
+                                              const result = await forceResyncDonors(
+                                                candidate.id,
+                                                candidate.fecCandidateId!,
+                                                candidate.name,
+                                                '2024'
+                                              );
+                                              if (result.success) {
+                                                if (result.hasMore) {
+                                                  toast.warning(`Still syncing. ${result.imported} donors imported so far.`);
+                                                } else {
+                                                  toast.success(`Re-sync complete: ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
+                                                }
+                                                refetchCandidates();
+                                              } else {
+                                                toast.error(result.error || 'Failed');
+                                              }
+                                            } catch (err) {
+                                              console.error('[Admin] Force re-sync failed:', err);
+                                              toast.error('Force re-sync failed');
+                                            }
+                                          })();
+                                        }}
+                                        className="text-destructive"
+                                      >
+                                        <RefreshCw className="h-4 w-4 mr-2" />
+                                        Force Re-Sync (clear & reimport)
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : syncStatus === 'complete' ? (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={donorLoading || anyBatchRunning}
+                                        className="h-7"
+                                        title="Sync options"
+                                      >
+                                        {donorLoading ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <>
+                                            <CheckCircle2 className="h-3 w-3 mr-1 text-green-600" />
+                                            <ChevronDown className="h-3 w-3" />
+                                          </>
+                                        )}
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem
+                                        onSelect={(e) => {
+                                          e.preventDefault();
+                                          void (async () => {
+                                            try {
+                                              const result = await forceResyncDonors(
+                                                candidate.id,
+                                                candidate.fecCandidateId!,
+                                                candidate.name,
+                                                '2024'
+                                              );
+                                              if (result.success) {
+                                                if (result.hasMore) {
+                                                  toast.warning(`Still syncing. ${result.imported} donors imported so far.`);
+                                                } else {
+                                                  toast.success(`Re-sync complete: ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
+                                                }
+                                                refetchCandidates();
+                                              } else {
+                                                toast.error(result.error || 'Failed');
+                                              }
+                                            } catch (err) {
+                                              console.error('[Admin] Force re-sync failed:', err);
+                                              toast.error('Force re-sync failed');
+                                            }
+                                          })();
+                                        }}
+                                        className="text-destructive"
+                                      >
+                                        <RefreshCw className="h-4 w-4 mr-2" />
+                                        Force Re-Sync (clear & reimport)
                                       </DropdownMenuItem>
                                     </DropdownMenuContent>
                                   </DropdownMenu>

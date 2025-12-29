@@ -435,6 +435,96 @@ export function useFECIntegration() {
     return fetchFECDonorsComplete(candidateId, fecCandidateId, candidateName, cycle, false, true);
   };
 
+  // Force re-sync: clears existing contributions and re-imports with proper cycle filtering
+  // Use this to fix cycle mismatch issues (e.g., Katie Boyd Britt bug)
+  const forceResyncDonors = async (
+    candidateId: string,
+    fecCandidateId: string,
+    candidateName: string,
+    cycle = '2024'
+  ): Promise<FetchDonorsResult> => {
+    setDonorLoadingIds(prev => new Set(prev).add(candidateId));
+    
+    try {
+      toast.info(`Clearing existing contributions for ${candidateName}...`);
+      
+      // Step 1: Delete existing contributions for this candidate and cycle
+      const { error: deleteContribError } = await supabase
+        .from('contributions')
+        .delete()
+        .eq('candidate_id', candidateId)
+        .eq('cycle', cycle);
+      
+      if (deleteContribError) {
+        console.error('[FORCE-RESYNC] Failed to delete contributions:', deleteContribError);
+        toast.error('Failed to clear contributions');
+        return { success: false, imported: 0, error: deleteContribError.message };
+      }
+      
+      // Step 2: Delete existing donors for this candidate and cycle
+      const { error: deleteDonorError } = await supabase
+        .from('donors')
+        .delete()
+        .eq('candidate_id', candidateId)
+        .eq('cycle', cycle);
+      
+      if (deleteDonorError) {
+        console.error('[FORCE-RESYNC] Failed to delete donors:', deleteDonorError);
+        toast.error('Failed to clear donors');
+        return { success: false, imported: 0, error: deleteDonorError.message };
+      }
+      
+      // Step 3: Reset committee sync cursors to force full sync
+      const { error: resetCursorError } = await supabase
+        .from('candidate_committees')
+        .update({
+          last_index: null,
+          last_contribution_date: null,
+          last_sync_completed_at: null,
+          has_more: false,
+          local_itemized_total: 0
+        })
+        .eq('candidate_id', candidateId);
+      
+      if (resetCursorError) {
+        console.warn('[FORCE-RESYNC] Failed to reset cursors:', resetCursorError);
+        // Continue anyway - the forceFullSync flag will handle this
+      }
+      
+      // Step 4: Clear reconciliation data
+      const { error: deleteReconcError } = await supabase
+        .from('finance_reconciliation')
+        .delete()
+        .eq('candidate_id', candidateId)
+        .eq('cycle', cycle);
+      
+      if (deleteReconcError) {
+        console.warn('[FORCE-RESYNC] Failed to clear reconciliation:', deleteReconcError);
+        // Continue anyway
+      }
+      
+      toast.success(`Cleared old data. Starting fresh sync for ${candidateName}...`);
+      
+      // Step 5: Trigger fresh sync with forceFullSync=true
+      // Release loading state before calling fetchFECDonorsComplete (it will set its own)
+      setDonorLoadingIds(prev => {
+        const next = new Set(prev);
+        next.delete(candidateId);
+        return next;
+      });
+      
+      return fetchFECDonorsComplete(candidateId, fecCandidateId, candidateName, cycle, true, true);
+    } catch (err) {
+      console.error('[FORCE-RESYNC] Exception:', err);
+      setDonorLoadingIds(prev => {
+        const next = new Set(prev);
+        next.delete(candidateId);
+        return next;
+      });
+      return { success: false, imported: 0, error: 'Force re-sync failed' };
+    }
+  };
+
   // Trigger finance reconciliation for a specific candidate (internal, no loading state)
   const triggerReconciliationInternal = async (candidateId: string, cycle = '2024'): Promise<{ success: boolean; status?: string; error?: string }> => {
     try {
@@ -791,6 +881,7 @@ export function useFECIntegration() {
     cancelSyncAll,
     clearSyncAllProgress,
     triggerReconciliation,
+    forceResyncDonors,
     isLoading,
     isDonorLoading,
     isCommitteeLoading,
