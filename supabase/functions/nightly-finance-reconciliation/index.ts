@@ -79,6 +79,12 @@ serve(async (req) => {
       varianceThreshold = 5  // % threshold to flag as warning
     } = await req.json().catch(() => ({}));
 
+    // NOTE: FEC cycles are 2-year periods ending in even years:
+    // - Cycle 2024 = contributions from Jan 1, 2023 - Dec 31, 2024
+    // - Cycle 2022 = contributions from Jan 1, 2021 - Dec 31, 2022
+    // Both local data AND FEC API queries must use consistent cycle boundaries
+    // to avoid apples-to-oranges comparisons (e.g., comparing 4 years of local data
+    // against 2 years of FEC totals, which caused the Katie Boyd Britt +1300% delta bug)
     console.log('[RECONCILIATION] Starting nightly reconciliation:', { candidateId, cycle, limit, onlyStale, onlyWithData });
 
     // Get candidates to reconcile

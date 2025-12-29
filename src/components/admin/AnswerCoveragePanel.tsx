@@ -58,6 +58,18 @@ function getCoverageColor(percent: number) {
   return "text-red-600 dark:text-red-400";
 }
 
+/**
+ * Get the date range description for a given FEC election cycle.
+ * FEC cycles are 2-year periods ending in even years:
+ * - Cycle 2024 = Jan 1, 2023 - Dec 31, 2024
+ * - Cycle 2022 = Jan 1, 2021 - Dec 31, 2022
+ */
+function getCycleDateRange(cycle: string): string {
+  const cycleYear = parseInt(cycle);
+  const startYear = cycleYear - 1;
+  return `Jan ${startYear} – Dec ${cycleYear}`;
+}
+
 function TopicCoverageItem({ topic }: { topic: TopicCoverage }) {
   return (
     <div className="flex items-center gap-3 py-2 px-3 hover:bg-muted/50 rounded-md transition-colors">
@@ -418,6 +430,9 @@ export function AnswerCoveragePanel() {
           <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
               Coverage & Finance Dashboard
+              <Badge variant="outline" className="ml-2 text-xs font-normal">
+                Cycle 2024 ({getCycleDateRange('2024')})
+              </Badge>
             </CardTitle>
             <CardDescription>
               Unified view of AI position answers, FEC donors, and finance reconciliation
