@@ -216,9 +216,35 @@ export function useFECIntegration() {
         return { success: false, imported: 0, error: 'Missing FEC candidate ID. Link FEC ID first.', hasMore: false };
       }
 
-      const { data, error } = await supabase.functions.invoke('fetch-fec-donors', {
-        body: { candidateId, fecCandidateId, cycle, forceFullSync }
-      });
+      const invokeOnce = () =>
+        supabase.functions.invoke('fetch-fec-donors', {
+          body: { candidateId, fecCandidateId, cycle, forceFullSync }
+        });
+
+      const isRetryableNetworkError = (raw: unknown) => {
+        const msg = normalizeInvokeError(raw);
+        return /failed to fetch|fetch failed|networkerror|load failed|timeout/i.test(msg);
+      };
+
+      let data: unknown;
+      let error: unknown;
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const res = await invokeOnce();
+        data = res.data;
+        error = res.error;
+
+        if (!error) break;
+
+        if (attempt < 3 && isRetryableNetworkError(error)) {
+          const delayMs = attempt === 1 ? 1500 : 3500;
+          console.warn(`[FEC-DONORS] Retryable invoke error (attempt ${attempt}). Retrying in ${delayMs}ms...`, error);
+          await new Promise((r) => setTimeout(r, delayMs));
+          continue;
+        }
+
+        break;
+      }
 
       // Handle Supabase invoke error (network/auth/function 4xx/5xx)
       if (error) {
@@ -227,9 +253,9 @@ export function useFECIntegration() {
       }
 
       // Handle edge function returning an error in the response body
-      if (data?.error) {
-        console.warn('[FEC-DONORS] Function returned error:', data.error);
-        return { success: false, imported: 0, error: String(data.error), hasMore: false };
+      if ((data as any)?.error) {
+        console.warn('[FEC-DONORS] Function returned error:', (data as any).error);
+        return { success: false, imported: 0, error: String((data as any).error), hasMore: false };
       }
 
       // Success

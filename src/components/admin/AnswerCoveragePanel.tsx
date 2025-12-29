@@ -1292,7 +1292,8 @@ export function AnswerCoveragePanel() {
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                       <DropdownMenuItem
-                                        onClick={() => {
+                                        onSelect={(e) => {
+                                          e.preventDefault();
                                           void (async () => {
                                             try {
                                               toast.info(`Resuming donor sync for ${candidate.name}...`);
@@ -1325,7 +1326,8 @@ export function AnswerCoveragePanel() {
                                       </DropdownMenuItem>
                                       <DropdownMenuSeparator />
                                       <DropdownMenuItem
-                                        onClick={() => {
+                                        onSelect={(e) => {
+                                          e.preventDefault();
                                           void (async () => {
                                             try {
                                               const result = await autoResumeSingleCandidate(
