@@ -26,6 +26,7 @@ import { FinanceSummaryCard, type FinanceSummaryData } from "@/components/Financ
 import { RecentErrorsPanel } from "@/components/admin/RecentErrorsPanel";
 import { SyncStatusBadge } from "@/components/admin/SyncStatusBadge";
 import { FinanceStatusBadge } from "@/components/admin/FinanceStatusBadge";
+import { DeltaBadge } from "@/components/admin/DeltaBadge";
 import { CandidateHealthBadge } from "@/components/admin/CandidateHealthBadge";
 import { CandidateEditDialog } from "@/components/admin/CandidateEditDialog";
 import { cn } from "@/lib/utils";
@@ -90,6 +91,7 @@ export function AnswerCoveragePanel() {
   const [stateFilter, setStateFilter] = useState<string>('all');
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('none');
   const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
+  const [deltaFilter, setDeltaFilter] = useState<'all' | 'within' | 'minor' | 'major' | 'no_data'>('all');
   const [syncFilter, setSyncFilter] = useState<'all' | 'needs_sync' | 'partial' | 'complete' | 'has_committee' | 'no_committee' | 'has_donors' | 'no_donors'>('all');
   
   // Edit dialog state
@@ -239,6 +241,34 @@ export function AnswerCoveragePanel() {
       });
     }
     
+    // Apply delta filter
+    if (deltaFilter !== 'all') {
+      result = result.filter(candidate => {
+        const deltaPct = candidate.deltaPct;
+        
+        if (deltaFilter === 'no_data') {
+          return deltaPct === null || deltaPct === undefined;
+        }
+        
+        if (deltaPct === null || deltaPct === undefined) {
+          return false;
+        }
+        
+        const absPct = Math.abs(deltaPct);
+        
+        switch (deltaFilter) {
+          case 'within':
+            return absPct <= 2;
+          case 'minor':
+            return absPct > 2 && absPct <= 5;
+          case 'major':
+            return absPct > 5;
+          default:
+            return true;
+        }
+      });
+    }
+    
     // Apply sync filter
     if (syncFilter === 'needs_sync') {
       result = result.filter(c => (c.syncStatus === 'never' || c.syncStatus === 'partial') && c.fecCandidateId);
@@ -253,7 +283,7 @@ export function AnswerCoveragePanel() {
     }
     
     return result;
-  }, [baseFilteredCandidates, financeFilter, syncFilter]);
+  }, [baseFilteredCandidates, financeFilter, deltaFilter, syncFilter]);
   const handleFillAll = async () => {
     try {
       if (!candidates) return;
@@ -1024,6 +1054,19 @@ export function AnswerCoveragePanel() {
                 </SelectContent>
               </Select>
 
+              <Select value={deltaFilter} onValueChange={(v) => setDeltaFilter(v as typeof deltaFilter)}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Delta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Delta</SelectItem>
+                  <SelectItem value="within">Within ±2%</SelectItem>
+                  <SelectItem value="minor">Minor (2-5%)</SelectItem>
+                  <SelectItem value="major">Major (&gt;5%)</SelectItem>
+                  <SelectItem value="no_data">No Data</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Select value={syncFilter} onValueChange={(v) => setSyncFilter(v as typeof syncFilter)}>
                 <SelectTrigger className="w-[150px]">
                   <SelectValue placeholder="Sync Status" />
@@ -1121,6 +1164,7 @@ export function AnswerCoveragePanel() {
                       <TableHead className="w-[100px]">Committee</TableHead>
                       <TableHead className="w-[80px]">Sync</TableHead>
                       <TableHead className="w-[90px]">Finance</TableHead>
+                      <TableHead className="w-[100px]">Delta</TableHead>
                       <TableHead className="w-[100px]">FEC ID</TableHead>
                       <TableHead className="text-right w-[120px]">Actions</TableHead>
                     </TableRow>
@@ -1261,6 +1305,13 @@ export function AnswerCoveragePanel() {
                                 />
                               </PopoverContent>
                             </Popover>
+                          </TableCell>
+                          {/* Delta Column */}
+                          <TableCell>
+                            <DeltaBadge
+                              deltaAmount={candidate.deltaAmount}
+                              deltaPct={candidate.deltaPct}
+                            />
                           </TableCell>
                           {/* FEC ID column - simplified */}
                           <TableCell>

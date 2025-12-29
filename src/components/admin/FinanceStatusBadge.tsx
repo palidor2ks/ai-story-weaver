@@ -7,23 +7,36 @@ import { cn } from '@/lib/utils';
 interface FinanceStatusBadgeProps {
   status: 'ok' | 'warning' | 'error' | null;
   deltaPct?: number | null;
+  deltaAmount?: number | null;
   fecTotalReceipts?: number | null;
   localItemized?: number;
   reconciliationCheckedAt?: string | null;
+  showDelta?: boolean;
   className?: string;
 }
 
 export function FinanceStatusBadge({ 
   status, 
   deltaPct,
+  deltaAmount,
   fecTotalReceipts,
   localItemized = 0,
   reconciliationCheckedAt,
+  showDelta = false,
   className 
 }: FinanceStatusBadgeProps) {
   const formatCurrency = (value?: number | null) => {
     if (value === null || value === undefined) return '—';
     return `$${Math.round(value).toLocaleString()}`;
+  };
+
+  const formatCompactCurrency = (value?: number | null) => {
+    if (value === null || value === undefined) return '—';
+    const absVal = Math.abs(value);
+    const sign = value < 0 ? '-' : '+';
+    if (absVal >= 1000000) return `${sign}$${(absVal / 1000000).toFixed(1)}M`;
+    if (absVal >= 1000) return `${sign}$${(absVal / 1000).toFixed(0)}K`;
+    return `${sign}$${absVal.toFixed(0)}`;
   };
 
   if (fecTotalReceipts === null || fecTotalReceipts === undefined) {
