@@ -1253,7 +1253,7 @@ export function AnswerCoveragePanel() {
                       <TableHead className="w-[76px] px-3 py-3">Sync</TableHead>
                       <TableHead className="w-[86px] px-3 py-3">Finance</TableHead>
                       <TableHead className="w-[100px] px-3 py-3">FEC Total</TableHead>
-                      <TableHead className="w-[100px] px-3 py-3">List Total</TableHead>
+                      <TableHead className="w-[100px] px-3 py-3">Local Total</TableHead>
                       <TableHead className="w-[95px] px-3 py-3">Delta</TableHead>
                       <TableHead className="w-[88px] px-3 py-3">FEC ID</TableHead>
                       <TableHead className="text-right w-[116px] px-3 py-3">Actions</TableHead>
@@ -1268,15 +1268,7 @@ export function AnswerCoveragePanel() {
                       const hasFecId = !!candidate.fecCandidateId;
                       const hasCommittee = !!candidate.fecCommitteeId;
                       const financeStatus = calculateFinanceStatus(candidate);
-                      const listTotal =
-                        (candidate.fecItemized ?? 0) +
-                        candidate.fecPacContributions +
-                        candidate.fecPartyContributions +
-                        (candidate.fecUnitemized ?? 0) +
-                        candidate.fecLoans +
-                        candidate.fecTransfers +
-                        candidate.fecCandidateContribution +
-                        candidate.fecOtherReceipts;
+                      // Use locally imported itemized totals for the "Local Total" column
                       const localItemized = candidate.localItemized || 0;
                       const syncStatus = candidate.syncStatus;
                       const hasOverride = overrideMap.has(candidate.id);
@@ -1413,7 +1405,7 @@ export function AnswerCoveragePanel() {
                             <div className="font-medium">{formatCurrency(financeStatus.fecTotalReceipts)}</div>
                           </TableCell>
                           <TableCell className="text-right text-sm px-3 py-3 whitespace-nowrap">
-                            <div className="font-medium">{formatCurrency(listTotal)}</div>
+                            <div className="font-medium">{formatCurrency(localItemized)}</div>
                           </TableCell>
                           {/* Delta Column */}
                           <TableCell className="text-right px-3 py-3 whitespace-nowrap">
