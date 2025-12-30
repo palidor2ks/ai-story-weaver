@@ -250,19 +250,53 @@ export function DonorAliasesPanel() {
     setDialogOpen(true);
   };
 
-  const handleAddToExistingAlias = (donorName: string, alias: DonorAlias) => {
-    // Pre-fill with existing alias data but suggest updating pattern to include new donor
-    setSelectedAlias(alias);
+  // Quick add donor to existing alias - directly updates and applies
+  const handleQuickAddToAlias = async (donorName: string, donorType: string, alias: DonorAlias) => {
+    // Check if donor already matches this alias
+    const existingMatch = findAliasForDonor(donorName, donorType);
+    if (existingMatch?.id === alias.id) {
+      toast.info('This donor already matches this alias');
+      return;
+    }
     
-    setFormData({
-      canonical_name: alias.canonical_name,
-      alias_pattern: alias.alias_pattern,
-      donor_types: alias.donor_types || [alias.donor_type],
-      fec_committee_id: alias.fec_committee_id || '',
-      notes: alias.notes ? `${alias.notes}\nAdded: ${donorName}` : `Added: ${donorName}`,
-      is_active: alias.is_active,
-    });
-    setDialogOpen(true);
+    // Ensure the donor type is included in the alias
+    const currentTypes = alias.donor_types || [alias.donor_type];
+    const updatedTypes = currentTypes.includes(donorType) 
+      ? currentTypes 
+      : [...currentTypes, donorType];
+    
+    try {
+      // Update the alias with the new donor type if needed
+      if (updatedTypes.length !== currentTypes.length) {
+        await updateMutation.mutateAsync({
+          id: alias.id,
+          canonical_name: alias.canonical_name,
+          alias_pattern: alias.alias_pattern,
+          donor_types: updatedTypes,
+          fec_committee_id: alias.fec_committee_id || null,
+          notes: alias.notes ? `${alias.notes}\nAdded: ${donorName}` : `Added: ${donorName}`,
+          is_active: alias.is_active,
+        });
+      }
+      
+      // Directly update this specific donor's display_name in the database
+      const { error: updateError } = await supabase
+        .from('donors')
+        .update({ display_name: alias.canonical_name })
+        .eq('name', donorName)
+        .eq('type', donorType as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
+      
+      if (updateError) {
+        console.error('Error updating donor display_name:', updateError);
+        toast.error('Failed to update donor display name');
+        return;
+      }
+      
+      toast.success(`Added "${donorName}" to alias "${alias.canonical_name}"`);
+    } catch (error) {
+      console.error('Error adding donor to alias:', error);
+      toast.error('Failed to add donor to alias');
+    }
   };
 
   const handleOpenEdit = (alias: DonorAlias) => {
@@ -594,7 +628,7 @@ export function DonorAliasesPanel() {
                                       <Select
                                         onValueChange={(aliasId) => {
                                           const alias = aliases.find(a => a.id === aliasId);
-                                          if (alias) handleAddToExistingAlias(donor.name, alias);
+                                          if (alias) handleQuickAddToAlias(donor.name, donor.type, alias);
                                         }}
                                       >
                                         <SelectTrigger className="w-[140px]">
