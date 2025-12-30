@@ -69,23 +69,26 @@ export function getScoreLabel(score: number | null | undefined): string {
 /**
  * Get coverage tier display info
  */
-export function getCoverageTierInfo(tier: CoverageTier): { label: string; description: string; color: string } {
+export function getCoverageTierInfo(tier: CoverageTier): { label: string; shortLabel: string; description: string; color: string } {
   switch (tier) {
     case 'tier_1':
       return {
         label: 'Full Coverage',
+        shortLabel: 'T1',
         description: 'Complete data: stances, donors, and voting record',
         color: 'bg-green-100 text-green-800 border-green-200',
       };
     case 'tier_2':
       return {
         label: 'Partial Coverage',
+        shortLabel: 'T2',
         description: 'Limited donors or voting record available',
         color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
       };
     case 'tier_3':
       return {
         label: 'Basic Coverage',
+        shortLabel: 'T3',
         description: 'Only stance data available',
         color: 'bg-gray-100 text-gray-800 border-gray-200',
       };
