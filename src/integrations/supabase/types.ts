@@ -1581,6 +1581,19 @@ export type Database = {
           transfers_total: number
         }[]
       }
+      get_contribution_totals_by_committee: {
+        Args: { p_candidate_id: string; p_cycle: string }
+        Returns: {
+          committee_id: string
+          contribution_count: number
+          earmarked_total: number
+          individual_total: number
+          itemized_total: number
+          pac_total: number
+          party_total: number
+          transfers_total: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
