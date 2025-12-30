@@ -86,7 +86,7 @@ export function DonorAliasesPanel() {
   const [selectedAlias, setSelectedAlias] = useState<DonorAlias | null>(null);
   const [formData, setFormData] = useState<DonorAliasInput>({
     canonical_name: '',
-    alias_pattern: '',
+    alias_patterns: [''],
     donor_types: ['Individual', 'PAC', 'Organization', 'Unknown'],
     fec_committee_id: '',
     notes: '',
@@ -99,7 +99,7 @@ export function DonorAliasesPanel() {
   const { data: searchResults = [], isLoading: searchLoading } = useSearchDonors(donorSearch, donorTypeFilter);
 
   const { data: matchCount } = useMatchingDonorsCount(
-    formData.alias_pattern,
+    formData.alias_patterns.filter(p => p.trim()),
     formData.donor_types
   );
 
@@ -208,7 +208,7 @@ export function DonorAliasesPanel() {
   const filteredAliases = aliases?.filter(
     (a) =>
       a.canonical_name.toLowerCase().includes(search.toLowerCase()) ||
-      a.alias_pattern.toLowerCase().includes(search.toLowerCase())
+      (a.alias_patterns || [a.alias_pattern]).some(p => p.toLowerCase().includes(search.toLowerCase()))
   );
 
   // Find current alias for a donor name (checks all types now)
@@ -218,9 +218,13 @@ export function DonorAliasesPanel() {
       if (!alias.is_active) return false;
       // Check if the donor type is in the alias's donor_types array
       if (!alias.donor_types?.includes(donorType)) return false;
-      const pattern = alias.alias_pattern.replace(/%/g, '.*').replace(/_/g, '.');
-      const regex = new RegExp(`^${pattern}$`, 'i');
-      return regex.test(donorName);
+      // Check against all patterns in alias_patterns
+      const patterns = alias.alias_patterns?.length ? alias.alias_patterns : [alias.alias_pattern];
+      return patterns.some(p => {
+        const pattern = p.replace(/%/g, '.*').replace(/_/g, '.');
+        const regex = new RegExp(`^${pattern}$`, 'i');
+        return regex.test(donorName);
+      });
     });
   };
 
@@ -228,7 +232,7 @@ export function DonorAliasesPanel() {
     setSelectedAlias(null);
     setFormData({
       canonical_name: '',
-      alias_pattern: '',
+      alias_patterns: [''],
       donor_types: ['Individual', 'PAC', 'Organization', 'Unknown'],
       fec_committee_id: '',
       notes: '',
@@ -243,7 +247,7 @@ export function DonorAliasesPanel() {
     const escapedName = donorName.replace(/[%_]/g, '\\$&');
     setFormData({
       canonical_name: donorName,
-      alias_pattern: `%${escapedName}%`,
+      alias_patterns: [`%${escapedName}%`],
       donor_types: [donorType], // Start with just the donor's type
       fec_committee_id: '',
       notes: '',
@@ -267,19 +271,23 @@ export function DonorAliasesPanel() {
       ? currentTypes 
       : [...currentTypes, donorType];
     
+    // Create new pattern for this donor name
+    const escapedName = donorName.replace(/[%_]/g, '\\$&');
+    const newPattern = `%${escapedName}%`;
+    const currentPatterns = alias.alias_patterns?.length ? alias.alias_patterns : [alias.alias_pattern];
+    const updatedPatterns = [...currentPatterns, newPattern];
+    
     try {
-      // Update the alias with the new donor type if needed
-      if (updatedTypes.length !== currentTypes.length) {
-        await updateMutation.mutateAsync({
-          id: alias.id,
-          canonical_name: alias.canonical_name,
-          alias_pattern: alias.alias_pattern,
-          donor_types: updatedTypes,
-          fec_committee_id: alias.fec_committee_id || null,
-          notes: alias.notes ? `${alias.notes}\nAdded: ${donorName}` : `Added: ${donorName}`,
-          is_active: alias.is_active,
-        });
-      }
+      // Update the alias with the new pattern and donor type
+      await updateMutation.mutateAsync({
+        id: alias.id,
+        canonical_name: alias.canonical_name,
+        alias_patterns: updatedPatterns,
+        donor_types: updatedTypes,
+        fec_committee_id: alias.fec_committee_id || null,
+        notes: alias.notes ? `${alias.notes}\nAdded: ${donorName}` : `Added: ${donorName}`,
+        is_active: alias.is_active,
+      });
       
       // Directly update this specific donor's display_name in the database
       const { error: updateError } = await supabase
@@ -308,7 +316,7 @@ export function DonorAliasesPanel() {
     setSelectedAlias(alias);
     setFormData({
       canonical_name: alias.canonical_name,
-      alias_pattern: alias.alias_pattern,
+      alias_patterns: alias.alias_patterns?.length ? alias.alias_patterns : [alias.alias_pattern],
       donor_types: alias.donor_types || [alias.donor_type],
       fec_committee_id: alias.fec_committee_id || '',
       notes: alias.notes || '',
@@ -448,9 +456,13 @@ export function DonorAliasesPanel() {
                     <TableRow key={alias.id}>
                       <TableCell className="font-medium">{alias.canonical_name}</TableCell>
                       <TableCell>
-                        <code className="bg-muted px-1.5 py-0.5 rounded text-sm">
-                          {alias.alias_pattern}
-                        </code>
+                        <div className="flex flex-wrap gap-1">
+                          {(alias.alias_patterns?.length ? alias.alias_patterns : [alias.alias_pattern]).map((pattern, idx) => (
+                            <code key={idx} className="bg-muted px-1.5 py-0.5 rounded text-sm">
+                              {pattern}
+                            </code>
+                          ))}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
@@ -1016,20 +1028,47 @@ export function DonorAliasesPanel() {
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="alias_pattern">Pattern (ILIKE)</Label>
-              <Input
-                id="alias_pattern"
-                placeholder="e.g., %aipac%"
-                value={formData.alias_pattern}
-                onChange={(e) =>
-                  setFormData({ ...formData, alias_pattern: e.target.value })
-                }
-              />
+              <Label>Patterns (ILIKE)</Label>
+              <div className="space-y-2">
+                {formData.alias_patterns.map((pattern, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      placeholder="e.g., %aipac%"
+                      value={pattern}
+                      onChange={(e) => {
+                        const newPatterns = [...formData.alias_patterns];
+                        newPatterns[index] = e.target.value;
+                        setFormData({ ...formData, alias_patterns: newPatterns });
+                      }}
+                    />
+                    {formData.alias_patterns.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          const newPatterns = formData.alias_patterns.filter((_, i) => i !== index);
+                          setFormData({ ...formData, alias_patterns: newPatterns });
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFormData({ ...formData, alias_patterns: [...formData.alias_patterns, ''] })}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add Pattern
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground">
-                SQL ILIKE pattern. Use % as wildcard.
-                {matchCount !== undefined && formData.alias_pattern && (
+                SQL ILIKE patterns. Use % as wildcard. Add multiple patterns to match different name variations.
+                {matchCount !== undefined && formData.alias_patterns.some(p => p.trim()) && (
                   <span className="ml-2 font-medium text-primary">
-                    Matches {matchCount} donor(s)
+                    Matches {matchCount} donor(s) across all patterns
                   </span>
                 )}
               </p>
@@ -1101,7 +1140,7 @@ export function DonorAliasesPanel() {
               onClick={handleSubmit}
               disabled={
                 !formData.canonical_name ||
-                !formData.alias_pattern ||
+                !formData.alias_patterns.some(p => p.trim()) ||
                 formData.donor_types.length === 0 ||
                 createMutation.isPending ||
                 updateMutation.isPending

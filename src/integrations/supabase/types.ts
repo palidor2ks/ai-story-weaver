@@ -513,6 +513,7 @@ export type Database = {
       donor_aliases: {
         Row: {
           alias_pattern: string
+          alias_patterns: string[] | null
           canonical_name: string
           created_at: string | null
           donor_type: string
@@ -525,6 +526,7 @@ export type Database = {
         }
         Insert: {
           alias_pattern: string
+          alias_patterns?: string[] | null
           canonical_name: string
           created_at?: string | null
           donor_type: string
@@ -537,6 +539,7 @@ export type Database = {
         }
         Update: {
           alias_pattern?: string
+          alias_patterns?: string[] | null
           canonical_name?: string
           created_at?: string | null
           donor_type?: string
@@ -1559,6 +1562,10 @@ export type Database = {
           confidence: Database["public"]["Enums"]["confidence_level"]
           coverage_tier: Database["public"]["Enums"]["coverage_tier"]
         }[]
+      }
+      count_donors_matching_patterns: {
+        Args: { p_donor_types: string[]; patterns: string[] }
+        Returns: number
       }
       get_contribution_totals: {
         Args: { p_candidate_id: string; p_cycle: string }

@@ -6,6 +6,7 @@ export interface DonorAlias {
   id: string;
   canonical_name: string;
   alias_pattern: string;
+  alias_patterns: string[];
   donor_type: string;
   donor_types: string[];
   fec_committee_id: string | null;
@@ -17,7 +18,7 @@ export interface DonorAlias {
 
 export interface DonorAliasInput {
   canonical_name: string;
-  alias_pattern: string;
+  alias_patterns: string[];
   donor_types: string[];
   fec_committee_id?: string | null;
   notes?: string | null;
@@ -44,10 +45,16 @@ export const useCreateDonorAlias = () => {
 
   return useMutation({
     mutationFn: async (input: DonorAliasInput) => {
-      // Include donor_type for backwards compatibility (use first type or 'PAC')
+      // Include alias_pattern and donor_type for backwards compatibility
       const insertData = {
-        ...input,
+        canonical_name: input.canonical_name,
+        alias_patterns: input.alias_patterns,
+        alias_pattern: input.alias_patterns[0] || '',
+        donor_types: input.donor_types,
         donor_type: input.donor_types[0] || 'PAC',
+        fec_committee_id: input.fec_committee_id,
+        notes: input.notes,
+        is_active: input.is_active,
       };
       const { data, error } = await supabase
         .from('donor_aliases')
@@ -78,10 +85,16 @@ export const useUpdateDonorAlias = () => {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: DonorAliasInput & { id: string }) => {
-      // Include donor_type for backwards compatibility
+      // Include alias_pattern and donor_type for backwards compatibility
       const updateData = {
-        ...input,
+        canonical_name: input.canonical_name,
+        alias_patterns: input.alias_patterns,
+        alias_pattern: input.alias_patterns[0] || '',
+        donor_types: input.donor_types,
         donor_type: input.donor_types[0] || 'PAC',
+        fec_committee_id: input.fec_committee_id,
+        notes: input.notes,
+        is_active: input.is_active,
       };
       const { data, error } = await supabase
         .from('donor_aliases')
@@ -135,25 +148,26 @@ export const useDeleteDonorAlias = () => {
   });
 };
 
-export const useMatchingDonorsCount = (pattern: string, donorTypes: string[]) => {
+export const useMatchingDonorsCount = (patterns: string[], donorTypes: string[]) => {
   return useQuery({
-    queryKey: ['matching-donors-count', pattern, donorTypes],
+    queryKey: ['matching-donors-count', patterns, donorTypes],
     queryFn: async () => {
-      if (!pattern || !donorTypes || donorTypes.length === 0) return 0;
+      if (!patterns || patterns.length === 0 || !donorTypes || donorTypes.length === 0) return 0;
       
       const validTypes = ['Individual', 'PAC', 'Organization', 'Unknown'] as const;
       const filteredTypes = donorTypes.filter(t => validTypes.includes(t as any));
       if (filteredTypes.length === 0) return 0;
       
-      const { count, error } = await supabase
-        .from('donors')
-        .select('*', { count: 'exact', head: true })
-        .in('type', filteredTypes as any)
-        .ilike('name', pattern);
+      // Use the new RPC function for multi-pattern matching
+      const { data, error } = await supabase
+        .rpc('count_donors_matching_patterns', {
+          patterns: patterns.filter(p => p.trim()),
+          p_donor_types: filteredTypes
+        });
 
       if (error) throw error;
-      return count || 0;
+      return data || 0;
     },
-    enabled: !!pattern && donorTypes.length > 0,
+    enabled: patterns.length > 0 && patterns.some(p => p.trim()) && donorTypes.length > 0,
   });
 };
