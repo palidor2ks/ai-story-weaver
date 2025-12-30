@@ -1180,7 +1180,9 @@ export function AnswerCoveragePanel() {
                       <TableHead className="w-[100px]">Committee</TableHead>
                       <TableHead className="w-[80px]">Sync</TableHead>
                       <TableHead className="w-[90px]">Finance</TableHead>
-                      <TableHead className="w-[100px]">Delta</TableHead>
+                      <TableHead className="w-[110px]">FEC Total</TableHead>
+                      <TableHead className="w-[110px]">List Total</TableHead>
+                      <TableHead className="w-[110px]">Delta</TableHead>
                       <TableHead className="w-[100px]">FEC ID</TableHead>
                       <TableHead className="text-right w-[120px]">Actions</TableHead>
                     </TableRow>
@@ -1299,11 +1301,11 @@ export function AnswerCoveragePanel() {
                           </TableCell>
                           {/* Finance Status Badge */}
                           <TableCell>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button className="hover:opacity-80 transition-opacity">
-                                  <FinanceStatusBadge
-                                    status={getFinanceBadgeStatus()}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className="hover:opacity-80 transition-opacity">
+                                <FinanceStatusBadge
+                                  status={getFinanceBadgeStatus()}
                                     fecTotalReceipts={financeStatus.fecTotalReceipts}
                                     localItemized={localItemized}
                                     reconciliationCheckedAt={candidate.reconciliationCheckedAt}
@@ -1322,8 +1324,14 @@ export function AnswerCoveragePanel() {
                               </PopoverContent>
                             </Popover>
                           </TableCell>
+                          <TableCell className="text-right text-sm">
+                            <div className="font-medium">{formatCurrency(financeStatus.fecTotalReceipts)}</div>
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            <div className="font-medium">{formatCurrency(candidate.localItemizedNet)}</div>
+                          </TableCell>
                           {/* Delta Column */}
-                          <TableCell>
+                          <TableCell className="text-right">
                             <DeltaBadge
                               deltaAmount={candidate.deltaAmount}
                               deltaPct={candidate.deltaPct}
