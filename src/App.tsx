@@ -24,6 +24,8 @@ import PoliticianDashboard from "./pages/PoliticianDashboard";
 import NotFound from "./pages/NotFound";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
 import { LoadingScreen } from "./components/LoadingScreen";
+import { Committees } from "./pages/Committees";
+import { CommitteeProfile } from "./pages/CommitteeProfile";
 
 const queryClient = new QueryClient();
 
@@ -87,6 +89,16 @@ const AppRoutes = () => {
       <Route path="/donors" element={
         <RouteGuard requireAuth requireOnboarding>
           <Donors />
+        </RouteGuard>
+      } />
+      <Route path="/committees" element={
+        <RouteGuard requireAuth requireOnboarding>
+          <Committees />
+        </RouteGuard>
+      } />
+      <Route path="/committee/:id" element={
+        <RouteGuard requireAuth requireOnboarding>
+          <CommitteeProfile />
         </RouteGuard>
       } />
       <Route path="/parties" element={

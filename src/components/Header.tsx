@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useUser } from '@/context/UserContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
-import { User, LayoutGrid, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText } from 'lucide-react';
+import { User, LayoutGrid, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
@@ -22,6 +22,7 @@ export const Header = () => {
     { path: '/candidates', label: 'Candidates', icon: Users },
     { path: '/parties', label: 'Parties', icon: Building2 },
     { path: '/donors', label: 'Donors', icon: DollarSign },
+    { path: '/committees', label: 'Committees', icon: Landmark },
     { path: '/quiz-library', label: 'Quizzes', icon: BookOpen },
     { path: '/profile', label: 'Profile', icon: User },
   ];
