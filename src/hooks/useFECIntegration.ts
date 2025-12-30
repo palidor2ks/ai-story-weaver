@@ -31,6 +31,9 @@ interface FetchDonorsResult {
   stoppedDueToTimeout?: boolean;
   committeesRemaining?: number;
   committeesSynced?: string;
+  // Rate limit tracking
+  hitRateLimit?: boolean;
+  rateLimitWaitMs?: number;
   reconciliation?: {
     localItemized: number;
     localTransfers: number;
@@ -67,6 +70,9 @@ interface SyncProgress {
   estimatedProgress?: number;
   attempts?: number;
   isAutoResuming?: boolean;
+  // Rate limit tracking
+  isWaitingForRateLimit?: boolean;
+  rateLimitWaitSeconds?: number;
 }
 
 interface SyncAllProgress {
@@ -326,11 +332,23 @@ export function useFECIntegration() {
           fecItemized: fecItemizedTotal,
           estimatedProgress,
           attempts,
-          isAutoResuming: unlimitedAutoResume
+          isAutoResuming: unlimitedAutoResume,
+          isWaitingForRateLimit: false
         });
         
         const result = await fetchFECDonorsSingle(candidateId, fecCandidateId, cycle, forceFullSync && attempts === 1);
         lastResult = result;
+        
+        // Check if we hit rate limit - update progress to show waiting status
+        if (result.hitRateLimit) {
+          const waitSeconds = Math.round((result.rateLimitWaitMs || 15000) / 1000);
+          setSyncProgress(prev => prev ? {
+            ...prev,
+            isWaitingForRateLimit: true,
+            rateLimitWaitSeconds: waitSeconds
+          } : null);
+          console.log(`[FEC-DONORS] Rate limit hit, waiting ${waitSeconds}s...`);
+        }
         
         if (!result.success && result.error) {
           console.error(`[FEC-DONORS] Failed on attempt ${attempts}:`, result.error);

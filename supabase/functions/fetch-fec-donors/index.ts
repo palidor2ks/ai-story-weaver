@@ -40,6 +40,8 @@ const DONOR_FLUSH_PAGES = 5; // Flush more often with smaller batches
 // Request tracking for rate limiting
 let requestCount = 0;
 let lastMinuteReset = Date.now();
+let hitRateLimitDuringRequest = false;
+let lastRateLimitBackoffMs = 0;
 
 // Rate-limited fetch with retries and defensive error handling
 async function fetchWithRetry(url: string, options: RequestInit = {}, retries = MAX_RETRIES): Promise<Response> {
@@ -68,6 +70,10 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
         // LONGER backoff specifically for rate limits
         const backoffMs = RATE_LIMIT_BACKOFF_MS * Math.pow(1.5, attempt);
         console.log(`[FEC-DONORS] Rate limited (429), backing off ${Math.round(backoffMs/1000)}s...`);
+        
+        // Track that we hit a rate limit for the response
+        hitRateLimitDuringRequest = true;
+        lastRateLimitBackoffMs = backoffMs;
         
         // Reset the minute counter to force additional waiting
         requestCount = MAX_REQUESTS_PER_MINUTE;
@@ -375,6 +381,10 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
 
 serve(async (req) => {
   const startTime = Date.now();
+  
+  // Reset rate limit tracking for this request
+  hitRateLimitDuringRequest = false;
+  lastRateLimitBackoffMs = 0;
   
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -1548,6 +1558,9 @@ serve(async (req) => {
           status 
         },
         elapsedMs,
+        // Rate limit tracking for UI feedback
+        hitRateLimit: hitRateLimitDuringRequest,
+        rateLimitWaitMs: lastRateLimitBackoffMs,
         message: globalHasMore 
           ? `Partial sync: ${totalDonors} donors from ${committeeName}. ${remainingCommittees} committees remaining. Call again to continue.`
           : `Imported ${totalDonors} donors (${totalContributions} transactions) totaling $${totalRaised.toLocaleString()}`
