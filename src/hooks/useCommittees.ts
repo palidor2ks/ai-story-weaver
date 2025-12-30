@@ -121,7 +121,7 @@ const buildCommitteeSummaries = (
 };
 
 async function fetchCommittees(cycle = '2024', committeeId?: string) {
-  let committeeQuery = supabase
+  let query = supabase
     .from('candidate_committees')
     .select(`
       id,
@@ -143,15 +143,15 @@ async function fetchCommittees(cycle = '2024', committeeId?: string) {
         office,
         state
       )
-    `)
-    .returns<CommitteeRow[]>()
-    .order('name', { ascending: true });
+    `);
 
   if (committeeId) {
-    committeeQuery = committeeQuery.eq('fec_committee_id', committeeId);
+    query = query.eq('fec_committee_id', committeeId);
   }
 
-  const { data: committees, error: committeeError } = await committeeQuery;
+  const { data: committees, error: committeeError } = await query
+    .order('name', { ascending: true })
+    .returns<CommitteeRow[]>();
   if (committeeError) throw committeeError;
 
   const committeeIds = (committees || []).map((c) => c.fec_committee_id).filter(Boolean);
@@ -161,9 +161,9 @@ async function fetchCommittees(cycle = '2024', committeeId?: string) {
     const { data: rollupData, error: rollupError } = await supabase
       .from('committee_finance_rollups')
       .select('committee_id, candidate_id, donor_count, contribution_count, local_itemized, fec_itemized, fec_total_receipts')
-      .returns<CommitteeRollupRow[]>()
       .in('committee_id', committeeIds)
-      .eq('cycle', cycle);
+      .eq('cycle', cycle)
+      .returns<CommitteeRollupRow[]>();
 
     if (rollupError) throw rollupError;
     rollups = rollupData || [];
@@ -238,11 +238,11 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = '202
             state
           )
         `)
-        .returns<ContributionRow[]>()
         .eq('recipient_committee_id', committeeId)
         .eq('cycle', cycle)
         .order('amount', { ascending: false })
-        .limit(500);
+        .limit(500)
+        .returns<ContributionRow[]>();
 
       if (error) throw error;
 
