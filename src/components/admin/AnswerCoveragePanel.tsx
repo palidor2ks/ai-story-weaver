@@ -1168,23 +1168,23 @@ export function AnswerCoveragePanel() {
               </div>
             ) : filteredCandidates.length > 0 ? (
               <div className="rounded-md border overflow-x-auto">
-                <Table>
+                <Table className="text-[13px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead className="w-[60px]">Party</TableHead>
-                      <TableHead className="w-[60px]">State</TableHead>
-                      <TableHead className="text-center w-[100px]">Answers</TableHead>
-                      <TableHead className="w-[80px]">Tier</TableHead>
-                      <TableHead className="w-[70px]">Health</TableHead>
-                      <TableHead className="w-[100px]">Committee</TableHead>
-                      <TableHead className="w-[80px]">Sync</TableHead>
-                      <TableHead className="w-[90px]">Finance</TableHead>
-                      <TableHead className="w-[110px]">FEC Total</TableHead>
-                      <TableHead className="w-[110px]">List Total</TableHead>
-                      <TableHead className="w-[110px]">Delta</TableHead>
-                      <TableHead className="w-[100px]">FEC ID</TableHead>
-                      <TableHead className="text-right w-[120px]">Actions</TableHead>
+                      <TableHead className="px-3 py-3">Name</TableHead>
+                      <TableHead className="w-[56px] px-3 py-3">Party</TableHead>
+                      <TableHead className="w-[60px] px-3 py-3">State</TableHead>
+                      <TableHead className="text-center w-[90px] px-3 py-3">Answers</TableHead>
+                      <TableHead className="w-[70px] px-3 py-3">Tier</TableHead>
+                      <TableHead className="w-[70px] px-3 py-3">Health</TableHead>
+                      <TableHead className="w-[96px] px-3 py-3">Committee</TableHead>
+                      <TableHead className="w-[76px] px-3 py-3">Sync</TableHead>
+                      <TableHead className="w-[86px] px-3 py-3">Finance</TableHead>
+                      <TableHead className="w-[100px] px-3 py-3">FEC Total</TableHead>
+                      <TableHead className="w-[100px] px-3 py-3">List Total</TableHead>
+                      <TableHead className="w-[95px] px-3 py-3">Delta</TableHead>
+                      <TableHead className="w-[88px] px-3 py-3">FEC ID</TableHead>
+                      <TableHead className="text-right w-[116px] px-3 py-3">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1212,7 +1212,7 @@ export function AnswerCoveragePanel() {
 
                       return (
                         <TableRow key={candidate.id}>
-                          <TableCell className="font-medium">
+                          <TableCell className="font-medium px-3 py-3">
                             <Link
                               to={`/candidate/${candidate.id}`}
                               className="hover:underline text-primary flex items-center gap-1"
@@ -1221,29 +1221,32 @@ export function AnswerCoveragePanel() {
                               <ExternalLink className="h-3 w-3" />
                             </Link>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="px-3 py-3">
                             <Badge className={getPartyBadgeColor(candidate.party)}>
                               {getPartyBadge(candidate.party)}
                             </Badge>
                           </TableCell>
-                          <TableCell>{candidate.state}</TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              {isComplete ? (
-                                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                              ) : (
+                          <TableCell className="px-3 py-3">{candidate.state}</TableCell>
+                          <TableCell className="text-center px-3 py-3">
+                            {isComplete ? (
+                              <div className="flex items-center justify-center">
+                                <CheckCircle2 className="h-4 w-4 text-green-500" aria-hidden="true" />
+                                <span className="sr-only">100% coverage</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1 text-sm">
                                 <span className={candidate.answerCount === 0 ? 'text-amber-600' : 'text-foreground'}>
                                   {candidate.answerCount}/{candidate.totalQuestions}
                                 </span>
-                              )}
-                              <span className="text-xs text-muted-foreground">({candidate.percentage}%)</span>
-                            </div>
+                                <span className="text-[11px] text-muted-foreground">{candidate.percentage}%</span>
+                              </div>
+                            )}
                           </TableCell>
-                          <TableCell>
-                            <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} />
+                          <TableCell className="px-3 py-3">
+                            <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} compact />
                           </TableCell>
                           {/* Health Badge */}
-                          <TableCell>
+                          <TableCell className="px-3 py-3">
                             <CandidateHealthBadge
                               hasFecId={hasFecId}
                               hasCommittee={hasCommittee}
@@ -1253,7 +1256,7 @@ export function AnswerCoveragePanel() {
                             />
                           </TableCell>
                           {/* Committee Status Badge - NEW COLUMN */}
-                          <TableCell>
+                          <TableCell className="px-3 py-3">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer">
@@ -1291,16 +1294,17 @@ export function AnswerCoveragePanel() {
                             </Popover>
                           </TableCell>
                           {/* Sync Status Badge */}
-                          <TableCell>
+                          <TableCell className="px-3 py-3">
                             <SyncStatusBadge
                               status={syncStatus}
                               lastSyncDate={candidate.lastDonorSync}
                               reconciliationCheckedAt={candidate.reconciliationCheckedAt}
                               hasFecId={hasFecId}
+                              compact
                             />
                           </TableCell>
                           {/* Finance Status Badge */}
-                          <TableCell>
+                          <TableCell className="px-3 py-3">
                           <Popover>
                             <PopoverTrigger asChild>
                               <button className="hover:opacity-80 transition-opacity">
@@ -1324,21 +1328,21 @@ export function AnswerCoveragePanel() {
                               </PopoverContent>
                             </Popover>
                           </TableCell>
-                          <TableCell className="text-right text-sm">
+                          <TableCell className="text-right text-sm px-3 py-3 whitespace-nowrap">
                             <div className="font-medium">{formatCurrency(financeStatus.fecTotalReceipts)}</div>
                           </TableCell>
-                          <TableCell className="text-right text-sm">
+                          <TableCell className="text-right text-sm px-3 py-3 whitespace-nowrap">
                             <div className="font-medium">{formatCurrency(candidate.localItemizedNet)}</div>
                           </TableCell>
                           {/* Delta Column */}
-                          <TableCell className="text-right">
+                          <TableCell className="text-right px-3 py-3 whitespace-nowrap">
                             <DeltaBadge
                               deltaAmount={candidate.deltaAmount}
                               deltaPct={candidate.deltaPct}
                             />
                           </TableCell>
                           {/* FEC ID column - simplified */}
-                          <TableCell>
+                          <TableCell className="px-3 py-3">
                             {hasFecId ? (
                               <Badge variant="outline" className="text-xs font-mono">
                                 {candidate.fecCandidateId?.slice(0, 9)}
@@ -1347,7 +1351,7 @@ export function AnswerCoveragePanel() {
                               <span className="text-muted-foreground/50 text-xs">—</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right px-3 py-3">
                             <div className="flex gap-1 justify-end">
                               {/* Link FEC ID */}
                               {!hasFecId && (

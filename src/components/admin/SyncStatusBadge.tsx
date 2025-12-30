@@ -10,6 +10,7 @@ interface SyncStatusBadgeProps {
   reconciliationCheckedAt?: string | null;
   hasFecId: boolean;
   className?: string;
+  compact?: boolean;
 }
 
 export function SyncStatusBadge({ 
@@ -17,7 +18,8 @@ export function SyncStatusBadge({
   lastSyncDate, 
   reconciliationCheckedAt,
   hasFecId,
-  className 
+  className,
+  compact = false
 }: SyncStatusBadgeProps) {
   if (!hasFecId) {
     return (
@@ -71,6 +73,7 @@ export function SyncStatusBadge({
 
   const config = getStatusConfig();
   const Icon = config.icon;
+  const hideLabel = compact && status === 'complete';
 
   return (
     <TooltipProvider>
@@ -80,12 +83,17 @@ export function SyncStatusBadge({
             variant="outline" 
             className={cn(
               "text-[10px] px-1.5 py-0 h-5 gap-1",
+              hideLabel ? "pr-1" : "",
               config.badgeClass,
               className
             )}
           >
             <Icon className={cn("h-3 w-3", config.iconClass)} />
-            {config.label}
+            {hideLabel ? (
+              <span className="sr-only">{config.label}</span>
+            ) : (
+              config.label
+            )}
           </Badge>
         </TooltipTrigger>
         <TooltipContent side="top" className="text-xs">

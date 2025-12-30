@@ -13,18 +13,25 @@ interface CoverageTierBadgeProps {
   tier: CoverageTier;
   showTooltip?: boolean;
   className?: string;
+  compact?: boolean;
 }
 
-export const CoverageTierBadge = ({ tier, showTooltip = true, className }: CoverageTierBadgeProps) => {
+export const CoverageTierBadge = ({ tier, showTooltip = true, className, compact = false }: CoverageTierBadgeProps) => {
   const info = getCoverageTierInfo(tier);
+  const label = compact ? info.shortLabel : info.label;
   
   const badge = (
     <Badge 
       variant="outline" 
-      className={cn('text-xs border', info.color, className)}
+      className={cn(
+        'text-xs border',
+        compact ? 'px-2 py-0.5 text-[11px]' : '',
+        info.color, 
+        className
+      )}
     >
-      {info.label}
-      {showTooltip && <Info className="w-3 h-3 ml-1" />}
+      {label}
+      {showTooltip && !compact && <Info className="w-3 h-3 ml-1" />}
     </Badge>
   );
   
