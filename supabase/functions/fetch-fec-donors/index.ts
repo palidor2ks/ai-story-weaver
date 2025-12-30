@@ -522,7 +522,8 @@ serve(async (req) => {
       for (const fecId of allFecIds) {
         try {
           // Include ALL committee designations: P, A, J, U, B, D
-          const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&cycle=${cycle}&designation=P&designation=A&designation=J&designation=U&designation=B&designation=D&per_page=50`;
+          // Note: Don't filter by cycle here - committees span multiple cycles and we filter contributions by cycle later
+          const committeeUrl = `https://api.open.fec.gov/v1/candidate/${fecId}/committees/?api_key=${fecApiKey}&designation=P&designation=A&designation=J&designation=U&designation=B&designation=D&per_page=50`;
           const committeeResponse = await fetchWithRetry(committeeUrl);
 
           if (!committeeResponse?.ok) {
