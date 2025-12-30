@@ -38,7 +38,7 @@ serve(async (req) => {
       // Get the specific alias
       const { data: alias, error: aliasError } = await supabase
         .from('donor_aliases')
-        .select('canonical_name, alias_pattern, donor_types')
+        .select('canonical_name, alias_pattern, alias_patterns, donor_types')
         .eq('id', body.alias_id)
         .eq('is_active', true)
         .single();
@@ -54,30 +54,38 @@ serve(async (req) => {
         });
       }
 
-      console.log(`Found alias: pattern="${alias.alias_pattern}", canonical="${alias.canonical_name}"`);
+      // Use alias_patterns if available, otherwise fall back to alias_pattern
+      const patterns = alias.alias_patterns?.length ? alias.alias_patterns : [alias.alias_pattern];
+      console.log(`Found alias: patterns=${JSON.stringify(patterns)}, canonical="${alias.canonical_name}"`);
 
-      // Update all donors matching this alias pattern using SQL ILIKE
-      const { data: updated, error: updateError } = await supabase
-        .from('donors')
-        .update({ display_name: alias.canonical_name })
-        .ilike('name', alias.alias_pattern)
-        .in('type', alias.donor_types || [])
-        .select('id');
+      // Update all donors matching any of the alias patterns
+      let totalUpdated = 0;
+      for (const pattern of patterns) {
+        if (!pattern) continue;
+        
+        const { data: updated, error: updateError } = await supabase
+          .from('donors')
+          .update({ display_name: alias.canonical_name })
+          .ilike('name', pattern)
+          .in('type', alias.donor_types || [])
+          .select('id');
 
-      if (updateError) {
-        console.error('Error updating donors:', updateError);
-        throw updateError;
+        if (updateError) {
+          console.error(`Error updating donors for pattern "${pattern}":`, updateError);
+          continue;
+        }
+        
+        totalUpdated += updated?.length || 0;
       }
 
-      const updatedCount = updated?.length || 0;
-      console.log(`Updated ${updatedCount} donors to display_name="${alias.canonical_name}"`);
+      console.log(`Updated ${totalUpdated} donors to display_name="${alias.canonical_name}"`);
 
       return new Response(JSON.stringify({
         success: true,
-        processed: updatedCount,
+        processed: totalUpdated,
         alias: alias.canonical_name,
-        pattern: alias.alias_pattern,
-        message: `Updated ${updatedCount} donor(s) to "${alias.canonical_name}"`,
+        patterns: patterns,
+        message: `Updated ${totalUpdated} donor(s) to "${alias.canonical_name}"`,
         elapsedMs: Date.now() - startTime
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -128,7 +136,7 @@ serve(async (req) => {
     // Get all active aliases
     const { data: aliases, error: aliasError } = await supabase
       .from('donor_aliases')
-      .select('canonical_name, alias_pattern, donor_types')
+      .select('canonical_name, alias_pattern, alias_patterns, donor_types')
       .eq('is_active', true);
 
     if (aliasError) {
@@ -150,16 +158,26 @@ serve(async (req) => {
         // Check if donor type matches
         if (!alias.donor_types?.includes(donor.type)) continue;
         
-        // Convert SQL ILIKE pattern to regex
-        const pattern = alias.alias_pattern
-          .replace(/%/g, '.*')
-          .replace(/_/g, '.');
-        const regex = new RegExp(`^${pattern}$`, 'i');
+        // Use alias_patterns if available, otherwise fall back to alias_pattern
+        const patterns = alias.alias_patterns?.length ? alias.alias_patterns : [alias.alias_pattern];
         
-        if (regex.test(donor.name)) {
-          displayName = alias.canonical_name;
-          break;
+        let matched = false;
+        for (const pattern of patterns) {
+          if (!pattern) continue;
+          // Convert SQL ILIKE pattern to regex
+          const regexPattern = pattern
+            .replace(/%/g, '.*')
+            .replace(/_/g, '.');
+          const regex = new RegExp(`^${regexPattern}$`, 'i');
+          
+          if (regex.test(donor.name)) {
+            displayName = alias.canonical_name;
+            matched = true;
+            break;
+          }
         }
+        
+        if (matched) break;
       }
 
       // Update the donor's display_name
