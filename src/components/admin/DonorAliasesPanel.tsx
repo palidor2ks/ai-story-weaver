@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Check, X, Search, Users, DollarSign, Link2, Layers, RefreshCw, Loader2, Building2, AlertTriangle, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +73,7 @@ const formatAmount = (amount: number) => {
 };
 
 export function DonorAliasesPanel() {
+  const queryClient = useQueryClient();
   const { data: aliases, isLoading } = useDonorAliases();
   const createMutation = useCreateDonorAlias();
   const updateMutation = useUpdateDonorAlias();
@@ -293,6 +295,9 @@ export function DonorAliasesPanel() {
       }
       
       toast.success(`Added "${donorName}" to alias "${alias.canonical_name}"`);
+      
+      // Invalidate donor search query to refresh the UI
+      await queryClient.invalidateQueries({ queryKey: ['donor-search'] });
     } catch (error) {
       console.error('Error adding donor to alias:', error);
       toast.error('Failed to add donor to alias');
