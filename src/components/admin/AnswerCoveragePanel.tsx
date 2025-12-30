@@ -1083,6 +1083,14 @@ export function AnswerCoveragePanel() {
               </div>
             </div>
             
+            {/* Rate limit indicator */}
+            {syncProgress.isWaitingForRateLimit && (
+              <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-md text-xs">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span>Rate limit reached - waiting {syncProgress.rateLimitWaitSeconds || 15}s before retrying...</span>
+              </div>
+            )}
+            
             <div className="text-xs text-muted-foreground">
               {syncProgress.isAutoResuming 
                 ? 'Running until complete. For high-volume candidates this may take 10-30 minutes.'
@@ -1681,6 +1689,39 @@ export function AnswerCoveragePanel() {
                                     )}
                                   </Button>
                                 )
+                              )}
+                              {/* Refresh FEC Totals (lightweight) */}
+                              {hasFecId && candidate.fecCommitteeId && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={isTotalsLoading(candidate.id) || anyBatchRunning}
+                                  onClick={() => {
+                                    void (async () => {
+                                      try {
+                                        toast.info(`Refreshing FEC totals for ${candidate.name}...`);
+                                        const result = await refreshFECTotals(candidate.id, '2024');
+                                        if (result.success) {
+                                          toast.success(`FEC totals updated: $${(result.fecItemized || 0).toLocaleString()} itemized (${result.deltaPct || 0}% delta)`);
+                                          refetchCandidates();
+                                        } else {
+                                          toast.error(result.error || 'Failed to refresh totals');
+                                        }
+                                      } catch (err) {
+                                        console.error('[Admin] Refresh totals failed:', err);
+                                        toast.error('Failed to refresh FEC totals');
+                                      }
+                                    })();
+                                  }}
+                                  title="Refresh FEC totals (lightweight, no contribution sync)"
+                                  className="h-7"
+                                >
+                                  {isTotalsLoading(candidate.id) ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <RefreshCw className="h-3 w-3 text-blue-600" />
+                                  )}
+                                </Button>
                               )}
                               {/* Refresh Finance Reconciliation */}
                               {hasFecId && (
