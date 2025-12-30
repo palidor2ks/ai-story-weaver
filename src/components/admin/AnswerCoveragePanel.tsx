@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit, Zap } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
@@ -1253,7 +1254,24 @@ export function AnswerCoveragePanel() {
                       <TableHead className="w-[76px] px-3 py-3">Sync</TableHead>
                       <TableHead className="w-[86px] px-3 py-3">Finance</TableHead>
                       <TableHead className="w-[100px] px-3 py-3">FEC Total</TableHead>
-                      <TableHead className="w-[100px] px-3 py-3">Local Total</TableHead>
+                      <TableHead className="w-[100px] px-3 py-3">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger className="flex items-center gap-1 cursor-help">
+                              Local Total
+                              <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[280px]">
+                              <p className="font-medium mb-1">Imported Itemized Contributions</p>
+                              <p className="text-xs text-muted-foreground">
+                                Sum of itemized contributions imported from FEC into our database. 
+                                Excludes unitemized contributions, transfers, loans, and other receipts. 
+                                Compare to FEC Total to identify sync gaps.
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
                       <TableHead className="w-[95px] px-3 py-3">Delta</TableHead>
                       <TableHead className="w-[88px] px-3 py-3">FEC ID</TableHead>
                       <TableHead className="text-right w-[116px] px-3 py-3">Actions</TableHead>
