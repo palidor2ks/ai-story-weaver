@@ -245,7 +245,6 @@ const fetchCommitteePage = async (
     .select(`
       id,
       name,
-      alias_name,
       fec_committee_id,
       designation,
       designation_full,
@@ -280,7 +279,7 @@ const fetchCommitteePage = async (
   }
 
   if (search) {
-    committeeQuery = committeeQuery.or(`name.ilike.%${search}%,alias_name.ilike.%${search}%,fec_committee_id.ilike.%${search}%,candidates.name.ilike.%${search}%`);
+    committeeQuery = committeeQuery.or(`name.ilike.%${search}%,fec_committee_id.ilike.%${search}%,candidates.name.ilike.%${search}%`);
   }
 
   const { data: committees, error: committeeError, count } = await committeeQuery.returns<CommitteeRow[]>();
