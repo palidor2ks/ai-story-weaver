@@ -156,8 +156,7 @@ serve(async (req) => {
 
         console.log(`[RECONCILIATION] ${candidate.name}: Found ${committees.length} P/A committees`);
 
-        // Calculate local totals using SQL aggregation via database function
-        // This avoids the 1000 row limit and handles null memo_code properly
+        // Calculate CANDIDATE-LEVEL local totals (for finance_reconciliation)
         const { data: categoryTotals, error: totalsError } = await supabase
           .rpc('get_contribution_totals', {
             p_candidate_id: candidate.id,
@@ -182,6 +181,42 @@ serve(async (req) => {
 
         const localItemizedNet = localItemized - passThroughTotal;
 
+        // Get PER-COMMITTEE local totals (to store correctly in committee_finance_rollups)
+        const { data: perCommitteeTotals, error: perCommitteeError } = await supabase
+          .rpc('get_contribution_totals_by_committee', {
+            p_candidate_id: candidate.id,
+            p_cycle: cycle
+          });
+        
+        if (perCommitteeError) {
+          console.error(`[RECONCILIATION] ${candidate.name}: Error fetching per-committee totals:`, perCommitteeError);
+        }
+
+        // Build a lookup map for per-committee local totals
+        const committeeTotalsMap = new Map<string, {
+          individual_total: number;
+          pac_total: number;
+          party_total: number;
+          itemized_total: number;
+          transfers_total: number;
+          earmarked_total: number;
+          contribution_count: number;
+        }>();
+        
+        if (perCommitteeTotals) {
+          for (const ct of perCommitteeTotals) {
+            committeeTotalsMap.set(ct.committee_id, {
+              individual_total: Number(ct.individual_total) || 0,
+              pac_total: Number(ct.pac_total) || 0,
+              party_total: Number(ct.party_total) || 0,
+              itemized_total: Number(ct.itemized_total) || 0,
+              transfers_total: Number(ct.transfers_total) || 0,
+              earmarked_total: Number(ct.earmarked_total) || 0,
+              contribution_count: Number(ct.contribution_count) || 0,
+            });
+          }
+        }
+
         console.log(`[RECONCILIATION] ${candidate.name}: ${contributionCount} contributions - Individual: $${localIndividualItemized}, PAC: $${localPacContributions}, Party: $${localPartyContributions}`);
 
         // Fetch fresh FEC totals for each committee (with category-level data)
@@ -196,18 +231,29 @@ serve(async (req) => {
         let fecOtherReceipts = 0;
 
         for (const cmte of committees) {
-          const totals = await fetchFECTotals(fecApiKey, cmte.fec_committee_id, cycle);
-          fecItemized += totals.fecItemized || 0;
-          fecUnitemized += totals.fecUnitemized || 0;
-          fecTotalReceipts += totals.fecTotalReceipts || 0;
-          fecPacContributions += totals.fecPacContributions || 0;
-          fecPartyContributions += totals.fecPartyContributions || 0;
-          fecLoans += totals.fecLoans || 0;
-          fecTransfers += totals.fecTransfers || 0;
-          fecCandidateContribution += totals.fecCandidateContribution || 0;
-          fecOtherReceipts += totals.fecOtherReceipts || 0;
+          const fecTotals = await fetchFECTotals(fecApiKey, cmte.fec_committee_id, cycle);
+          fecItemized += fecTotals.fecItemized || 0;
+          fecUnitemized += fecTotals.fecUnitemized || 0;
+          fecTotalReceipts += fecTotals.fecTotalReceipts || 0;
+          fecPacContributions += fecTotals.fecPacContributions || 0;
+          fecPartyContributions += fecTotals.fecPartyContributions || 0;
+          fecLoans += fecTotals.fecLoans || 0;
+          fecTransfers += fecTotals.fecTransfers || 0;
+          fecCandidateContribution += fecTotals.fecCandidateContribution || 0;
+          fecOtherReceipts += fecTotals.fecOtherReceipts || 0;
 
-          // Update committee rollup with fresh FEC data AND corrected local totals
+          // Get THIS COMMITTEE's local totals (not candidate-wide totals!)
+          const cmteTotals = committeeTotalsMap.get(cmte.fec_committee_id) || {
+            individual_total: 0,
+            pac_total: 0,
+            party_total: 0,
+            itemized_total: 0,
+            transfers_total: 0,
+            earmarked_total: 0,
+            contribution_count: 0,
+          };
+
+          // Update committee rollup with fresh FEC data AND per-committee local totals
           await supabase
             .from('committee_finance_rollups')
             .upsert({
@@ -215,16 +261,17 @@ serve(async (req) => {
               candidate_id: candidate.id,
               cycle,
               // FEC data
-              fec_itemized: totals.fecItemized,
-              fec_unitemized: totals.fecUnitemized,
-              fec_total_receipts: totals.fecTotalReceipts,
-              // Corrected local totals (calculated from contributions table)
-              local_itemized: localItemized,
-              local_individual_itemized: localIndividualItemized,
-              local_pac_contributions: localPacContributions,
-              local_party_contributions: localPartyContributions,
-              local_transfers: localTransfers,
-              local_earmarked: localEarmarked,
+              fec_itemized: fecTotals.fecItemized,
+              fec_unitemized: fecTotals.fecUnitemized,
+              fec_total_receipts: fecTotals.fecTotalReceipts,
+              // PER-COMMITTEE local totals (not candidate-wide!)
+              local_itemized: cmteTotals.itemized_total,
+              local_individual_itemized: cmteTotals.individual_total,
+              local_pac_contributions: cmteTotals.pac_total,
+              local_party_contributions: cmteTotals.party_total,
+              local_transfers: cmteTotals.transfers_total,
+              local_earmarked: cmteTotals.earmarked_total,
+              contribution_count: cmteTotals.contribution_count,
               last_fec_check: new Date().toISOString(),
               updated_at: new Date().toISOString()
             }, { onConflict: 'committee_id,cycle' });
