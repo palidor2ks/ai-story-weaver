@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface CommitteeSummary {
   id: string;
   name: string | null;
+  aliasName?: string | null;
   fecCommitteeId: string;
   designation: string | null;
   designationFull: string | null;
@@ -53,6 +54,7 @@ interface CommitteeRollupRow {
 interface CommitteeRow {
   id: string;
   name: string | null;
+  alias_name?: string | null;
   fec_committee_id: string;
   designation: string | null;
   designation_full: string | null;
@@ -118,6 +120,7 @@ const buildCommitteeSummaries = (
     return {
       id: committee.id,
       name: committee.name,
+      aliasName: committee.alias_name,
       fecCommitteeId: committee.fec_committee_id,
       designation: committee.designation,
       designationFull: committee.designation_full,
@@ -142,6 +145,7 @@ async function fetchCommittees(cycle: string = '2024', committeeId?: string) {
     .select(`
       id,
       name,
+      alias_name,
       fec_committee_id,
       designation,
       designation_full,

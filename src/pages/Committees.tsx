@@ -198,7 +198,9 @@ export const Committees = () => {
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-lg leading-tight">{committee.name || 'Unknown Committee'}</h3>
+                        <h3 className="font-semibold text-lg leading-tight">
+                          {committee.aliasName || committee.name || 'Unknown Committee'}
+                        </h3>
                         {committee.designation && (
                           <Badge variant="secondary" className="text-xs">
                             {committee.designation}
