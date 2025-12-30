@@ -141,16 +141,20 @@ export function AnswerCoveragePanel() {
     cancelSyncAll,
     clearSyncAllProgress,
     triggerReconciliation,
+    refreshFECTotals,
+    batchRefreshFECTotals,
     isLoading: isFECLoading, 
     isDonorLoading,
     isCommitteeLoading,
     isReconcileLoading,
+    isTotalsLoading,
     hasPartialSync,
     batchProgress: fecBatchProgress,
     isBatchRunning: isFECBatchRunning,
     syncProgress,
     syncAllProgress,
     isSyncAllRunning,
+    isTotalsRefreshing,
     highVolumeMode,
     setHighVolumeMode
   } = useFECIntegration();
@@ -404,6 +408,25 @@ export function AnswerCoveragePanel() {
     } catch (err) {
       console.error('[Admin] Resume partial syncs failed:', err);
       toast.error('Failed to resume donor syncs');
+    }
+  };
+
+  const handleBatchRefreshFECTotals = async () => {
+    try {
+      const toProcess = candidatesWithFecId.map(c => c.id);
+      if (toProcess.length === 0) {
+        toast.info('No candidates with FEC IDs found.');
+        return;
+      }
+      toast.info(`Refreshing FEC totals for ${toProcess.length} candidates...`);
+      const results = await batchRefreshFECTotals(toProcess, '2024');
+      toast.success(
+        `Refreshed FEC totals: ${results.success} succeeded, ${results.failed} failed, ${results.skipped} skipped`
+      );
+      refetchCandidates();
+    } catch (err) {
+      console.error('[Admin] Batch refresh FEC totals failed:', err);
+      toast.error('Failed to refresh FEC totals');
     }
   };
 
@@ -673,6 +696,47 @@ export function AnswerCoveragePanel() {
                         className="bg-green-600 hover:bg-green-700"
                       >
                         Start Sync All
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                
+                <DropdownMenuSeparator />
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem 
+                      onSelect={(e) => e.preventDefault()}
+                      className="text-blue-600"
+                      disabled={isTotalsRefreshing}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh FEC Totals ({candidatesWithFecId.length})
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Refresh FEC Summary Totals?</AlertDialogTitle>
+                      <AlertDialogDescription className="space-y-2">
+                        <p>
+                          This will fetch updated FEC summary totals for all candidates with FEC IDs.
+                        </p>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          This does NOT re-sync contribution data — it only updates the FEC totals 
+                          displayed in the dashboard. Much faster than a full sync.
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Use this to fix $0 FEC totals caused by rate limiting during bulk syncs.
+                        </p>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={handleBatchRefreshFECTotals}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        Refresh Totals
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

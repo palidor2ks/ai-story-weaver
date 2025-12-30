@@ -8,12 +8,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Rate limiting constants
-const MAX_REQUESTS_PER_MINUTE = 45; // FEC limit is 1000/hour, be conservative
-const REQUEST_DELAY_MS = 200;
+// Rate limiting constants - MORE CONSERVATIVE to reduce 429 errors
+const MAX_REQUESTS_PER_MINUTE = 30; // Reduced from 45 for better rate limit safety
+const REQUEST_DELAY_MS = 350; // Increased from 200 for smoother pacing
 const MAX_RUNTIME_MS = 25000; // 25 seconds - safe margin to avoid WORKER_LIMIT
-const MAX_RETRIES = 3;
-const RETRY_BACKOFF_BASE_MS = 2000;
+const MAX_RETRIES = 5; // Increased from 3 for better resilience
+const RETRY_BACKOFF_BASE_MS = 3000; // Increased from 2000
+const RATE_LIMIT_BACKOFF_MS = 15000; // 15 second backoff specifically for 429 errors
 
 /**
  * Get the date range for a given FEC election cycle.
@@ -64,9 +65,13 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
       const response = await fetch(url, options);
       
       if (response.status === 429) {
-        // Rate limited by API
-        const backoffMs = RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt);
-        console.log(`[FEC-DONORS] Rate limited (429), backing off ${backoffMs}ms...`);
+        // LONGER backoff specifically for rate limits
+        const backoffMs = RATE_LIMIT_BACKOFF_MS * Math.pow(1.5, attempt);
+        console.log(`[FEC-DONORS] Rate limited (429), backing off ${Math.round(backoffMs/1000)}s...`);
+        
+        // Reset the minute counter to force additional waiting
+        requestCount = MAX_REQUESTS_PER_MINUTE;
+        
         await new Promise(resolve => setTimeout(resolve, backoffMs));
         continue;
       }

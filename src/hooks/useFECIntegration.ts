@@ -86,6 +86,7 @@ export function useFECIntegration() {
   const [donorLoadingIds, setDonorLoadingIds] = useState<Set<string>>(new Set());
   const [committeeLoadingIds, setCommitteeLoadingIds] = useState<Set<string>>(new Set());
   const [reconcileLoadingIds, setReconcileLoadingIds] = useState<Set<string>>(new Set());
+  const [totalsLoadingIds, setTotalsLoadingIds] = useState<Set<string>>(new Set());
   const [partialSyncIds, setPartialSyncIds] = useState<Set<string>>(new Set());
   const [highVolumeMode, setHighVolumeMode] = useState<boolean>(false); // Smaller batches for massive candidates
   const [batchProgress, setBatchProgress] = useState<{
@@ -95,12 +96,14 @@ export function useFECIntegration() {
   } | null>(null);
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [syncAllProgress, setSyncAllProgress] = useState<SyncAllProgress | null>(null);
+  const [totalsProgress, setTotalsProgress] = useState<{ current: number; total: number } | null>(null);
   const cancelSyncAllRef = useRef(false);
 
   const isLoading = (candidateId: string) => loadingIds.has(candidateId);
   const isDonorLoading = (candidateId: string) => donorLoadingIds.has(candidateId);
   const isCommitteeLoading = (candidateId: string) => committeeLoadingIds.has(candidateId);
   const isReconcileLoading = (candidateId: string) => reconcileLoadingIds.has(candidateId);
+  const isTotalsLoading = (candidateId: string) => totalsLoadingIds.has(candidateId);
   const hasPartialSync = (candidateId: string) => partialSyncIds.has(candidateId);
 
   const fetchFECCandidateId = async (
@@ -868,6 +871,74 @@ export function useFECIntegration() {
     setSyncAllProgress(null);
   };
 
+  // Refresh FEC totals for a single candidate (lightweight, no contribution sync)
+  const refreshFECTotals = async (
+    candidateId: string,
+    cycle = '2024'
+  ): Promise<{ success: boolean; fecItemized?: number; deltaPct?: number; error?: string }> => {
+    setTotalsLoadingIds(prev => new Set(prev).add(candidateId));
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('refresh-fec-totals', {
+        body: { candidateId, cycle }
+      });
+
+      if (error) {
+        console.error('[REFRESH-FEC-TOTALS] Invoke error:', error);
+        return { success: false, error: error.message };
+      }
+
+      if (data?.error) {
+        return { success: false, error: String(data.error) };
+      }
+
+      return { 
+        success: true, 
+        fecItemized: data?.fecItemized,
+        deltaPct: data?.deltaPct
+      };
+    } catch (err) {
+      console.error('[REFRESH-FEC-TOTALS] Exception:', err);
+      return { success: false, error: 'Failed to refresh FEC totals' };
+    } finally {
+      setTotalsLoadingIds(prev => {
+        const next = new Set(prev);
+        next.delete(candidateId);
+        return next;
+      });
+    }
+  };
+
+  // Batch refresh FEC totals for multiple candidates
+  const batchRefreshFECTotals = async (
+    candidateIds: string[],
+    cycle = '2024'
+  ): Promise<{ success: number; failed: number; skipped: number }> => {
+    setTotalsProgress({ current: 0, total: candidateIds.length });
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('refresh-fec-totals', {
+        body: { batch: true, candidateIds, cycle }
+      });
+
+      if (error) {
+        console.error('[REFRESH-FEC-TOTALS] Batch invoke error:', error);
+        return { success: 0, failed: candidateIds.length, skipped: 0 };
+      }
+
+      return {
+        success: data?.processed || 0,
+        failed: data?.failed || 0,
+        skipped: data?.skipped || 0
+      };
+    } catch (err) {
+      console.error('[REFRESH-FEC-TOTALS] Batch exception:', err);
+      return { success: 0, failed: candidateIds.length, skipped: 0 };
+    } finally {
+      setTotalsProgress(null);
+    }
+  };
+
   return {
     fetchFECCandidateId,
     fetchFECCommittees,
@@ -882,17 +953,22 @@ export function useFECIntegration() {
     clearSyncAllProgress,
     triggerReconciliation,
     forceResyncDonors,
+    refreshFECTotals,
+    batchRefreshFECTotals,
     isLoading,
     isDonorLoading,
     isCommitteeLoading,
     isReconcileLoading,
+    isTotalsLoading,
     hasPartialSync,
     partialSyncIds,
     batchProgress,
     syncProgress,
     syncAllProgress,
+    totalsProgress,
     isBatchRunning: batchProgress !== null,
     isSyncAllRunning: syncAllProgress?.isRunning === true,
+    isTotalsRefreshing: totalsProgress !== null,
     highVolumeMode,
     setHighVolumeMode
   };
