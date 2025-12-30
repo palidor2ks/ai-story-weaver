@@ -1196,6 +1196,15 @@ export function AnswerCoveragePanel() {
                       const hasFecId = !!candidate.fecCandidateId;
                       const hasCommittee = !!candidate.fecCommitteeId;
                       const financeStatus = calculateFinanceStatus(candidate);
+                      const listTotal =
+                        (candidate.fecItemized ?? 0) +
+                        candidate.fecPacContributions +
+                        candidate.fecPartyContributions +
+                        (candidate.fecUnitemized ?? 0) +
+                        candidate.fecLoans +
+                        candidate.fecTransfers +
+                        candidate.fecCandidateContribution +
+                        candidate.fecOtherReceipts;
                       const localItemized = candidate.localItemized || 0;
                       const syncStatus = candidate.syncStatus;
                       const hasOverride = overrideMap.has(candidate.id);
@@ -1332,7 +1341,7 @@ export function AnswerCoveragePanel() {
                             <div className="font-medium">{formatCurrency(financeStatus.fecTotalReceipts)}</div>
                           </TableCell>
                           <TableCell className="text-right text-sm px-3 py-3 whitespace-nowrap">
-                            <div className="font-medium">{formatCurrency(candidate.localItemizedNet)}</div>
+                            <div className="font-medium">{formatCurrency(listTotal)}</div>
                           </TableCell>
                           {/* Delta Column */}
                           <TableCell className="text-right px-3 py-3 whitespace-nowrap">

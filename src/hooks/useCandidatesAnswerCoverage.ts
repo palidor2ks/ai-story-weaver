@@ -26,6 +26,12 @@ export interface CandidateAnswerCoverage {
   fecItemized: number | null;    // FEC itemized contributions
   fecUnitemized: number | null;  // FEC unitemized contributions
   fecTotalReceipts: number | null; // FEC total receipts
+  fecPacContributions: number;   // FEC PAC contributions (line 11C)
+  fecPartyContributions: number; // FEC party contributions
+  fecLoans: number;              // Candidate loans
+  fecTransfers: number;          // Committee transfers (line 12)
+  fecCandidateContribution: number; // Candidate self-contribution (non-loan)
+  fecOtherReceipts: number;      // Other receipts
   deltaAmount: number | null;    // Difference between local NET and FEC
   deltaPct: number | null;       // Percentage difference
   reconciliationStatus: string | null; // ok, warning, error
@@ -130,6 +136,12 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         fec_itemized: number | null;
         fec_unitemized: number | null;
         fec_total_receipts: number | null;
+        fec_pac_contributions: number | null;
+        fec_party_contributions: number | null;
+        fec_loans: number | null;
+        fec_transfers: number | null;
+        fec_candidate_contribution: number | null;
+        fec_other_receipts: number | null;
         delta_amount: number | null;
         delta_pct: number | null;
         status: string | null;
@@ -222,6 +234,12 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           fecItemized: rec?.fec_itemized ?? null,
           fecUnitemized: rec?.fec_unitemized ?? null,
           fecTotalReceipts: rec?.fec_total_receipts ?? null,
+          fecPacContributions: rec?.fec_pac_contributions || 0,
+          fecPartyContributions: rec?.fec_party_contributions || 0,
+          fecLoans: rec?.fec_loans || 0,
+          fecTransfers: rec?.fec_transfers || 0,
+          fecCandidateContribution: rec?.fec_candidate_contribution || 0,
+          fecOtherReceipts: rec?.fec_other_receipts || 0,
           deltaAmount: rec?.delta_amount ?? null,
           deltaPct: rec?.delta_pct ?? null,
           reconciliationStatus: rec?.status || null,
