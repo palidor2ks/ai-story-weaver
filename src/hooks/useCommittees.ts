@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface CommitteeSummary {
   id: string;
   name: string | null;
+  aliasName?: string | null;
   fecCommitteeId: string;
   designation: string | null;
   designationFull: string | null;
@@ -47,11 +48,13 @@ interface CommitteeRollupRow {
   local_itemized: number | null;
   fec_itemized: number | null;
   fec_total_receipts: number | null;
+  cycle: string;
 }
 
 interface CommitteeRow {
   id: string;
   name: string | null;
+  alias_name?: string | null;
   fec_committee_id: string;
   designation: string | null;
   designation_full: string | null;
@@ -74,27 +77,42 @@ interface CommitteeRow {
 const buildCommitteeSummaries = (
   committees: CommitteeRow[] = [],
   rollups: CommitteeRollupRow[] = [],
+  cycle?: string,
 ) => {
-  const rollupByKey = new Map<string, CommitteeRollupRow>();
   const rollupByCommittee = new Map<string, CommitteeRollupRow[]>();
 
   rollups.forEach((row) => {
-    const key = `${row.committee_id}-${row.candidate_id || 'unknown'}`;
-    rollupByKey.set(key, row);
     const list = rollupByCommittee.get(row.committee_id) || [];
     list.push(row);
     rollupByCommittee.set(row.committee_id, list);
   });
 
   return committees.map((committee) => {
-    const rollup =
-      rollupByKey.get(`${committee.fec_committee_id}-${committee.candidate_id || 'unknown'}`) ||
-      (rollupByCommittee.get(committee.fec_committee_id) || [])[0];
+    const committeeRollups = rollupByCommittee.get(committee.fec_committee_id) || [];
+    const matchingRollup =
+      committeeRollups.find((row) => row.candidate_id === committee.candidate_id) ??
+      committeeRollups.find((row) => !cycle || cycle === 'all' || row.cycle === cycle) ??
+      committeeRollups[0];
+
+    const aggregatedRollup = (!cycle || cycle === 'all') && committeeRollups.length > 0
+      ? committeeRollups.reduce(
+          (acc, row) => {
+            const raised = row.local_itemized ?? row.fec_total_receipts ?? row.fec_itemized ?? 0;
+            return {
+              donor_count: acc.donor_count + (row.donor_count ?? 0),
+              contribution_count: acc.contribution_count + (row.contribution_count ?? 0),
+              total_raised: acc.total_raised + raised,
+            };
+          },
+          { donor_count: 0, contribution_count: 0, total_raised: 0 },
+        )
+      : null;
 
     const totalRaised =
-      rollup?.local_itemized ??
-      rollup?.fec_total_receipts ??
-      rollup?.fec_itemized ??
+      matchingRollup?.local_itemized ??
+      matchingRollup?.fec_total_receipts ??
+      matchingRollup?.fec_itemized ??
+      aggregatedRollup?.total_raised ??
       committee.local_itemized_total ??
       committee.fec_itemized_total ??
       0;
@@ -102,6 +120,7 @@ const buildCommitteeSummaries = (
     return {
       id: committee.id,
       name: committee.name,
+      aliasName: committee.alias_name,
       fecCommitteeId: committee.fec_committee_id,
       designation: committee.designation,
       designationFull: committee.designation_full,
@@ -113,19 +132,20 @@ const buildCommitteeSummaries = (
       fecItemizedTotal: committee.fec_itemized_total,
       candidateId: committee.candidate_id,
       candidate: committee.candidates,
-      donorCount: rollup?.donor_count ?? 0,
-      contributionCount: rollup?.contribution_count ?? 0,
+      donorCount: matchingRollup?.donor_count ?? aggregatedRollup?.donor_count ?? 0,
+      contributionCount: matchingRollup?.contribution_count ?? aggregatedRollup?.contribution_count ?? 0,
       totalRaised,
     } as CommitteeSummary;
   });
 };
 
-async function fetchCommittees(cycle = '2024', committeeId?: string) {
+async function fetchCommittees(cycle: string = '2024', committeeId?: string) {
   let query = supabase
     .from('candidate_committees')
     .select(`
       id,
       name,
+      alias_name,
       fec_committee_id,
       designation,
       designation_full,
@@ -158,24 +178,199 @@ async function fetchCommittees(cycle = '2024', committeeId?: string) {
 
   let rollups: CommitteeRollupRow[] = [];
   if (committeeIds.length > 0) {
-    const { data: rollupData, error: rollupError } = await supabase
+    let rollupQuery = supabase
       .from('committee_finance_rollups')
-      .select('committee_id, candidate_id, donor_count, contribution_count, local_itemized, fec_itemized, fec_total_receipts')
-      .in('committee_id', committeeIds)
-      .eq('cycle', cycle)
-      .returns<CommitteeRollupRow[]>();
+      .select('committee_id, candidate_id, donor_count, contribution_count, local_itemized, fec_itemized, fec_total_receipts, cycle')
+      .in('committee_id', committeeIds);
+
+    if (cycle && cycle !== 'all') {
+      rollupQuery = rollupQuery.eq('cycle', cycle);
+    }
+
+    const { data: rollupData, error: rollupError } = await rollupQuery.returns<CommitteeRollupRow[]>();
 
     if (rollupError) throw rollupError;
     rollups = rollupData || [];
   }
 
-  return buildCommitteeSummaries(committees, rollups);
+  return buildCommitteeSummaries(committees, rollups, cycle);
 }
 
 export const useCommittees = (cycle = '2024') => {
   return useQuery({
     queryKey: ['committees', cycle],
     queryFn: () => fetchCommittees(cycle),
+  });
+};
+
+export interface CommitteeFilters {
+  search?: string;
+  cycle?: string;
+  designation?: string;
+  candidateId?: string;
+  pageSize?: number;
+}
+
+interface CommitteeFilterOptions {
+  cycles: string[];
+  designations: string[];
+  candidates: { id: string; name: string; party: string }[];
+}
+
+interface CommitteePageResult {
+  committees: CommitteeSummary[];
+  totalCount: number;
+  hasMore: boolean;
+}
+
+const PAGE_SIZE_DEFAULT = 12;
+
+const fetchCommitteePage = async (
+  page: number,
+  filters: CommitteeFilters = {},
+): Promise<CommitteePageResult> => {
+  const {
+    search = '',
+    cycle = '2024',
+    designation,
+    candidateId,
+    pageSize = PAGE_SIZE_DEFAULT,
+  } = filters;
+
+  const offset = page * pageSize;
+  const limit = pageSize - 1;
+
+  let committeeQuery = supabase
+    .from('candidate_committees')
+    .select(`
+      id,
+      name,
+      alias_name,
+      fec_committee_id,
+      designation,
+      designation_full,
+      role,
+      cycles,
+      last_sync_date,
+      last_contribution_date,
+      local_itemized_total,
+      fec_itemized_total,
+      candidate_id,
+      candidates:candidate_id (
+        id,
+        name,
+        party,
+        office,
+        state
+      )
+    `, { count: 'exact' })
+    .order('name', { ascending: true })
+    .range(offset, offset + limit);
+
+  if (cycle && cycle !== 'all') {
+    committeeQuery = committeeQuery.contains('cycles', [cycle]);
+  }
+
+  if (designation && designation !== 'all') {
+    committeeQuery = committeeQuery.eq('designation', designation);
+  }
+
+  if (candidateId && candidateId !== 'all') {
+    committeeQuery = committeeQuery.eq('candidate_id', candidateId);
+  }
+
+  if (search) {
+    committeeQuery = committeeQuery.or(`name.ilike.%${search}%,alias_name.ilike.%${search}%,fec_committee_id.ilike.%${search}%,candidates.name.ilike.%${search}%`);
+  }
+
+  const { data: committees, error: committeeError, count } = await committeeQuery.returns<CommitteeRow[]>();
+  if (committeeError) throw committeeError;
+
+  const committeeIds = (committees || []).map((c) => c.fec_committee_id).filter(Boolean);
+
+  let rollups: CommitteeRollupRow[] = [];
+  if (committeeIds.length > 0) {
+    let rollupQuery = supabase
+      .from('committee_finance_rollups')
+      .select('committee_id, candidate_id, donor_count, contribution_count, local_itemized, fec_itemized, fec_total_receipts, cycle')
+      .in('committee_id', committeeIds);
+
+    if (cycle && cycle !== 'all') {
+      rollupQuery = rollupQuery.eq('cycle', cycle);
+    }
+
+    const { data: rollupData, error: rollupError } = await rollupQuery.returns<CommitteeRollupRow[]>();
+    if (rollupError) throw rollupError;
+    rollups = rollupData || [];
+  }
+
+  const summaries = buildCommitteeSummaries(committees, rollups, cycle);
+  const totalCount = count ?? summaries.length;
+  const hasMore = offset + summaries.length < totalCount;
+
+  return { committees: summaries, totalCount, hasMore };
+};
+
+export const useCommitteesPaginated = (filters: CommitteeFilters) => {
+  const pageSize = filters.pageSize ?? PAGE_SIZE_DEFAULT;
+
+  return useInfiniteQuery({
+    queryKey: ['committees', 'paginated', { ...filters, pageSize }],
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => fetchCommitteePage(pageParam, { ...filters, pageSize }),
+    getNextPageParam: (lastPage, pages) => {
+      const loaded = pages.reduce((sum, page) => sum + page.committees.length, 0);
+      if (lastPage.hasMore && lastPage.totalCount > loaded) {
+        return pages.length;
+      }
+      if (lastPage.hasMore && lastPage.committees.length === pageSize) {
+        return pages.length;
+      }
+      return undefined;
+    },
+  });
+};
+
+const fetchCommitteeFilterOptions = async (): Promise<CommitteeFilterOptions> => {
+  const [cyclesResult, designationResult, candidatesResult] = await Promise.all([
+    supabase.from('committee_finance_rollups').select('cycle'),
+    supabase.from('candidate_committees').select('designation'),
+    supabase.from('candidates').select('id, name, party').order('name'),
+  ]);
+
+  if (cyclesResult.error) throw cyclesResult.error;
+  if (designationResult.error) throw designationResult.error;
+  if (candidatesResult.error) throw candidatesResult.error;
+
+  const cycleSet = new Set<string>(
+    (cyclesResult.data || [])
+      .map((row) => row.cycle)
+      .filter((cycle): cycle is string => !!cycle),
+  );
+
+  const designationSet = new Set<string>(
+    (designationResult.data || [])
+      .map((row) => row.designation)
+      .filter((designation): designation is string => !!designation),
+  );
+
+  const candidates = (candidatesResult.data || []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    party: row.party,
+  }));
+
+  return {
+    cycles: Array.from(cycleSet).sort((a, b) => Number(b) - Number(a)),
+    designations: Array.from(designationSet).sort(),
+    candidates,
+  };
+};
+
+export const useCommitteeFilterOptions = () => {
+  return useQuery({
+    queryKey: ['committee-filter-options'],
+    queryFn: fetchCommitteeFilterOptions,
   });
 };
 

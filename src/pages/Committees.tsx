@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useCommittees } from '@/hooks/useCommittees';
-import { Loader2, Landmark, Users, DollarSign, ArrowRight, Search } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useCommitteesPaginated, useCommitteeFilterOptions } from '@/hooks/useCommittees';
+import { Loader2, Landmark, Users, DollarSign, ArrowRight, Search, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const formatCurrency = (value: number) =>
@@ -28,16 +29,58 @@ const formatDate = (value: string | null) => {
 };
 
 export const Committees = () => {
-  const { data: committees = [], isLoading, error } = useCommittees();
   const [search, setSearch] = useState('');
+  const [cycle, setCycle] = useState<string>('2024');
+  const [designation, setDesignation] = useState<string>('all');
+  const [candidateId, setCandidateId] = useState<string>('all');
 
-  const filteredCommittees = useMemo(() => {
-    if (!search) return committees;
-    return committees.filter((committee) => {
-      const haystack = `${committee.name || ''} ${committee.fecCommitteeId} ${committee.candidate?.name || ''}`.toLowerCase();
-      return haystack.includes(search.toLowerCase());
-    });
-  }, [committees, search]);
+  const { data: filterOptions, isLoading: filtersLoading } = useCommitteeFilterOptions();
+
+  const availableCycles = useMemo(
+    () => {
+      const cycles = filterOptions?.cycles ?? ['2024'];
+      const unique = Array.from(new Set(['all', ...cycles]));
+      return unique;
+    },
+    [filterOptions],
+  );
+
+  const availableDesignations = useMemo(
+    () => filterOptions?.designations ?? [],
+    [filterOptions],
+  );
+
+  const candidateOptions = useMemo(
+    () => filterOptions?.candidates ?? [],
+    [filterOptions],
+  );
+
+  useEffect(() => {
+    if (availableCycles.length > 0 && !availableCycles.includes(cycle)) {
+      setCycle(availableCycles[0]);
+    }
+  }, [availableCycles, cycle]);
+
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useCommitteesPaginated({
+    search,
+    cycle,
+    designation,
+    candidateId,
+    pageSize: 12,
+  });
+
+  const committees = useMemo(
+    () => data?.pages.flatMap((page) => page.committees) ?? [],
+    [data],
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,6 +106,63 @@ export const Committees = () => {
                 className="pl-9"
               />
             </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={cycle} onValueChange={setCycle} disabled={isLoading || filtersLoading}>
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue placeholder="Cycle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableCycles.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c === 'all' ? 'All cycles' : c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={designation} onValueChange={setDesignation} disabled={isLoading || filtersLoading}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Designation" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All designations</SelectItem>
+                  {availableDesignations.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={candidateId} onValueChange={setCandidateId} disabled={isLoading || filtersLoading}>
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="Filter by candidate" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  <SelectItem value="all">All candidates</SelectItem>
+                  {candidateOptions.map((candidate) => (
+                    <SelectItem key={candidate.id} value={candidate.id}>
+                      {candidate.name} ({candidate.party})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setSearch('');
+                  setCycle(availableCycles[0] || '2024');
+                  setDesignation('all');
+                  setCandidateId('all');
+                }}
+                disabled={isLoading}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -72,20 +172,20 @@ export const Committees = () => {
           </div>
         )}
 
-        {error && (
+        {isError && error && (
           <div className="text-center py-16 text-destructive">
             Unable to load committees: {error.message}
           </div>
         )}
 
-        {!isLoading && !error && filteredCommittees.length === 0 && (
+        {!isLoading && !isError && committees.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">
             No committees found matching your search.
           </div>
         )}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredCommittees.map((committee) => (
+          {committees.map((committee) => (
             <Card
               key={committee.id}
               className="hover:border-primary/50 transition-colors group"
@@ -98,7 +198,9 @@ export const Committees = () => {
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-lg leading-tight">{committee.name || 'Unknown Committee'}</h3>
+                        <h3 className="font-semibold text-lg leading-tight">
+                          {committee.aliasName || committee.name || 'Unknown Committee'}
+                        </h3>
                         {committee.designation && (
                           <Badge variant="secondary" className="text-xs">
                             {committee.designation}
@@ -157,6 +259,21 @@ export const Committees = () => {
             </Card>
           ))}
         </div>
+
+        {hasNextPage && (
+          <div className="flex justify-center mt-10">
+            <Button onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+              {isFetchingNextPage ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading...
+                </div>
+              ) : (
+                'Load more committees'
+              )}
+            </Button>
+          </div>
+        )}
       </main>
     </div>
   );
