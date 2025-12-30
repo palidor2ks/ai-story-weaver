@@ -1280,6 +1280,29 @@ serve(async (req) => {
     if (!committeeHasMore && !isExternalCommittee) {
       const fecTotals = await fetchFECTotals(fecApiKey, committeeId, cycle);
       
+      // CRITICAL: Preserve existing FEC values if API call failed (returned nulls)
+      // This prevents rate-limited syncs from zeroing out FEC totals
+      let finalFecItemized = fecTotals.fecItemized;
+      let finalFecUnitemized = fecTotals.fecUnitemized;
+      let finalFecTotalReceipts = fecTotals.fecTotalReceipts;
+      
+      if (fecTotals.fecItemized === null || fecTotals.fecTotalReceipts === null) {
+        // FEC API failed - try to preserve existing values
+        const { data: existingRollup } = await supabase
+          .from('committee_finance_rollups')
+          .select('fec_itemized, fec_unitemized, fec_total_receipts')
+          .eq('committee_id', committeeId)
+          .eq('cycle', cycle)
+          .maybeSingle();
+        
+        if (existingRollup) {
+          console.log(`[FEC-DONORS] Preserving existing FEC values for ${committeeId} (API returned nulls)`);
+          finalFecItemized = existingRollup.fec_itemized;
+          finalFecUnitemized = existingRollup.fec_unitemized;
+          finalFecTotalReceipts = existingRollup.fec_total_receipts;
+        }
+      }
+      
       await supabase
         .from('committee_finance_rollups')
         .upsert({
@@ -1293,13 +1316,13 @@ serve(async (req) => {
           local_individual_itemized: committeeIndividualItemized,
           local_pac_contributions: committeePacContributions,
           local_party_contributions: committeePartyContributions,
-          fec_itemized: fecTotals.fecItemized,
-          fec_unitemized: fecTotals.fecUnitemized,
-          fec_total_receipts: fecTotals.fecTotalReceipts,
+          fec_itemized: finalFecItemized,
+          fec_unitemized: finalFecUnitemized,
+          fec_total_receipts: finalFecTotalReceipts,
           contribution_count: committeeContributions,
           donor_count: totalDonors,
           last_sync: new Date().toISOString(),
-          last_fec_check: new Date().toISOString()
+          last_fec_check: fecTotals.fecItemized !== null ? new Date().toISOString() : undefined // Only update if FEC succeeded
         }, { onConflict: 'committee_id,cycle' });
     } else if (!committeeHasMore && isExternalCommittee) {
       // For external committees, store in external_committee_finance table instead
@@ -1387,10 +1410,46 @@ serve(async (req) => {
     let totalFecPartyContributions = 0;
     
     // If we just completed a sync, use the totals we already fetched
+    // CRITICAL: Preserve existing FEC values if API call failed
     if (!committeeHasMore) {
       const fecTotals = await fetchFECTotals(fecApiKey, committeeId, cycle);
-      totalFecPacContributions = fecTotals.fecPacContributions || 0;
-      totalFecPartyContributions = fecTotals.fecPartyContributions || 0;
+      
+      if (fecTotals.fecPacContributions !== null) {
+        totalFecPacContributions = fecTotals.fecPacContributions;
+      }
+      if (fecTotals.fecPartyContributions !== null) {
+        totalFecPartyContributions = fecTotals.fecPartyContributions;
+      }
+      
+      // If FEC API failed, try to preserve existing reconciliation values
+      if (fecTotals.fecItemized === null || fecTotals.fecTotalReceipts === null) {
+        const { data: existingRecon } = await supabase
+          .from('finance_reconciliation')
+          .select('fec_itemized, fec_unitemized, fec_total_receipts, fec_pac_contributions, fec_party_contributions')
+          .eq('candidate_id', candidateId)
+          .eq('cycle', cycle)
+          .maybeSingle();
+        
+        if (existingRecon) {
+          console.log(`[FEC-DONORS] Preserving existing reconciliation FEC values for ${candidateId} (API returned nulls)`);
+          // Only overwrite with existing if current totals are 0 (meaning rollups had nulls)
+          if (totalFecItemized === 0 && existingRecon.fec_itemized) {
+            totalFecItemized = existingRecon.fec_itemized;
+          }
+          if (totalFecUnitemized === 0 && existingRecon.fec_unitemized) {
+            totalFecUnitemized = existingRecon.fec_unitemized;
+          }
+          if (totalFecReceipts === 0 && existingRecon.fec_total_receipts) {
+            totalFecReceipts = existingRecon.fec_total_receipts;
+          }
+          if (totalFecPacContributions === 0 && existingRecon.fec_pac_contributions) {
+            totalFecPacContributions = existingRecon.fec_pac_contributions;
+          }
+          if (totalFecPartyContributions === 0 && existingRecon.fec_party_contributions) {
+            totalFecPartyContributions = existingRecon.fec_party_contributions;
+          }
+        }
+      }
     }
     
     // Calculate category-level deltas (individual contributions)
