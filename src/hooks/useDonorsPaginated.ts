@@ -128,7 +128,8 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
       }
 
       if (search) {
-        query = query.ilike('display_name', `%${search}%`);
+        // Search against search_text which includes display_name AND name_variations
+        query = query.ilike('search_text', `%${search}%`);
       }
 
       if (minAmount !== null) {
@@ -186,10 +187,11 @@ export const useSearchDonors = (searchTerm: string, donorType?: string) => {
     queryFn: async () => {
       if (!searchTerm || searchTerm.length < 2) return [];
       
+      // Search against search_text which includes display_name AND name_variations
       let query = supabase
         .from('donor_consolidated')
         .select('*')
-        .ilike('display_name', `%${searchTerm}%`)
+        .ilike('search_text', `%${searchTerm}%`)
         .order('total_amount', { ascending: false })
         .limit(50);
       

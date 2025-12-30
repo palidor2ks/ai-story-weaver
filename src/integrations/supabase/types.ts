@@ -1541,6 +1541,7 @@ export type Database = {
           name_variations: string[] | null
           primary_id: string | null
           recipient_count: number | null
+          search_text: string | null
           total_amount: number | null
           total_transactions: number | null
           type: Database["public"]["Enums"]["donor_type"] | null

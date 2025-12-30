@@ -155,6 +155,11 @@ export function DonorAliasesPanel() {
       }
 
       toast.success(data.message || `Updated ${data.processed} donor(s)`);
+      
+      // Invalidate donors page caches so changes appear immediately
+      queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['donor-filter-options'] });
+      queryClient.invalidateQueries({ queryKey: ['donor-search'] });
     } catch (err) {
       console.error('Error backfilling alias:', err);
       toast.error('An error occurred during backfill');
@@ -196,6 +201,11 @@ export function DonorAliasesPanel() {
           toast.success(`Completed! Updated ${totalProcessed} donor display names.`);
         }
       }
+      
+      // Invalidate donors page caches so changes appear immediately
+      queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['donor-filter-options'] });
+      queryClient.invalidateQueries({ queryKey: ['donor-search'] });
     } catch (err) {
       console.error('Error in refresh loop:', err);
       toast.error('An error occurred during refresh');
