@@ -33,7 +33,7 @@ export function FinanceReconciliationCard({
 
   const { 
     fec_itemized, fec_unitemized, fec_total_receipts, status,
-    local_individual_itemized, local_pac_contributions, local_party_contributions,
+    local_individual_itemized, local_pac_contributions, local_party_contributions, local_organization,
     fec_pac_contributions, fec_party_contributions,
     fec_loans, fec_transfers, fec_candidate_contribution, fec_other_receipts,
     local_loans, local_transfers,
@@ -200,6 +200,24 @@ export function FinanceReconciliationCard({
                     <td className="text-right p-2">{formatCurrency(fec_party_contributions)}</td>
                     <td className="text-right p-2 text-muted-foreground">—</td>
                   </tr>
+                  {/* Organization contributions - only show if present */}
+                  {(local_organization ?? 0) > 0 && (
+                    <tr className="border-t border-border bg-amber-500/5">
+                      <td className="p-2 flex items-center gap-1">
+                        Organization (11A)
+                        <Tooltip>
+                          <TooltipTrigger><Info className="h-3 w-3 text-amber-500" /></TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            Organizations contributing on Line 11A. FEC counts these separately from "individual itemized" - 
+                            this explains delta when present.
+                          </TooltipContent>
+                        </Tooltip>
+                      </td>
+                      <td className="text-right p-2 text-amber-600">{formatCurrency(local_organization)}</td>
+                      <td className="text-right p-2 text-muted-foreground">N/A</td>
+                      <td className="text-right p-2 text-muted-foreground">—</td>
+                    </tr>
+                  )}
                   {/* Itemized Subtotal */}
                   <tr className="border-t-2 border-primary/30 bg-primary/5">
                     <td className="p-2 font-medium">Itemized Subtotal</td>

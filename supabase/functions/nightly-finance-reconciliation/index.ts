@@ -179,6 +179,7 @@ serve(async (req) => {
         const passThroughTotal = Number(totals.passthrough_total) || 0;
         const localOther = Number(totals.other_total) || 0;
         const localLoans = Number(totals.loans_total) || 0;
+        const localOrganization = Number(totals.organization_total) || 0;
         const contributionCount = Number(totals.contribution_count) || 0;
 
         // local_itemized now excludes transfers (Line 12), loans (Line 13A), and other receipts (Line 15)
@@ -221,7 +222,7 @@ serve(async (req) => {
           }
         }
 
-        console.log(`[RECONCILIATION] ${candidate.name}: ${contributionCount} contributions - Individual: $${localIndividualItemized}, PAC: $${localPacContributions}, Party: $${localPartyContributions}`);
+        console.log(`[RECONCILIATION] ${candidate.name}: ${contributionCount} contributions - Individual: $${localIndividualItemized}, Org: $${localOrganization}, PAC: $${localPacContributions}, Party: $${localPartyContributions}`);
 
         // Fetch fresh FEC totals for each committee (with category-level data)
         let fecItemized = 0;
@@ -346,6 +347,7 @@ serve(async (req) => {
             local_pac_contributions: localPacContributions,
             local_party_contributions: localPartyContributions,
             local_loans: localLoans,
+            local_organization: localOrganization,
             // FEC data
             fec_itemized: fecItemized,
             fec_unitemized: fecUnitemized,
