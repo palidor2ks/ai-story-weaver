@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Pencil, Search } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 interface QuestionOption {
@@ -38,14 +39,50 @@ interface Topic {
   icon: string;
 }
 
+interface NewQuestionForm {
+  id: string;
+  text: string;
+  topic_id: string;
+  is_onboarding_canonical: boolean;
+  onboarding_slot: number | null;
+  options: {
+    value: number;
+    text: string;
+    label: string;
+  }[];
+}
+
+const DEFAULT_OPTIONS = [
+  { value: -10, text: "", label: "Far Left (L10)" },
+  { value: -5, text: "", label: "Center Left (L5)" },
+  { value: 0, text: "", label: "Center (C)" },
+  { value: 5, text: "", label: "Center Right (R5)" },
+  { value: 10, text: "", label: "Far Right (R10)" },
+];
+
+const generateQuestionId = (topicId: string, existingIds: string[]): string => {
+  const prefix = topicId.slice(0, 3).toLowerCase();
+  let counter = 1;
+  while (existingIds.includes(`${prefix}${counter}`)) {
+    counter++;
+  }
+  return `${prefix}${counter}`;
+};
+
 export function QuestionManagementPanel() {
   const queryClient = useQueryClient();
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [topicFilter, setTopicFilter] = useState<string>("all");
-  const [editingOption, setEditingOption] = useState<QuestionOption | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editFormData, setEditFormData] = useState({ text: "", value: 0 });
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newQuestion, setNewQuestion] = useState<NewQuestionForm>({
+    id: "",
+    text: "",
+    topic_id: "",
+    is_onboarding_canonical: false,
+    onboarding_slot: null,
+    options: DEFAULT_OPTIONS.map(o => ({ ...o })),
+  });
 
   // Fetch all questions with their options
   const { data: questions, isLoading: questionsLoading } = useQuery({
@@ -75,8 +112,127 @@ export function QuestionManagementPanel() {
     },
   });
 
-  // Update option mutation (admin only via edge function would be needed for full CRUD)
-  // For now, showing read-only view with edit placeholder
+  // Create question mutation
+  const createQuestionMutation = useMutation({
+    mutationFn: async (form: NewQuestionForm) => {
+      // First, insert the question
+      const { error: questionError } = await supabase
+        .from('questions')
+        .insert({
+          id: form.id,
+          text: form.text,
+          topic_id: form.topic_id,
+          is_onboarding_canonical: form.is_onboarding_canonical,
+          onboarding_slot: form.onboarding_slot,
+        });
+
+      if (questionError) throw questionError;
+
+      // Then, insert all the options
+      const optionsToInsert = form.options.map((opt, index) => ({
+        id: `${form.id}-opt-${index + 1}`,
+        question_id: form.id,
+        text: opt.text,
+        value: opt.value,
+        display_order: index + 1,
+        is_skip_option: false,
+      }));
+
+      // Add the skip option
+      optionsToInsert.push({
+        id: `${form.id}-skip`,
+        question_id: form.id,
+        text: "Not important to me",
+        value: 0,
+        display_order: 6,
+        is_skip_option: true,
+      });
+
+      const { error: optionsError } = await supabase
+        .from('question_options')
+        .insert(optionsToInsert);
+
+      if (optionsError) {
+        // Rollback: delete the question if options failed
+        await supabase.from('questions').delete().eq('id', form.id);
+        throw optionsError;
+      }
+
+      return form.id;
+    },
+    onSuccess: (questionId) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-questions'] });
+      toast.success(`Question "${questionId}" created successfully`);
+      setIsCreateDialogOpen(false);
+      resetForm();
+    },
+    onError: (error) => {
+      console.error('Failed to create question:', error);
+      toast.error(`Failed to create question: ${error.message}`);
+    },
+  });
+
+  const resetForm = () => {
+    setNewQuestion({
+      id: "",
+      text: "",
+      topic_id: "",
+      is_onboarding_canonical: false,
+      onboarding_slot: null,
+      options: DEFAULT_OPTIONS.map(o => ({ ...o })),
+    });
+  };
+
+  const handleTopicChange = (topicId: string) => {
+    const existingIds = questions?.map(q => q.id) || [];
+    const suggestedId = generateQuestionId(topicId, existingIds);
+    setNewQuestion(prev => ({
+      ...prev,
+      topic_id: topicId,
+      id: prev.id || suggestedId,
+    }));
+  };
+
+  const handleOptionTextChange = (index: number, text: string) => {
+    setNewQuestion(prev => ({
+      ...prev,
+      options: prev.options.map((opt, i) => 
+        i === index ? { ...opt, text } : opt
+      ),
+    }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validation
+    if (!newQuestion.id.trim()) {
+      toast.error("Question ID is required");
+      return;
+    }
+    if (!newQuestion.text.trim()) {
+      toast.error("Question text is required");
+      return;
+    }
+    if (!newQuestion.topic_id) {
+      toast.error("Topic is required");
+      return;
+    }
+    
+    const emptyOptions = newQuestion.options.filter(o => !o.text.trim());
+    if (emptyOptions.length > 0) {
+      toast.error("All 5 answer options are required");
+      return;
+    }
+
+    // Check for duplicate ID
+    if (questions?.some(q => q.id === newQuestion.id)) {
+      toast.error("A question with this ID already exists");
+      return;
+    }
+
+    createQuestionMutation.mutate(newQuestion);
+  };
 
   const toggleQuestion = (questionId: string) => {
     const newExpanded = new Set(expandedQuestions);
@@ -165,6 +321,149 @@ export function QuestionManagementPanel() {
         <CardTitle className="flex items-center justify-between">
           <span>Quiz Questions & Options</span>
           <div className="flex gap-2">
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={() => resetForm()}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Question
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Create New Question</DialogTitle>
+                  <DialogDescription>
+                    Add a new quiz question with all 5 required answer options (L10, L5, Center, R5, R10).
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="topic">Topic *</Label>
+                      <Select
+                        value={newQuestion.topic_id}
+                        onValueChange={handleTopicChange}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select topic" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {topics?.map((topic) => (
+                            <SelectItem key={topic.id} value={topic.id}>
+                              {topic.icon} {topic.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="id">Question ID *</Label>
+                      <Input
+                        id="id"
+                        value={newQuestion.id}
+                        onChange={(e) => setNewQuestion(prev => ({ ...prev, id: e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '') }))}
+                        placeholder="e.g., eco1, imm3"
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Lowercase letters, numbers, hyphens only
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="text">Question Text *</Label>
+                    <Textarea
+                      id="text"
+                      value={newQuestion.text}
+                      onChange={(e) => setNewQuestion(prev => ({ ...prev, text: e.target.value }))}
+                      placeholder="Enter the question text..."
+                      rows={2}
+                      required
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="onboarding"
+                        checked={newQuestion.is_onboarding_canonical}
+                        onCheckedChange={(checked) => setNewQuestion(prev => ({ 
+                          ...prev, 
+                          is_onboarding_canonical: checked,
+                          onboarding_slot: checked ? 1 : null 
+                        }))}
+                      />
+                      <Label htmlFor="onboarding">Onboarding Question</Label>
+                    </div>
+                    
+                    {newQuestion.is_onboarding_canonical && (
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="slot">Slot #</Label>
+                        <Input
+                          id="slot"
+                          type="number"
+                          min={1}
+                          max={20}
+                          className="w-20"
+                          value={newQuestion.onboarding_slot || ""}
+                          onChange={(e) => setNewQuestion(prev => ({ 
+                            ...prev, 
+                            onboarding_slot: parseInt(e.target.value) || null 
+                          }))}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label>Answer Options * (all 5 required)</Label>
+                    <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+                      {newQuestion.options.map((option, index) => (
+                        <div key={option.value} className="flex items-start gap-3">
+                          <div className="w-20 flex-shrink-0 pt-2">
+                            {getValueBadge(option.value)}
+                          </div>
+                          <div className="flex-1">
+                            <Textarea
+                              value={option.text}
+                              onChange={(e) => handleOptionTextChange(index, e.target.value)}
+                              placeholder={`${option.label} position...`}
+                              rows={2}
+                              className="resize-none"
+                              required
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      <p className="text-xs text-muted-foreground mt-2">
+                        A "Not important to me" skip option will be added automatically.
+                      </p>
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => setIsCreateDialogOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={createQuestionMutation.isPending}
+                    >
+                      {createQuestionMutation.isPending && (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      )}
+                      Create Question
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
             <Button variant="outline" size="sm" onClick={expandAll}>
               Expand All
             </Button>
