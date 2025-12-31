@@ -599,6 +599,7 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
                           description?: string;
                           subLabel?: string;
                           searchText?: string;
+                          linkTo?: string; // For clickable committee links
                         };
 
                         const allSources: FundingSource[] = [];
@@ -620,6 +621,8 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
                           
                           // Show transfer donors with their names but mark them as transfers
                           if (isTransfer) {
+                            // For transfers, the conduit_committee_id is the originating committee
+                            const committeeId = d.conduit_committee_id;
                             allSources.push({
                               id: d.id,
                               name: displayName,
@@ -630,7 +633,8 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
                               badgeStyle: 'border-purple-500/50 text-purple-600 bg-purple-500/10',
                               description: `Transfer from ${displayName}`,
                               subLabel: 'Committee transfer',
-                              searchText: [displayName, 'transfer committee'].join(' ').toLowerCase()
+                              searchText: [displayName, 'transfer committee'].join(' ').toLowerCase(),
+                              linkTo: committeeId ? `/committee/${committeeId}` : undefined
                             });
                           } else {
                             allSources.push({
@@ -836,14 +840,18 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
                                 }
                               };
                               
-                              return (
-                                <div key={source.id} className={cn(
+                              const content = (
+                                <div className={cn(
                                   "flex items-center justify-between p-4 rounded-lg border",
-                                  getBorderStyle()
+                                  getBorderStyle(),
+                                  source.linkTo && "cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all group"
                                 )}>
                                   <div>
                                     <div className="flex items-center gap-2">
-                                      <p className="font-medium text-foreground">{source.name}</p>
+                                      <p className={cn(
+                                        "font-medium text-foreground",
+                                        source.linkTo && "group-hover:text-primary transition-colors"
+                                      )}>{source.name}</p>
                                       {source.badgeLabel && (
                                         <Badge variant="outline" className={cn("text-[10px]", source.badgeStyle)}>
                                           {source.badgeLabel}
@@ -864,6 +872,17 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
                                   </div>
                                 </div>
                               );
+                              
+                              // Wrap in Link if linkTo is set
+                              if (source.linkTo) {
+                                return (
+                                  <Link key={source.id} to={source.linkTo} className="block">
+                                    {content}
+                                  </Link>
+                                );
+                              }
+                              
+                              return <div key={source.id}>{content}</div>;
                             })}
                             
                             {/* Load More Button */}
