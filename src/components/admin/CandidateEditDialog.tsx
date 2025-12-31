@@ -34,6 +34,7 @@ interface CandidateEditDialogProps {
     coverage_tier: string;
     confidence: string;
   };
+  defaultTab?: 'details' | 'fec';
 }
 
 interface FormData {
@@ -55,6 +56,7 @@ export function CandidateEditDialog({
   candidateId,
   candidateName,
   currentData,
+  defaultTab = 'details',
 }: CandidateEditDialogProps) {
   const { data: existingOverride } = useCandidateOverride(candidateId);
   const upsertMutation = useUpsertCandidateOverride();
@@ -165,7 +167,7 @@ export function CandidateEditDialog({
           </div>
         )}
 
-        <Tabs defaultValue="details" className="w-full">
+        <Tabs defaultValue={defaultTab} key={defaultTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="details">Profile Details</TabsTrigger>
             <TabsTrigger value="fec">FEC Campaign IDs</TabsTrigger>
