@@ -93,14 +93,13 @@ serve(async (req) => {
     }
 
     // Build the prompt
-    const systemPrompt = `You are a nonpartisan political analyst helping voters understand how their positions compare to their elected representatives. Be concise, factual, and cite voting records or public statements when available.
+    const systemPrompt = `You are a seasoned political analyst speaking directly to a client about how their views compare to their elected representatives. 
 
-When referencing a representative's position, prefer citing:
-1. Specific bill votes (e.g., "H.R.1234 Climate Act")
-2. Public statements or speeches
-3. Policy platform positions
+Write in second person ("you", "your positions") - never say "the user" or reference "data provided."
 
-Always maintain a neutral, informative tone. Do not advocate for any position.`;
+Be conversational yet insightful, like explaining things over coffee. Cite specific votes or statements naturally, e.g., "When it comes to healthcare, you're both on the same page - he voted for the Affordable Care Act expansion."
+
+Maintain neutrality - explain differences without judgment. Your goal is to help people understand where they align and where they diverge with their representatives.`;
 
     const comparisonData = `
 Representative: ${candidateName}
@@ -128,29 +127,29 @@ ${disagreements.map(d => `- Topic: ${d.topic}
     if (deepAnalysis) {
       userPrompt = `${comparisonData}
 
-Based on the comparison data above, provide a detailed analysis in JSON format:
+Provide a detailed analysis in JSON format:
 
 {
-  "deepAnalysis": "A 2-3 paragraph detailed analysis explaining the key areas of agreement and disagreement between the user and ${candidateName}. Reference specific votes or statements where available. Explain what these differences mean for policies the user cares about.",
-  "keyAgreements": ["List 2-4 specific policy areas where they agree, with brief context"],
-  "keyDisagreements": ["List 2-4 specific policy areas where they disagree, with brief context"],
+  "deepAnalysis": "A 2-3 paragraph analysis written directly to the person using 'you' and 'your'. Explain where they align with ${candidateName} and where they part ways. Reference specific votes (H.R. numbers) or public statements naturally. Never say 'the user' or 'based on the data provided'. Write like a political consultant briefing a client: 'On economic issues, you and the Senator are largely in sync...'",
+  "keyAgreements": ["List 2-4 specific policy areas with brief context"],
+  "keyDisagreements": ["List 2-4 specific policy areas with brief context"],
   "sources": [{"title": "Source title", "url": "source url if available", "type": "voting_record|statement|platform"}]
 }
 
-Only include sources that have actual URLs from the data provided. Be specific about which bills or statements support your analysis.`;
+Speak directly and conversationally. Avoid clinical language.`;
     } else {
       userPrompt = `${comparisonData}
 
-Based on the comparison data above, provide a brief summary in JSON format:
+Provide a brief comparison in JSON format:
 
 {
-  "summary": "A 1-2 sentence summary of how the user's positions compare to ${candidateName}. Highlight the most significant agreement or disagreement. Example: 'You and ${candidateName} align on healthcare and climate action, but differ on immigration policy.'",
+  "summary": "A 1-2 sentence conversational summary speaking directly to the person. Use 'you' and 'your' - never say 'the user' or 'based on data'. Example: 'You and ${candidateName} see eye-to-eye on climate policy and healthcare access, though you're on opposite sides when it comes to immigration reform.'",
   "keyAgreements": ["Brief 2-3 word description of each agreement area"],
   "keyDisagreements": ["Brief 2-3 word description of each disagreement area"],
   "sources": [{"title": "Source title", "url": "source url if available", "type": "voting_record|statement|platform"}]
 }
 
-Only include sources that have actual URLs from the data provided. Keep the summary conversational and accessible.`;
+Write like you're explaining to a friend where they stand politically. Be direct and personable.`;
     }
 
     console.log(`[generate-rep-comparison] Calling Lovable AI Gateway...`);
@@ -213,7 +212,7 @@ Only include sources that have actual URLs from the data provided. Keep the summ
     const validSources = (parsed.sources || []).filter((s: any) => s.url && s.url.startsWith('http'));
 
     const result = {
-      summary: parsed.summary || `Comparison with ${candidateName} based on ${sharedQuestions.length} shared topics.`,
+      summary: parsed.summary || `Looking at ${sharedQuestions.length} topics you both have positions on, here's how you compare with ${candidateName}.`,
       deepAnalysis: parsed.deepAnalysis || null,
       keyAgreements: parsed.keyAgreements || [],
       keyDisagreements: parsed.keyDisagreements || [],
