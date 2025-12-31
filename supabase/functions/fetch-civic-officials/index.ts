@@ -73,13 +73,36 @@ let cachedExecutives: Executive[] | null = null;
 let cacheTimestamp = 0;
 const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
 
-// Normalize name for comparison (removes suffixes like Jr., Sr., III, etc.)
+// Normalize name for comparison (removes suffixes, middle initials, punctuation)
 function normalizeName(name: string): string {
   return name
     .toLowerCase()
-    .replace(/,?\s+(jr\.?|sr\.?|iii|ii|iv|v)$/i, '') // Remove suffixes
-    .replace(/\s+/g, ' ')
+    .replace(/[.,]/g, '') // Remove punctuation
+    .replace(/\s+(jr|sr|iii|ii|iv|v)$/i, '') // Remove suffixes
+    .split(/\s+/)
+    .filter(token => token.length > 1) // Remove single-letter tokens (middle initials)
+    .join(' ')
     .trim();
+}
+
+// Generate multiple match keys for a name (handles variations)
+function generateNameMatchKeys(name: string): string[] {
+  const normalized = normalizeName(name);
+  const parts = normalized.split(' ');
+  
+  const keys: string[] = [normalized];
+  
+  // Add first + last name key if we have at least 2 parts
+  if (parts.length >= 2) {
+    keys.push(`${parts[0]} ${parts[parts.length - 1]}`);
+  }
+  
+  // Add first initial + last name
+  if (parts.length >= 2 && parts[0].length > 0) {
+    keys.push(`${parts[0][0]} ${parts[parts.length - 1]}`);
+  }
+  
+  return keys;
 }
 
 // Map party names to our types
@@ -235,7 +258,7 @@ async function fetchFederalExecutiveFromDB(): Promise<OfficialInfo[]> {
 
 // Fetch normalized names of federal legislators for a state (to filter from Open States results)
 async function fetchFederalLegislatorNames(state: string): Promise<Set<string>> {
-  const federalNames = new Set<string>();
+  const federalNameKeys = new Set<string>();
   
   try {
     console.log(`[GitHub] Fetching federal legislators for state: ${state}`);
@@ -243,7 +266,7 @@ async function fetchFederalLegislatorNames(state: string): Promise<Set<string>> 
     
     if (!response.ok) {
       console.error(`[GitHub] Failed to fetch legislators: ${response.status}`);
-      return federalNames;
+      return federalNameKeys;
     }
     
     const legislators = await response.json();
@@ -260,21 +283,23 @@ async function fetchFederalLegislatorNames(state: string): Promise<Set<string>> 
       // Check if state matches
       if (currentTerm.state?.toUpperCase() !== state.toUpperCase()) continue;
       
-      // Add normalized name to set
+      // Add all match keys for this legislator
       const fullName = leg.name?.official_full || `${leg.name?.first || ''} ${leg.name?.last || ''}`.trim();
       if (fullName) {
-        const normalized = normalizeName(fullName);
-        federalNames.add(normalized);
-        console.log(`[GitHub] Added federal legislator: ${fullName} -> ${normalized}`);
+        const matchKeys = generateNameMatchKeys(fullName);
+        for (const key of matchKeys) {
+          federalNameKeys.add(key);
+        }
+        console.log(`[GitHub] Added federal legislator: ${fullName} -> keys: [${matchKeys.join(', ')}]`);
       }
     }
     
-    console.log(`[GitHub] Found ${federalNames.size} federal legislators for ${state}`);
+    console.log(`[GitHub] Found ${federalNameKeys.size} federal legislator match keys for ${state}`);
   } catch (error) {
     console.error('[GitHub] Error fetching federal legislators:', error);
   }
   
-  return federalNames;
+  return federalNameKeys;
 }
 
 // Fetch state legislators and governors from Open States API v3
@@ -322,10 +347,11 @@ async function fetchOpenStatesOfficials(
       for (const person of results) {
         if (!person.current_role) continue;
 
-        // Check if this person's name matches a federal legislator
-        const normalizedPersonName = normalizeName(person.name);
-        if (federalLegislatorNames?.has(normalizedPersonName)) {
-          console.log(`[Open States] EXCLUDING ${person.name} - matches federal legislator (normalized: ${normalizedPersonName})`);
+        // Check if this person's name matches any federal legislator keys
+        const personMatchKeys = generateNameMatchKeys(person.name);
+        const matchingKey = personMatchKeys.find(key => federalLegislatorNames?.has(key));
+        if (matchingKey) {
+          console.log(`[Open States] EXCLUDING ${person.name} - matches federal legislator key: "${matchingKey}"`);
           continue;
         }
 
