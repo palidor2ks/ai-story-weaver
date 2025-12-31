@@ -1336,20 +1336,18 @@ export function AnswerCoveragePanel() {
                       // This creates an apples-to-apples comparison with FEC Total Receipts
                       const localItemized = candidate.localItemized || 0; // Raw imported amount from donors/contributions
                       const localTransfers = candidate.localTransfers || 0; // Transfers already included in localItemized
-                      const localLoans = candidate.localLoans || 0; // Loans already included in localItemized
                       const fecUnitemized = candidate.fecUnitemized || 0;
                       const fecCandidateContribution = candidate.fecCandidateContribution || 0;
                       const fecOtherReceipts = candidate.fecOtherReceipts || 0;
                       const fecLoans = candidate.fecLoans || 0;
                       const fecTransfers = candidate.fecTransfers || 0;
                       
-                      // Only add the GAP between FEC and local for transfers/loans to avoid double-counting
-                      // (transfers and loans are already included in localItemized if imported)
+                      // Transfers ARE included in localItemized (Line 12), so only add the gap
+                      // Loans are NOT included in localItemized (Line 13A excluded), so add full FEC amount
                       const transferGap = Math.max(0, fecTransfers - localTransfers);
-                      const loanGap = Math.max(0, fecLoans - localLoans);
                       
-                      // Local Total = What we imported + What we can't import (FEC summary-only items) + gaps
-                      const localTotal = localItemized + fecUnitemized + fecCandidateContribution + fecOtherReceipts + transferGap + loanGap;
+                      // Local Total = What we imported + What we can't import (FEC summary-only items)
+                      const localTotal = localItemized + fecUnitemized + fecCandidateContribution + fecOtherReceipts + transferGap + fecLoans;
                       
                       // Calculate delta inline: Local Total vs FEC Total Receipts
                       const fecTotalReceipts = financeStatus.fecTotalReceipts;
@@ -1502,12 +1500,18 @@ export function AnswerCoveragePanel() {
                                     <span className="text-muted-foreground">Imported Itemized (Schedule A)</span>
                                     <span className="font-medium">{formatCurrency(localItemized)}</span>
                                   </div>
-                                  <div className="text-xs text-muted-foreground/70 pl-2 -mt-1">
-                                    (incl. ${formatCurrency(localTransfers)} transfers, ${formatCurrency(localLoans)} loans)
-                                  </div>
+                                  {localTransfers > 0 && (
+                                    <div className="text-xs text-muted-foreground/70 pl-2 -mt-1">
+                                      (incl. {formatCurrency(localTransfers)} transfers)
+                                    </div>
+                                  )}
                                   <div className="flex justify-between">
                                     <span className="text-muted-foreground">+ Unitemized (FEC summary)</span>
                                     <span className="font-medium">{formatCurrency(fecUnitemized)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">+ Loans (FEC summary)</span>
+                                    <span className="font-medium">{formatCurrency(fecLoans)}</span>
                                   </div>
                                   <div className="flex justify-between">
                                     <span className="text-muted-foreground">+ Candidate Self-Fund (FEC)</span>
@@ -1521,12 +1525,6 @@ export function AnswerCoveragePanel() {
                                     <div className="flex justify-between">
                                       <span className="text-muted-foreground">+ Transfer Gap (not imported)</span>
                                       <span className="font-medium">{formatCurrency(transferGap)}</span>
-                                    </div>
-                                  )}
-                                  {loanGap > 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">+ Loan Gap (not imported)</span>
-                                      <span className="font-medium">{formatCurrency(loanGap)}</span>
                                     </div>
                                   )}
                                   <div className="flex justify-between border-t pt-2 mt-2">
