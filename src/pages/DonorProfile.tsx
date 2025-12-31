@@ -196,9 +196,9 @@ const DonorProfile = () => {
   // The display name is the canonical name from alias, or the original name
   const displayName = aliasInfo?.canonical_name || donor?.name || '';
 
-  // Fetch all donor records with the same name OR same alias pattern
+  // Fetch all donor records with the same display name (across all types)
   const { data: donorRecords = [], isLoading: recordsLoading } = useQuery({
-    queryKey: ['donor-records', displayName, aliasInfo?.alias_pattern, donor?.type],
+    queryKey: ['donor-records', displayName, aliasInfo?.alias_pattern],
     queryFn: async () => {
       if (!donor?.name) return [] as DonorRecord[];
       
@@ -207,11 +207,15 @@ const DonorProfile = () => {
         .select(`*, candidates (id, name, party, office, state, district, image_url)`)
         .order('amount', { ascending: false });
       
-      // If there's an alias, get all donors matching the pattern
+      // If there's an alias, get all donors matching the pattern (across all types)
       if (aliasInfo?.alias_pattern) {
         query = query.ilike('name', aliasInfo.alias_pattern);
+      } else if (aliasInfo?.canonical_name) {
+        // Match by display_name for consolidated donors
+        query = query.or(`name.eq.${donor.name},display_name.eq.${aliasInfo.canonical_name}`);
       } else {
-        query = query.eq('name', donor.name);
+        // Match by exact name OR display_name
+        query = query.or(`name.eq.${donor.name},display_name.eq.${donor.name}`);
       }
       
       const { data, error } = await query;
@@ -224,9 +228,9 @@ const DonorProfile = () => {
     enabled: !!donor?.name,
   });
 
-  // Fetch individual contributions for detailed history
+  // Fetch individual contributions for detailed history (across all types)
   const { data: contributions = [], isLoading: contributionsLoading } = useQuery({
-    queryKey: ['donor-contributions', displayName, aliasInfo?.alias_pattern, donor?.type],
+    queryKey: ['donor-contributions', displayName, aliasInfo?.alias_pattern],
     queryFn: async () => {
       if (!donor?.name) return [] as ContributionRecord[];
       
@@ -267,13 +271,21 @@ const DonorProfile = () => {
     return contributions.filter(c => c.cycle === cycleFilter);
   }, [contributions, cycleFilter]);
 
-  // Aggregate stats
+  // Aggregate stats (including type breakdown)
   const stats = useMemo(() => {
     const totalAmount = donorRecords.reduce((sum, r) => sum + r.amount, 0);
     const totalTransactions = donorRecords.reduce((sum, r) => sum + (r.transaction_count || 1), 0);
     const uniqueRecipients = new Set(donorRecords.map(r => r.candidate_id)).size;
     const uniqueCycles = new Set(donorRecords.map(r => r.cycle)).size;
-    return { totalAmount, totalTransactions, uniqueRecipients, uniqueCycles };
+    const uniqueTypes = [...new Set(donorRecords.map(r => r.type))];
+    
+    // Type breakdown
+    const byType = uniqueTypes.map(t => ({
+      type: t,
+      amount: donorRecords.filter(r => r.type === t).reduce((sum, r) => sum + r.amount, 0),
+    })).sort((a, b) => b.amount - a.amount);
+    
+    return { totalAmount, totalTransactions, uniqueRecipients, uniqueCycles, uniqueTypes, byType };
   }, [donorRecords]);
 
   const isLoading = donorLoading || recordsLoading || contributionsLoading;
@@ -330,7 +342,13 @@ const DonorProfile = () => {
                   {displayName}
                 </h1>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <Badge variant="outline">{donor.type}</Badge>
+                  {stats.uniqueTypes.length > 1 ? (
+                    stats.uniqueTypes.map(t => (
+                      <Badge key={t} variant="outline">{t}</Badge>
+                    ))
+                  ) : (
+                    <Badge variant="outline">{donor.type}</Badge>
+                  )}
                   {nameVariations.length > 1 && (
                     <Badge variant="secondary" className="gap-1">
                       <Layers className="h-3 w-3" />

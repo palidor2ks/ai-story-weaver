@@ -163,6 +163,7 @@ export const Donors = () => {
                 id={donor.id}
                 name={donor.name}
                 type={donor.type as 'Individual' | 'PAC' | 'Organization' | 'Unknown'}
+                types={donor.types}
                 amount={donor.amount}
                 transactionCount={donor.transaction_count || 1}
                 isConsolidated={donor.is_consolidated}

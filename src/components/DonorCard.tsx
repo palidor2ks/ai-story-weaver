@@ -8,6 +8,7 @@ interface DonorCardProps {
   id: string;
   name: string;
   type: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
+  types?: string[]; // All types for consolidated donors
   amount: number;
   transactionCount: number;
   isConsolidated?: boolean;
@@ -55,6 +56,7 @@ export const DonorCard = ({
   id, 
   name, 
   type, 
+  types,
   amount, 
   transactionCount,
   isConsolidated,
@@ -62,6 +64,7 @@ export const DonorCard = ({
   recipientCount,
 }: DonorCardProps) => {
   const hasMultipleVariations = nameVariations && nameVariations.length > 1;
+  const hasMultipleTypes = types && types.length > 1;
   
   return (
     <Link to={`/donor/${id}`} className="block group">
@@ -96,9 +99,19 @@ export const DonorCard = ({
                   </Tooltip>
                 </TooltipProvider>
               )}
-              <Badge variant="outline" className={`shrink-0 ${getTypeBadgeStyle(type)}`}>
-                {type}
-              </Badge>
+              {hasMultipleTypes ? (
+                <div className="flex gap-1">
+                  {types.map(t => (
+                    <Badge key={t} variant="outline" className={`shrink-0 text-xs ${getTypeBadgeStyle(t)}`}>
+                      {t === 'Organization' ? 'Org' : t}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <Badge variant="outline" className={`shrink-0 ${getTypeBadgeStyle(type)}`}>
+                  {type}
+                </Badge>
+              )}
             </div>
           </div>
 
