@@ -116,8 +116,57 @@ export function usePopulatePartyAnswers() {
     }
   };
 
+  const enrichPartySources = async (partyId: string, topicId?: string): Promise<PopulateResult> => {
+    const key = `enrich:${getLoadingKey(partyId, topicId)}`;
+    setLoadingKeys(prev => ({ ...prev, [key]: true }));
+    setProgress(prev => ({ ...prev, [key]: 'Researching sources...' }));
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('enrich-party-sources', {
+        body: { partyId, topicId },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const result = data as PopulateResult & { enriched?: number };
+      
+      if (result.success) {
+        if (result.skipped) {
+          toast.info(`All answers already have sources`);
+        } else {
+          toast.success(`Enriched ${result.enriched || 0} answers with sources`);
+        }
+        queryClient.invalidateQueries({ queryKey: ['party-answer-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['party-answer-stats-by-topic'] });
+      }
+
+      setProgress(prev => {
+        const newProgress = { ...prev };
+        delete newProgress[key];
+        return newProgress;
+      });
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to enrich sources';
+      toast.error(`Source enrichment failed: ${message}`);
+      setProgress(prev => {
+        const newProgress = { ...prev };
+        delete newProgress[key];
+        return newProgress;
+      });
+      return { success: false, error: message };
+    } finally {
+      setLoadingKeys(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
   const isLoading = (partyId: string, topicId?: string) => 
     loadingKeys[getLoadingKey(partyId, topicId)] || false;
+
+  const isEnriching = (partyId: string, topicId?: string) => 
+    loadingKeys[`enrich:${getLoadingKey(partyId, topicId)}`] || false;
   
   const getProgress = (partyId: string, topicId?: string) => 
     progress[getLoadingKey(partyId, topicId)] || null;
@@ -127,7 +176,9 @@ export function usePopulatePartyAnswers() {
   return {
     populateParty,
     populatePartyTopic,
+    enrichPartySources,
     isLoading,
+    isEnriching,
     getProgress,
     isAnyLoading,
   };
