@@ -109,6 +109,7 @@ export function AnswerCoveragePanel() {
   
   // Edit dialog state
   const [editingCandidate, setEditingCandidate] = useState<CandidateAnswerCoverage | null>(null);
+  const [editDialogTab, setEditDialogTab] = useState<'details' | 'fec'>('details');
 
   const { data: candidates, isLoading: candidatesLoading, refetch: refetchCandidates } = useCandidatesAnswerCoverage({
     party: partyFilter,
@@ -1523,10 +1524,17 @@ export function AnswerCoveragePanel() {
                               );
                             })()}
                           </TableCell>
-                          {/* FEC ID column with mismatch warning */}
+                          {/* FEC ID column with mismatch warning - clickable to edit */}
                           <TableCell className="px-3 py-3">
                             {hasFecId ? (
-                              <div className="flex items-center gap-1">
+                              <div 
+                                className="flex items-center gap-1 cursor-pointer group"
+                                onClick={() => {
+                                  setEditDialogTab('fec');
+                                  setEditingCandidate(candidate);
+                                }}
+                                title="Click to manage FEC IDs"
+                              >
                                 {candidate.fecIdMismatch && (
                                   <TooltipProvider>
                                     <Tooltip>
@@ -1545,15 +1553,25 @@ export function AnswerCoveragePanel() {
                                 <Badge 
                                   variant="outline" 
                                   className={cn(
-                                    "text-xs font-mono",
+                                    "text-xs font-mono group-hover:border-primary/50 group-hover:bg-primary/5 transition-colors",
                                     candidate.fecIdMismatch && "border-amber-500/50 text-amber-600"
                                   )}
                                 >
                                   {candidate.fecCandidateId?.slice(0, 9)}
                                 </Badge>
+                                <Edit className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                               </div>
                             ) : (
-                              <span className="text-muted-foreground/50 text-xs">—</span>
+                              <button
+                                className="text-muted-foreground/50 text-xs hover:text-primary hover:underline"
+                                onClick={() => {
+                                  setEditDialogTab('fec');
+                                  setEditingCandidate(candidate);
+                                }}
+                                title="Click to add FEC IDs"
+                              >
+                                + Add
+                              </button>
                             )}
                           </TableCell>
                           <TableCell className="text-right px-3 py-3">
@@ -1951,6 +1969,30 @@ export function AnswerCoveragePanel() {
           </TabsContent>
         </Tabs>
       </CardContent>
+
+      {/* Candidate Edit Dialog */}
+      {editingCandidate && (
+        <CandidateEditDialog
+          open={!!editingCandidate}
+          onOpenChange={(open) => {
+            if (!open) setEditingCandidate(null);
+          }}
+          candidateId={editingCandidate.id}
+          candidateName={editingCandidate.name}
+          currentData={{
+            name: editingCandidate.name,
+            party: editingCandidate.party,
+            office: editingCandidate.office || '',
+            state: editingCandidate.state,
+            district: null,
+            image_url: null,
+            overall_score: null,
+            coverage_tier: editingCandidate.coverageTier || 'tier_3',
+            confidence: editingCandidate.confidence || 'low',
+          }}
+          defaultTab={editDialogTab}
+        />
+      )}
     </Card>
   );
 }
