@@ -95,3 +95,9 @@ verify_jwt = true
 
 [functions.generate-party-comparison]
 verify_jwt = true
+
+[functions.verify-identity-idme]
+verify_jwt = true
+
+[functions.verify-voter-registration]
+verify_jwt = true

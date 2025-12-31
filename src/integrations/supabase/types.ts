@@ -1134,9 +1134,14 @@ export type Database = {
         Row: {
           address: string | null
           age: number | null
+          birth_date: string | null
           created_at: string | null
           email: string | null
           id: string
+          identity_provider: string | null
+          identity_verification_id: string | null
+          identity_verified: boolean | null
+          identity_verified_at: string | null
           income: string | null
           location: string | null
           name: string
@@ -1146,13 +1151,22 @@ export type Database = {
           score_version: string | null
           sex: string | null
           updated_at: string | null
+          voter_registration_status: string | null
+          voter_state: string | null
+          voter_verified: boolean | null
+          voter_verified_at: string | null
         }
         Insert: {
           address?: string | null
           age?: number | null
+          birth_date?: string | null
           created_at?: string | null
           email?: string | null
           id: string
+          identity_provider?: string | null
+          identity_verification_id?: string | null
+          identity_verified?: boolean | null
+          identity_verified_at?: string | null
           income?: string | null
           location?: string | null
           name: string
@@ -1162,13 +1176,22 @@ export type Database = {
           score_version?: string | null
           sex?: string | null
           updated_at?: string | null
+          voter_registration_status?: string | null
+          voter_state?: string | null
+          voter_verified?: boolean | null
+          voter_verified_at?: string | null
         }
         Update: {
           address?: string | null
           age?: number | null
+          birth_date?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
+          identity_provider?: string | null
+          identity_verification_id?: string | null
+          identity_verified?: boolean | null
+          identity_verified_at?: string | null
           income?: string | null
           location?: string | null
           name?: string
@@ -1178,6 +1201,10 @@ export type Database = {
           score_version?: string | null
           sex?: string | null
           updated_at?: string | null
+          voter_registration_status?: string | null
+          voter_state?: string | null
+          voter_verified?: boolean | null
+          voter_verified_at?: string | null
         }
         Relationships: []
       }
