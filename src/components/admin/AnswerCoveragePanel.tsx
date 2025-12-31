@@ -1262,11 +1262,11 @@ export function AnswerCoveragePanel() {
                               <HelpCircle className="h-3 w-3 text-muted-foreground" />
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-[280px]">
-                              <p className="font-medium mb-1">Imported Itemized Contributions</p>
+                              <p className="font-medium mb-1">Local + Non-Itemized Receipts</p>
                               <p className="text-xs text-muted-foreground">
-                                Sum of itemized contributions imported from FEC into our database. 
-                                Excludes unitemized contributions, transfers, loans, and other receipts. 
-                                Compare to FEC Total to identify sync gaps.
+                                Imported itemized contributions + FEC-reported unitemized + other receipts 
+                                (loans, transfers, candidate contributions). 
+                                This provides an apples-to-apples comparison with FEC Total.
                               </p>
                             </TooltipContent>
                           </Tooltip>
@@ -1286,8 +1286,11 @@ export function AnswerCoveragePanel() {
                       const hasFecId = !!candidate.fecCandidateId;
                       const hasCommittee = !!candidate.fecCommitteeId;
                       const financeStatus = calculateFinanceStatus(candidate);
-                      // Use locally imported itemized totals for the "Local Total" column
+                      // Calculate "Local Total" as imported itemized + FEC non-itemized receipts for apples-to-apples comparison
                       const localItemized = candidate.localItemized || 0;
+                      const fecUnitemized = candidate.fecUnitemized || 0;
+                      const fecOtherReceipts = (candidate.fecLoans || 0) + (candidate.fecTransfers || 0) + (candidate.fecCandidateContribution || 0) + (candidate.fecOtherReceipts || 0);
+                      const localTotal = localItemized + fecUnitemized + fecOtherReceipts;
                       const syncStatus = candidate.syncStatus;
                       const hasOverride = overrideMap.has(candidate.id);
                       
@@ -1423,7 +1426,7 @@ export function AnswerCoveragePanel() {
                             <div className="font-medium">{formatCurrency(financeStatus.fecTotalReceipts)}</div>
                           </TableCell>
                           <TableCell className="text-right text-sm px-3 py-3 whitespace-nowrap">
-                            <div className="font-medium">{formatCurrency(localItemized)}</div>
+                            <div className="font-medium">{formatCurrency(localTotal)}</div>
                           </TableCell>
                           {/* Delta Column */}
                           <TableCell className="text-right px-3 py-3 whitespace-nowrap">
