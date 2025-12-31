@@ -1,18 +1,16 @@
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CandidateAnswerCard } from './CandidateAnswerCard';
+import { TopicPositionGroup } from './TopicPositionGroup';
 import { 
   useCandidateAnswers, 
   useGenerateCandidateAnswers,
   CandidateAnswer 
 } from '@/hooks/useCandidateAnswers';
-import { useUserTopicScores } from '@/hooks/useProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, ChevronDown, ChevronUp, Filter, Sparkles, RefreshCw } from 'lucide-react';
+import { FileText, Sparkles, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CandidatePositionsProps {
@@ -22,8 +20,6 @@ interface CandidatePositionsProps {
 }
 
 export const CandidatePositions = ({ candidateId, candidateName, isUserRep = false }: CandidatePositionsProps) => {
-  const [showAll, setShowAll] = useState(false);
-  const [topicFilter, setTopicFilter] = useState<string>('all');
 
   const { data: candidateAnswers = [], isLoading, refetch } = useCandidateAnswers(candidateId);
   const generateAnswers = useGenerateCandidateAnswers();
@@ -65,20 +61,20 @@ export const CandidatePositions = ({ candidateId, candidateName, isUserRep = fal
     userQuizAnswers.map(a => [a.question_id, { value: a.value, text: a.selected_option?.text || null }])
   );
 
-  // Get unique topics from answers
-  const topics = [...new Set(
-    candidateAnswers
-      .filter(a => a.question?.topics?.name)
-      .map(a => a.question!.topics!.name)
-  )].sort();
+  // Group answers by topic
+  const answersByTopic = candidateAnswers.reduce((acc, answer) => {
+    const topicName = answer.question?.topics?.name || 'General';
+    if (!acc[topicName]) {
+      acc[topicName] = [];
+    }
+    acc[topicName].push(answer);
+    return acc;
+  }, {} as Record<string, CandidateAnswer[]>);
 
-  // Filter answers by topic
-  const filteredAnswers = topicFilter === 'all' 
-    ? candidateAnswers 
-    : candidateAnswers.filter(a => a.question?.topics?.name === topicFilter);
-
-  // Show limited or all
-  const displayedAnswers = showAll ? filteredAnswers : filteredAnswers.slice(0, 6);
+  // Sort topics by number of answers (descending)
+  const sortedTopics = Object.keys(answersByTopic).sort(
+    (a, b) => answersByTopic[b].length - answersByTopic[a].length
+  );
 
   // Calculate stats
   const totalAnswers = candidateAnswers.length;
@@ -226,67 +222,18 @@ export const CandidatePositions = ({ candidateId, candidateName, isUserRep = fal
           </div>
         )}
 
-        {/* Topic Filter */}
-        {topics.length > 1 && (
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <Filter className="w-4 h-4 text-muted-foreground" />
-            <Button
-              variant={topicFilter === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setTopicFilter('all')}
-              className="text-xs"
-            >
-              All Topics
-            </Button>
-            {topics.map(topic => (
-              <Button
-                key={topic}
-                variant={topicFilter === topic ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setTopicFilter(topic)}
-                className="text-xs"
-              >
-                {topic}
-              </Button>
-            ))}
-          </div>
-        )}
-
-        {/* Answers Grid */}
-        <div className="grid gap-4 md:grid-cols-2">
-          {displayedAnswers.map(answer => {
-            const userData = userAnswerMap.get(answer.question_id);
-            return (
-              <CandidateAnswerCard
-                key={answer.id}
-                answer={answer}
-                userAnswer={userData?.value ?? null}
-                userAnswerText={userData?.text ?? null}
-              />
-            );
-          })}
+        {/* Topic Accordion Groups */}
+        <div className="space-y-2">
+          {sortedTopics.map((topicName, index) => (
+            <TopicPositionGroup
+              key={topicName}
+              topicName={topicName}
+              answers={answersByTopic[topicName]}
+              userAnswerMap={userAnswerMap}
+              defaultOpen={index === 0}
+            />
+          ))}
         </div>
-
-        {/* Show More/Less */}
-        {filteredAnswers.length > 6 && (
-          <Button
-            variant="ghost"
-            className="w-full mt-4 gap-2"
-            onClick={() => setShowAll(!showAll)}
-          >
-            {showAll ? (
-              <>
-                <ChevronUp className="w-4 h-4" />
-                Show Less
-              </>
-            ) : (
-              <>
-                <ChevronDown className="w-4 h-4" />
-                Show All {filteredAnswers.length} Positions
-              </>
-            )}
-          </Button>
-        )}
       </CardContent>
     </Card>
   );
