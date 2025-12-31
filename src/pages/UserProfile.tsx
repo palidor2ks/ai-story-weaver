@@ -20,6 +20,7 @@ import { ScoreText } from '@/components/ScoreText';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
+import { PartyComparisonCard } from '@/components/PartyComparisonCard';
 
 interface ProfileAnalysis {
   summary: string;
@@ -170,16 +171,25 @@ export const UserProfile = () => {
     setIsRefreshingAI(true);
     
     try {
-      // Delete all cached comparisons for this user
-      const { error } = await supabase
+      // Delete all cached rep comparisons for this user
+      const { error: repError } = await supabase
         .from('user_rep_comparisons')
         .delete()
         .eq('user_id', user.id);
       
-      if (error) throw error;
+      if (repError) throw repError;
+      
+      // Delete all cached party comparisons for this user
+      const { error: partyError } = await supabase
+        .from('user_party_comparisons')
+        .delete()
+        .eq('user_id', user.id);
+      
+      if (partyError) throw partyError;
       
       // Invalidate React Query cache so components regenerate
       queryClient.invalidateQueries({ queryKey: ['rep-comparison'] });
+      queryClient.invalidateQueries({ queryKey: ['party-comparison'] });
       
       toast.success('AI comparisons cleared! New summaries will generate automatically.');
     } catch (error) {
@@ -398,79 +408,31 @@ export const UserProfile = () => {
 
             {/* Party Platform Comparison */}
             <TooltipProvider>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <Link to="/party/democrat" className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 hover:border-blue-500/40 transition-colors">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Building2 className="w-4 h-4 text-blue-600" />
-                    <span className="font-semibold text-blue-600 text-sm">Democrat</span>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3 h-3 text-muted-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p className="font-medium mb-1">L = Left, R = Right</p>
-                        <p className="text-sm">This score shows the Democratic Party's average position <strong>only on the questions you've answered</strong>. Answer more quiz questions to refine this comparison.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.democrat} size="md" />}
-                  </div>
-                </Link>
-                <Link to="/party/republican" className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 hover:border-red-500/40 transition-colors">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Building2 className="w-4 h-4 text-red-600" />
-                    <span className="font-semibold text-red-600 text-sm">Republican</span>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3 h-3 text-muted-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p className="font-medium mb-1">L = Left, R = Right</p>
-                        <p className="text-sm">This score shows the Republican Party's average position <strong>only on the questions you've answered</strong>. Answer more quiz questions to refine this comparison.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <div className="text-2xl font-bold text-red-600">
-                    {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.republican} size="md" />}
-                  </div>
-                </Link>
-                <Link to="/party/green" className="p-4 rounded-xl bg-green-500/5 border border-green-500/20 hover:border-green-500/40 transition-colors">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Building2 className="w-4 h-4 text-green-600" />
-                    <span className="font-semibold text-green-600 text-sm">Green</span>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3 h-3 text-muted-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p className="font-medium mb-1">L = Left, R = Right</p>
-                        <p className="text-sm">This score shows the Green Party's average position <strong>only on the questions you've answered</strong>. Answer more quiz questions to refine this comparison.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <div className="text-2xl font-bold text-green-600">
-                    {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.green} size="md" />}
-                  </div>
-                </Link>
-                <Link to="/party/libertarian" className="p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20 hover:border-yellow-500/40 transition-colors">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Building2 className="w-4 h-4 text-yellow-600" />
-                    <span className="font-semibold text-yellow-600 text-sm">Libertarian</span>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="w-3 h-3 text-muted-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p className="font-medium mb-1">L = Left, R = Right</p>
-                        <p className="text-sm">This score shows the Libertarian Party's average position <strong>only on the questions you've answered</strong>. Answer more quiz questions to refine this comparison.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                  <div className="text-2xl font-bold text-yellow-600">
-                    {partyScoresLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={partyScores?.libertarian} size="md" />}
-                  </div>
-                </Link>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <PartyComparisonCard
+                  partyId="democrat"
+                  partyName="Democratic"
+                  score={partyScores?.democrat}
+                  isLoading={partyScoresLoading}
+                />
+                <PartyComparisonCard
+                  partyId="republican"
+                  partyName="Republican"
+                  score={partyScores?.republican}
+                  isLoading={partyScoresLoading}
+                />
+                <PartyComparisonCard
+                  partyId="green"
+                  partyName="Green"
+                  score={partyScores?.green}
+                  isLoading={partyScoresLoading}
+                />
+                <PartyComparisonCard
+                  partyId="libertarian"
+                  partyName="Libertarian"
+                  score={partyScores?.libertarian}
+                  isLoading={partyScoresLoading}
+                />
               </div>
             </TooltipProvider>
 
