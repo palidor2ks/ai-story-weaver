@@ -296,7 +296,9 @@ serve(async (req) => {
             // Calculate deltas - compare apples to apples
             // FEC total itemized = individual + PAC + party contributions
             const fecTotalItemized = totalFecItemized + totalFecPac + totalFecParty;
-            const localItemizedNet = localItemized - localEarmarked;
+            // itemized_total already excludes memo_code='X' entries (the informational duplicates)
+            // Do NOT subtract earmarked_total - those are real contributions that should count
+            const localItemizedNet = localItemized;
             const deltaAmount = fecTotalItemized - localItemizedNet;
             const deltaPct = fecTotalItemized > 0 ? (deltaAmount / fecTotalItemized) * 100 : 0;
             const individualDeltaAmount = totalFecItemized - localIndividual;
@@ -509,7 +511,9 @@ serve(async (req) => {
     // Calculate deltas - compare apples to apples
     // FEC total itemized = individual + PAC + party contributions
     const fecTotalItemized = totalFecItemized + totalFecPac + totalFecParty;
-    const localItemizedNet = localItemized - localEarmarked;
+    // itemized_total already excludes memo_code='X' entries (the informational duplicates)
+    // Do NOT subtract earmarked_total - those are real contributions that should count
+    const localItemizedNet = localItemized;
     const deltaAmount = fecTotalItemized - localItemizedNet;
     const deltaPct = fecTotalItemized > 0 ? (deltaAmount / fecTotalItemized) * 100 : 0;
     const individualDeltaAmount = totalFecItemized - localIndividual;
