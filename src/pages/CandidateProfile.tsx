@@ -29,6 +29,7 @@ import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
 import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
 import { OfficialAvatar } from '@/components/OfficialAvatar';
+import { VotingRecordSection } from '@/components/VotingRecordSection';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -969,53 +970,11 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
           </TabsContent>
 
           <TabsContent value="votes">
-            <Card className="shadow-elevated">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="font-display">Voting Record</CardTitle>
-                  <span className="text-sm text-muted-foreground">Key Votes</span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {votes.length > 0 ? (
-                  <div className="space-y-4">
-                    {votes.map(vote => (
-                      <div key={vote.id} className="p-4 rounded-lg border border-border">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge variant="secondary">{vote.topic}</Badge>
-                              <span className="text-sm text-muted-foreground">{vote.bill_id}</span>
-                            </div>
-                            <h4 className="font-medium text-foreground">{vote.bill_name}</h4>
-                            <p className="text-sm text-muted-foreground mt-1">{vote.description}</p>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <Badge 
-                              variant={(vote.position === 'Yea' || (vote.position as string) === 'Sponsored') ? 'default' : 'secondary'}
-                              className={cn(
-                                (vote.position === 'Yea' || (vote.position as string) === 'Sponsored') && "bg-agree text-agree-foreground",
-                                vote.position === 'Nay' && "bg-disagree text-disagree-foreground",
-                                (vote.position as string) === 'Cosponsored' && "bg-primary/80 text-primary-foreground"
-                              )}
-                            >
-                              {vote.position}
-                            </Badge>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {new Date(vote.date).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-center py-8">
-                    Voting record not available for this candidate.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+            <VotingRecordSection 
+              votes={votes}
+              userTopicScores={userTopicScores}
+              representativeParty={candidate.party}
+            />
           </TabsContent>
         </Tabs>
 
