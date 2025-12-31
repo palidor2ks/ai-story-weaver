@@ -32,6 +32,20 @@ interface RequestBody {
   deepAnalysis?: boolean;
 }
 
+// Helper to detect if source contains actual legislation citations
+function hasLegislationCitation(source: string | null): boolean {
+  if (!source) return false;
+  // Match H.R., S., sponsored, cosponsored, bill patterns
+  return /\b(H\.?R\.?\s*\d+|S\.?\s*\d+|sponsored|cosponsored|voted\s+(for|against)|bill)/i.test(source);
+}
+
+// Extract bill references from source description
+function extractBillReferences(source: string | null): string[] {
+  if (!source) return [];
+  const matches = source.match(/\b(H\.?R\.?\s*\d+|S\.?\s*\d+)/gi) || [];
+  return matches.map(m => m.replace(/\s+/g, '')); // Normalize to "H.R.1234" format
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -53,17 +67,26 @@ serve(async (req) => {
     const repAnswerMap = new Map(repAnswers.map(a => [a.question_id, a]));
     const sharedQuestions = userAnswers
       .filter(ua => repAnswerMap.has(ua.question_id))
-      .map(ua => ({
-        question_text: ua.question_text,
-        topic: ua.topic_name,
-        user_value: ua.value,
-        rep_value: repAnswerMap.get(ua.question_id)!.value,
-        rep_source_type: repAnswerMap.get(ua.question_id)!.source_type,
-        rep_source_url: repAnswerMap.get(ua.question_id)!.source_url,
-        rep_source_description: repAnswerMap.get(ua.question_id)!.source_description,
-      }));
+      .map(ua => {
+        const repAnswer = repAnswerMap.get(ua.question_id)!;
+        return {
+          question_text: ua.question_text,
+          topic: ua.topic_name,
+          user_value: ua.value,
+          rep_value: repAnswer.value,
+          rep_source_type: repAnswer.source_type,
+          rep_source_url: repAnswer.source_url,
+          rep_source_description: repAnswer.source_description,
+          has_voting_record: hasLegislationCitation(repAnswer.source_description),
+          bill_references: extractBillReferences(repAnswer.source_description),
+        };
+      });
 
     console.log(`[generate-rep-comparison] Shared questions: ${sharedQuestions.length}`);
+
+    // Count questions with voting record evidence
+    const questionsWithVotingRecords = sharedQuestions.filter(q => q.has_voting_record);
+    console.log(`[generate-rep-comparison] Questions with voting record evidence: ${questionsWithVotingRecords.length}`);
 
     if (sharedQuestions.length === 0) {
       return new Response(JSON.stringify({
@@ -71,6 +94,7 @@ serve(async (req) => {
         keyAgreements: [],
         keyDisagreements: [],
         sources: [],
+        votingRecordCount: 0,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -92,34 +116,98 @@ serve(async (req) => {
       }
     }
 
-    // Build the prompt
+    // Separate into voting-record-backed vs party-platform-inferred
+    const agreementsWithVotes = agreements.filter(a => a.has_voting_record);
+    const agreementsInferred = agreements.filter(a => !a.has_voting_record);
+    const disagreementsWithVotes = disagreements.filter(d => d.has_voting_record);
+    const disagreementsInferred = disagreements.filter(d => !d.has_voting_record);
+
+    // Build the prompt with clear prioritization of voting records
     const systemPrompt = `You are a seasoned political analyst speaking directly to a client about how their views compare to their elected representatives. 
 
 Write in second person ("you", "your positions") - never say "the user" or reference "data provided."
 
-Be conversational yet insightful, like explaining things over coffee. Cite specific votes or statements naturally, e.g., "When it comes to healthcare, you're both on the same page - he voted for the Affordable Care Act expansion."
+CRITICAL INSTRUCTION FOR CITING SOURCES:
+- When you see "VOTING RECORD EVIDENCE" sections, you MUST cite the specific bill numbers (H.R.1234, S.567) in your analysis.
+- Weave legislation references naturally into sentences, e.g., "You both support healthcare access - ${candidateName} sponsored H.R.5430 to expand coverage."
+- When no voting record exists, you may reference party platform positions, but clearly indicate this is inferred.
+- Prioritize discussing topics that have voting record evidence over those that are inferred.
 
-Maintain neutrality - explain differences without judgment. Your goal is to help people understand where they align and where they diverge with their representatives.`;
+Be conversational yet insightful, like explaining things over coffee. Maintain neutrality - explain differences without judgment.`;
 
-    const comparisonData = `
+    // Build structured comparison data that clearly separates voting-record-backed from inferred
+    const formatQuestion = (q: typeof sharedQuestions[0], isAgreement: boolean) => {
+      const stance = isAgreement
+        ? `Both lean ${q.user_value > 0 ? 'supportive' : q.user_value < 0 ? 'opposed' : 'neutral'}`
+        : `You: ${q.user_value > 0 ? 'Support' : q.user_value < 0 ? 'Oppose' : 'Neutral'}, ${candidateName}: ${q.rep_value > 0 ? 'Support' : q.rep_value < 0 ? 'Oppose' : 'Neutral'}`;
+      
+      let sourceInfo = '';
+      if (q.has_voting_record && q.rep_source_description) {
+        sourceInfo = `\n  📋 LEGISLATION: ${q.rep_source_description}`;
+        if (q.bill_references.length > 0) {
+          sourceInfo += `\n  📌 BILL NUMBERS TO CITE: ${q.bill_references.join(', ')}`;
+        }
+        if (q.rep_source_url) {
+          sourceInfo += `\n  🔗 Source: ${q.rep_source_url}`;
+        }
+      } else if (q.rep_source_description) {
+        sourceInfo = `\n  ℹ️ Inferred: ${q.rep_source_description}`;
+      }
+      
+      return `- Topic: ${q.topic}
+  Question: "${q.question_text}"
+  ${stance}${sourceInfo}`;
+    };
+
+    let comparisonData = `
 Representative: ${candidateName}
 Party: ${candidateParty}
 Office: ${candidateOffice}
 
-AGREEMENTS (${agreements.length} topics where you and ${candidateName} align):
-${agreements.map(a => `- Topic: ${a.topic}
-  Question: "${a.question_text}"
-  Both lean ${a.user_value > 0 ? 'supportive' : a.user_value < 0 ? 'opposed' : 'neutral'}
-  ${a.rep_source_description ? `Source: ${a.rep_source_description}` : ''}
-  ${a.rep_source_url ? `Link: ${a.rep_source_url}` : ''}`).join('\n\n')}
+=== VOTING RECORD EVIDENCE (CITE THESE BILLS!) ===
 
-DISAGREEMENTS (${disagreements.length} topics where you differ):
-${disagreements.map(d => `- Topic: ${d.topic}
-  Question: "${d.question_text}"
-  You: ${d.user_value > 0 ? 'Support' : d.user_value < 0 ? 'Oppose' : 'Neutral'}
-  ${candidateName}: ${d.rep_value > 0 ? 'Support' : d.rep_value < 0 ? 'Oppose' : 'Neutral'}
-  ${d.rep_source_description ? `Source: ${d.rep_source_description}` : ''}
-  ${d.rep_source_url ? `Link: ${d.rep_source_url}` : ''}`).join('\n\n')}
+`;
+
+    if (agreementsWithVotes.length > 0) {
+      comparisonData += `AGREEMENTS WITH VOTING RECORD EVIDENCE (${agreementsWithVotes.length}):
+${agreementsWithVotes.map(a => formatQuestion(a, true)).join('\n\n')}
+
+`;
+    }
+
+    if (disagreementsWithVotes.length > 0) {
+      comparisonData += `DISAGREEMENTS WITH VOTING RECORD EVIDENCE (${disagreementsWithVotes.length}):
+${disagreementsWithVotes.map(d => formatQuestion(d, false)).join('\n\n')}
+
+`;
+    }
+
+    comparisonData += `
+=== PARTY PLATFORM / INFERRED POSITIONS ===
+
+`;
+
+    if (agreementsInferred.length > 0) {
+      comparisonData += `AGREEMENTS (inferred from party platform) (${agreementsInferred.length}):
+${agreementsInferred.map(a => formatQuestion(a, true)).join('\n\n')}
+
+`;
+    }
+
+    if (disagreementsInferred.length > 0) {
+      comparisonData += `DISAGREEMENTS (inferred from party platform) (${disagreementsInferred.length}):
+${disagreementsInferred.map(d => formatQuestion(d, false)).join('\n\n')}
+
+`;
+    }
+
+    // Add summary stats
+    comparisonData += `
+=== SUMMARY STATS ===
+Total shared questions: ${sharedQuestions.length}
+Backed by voting records: ${questionsWithVotingRecords.length}
+Inferred from party platform: ${sharedQuestions.length - questionsWithVotingRecords.length}
+Agreement rate: ${Math.round((agreements.length / sharedQuestions.length) * 100)}%
 `;
 
     let userPrompt: string;
@@ -130,26 +218,26 @@ ${disagreements.map(d => `- Topic: ${d.topic}
 Provide a detailed analysis in JSON format:
 
 {
-  "deepAnalysis": "A 2-3 paragraph analysis written directly to the person using 'you' and 'your'. Explain where they align with ${candidateName} and where they part ways. Reference specific votes (H.R. numbers) or public statements naturally. Never say 'the user' or 'based on the data provided'. Write like a political consultant briefing a client: 'On economic issues, you and the Senator are largely in sync...'",
-  "keyAgreements": ["List 2-4 specific policy areas with brief context"],
-  "keyDisagreements": ["List 2-4 specific policy areas with brief context"],
-  "sources": [{"title": "Source title", "url": "source url if available", "type": "voting_record|statement|platform"}]
+  "deepAnalysis": "A 2-3 paragraph analysis written directly to the person using 'you' and 'your'. PRIORITIZE discussing topics with voting record evidence and cite specific bill numbers (H.R.1234, S.567). For example: 'On healthcare, you and ${candidateName} are aligned - ${candidateName} sponsored H.R.5430 which expands coverage access.' Only mention party platform positions after covering voting-record-backed positions. Never say 'the user' or 'based on the data provided'.",
+  "keyAgreements": ["List 2-4 specific policy areas - include bill numbers where available, e.g., 'Healthcare (H.R.5430)'"],
+  "keyDisagreements": ["List 2-4 specific policy areas - include bill numbers where available"],
+  "sources": [{"title": "Source title with bill number if applicable", "url": "Congress.gov or source URL", "type": "voting_record|statement|platform"}]
 }
 
-Speak directly and conversationally. Avoid clinical language.`;
+IMPORTANT: If voting record evidence exists, you MUST reference specific bill numbers in your analysis. Speak directly and conversationally.`;
     } else {
       userPrompt = `${comparisonData}
 
 Provide a brief comparison in JSON format:
 
 {
-  "summary": "A 1-2 sentence conversational summary speaking directly to the person. Use 'you' and 'your' - never say 'the user' or 'based on data'. Example: 'You and ${candidateName} see eye-to-eye on climate policy and healthcare access, though you're on opposite sides when it comes to immigration reform.'",
-  "keyAgreements": ["Brief 2-3 word description of each agreement area"],
-  "keyDisagreements": ["Brief 2-3 word description of each disagreement area"],
+  "summary": "A 1-2 sentence conversational summary speaking directly to the person. Use 'you' and 'your'. If there are voting records available, mention at least one specific bill number. Example: 'You and ${candidateName} align on healthcare (${candidateName} sponsored H.R.5430) and immigration, though you differ on tax policy.'",
+  "keyAgreements": ["Brief description - include bill number if available, e.g., 'Healthcare (H.R.5430)'"],
+  "keyDisagreements": ["Brief description - include bill number if available"],
   "sources": [{"title": "Source title", "url": "source url if available", "type": "voting_record|statement|platform"}]
 }
 
-Write like you're explaining to a friend where they stand politically. Be direct and personable.`;
+IMPORTANT: Prioritize mentioning topics backed by voting records. Be direct and personable.`;
     }
 
     console.log(`[generate-rep-comparison] Calling Lovable AI Gateway...`);
@@ -218,9 +306,10 @@ Write like you're explaining to a friend where they stand politically. Be direct
       keyDisagreements: parsed.keyDisagreements || [],
       sources: validSources,
       matchScore: Math.round((agreements.length / sharedQuestions.length) * 100),
+      votingRecordCount: questionsWithVotingRecords.length,
     };
 
-    console.log(`[generate-rep-comparison] Success - match score: ${result.matchScore}%`);
+    console.log(`[generate-rep-comparison] Success - match score: ${result.matchScore}%, voting records used: ${result.votingRecordCount}`);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
