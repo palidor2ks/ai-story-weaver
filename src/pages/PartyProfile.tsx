@@ -61,9 +61,13 @@ export default function PartyProfile() {
         .select(`
           question_id,
           value,
+          selected_option_id,
           questions!inner (
             text,
             topics!inner (name)
+          ),
+          question_options!quiz_answers_selected_option_id_fkey (
+            is_skip_option
           )
         `)
         .eq('user_id', user.id);
@@ -78,6 +82,7 @@ export default function PartyProfile() {
         value: a.value,
         question_text: a.questions.text,
         topic_name: a.questions.topics.name,
+        is_skipped: a.question_options?.is_skip_option ?? false,
       }));
     },
     enabled: !!user?.id,

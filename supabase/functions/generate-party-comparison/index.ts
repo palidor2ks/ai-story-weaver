@@ -10,6 +10,7 @@ interface UserAnswer {
   value: number;
   question_text: string;
   topic_name: string;
+  is_skipped?: boolean; // User marked this as "not important to me"
 }
 
 interface PartyAnswer {
@@ -46,9 +47,15 @@ serve(async (req) => {
     console.log(`[generate-party-comparison] Generating ${deepAnalysis ? 'deep' : 'summary'} comparison for ${partyName}`);
     console.log(`[generate-party-comparison] User answers: ${userAnswers.length}, Party answers: ${partyAnswers.length}`);
 
-    // Find overlapping questions
+    // Separate skipped (not important) answers from scored answers
+    const skippedAnswers = userAnswers.filter(ua => ua.is_skipped === true);
+    const scoredUserAnswers = userAnswers.filter(ua => !ua.is_skipped);
+    
+    console.log(`[generate-party-comparison] Scored answers: ${scoredUserAnswers.length}, Skipped (not important): ${skippedAnswers.length}`);
+
+    // Find overlapping questions (only from scored answers)
     const partyAnswerMap = new Map(partyAnswers.map(a => [a.question_id, a]));
-    const sharedQuestions = userAnswers
+    const sharedQuestions = scoredUserAnswers
       .filter(ua => partyAnswerMap.has(ua.question_id))
       .map(ua => ({
         question_text: ua.question_text,
@@ -89,13 +96,17 @@ serve(async (req) => {
     }
 
     // Build the prompt
+    const skippedTopics = skippedAnswers.length > 0 
+      ? `\n\nNote: The user marked ${skippedAnswers.length} topic(s) as "not important to me" and these are excluded from this comparison: ${[...new Set(skippedAnswers.map(a => a.topic_name))].join(', ')}.`
+      : '';
+
     const systemPrompt = `You are a seasoned political analyst speaking directly to a client about how their views compare to political party platforms. 
 
 Write in second person ("you", "your positions") - never say "the user" or reference "data provided."
 
 Be conversational yet insightful, like explaining things over coffee. Reference official party platform positions naturally, e.g., "When it comes to healthcare, you and the Democrats are on the same page - their platform calls for expanding Medicare access."
 
-Maintain neutrality - explain differences without judgment. Your goal is to help people understand where they align and where they diverge from each party's official stance.`;
+Maintain neutrality - explain differences without judgment. Your goal is to help people understand where they align and where they diverge from each party's official stance.${skippedTopics}`;
 
     const comparisonData = `
 Party: ${partyName}

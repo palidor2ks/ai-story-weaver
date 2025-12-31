@@ -74,6 +74,7 @@ interface QuestionOption {
   text: string;
   value: number;
   display_order: number;
+  is_skip_option?: boolean;
 }
 
 interface Question {

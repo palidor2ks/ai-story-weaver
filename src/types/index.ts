@@ -38,6 +38,7 @@ export interface QuestionOption {
   id: string;
   text: string;
   value: number; // e.g., -10, -5, 0, 5, 10
+  is_skip_option?: boolean; // If true, this answer means "not important to me"
 }
 
 export interface QuizAttempt {
@@ -52,6 +53,7 @@ export interface QuizAnswer {
   questionId: string;
   selectedOptionId: string;
   value: number;
+  isSkipped?: boolean; // If true, user marked this as "not important to me"
 }
 
 export interface Candidate {

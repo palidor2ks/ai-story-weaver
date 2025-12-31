@@ -1215,6 +1215,7 @@ export type Database = {
         Row: {
           display_order: number | null
           id: string
+          is_skip_option: boolean | null
           question_id: string
           text: string
           value: number
@@ -1222,6 +1223,7 @@ export type Database = {
         Insert: {
           display_order?: number | null
           id: string
+          is_skip_option?: boolean | null
           question_id: string
           text: string
           value: number
@@ -1229,6 +1231,7 @@ export type Database = {
         Update: {
           display_order?: number | null
           id?: string
+          is_skip_option?: boolean | null
           question_id?: string
           text?: string
           value?: number
