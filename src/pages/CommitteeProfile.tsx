@@ -4,8 +4,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowLeft, DollarSign, Users, Landmark, MapPin, Calendar } from 'lucide-react';
+import { Loader2, ArrowLeft, DollarSign, Users, Landmark, MapPin, Calendar, RefreshCw } from 'lucide-react';
 import { useCommittee, useCommitteeDonors } from '@/hooks/useCommittees';
+import { useFetchCommitteeDonors } from '@/hooks/useImportExternalCommittee';
+import { useAdminRole } from '@/hooks/useAdminRole';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
@@ -29,8 +31,16 @@ export const CommitteeProfile = () => {
   const { id } = useParams<{ id: string }>();
   const { data: committee, isLoading: committeeLoading } = useCommittee(id);
   const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id);
+  const { data: adminData } = useAdminRole();
+  const fetchDonorsMutation = useFetchCommitteeDonors();
 
+  const isAdmin = adminData?.isAdmin ?? false;
   const isLoading = committeeLoading || donorsLoading;
+
+  const handleSyncDonors = () => {
+    if (!committee?.fecCommitteeId) return;
+    fetchDonorsMutation.mutate({ committeeId: committee.fecCommitteeId, cycle: '2024' });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -89,6 +99,24 @@ export const CommitteeProfile = () => {
                 {committee.role && <Badge variant="outline">{committee.role}</Badge>}
                 {committee.cycles && committee.cycles.length > 0 && (
                   <Badge variant="outline">Cycles: {committee.cycles.join(', ')}</Badge>
+                )}
+                
+                {/* Admin Sync Button */}
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncDonors}
+                    disabled={fetchDonorsMutation.isPending}
+                    className="ml-2"
+                  >
+                    {fetchDonorsMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                    )}
+                    Sync Donors
+                  </Button>
                 )}
               </div>
             </div>
