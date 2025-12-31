@@ -18,6 +18,7 @@ export interface DemographicsData {
   age: number | null;
   income: string;
   sex: string;
+  religion: string;
 }
 
 interface DemographicsFormProps {
@@ -56,6 +57,18 @@ const SEX_OPTIONS = [
   'Prefer not to say',
 ];
 
+const RELIGION_OPTIONS = [
+  'Christianity',
+  'Judaism',
+  'Islam',
+  'Hinduism',
+  'Buddhism',
+  'Sikhism',
+  'Atheist/Agnostic',
+  'Other',
+  'Prefer not to say',
+];
+
 export const DemographicsForm = ({
   initialData,
   onSubmit,
@@ -68,6 +81,7 @@ export const DemographicsForm = ({
     age: initialData?.age || null,
     income: initialData?.income || '',
     sex: initialData?.sex || '',
+    religion: initialData?.religion || '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -75,7 +89,7 @@ export const DemographicsForm = ({
     onSubmit(formData);
   };
 
-  const isFormValid = formData.address && formData.political_party && formData.age && formData.income && formData.sex;
+  const isFormValid = formData.address && formData.political_party && formData.age && formData.income && formData.sex && formData.religion;
 
   return (
     <div className="max-w-xl mx-auto animate-fade-in">
@@ -186,6 +200,27 @@ export const DemographicsForm = ({
               </SelectTrigger>
               <SelectContent>
                 {SEX_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="religion" className="text-foreground">
+              Religion
+            </Label>
+            <Select
+              value={formData.religion}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, religion: value }))}
+            >
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Select your religion" />
+              </SelectTrigger>
+              <SelectContent>
+                {RELIGION_OPTIONS.map((option) => (
                   <SelectItem key={option} value={option}>
                     {option}
                   </SelectItem>

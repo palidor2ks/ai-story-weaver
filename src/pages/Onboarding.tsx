@@ -239,6 +239,7 @@ export const Onboarding = () => {
         age: data.age,
         income: data.income,
         sex: data.sex,
+        religion: data.religion,
       });
       setStep('topics');
     } catch (error) {
@@ -317,6 +318,7 @@ export const Onboarding = () => {
               age: profile?.age || null,
               income: profile?.income || '',
               sex: profile?.sex || '',
+              religion: profile?.religion || '',
             }}
             onSubmit={handleDemographicsSubmit}
             onBack={() => setStep('welcome')}

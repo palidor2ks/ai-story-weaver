@@ -18,6 +18,7 @@ interface Profile {
   age: number | null;
   income: string | null;
   sex: string | null;
+  religion: string | null;
   score_version: string;
 }
 
