@@ -287,10 +287,12 @@ serve(async (req) => {
           }
 
           if (hasValidData) {
-            // Calculate deltas
+            // Calculate deltas - compare apples to apples
+            // FEC total itemized = individual + PAC + party contributions
+            const fecTotalItemized = totalFecItemized + totalFecPac + totalFecParty;
             const localItemizedNet = localItemized - localEarmarked;
-            const deltaAmount = totalFecItemized - localItemizedNet;
-            const deltaPct = totalFecItemized > 0 ? (deltaAmount / totalFecItemized) * 100 : 0;
+            const deltaAmount = fecTotalItemized - localItemizedNet;
+            const deltaPct = fecTotalItemized > 0 ? (deltaAmount / fecTotalItemized) * 100 : 0;
             const individualDeltaAmount = totalFecItemized - localIndividual;
             const individualDeltaPct = totalFecItemized > 0 ? (individualDeltaAmount / totalFecItemized) * 100 : 0;
             const pacDeltaAmount = totalFecPac - localPac;
@@ -491,10 +493,12 @@ serve(async (req) => {
       );
     }
 
-    // Calculate deltas
+    // Calculate deltas - compare apples to apples
+    // FEC total itemized = individual + PAC + party contributions
+    const fecTotalItemized = totalFecItemized + totalFecPac + totalFecParty;
     const localItemizedNet = localItemized - localEarmarked;
-    const deltaAmount = totalFecItemized - localItemizedNet;
-    const deltaPct = totalFecItemized > 0 ? (deltaAmount / totalFecItemized) * 100 : 0;
+    const deltaAmount = fecTotalItemized - localItemizedNet;
+    const deltaPct = fecTotalItemized > 0 ? (deltaAmount / fecTotalItemized) * 100 : 0;
     const individualDeltaAmount = totalFecItemized - localIndividual;
     const individualDeltaPct = totalFecItemized > 0 ? (individualDeltaAmount / totalFecItemized) * 100 : 0;
     const pacDeltaAmount = totalFecPac - localPac;
