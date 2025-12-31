@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Loader2, Plus, RefreshCw, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, CheckCircle2, ChevronDown, ChevronRight, FileText } from 'lucide-react';
 import { usePopulatePartyAnswers } from '@/hooks/usePopulatePartyAnswers';
 import { usePartyAnswerStatsByTopic } from '@/hooks/usePartyAnswerStatsByTopic';
 
@@ -16,6 +16,18 @@ export function PartyAnswersPanel() {
 
   const toggleExpanded = (partyId: string) => {
     setExpandedParties(prev => ({ ...prev, [partyId]: !prev[partyId] }));
+  };
+
+  const getSourceBadgeColor = (percentage: number) => {
+    if (percentage >= 70) return 'bg-green-600 text-white';
+    if (percentage >= 40) return 'bg-amber-500 text-white';
+    return 'bg-red-500 text-white';
+  };
+
+  const getSourceDotColor = (percentage: number) => {
+    if (percentage >= 70) return 'bg-green-500';
+    if (percentage >= 40) return 'bg-amber-500';
+    return 'bg-red-500';
   };
 
   return (
@@ -71,10 +83,17 @@ export function PartyAnswersPanel() {
                               {isComplete && <CheckCircle2 className="h-3 w-3 mr-1" />}
                               {party.overallPercentage}%
                             </Badge>
+                            <Badge
+                              variant="secondary"
+                              className={getSourceBadgeColor(party.overallSourcePercentage)}
+                            >
+                              <FileText className="h-3 w-3 mr-1" />
+                              {party.overallSourcePercentage}% sourced
+                            </Badge>
                             <div className="text-left">
                               <p className="font-medium">{party.partyName}</p>
                               <p className="text-sm text-muted-foreground">
-                                {party.totalAnswers} / {party.totalQuestions} questions • Click to expand topics
+                                {party.totalAnswers} / {party.totalQuestions} questions • {party.totalSourced} with sources
                               </p>
                             </div>
                           </button>
@@ -160,11 +179,16 @@ export function PartyAnswersPanel() {
                                       {topicComplete && <CheckCircle2 className="h-3 w-3 mr-1" />}
                                       {topic.percentage}%
                                     </Badge>
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 flex-1">
                                       <p className="font-medium text-sm truncate">{topic.topicName}</p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {topic.answerCount} / {topic.totalQuestions} questions
-                                      </p>
+                                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{topic.answerCount} / {topic.totalQuestions} questions</span>
+                                        <span>•</span>
+                                        <span className="flex items-center gap-1">
+                                          <span className={`w-2 h-2 rounded-full ${getSourceDotColor(topic.sourcePercentage)}`} />
+                                          {topic.sourcedCount}/{topic.answerCount} sourced ({topic.sourcePercentage}%)
+                                        </span>
+                                      </div>
                                     </div>
                                   </div>
 
