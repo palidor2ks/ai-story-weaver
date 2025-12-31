@@ -19,12 +19,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit, UserCheck, Building2, RefreshCw, CheckCircle2, AlertTriangle, BarChart3, DollarSign } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, ExternalLink, FileEdit, UserCheck, Building2, RefreshCw, CheckCircle2, AlertTriangle, BarChart3, DollarSign, HelpCircle } from "lucide-react";
 import { usePopulatePartyAnswers } from "@/hooks/usePopulatePartyAnswers";
 import { usePartyAnswerStats } from "@/hooks/usePartyAnswerStats";
 import { Progress } from "@/components/ui/progress";
 import { useInvertedScoreCandidates, useRegenerateCandidateAnswers, useBatchRegenerateCandidates } from "@/hooks/useInvertedScoreCandidates";
 import { ScoreTextInline } from "@/components/ScoreText";
+import { QuestionManagementPanel } from "@/components/admin/QuestionManagementPanel";
 
 
 // Only levels that require manual entry (no API available)
@@ -450,6 +451,10 @@ export default function Admin() {
             <TabsTrigger value="donor-aliases" className="gap-2">
               <DollarSign className="h-4 w-4" />
               Donor Aliases
+            </TabsTrigger>
+            <TabsTrigger value="questions" className="gap-2">
+              <HelpCircle className="h-4 w-4" />
+              Questions
             </TabsTrigger>
           </TabsList>
 
@@ -922,6 +927,10 @@ export default function Admin() {
                 <DonorAliasesPanel />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="questions">
+            <QuestionManagementPanel />
           </TabsContent>
 
         </Tabs>
