@@ -100,13 +100,14 @@ Questions:
 ${questionsText}
 
 For each question, provide a JSON array with objects containing:
-- question_id: the ID in brackets
-- answer_value: MUST be one of: -10, -5, 0, +5, or +10 (no intermediate values)
+- question_id: EXACTLY as shown in brackets (e.g., "gun1", "cr2", "tech11") - do NOT include the brackets in your response
+- answer_value: MUST be exactly one of these integers: -10, -5, 0, 5, or 10 (NO + prefix, NO intermediate values like -7 or 3)
 - confidence: "high", "medium", or "low"
 - source_description: brief description of where this position comes from (e.g., "2024 Party Platform", "Congressional voting pattern")
 - notes: optional brief explanation of the position (null if not needed)
 
-Return ONLY a valid JSON array, no other text.`;
+Return ONLY a valid JSON array, no other text. Example format:
+[{"question_id": "gun1", "answer_value": -5, "confidence": "high", "source_description": "Party Platform", "notes": null}]`;
 
   console.log(`Querying AI for ${partyContext.name} stances on ${questions.length} questions...`);
 
@@ -136,28 +137,50 @@ Return ONLY a valid JSON array, no other text.`;
   const aiResponse = await response.json();
   const content = aiResponse.choices?.[0]?.message?.content || '';
 
+  // Build a set of valid question IDs from this batch for validation
+  const validQuestionIds = new Set(questions.map(q => q.id));
+
   // Parse JSON from response
   let answers: PartyAnswer[] = [];
   try {
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      answers = parsed.map((item: any) => ({
-        party_id: partyId,
-        question_id: item.question_id,
-        answer_value: snapToValidValue(item.answer_value),
-        source_description: item.source_description || `${partyContext.name} Platform`,
-        source_url: getSourceUrl(partyId),
-        confidence: item.confidence || 'medium',
-        notes: item.notes || null,
-      }));
+      // Sanitize common AI JSON issues before parsing
+      let cleanedJson = jsonMatch[0]
+        .replace(/:\s*\+(\d)/g, ': $1')  // Fix +5 -> 5
+        .replace(/,\s*}/g, '}')          // Remove trailing commas before }
+        .replace(/,\s*]/g, ']');         // Remove trailing commas before ]
+      
+      const parsed = JSON.parse(cleanedJson);
+      
+      // Filter and validate each answer
+      answers = parsed
+        .filter((item: any) => {
+          // Clean the question_id (remove brackets if present)
+          const cleanId = String(item.question_id).replace(/[\[\]]/g, '');
+          // Only include if it's a valid question ID from our batch
+          if (!validQuestionIds.has(cleanId)) {
+            console.warn(`Skipping invalid question_id: ${item.question_id} (cleaned: ${cleanId})`);
+            return false;
+          }
+          return true;
+        })
+        .map((item: any) => ({
+          party_id: partyId,
+          question_id: String(item.question_id).replace(/[\[\]]/g, ''), // Clean brackets
+          answer_value: snapToValidValue(item.answer_value),
+          source_description: item.source_description || `${partyContext.name} Platform`,
+          source_url: getSourceUrl(partyId),
+          confidence: item.confidence || 'medium',
+          notes: item.notes || null,
+        }));
     }
   } catch (e) {
     console.error(`Failed to parse AI response for ${partyId}:`, e);
     console.error('Raw content:', content.slice(0, 500));
   }
 
-  console.log(`Parsed ${answers.length} answers for ${partyContext.name}`);
+  console.log(`Parsed ${answers.length} valid answers for ${partyContext.name}`);
   return answers;
 }
 
