@@ -200,11 +200,11 @@ export function PartyComparisonCard({ partyId, partyName, score, isLoading = fal
       </Link>
 
       {/* AI Comparison Summary */}
-      <RepComparisonSummary
-        summary={comparison?.summary ?? null}
-        deepAnalysis={comparison?.deep_analysis ?? null}
-        keyAgreements={comparison?.key_agreements ?? []}
-        keyDisagreements={comparison?.key_disagreements ?? []}
+          <RepComparisonSummary
+            summary={comparison?.summary ?? null}
+            deepAnalysis={comparison?.deep_analysis ?? null}
+            keyAgreements={[]}
+            keyDisagreements={[]}
         sources={comparison?.sources ?? []}
         isLoading={comparisonLoading}
         isGenerating={generateComparison.isPending}
