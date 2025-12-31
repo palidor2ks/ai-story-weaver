@@ -452,18 +452,42 @@ export default function PartyProfile() {
                               key={answer.id}
                               className="p-4 rounded-lg bg-secondary/30 border border-border"
                             >
+                              {/* Question */}
                               <p className="font-medium text-foreground mb-3">
                                 {answer.question?.text}
                               </p>
                               
+                              {/* Party's Specific Answer from question_options */}
+                              {(() => {
+                                const matchingOption = answer.question_options?.find(
+                                  (opt) => opt.value === answer.answer_value
+                                );
+                                return matchingOption ? (
+                                  <div className={cn(
+                                    "p-3 rounded-lg mb-3 border-l-4",
+                                    answer.answer_value < 0 
+                                      ? "bg-blue-500/5 border-blue-500"
+                                      : answer.answer_value > 0
+                                      ? "bg-red-500/5 border-red-500"
+                                      : "bg-gray-500/5 border-gray-500"
+                                  )}>
+                                    <p className="text-sm">
+                                      <span className="font-medium text-muted-foreground">Party Position: </span>
+                                      <span className="text-foreground">{matchingOption.text}</span>
+                                    </p>
+                                  </div>
+                                ) : null;
+                              })()}
+                              
+                              {/* Ideological indicators */}
                               <div className="flex items-center gap-3 flex-wrap mb-3">
                                 <Badge 
                                   variant="outline" 
                                   className={cn(
                                     "text-sm",
-                                    answer.answer_value > 0 
+                                    answer.answer_value < 0 
                                       ? "bg-blue-500/10 text-blue-600 border-blue-500/30"
-                                      : answer.answer_value < 0
+                                      : answer.answer_value > 0
                                       ? "bg-red-500/10 text-red-600 border-red-500/30"
                                       : "bg-gray-500/10 text-gray-600 border-gray-500/30"
                                   )}
@@ -479,12 +503,14 @@ export default function PartyProfile() {
                                 )}
                               </div>
 
+                              {/* AI explanation/notes */}
                               {answer.notes && (
                                 <p className="text-sm text-muted-foreground mb-3 italic">
                                   {answer.notes}
                                 </p>
                               )}
 
+                              {/* Source link */}
                               {answer.source_url && (
                                 <a 
                                   href={answer.source_url}
