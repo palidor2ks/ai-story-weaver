@@ -1426,14 +1426,63 @@ export function AnswerCoveragePanel() {
                             <div className="font-medium">{formatCurrency(financeStatus.fecTotalReceipts)}</div>
                           </TableCell>
                           <TableCell className="text-right text-sm px-3 py-3 whitespace-nowrap">
-                            <div className="font-medium">{formatCurrency(localTotal)}</div>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="font-medium hover:underline cursor-help">
+                                  {formatCurrency(localTotal)}
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-64 p-3" align="end">
+                                <div className="space-y-2 text-sm">
+                                  <div className="font-medium border-b pb-1 mb-2">Local Total Breakdown</div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Imported Itemized</span>
+                                    <span className="font-medium">{formatCurrency(localItemized)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">+ Unitemized (FEC)</span>
+                                    <span className="font-medium">{formatCurrency(fecUnitemized)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">+ Loans (FEC)</span>
+                                    <span className="font-medium">{formatCurrency(candidate.fecLoans || 0)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">+ Transfers (FEC)</span>
+                                    <span className="font-medium">{formatCurrency(candidate.fecTransfers || 0)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">+ Candidate (FEC)</span>
+                                    <span className="font-medium">{formatCurrency(candidate.fecCandidateContribution || 0)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">+ Other (FEC)</span>
+                                    <span className="font-medium">{formatCurrency(candidate.fecOtherReceipts || 0)}</span>
+                                  </div>
+                                  <div className="flex justify-between border-t pt-2 mt-2">
+                                    <span className="font-medium">Total</span>
+                                    <span className="font-bold">{formatCurrency(localTotal)}</span>
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </TableCell>
-                          {/* Delta Column */}
+                          {/* Delta Column - calculated from localTotal vs fecTotalReceipts */}
                           <TableCell className="text-right px-3 py-3 whitespace-nowrap">
-                            <DeltaBadge
-                              deltaAmount={candidate.deltaAmount}
-                              deltaPct={candidate.deltaPct}
-                            />
+                            {(() => {
+                              const fecTotal = financeStatus.fecTotalReceipts;
+                              if (fecTotal === null || fecTotal === undefined) {
+                                return <DeltaBadge deltaAmount={null} deltaPct={null} />;
+                              }
+                              const calculatedDelta = localTotal - fecTotal;
+                              const calculatedDeltaPct = fecTotal > 0 ? (calculatedDelta / fecTotal) * 100 : 0;
+                              return (
+                                <DeltaBadge
+                                  deltaAmount={calculatedDelta}
+                                  deltaPct={calculatedDeltaPct}
+                                />
+                              );
+                            })()}
                           </TableCell>
                           {/* FEC ID column - simplified */}
                           <TableCell className="px-3 py-3">
