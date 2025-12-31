@@ -1575,6 +1575,7 @@ export type Database = {
           earmarked_total: number
           individual_total: number
           itemized_total: number
+          other_total: number
           pac_total: number
           party_total: number
           passthrough_total: number
@@ -1589,6 +1590,7 @@ export type Database = {
           earmarked_total: number
           individual_total: number
           itemized_total: number
+          other_total: number
           pac_total: number
           party_total: number
           transfers_total: number
