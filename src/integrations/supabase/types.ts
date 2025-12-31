@@ -1366,6 +1366,57 @@ export type Database = {
         }
         Relationships: []
       }
+      user_rep_comparisons: {
+        Row: {
+          candidate_id: string
+          created_at: string | null
+          deep_analysis: string | null
+          deep_analysis_generated_at: string | null
+          id: string
+          key_agreements: string[] | null
+          key_disagreements: string[] | null
+          match_score: number | null
+          rep_answers_hash: string | null
+          sources: Json | null
+          summary: string
+          updated_at: string | null
+          user_answers_hash: string | null
+          user_id: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string | null
+          deep_analysis?: string | null
+          deep_analysis_generated_at?: string | null
+          id?: string
+          key_agreements?: string[] | null
+          key_disagreements?: string[] | null
+          match_score?: number | null
+          rep_answers_hash?: string | null
+          sources?: Json | null
+          summary: string
+          updated_at?: string | null
+          user_answers_hash?: string | null
+          user_id: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string | null
+          deep_analysis?: string | null
+          deep_analysis_generated_at?: string | null
+          id?: string
+          key_agreements?: string[] | null
+          key_disagreements?: string[] | null
+          match_score?: number | null
+          rep_answers_hash?: string | null
+          sources?: Json | null
+          summary?: string
+          updated_at?: string | null
+          user_answers_hash?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null

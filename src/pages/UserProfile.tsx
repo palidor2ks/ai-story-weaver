@@ -19,6 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ScoreText } from '@/components/ScoreText';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 
 interface ProfileAnalysis {
   summary: string;
@@ -599,11 +600,9 @@ export const UserProfile = () => {
                     </h4>
                     <div className="space-y-3">
                       {civicData.federalExecutive.map((official) => (
-                        <RepresentativeCard
+                        <RepresentativeComparisonCard
                           key={official.id}
                           official={official}
-                          userScore={profile.overall_score ?? 0}
-                          getPartyColor={getPartyColor}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
@@ -683,11 +682,9 @@ export const UserProfile = () => {
                     </h4>
                     <div className="space-y-3">
                       {civicData.stateExecutive.map((official) => (
-                        <RepresentativeCard
+                        <RepresentativeComparisonCard
                           key={official.id}
                           official={official}
-                          userScore={profile.overall_score ?? 0}
-                          getPartyColor={getPartyColor}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
@@ -704,11 +701,9 @@ export const UserProfile = () => {
                     </h4>
                     <div className="space-y-3">
                       {civicData.stateLegislative.map((official) => (
-                        <RepresentativeCard
+                        <RepresentativeComparisonCard
                           key={official.id}
                           official={official}
-                          userScore={profile.overall_score ?? 0}
-                          getPartyColor={getPartyColor}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
@@ -725,11 +720,9 @@ export const UserProfile = () => {
                     </h4>
                     <div className="space-y-3">
                       {civicData.local.map((official) => (
-                        <RepresentativeCard
+                        <RepresentativeComparisonCard
                           key={official.id}
                           official={official}
-                          userScore={profile.overall_score ?? 0}
-                          getPartyColor={getPartyColor}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
