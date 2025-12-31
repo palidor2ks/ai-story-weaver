@@ -125,6 +125,18 @@ export const Quiz = () => {
       }
       return [...prev, newAnswer];
     });
+
+    // Auto-advance to next question after a short delay
+    setTimeout(() => {
+      if (currentQuestionIndex < questions.length - 1) {
+        setCurrentQuestionIndex(prev => prev + 1);
+      } else {
+        // Calculate scores and show results
+        const scores = calculateUserScoreFromAnswers();
+        setCalculatedScores(scores);
+        setShowResults(true);
+      }
+    }, 300);
   };
 
   const calculateUserScoreFromAnswers = (): { overall: number; byTopic: TopicScore[] } => {
