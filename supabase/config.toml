@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.generate-rep-comparison]
 verify_jwt = true
+
+[functions.generate-party-comparison]
+verify_jwt = true
