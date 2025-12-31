@@ -73,15 +73,16 @@ function snapToValidValue(value: number): number {
 async function researchPartyPosition(
   partyName: string,
   questionText: string,
-  topicName: string
+  topicName: string,
+  retryCount = 0
 ): Promise<GroundingResult> {
+  const maxRetries = 2;
+  
   if (!GOOGLE_GEMINI_API_KEY) {
     console.log('GOOGLE_GEMINI_API_KEY not configured, skipping web research');
     return { researchText: '', sourceUrls: [], success: false };
   }
 
-  const searchQuery = `${partyName} official position on ${topicName}: ${questionText} 2024 platform policy`;
-  
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
@@ -101,17 +102,23 @@ Look for:
 Summarize what you find with specific citations. If you cannot find a documented position, say "No documented position found."`
             }] 
           }],
-          tools: [{
-            google_search_retrieval: {
-              dynamic_retrieval_config: { mode: "MODE_DYNAMIC" }
-            }
-          }]
+          tools: [{ googleSearch: {} }]
         })
       }
     );
 
     if (!response.ok) {
-      console.error(`Gemini grounding error: ${response.status}`);
+      const errorBody = await response.text();
+      console.error(`Gemini grounding error: ${response.status} - ${errorBody}`);
+      
+      // Retry on transient errors
+      if (retryCount < maxRetries && (response.status === 429 || response.status >= 500)) {
+        const delay = Math.pow(2, retryCount + 1) * 1000;
+        console.log(`Retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+        await new Promise(r => setTimeout(r, delay));
+        return researchPartyPosition(partyName, questionText, topicName, retryCount + 1);
+      }
+      
       return { researchText: '', sourceUrls: [], success: false };
     }
 
@@ -120,10 +127,11 @@ Summarize what you find with specific citations. If you cannot find a documented
     // Extract text content
     const researchText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // Extract source URLs from grounding metadata
+    // Extract source URLs from grounding metadata (Gemini 2.0 format)
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
     const sourceUrls: string[] = [];
     
+    // Check groundingChunks (primary source for URLs)
     if (groundingMetadata?.groundingChunks) {
       for (const chunk of groundingMetadata.groundingChunks) {
         if (chunk.web?.uri) {
@@ -132,27 +140,41 @@ Summarize what you find with specific citations. If you cannot find a documented
       }
     }
     
-    // Also check groundingSupports for additional URLs
+    // Check groundingSupports for additional URLs
     if (groundingMetadata?.groundingSupports) {
       for (const support of groundingMetadata.groundingSupports) {
-        if (support.groundingChunkIndices) {
-          // URLs already captured above
+        if (support.web?.uri) {
+          sourceUrls.push(support.web.uri);
         }
       }
     }
+    
+    // Log web searches performed
+    if (groundingMetadata?.webSearchQueries) {
+      console.log(`Web searches: ${groundingMetadata.webSearchQueries.join(', ')}`);
+    }
 
     // Deduplicate URLs
-    const uniqueUrls = [...new Set(sourceUrls)].slice(0, 5); // Limit to 5 URLs
+    const uniqueUrls = [...new Set(sourceUrls)].slice(0, 5);
 
     console.log(`Grounding research for "${questionText.slice(0, 40)}...": ${researchText.length} chars, ${uniqueUrls.length} sources`);
     
     return {
-      researchText: researchText.slice(0, 2000), // Limit research text
+      researchText: researchText.slice(0, 2000),
       sourceUrls: uniqueUrls,
       success: researchText.length > 50
     };
   } catch (e) {
     console.error('Gemini grounding error:', e);
+    
+    // Retry on network errors
+    if (retryCount < maxRetries) {
+      const delay = Math.pow(2, retryCount + 1) * 1000;
+      console.log(`Retrying after error in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, delay));
+      return researchPartyPosition(partyName, questionText, topicName, retryCount + 1);
+    }
+    
     return { researchText: '', sourceUrls: [], success: false };
   }
 }
@@ -438,8 +460,8 @@ serve(async (req) => {
             researchResults.set(q.id, research);
             if (research.success) totalResearched++;
             
-            // Rate limiting: 1.5 second delay between grounding calls
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // Rate limiting: 2 second delay between grounding calls for reliability
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
           console.log(`Researched ${batch.length} questions, ${researchResults.size} with results`);
         }
