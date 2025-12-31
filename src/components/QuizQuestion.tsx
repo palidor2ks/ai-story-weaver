@@ -2,7 +2,7 @@ import { Question, QuestionOption } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { X } from 'lucide-react';
+import { MinusCircle } from 'lucide-react';
 
 interface QuizQuestionProps {
   question: Question;
@@ -21,6 +21,10 @@ export const QuizQuestion = ({
   questionNumber,
   totalQuestions,
 }: QuizQuestionProps) => {
+  // Separate regular options from skip option
+  const regularOptions = question.options.filter(opt => !opt.is_skip_option);
+  const skipOption = question.options.find(opt => opt.is_skip_option);
+
   return (
     <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-6">
@@ -42,7 +46,7 @@ export const QuizQuestion = ({
           </h2>
 
           <div className="space-y-3">
-            {question.options.map((option, index) => {
+            {regularOptions.map((option, index) => {
               const isSelected = selectedOptionId === option.id;
               
               return (
@@ -69,16 +73,19 @@ export const QuizQuestion = ({
             })}
           </div>
 
-          {/* Not Important option */}
-          {onSkip && (
+          {/* Not Important to Me option */}
+          {skipOption && (
             <div className="mt-6 pt-4 border-t border-border">
               <Button
-                variant="ghost"
-                onClick={onSkip}
-                className="w-full text-muted-foreground hover:text-foreground gap-2"
+                variant={selectedOptionId === skipOption.id ? "secondary" : "ghost"}
+                onClick={() => onSelect(skipOption)}
+                className={cn(
+                  "w-full text-muted-foreground hover:text-foreground gap-2",
+                  selectedOptionId === skipOption.id && "ring-2 ring-muted ring-offset-2 text-foreground"
+                )}
               >
-                <X className="w-4 h-4" />
-                Not Important to Me - Skip This Topic
+                <MinusCircle className="w-4 h-4" />
+                {skipOption.text}
               </Button>
             </div>
           )}

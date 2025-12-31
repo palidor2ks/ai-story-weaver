@@ -19,6 +19,7 @@ import { TopicScore } from '@/types';
 export interface QuizAnswer {
   questionId: string;
   value: number; // -10 to +10
+  isSkipped?: boolean; // If true, user marked this as "not important to me"
 }
 
 export interface Question {
@@ -89,6 +90,8 @@ export function calculateWeightedOverallScore(
 /**
  * Calculate quiz scores from user answers with topic weighting.
  * Returns overall score and per-topic scores, all on -10 to +10 scale.
+ * 
+ * Answers marked as "not important" (isSkipped=true) are excluded from scoring.
  */
 export function calculateQuizScore(
   answers: QuizAnswer[],
@@ -96,10 +99,13 @@ export function calculateQuizScore(
   selectedTopics: TopicWeight[],
   topicInfo: TopicInfo[]
 ): ScoringResult {
+  // Filter out skipped answers - they don't count toward scoring
+  const scorableAnswers = answers.filter(a => !a.isSkipped);
+  
   // Group answers by topic
   const topicAnswers: Record<string, number[]> = {};
   
-  answers.forEach(answer => {
+  scorableAnswers.forEach(answer => {
     const question = questions.find(q => q.id === answer.questionId);
     if (question) {
       if (!topicAnswers[question.topicId]) {

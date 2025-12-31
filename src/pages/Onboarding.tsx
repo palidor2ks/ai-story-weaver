@@ -57,6 +57,7 @@ export const Onboarding = () => {
       id: o.id,
       text: o.text,
       value: o.value,
+      is_skip_option: o.is_skip_option ?? false,
     })),
   })), [canonicalQuestions]);
 
@@ -106,6 +107,7 @@ export const Onboarding = () => {
         questionId,
         selectedOptionId: option.id,
         value: option.value,
+        isSkipped: option.is_skip_option ?? false,
       };
       if (existing !== -1) {
         const updated = [...prev];

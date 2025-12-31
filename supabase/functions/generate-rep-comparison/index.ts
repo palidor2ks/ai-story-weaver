@@ -10,6 +10,7 @@ interface UserAnswer {
   value: number;
   question_text: string;
   topic_name: string;
+  is_skipped?: boolean; // User marked this as "not important to me"
 }
 
 interface RepAnswer {
@@ -63,9 +64,15 @@ serve(async (req) => {
     console.log(`[generate-rep-comparison] Generating ${deepAnalysis ? 'deep' : 'summary'} comparison for ${candidateName}`);
     console.log(`[generate-rep-comparison] User answers: ${userAnswers.length}, Rep answers: ${repAnswers.length}`);
 
-    // Find overlapping questions
+    // Separate skipped (not important) answers from scored answers
+    const skippedAnswers = userAnswers.filter(ua => ua.is_skipped === true);
+    const scoredUserAnswers = userAnswers.filter(ua => !ua.is_skipped);
+    
+    console.log(`[generate-rep-comparison] Scored answers: ${scoredUserAnswers.length}, Skipped (not important): ${skippedAnswers.length}`);
+
+    // Find overlapping questions (only from scored answers)
     const repAnswerMap = new Map(repAnswers.map(a => [a.question_id, a]));
-    const sharedQuestions = userAnswers
+    const sharedQuestions = scoredUserAnswers
       .filter(ua => repAnswerMap.has(ua.question_id))
       .map(ua => {
         const repAnswer = repAnswerMap.get(ua.question_id)!;
@@ -123,6 +130,10 @@ serve(async (req) => {
     const disagreementsInferred = disagreements.filter(d => !d.has_voting_record);
 
     // Build the prompt with clear prioritization of voting records
+    const skippedTopics = skippedAnswers.length > 0 
+      ? `\n\nNote: The user marked ${skippedAnswers.length} topic(s) as "not important to me" and these are excluded from this comparison: ${[...new Set(skippedAnswers.map(a => a.topic_name))].join(', ')}.`
+      : '';
+
     const systemPrompt = `You are a seasoned political analyst speaking directly to a client about how their views compare to their elected representatives. 
 
 Write in second person ("you", "your positions") - never say "the user" or reference "data provided."
@@ -133,7 +144,7 @@ CRITICAL INSTRUCTION FOR CITING SOURCES:
 - When no voting record exists, you may reference party platform positions, but clearly indicate this is inferred.
 - Prioritize discussing topics that have voting record evidence over those that are inferred.
 
-Be conversational yet insightful, like explaining things over coffee. Maintain neutrality - explain differences without judgment.`;
+Be conversational yet insightful, like explaining things over coffee. Maintain neutrality - explain differences without judgment.${skippedTopics}`;
 
     // Build structured comparison data that clearly separates voting-record-backed from inferred
     const formatQuestion = (q: typeof sharedQuestions[0], isAgreement: boolean) => {

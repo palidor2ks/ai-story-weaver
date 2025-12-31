@@ -58,6 +58,7 @@ export const Quiz = () => {
         id: o.id,
         text: o.text,
         value: o.value,
+        is_skip_option: o.is_skip_option ?? false,
       })),
     }));
   }, [dbQuestions]);
@@ -109,7 +110,7 @@ export const Quiz = () => {
     weight: ut.weight,
   }));
 
-  const handleOptionSelect = (option: { id: string; text: string; value: number }) => {
+  const handleOptionSelect = (option: { id: string; text: string; value: number; is_skip_option?: boolean }) => {
     const questionId = questions[currentQuestionIndex].id;
     setQuizAnswers(prev => {
       const existing = prev.findIndex(a => a.questionId === questionId);
@@ -117,6 +118,7 @@ export const Quiz = () => {
         questionId,
         selectedOptionId: option.id,
         value: option.value,
+        isSkipped: option.is_skip_option ?? false,
       };
       if (existing !== -1) {
         const updated = [...prev];
