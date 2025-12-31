@@ -10,8 +10,9 @@ const OPEN_STATES_API_KEY = Deno.env.get('OPEN_STATES_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-// GitHub Pages URL for executive data
+// GitHub Pages URLs for congress-legislators data
 const EXECUTIVE_URL = 'https://unitedstates.github.io/congress-legislators/executive.json';
+const LEGISLATORS_URL = 'https://unitedstates.github.io/congress-legislators/legislators-current.json';
 
 // Office level categorization
 type OfficeLevelType = 'federal_executive' | 'federal_legislative' | 'state_executive' | 'state_legislative' | 'local';
@@ -71,6 +72,15 @@ interface Executive {
 let cachedExecutives: Executive[] | null = null;
 let cacheTimestamp = 0;
 const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
+
+// Normalize name for comparison (removes suffixes like Jr., Sr., III, etc.)
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/,?\s+(jr\.?|sr\.?|iii|ii|iv|v)$/i, '') // Remove suffixes
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 // Map party names to our types
 function mapParty(party: string | undefined): 'Democrat' | 'Republican' | 'Independent' | 'Other' {
@@ -223,14 +233,64 @@ async function fetchFederalExecutiveFromDB(): Promise<OfficialInfo[]> {
   }
 }
 
+// Fetch normalized names of federal legislators for a state (to filter from Open States results)
+async function fetchFederalLegislatorNames(state: string): Promise<Set<string>> {
+  const federalNames = new Set<string>();
+  
+  try {
+    console.log(`[GitHub] Fetching federal legislators for state: ${state}`);
+    const response = await fetch(LEGISLATORS_URL);
+    
+    if (!response.ok) {
+      console.error(`[GitHub] Failed to fetch legislators: ${response.status}`);
+      return federalNames;
+    }
+    
+    const legislators = await response.json();
+    
+    for (const leg of legislators) {
+      // Check if this legislator represents the given state
+      const currentTerm = leg.terms?.[leg.terms.length - 1];
+      if (!currentTerm) continue;
+      
+      // Check if term is current (end date in future or not set)
+      const endDate = currentTerm.end ? new Date(currentTerm.end) : null;
+      if (endDate && endDate < new Date()) continue;
+      
+      // Check if state matches
+      if (currentTerm.state?.toUpperCase() !== state.toUpperCase()) continue;
+      
+      // Add normalized name to set
+      const fullName = leg.name?.official_full || `${leg.name?.first || ''} ${leg.name?.last || ''}`.trim();
+      if (fullName) {
+        const normalized = normalizeName(fullName);
+        federalNames.add(normalized);
+        console.log(`[GitHub] Added federal legislator: ${fullName} -> ${normalized}`);
+      }
+    }
+    
+    console.log(`[GitHub] Found ${federalNames.size} federal legislators for ${state}`);
+  } catch (error) {
+    console.error('[GitHub] Error fetching federal legislators:', error);
+  }
+  
+  return federalNames;
+}
+
 // Fetch state legislators and governors from Open States API v3
-async function fetchOpenStatesOfficials(state: string, lat?: number, lng?: number): Promise<{ legislators: OfficialInfo[], governors: OfficialInfo[] }> {
+async function fetchOpenStatesOfficials(
+  state: string, 
+  lat?: number, 
+  lng?: number,
+  federalLegislatorNames?: Set<string>
+): Promise<{ legislators: OfficialInfo[], governors: OfficialInfo[] }> {
   if (!OPEN_STATES_API_KEY) {
     console.error('[Open States] No API key configured');
     return { legislators: [], governors: [] };
   }
 
   console.log(`[Open States] Fetching officials for state: ${state}, lat: ${lat}, lng: ${lng}`);
+  console.log(`[Open States] Federal legislator names to exclude: ${federalLegislatorNames?.size || 0}`);
   
   const headers = {
     'X-API-KEY': OPEN_STATES_API_KEY,
@@ -257,10 +317,17 @@ async function fetchOpenStatesOfficials(state: string, lat?: number, lng?: numbe
     if (legislatorsResponse.ok) {
       const data = await legislatorsResponse.json();
       const results = data.results || [];
-      console.log(`[Open States] Found ${results.length} legislators`);
+      console.log(`[Open States] Found ${results.length} legislators from API`);
 
       for (const person of results) {
         if (!person.current_role) continue;
+
+        // Check if this person's name matches a federal legislator
+        const normalizedPersonName = normalizeName(person.name);
+        if (federalLegislatorNames?.has(normalizedPersonName)) {
+          console.log(`[Open States] EXCLUDING ${person.name} - matches federal legislator (normalized: ${normalizedPersonName})`);
+          continue;
+        }
 
         const role = person.current_role;
         let office = 'State Legislator';
@@ -290,6 +357,8 @@ async function fetchOpenStatesOfficials(state: string, lat?: number, lng?: numbe
 
         legislators.push(official);
       }
+      
+      console.log(`[Open States] After filtering: ${legislators.length} state legislators`);
     } else {
       const errorText = await legislatorsResponse.text();
       console.error(`[Open States] Legislators API error: ${legislatorsResponse.status} - ${errorText}`);
@@ -584,10 +653,13 @@ serve(async (req) => {
     // Get coordinates for geo-based lookup
     const coords = await geocodeAddress(address);
 
+    // First fetch federal legislator names to filter from Open States results
+    const federalLegislatorNames = await fetchFederalLegislatorNames(state);
+
     // Fetch from all sources in parallel (including transitions)
     const [federalExecutive, openStatesResult, localOfficials, transitions] = await Promise.all([
       fetchFederalExecutiveFromGitHub(),
-      fetchOpenStatesOfficials(state, coords?.lat, coords?.lng),
+      fetchOpenStatesOfficials(state, coords?.lat, coords?.lng, federalLegislatorNames),
       fetchLocalOfficialsFromDB(state),
       fetchOfficialTransitions(state),
     ]);
