@@ -135,6 +135,13 @@ export function DonorAliasesPanel() {
   
   // Per-alias backfill state
   const [backfillingAliasId, setBackfillingAliasId] = useState<string | null>(null);
+  
+  // Conduit committee backfill state
+  const [isBackfillingConduit, setIsBackfillingConduit] = useState(false);
+  const [conduitBackfillResult, setConduitBackfillResult] = useState<{
+    donors: { before: number; updated: number; remaining: number };
+    contributions: { before: number; updated: number; remaining: number };
+  } | null>(null);
 
   const handleBackfillAlias = async (aliasId: string) => {
     setBackfillingAliasId(aliasId);
@@ -212,6 +219,36 @@ export function DonorAliasesPanel() {
     } finally {
       setIsRefreshing(false);
       setRefreshProgress(null);
+    }
+  };
+
+  const handleBackfillConduitCommittees = async () => {
+    setIsBackfillingConduit(true);
+    setConduitBackfillResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('backfill-conduit-committees');
+      
+      if (error) {
+        console.error('Error backfilling conduit committees:', error);
+        toast.error('Failed to backfill conduit committees');
+        return;
+      }
+
+      if (!data.success) {
+        toast.error(data.error || 'Failed to backfill conduit committees');
+        return;
+      }
+
+      setConduitBackfillResult({
+        donors: data.donors,
+        contributions: data.contributions
+      });
+      toast.success(data.message || 'Backfill complete');
+    } catch (err) {
+      console.error('Error in conduit backfill:', err);
+      toast.error('An error occurred during backfill');
+    } finally {
+      setIsBackfillingConduit(false);
     }
   };
 
@@ -421,6 +458,55 @@ export function DonorAliasesPanel() {
                       : 0
                     } 
                   />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Backfill Conduit Committees Card */}
+          <Card className="bg-muted/50">
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="font-medium">Backfill Committee Transfer Links</p>
+                  <p className="text-sm text-muted-foreground">
+                    Link Line 12 transfers to their source committees by matching contributor names to candidate_committees.
+                  </p>
+                </div>
+                <Button 
+                  onClick={handleBackfillConduitCommittees} 
+                  disabled={isBackfillingConduit}
+                  variant="secondary"
+                >
+                  {isBackfillingConduit ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Backfilling...
+                    </>
+                  ) : (
+                    <>
+                      <Link2 className="h-4 w-4 mr-2" />
+                      Backfill Conduit IDs
+                    </>
+                  )}
+                </Button>
+              </div>
+              {conduitBackfillResult && (
+                <div className="mt-4 space-y-2 text-sm">
+                  <div className="flex gap-4">
+                    <span className="text-muted-foreground">
+                      Donors: <span className="text-foreground font-medium">{conduitBackfillResult.donors.updated}</span> updated
+                      {conduitBackfillResult.donors.remaining > 0 && (
+                        <span className="text-amber-500 ml-1">({conduitBackfillResult.donors.remaining} unmatched)</span>
+                      )}
+                    </span>
+                    <span className="text-muted-foreground">
+                      Contributions: <span className="text-foreground font-medium">{conduitBackfillResult.contributions.updated}</span> updated
+                      {conduitBackfillResult.contributions.remaining > 0 && (
+                        <span className="text-amber-500 ml-1">({conduitBackfillResult.contributions.remaining} unmatched)</span>
+                      )}
+                    </span>
+                  </div>
                 </div>
               )}
             </CardContent>

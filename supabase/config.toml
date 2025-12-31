@@ -104,3 +104,6 @@ verify_jwt = true
 
 [functions.generate-quiz-question]
 verify_jwt = true
+
+[functions.backfill-conduit-committees]
+verify_jwt = false
