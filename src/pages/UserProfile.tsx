@@ -13,6 +13,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info } from 'lucide-react';
 import { EditProfileDialog } from '@/components/EditProfileDialog';
+import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
+import { AvatarUpload } from '@/components/AvatarUpload';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -318,9 +320,12 @@ export const UserProfile = () => {
         <div className="bg-card rounded-2xl border border-border p-6 md:p-8 mb-8 shadow-elevated">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-6">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-hero flex items-center justify-center">
-                <User className="w-10 h-10 text-primary-foreground" />
-              </div>
+              <AvatarUpload
+                userId={profile.id}
+                currentAvatarUrl={profile.avatar_url}
+                userName={profile.name}
+                onAvatarChange={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
+              />
               <div>
                 <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">
                   {profile.name}
@@ -414,6 +419,7 @@ export const UserProfile = () => {
                     }}
                     isLoading={updateProfile.isPending}
                   />
+                  <ChangePasswordDialog />
                 </div>
                 
                 {/* Verification badges */}

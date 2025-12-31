@@ -30,6 +30,7 @@ export interface Profile {
   voter_registration_status: string | null;
   voter_state: string | null;
   birth_date: string | null;
+  avatar_url: string | null;
 }
 
 interface TopicScore {
