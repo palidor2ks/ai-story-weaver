@@ -16,7 +16,8 @@ import { useFinanceReconciliation, useCommitteeRollups } from '@/hooks/useFinanc
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { ScoreText } from '@/components/ScoreText';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
@@ -51,7 +52,9 @@ export const CandidateProfile = () => {
   const { data: financeReconciliation } = useFinanceReconciliation(id);
   const { data: committeeRollups = [] } = useCommitteeRollups(id);
   
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [visibleDonorCount, setVisibleDonorCount] = useState(20);
+  const [donorSearch, setDonorSearch] = useState('');
   
   const isAdmin = adminData?.isAdmin ?? false;
   const isPoliticianOwner = !!user && candidate?.claimed_by_user_id === user.id;
@@ -484,15 +487,6 @@ export const CandidateProfile = () => {
                       </div>
                     )}
                     
-                    {/* Finance Summary Card - visible to all users */}
-                    <FinanceSummaryCard
-                      data={{
-                        fecItemized,
-                        fecUnitemized,
-                        fecTotalReceipts,
-                      }}
-                      className="mb-6"
-                    />
 
                     {/* FEC-derived aggregates to align list with FEC Total Receipts */}
                     {hasFecBreakdown && (
@@ -603,30 +597,6 @@ export const CandidateProfile = () => {
                       </div>
                     )}
 
-                    {/* Variance Check Banner */}
-                    {hasVariance && fecTotalReceipts !== null && (
-                      <div className={cn(
-                        "mb-4 p-3 rounded-lg border flex items-start gap-2",
-                        Math.abs(Number(variancePct)) > 5 
-                          ? "bg-amber-500/10 border-amber-500/30" 
-                          : "bg-muted/50 border-border"
-                      )}>
-                        <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                        <div className="text-sm">
-                          <span className="font-medium">Data Variance Detected</span>
-                          <div className="text-xs text-muted-foreground mt-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <div>FEC Total: <strong>{formatCurrency(fecTotalReceipts)}</strong></div>
-                            <div>List Total: <strong>{formatCurrency(contributionListTotal)}</strong></div>
-                            <div>Delta: <strong className={varianceAmount > 0 ? "text-agree" : "text-disagree"}>
-                              {varianceAmount > 0 ? '+' : ''}{formatCurrency(varianceAmount)} ({variancePct}%)
-                            </strong></div>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground mt-2">
-                            Variance may occur if donor list is incomplete or FEC totals include categories not shown here.
-                          </p>
-                        </div>
-                      </div>
-                    )}
                     
                     <div className="mb-6 p-4 rounded-xl bg-secondary/50">
                       <div className="flex items-center justify-between">
@@ -655,6 +625,31 @@ export const CandidateProfile = () => {
                         </div>
                       </div>
                     </div>
+                    {/* Search Bar */}
+                    <div className="mb-4 relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search donors by name, employer, or location..."
+                        value={donorSearch}
+                        onChange={(e) => {
+                          setDonorSearch(e.target.value);
+                          setVisibleDonorCount(20); // Reset pagination on search
+                        }}
+                        className="pl-9 pr-9"
+                      />
+                      {donorSearch && (
+                        <button
+                          onClick={() => {
+                            setDonorSearch('');
+                            setVisibleDonorCount(20);
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
                     <div className="space-y-3">
                       {(() => {
                         // Build unified funding sources array
@@ -668,6 +663,7 @@ export const CandidateProfile = () => {
                           badgeStyle?: string;
                           description?: string;
                           subLabel?: string;
+                          searchText?: string;
                         };
 
                         const allSources: FundingSource[] = [];
@@ -686,12 +682,14 @@ export const CandidateProfile = () => {
                           if (fecTransfers > 0 && d.line_number?.startsWith('12')) {
                             return;
                           }
+                          const displayName = d.display_name || d.name;
                           allSources.push({
                             id: d.id,
                             name: d.name,
                             amount: d.amount,
                             sourceType: 'donor',
-                            donor: d
+                            donor: d,
+                            searchText: [displayName, d.employer, d.contributor_city, d.contributor_state, d.type].filter(Boolean).join(' ').toLowerCase()
                           });
                         });
                         
@@ -705,7 +703,8 @@ export const CandidateProfile = () => {
                             badgeLabel: 'Aggregate',
                             badgeStyle: 'border-primary/50 text-primary bg-primary/10',
                             description: 'Individual donations under $200 — not itemized by FEC',
-                            subLabel: 'FEC aggregate'
+                            subLabel: 'FEC aggregate',
+                            searchText: 'small donors unitemized aggregate'
                           });
                         }
                         
@@ -718,7 +717,8 @@ export const CandidateProfile = () => {
                             badgeLabel: 'Candidate Loan',
                             badgeStyle: 'border-blue-500/50 text-blue-600 bg-blue-500/10',
                             description: 'Loan from the candidate to their own campaign — may be repaid from future contributions',
-                            subLabel: 'Self-funded'
+                            subLabel: 'Self-funded',
+                            searchText: `${candidate.name.toLowerCase()} loan self-funded`
                           });
                         }
                         
@@ -731,7 +731,8 @@ export const CandidateProfile = () => {
                             badgeLabel: 'Candidate Contribution',
                             badgeStyle: 'border-blue-500/50 text-blue-600 bg-blue-500/10',
                             description: 'Direct contribution from the candidate (not a loan — non-repayable)',
-                            subLabel: 'Self-funded'
+                            subLabel: 'Self-funded',
+                            searchText: `${candidate.name.toLowerCase()} contribution self-funded`
                           });
                         }
                         
@@ -744,146 +745,178 @@ export const CandidateProfile = () => {
                             badgeLabel: 'Line 12',
                             badgeStyle: 'border-purple-500/50 text-purple-600 bg-purple-500/10',
                             description: 'Transfers from other authorized campaign committees',
-                            subLabel: 'Inter-committee'
+                            subLabel: 'Inter-committee',
+                            searchText: 'committee transfers inter-committee'
                           });
                         }
                         
                         // Sort by amount descending
                         allSources.sort((a, b) => b.amount - a.amount);
                         
-                        return allSources.map(source => {
-                          // Render donor-type sources
-                          if (source.sourceType === 'donor' && source.donor) {
-                            const donor = source.donor;
-                            const displayName = donor.display_name || donor.name;
-                            const conduitOrgs = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
-                            const isConduit = conduitOrgs.some(c => displayName.toUpperCase().includes(c));
+                        // Filter by search term
+                        const searchLower = donorSearch.toLowerCase().trim();
+                        const filteredSources = searchLower
+                          ? allSources.filter(s => s.searchText?.includes(searchLower))
+                          : allSources;
+                        
+                        // Paginate
+                        const visibleSources = filteredSources.slice(0, visibleDonorCount);
+                        const remaining = filteredSources.length - visibleDonorCount;
+                        
+                        return (
+                          <>
+                            {visibleSources.length === 0 && (
+                              <div className="text-center py-8 text-muted-foreground">
+                                No donors match your search.
+                              </div>
+                            )}
+                            {visibleSources.map(source => {
+                              // Render donor-type sources
+                              if (source.sourceType === 'donor' && source.donor) {
+                                const donor = source.donor;
+                                const displayName = donor.display_name || donor.name;
+                                const conduitOrgs = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
+                                const isConduit = conduitOrgs.some(c => displayName.toUpperCase().includes(c));
+                                
+                                return (
+                                  <div key={source.id} className={cn(
+                                    "flex items-center justify-between p-4 rounded-lg border",
+                                    isConduit ? "border-amber-500/30 bg-amber-500/5" : "border-border"
+                                  )}>
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <p className="font-medium text-foreground">{displayName}</p>
+                                        {isConduit && (
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger>
+                                                <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 bg-amber-500/10">
+                                                  Conduit
+                                                </Badge>
+                                              </TooltipTrigger>
+                                              <TooltipContent className="max-w-xs">
+                                                <p className="font-medium mb-1">Pass-Through Organization</p>
+                                                <p className="text-xs">This organization processes donations on behalf of individual donors. 
+                                                The amount shown is the total routed through this conduit — individual donors are listed separately to avoid double-counting.</p>
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        )}
+                                        {donor.is_consolidated && donor.name_variations && donor.name_variations.length > 1 && (
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger>
+                                                <Badge variant="outline" className="text-[10px] border-primary/50 text-primary bg-primary/10">
+                                                  {donor.name_variations.length} merged
+                                                </Badge>
+                                              </TooltipTrigger>
+                                              <TooltipContent className="max-w-xs">
+                                                <p className="font-medium mb-1">Merged Names</p>
+                                                <ul className="text-xs space-y-0.5">
+                                                  {donor.name_variations.slice(0, 10).map((name, i) => (
+                                                    <li key={i}>{name}</li>
+                                                  ))}
+                                                  {donor.name_variations.length > 10 && (
+                                                    <li>...and {donor.name_variations.length - 10} more</li>
+                                                  )}
+                                                </ul>
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                                        <Badge variant="secondary">{donor.type}</Badge>
+                                        {isConduit && (
+                                          <span className="text-xs text-amber-600">Pass-through</span>
+                                        )}
+                                        {donor.contributor_city && donor.contributor_state && (
+                                          <span className="text-xs text-muted-foreground">
+                                            {donor.contributor_city}, {donor.contributor_state}
+                                          </span>
+                                        )}
+                                        {donor.employer && (
+                                          <span className="text-xs text-muted-foreground">
+                                            • {donor.employer}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className={cn("font-bold", isConduit ? "text-amber-600" : "text-foreground")}>
+                                        ${donor.amount.toLocaleString()}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {donor.transaction_count > 1 ? `${donor.transaction_count} contributions` : donor.cycle}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              
+                              // Render FEC aggregate sources
+                              const getBorderStyle = () => {
+                                switch (source.sourceType) {
+                                  case 'small_donors': return 'border-primary/30 bg-primary/5';
+                                  case 'candidate_loan':
+                                  case 'candidate_contribution': return 'border-blue-500/30 bg-blue-500/5';
+                                  case 'committee_transfer': return 'border-purple-500/30 bg-purple-500/5';
+                                  default: return 'border-border';
+                                }
+                              };
+                              
+                              const getAmountColor = () => {
+                                switch (source.sourceType) {
+                                  case 'candidate_loan':
+                                  case 'candidate_contribution': return 'text-blue-600';
+                                  case 'committee_transfer': return 'text-purple-600';
+                                  default: return 'text-foreground';
+                                }
+                              };
+                              
+                              return (
+                                <div key={source.id} className={cn(
+                                  "flex items-center justify-between p-4 rounded-lg border",
+                                  getBorderStyle()
+                                )}>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium text-foreground">{source.name}</p>
+                                      {source.badgeLabel && (
+                                        <Badge variant="outline" className={cn("text-[10px]", source.badgeStyle)}>
+                                          {source.badgeLabel}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    {source.description && (
+                                      <p className="text-xs text-muted-foreground mt-1">{source.description}</p>
+                                    )}
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={cn("font-bold", getAmountColor())}>
+                                      {formatCurrency(source.amount)}
+                                    </p>
+                                    {source.subLabel && (
+                                      <p className="text-xs text-muted-foreground">{source.subLabel}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
                             
-                            return (
-                              <div key={source.id} className={cn(
-                                "flex items-center justify-between p-4 rounded-lg border",
-                                isConduit ? "border-amber-500/30 bg-amber-500/5" : "border-border"
-                              )}>
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-medium text-foreground">{displayName}</p>
-                                    {isConduit && (
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger>
-                                            <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 bg-amber-500/10">
-                                              Conduit
-                                            </Badge>
-                                          </TooltipTrigger>
-                                          <TooltipContent className="max-w-xs">
-                                            <p className="font-medium mb-1">Pass-Through Organization</p>
-                                            <p className="text-xs">This organization processes donations on behalf of individual donors. 
-                                            The amount shown is the total routed through this conduit — individual donors are listed separately to avoid double-counting.</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    )}
-                                    {donor.is_consolidated && donor.name_variations && donor.name_variations.length > 1 && (
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger>
-                                            <Badge variant="outline" className="text-[10px] border-primary/50 text-primary bg-primary/10">
-                                              {donor.name_variations.length} merged
-                                            </Badge>
-                                          </TooltipTrigger>
-                                          <TooltipContent className="max-w-xs">
-                                            <p className="font-medium mb-1">Merged Names</p>
-                                            <ul className="text-xs space-y-0.5">
-                                              {donor.name_variations.slice(0, 10).map((name, i) => (
-                                                <li key={i}>{name}</li>
-                                              ))}
-                                              {donor.name_variations.length > 10 && (
-                                                <li>...and {donor.name_variations.length - 10} more</li>
-                                              )}
-                                            </ul>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    )}
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-2 mt-1">
-                                    <Badge variant="secondary">{donor.type}</Badge>
-                                    {isConduit && (
-                                      <span className="text-xs text-amber-600">Pass-through</span>
-                                    )}
-                                    {donor.contributor_city && donor.contributor_state && (
-                                      <span className="text-xs text-muted-foreground">
-                                        {donor.contributor_city}, {donor.contributor_state}
-                                      </span>
-                                    )}
-                                    {donor.employer && (
-                                      <span className="text-xs text-muted-foreground">
-                                        • {donor.employer}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <p className={cn("font-bold", isConduit ? "text-amber-600" : "text-foreground")}>
-                                    ${donor.amount.toLocaleString()}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {donor.transaction_count > 1 ? `${donor.transaction_count} contributions` : donor.cycle}
-                                  </p>
-                                </div>
+                            {/* Load More Button */}
+                            {remaining > 0 && (
+                              <div className="flex justify-center pt-4">
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setVisibleDonorCount(prev => prev + 20)}
+                                >
+                                  Show 20 more ({remaining} remaining)
+                                </Button>
                               </div>
-                            );
-                          }
-                          
-                          // Render FEC aggregate sources
-                          const getBorderStyle = () => {
-                            switch (source.sourceType) {
-                              case 'small_donors': return 'border-primary/30 bg-primary/5';
-                              case 'candidate_loan':
-                              case 'candidate_contribution': return 'border-blue-500/30 bg-blue-500/5';
-                              case 'committee_transfer': return 'border-purple-500/30 bg-purple-500/5';
-                              default: return 'border-border';
-                            }
-                          };
-                          
-                          const getAmountColor = () => {
-                            switch (source.sourceType) {
-                              case 'candidate_loan':
-                              case 'candidate_contribution': return 'text-blue-600';
-                              case 'committee_transfer': return 'text-purple-600';
-                              default: return 'text-foreground';
-                            }
-                          };
-                          
-                          return (
-                            <div key={source.id} className={cn(
-                              "flex items-center justify-between p-4 rounded-lg border",
-                              getBorderStyle()
-                            )}>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <p className="font-medium text-foreground">{source.name}</p>
-                                  {source.badgeLabel && (
-                                    <Badge variant="outline" className={cn("text-[10px]", source.badgeStyle)}>
-                                      {source.badgeLabel}
-                                    </Badge>
-                                  )}
-                                </div>
-                                {source.description && (
-                                  <p className="text-xs text-muted-foreground mt-1">{source.description}</p>
-                                )}
-                              </div>
-                              <div className="text-right">
-                                <p className={cn("font-bold", getAmountColor())}>
-                                  {formatCurrency(source.amount)}
-                                </p>
-                                {source.subLabel && (
-                                  <p className="text-xs text-muted-foreground">{source.subLabel}</p>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        });
+                            )}
+                          </>
+                        );
                       })()}
                     </div>
                     
