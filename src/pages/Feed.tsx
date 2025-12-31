@@ -60,14 +60,25 @@ export const Feed = () => {
         : 'federal',
     }));
 
+    // Get set of congress member names (lowercase for comparison)
+    const congressMemberNames = new Set(
+      congressCandidates.map(c => c.name.toLowerCase())
+    );
+
     // Transform Civic API officials (state and local)
     const civicCandidates: Candidate[] = civicOfficials
       .filter(official => {
         // Exclude federal legislative (we get those from Congress API)
-        const isFederalLegislative = official.level === 'federal_legislative' ||
-          official.office.toLowerCase().includes('senator') ||
-          official.office.toLowerCase().includes('representative');
-        return !isFederalLegislative;
+        if (official.level === 'federal_legislative') return false;
+        
+        // Exclude if this name matches a federal representative
+        // (prevents Open States data quality issues causing duplicates)
+        if (congressMemberNames.has(official.name.toLowerCase())) {
+          console.log(`Excluding ${official.name} from civic data - matches federal representative`);
+          return false;
+        }
+        
+        return true;
       })
       .map(official => ({
         id: official.id,
