@@ -1299,9 +1299,9 @@ export function AnswerCoveragePanel() {
                       const hasFecId = !!candidate.fecCandidateId;
                       const hasCommittee = !!candidate.fecCommitteeId;
                       const financeStatus = calculateFinanceStatus(candidate);
-                      // Calculate "Local Total" as imported itemized + FEC non-itemized receipts for apples-to-apples comparison
-                      // Transfer gap: only add transfers we HAVEN'T already imported locally
-                      const localItemized = candidate.localItemized || 0;
+                      // Calculate "Local Total" as imported itemized NET + FEC non-itemized receipts for apples-to-apples comparison
+                      // Use localItemizedNet which excludes earmark pass-throughs (memo_code = 'X') to prevent double-counting
+                      const localItemizedNet = candidate.localItemizedNet || 0;
                       const localTransfers = candidate.localTransfers || 0;
                       const fecTransfers = candidate.fecTransfers || 0;
                       const transferGap = Math.max(0, fecTransfers - localTransfers); // Transfers missing from local import
@@ -1312,7 +1312,7 @@ export function AnswerCoveragePanel() {
                       const fecUnitemized = candidate.fecUnitemized || 0;
                       // fecOtherReceipts now uses loanGap instead of full fecLoans to avoid double-counting
                       const fecOtherReceipts = loanGap + (candidate.fecCandidateContribution || 0) + (candidate.fecOtherReceipts || 0) + transferGap;
-                      const localTotal = localItemized + fecUnitemized + fecOtherReceipts;
+                      const localTotal = localItemizedNet + fecUnitemized + fecOtherReceipts;
                       const syncStatus = candidate.syncStatus;
                       const hasOverride = overrideMap.has(candidate.id);
                       
@@ -1427,7 +1427,7 @@ export function AnswerCoveragePanel() {
                                 <FinanceStatusBadge
                                   status={getFinanceBadgeStatus()}
                                     fecTotalReceipts={financeStatus.fecTotalReceipts}
-                                    localItemized={localItemized}
+                                    localItemized={localItemizedNet}
                                     reconciliationCheckedAt={candidate.reconciliationCheckedAt}
                                   />
                                 </button>
@@ -1458,8 +1458,8 @@ export function AnswerCoveragePanel() {
                                 <div className="space-y-2 text-sm">
                                   <div className="font-medium border-b pb-1 mb-2">Local Total Breakdown</div>
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Imported Itemized</span>
-                                    <span className="font-medium">{formatCurrency(localItemized)}</span>
+                                    <span className="text-muted-foreground">Imported Itemized (Net)</span>
+                                    <span className="font-medium">{formatCurrency(localItemizedNet)}</span>
                                   </div>
                                   {localTransfers > 0 && (
                                     <div className="flex justify-between text-xs text-muted-foreground/70 pl-2">
