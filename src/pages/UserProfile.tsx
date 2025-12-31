@@ -383,7 +383,32 @@ export const UserProfile = () => {
           </div>
         </div>
 
-        {/* Overall Score with L10-R10 Display */}
+        {/* Quiz Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-8">
+          <Link to="/quiz?mode=random" className="flex-1">
+            <Button variant="default" className="w-full gap-2">
+              <HelpCircle className="w-4 h-4" />
+              Answer More Questions
+            </Button>
+          </Link>
+          <Link to="/quiz" className="flex-1">
+            <Button variant="outline" className="w-full gap-2">
+              <RefreshCw className="w-4 h-4" />
+              Retake Full Quiz
+            </Button>
+          </Link>
+          <Button 
+            variant="ghost" 
+            className="flex-1 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={handleResetOnboarding}
+            disabled={resetOnboarding.isPending}
+          >
+            <RotateCcw className="w-4 h-4" />
+            {resetOnboarding.isPending ? 'Resetting...' : 'Reset Onboarding'}
+          </Button>
+        </div>
+
+        {/* Overall Score */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
@@ -392,7 +417,7 @@ export const UserProfile = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-center mb-8 p-6 rounded-xl bg-secondary/50">
+            <div className="text-center p-6 rounded-xl bg-secondary/50">
               <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                 Overall Score
               </span>
@@ -404,76 +429,6 @@ export const UserProfile = () => {
                  profile.overall_score <= -30 ? 'You tend to lean Conservative on most issues' : 
                  'You hold moderate or mixed views across issues'}
               </p>
-            </div>
-
-            {/* Party Platform Comparison */}
-            <TooltipProvider>
-              <div className="flex flex-col gap-4 mb-8">
-                <PartyComparisonCard
-                  partyId="democrat"
-                  partyName="Democratic"
-                  score={partyScores?.democrat}
-                  isLoading={partyScoresLoading}
-                />
-                <PartyComparisonCard
-                  partyId="republican"
-                  partyName="Republican"
-                  score={partyScores?.republican}
-                  isLoading={partyScoresLoading}
-                />
-                <PartyComparisonCard
-                  partyId="green"
-                  partyName="Green"
-                  score={partyScores?.green}
-                  isLoading={partyScoresLoading}
-                />
-                <PartyComparisonCard
-                  partyId="libertarian"
-                  partyName="Libertarian"
-                  score={partyScores?.libertarian}
-                  isLoading={partyScoresLoading}
-                />
-              </div>
-            </TooltipProvider>
-
-            {/* Score Breakdown */}
-            {topicScoresList.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {topicScoresList.map((ts, index) => (
-                  <div 
-                    key={ts.topicId}
-                    className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 animate-slide-up"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <span className="text-sm font-medium text-foreground">{ts.topicName}</span>
-                    <ScoreText score={ts.score} size="sm" />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-6 pt-6 border-t border-border space-y-3">
-              <Link to="/quiz?mode=random">
-                <Button variant="default" className="w-full gap-2">
-                  <HelpCircle className="w-4 h-4" />
-                  Answer More Questions (5 Random)
-                </Button>
-              </Link>
-              <Link to="/quiz">
-                <Button variant="outline" className="w-full gap-2">
-                  <RefreshCw className="w-4 h-4" />
-                  Retake Full Quiz
-                </Button>
-              </Link>
-              <Button 
-                variant="ghost" 
-                className="w-full gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={handleResetOnboarding}
-                disabled={resetOnboarding.isPending}
-              >
-                <RotateCcw className="w-4 h-4" />
-                {resetOnboarding.isPending ? 'Resetting...' : 'Reset Onboarding'}
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -521,6 +476,46 @@ export const UserProfile = () => {
             ) : (
               <p className="text-muted-foreground">Complete the quiz to see your AI-generated political analysis.</p>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Party Alignment */}
+        <Card className="mb-8 shadow-elevated">
+          <CardHeader>
+            <CardTitle className="font-display flex items-center gap-2">
+              <Users className="w-5 h-5 text-accent" />
+              Party Alignment
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TooltipProvider>
+              <div className="flex flex-col gap-4">
+                <PartyComparisonCard
+                  partyId="democrat"
+                  partyName="Democratic"
+                  score={partyScores?.democrat}
+                  isLoading={partyScoresLoading}
+                />
+                <PartyComparisonCard
+                  partyId="republican"
+                  partyName="Republican"
+                  score={partyScores?.republican}
+                  isLoading={partyScoresLoading}
+                />
+                <PartyComparisonCard
+                  partyId="green"
+                  partyName="Green"
+                  score={partyScores?.green}
+                  isLoading={partyScoresLoading}
+                />
+                <PartyComparisonCard
+                  partyId="libertarian"
+                  partyName="Libertarian"
+                  score={partyScores?.libertarian}
+                  isLoading={partyScoresLoading}
+                />
+              </div>
+            </TooltipProvider>
           </CardContent>
         </Card>
 
