@@ -360,16 +360,35 @@ export const useCandidateDonors = (candidateId: string | undefined) => {
       const canonicalGroups = new Map<string, DonorWithCanonical>();
       
       rawDonors.forEach(donor => {
-        // Find matching alias
-        const matchingAlias = (aliases || []).find(alias => {
-          if (!alias.donor_types?.includes(donor.type)) return false;
-          const pattern = alias.alias_pattern.replace(/%/g, '.*').replace(/_/g, '.');
-          const regex = new RegExp(`^${pattern}$`, 'i');
-          return regex.test(donor.name);
-        });
+        // Use display_name from database if it exists (already resolved by backfill)
+        let canonicalName = donor.display_name;
+        let isConsolidated = donor.display_name !== null && donor.display_name !== donor.name;
         
-        const canonicalName = matchingAlias?.canonical_name || donor.name;
-        const groupKey = `${canonicalName}|${donor.type}|${donor.cycle}`;
+        // Fallback: Find matching alias if display_name not set or same as name
+        if (!canonicalName || canonicalName === donor.name) {
+          const matchingAlias = (aliases || []).find(alias => {
+            if (!alias.donor_types?.includes(donor.type)) return false;
+            
+            // Check all patterns in alias_patterns array
+            const patterns = alias.alias_patterns || (alias.alias_pattern ? [alias.alias_pattern] : []);
+            return patterns.some(pattern => {
+              if (!pattern) return false;
+              const regexPattern = pattern.replace(/%/g, '.*').replace(/_/g, '.');
+              const regex = new RegExp(`^${regexPattern}$`, 'i');
+              return regex.test(donor.name);
+            });
+          });
+          
+          if (matchingAlias) {
+            canonicalName = matchingAlias.canonical_name;
+            isConsolidated = true;
+          } else {
+            canonicalName = donor.name;
+          }
+        }
+        
+        // Group by display_name and cycle (removes type to consolidate same entity across types)
+        const groupKey = `${canonicalName}|${donor.cycle}`;
         
         const existing = canonicalGroups.get(groupKey);
         if (existing) {
@@ -385,8 +404,8 @@ export const useCandidateDonors = (candidateId: string | undefined) => {
           canonicalGroups.set(groupKey, {
             ...donor,
             display_name: canonicalName,
-            is_consolidated: !!matchingAlias,
-            name_variations: matchingAlias ? [donor.name] : undefined,
+            is_consolidated: isConsolidated,
+            name_variations: isConsolidated ? [donor.name] : undefined,
           });
         }
       });
