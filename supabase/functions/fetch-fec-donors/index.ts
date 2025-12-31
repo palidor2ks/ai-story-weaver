@@ -1289,20 +1289,52 @@ serve(async (req) => {
     // Update committee sync cursors
     await saveCursor(committeeHasMore);
 
-    // Fetch FEC totals and store rollup (only if we completed the committee)
+    // Update rollups for EVERY sync batch (not just when complete)
+    // This ensures the dashboard shows accurate dollar amounts during partial syncs
     // CRITICAL: Only store rollups for P/A (campaign) committees with the candidate_id
     // External committees (J/U/B/D) should NOT contribute to candidate totals
-    if (!committeeHasMore && !isExternalCommittee) {
-      const fecTotals = await fetchFECTotals(fecApiKey, committeeId, cycle);
+    if (!isExternalCommittee) {
+      // Query actual totals from contributions table for accuracy
+      const { data: dbTotals } = await supabase.rpc(
+        'get_contribution_totals_by_committee',
+        { p_candidate_id: candidateId, p_cycle: cycle }
+      );
       
-      // CRITICAL: Preserve existing FEC values if API call failed (returned nulls)
-      // This prevents rate-limited syncs from zeroing out FEC totals
-      let finalFecItemized = fecTotals.fecItemized;
-      let finalFecUnitemized = fecTotals.fecUnitemized;
-      let finalFecTotalReceipts = fecTotals.fecTotalReceipts;
+      // Find totals for this specific committee
+      const committeeDbTotals = (dbTotals || []).find((t: { committee_id: string }) => t.committee_id === committeeId);
       
-      if (fecTotals.fecItemized === null || fecTotals.fecTotalReceipts === null) {
-        // FEC API failed - try to preserve existing values
+      // Use DB totals if available, fall back to in-memory session totals
+      const localItemizedToStore = committeeDbTotals?.itemized_total || committeeItemized;
+      const localIndividualToStore = committeeDbTotals?.individual_total || committeeIndividualItemized;
+      const localPacToStore = committeeDbTotals?.pac_total || committeePacContributions;
+      const localPartyToStore = committeeDbTotals?.party_total || committeePartyContributions;
+      const localTransfersToStore = committeeDbTotals?.transfers_total || committeeTransfers;
+      const localEarmarkedToStore = committeeDbTotals?.earmarked_total || committeeEarmarked;
+      const contributionCountToStore = committeeDbTotals?.contribution_count || committeeContributions;
+      
+      // Count actual donors from DB
+      const { count: dbDonorCount } = await supabase
+        .from('donors')
+        .select('*', { count: 'exact', head: true })
+        .eq('recipient_committee_id', committeeId)
+        .eq('cycle', cycle);
+      
+      const donorCountToStore = dbDonorCount || totalDonors;
+      
+      // Only fetch FEC totals when sync completes (to avoid rate limits during partial syncs)
+      let finalFecItemized: number | null = null;
+      let finalFecUnitemized: number | null = null;
+      let finalFecTotalReceipts: number | null = null;
+      
+      if (!committeeHasMore) {
+        const fecTotals = await fetchFECTotals(fecApiKey, committeeId, cycle);
+        finalFecItemized = fecTotals.fecItemized;
+        finalFecUnitemized = fecTotals.fecUnitemized;
+        finalFecTotalReceipts = fecTotals.fecTotalReceipts;
+      }
+      
+      // CRITICAL: Preserve existing FEC values if not fetching new ones or if API failed
+      if (finalFecItemized === null || finalFecTotalReceipts === null) {
         const { data: existingRollup } = await supabase
           .from('committee_finance_rollups')
           .select('fec_itemized, fec_unitemized, fec_total_receipts')
@@ -1311,12 +1343,16 @@ serve(async (req) => {
           .maybeSingle();
         
         if (existingRollup) {
-          console.log(`[FEC-DONORS] Preserving existing FEC values for ${committeeId} (API returned nulls)`);
-          finalFecItemized = existingRollup.fec_itemized;
-          finalFecUnitemized = existingRollup.fec_unitemized;
-          finalFecTotalReceipts = existingRollup.fec_total_receipts;
+          if (!committeeHasMore) {
+            console.log(`[FEC-DONORS] Preserving existing FEC values for ${committeeId} (API returned nulls)`);
+          }
+          finalFecItemized = finalFecItemized ?? existingRollup.fec_itemized;
+          finalFecUnitemized = finalFecUnitemized ?? existingRollup.fec_unitemized;
+          finalFecTotalReceipts = finalFecTotalReceipts ?? existingRollup.fec_total_receipts;
         }
       }
+      
+      console.log(`[FEC-DONORS] Updating rollup for ${committeeId}: local=$${localItemizedToStore}, donors=${donorCountToStore}, hasMore=${committeeHasMore}`);
       
       await supabase
         .from('committee_finance_rollups')
@@ -1324,20 +1360,20 @@ serve(async (req) => {
           committee_id: committeeId,
           candidate_id: candidateId,
           cycle,
-          local_itemized: committeeItemized,
-          local_transfers: committeeTransfers,
-          local_earmarked: committeeEarmarked,
+          local_itemized: localItemizedToStore,
+          local_transfers: localTransfersToStore,
+          local_earmarked: localEarmarkedToStore,
           // Category-level local tracking
-          local_individual_itemized: committeeIndividualItemized,
-          local_pac_contributions: committeePacContributions,
-          local_party_contributions: committeePartyContributions,
+          local_individual_itemized: localIndividualToStore,
+          local_pac_contributions: localPacToStore,
+          local_party_contributions: localPartyToStore,
           fec_itemized: finalFecItemized,
           fec_unitemized: finalFecUnitemized,
           fec_total_receipts: finalFecTotalReceipts,
-          contribution_count: committeeContributions,
-          donor_count: totalDonors,
+          contribution_count: contributionCountToStore,
+          donor_count: donorCountToStore,
           last_sync: new Date().toISOString(),
-          last_fec_check: fecTotals.fecItemized !== null ? new Date().toISOString() : undefined // Only update if FEC succeeded
+          last_fec_check: (!committeeHasMore && finalFecItemized !== null) ? new Date().toISOString() : undefined
         }, { onConflict: 'committee_id,cycle' });
     } else if (!committeeHasMore && isExternalCommittee) {
       // For external committees, store in external_committee_finance table instead
