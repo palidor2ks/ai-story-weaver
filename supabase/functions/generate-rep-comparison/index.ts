@@ -129,6 +129,16 @@ serve(async (req) => {
     const disagreementsWithVotes = disagreements.filter(d => d.has_voting_record);
     const disagreementsInferred = disagreements.filter(d => !d.has_voting_record);
 
+    // Helper to format score in L/R format
+    const formatScoreLR = (score: number): string => {
+      if (score === 0) return 'C';
+      const absValue = Math.abs(score);
+      if (score >= -3 && score <= 3) {
+        return score < 0 ? `CL${absValue}` : `CR${absValue}`;
+      }
+      return score < 0 ? `L${absValue}` : `R${absValue}`;
+    };
+
     // Build the prompt with clear prioritization of voting records
     const skippedTopics = skippedAnswers.length > 0 
       ? `\n\nNote: The user marked ${skippedAnswers.length} topic(s) as "not important to me" and these are excluded from this comparison: ${[...new Set(skippedAnswers.map(a => a.topic_name))].join(', ')}.`
@@ -137,6 +147,15 @@ serve(async (req) => {
     const systemPrompt = `You are a seasoned political analyst speaking directly to a client about how their views compare to their elected representatives. 
 
 Write in second person ("you", "your positions") - never say "the user" or reference "data provided."
+
+CRITICAL: When referencing any political scores in your analysis, ALWAYS use L/R format:
+- L = Left/Progressive (e.g., L5, L10)
+- R = Right/Conservative (e.g., R5, R10)
+- CL = Center-Left (e.g., CL2)
+- CR = Center-Right (e.g., CR2)
+- C = Center
+
+NEVER use raw numbers like +5 or -5. Always format scores as L5 or R5.
 
 CRITICAL INSTRUCTION FOR CITING SOURCES:
 - When you see "VOTING RECORD EVIDENCE" sections, you MUST cite the specific bill numbers (H.R.1234, S.567) in your analysis.
@@ -149,8 +168,8 @@ Be conversational yet insightful, like explaining things over coffee. Maintain n
     // Build structured comparison data that clearly separates voting-record-backed from inferred
     const formatQuestion = (q: typeof sharedQuestions[0], isAgreement: boolean) => {
       const stance = isAgreement
-        ? `Both lean ${q.user_value > 0 ? 'supportive' : q.user_value < 0 ? 'opposed' : 'neutral'}`
-        : `You: ${q.user_value > 0 ? 'Support' : q.user_value < 0 ? 'Oppose' : 'Neutral'}, ${candidateName}: ${q.rep_value > 0 ? 'Support' : q.rep_value < 0 ? 'Oppose' : 'Neutral'}`;
+        ? `Both lean ${q.user_value > 0 ? `right (${formatScoreLR(q.user_value)})` : q.user_value < 0 ? `left (${formatScoreLR(q.user_value)})` : 'neutral (C)'}`
+        : `You: ${formatScoreLR(q.user_value)}, ${candidateName}: ${formatScoreLR(q.rep_value)}`;
       
       let sourceInfo = '';
       if (q.has_voting_record && q.rep_source_description) {
@@ -229,26 +248,26 @@ Agreement rate: ${Math.round((agreements.length / sharedQuestions.length) * 100)
 Provide a detailed analysis in JSON format:
 
 {
-  "deepAnalysis": "A 2-3 paragraph analysis written directly to the person using 'you' and 'your'. PRIORITIZE discussing topics with voting record evidence and cite specific bill numbers (H.R.1234, S.567). For example: 'On healthcare, you and ${candidateName} are aligned - ${candidateName} sponsored H.R.5430 which expands coverage access.' Only mention party platform positions after covering voting-record-backed positions. Never say 'the user' or 'based on the data provided'.",
+  "deepAnalysis": "A 2-3 paragraph analysis written directly to the person using 'you' and 'your'. PRIORITIZE discussing topics with voting record evidence and cite specific bill numbers (H.R.1234, S.567). When mentioning scores, use L/R format (L5, R3, etc). For example: 'On healthcare, you and ${candidateName} are aligned - ${candidateName} sponsored H.R.5430 which expands coverage access.' Only mention party platform positions after covering voting-record-backed positions. Never say 'the user' or 'based on the data provided'.",
   "keyAgreements": ["List 2-4 specific policy areas - include bill numbers where available, e.g., 'Healthcare (H.R.5430)'"],
   "keyDisagreements": ["List 2-4 specific policy areas - include bill numbers where available"],
   "sources": [{"title": "Source title with bill number if applicable", "url": "Congress.gov or source URL", "type": "voting_record|statement|platform"}]
 }
 
-IMPORTANT: If voting record evidence exists, you MUST reference specific bill numbers in your analysis. Speak directly and conversationally.`;
+IMPORTANT: If voting record evidence exists, you MUST reference specific bill numbers in your analysis. Use L/R format for all scores. Speak directly and conversationally.`;
     } else {
       userPrompt = `${comparisonData}
 
 Provide a brief comparison in JSON format:
 
 {
-  "summary": "A 1-2 sentence conversational summary speaking directly to the person. Use 'you' and 'your'. If there are voting records available, mention at least one specific bill number. Example: 'You and ${candidateName} align on healthcare (${candidateName} sponsored H.R.5430) and immigration, though you differ on tax policy.'",
+  "summary": "A 1-2 sentence conversational summary speaking directly to the person. Use 'you' and 'your'. If there are voting records available, mention at least one specific bill number. Use L/R format for scores (L5, R3, etc). Example: 'You and ${candidateName} align on healthcare (${candidateName} sponsored H.R.5430) and immigration, though you differ on tax policy.'",
   "keyAgreements": ["Brief description - include bill number if available, e.g., 'Healthcare (H.R.5430)'"],
   "keyDisagreements": ["Brief description - include bill number if available"],
   "sources": [{"title": "Source title", "url": "source url if available", "type": "voting_record|statement|platform"}]
 }
 
-IMPORTANT: Prioritize mentioning topics backed by voting records. Be direct and personable.`;
+IMPORTANT: Prioritize mentioning topics backed by voting records. Use L/R format for all scores. Be direct and personable.`;
     }
 
     console.log(`[generate-rep-comparison] Calling Lovable AI Gateway...`);
