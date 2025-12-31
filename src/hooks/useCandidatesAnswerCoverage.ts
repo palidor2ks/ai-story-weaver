@@ -23,6 +23,7 @@ export interface CandidateAnswerCoverage {
   localItemizedNet: number;      // Local itemized NET (excluding earmark pass-throughs) - comparable to FEC
   localTransfers: number;        // Committee transfers
   localEarmarked: number;        // Earmarked contributions
+  localLoans: number;            // Candidate loans (Line 13A)
   fecItemized: number | null;    // FEC itemized contributions
   fecUnitemized: number | null;  // FEC unitemized contributions
   fecTotalReceipts: number | null; // FEC total receipts
@@ -133,6 +134,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         local_itemized_net: number | null;
         local_transfers: number | null;
         local_earmarked: number | null;
+        local_loans: number | null;
         fec_itemized: number | null;
         fec_unitemized: number | null;
         fec_total_receipts: number | null;
@@ -231,6 +233,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           localItemizedNet: rec?.local_itemized_net || 0, // NET for proper comparison
           localTransfers: rec?.local_transfers || 0,
           localEarmarked: rec?.local_earmarked || 0,
+          localLoans: rec?.local_loans || 0,
           fecItemized: rec?.fec_itemized ?? null,
           fecUnitemized: rec?.fec_unitemized ?? null,
           fecTotalReceipts: rec?.fec_total_receipts ?? null,

@@ -1292,8 +1292,13 @@ export function AnswerCoveragePanel() {
                       const localTransfers = candidate.localTransfers || 0;
                       const fecTransfers = candidate.fecTransfers || 0;
                       const transferGap = Math.max(0, fecTransfers - localTransfers); // Transfers missing from local import
+                      // Loan gap: only add loans we HAVEN'T already imported locally (Line 13A)
+                      const localLoans = candidate.localLoans || 0;
+                      const fecLoans = candidate.fecLoans || 0;
+                      const loanGap = Math.max(0, fecLoans - localLoans); // Loans missing from local import
                       const fecUnitemized = candidate.fecUnitemized || 0;
-                      const fecOtherReceipts = (candidate.fecLoans || 0) + (candidate.fecCandidateContribution || 0) + (candidate.fecOtherReceipts || 0) + transferGap;
+                      // fecOtherReceipts now uses loanGap instead of full fecLoans to avoid double-counting
+                      const fecOtherReceipts = loanGap + (candidate.fecCandidateContribution || 0) + (candidate.fecOtherReceipts || 0) + transferGap;
                       const localTotal = localItemized + fecUnitemized + fecOtherReceipts;
                       const syncStatus = candidate.syncStatus;
                       const hasOverride = overrideMap.has(candidate.id);
@@ -1454,9 +1459,14 @@ export function AnswerCoveragePanel() {
                                     <span className="font-medium">{formatCurrency(fecUnitemized)}</span>
                                   </div>
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">+ Loans (FEC)</span>
-                                    <span className="font-medium">{formatCurrency(candidate.fecLoans || 0)}</span>
+                                    <span className="text-muted-foreground">+ Loans (FEC Gap)</span>
+                                    <span className="font-medium">{formatCurrency(loanGap)}</span>
                                   </div>
+                                  {fecLoans > 0 && (
+                                    <div className="flex justify-between text-xs text-muted-foreground/70 pl-2">
+                                      <span className="italic">FEC: {formatCurrency(fecLoans)} − Local: {formatCurrency(localLoans)}</span>
+                                    </div>
+                                  )}
                                   <div className="flex justify-between">
                                     <span className="text-muted-foreground">+ Candidate (FEC)</span>
                                     <span className="font-medium">{formatCurrency(candidate.fecCandidateContribution || 0)}</span>
