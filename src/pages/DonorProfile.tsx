@@ -676,6 +676,18 @@ const DonorProfile = () => {
                                 {contribution.candidates.office} • {contribution.candidates.state}
                               </p>
                             </Link>
+                          ) : contribution.recipient_committee_id ? (
+                            <Link 
+                              to={`/committee/${contribution.recipient_committee_id}`}
+                              className="hover:text-primary transition-colors"
+                            >
+                              <p className="font-medium text-foreground">
+                                {contribution.recipient_committee_name || 'Unknown Committee'}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {contribution.recipient_committee_id}
+                              </p>
+                            </Link>
                           ) : (
                             <p className="font-medium text-foreground">
                               {contribution.recipient_committee_name || 'Unknown'}
