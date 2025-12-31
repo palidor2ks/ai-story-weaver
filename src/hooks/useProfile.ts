@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 
 // ============= Types =============
 
-interface Profile {
+export interface Profile {
   id: string;
   name: string;
   email: string | null;

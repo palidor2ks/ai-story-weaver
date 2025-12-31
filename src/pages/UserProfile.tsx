@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info } from 'lucide-react';
+import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -401,6 +402,18 @@ export const UserProfile = () => {
                       • ⛪ {profile.religion}
                     </span>
                   )}
+                </div>
+                
+                {/* Edit Profile Button */}
+                <div className="mt-3">
+                  <EditProfileDialog 
+                    profile={profile} 
+                    onSave={async (data) => {
+                      await updateProfile.mutateAsync(data);
+                      toast.success('Profile updated successfully!');
+                    }}
+                    isLoading={updateProfile.isPending}
+                  />
                 </div>
                 
                 {/* Verification badges */}
