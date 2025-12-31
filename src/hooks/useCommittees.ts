@@ -223,7 +223,7 @@ interface CommitteePageResult {
   hasMore: boolean;
 }
 
-const PAGE_SIZE_DEFAULT = 12;
+const PAGE_SIZE_DEFAULT = 50;
 
 const fetchCommitteePage = async (
   page: number,
@@ -331,10 +331,11 @@ export const useCommitteesPaginated = (filters: CommitteeFilters) => {
 };
 
 const fetchCommitteeFilterOptions = async (): Promise<CommitteeFilterOptions> => {
+  // Limit scans for faster load
   const [cyclesResult, designationResult, candidatesResult] = await Promise.all([
-    supabase.from('committee_finance_rollups').select('cycle'),
-    supabase.from('candidate_committees').select('designation'),
-    supabase.from('candidates').select('id, name, party').order('name'),
+    supabase.from('committee_finance_rollups').select('cycle').limit(100),
+    supabase.from('candidate_committees').select('designation').limit(500),
+    supabase.from('candidates').select('id, name, party').not('fec_committee_id', 'is', null).order('name').limit(200),
   ]);
 
   if (cyclesResult.error) throw cyclesResult.error;
@@ -370,6 +371,7 @@ export const useCommitteeFilterOptions = () => {
   return useQuery({
     queryKey: ['committee-filter-options'],
     queryFn: fetchCommitteeFilterOptions,
+    staleTime: 10 * 60 * 1000, // 10 minutes cache
   });
 };
 

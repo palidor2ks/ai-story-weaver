@@ -73,26 +73,28 @@ export const useAvailableDonorFilters = () => {
   return useQuery({
     queryKey: ['donor-filter-options'],
     queryFn: async () => {
-      // Get distinct cycles
+      // Get distinct cycles - limit scan for faster load
       const { data: cyclesData } = await supabase
         .from('donors')
         .select('cycle')
-        .order('cycle', { ascending: false });
+        .order('cycle', { ascending: false })
+        .limit(1000);
       
       const cycles = [...new Set(cyclesData?.map(d => d.cycle) || [])];
       
-      // Get distinct states
+      // Get distinct states - limit scan for faster load
       const { data: statesData } = await supabase
         .from('donors')
         .select('contributor_state')
         .not('contributor_state', 'is', null)
-        .order('contributor_state');
+        .order('contributor_state')
+        .limit(5000);
       
       const states = [...new Set(statesData?.map(d => d.contributor_state).filter(Boolean) || [])] as string[];
       
       return { cycles, states };
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes - cache longer
   });
 };
 
