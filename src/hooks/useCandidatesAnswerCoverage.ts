@@ -11,6 +11,8 @@ export interface CandidateAnswerCoverage {
   answerCount: number;
   totalQuestions: number;
   percentage: number;
+  sourcedCount: number;           // Answers with valid (non-party-inferred) sources
+  sourcePercentage: number;       // Percentage of answers with valid sources
   coverageTier: CoverageTier;
   confidence: ConfidenceLevel;
   voteCount: number;
@@ -82,26 +84,39 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
 
       if (candidatesError) throw candidatesError;
 
-      // Get answer counts per candidate (paginated to handle >1000 rows)
+      // Get answer counts per candidate with source info (paginated to handle >1000 rows)
       const PAGE_SIZE = 1000;
       let from = 0;
-      const allAnswers: Array<{ candidate_id: string }> = [];
+      const allAnswers: Array<{ candidate_id: string; source_description: string | null }> = [];
 
       while (true) {
         const { data, error } = await supabase
           .from('candidate_answers')
-          .select('id, candidate_id')
+          .select('id, candidate_id, source_description')
           .order('id', { ascending: true })
           .range(from, from + PAGE_SIZE - 1);
 
         if (error) throw error;
 
-        (data || []).forEach(row => allAnswers.push({ candidate_id: row.candidate_id }));
+        (data || []).forEach(row => allAnswers.push({ 
+          candidate_id: row.candidate_id,
+          source_description: row.source_description
+        }));
 
         if (!data || data.length < PAGE_SIZE) break;
         from += PAGE_SIZE;
         if (from > 500000) break;
       }
+
+      // Helper to check if answer has a valid (non-party-inferred) source
+      const hasValidSource = (desc: string | null) => {
+        if (!desc) return false;
+        const lowerDesc = desc.toLowerCase();
+        // Exclude party platform inferences
+        if (lowerDesc.includes('platform') || lowerDesc.includes('inferred from')) return false;
+        // Must have actual evidence
+        return desc.length > 10;
+      };
 
       // Get vote counts per candidate
       const { data: votesData } = await supabase
@@ -191,10 +206,14 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         }
       });
 
-      // Count answers per candidate
+      // Count answers and sourced answers per candidate
       const answerCountMap: Record<string, number> = {};
+      const sourcedCountMap: Record<string, number> = {};
       allAnswers.forEach(row => {
         answerCountMap[row.candidate_id] = (answerCountMap[row.candidate_id] || 0) + 1;
+        if (hasValidSource(row.source_description)) {
+          sourcedCountMap[row.candidate_id] = (sourcedCountMap[row.candidate_id] || 0) + 1;
+        }
       });
 
       // Helper to validate FEC ID prefix against office
@@ -232,7 +251,9 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       // Build result with coverage info
       const results: CandidateAnswerCoverage[] = (candidates || []).map(c => {
         const answerCount = answerCountMap[c.id] || 0;
+        const sourcedCount = sourcedCountMap[c.id] || 0;
         const percentage = totalQuestions ? Math.round((answerCount / totalQuestions) * 100) : 0;
+        const sourcePercentage = answerCount > 0 ? Math.round((sourcedCount / answerCount) * 100) : 0;
         const rec = reconciliationMap[c.id];
         
         // Determine sync status
@@ -259,6 +280,8 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           answerCount,
           totalQuestions: totalQuestions || 0,
           percentage,
+          sourcedCount,
+          sourcePercentage,
           coverageTier: (c.coverage_tier as CoverageTier) || 'tier_3',
           confidence: (c.confidence as ConfidenceLevel) || 'low',
           voteCount: voteCountMap[c.id] || 0,

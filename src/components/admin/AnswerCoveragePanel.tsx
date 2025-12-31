@@ -224,6 +224,27 @@ export function AnswerCoveragePanel() {
     return { withFecId, neverSynced, partial, complete };
   }, [candidates]);
 
+  // Source coverage stats from candidates
+  const sourceStats = useMemo(() => {
+    if (!candidates) return { totalSourced: 0, totalAnswers: 0, sourcePercentage: 0 };
+    const totalSourced = candidates.reduce((sum, c) => sum + c.sourcedCount, 0);
+    const totalAnswers = candidates.reduce((sum, c) => sum + c.answerCount, 0);
+    const sourcePercentage = totalAnswers > 0 ? Math.round((totalSourced / totalAnswers) * 100) : 0;
+    return { totalSourced, totalAnswers, sourcePercentage };
+  }, [candidates]);
+
+  const getSourceBadgeColor = (percentage: number) => {
+    if (percentage >= 70) return 'bg-green-600 text-white';
+    if (percentage >= 40) return 'bg-amber-500 text-white';
+    return 'bg-red-500 text-white';
+  };
+
+  const getSourceDotColor = (percentage: number) => {
+    if (percentage >= 70) return 'bg-green-500';
+    if (percentage >= 40) return 'bg-amber-500';
+    return 'bg-red-500';
+  };
+
   // Get counts for batch action buttons (from filtered candidates)
   const partialSyncCandidates = useMemo(() => 
     baseFilteredCandidates.filter(c => c.syncStatus === 'partial' && c.fecCandidateId),
@@ -812,6 +833,38 @@ export function AnswerCoveragePanel() {
           </div>
         </div>
 
+        {/* Source Coverage Stats */}
+        <div className="bg-muted/30 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <FileText className="h-4 w-4" />
+              <span>Source Quality</span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="text-muted-foreground hover:text-foreground">
+                    <HelpCircle className="h-3.5 w-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 text-sm">
+                  <p className="font-medium mb-1">Source Quality</p>
+                  <p className="text-muted-foreground">
+                    Percentage of answers with specific, verifiable sources (voting records, cosponsored bills, public statements)
+                    rather than party platform inferences.
+                  </p>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">
+                {sourceStats.totalSourced.toLocaleString()} / {sourceStats.totalAnswers.toLocaleString()} answers with sources
+              </span>
+              <Badge className={getSourceBadgeColor(sourceStats.sourcePercentage)}>
+                {sourceStats.sourcePercentage}% sourced
+              </Badge>
+            </div>
+          </div>
+        </div>
+
         {/* FEC Sync Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-muted/50 rounded-lg p-4 space-y-1">
@@ -1388,18 +1441,35 @@ export function AnswerCoveragePanel() {
                           </TableCell>
                           <TableCell className="px-2 py-2">{candidate.state}</TableCell>
                           <TableCell className="text-center px-2 py-2">
-                            {isComplete ? (
-                              <div className="flex items-center justify-center">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
-                                <span className="sr-only">100% coverage</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-center gap-0.5 text-xs">
-                                <span className={candidate.answerCount === 0 ? 'text-amber-600' : 'text-foreground'}>
-                                  {candidate.answerCount}/{candidate.totalQuestions}
-                                </span>
-                              </div>
-                            )}
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  {isComplete ? (
+                                    <div className="flex items-center justify-center gap-1">
+                                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
+                                      <span className={`w-2 h-2 rounded-full ${getSourceDotColor(candidate.sourcePercentage)}`} />
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-center gap-1 text-xs">
+                                      <span className={candidate.answerCount === 0 ? 'text-amber-600' : 'text-foreground'}>
+                                        {candidate.answerCount}/{candidate.totalQuestions}
+                                      </span>
+                                      {candidate.answerCount > 0 && (
+                                        <span className={`w-2 h-2 rounded-full ${getSourceDotColor(candidate.sourcePercentage)}`} />
+                                      )}
+                                    </div>
+                                  )}
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p className="font-medium">{candidate.answerCount}/{candidate.totalQuestions} answers</p>
+                                  {candidate.answerCount > 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {candidate.sourcedCount}/{candidate.answerCount} with sources ({candidate.sourcePercentage}%)
+                                    </p>
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </TableCell>
                           <TableCell className="px-2 py-2">
                             <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} compact />
