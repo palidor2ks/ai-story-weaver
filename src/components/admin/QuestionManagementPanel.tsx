@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search, Pencil, Sparkles } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search, Pencil, Sparkles, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 interface QuestionOption {
@@ -72,15 +74,186 @@ const generateQuestionId = (topicId: string, existingIds: string[]): string => {
   return `${prefix}${counter}`;
 };
 
+// Bulk Generate Dialog Component
+interface BulkGenerateDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  topics: Topic[];
+  onGenerate: (topicIds: string[]) => Promise<void>;
+  progress: {
+    isRunning: boolean;
+    currentTopic: string;
+    completed: number;
+    total: number;
+    results: { topicId: string; topicName: string; success: boolean; error?: string }[];
+  };
+}
+
+function BulkGenerateDialog({ open, onOpenChange, topics, onGenerate, progress }: BulkGenerateDialogProps) {
+  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
+
+  const toggleTopic = (topicId: string) => {
+    const newSelected = new Set(selectedTopics);
+    if (newSelected.has(topicId)) {
+      newSelected.delete(topicId);
+    } else {
+      newSelected.add(topicId);
+    }
+    setSelectedTopics(newSelected);
+  };
+
+  const selectAll = () => {
+    setSelectedTopics(new Set(topics.map(t => t.id)));
+  };
+
+  const selectNone = () => {
+    setSelectedTopics(new Set());
+  };
+
+  const handleGenerate = () => {
+    onGenerate(Array.from(selectedTopics));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          <Sparkles className="h-4 w-4 mr-2" />
+          Bulk Generate
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            Bulk AI Question Generation
+          </DialogTitle>
+          <DialogDescription>
+            Generate one question per selected topic using AI. Each question will include all 5 answer options.
+          </DialogDescription>
+        </DialogHeader>
+
+        {progress.isRunning ? (
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Generating: {progress.currentTopic}</span>
+                <span>{progress.completed} / {progress.total}</span>
+              </div>
+              <Progress value={(progress.completed / progress.total) * 100} />
+            </div>
+            
+            {progress.results.length > 0 && (
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {progress.results.map((result) => (
+                  <div key={result.topicId} className="flex items-center gap-2 text-sm">
+                    {result.success ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-600" />
+                    )}
+                    <span>{result.topicName}</span>
+                    {result.error && (
+                      <span className="text-muted-foreground text-xs">({result.error})</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="space-y-4 py-4">
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={selectAll}>
+                  Select All
+                </Button>
+                <Button variant="outline" size="sm" onClick={selectNone}>
+                  Select None
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                {topics.map((topic) => (
+                  <div
+                    key={topic.id}
+                    className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
+                      selectedTopics.has(topic.id) ? 'bg-primary/10 border-primary' : 'hover:bg-muted'
+                    }`}
+                    onClick={() => toggleTopic(topic.id)}
+                  >
+                    <Checkbox
+                      checked={selectedTopics.has(topic.id)}
+                      onCheckedChange={() => toggleTopic(topic.id)}
+                    />
+                    <span className="text-lg">{topic.icon}</span>
+                    <span className="text-sm">{topic.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleGenerate}
+                disabled={selectedTopics.size === 0}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Generate {selectedTopics.size} Question{selectedTopics.size !== 1 ? 's' : ''}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {!progress.isRunning && progress.results.length > 0 && (
+          <div className="space-y-2 border-t pt-4">
+            <div className="text-sm font-medium">Results:</div>
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {progress.results.map((result) => (
+                <div key={result.topicId} className="flex items-center gap-2 text-sm">
+                  {result.success ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-600" />
+                  )}
+                  <span>{result.topicName}</span>
+                  {result.error && (
+                    <span className="text-muted-foreground text-xs">({result.error})</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" className="w-full" onClick={() => onOpenChange(false)}>
+              Done
+            </Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function QuestionManagementPanel() {
   const queryClient = useQueryClient();
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
+  const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [topicFilter, setTopicFilter] = useState<string>("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isBulkGenerateOpen, setIsBulkGenerateOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [bulkGenerateProgress, setBulkGenerateProgress] = useState<{
+    isRunning: boolean;
+    currentTopic: string;
+    completed: number;
+    total: number;
+    results: { topicId: string; topicName: string; success: boolean; error?: string }[];
+  }>({ isRunning: false, currentTopic: '', completed: 0, total: 0, results: [] });
   const [formData, setFormData] = useState<QuestionFormData>({
     id: "",
     text: "",
@@ -365,6 +538,122 @@ export function QuestionManagementPanel() {
     }
   };
 
+  const handleBulkGenerate = async (selectedTopicIds: string[]) => {
+    if (selectedTopicIds.length === 0) {
+      toast.error("Please select at least one topic");
+      return;
+    }
+
+    const selectedTopics = topics?.filter(t => selectedTopicIds.includes(t.id)) || [];
+    setBulkGenerateProgress({
+      isRunning: true,
+      currentTopic: selectedTopics[0]?.name || '',
+      completed: 0,
+      total: selectedTopics.length,
+      results: [],
+    });
+
+    const existingIds = questions?.map(q => q.id) || [];
+
+    for (let i = 0; i < selectedTopics.length; i++) {
+      const topic = selectedTopics[i];
+      setBulkGenerateProgress(prev => ({
+        ...prev,
+        currentTopic: topic.name,
+        completed: i,
+      }));
+
+      try {
+        // Generate question with AI
+        const { data, error } = await supabase.functions.invoke('generate-quiz-question', {
+          body: { topicId: topic.id, topicName: topic.name }
+        });
+
+        if (error || data.error) {
+          throw new Error(data?.error || error?.message || 'Unknown error');
+        }
+
+        // Generate unique ID
+        const questionId = generateQuestionId(topic.id, existingIds);
+        existingIds.push(questionId);
+
+        // Create question in database
+        const { error: questionError } = await supabase
+          .from('questions')
+          .insert({
+            id: questionId,
+            text: data.questionText,
+            topic_id: topic.id,
+            is_onboarding_canonical: false,
+            onboarding_slot: null,
+          });
+
+        if (questionError) throw questionError;
+
+        // Create options
+        const optionsToInsert = [
+          { id: `${questionId}-opt-1`, question_id: questionId, text: data.options.L10, value: -10, display_order: 1, is_skip_option: false },
+          { id: `${questionId}-opt-2`, question_id: questionId, text: data.options.L5, value: -5, display_order: 2, is_skip_option: false },
+          { id: `${questionId}-opt-3`, question_id: questionId, text: data.options.C, value: 0, display_order: 3, is_skip_option: false },
+          { id: `${questionId}-opt-4`, question_id: questionId, text: data.options.R5, value: 5, display_order: 4, is_skip_option: false },
+          { id: `${questionId}-opt-5`, question_id: questionId, text: data.options.R10, value: 10, display_order: 5, is_skip_option: false },
+          { id: `${questionId}-skip`, question_id: questionId, text: "Not important to me", value: 0, display_order: 6, is_skip_option: true },
+        ];
+
+        const { error: optionsError } = await supabase
+          .from('question_options')
+          .insert(optionsToInsert);
+
+        if (optionsError) {
+          await supabase.from('questions').delete().eq('id', questionId);
+          throw optionsError;
+        }
+
+        setBulkGenerateProgress(prev => ({
+          ...prev,
+          results: [...prev.results, { topicId: topic.id, topicName: topic.name, success: true }],
+        }));
+
+        // Add delay between requests to avoid rate limiting
+        if (i < selectedTopics.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+      } catch (error) {
+        console.error(`Failed to generate for ${topic.name}:`, error);
+        setBulkGenerateProgress(prev => ({
+          ...prev,
+          results: [...prev.results, { 
+            topicId: topic.id, 
+            topicName: topic.name, 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Unknown error' 
+          }],
+        }));
+      }
+    }
+
+    setBulkGenerateProgress(prev => ({
+      ...prev,
+      isRunning: false,
+      completed: selectedTopics.length,
+    }));
+
+    queryClient.invalidateQueries({ queryKey: ['admin-questions'] });
+    
+    const successCount = bulkGenerateProgress.results.filter(r => r.success).length + 1;
+    toast.success(`Generated ${successCount} questions successfully`);
+  };
+
+  const toggleTopic = (topicId: string) => {
+    const newExpanded = new Set(expandedTopics);
+    if (newExpanded.has(topicId)) {
+      newExpanded.delete(topicId);
+    } else {
+      newExpanded.add(topicId);
+    }
+    setExpandedTopics(newExpanded);
+  };
+
   const handleOptionTextChange = (index: number, text: string) => {
     setFormData(prev => ({
       ...prev,
@@ -441,10 +730,14 @@ export function QuestionManagementPanel() {
     if (filteredQuestions) {
       setExpandedQuestions(new Set(filteredQuestions.map(q => q.id)));
     }
+    if (topics) {
+      setExpandedTopics(new Set(topics.map(t => t.id)));
+    }
   };
 
   const collapseAll = () => {
     setExpandedQuestions(new Set());
+    setExpandedTopics(new Set());
   };
 
   const filteredQuestions = questions?.filter(q => {
@@ -454,6 +747,15 @@ export function QuestionManagementPanel() {
     const matchesTopic = topicFilter === "all" || q.topic_id === topicFilter;
     return matchesSearch && matchesTopic;
   });
+
+  // Group questions by topic
+  const questionsByTopic = filteredQuestions?.reduce((acc, q) => {
+    if (!acc[q.topic_id]) {
+      acc[q.topic_id] = [];
+    }
+    acc[q.topic_id].push(q);
+    return acc;
+  }, {} as Record<string, Question[]>) || {};
 
   const stats = {
     totalQuestions: questions?.length || 0,
@@ -707,6 +1009,14 @@ export function QuestionManagementPanel() {
               </DialogContent>
             </Dialog>
 
+            <BulkGenerateDialog 
+              open={isBulkGenerateOpen}
+              onOpenChange={setIsBulkGenerateOpen}
+              topics={topics || []}
+              onGenerate={handleBulkGenerate}
+              progress={bulkGenerateProgress}
+            />
+
             <Button variant="outline" size="sm" onClick={expandAll}>
               Expand All
             </Button>
@@ -766,109 +1076,167 @@ export function QuestionManagementPanel() {
           </Select>
         </div>
 
-        {/* Questions List */}
-        <div className="space-y-2">
-          {filteredQuestions?.map((question) => (
-            <Collapsible
-              key={question.id}
-              open={expandedQuestions.has(question.id)}
-              onOpenChange={() => toggleQuestion(question.id)}
-            >
-              <div className="border rounded-lg">
-                <div className="flex items-center">
-                  <CollapsibleTrigger className="flex-1 p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors">
-                    {expandedQuestions.has(question.id) ? (
-                      <ChevronDown className="h-4 w-4 flex-shrink-0" />
+        {/* Questions List - Grouped by Topic */}
+        <div className="space-y-3">
+          {topics?.filter(topic => 
+            topicFilter === "all" || topic.id === topicFilter
+          ).map((topic) => {
+            const topicQuestions = questionsByTopic[topic.id] || [];
+            if (topicQuestions.length === 0 && topicFilter === "all") return null;
+            
+            const completeCount = topicQuestions.filter(q => 
+              q.question_options.filter(o => !o.is_skip_option).length >= 5
+            ).length;
+            const incompleteCount = topicQuestions.length - completeCount;
+
+            return (
+              <Collapsible
+                key={topic.id}
+                open={expandedTopics.has(topic.id)}
+                onOpenChange={() => toggleTopic(topic.id)}
+              >
+                <div className="border rounded-lg">
+                  <CollapsibleTrigger className="w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors">
+                    {expandedTopics.has(topic.id) ? (
+                      <ChevronDown className="h-5 w-5 flex-shrink-0" />
                     ) : (
-                      <ChevronRight className="h-4 w-4 flex-shrink-0" />
+                      <ChevronRight className="h-5 w-5 flex-shrink-0" />
                     )}
+                    <span className="text-xl">{topic.icon}</span>
                     <div className="flex-1 text-left">
-                      <div className="font-medium">{question.text}</div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className="text-xs">
-                          {question.id}
-                        </Badge>
-                        <Badge variant="secondary" className="text-xs">
-                          {getTopicName(question.topic_id)}
-                        </Badge>
-                        {question.is_onboarding_canonical && (
-                          <Badge className="text-xs bg-primary">
-                            Onboarding #{question.onboarding_slot}
-                          </Badge>
-                        )}
+                      <div className="font-semibold">{topic.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {topicQuestions.length} question{topicQuestions.length !== 1 ? 's' : ''}
                       </div>
                     </div>
-                    {getOptionStatus(question)}
+                    <div className="flex gap-2">
+                      {completeCount > 0 && (
+                        <Badge variant="default" className="bg-green-600">
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          {completeCount} complete
+                        </Badge>
+                      )}
+                      {incompleteCount > 0 && (
+                        <Badge variant="destructive">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          {incompleteCount} incomplete
+                        </Badge>
+                      )}
+                    </div>
                   </CollapsibleTrigger>
-                  <div className="pr-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenEdit(question);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                
-                <CollapsibleContent>
-                  <div className="px-4 pb-4 pt-2 border-t bg-muted/30">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[60px]">Order</TableHead>
-                          <TableHead className="w-[80px]">Value</TableHead>
-                          <TableHead>Option Text</TableHead>
-                          <TableHead className="w-[100px]">Type</TableHead>
-                          <TableHead className="w-[80px] text-right">ID</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {question.question_options
-                          .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
-                          .map((option) => (
-                            <TableRow key={option.id} className={option.is_skip_option ? "opacity-60" : ""}>
-                              <TableCell>{option.display_order ?? '-'}</TableCell>
-                              <TableCell>{getValueBadge(option.value)}</TableCell>
-                              <TableCell className="max-w-md">
-                                <span className={option.is_skip_option ? "italic" : ""}>
-                                  {option.text}
-                                </span>
-                              </TableCell>
-                              <TableCell>
-                                {option.is_skip_option ? (
-                                  <Badge variant="outline" className="text-xs">Skip</Badge>
-                                ) : (
-                                  <Badge variant="secondary" className="text-xs">Regular</Badge>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <code className="text-xs text-muted-foreground">
-                                  {option.id.slice(-8)}
-                                </code>
-                              </TableCell>
-                            </TableRow>
+
+                  <CollapsibleContent>
+                    <div className="border-t">
+                      {topicQuestions.length === 0 ? (
+                        <div className="p-4 text-center text-muted-foreground">
+                          No questions in this category
+                        </div>
+                      ) : (
+                        <div className="divide-y">
+                          {topicQuestions.map((question) => (
+                            <Collapsible
+                              key={question.id}
+                              open={expandedQuestions.has(question.id)}
+                              onOpenChange={() => toggleQuestion(question.id)}
+                            >
+                              <div className="flex items-center">
+                                <CollapsibleTrigger className="flex-1 p-3 pl-12 flex items-center gap-3 hover:bg-muted/30 transition-colors">
+                                  {expandedQuestions.has(question.id) ? (
+                                    <ChevronDown className="h-4 w-4 flex-shrink-0" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4 flex-shrink-0" />
+                                  )}
+                                  <div className="flex-1 text-left">
+                                    <div className="font-medium text-sm">{question.text}</div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Badge variant="outline" className="text-xs">
+                                        {question.id}
+                                      </Badge>
+                                      {question.is_onboarding_canonical && (
+                                        <Badge className="text-xs bg-primary">
+                                          Onboarding #{question.onboarding_slot}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {getOptionStatus(question)}
+                                </CollapsibleTrigger>
+                                <div className="pr-4">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenEdit(question);
+                                    }}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                              
+                              <CollapsibleContent>
+                                <div className="px-4 pb-4 pt-2 ml-8 border-t bg-muted/30">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead className="w-[60px]">Order</TableHead>
+                                        <TableHead className="w-[80px]">Value</TableHead>
+                                        <TableHead>Option Text</TableHead>
+                                        <TableHead className="w-[100px]">Type</TableHead>
+                                        <TableHead className="w-[80px] text-right">ID</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {question.question_options
+                                        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+                                        .map((option) => (
+                                          <TableRow key={option.id} className={option.is_skip_option ? "opacity-60" : ""}>
+                                            <TableCell>{option.display_order ?? '-'}</TableCell>
+                                            <TableCell>{getValueBadge(option.value)}</TableCell>
+                                            <TableCell className="max-w-md">
+                                              <span className={option.is_skip_option ? "italic" : ""}>
+                                                {option.text}
+                                              </span>
+                                            </TableCell>
+                                            <TableCell>
+                                              {option.is_skip_option ? (
+                                                <Badge variant="outline" className="text-xs">Skip</Badge>
+                                              ) : (
+                                                <Badge variant="secondary" className="text-xs">Regular</Badge>
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              <code className="text-xs text-muted-foreground">
+                                                {option.id.slice(-8)}
+                                              </code>
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      {question.question_options.length === 0 && (
+                                        <TableRow>
+                                          <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
+                                            No options defined for this question
+                                          </TableCell>
+                                        </TableRow>
+                                      )}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
                           ))}
-                        {question.question_options.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
-                              No options defined for this question
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CollapsibleContent>
-              </div>
-            </Collapsible>
-          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CollapsibleContent>
+                </div>
+              </Collapsible>
+            );
+          })}
         </div>
 
-        {filteredQuestions?.length === 0 && (
+        {Object.keys(questionsByTopic).length === 0 && (
           <div className="text-center py-8 text-muted-foreground">
             No questions found matching your filters
           </div>
