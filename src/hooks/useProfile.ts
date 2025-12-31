@@ -238,8 +238,30 @@ export const useSaveQuizResults = () => {
 
       return { success: true };
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       invalidateUserQueries(queryClient, user?.id);
+      
+      // Delete cached AI comparisons so they regenerate with new answers
+      if (user?.id) {
+        try {
+          // Delete cached representative comparisons
+          await supabase
+            .from('user_rep_comparisons')
+            .delete()
+            .eq('user_id', user.id);
+          
+          // Delete cached party comparisons
+          await supabase
+            .from('user_party_comparisons')
+            .delete()
+            .eq('user_id', user.id);
+          
+          console.log('Cleared cached AI comparisons for updated answers');
+        } catch (error) {
+          console.error('Failed to clear cached comparisons:', error);
+          // Non-blocking - comparisons will just be stale
+        }
+      }
       
       // Invalidate AI comparison caches so they refresh with new answers
       queryClient.invalidateQueries({ queryKey: ['party-comparison'] });

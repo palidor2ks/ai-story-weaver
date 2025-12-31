@@ -101,3 +101,6 @@ verify_jwt = true
 
 [functions.verify-voter-registration]
 verify_jwt = true
+
+[functions.generate-quiz-question]
+verify_jwt = true
