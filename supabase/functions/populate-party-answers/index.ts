@@ -10,27 +10,27 @@ const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// Party platform reference data for context
+// Party platform reference data - sources only, no assumed positions
 const PARTY_CONTEXT = {
   democrat: {
     name: 'Democratic Party',
-    philosophy: 'Generally supports progressive policies: government-funded healthcare, environmental protection, labor rights, civil liberties, gun control, social safety nets, and reproductive rights.',
-    sources: ['2024 Democratic Party Platform', 'democrats.org', 'Congressional voting records'],
+    officialPlatformUrl: 'https://democrats.org/where-we-stand/party-platform/',
+    sources: ['2024 Democratic Party Platform document', 'Official DNC policy statements', 'Congressional Democratic Caucus voting records'],
   },
   republican: {
     name: 'Republican Party',
-    philosophy: 'Generally supports conservative policies: limited government, free markets, traditional values, strong national defense, Second Amendment rights, lower taxes, and deregulation.',
-    sources: ['2024 Republican Party Platform', 'gop.com', 'Congressional voting records'],
+    officialPlatformUrl: 'https://gop.com/platform/',
+    sources: ['2024 Republican Party Platform document', 'Official RNC policy statements', 'Congressional Republican Conference voting records'],
   },
   green: {
     name: 'Green Party',
-    philosophy: 'Focuses on environmentalism, nonviolence, social justice, and grassroots democracy. Advocates for bold climate action, universal healthcare, anti-war foreign policy, and systemic change.',
-    sources: ['Green Party Platform', 'gp.org', 'Green New Deal proposals'],
+    officialPlatformUrl: 'https://gp.org/platform/',
+    sources: ['Green Party Platform document', 'Official Green Party policy statements', 'Green New Deal proposals'],
   },
   libertarian: {
     name: 'Libertarian Party',
-    philosophy: 'Advocates for civil liberties, free markets, and minimal government intervention in both personal and economic matters. Opposes government overreach, supports individual freedom.',
-    sources: ['Libertarian Party Platform', 'lp.org', 'Policy statements'],
+    officialPlatformUrl: 'https://lp.org/platform/',
+    sources: ['Libertarian Party Platform document', 'Official LP policy statements', 'Libertarian position papers'],
   },
 };
 
@@ -68,46 +68,51 @@ async function getPartyStances(
     .map((q, i) => `${i + 1}. [${q.id}] ${q.text}`)
     .join('\n');
 
-  const systemPrompt = `You are a non-partisan political analyst determining official party positions.
-You must analyze each question and determine where the ${partyContext.name} would stand based on:
-- Official party platforms and policy documents
-- Voting records of party members in Congress
-- Public statements from party leadership
-- Historical party positions
+  // NEUTRAL, EVIDENCE-ONLY PROMPT
+  const systemPrompt = `You are a non-partisan political analyst researching official party positions from documented sources.
 
-CRITICAL - Use the LEFT-RIGHT political spectrum for scoring:
-- -10 = Far LEFT / Very progressive position (e.g., Democrats, Greens typically score here)
-- -5 = Left-leaning / Progressive position
-- 0 = Neutral, centrist, or no clear party position
-- +5 = Right-leaning / Conservative position  
-- +10 = Far RIGHT / Very conservative position (e.g., Republicans typically score here)
+EVIDENCE-BASED SCORING RULES:
+- ONLY assign non-zero scores when you find SPECIFIC EVIDENCE in official party documents:
+  * Official party platform documents (with specific section/page reference)
+  * Official policy statements from party leadership
+  * Aggregate Congressional voting patterns (with bill references if possible)
+- If the party has NO documented position on a topic: answer_value = 0, confidence = "low"
+- Source MUST be specific and verifiable (cite document section, not just "party platform")
 
-IMPORTANT: Democrats and Green Party should have NEGATIVE scores (left-leaning).
-Republicans should have POSITIVE scores (right-leaning).
-Libertarians are mixed: socially liberal (negative) but fiscally conservative (positive).
+SCORING SCALE:
+- -10 = Far Left/Progressive position (documented in official sources)
+- -5 = Left-leaning position (documented in official sources)
+- 0 = Neutral, no clear position, OR NOT DOCUMENTED (use when no evidence exists)
+- +5 = Right-leaning position (documented in official sources)
+- +10 = Far Right/Conservative position (documented in official sources)
 
-CRITICAL: You MUST use ONLY these exact values: -10, -5, 0, +5, or +10.
-NO intermediate values like -7, -3, +2, +8, etc. are allowed.
+CRITICAL: 
+- Do NOT assume positions based on general ideology
+- Only score based on what is EXPLICITLY stated in official party documents
+- When in doubt, return 0 with confidence "low"
+- You MUST use ONLY these exact values: -10, -5, 0, +5, or +10`;
 
-Be accurate to the party's actual documented positions. Include confidence level (high/medium/low) based on how clearly documented the position is.`;
+  const userPrompt = `Research the ${partyContext.name}'s DOCUMENTED positions on each question.
 
-  const userPrompt = `Analyze the ${partyContext.name}'s official position on each of these questions.
-
-Party Philosophy: ${partyContext.philosophy}
-Reference Sources: ${partyContext.sources.join(', ')}
+Reference Sources to check: ${partyContext.sources.join(', ')}
+Official Platform URL: ${partyContext.officialPlatformUrl}
 
 Questions:
 ${questionsText}
 
 For each question, provide a JSON array with objects containing:
-- question_id: EXACTLY as shown in brackets (e.g., "gun1", "cr2", "tech11") - do NOT include the brackets in your response
-- answer_value: MUST be exactly one of these integers: -10, -5, 0, 5, or 10 (NO + prefix, NO intermediate values like -7 or 3)
-- confidence: "high", "medium", or "low"
-- source_description: brief description of where this position comes from (e.g., "2024 Party Platform", "Congressional voting pattern")
-- notes: optional brief explanation of the position (null if not needed)
+- question_id: EXACTLY as shown in brackets (e.g., "gun1", "cr2") - do NOT include the brackets
+- answer_value: MUST be exactly one of these integers: -10, -5, 0, 5, or 10
+  * Use 0 if the party has no documented position on this specific topic
+- confidence: "high" (explicit platform statement), "medium" (inferred from voting patterns), "low" (no documented position - must be 0)
+- source_description: SPECIFIC citation (e.g., "2024 Platform, Section 3.2" or "No documented position")
+- notes: Brief explanation if needed, null otherwise
 
-Return ONLY a valid JSON array, no other text. Example format:
-[{"question_id": "gun1", "answer_value": -5, "confidence": "high", "source_description": "Party Platform", "notes": null}]`;
+IMPORTANT: Do NOT infer positions from general party ideology. Only cite what is explicitly documented.
+If you cannot find a specific position, return answer_value: 0 with source_description: "No documented position".
+
+Return ONLY a valid JSON array, no other text. Example:
+[{"question_id": "gun1", "answer_value": 0, "confidence": "low", "source_description": "No documented position", "notes": null}]`;
 
   console.log(`Querying AI for ${partyContext.name} stances on ${questions.length} questions...`);
 
@@ -123,7 +128,7 @@ Return ONLY a valid JSON array, no other text. Example format:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      temperature: 0.3,
+      temperature: 0.2, // Lower temperature for more factual responses
       max_tokens: 4000,
     }),
   });
@@ -165,15 +170,33 @@ Return ONLY a valid JSON array, no other text. Example format:
           }
           return true;
         })
-        .map((item: any) => ({
-          party_id: partyId,
-          question_id: String(item.question_id).replace(/[\[\]]/g, ''), // Clean brackets
-          answer_value: snapToValidValue(item.answer_value),
-          source_description: item.source_description || `${partyContext.name} Platform`,
-          source_url: getSourceUrl(partyId),
-          confidence: item.confidence || 'medium',
-          notes: item.notes || null,
-        }));
+        .map((item: any) => {
+          const hasValidSource = item.source_description && 
+            !item.source_description.toLowerCase().includes('no documented') &&
+            item.source_description.length > 10;
+          
+          // Enforce evidence-only: if no valid source, must be 0
+          let answerValue = snapToValidValue(item.answer_value);
+          let confidence = item.confidence || 'medium';
+          let sourceDesc = item.source_description || 'No documented position';
+          
+          if (!hasValidSource && answerValue !== 0) {
+            console.log(`Resetting unsourced answer for ${item.question_id}: ${answerValue} -> 0`);
+            answerValue = 0;
+            confidence = 'low';
+            sourceDesc = 'No documented position';
+          }
+          
+          return {
+            party_id: partyId,
+            question_id: String(item.question_id).replace(/[\[\]]/g, ''),
+            answer_value: answerValue,
+            source_description: sourceDesc,
+            source_url: partyContext.officialPlatformUrl,
+            confidence: confidence,
+            notes: item.notes || null,
+          };
+        });
     }
   } catch (e) {
     console.error(`Failed to parse AI response for ${partyId}:`, e);
@@ -182,16 +205,6 @@ Return ONLY a valid JSON array, no other text. Example format:
 
   console.log(`Parsed ${answers.length} valid answers for ${partyContext.name}`);
   return answers;
-}
-
-function getSourceUrl(partyId: string): string {
-  switch (partyId) {
-    case 'democrat': return 'https://democrats.org/where-we-stand/party-platform/';
-    case 'republican': return 'https://gop.com/platform/';
-    case 'green': return 'https://gp.org/platform/';
-    case 'libertarian': return 'https://lp.org/platform/';
-    default: return '';
-  }
 }
 
 serve(async (req) => {
