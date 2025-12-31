@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ChevronDown, ChevronUp, Sparkles, Check, X, ExternalLink, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -51,15 +52,24 @@ export function RepComparisonSummary({
   if (!summary && !isGenerating) {
     return (
       <div className="mt-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onRefresh}
-          className="text-xs text-muted-foreground hover:text-foreground gap-1"
-        >
-          <Sparkles className="h-3 w-3" />
-          Generate AI Comparison
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRefresh}
+                className="text-xs text-muted-foreground hover:text-foreground gap-1"
+              >
+                <Sparkles className="h-3 w-3" />
+                Generate AI Comparison
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Generate an AI-powered comparison analysis</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     );
   }
@@ -79,15 +89,23 @@ export function RepComparisonSummary({
             <p className="text-xs text-muted-foreground leading-relaxed">
               {summary}
               {isStale && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onRefresh}
-                  className="ml-1 h-4 w-4 p-0 text-muted-foreground hover:text-foreground"
-                  title="Comparison may be outdated"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onRefresh}
+                        className="ml-1 h-4 w-4 p-0 text-muted-foreground hover:text-foreground"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Refresh - comparison may be outdated</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </p>
           )}
@@ -97,28 +115,60 @@ export function RepComparisonSummary({
       {/* Dig Deeper / Collapse Button */}
       {summary && !isGenerating && (
         <div className="flex items-center gap-2">
-          {!hasDeepAnalysis ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onDigDeeper}
-              disabled={isGenerating}
-              className="text-xs text-primary hover:text-primary/80 gap-1 h-6 px-2"
-            >
-              Dig Deeper
-              <ChevronDown className="h-3 w-3" />
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="text-xs text-primary hover:text-primary/80 gap-1 h-6 px-2"
-            >
-              {isExpanded ? 'Show Less' : 'View Details'}
-              {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            </Button>
-          )}
+          <TooltipProvider>
+            {!hasDeepAnalysis ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onDigDeeper}
+                    disabled={isGenerating}
+                    className="text-xs text-primary hover:text-primary/80 gap-1 h-6 px-2"
+                  >
+                    Dig Deeper
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Generate detailed analysis with agreements & disagreements</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="text-xs text-primary hover:text-primary/80 gap-1 h-6 px-2"
+                  >
+                    {isExpanded ? 'Show Less' : 'View Details'}
+                    {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isExpanded ? 'Collapse detailed analysis' : 'Expand detailed analysis'}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRefresh}
+                  className="text-xs text-muted-foreground hover:text-foreground h-6 px-2"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  <span className="sr-only">Refresh AI Analysis</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Refresh AI analysis</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       )}
 
