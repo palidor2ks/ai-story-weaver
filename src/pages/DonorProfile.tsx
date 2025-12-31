@@ -5,6 +5,7 @@ import { Header } from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { 
@@ -12,13 +13,15 @@ import {
   Building2, 
   Calendar, 
   DollarSign, 
+  Filter,
   Hash, 
   Layers,
   Loader2, 
   MapPin, 
   TrendingUp, 
   User as UserIcon, 
-  Users 
+  Users,
+  X
 } from 'lucide-react';
 
 interface DonorRecord {
@@ -51,6 +54,7 @@ interface ContributionRecord {
   cycle: string;
   receipt_date: string | null;
   candidate_id: string | null;
+  recipient_committee_id: string | null;
   recipient_committee_name: string | null;
   candidates?: {
     id: string;
@@ -129,6 +133,9 @@ const formatDate = (dateStr: string | null) => {
 const DonorProfile = () => {
   const { id } = useParams<{ id: string }>();
   const [cycleFilter, setCycleFilter] = useState<string>('all');
+  const [showAllDonations, setShowAllDonations] = useState(false);
+  const [committeeFilter, setCommitteeFilter] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
 
   // Fetch the specific donor record
   const { data: donor, isLoading: donorLoading } = useQuery({
@@ -230,7 +237,7 @@ const DonorProfile = () => {
 
   // Fetch individual contributions for detailed history (across all types)
   const { data: contributions = [], isLoading: contributionsLoading } = useQuery({
-    queryKey: ['donor-contributions', displayName, aliasInfo?.alias_pattern],
+    queryKey: ['donor-contributions', displayName, aliasInfo?.alias_pattern, showAllDonations],
     queryFn: async () => {
       if (!donor?.name) return [] as ContributionRecord[];
       
@@ -238,7 +245,7 @@ const DonorProfile = () => {
         .from('contributions')
         .select(`*, candidates (id, name, party, office, state)`)
         .order('receipt_date', { ascending: false })
-        .limit(500);
+        .limit(showAllDonations ? 5000 : 500);
       
       // If there's an alias, get all contributions matching the pattern
       if (aliasInfo?.alias_pattern) {
@@ -265,11 +272,54 @@ const DonorProfile = () => {
     return Array.from(cycles).sort().reverse();
   }, [contributions, donorRecords]);
 
-  // Filter contributions by cycle
+  // Get unique committees for filter
+  const availableCommittees = useMemo(() => {
+    const committees = new Map<string, string>();
+    contributions.forEach(c => {
+      if (c.recipient_committee_id && c.recipient_committee_name) {
+        committees.set(c.recipient_committee_id, c.recipient_committee_name);
+      }
+    });
+    return Array.from(committees.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [contributions]);
+
+  // Filter contributions by all criteria
   const filteredContributions = useMemo(() => {
-    if (cycleFilter === 'all') return contributions;
-    return contributions.filter(c => c.cycle === cycleFilter);
-  }, [contributions, cycleFilter]);
+    let filtered = contributions;
+    
+    if (cycleFilter !== 'all') {
+      filtered = filtered.filter(c => c.cycle === cycleFilter);
+    }
+    
+    if (committeeFilter !== 'all') {
+      filtered = filtered.filter(c => c.recipient_committee_id === committeeFilter);
+    }
+    
+    if (dateRange.start) {
+      filtered = filtered.filter(c => c.receipt_date && c.receipt_date >= dateRange.start);
+    }
+    
+    if (dateRange.end) {
+      filtered = filtered.filter(c => c.receipt_date && c.receipt_date <= dateRange.end);
+    }
+    
+    return filtered;
+  }, [contributions, cycleFilter, committeeFilter, dateRange]);
+
+  // Summary stats for filtered contributions
+  const filteredStats = useMemo(() => {
+    const total = filteredContributions.reduce((sum, c) => sum + c.amount, 0);
+    const avg = filteredContributions.length > 0 ? total / filteredContributions.length : 0;
+    return { total, avg, count: filteredContributions.length };
+  }, [filteredContributions]);
+
+  const hasActiveFilters = cycleFilter !== 'all' || committeeFilter !== 'all' || dateRange.start || dateRange.end;
+
+  const clearAllFilters = () => {
+    setCycleFilter('all');
+    setCommitteeFilter('all');
+    setDateRange({ start: '', end: '' });
+  };
 
   // Aggregate stats (including type breakdown)
   const stats = useMemo(() => {
@@ -488,24 +538,106 @@ const DonorProfile = () => {
               <DollarSign className="w-5 h-5 text-primary" />
               <h2 className="font-display text-xl font-bold">Contribution History</h2>
               <span className="text-sm text-muted-foreground">
-                ({filteredContributions.length} records)
+                ({filteredStats.count} of {contributions.length} records)
               </span>
             </div>
             
-            {availableCycles.length > 1 && (
-              <Select value={cycleFilter} onValueChange={setCycleFilter}>
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="Filter cycle" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Cycles</SelectItem>
-                  {availableCycles.map(cycle => (
-                    <SelectItem key={cycle} value={cycle}>{cycle}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Button 
+              variant={showAllDonations ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowAllDonations(!showAllDonations)}
+            >
+              <Filter className="w-4 h-4 mr-2" />
+              {showAllDonations ? 'Hide Filters' : 'View All Donations'}
+            </Button>
           </div>
+
+          {/* Advanced Filters Panel */}
+          {showAllDonations && (
+            <Card className="mb-4 p-4 bg-muted/30 border-border">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {/* Cycle Filter */}
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block text-foreground">Cycle</label>
+                  <Select value={cycleFilter} onValueChange={setCycleFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Cycles" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Cycles</SelectItem>
+                      {availableCycles.map(cycle => (
+                        <SelectItem key={cycle} value={cycle}>{cycle}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Committee Filter */}
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block text-foreground">Committee</label>
+                  <Select value={committeeFilter} onValueChange={setCommitteeFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Committees" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Committees</SelectItem>
+                      {availableCommittees.map(([id, name]) => (
+                        <SelectItem key={id} value={id}>
+                          <span className="truncate max-w-[200px] block">{name}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Date Range - Start */}
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block text-foreground">From Date</label>
+                  <Input 
+                    type="date" 
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="bg-background"
+                  />
+                </div>
+                
+                {/* Date Range - End */}
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block text-foreground">To Date</label>
+                  <Input 
+                    type="date" 
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="bg-background"
+                  />
+                </div>
+              </div>
+              
+              {/* Clear Filters and Stats Row */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4 pt-4 border-t border-border">
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span>
+                    Total: <strong className="text-foreground">{formatAmount(filteredStats.total)}</strong>
+                  </span>
+                  <span>
+                    Avg: <strong className="text-foreground">{formatAmount(Math.round(filteredStats.avg))}</strong>
+                  </span>
+                </div>
+                
+                {hasActiveFilters && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={clearAllFilters}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Clear all filters
+                  </Button>
+                )}
+              </div>
+            </Card>
+          )}
 
           {/* Contributions table */}
           <div className="border border-border rounded-lg overflow-hidden">
