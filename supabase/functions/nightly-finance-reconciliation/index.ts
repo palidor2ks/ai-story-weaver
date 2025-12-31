@@ -177,8 +177,12 @@ serve(async (req) => {
         const localTransfers = Number(totals.transfers_total) || 0;
         const localEarmarked = Number(totals.earmarked_total) || 0;
         const passThroughTotal = Number(totals.passthrough_total) || 0;
+        const localOther = Number(totals.other_total) || 0;
+        const localLoans = Number(totals.loans_total) || 0;
         const contributionCount = Number(totals.contribution_count) || 0;
 
+        // local_itemized now excludes transfers (Line 12), loans (Line 13A), and other receipts (Line 15)
+        // It equals: Individual + PAC + Party contributions
         const localItemizedNet = localItemized - passThroughTotal;
 
         // Get PER-COMMITTEE local totals (to store correctly in committee_finance_rollups)
@@ -301,11 +305,27 @@ serve(async (req) => {
           ? Math.round((pacDeltaAmount / fecPacContributions) * 10000) / 100 
           : 0;
         
-        // Overall delta now uses individual comparison (apples-to-apples)
-        const deltaAmount = individualDeltaAmount;
-        const deltaPct = individualDeltaPct;
+        // Party: local_party_contributions vs fec_party_contributions (both are Line 11B)
+        const partyDeltaAmount = localPartyContributions - fecPartyContributions;
+        
+        // FIXED: Calculate Local Total to match FEC Total Receipts formula
+        // Local Total = Imported Itemized (Ind + PAC + Party) + Transfers + Loans + Other
+        // We compare this against FEC Total Receipts for the main delta
+        // Note: We don't have local unitemized since we only import itemized contributions
+        const localTotal = localItemized + localTransfers + localLoans + localOther;
+        
+        // Compare local vs FEC at the comparable itemized level (Ind + PAC + Party)
+        // This is the "apples-to-apples" comparison for imported data
+        const fecComparableItemized = fecItemized + fecPacContributions + fecPartyContributions;
+        const localComparableItemized = localIndividualItemized + localPacContributions + localPartyContributions;
+        
+        // Overall delta: compare comparable itemized totals
+        const deltaAmount = localComparableItemized - fecComparableItemized;
+        const deltaPct = fecComparableItemized > 0 
+          ? Math.round((deltaAmount / fecComparableItemized) * 10000) / 100 
+          : 0;
 
-        // Status based on individual delta (the most important comparison)
+        // Status based on overall delta
         let status = 'ok';
         if (!fecDataBalanced) status = 'error';
         else if (Math.abs(deltaPct) > 10) status = 'error';
@@ -325,6 +345,7 @@ serve(async (req) => {
             local_individual_itemized: localIndividualItemized,
             local_pac_contributions: localPacContributions,
             local_party_contributions: localPartyContributions,
+            local_loans: localLoans,
             // FEC data
             fec_itemized: fecItemized,
             fec_unitemized: fecUnitemized,

@@ -13,6 +13,7 @@ export interface FinanceReconciliation {
   local_individual_itemized: number | null;
   local_pac_contributions: number | null;
   local_party_contributions: number | null;
+  local_loans: number | null;
   // FEC data
   fec_itemized: number | null;
   fec_unitemized: number | null;
