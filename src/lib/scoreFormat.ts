@@ -52,7 +52,7 @@ export function getScoreColor(score: number | null | undefined): string {
 }
 
 /**
- * Get a label for the score position
+ * Get a label for the score position (neutral terminology)
  */
 export function getScoreLabel(score: number | null | undefined): string {
   if (score === null || score === undefined) {
@@ -64,6 +64,50 @@ export function getScoreLabel(score: number | null | undefined): string {
   if (score < 3) return 'Moderate / Centrist';
   if (score < 7) return 'Right-Leaning';
   return 'Far Right';
+}
+
+/**
+ * Get a label for the score position (progressive/conservative terminology)
+ * Negative scores = Progressive (Left), Positive scores = Conservative (Right)
+ */
+export function getScoreLabelProgCon(score: number | null | undefined): string {
+  if (score === null || score === undefined) {
+    return 'Unknown';
+  }
+  
+  if (score <= -7) return 'Strongly Progressive';
+  if (score <= -3) return 'Progressive';
+  if (score < 0) return 'Lean Progressive';
+  if (score === 0) return 'Moderate';
+  if (score < 4) return 'Lean Conservative';
+  if (score < 8) return 'Conservative';
+  return 'Strongly Conservative';
+}
+
+/**
+ * Get a simplified label for the score position
+ */
+export function getScoreLabelSimple(score: number | null | undefined): string {
+  if (score === null || score === undefined) {
+    return 'Unknown';
+  }
+  
+  if (score >= 5) return 'Conservative';
+  if (score <= -5) return 'Progressive';
+  return 'Moderate';
+}
+
+/**
+ * Get score label with color class
+ */
+export function getScoreLabelWithColor(score: number | null | undefined): { label: string; className: string } {
+  if (score === null || score === undefined) {
+    return { label: 'Unknown', className: 'text-muted-foreground' };
+  }
+  
+  if (score >= 5) return { label: 'Conservative', className: 'text-red-600' };
+  if (score <= -5) return { label: 'Progressive', className: 'text-blue-600' };
+  return { label: 'Mixed', className: 'text-purple-600' };
 }
 
 /**
