@@ -619,54 +619,27 @@ export const UserProfile = () => {
                     </h4>
                     <div className="space-y-3">
                       {federalReps.map((rep) => {
-                        const hasImage = rep.image_url && rep.image_url.trim() !== '';
+                        // Convert Representative to CivicOfficial format for RepresentativeComparisonCard
+                        const official: CivicOfficial = {
+                          id: rep.bioguide_id || rep.id,
+                          name: rep.name,
+                          party: rep.party,
+                          office: rep.office,
+                          level: 'federal_legislative',
+                          state: rep.state,
+                          district: rep.district || undefined,
+                          image_url: rep.image_url,
+                          is_incumbent: rep.is_incumbent,
+                          overall_score: rep.overall_score,
+                          coverage_tier: rep.coverage_tier,
+                          confidence: rep.confidence,
+                        };
                         return (
-                          <Link
+                          <RepresentativeComparisonCard
                             key={rep.id}
-                            to={`/candidate/${rep.bioguide_id || rep.id}`}
-                            className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
-                          >
-                            <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
-                              {hasImage ? (
-                                <img 
-                                  src={rep.image_url}
-                                  alt={rep.name}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    const target = e.currentTarget;
-                                    target.style.display = 'none';
-                                    const fallback = target.nextElementSibling as HTMLElement;
-                                    if (fallback) fallback.style.display = 'flex';
-                                  }}
-                                />
-                              ) : null}
-                              <div 
-                                className={cn("w-full h-full flex items-center justify-center", getPartyBgColor(rep.party))}
-                                style={{ display: hasImage ? 'none' : 'flex' }}
-                              >
-                                <span className="text-white font-bold text-sm">{getInitials(rep.name)}</span>
-                              </div>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-foreground truncate">{rep.name}</h4>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm text-muted-foreground">{rep.office}</span>
-                                <Badge variant="outline" className={cn("text-xs", getPartyColor(rep.party))}>
-                                  {rep.party}
-                                </Badge>
-                              </div>
-                            </div>
-                            {(() => {
-                              const resolvedRepScore = getResolvedScore(rep.bioguide_id || rep.id, rep.overall_score);
-                              return resolvedRepScore !== null ? (
-                                <ScoreText score={resolvedRepScore} size="md" />
-                              ) : (
-                                <Badge variant="outline" className="text-xs text-muted-foreground">
-                                  NA
-                                </Badge>
-                              );
-                            })()}
-                          </Link>
+                            official={official}
+                            resolvedScore={getResolvedScore(rep.bioguide_id || rep.id, rep.overall_score)}
+                          />
                         );
                       })}
                     </div>
