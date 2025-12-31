@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useSyncStats, TopicCoverage } from "@/hooks/useSyncStats";
 import { useCandidatesAnswerCoverage, useCandidateAnswerStats, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
+import { useEnrichCandidateSources } from "@/hooks/useCandidateAnswers";
 import { useFECIntegration } from "@/hooks/useFECIntegration";
 import { useAdminErrors } from "@/hooks/useAdminErrors";
 import { useCandidateOverrides } from "@/hooks/useCandidateOverrides";
@@ -130,6 +131,7 @@ export function AnswerCoveragePanel() {
 
   const { populateCandidate, populateBatch, pauseBatch, resumeBatch, cancelBatch, isLoading, isBatchRunning, batchProgress } = usePopulateCandidateAnswers();
   const { recalculateAll, isRecalculatingAll } = useRecalculateCoverageTiers();
+  const { mutate: enrichSources, isPending: isEnrichingSource } = useEnrichCandidateSources();
   const { 
     fetchFECCandidateId, 
     fetchFECCommittees,
@@ -1915,15 +1917,28 @@ export function AnswerCoveragePanel() {
                                   </DropdownMenuItem>
                                 )}
                                 {candidate.answerCount > 0 && (
-                                  <DropdownMenuItem
-                                    onSelect={(e) => {
-                                      e.preventDefault();
-                                      populateCandidate(candidate.id, true);
-                                    }}
-                                  >
-                                    <Sparkles className="h-4 w-4 mr-2" />
-                                    Regenerate Answers
-                                  </DropdownMenuItem>
+                                  <>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        populateCandidate(candidate.id, true);
+                                      }}
+                                    >
+                                      <Sparkles className="h-4 w-4 mr-2" />
+                                      Regenerate Answers
+                                    </DropdownMenuItem>
+                                    {candidate.sourcePercentage < 70 && (
+                                      <DropdownMenuItem
+                                        onSelect={(e) => {
+                                          e.preventDefault();
+                                          enrichSources({ candidateId: candidate.id });
+                                        }}
+                                      >
+                                        <Link2 className="h-4 w-4 mr-2 text-blue-500" />
+                                        Fill Sources ({candidate.sourcedCount}/{candidate.answerCount})
+                                      </DropdownMenuItem>
+                                    )}
+                                  </>
                                 )}
                                 
                                 <DropdownMenuSeparator />

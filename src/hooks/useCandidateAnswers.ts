@@ -212,6 +212,54 @@ export const useGenerateCandidateAnswers = () => {
   });
 };
 
+/**
+ * Mutation to enrich candidate answer sources without changing answer values
+ */
+export const useEnrichCandidateSources = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      candidateId, 
+      topicId,
+      limit = 50
+    }: { 
+      candidateId: string; 
+      topicId?: string;
+      limit?: number;
+    }) => {
+      const { data, error } = await supabase.functions.invoke(
+        'enrich-candidate-sources',
+        {
+          body: {
+            candidateId,
+            topicId,
+            limit,
+          },
+        }
+      );
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['candidate-answers', variables.candidateId] });
+      queryClient.invalidateQueries({ queryKey: ['candidates-answer-coverage'] });
+      queryClient.invalidateQueries({ queryKey: ['smart-candidate-answers'] });
+      
+      if (data.enriched > 0) {
+        toast.success(`Added sources to ${data.enriched} answer${data.enriched > 1 ? 's' : ''} for ${data.candidateName}`);
+      } else if (data.skipped) {
+        toast.info('All answers already have sources');
+      }
+    },
+    onError: (error) => {
+      console.error('Error enriching sources:', error);
+      toast.error('Failed to enrich sources. Please try again.');
+    },
+  });
+};
+
 // Fetch answers for a specific candidate on questions the user has also answered
 export const useCandidateAnswersForUser = (
   candidateId: string | undefined, 

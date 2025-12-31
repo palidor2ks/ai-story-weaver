@@ -110,3 +110,6 @@ verify_jwt = false
 
 [functions.enrich-party-sources]
 verify_jwt = false
+
+[functions.enrich-candidate-sources]
+verify_jwt = false
