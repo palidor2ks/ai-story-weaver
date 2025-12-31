@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CandidateAnswer, getSourceTypeLabel } from '@/hooks/useCandidateAnswers';
 import { cn } from '@/lib/utils';
+import { getScoreLabelProgCon, getScoreColor } from '@/lib/scoreFormat';
 
 interface CandidateAnswerCardProps {
   answer: CandidateAnswer;
@@ -40,20 +41,10 @@ export const CandidateAnswerCard = ({
   };
 
   // Positive = Right/Conservative (red), Negative = Left/Progressive (blue)
-  const getScoreColor = (value: number) => {
+  const getLocalScoreColor = (value: number) => {
     if (value >= 5) return 'text-red-600 bg-red-500/10';
     if (value <= -5) return 'text-blue-600 bg-blue-500/10';
     return 'text-purple-600 bg-purple-500/10';
-  };
-
-  const getScoreLabel = (value: number) => {
-    if (value >= 7) return 'Strongly Conservative';
-    if (value >= 3) return 'Conservative';
-    if (value >= 1) return 'Lean Conservative';
-    if (value <= -7) return 'Strongly Progressive';
-    if (value <= -3) return 'Progressive';
-    if (value <= -1) return 'Lean Progressive';
-    return 'Moderate';
   };
 
   // Get the answer text from question options - with nearest-match fallback
@@ -130,7 +121,7 @@ export const CandidateAnswerCard = ({
               )}>
                 {answer.answer_value > 0 ? '+' : ''}{answer.answer_value}
               </span>
-              <span className="text-sm text-muted-foreground">{getScoreLabel(answer.answer_value)}</span>
+              <span className="text-sm text-muted-foreground">{getScoreLabelProgCon(answer.answer_value)}</span>
             </div>
             {getAgreementBadge()}
           </div>

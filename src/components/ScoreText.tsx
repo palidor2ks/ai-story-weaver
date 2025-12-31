@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { getScoreLabel } from '@/lib/scoreFormat';
 
 interface ScoreTextProps {
   score: number | null | undefined;
@@ -50,17 +51,6 @@ export function ScoreText({ score, size = 'md', showLabel = false, className }: 
     return 'text-purple-600';
   };
 
-  const getLabel = (s: number | null | undefined): string => {
-    if (s === null || s === undefined) {
-      return 'Not Available';
-    }
-    if (s <= -7) return 'Far Left';
-    if (s <= -3) return 'Left-Leaning';
-    if (s < 3) return 'Moderate';
-    if (s < 7) return 'Right-Leaning';
-    return 'Far Right';
-  };
-
   const sizeClasses = {
     sm: 'text-sm font-semibold',
     md: 'text-base font-bold',
@@ -69,6 +59,9 @@ export function ScoreText({ score, size = 'md', showLabel = false, className }: 
 
   const scoreText = formatScoreText(score);
   const isNA = scoreText === 'NA';
+  
+  // Handle null/undefined case for label
+  const labelText = score === null || score === undefined ? 'Not Available' : getScoreLabel(score);
 
   return (
     <div className={cn("flex flex-col items-center", className)}>
@@ -82,7 +75,7 @@ export function ScoreText({ score, size = 'md', showLabel = false, className }: 
       </span>
       {showLabel && (
         <span className="text-xs text-muted-foreground">
-          {getLabel(score)}
+          {labelText}
         </span>
       )}
     </div>

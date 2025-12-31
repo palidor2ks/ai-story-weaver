@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { CandidateAnswer, getSourceTypeLabel } from '@/hooks/useCandidateAnswers';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { getScoreLabelSimple } from '@/lib/scoreFormat';
 
 interface CompactPositionRowProps {
   answer: CandidateAnswer;
@@ -40,12 +41,6 @@ export const CompactPositionRow = ({ answer, userAnswer, userAnswerText }: Compa
     if (value >= 5) return 'text-red-600 bg-red-500/10';
     if (value <= -5) return 'text-blue-600 bg-blue-500/10';
     return 'text-purple-600 bg-purple-500/10';
-  };
-
-  const getScoreLabel = (value: number) => {
-    if (value >= 5) return 'Conservative';
-    if (value <= -5) return 'Progressive';
-    return 'Moderate';
   };
 
   const getAnswerText = (value: number): string | null => {
@@ -142,7 +137,7 @@ export const CompactPositionRow = ({ answer, userAnswer, userAnswerText }: Compa
               )}>
                 {answer.answer_value > 0 ? '+' : ''}{answer.answer_value}
               </span>
-              <span className="text-sm text-muted-foreground">{getScoreLabel(answer.answer_value)}</span>
+              <span className="text-sm text-muted-foreground">{getScoreLabelSimple(answer.answer_value)}</span>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <confidenceInfo.icon className={cn("w-4 h-4", confidenceInfo.color)} />

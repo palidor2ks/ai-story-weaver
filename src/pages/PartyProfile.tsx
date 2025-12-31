@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScoreText } from '@/components/ScoreText';
 import { RepComparisonSummary } from '@/components/RepComparisonSummary';
 import { usePartyComparison, useGeneratePartyComparison, isPartyComparisonStale } from '@/hooks/usePartyComparison';
+import { getScoreLabelProgCon } from '@/lib/scoreFormat';
 import {
   Accordion,
   AccordionContent,
@@ -229,15 +230,7 @@ export default function PartyProfile() {
     }
   };
 
-  const getAnswerLabel = (value: number) => {
-    if (value <= -7) return 'Strongly Progressive';
-    if (value <= -3) return 'Progressive';
-    if (value < 0) return 'Lean Progressive';
-    if (value === 0) return 'Neutral / Mixed';
-    if (value < 4) return 'Lean Conservative';
-    if (value < 8) return 'Conservative';
-    return 'Strongly Conservative';
-  };
+  // Use centralized getScoreLabelProgCon from scoreFormat.ts
 
   if (isLoading) {
     return (
@@ -475,7 +468,7 @@ export default function PartyProfile() {
                                       : "bg-gray-500/10 text-gray-600 border-gray-500/30"
                                   )}
                                 >
-                                  {getAnswerLabel(answer.answer_value)}
+                                  {getScoreLabelProgCon(answer.answer_value)}
                                 </Badge>
                                 <ScoreText score={answer.answer_value} size="sm" />
                                 {answer.confidence && (

@@ -11,6 +11,7 @@ import { Loader2, Save, Trash2, ExternalLink, CheckCircle2 } from 'lucide-react'
 import { CandidateAnswer } from '@/hooks/useCandidateAnswers';
 import { CandidateAnswerInput } from '@/hooks/usePoliticianProfile';
 import { cn } from '@/lib/utils';
+import { getScoreLabelProgCon } from '@/lib/scoreFormat';
 
 interface Question {
   id: string;
@@ -83,15 +84,7 @@ export function QuestionAnswerForm({
     setIsEdited(false);
   };
 
-  const getPositionLabel = (value: number) => {
-    if (value <= -7) return 'Strongly Progressive';
-    if (value <= -3) return 'Progressive';
-    if (value < 0) return 'Lean Progressive';
-    if (value === 0) return 'Neutral/Moderate';
-    if (value < 4) return 'Lean Conservative';
-    if (value < 8) return 'Conservative';
-    return 'Strongly Progressive';
-  };
+  // Use centralized getScoreLabelProgCon from scoreFormat.ts
 
   const getPositionColor = (value: number) => {
     if (value < 0) return 'text-flag-red';
@@ -127,7 +120,7 @@ export function QuestionAnswerForm({
           <div className="flex items-center justify-between">
             <Label>Your Position</Label>
             <span className={cn("font-semibold", getPositionColor(answerValue))}>
-              {answerValue > 0 ? '+' : ''}{answerValue} — {getPositionLabel(answerValue)}
+              {answerValue > 0 ? '+' : ''}{answerValue} — {getScoreLabelProgCon(answerValue)}
             </span>
           </div>
           <div className="px-2">

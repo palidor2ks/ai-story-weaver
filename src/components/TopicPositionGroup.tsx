@@ -6,6 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { CompactPositionRow } from './CompactPositionRow';
 import { CandidateAnswer } from '@/hooks/useCandidateAnswers';
 import { cn } from '@/lib/utils';
+import { getScoreLabelWithColor } from '@/lib/scoreFormat';
 
 interface TopicPositionGroupProps {
   topicName: string;
@@ -47,13 +48,7 @@ export const TopicPositionGroup = ({
   // Calculate average score for topic
   const avgScore = answers.reduce((sum, a) => sum + a.answer_value, 0) / answers.length;
   
-  const getScoreLabel = (value: number) => {
-    if (value >= 5) return { label: 'Conservative', className: 'text-red-600' };
-    if (value <= -5) return { label: 'Progressive', className: 'text-blue-600' };
-    return { label: 'Mixed', className: 'text-purple-600' };
-  };
-
-  const scoreInfo = getScoreLabel(avgScore);
+  const scoreInfo = getScoreLabelWithColor(avgScore);
   const displayedAnswers = showAll ? answers : answers.slice(0, INITIAL_SHOW_COUNT);
 
   return (
