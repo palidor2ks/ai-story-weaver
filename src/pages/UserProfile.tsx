@@ -503,8 +503,8 @@ export const UserProfile = () => {
                 <ScoreText score={profile.overall_score} size="lg" className="text-5xl" />
               </div>
               <p className="text-sm text-muted-foreground mt-2">
-                {profile.overall_score >= 30 ? 'You tend to lean Progressive on most issues' : 
-                 profile.overall_score <= -30 ? 'You tend to lean Conservative on most issues' : 
+                {profile.overall_score <= -30 ? 'You tend to lean Progressive on most issues' : 
+                 profile.overall_score >= 30 ? 'You tend to lean Conservative on most issues' : 
                  'You hold moderate or mixed views across issues'}
               </p>
             </div>

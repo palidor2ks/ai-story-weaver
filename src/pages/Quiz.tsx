@@ -247,8 +247,8 @@ export const Quiz = () => {
                   {calculatedScores.overall > 0 ? '+' : ''}{calculatedScores.overall}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {calculatedScores.overall >= 30 ? 'Leans Progressive' : 
-                   calculatedScores.overall <= -30 ? 'Leans Conservative' : 
+                  {calculatedScores.overall <= -30 ? 'Leans Progressive' : 
+                   calculatedScores.overall >= 30 ? 'Leans Conservative' : 
                    'Moderate / Centrist'}
                 </p>
               </div>
