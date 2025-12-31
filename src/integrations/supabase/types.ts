@@ -1142,6 +1142,7 @@ export type Database = {
           name: string
           overall_score: number | null
           political_party: string | null
+          religion: string | null
           score_version: string | null
           sex: string | null
           updated_at: string | null
@@ -1157,6 +1158,7 @@ export type Database = {
           name: string
           overall_score?: number | null
           political_party?: string | null
+          religion?: string | null
           score_version?: string | null
           sex?: string | null
           updated_at?: string | null
@@ -1172,6 +1174,7 @@ export type Database = {
           name?: string
           overall_score?: number | null
           political_party?: string | null
+          religion?: string | null
           score_version?: string | null
           sex?: string | null
           updated_at?: string | null
