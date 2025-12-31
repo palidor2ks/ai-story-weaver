@@ -23,6 +23,7 @@ export interface DonorWithCandidate {
   name: string;
   amount: number;
   type: string;
+  types?: string[]; // All types for consolidated donors
   cycle: string;
   candidate_id: string;
   contributor_state: string | null;
@@ -126,7 +127,8 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
       }
 
       if (type && type !== 'all') {
-        query = query.eq('type', type as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
+        // Filter by types array using contains
+        query = query.contains('types', [type]);
       }
 
       if (search) {
@@ -159,6 +161,7 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
         name: d.display_name,
         amount: d.total_amount,
         type: d.type,
+        types: d.types, // All types for this donor
         cycle: d.cycle,
         candidate_id: '',
         contributor_state: null,

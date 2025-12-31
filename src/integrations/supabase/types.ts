@@ -1551,6 +1551,7 @@ export type Database = {
           total_amount: number | null
           total_transactions: number | null
           type: Database["public"]["Enums"]["donor_type"] | null
+          types: Database["public"]["Enums"]["donor_type"][] | null
         }
         Relationships: []
       }
