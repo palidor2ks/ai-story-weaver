@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { TopicPositionGroup } from './TopicPositionGroup';
 import { 
   useCandidateAnswers, 
@@ -10,17 +13,17 @@ import {
 } from '@/hooks/useCandidateAnswers';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Sparkles, RefreshCw } from 'lucide-react';
+import { FileText, Sparkles, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CandidatePositionsProps {
   candidateId: string;
   candidateName: string;
-  isUserRep?: boolean; // Whether this candidate is one of the user's representatives
+  isUserRep?: boolean;
 }
 
 export const CandidatePositions = ({ candidateId, candidateName, isUserRep = false }: CandidatePositionsProps) => {
-
+  const [isOpen, setIsOpen] = useState(false);
   const { data: candidateAnswers = [], isLoading, refetch } = useCandidateAnswers(candidateId);
   const generateAnswers = useGenerateCandidateAnswers();
   
@@ -163,78 +166,91 @@ export const CandidatePositions = ({ candidateId, candidateName, isUserRep = fal
 
   return (
     <Card className="shadow-elevated">
-      <CardHeader>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <CardTitle className="font-display flex items-center gap-2">
-            <FileText className="w-5 h-5 text-primary" />
-            Positions & Sources
-          </CardTitle>
-          <div className="flex items-center gap-2 text-sm flex-wrap">
-            <Badge variant="secondary">{totalAnswers} positions</Badge>
-            {sharedQuestions > 0 && (
-              <Badge variant="outline" className="text-primary">
-                {sharedQuestions} in common with you
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CardHeader className="pb-3">
+          <CollapsibleTrigger asChild>
+            <button className="w-full flex items-center justify-between text-left hover:bg-secondary/30 -mx-2 px-2 py-1 rounded-lg transition-colors">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" />
+                <span className="font-display font-semibold">Positions & Sources</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">{totalAnswers} positions</Badge>
+                <Badge variant="outline" className="text-xs">{sortedTopics.length} topics</Badge>
+                {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+              </div>
+            </button>
+          </CollapsibleTrigger>
+        </CardHeader>
+        
+        <CollapsibleContent>
+          <CardContent className="pt-0">
+            {/* Stats badges */}
+            <div className="flex items-center gap-2 text-sm flex-wrap mb-4">
+              {sharedQuestions > 0 && (
+                <Badge variant="outline" className="text-primary">
+                  {sharedQuestions} in common with you
+                </Badge>
+              )}
+              {aiGenerated > 0 && (
+                <Badge variant="outline" className="text-purple-600 bg-purple-50">
+                  <Sparkles className="w-3 h-3 mr-1" />
+                  {aiGenerated} AI-researched
+                </Badge>
+              )}
+              <Badge variant="outline" className={cn(
+                highConfidence > totalAnswers / 2 ? 'text-green-600' : 'text-amber-600'
+              )}>
+                {Math.round((highConfidence / totalAnswers) * 100)}% verified
               </Badge>
-            )}
-            {aiGenerated > 0 && (
-              <Badge variant="outline" className="text-purple-600 bg-purple-50">
-                <Sparkles className="w-3 h-3 mr-1" />
-                {aiGenerated} AI-researched
-              </Badge>
-            )}
-            <Badge variant="outline" className={cn(
-              highConfidence > totalAnswers / 2 ? 'text-green-600' : 'text-amber-600'
-            )}>
-              {Math.round((highConfidence / totalAnswers) * 100)}% verified
-            </Badge>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {/* Generate More Button for User's Reps */}
-        {isUserRep && userQuizAnswers.length > sharedQuestions && (
-          <div className="mb-4 p-3 rounded-lg bg-purple-50 border border-purple-200">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <p className="text-sm text-purple-700">
-                <Sparkles className="w-4 h-4 inline mr-1" />
-                {userQuizAnswers.length - sharedQuestions} of your questions don&apos;t have answers for this rep yet.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleGeneratePositions}
-                disabled={generateAnswers.isPending}
-                className="gap-2 border-purple-300 text-purple-700 hover:bg-purple-100"
-              >
-                {generateAnswers.isPending ? (
-                  <>
-                    <RefreshCw className="w-3 h-3 animate-spin" />
-                    Researching...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3 h-3" />
-                    Generate Missing Positions
-                  </>
-                )}
-              </Button>
             </div>
-          </div>
-        )}
 
-        {/* Topic Accordion Groups */}
-        <div className="space-y-2">
-          {sortedTopics.map((topicName, index) => (
-            <TopicPositionGroup
-              key={topicName}
-              topicName={topicName}
-              answers={answersByTopic[topicName]}
-              userAnswerMap={userAnswerMap}
-              defaultOpen={index === 0}
-            />
-          ))}
-        </div>
-      </CardContent>
+            {/* Generate More Button for User's Reps */}
+            {isUserRep && userQuizAnswers.length > sharedQuestions && (
+              <div className="mb-4 p-3 rounded-lg bg-purple-50 border border-purple-200">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-sm text-purple-700">
+                    <Sparkles className="w-4 h-4 inline mr-1" />
+                    {userQuizAnswers.length - sharedQuestions} of your questions don&apos;t have answers for this rep yet.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGeneratePositions}
+                    disabled={generateAnswers.isPending}
+                    className="gap-2 border-purple-300 text-purple-700 hover:bg-purple-100"
+                  >
+                    {generateAnswers.isPending ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        Researching...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3" />
+                        Generate Missing Positions
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Topic Accordion Groups */}
+            <div className="space-y-2">
+              {sortedTopics.map((topicName, index) => (
+                <TopicPositionGroup
+                  key={topicName}
+                  topicName={topicName}
+                  answers={answersByTopic[topicName]}
+                  userAnswerMap={userAnswerMap}
+                  defaultOpen={index === 0}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 };

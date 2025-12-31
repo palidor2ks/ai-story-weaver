@@ -16,12 +16,13 @@ import { useFinanceReconciliation, useCommitteeRollups } from '@/hooks/useFinanc
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScoreText } from '@/components/ScoreText';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
-import { EvidenceBrowser } from '@/components/EvidenceBrowser';
+
 import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
 import { ContactInfoCard } from '@/components/ContactInfoCard';
 import { CandidatePositions } from '@/components/CandidatePositions';
@@ -54,6 +55,7 @@ export const CandidateProfile = () => {
   const { data: committeeRollups = [] } = useCommitteeRollups(id);
   
 const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isFecBreakdownOpen, setIsFecBreakdownOpen] = useState(false);
   const [visibleDonorCount, setVisibleDonorCount] = useState(20);
   const [donorSearch, setDonorSearch] = useState('');
   
@@ -341,95 +343,6 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
           </div>
         )}
 
-        {/* You vs Candidate */}
-        <Card className="mb-8 shadow-elevated">
-          <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-accent" />
-              You vs. {candidate.name.split(' ')[0]}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Agreements */}
-              <div>
-                <h4 className="font-semibold text-agree mb-4 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-agree/20 flex items-center justify-center text-sm">✓</span>
-                  Where You Agree
-                </h4>
-                {agreements.length > 0 ? (
-                  <div className="space-y-3">
-                    {agreements.map(a => (
-                      <div key={a.topicId} className="p-3 rounded-lg bg-agree/5 border border-agree/20">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-medium text-foreground">{a.topicName}</span>
-                          <span className="text-sm text-agree">Both {a.score >= 0 ? 'Progressive' : 'Conservative'}</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">You:</span>
-                            <span className="ml-2 font-medium">{a.userScore > 0 ? '+' : ''}{a.userScore}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Them:</span>
-                            <span className="ml-2 font-medium">{a.score > 0 ? '+' : ''}{a.score}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No clear agreements found based on your quiz responses.</p>
-                )}
-              </div>
-
-              {/* Disagreements */}
-              <div>
-                <h4 className="font-semibold text-disagree mb-4 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-disagree/20 flex items-center justify-center text-sm">✗</span>
-                  Where You Differ
-                </h4>
-                {disagreements.length > 0 ? (
-                  <div className="space-y-3">
-                    {disagreements.map(d => (
-                      <div key={d.topicId} className="p-3 rounded-lg bg-disagree/5 border border-disagree/20">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-medium text-foreground">{d.topicName}</span>
-                          <span className="text-sm text-disagree">Opposing views</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">You:</span>
-                            <span className="ml-2 font-medium">{d.userScore > 0 ? '+' : ''}{d.userScore}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Them:</span>
-                            <span className="ml-2 font-medium">{d.score > 0 ? '+' : ''}{d.score}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No clear disagreements found based on your quiz responses.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Topic Breakdown */}
-            <div className="mt-8 pt-8 border-t border-border">
-              <h4 className="font-semibold text-foreground mb-4">Topic-by-Topic Scores</h4>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {candidateTopicScores.map(ts => (
-                  <div key={ts.topicId} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
-                    <span className="text-sm font-medium text-foreground">{ts.topicName}</span>
-                    <ScoreText score={ts.score} size="sm" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Tabs for Donors and Votes */}
         <Tabs defaultValue="donors" className="w-full">
@@ -491,111 +404,118 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
                     {/* FEC-derived aggregates to align list with FEC Total Receipts */}
                     {hasFecBreakdown && (
-                      <div className="mb-6 space-y-4">
-                        {fecSourceLabel && (
-                          <div className="text-xs text-muted-foreground flex items-center gap-2">
-                            <Info className="w-4 h-4" />
-                            <span>Totals from {fecSourceLabel}.</span>
-                          </div>
-                        )}
-                        
-                        {/* Contribution Breakdown Table */}
+                      <Collapsible open={isFecBreakdownOpen} onOpenChange={setIsFecBreakdownOpen} className="mb-6">
                         <div className="rounded-lg border border-border overflow-hidden">
-                          <div className="bg-secondary/60 px-4 py-2 border-b border-border">
-                            <p className="text-sm font-medium text-foreground">FEC Contribution Breakdown</p>
-                          </div>
-                          <div className="divide-y divide-border">
-                            {/* Itemized Individual (Line 11A) */}
-                            <div className="flex items-center justify-between px-4 py-3">
+                          <CollapsibleTrigger asChild>
+                            <button className="w-full flex items-center justify-between px-4 py-3 bg-secondary/60 border-b border-border hover:bg-secondary/80 transition-colors">
+                              <div className="flex items-center gap-2">
+                                <DollarSign className="w-4 h-4 text-primary" />
+                                <span className="text-sm font-medium text-foreground">FEC Contribution Breakdown</span>
+                                {fecSourceLabel && (
+                                  <span className="text-xs text-muted-foreground">({fecSourceLabel})</span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-3">
-                                <span className="text-sm font-medium text-foreground">Itemized Individual (Line 11A)</span>
-                                <Badge variant="outline" className="text-[10px]">{itemizedIndividualDonors.length} donors</Badge>
+                                <span className="text-sm font-bold text-primary">{formatCurrency(fecTotalReceipts)}</span>
+                                {isFecBreakdownOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                               </div>
-                              <span className="text-sm font-semibold">{formatCurrency(fecItemized)}</span>
-                            </div>
-                            
-                            {/* PAC/Committee (Line 11C) */}
-                            {(financeReconciliation?.fec_pac_contributions ?? 0) > 0 && (
+                            </button>
+                          </CollapsibleTrigger>
+                          
+                          <CollapsibleContent>
+                            <div className="divide-y divide-border">
+                              {/* Itemized Individual (Line 11A) */}
                               <div className="flex items-center justify-between px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <span className="text-sm font-medium text-foreground">PAC/Committee (Line 11C)</span>
-                                  <Badge variant="outline" className="text-[10px]">{pacDonors.length} sources</Badge>
+                                  <span className="text-sm font-medium text-foreground">Itemized Individual (Line 11A)</span>
+                                  <Badge variant="outline" className="text-[10px]">{itemizedIndividualDonors.length} donors</Badge>
                                 </div>
-                                <span className="text-sm font-semibold">{formatCurrency(financeReconciliation?.fec_pac_contributions)}</span>
+                                <span className="text-sm font-semibold">{formatCurrency(fecItemized)}</span>
                               </div>
-                            )}
-                            
-                            {/* Party Contributions (Line 11B) */}
-                            {(financeReconciliation?.fec_party_contributions ?? 0) > 0 && (
-                              <div className="flex items-center justify-between px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm font-medium text-foreground">Party Contributions (Line 11B)</span>
+                              
+                              {/* PAC/Committee (Line 11C) */}
+                              {(financeReconciliation?.fec_pac_contributions ?? 0) > 0 && (
+                                <div className="flex items-center justify-between px-4 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-sm font-medium text-foreground">PAC/Committee (Line 11C)</span>
+                                    <Badge variant="outline" className="text-[10px]">{pacDonors.length} sources</Badge>
+                                  </div>
+                                  <span className="text-sm font-semibold">{formatCurrency(financeReconciliation?.fec_pac_contributions)}</span>
                                 </div>
-                                <span className="text-sm font-semibold">{formatCurrency(financeReconciliation?.fec_party_contributions)}</span>
-                              </div>
-                            )}
-                            
-                            {/* Transfers (Line 12) */}
-                            {fecTransfers > 0 && (
-                              <div className="flex items-center justify-between px-4 py-3">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-medium text-foreground">Transfers (Line 12)</span>
-                                  <span className="text-[11px] text-muted-foreground">From other authorized committees</span>
+                              )}
+                              
+                              {/* Party Contributions (Line 11B) */}
+                              {(financeReconciliation?.fec_party_contributions ?? 0) > 0 && (
+                                <div className="flex items-center justify-between px-4 py-3">
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-sm font-medium text-foreground">Party Contributions (Line 11B)</span>
+                                  </div>
+                                  <span className="text-sm font-semibold">{formatCurrency(financeReconciliation?.fec_party_contributions)}</span>
                                 </div>
-                                <span className="text-sm font-semibold">{formatCurrency(fecTransfers)}</span>
-                              </div>
-                            )}
-                            
-                            {/* Candidate Loans */}
-                            {fecLoans > 0 && (
-                              <div className="flex items-center justify-between px-4 py-3 bg-amber-500/5">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-medium text-foreground">Candidate Loans</span>
-                                  <span className="text-[11px] text-muted-foreground">Loans from the candidate to campaign</span>
+                              )}
+                              
+                              {/* Transfers (Line 12) */}
+                              {fecTransfers > 0 && (
+                                <div className="flex items-center justify-between px-4 py-3">
+                                  <div className="flex flex-col">
+                                    <span className="text-sm font-medium text-foreground">Transfers (Line 12)</span>
+                                    <span className="text-[11px] text-muted-foreground">From other authorized committees</span>
+                                  </div>
+                                  <span className="text-sm font-semibold">{formatCurrency(fecTransfers)}</span>
                                 </div>
-                                <span className="text-sm font-semibold text-amber-700">{formatCurrency(fecLoans)}</span>
-                              </div>
-                            )}
-                            
-                            {/* Candidate Contribution */}
-                            {fecCandidateContribution > 0 && (
-                              <div className="flex items-center justify-between px-4 py-3">
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-medium text-foreground">Candidate Contribution</span>
-                                  <span className="text-[11px] text-muted-foreground">Direct contribution from candidate</span>
+                              )}
+                              
+                              {/* Candidate Loans */}
+                              {fecLoans > 0 && (
+                                <div className="flex items-center justify-between px-4 py-3 bg-amber-500/5">
+                                  <div className="flex flex-col">
+                                    <span className="text-sm font-medium text-foreground">Candidate Loans</span>
+                                    <span className="text-[11px] text-muted-foreground">Loans from the candidate to campaign</span>
+                                  </div>
+                                  <span className="text-sm font-semibold text-amber-700">{formatCurrency(fecLoans)}</span>
                                 </div>
-                                <span className="text-sm font-semibold">{formatCurrency(fecCandidateContribution)}</span>
-                              </div>
-                            )}
-                            
-                            {/* Other Receipts (Line 15) */}
-                            {fecOtherReceipts > 0 && (
+                              )}
+                              
+                              {/* Candidate Contribution */}
+                              {fecCandidateContribution > 0 && (
+                                <div className="flex items-center justify-between px-4 py-3">
+                                  <div className="flex flex-col">
+                                    <span className="text-sm font-medium text-foreground">Candidate Contribution</span>
+                                    <span className="text-[11px] text-muted-foreground">Direct contribution from candidate</span>
+                                  </div>
+                                  <span className="text-sm font-semibold">{formatCurrency(fecCandidateContribution)}</span>
+                                </div>
+                              )}
+                              
+                              {/* Other Receipts (Line 15) */}
+                              {fecOtherReceipts > 0 && (
+                                <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
+                                  <div className="flex flex-col">
+                                    <span className="text-sm font-medium text-foreground">Other Receipts (Line 15)</span>
+                                    <span className="text-[11px] text-muted-foreground">Slate mailers, refunds, misc</span>
+                                  </div>
+                                  <span className="text-sm font-semibold">{formatCurrency(fecOtherReceipts)}</span>
+                                </div>
+                              )}
+                              
+                              {/* Unitemized / Small Donors */}
                               <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
                                 <div className="flex flex-col">
-                                  <span className="text-sm font-medium text-foreground">Other Receipts (Line 15)</span>
-                                  <span className="text-[11px] text-muted-foreground">Slate mailers, refunds, misc</span>
+                                  <span className="text-sm font-medium text-foreground">Unitemized (Small Donors)</span>
+                                  <span className="text-[11px] text-muted-foreground">Donations &lt;$200, FEC aggregate</span>
                                 </div>
-                                <span className="text-sm font-semibold">{formatCurrency(fecOtherReceipts)}</span>
+                                <span className="text-sm font-semibold">{formatCurrency(fecUnitemized)}</span>
                               </div>
-                            )}
-                            
-                            {/* Unitemized / Small Donors */}
-                            <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
-                              <div className="flex flex-col">
-                                <span className="text-sm font-medium text-foreground">Unitemized (Small Donors)</span>
-                                <span className="text-[11px] text-muted-foreground">Donations &lt;$200, FEC aggregate</span>
+                              
+                              {/* Total Row */}
+                              <div className="flex items-center justify-between px-4 py-3 bg-primary/5 border-t-2 border-primary/30">
+                                <span className="text-sm font-bold text-foreground">FEC Total Receipts</span>
+                                <span className="text-lg font-bold text-primary">{formatCurrency(fecTotalReceipts)}</span>
                               </div>
-                              <span className="text-sm font-semibold">{formatCurrency(fecUnitemized)}</span>
                             </div>
-                            
-                            {/* Total Row */}
-                            <div className="flex items-center justify-between px-4 py-3 bg-primary/5 border-t-2 border-primary/30">
-                              <span className="text-sm font-bold text-foreground">FEC Total Receipts</span>
-                              <span className="text-lg font-bold text-primary">{formatCurrency(fecTotalReceipts)}</span>
-                            </div>
-                          </div>
+                          </CollapsibleContent>
                         </div>
-                      </div>
+                      </Collapsible>
                     )}
 
                     
@@ -978,20 +898,6 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
           </TabsContent>
         </Tabs>
 
-        {/* Evidence Browser */}
-        <div className="mt-8">
-          <EvidenceBrowser 
-            candidateName={candidate.name}
-            stances={candidateTopicScores.map(ts => ({
-              questionId: ts.topicId,
-              questionText: `Position on ${ts.topicName}`,
-              topicName: ts.topicName,
-              stance: 'known' as const,
-              score: ts.score,
-              sources: [{ title: 'Public records', url: '#' }],
-            }))}
-          />
-        </div>
 
         {/* Report Issue & Feedback */}
         <div className="mt-6 flex items-center justify-center gap-4">
