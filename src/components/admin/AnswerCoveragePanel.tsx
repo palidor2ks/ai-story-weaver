@@ -105,7 +105,7 @@ export function AnswerCoveragePanel() {
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('none');
   const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
   const [deltaFilter, setDeltaFilter] = useState<'all' | 'within' | 'minor' | 'major' | 'no_data'>('all');
-  const [syncFilter, setSyncFilter] = useState<'all' | 'needs_sync' | 'partial' | 'complete' | 'has_committee' | 'no_committee' | 'has_donors' | 'no_donors'>('all');
+  const [syncFilter, setSyncFilter] = useState<'all' | 'needs_sync' | 'partial' | 'complete' | 'has_committee' | 'no_committee' | 'has_donors' | 'no_donors' | 'fec_mismatch'>('all');
   
   // Edit dialog state
   const [editingCandidate, setEditingCandidate] = useState<CandidateAnswerCoverage | null>(null);
@@ -248,6 +248,11 @@ export function AnswerCoveragePanel() {
     [baseFilteredCandidates]
   );
 
+  const fecIdMismatchCandidates = useMemo(() => 
+    baseFilteredCandidates.filter(c => c.fecIdMismatch),
+    [baseFilteredCandidates]
+  );
+
   const filteredCandidates = useMemo(() => {
     let result = baseFilteredCandidates;
     
@@ -298,6 +303,8 @@ export function AnswerCoveragePanel() {
       result = result.filter(c => c.fecCandidateId && !c.fecCommitteeId);
     } else if (syncFilter === 'has_committee') {
       result = result.filter(c => !!c.fecCommitteeId);
+    } else if (syncFilter === 'fec_mismatch') {
+      result = result.filter(c => c.fecIdMismatch);
     }
     
     return result;
@@ -1166,6 +1173,11 @@ export function AnswerCoveragePanel() {
                   <SelectItem value="needs_sync">Needs Sync ({needsSyncCandidates.length})</SelectItem>
                   <SelectItem value="partial">Partial ({partialSyncCandidates.length})</SelectItem>
                   <SelectItem value="complete">Complete ({completeSyncCandidates.length})</SelectItem>
+                  {fecIdMismatchCandidates.length > 0 && (
+                    <SelectItem value="fec_mismatch" className="text-amber-600">
+                      ⚠️ FEC ID Mismatch ({fecIdMismatchCandidates.length})
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
 
@@ -1511,12 +1523,35 @@ export function AnswerCoveragePanel() {
                               );
                             })()}
                           </TableCell>
-                          {/* FEC ID column - simplified */}
+                          {/* FEC ID column with mismatch warning */}
                           <TableCell className="px-3 py-3">
                             {hasFecId ? (
-                              <Badge variant="outline" className="text-xs font-mono">
-                                {candidate.fecCandidateId?.slice(0, 9)}
-                              </Badge>
+                              <div className="flex items-center gap-1">
+                                {candidate.fecIdMismatch && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                      </TooltipTrigger>
+                                      <TooltipContent side="left" className="max-w-[260px]">
+                                        <p className="font-medium text-amber-600 mb-1">FEC ID Mismatch</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {candidate.fecIdMismatchReason || 'FEC ID prefix does not match current office'}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                                <Badge 
+                                  variant="outline" 
+                                  className={cn(
+                                    "text-xs font-mono",
+                                    candidate.fecIdMismatch && "border-amber-500/50 text-amber-600"
+                                  )}
+                                >
+                                  {candidate.fecCandidateId?.slice(0, 9)}
+                                </Badge>
+                              </div>
                             ) : (
                               <span className="text-muted-foreground/50 text-xs">—</span>
                             )}

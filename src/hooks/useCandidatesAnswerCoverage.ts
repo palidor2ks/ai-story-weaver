@@ -42,6 +42,9 @@ export interface CandidateAnswerCoverage {
   lastSyncDate: string | null;   // Last sync date from committees
   reconciliationCheckedAt: string | null; // When reconciliation was last checked
   syncStatus: 'never' | 'partial' | 'complete'; // Aggregated sync status
+  // Validation flags
+  fecIdMismatch: boolean;        // True if FEC ID prefix doesn't match office (H=House, S=Senate, P=President)
+  fecIdMismatchReason: string | null; // Human-readable reason for the mismatch
 }
 
 interface Filters {
@@ -194,6 +197,38 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         answerCountMap[row.candidate_id] = (answerCountMap[row.candidate_id] || 0) + 1;
       });
 
+      // Helper to validate FEC ID prefix against office
+      const validateFecIdPrefix = (fecId: string | null, office: string): { mismatch: boolean; reason: string | null } => {
+        if (!fecId) return { mismatch: false, reason: null };
+        
+        const prefix = fecId.charAt(0).toUpperCase();
+        const officeNormalized = office.toLowerCase();
+        
+        // Expected prefixes: H = House Representative, S = Senator, P = President
+        const expectedPrefix = officeNormalized.includes('representative') || officeNormalized.includes('house') 
+          ? 'H'
+          : officeNormalized.includes('senator') || officeNormalized.includes('senate')
+            ? 'S'
+            : officeNormalized.includes('president')
+              ? 'P'
+              : null;
+        
+        if (!expectedPrefix) {
+          // Unknown office type, can't validate
+          return { mismatch: false, reason: null };
+        }
+        
+        if (prefix !== expectedPrefix) {
+          const prefixMeaning = prefix === 'H' ? 'House' : prefix === 'S' ? 'Senate' : prefix === 'P' ? 'President' : 'Unknown';
+          return { 
+            mismatch: true, 
+            reason: `FEC ID starts with "${prefix}" (${prefixMeaning}) but office is "${office}"`
+          };
+        }
+        
+        return { mismatch: false, reason: null };
+      };
+
       // Build result with coverage info
       const results: CandidateAnswerCoverage[] = (candidates || []).map(c => {
         const answerCount = answerCountMap[c.id] || 0;
@@ -211,6 +246,9 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         } else if (hasLastDonorSync || hasCompletedAnySync) {
           syncStatus = 'complete';
         }
+        
+        // Validate FEC ID prefix
+        const fecIdValidation = validateFecIdPrefix(c.fec_candidate_id, c.office);
         
         return {
           id: c.id,
@@ -251,6 +289,9 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           lastSyncDate: lastSyncMap[c.id] || null,
           reconciliationCheckedAt: rec?.checked_at || null,
           syncStatus,
+          // Validation flags
+          fecIdMismatch: fecIdValidation.mismatch,
+          fecIdMismatchReason: fecIdValidation.reason,
         };
       });
 
