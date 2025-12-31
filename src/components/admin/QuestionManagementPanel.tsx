@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search, Pencil } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search, Pencil, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 interface QuestionOption {
@@ -80,6 +80,7 @@ export function QuestionManagementPanel() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [formData, setFormData] = useState<QuestionFormData>({
     id: "",
     text: "",
@@ -310,6 +311,60 @@ export function QuestionManagementPanel() {
     }
   };
 
+  const handleGenerateWithAI = async () => {
+    if (!formData.topic_id) {
+      toast.error("Please select a topic first");
+      return;
+    }
+
+    const topic = topics?.find(t => t.id === formData.topic_id);
+    if (!topic) {
+      toast.error("Topic not found");
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-quiz-question', {
+        body: { topicId: formData.topic_id, topicName: topic.name }
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        if (data.error.includes('Rate limit')) {
+          toast.error("AI rate limit exceeded. Please wait a moment and try again.");
+        } else if (data.error.includes('credits')) {
+          toast.error("AI credits exhausted. Please add funds to continue.");
+        } else {
+          toast.error(data.error);
+        }
+        return;
+      }
+
+      // Update form with AI-generated content
+      setFormData(prev => ({
+        ...prev,
+        text: data.questionText,
+        options: prev.options.map(opt => {
+          if (opt.is_skip_option) return opt;
+          const key = opt.value === -10 ? 'L10' : 
+                     opt.value === -5 ? 'L5' : 
+                     opt.value === 0 ? 'C' : 
+                     opt.value === 5 ? 'R5' : 'R10';
+          return { ...opt, text: data.options[key] };
+        }),
+      }));
+
+      toast.success("AI generated question! Review and edit as needed.");
+    } catch (error) {
+      console.error('Failed to generate question:', error);
+      toast.error("Failed to generate question. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleOptionTextChange = (index: number, text: string) => {
     setFormData(prev => ({
       ...prev,
@@ -486,6 +541,35 @@ export function QuestionManagementPanel() {
           )}
         </div>
       </div>
+
+      {/* AI Generate Button - Only show for new questions */}
+      {!isEdit && (
+        <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-dashed">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <span className="text-sm text-muted-foreground flex-1">
+            Generate question and answers with AI
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleGenerateWithAI}
+            disabled={isGenerating || !formData.topic_id}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4 mr-2" />
+                Generate with AI
+              </>
+            )}
+          </Button>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="text">Question Text *</Label>
