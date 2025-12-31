@@ -35,7 +35,9 @@ export function FinanceReconciliationCard({
     fec_itemized, fec_unitemized, fec_total_receipts, status,
     local_individual_itemized, local_pac_contributions, local_party_contributions,
     fec_pac_contributions, fec_party_contributions,
-    individual_delta_pct, pac_delta_pct
+    fec_loans, fec_transfers, fec_candidate_contribution, fec_other_receipts,
+    local_loans, local_transfers,
+    individual_delta_pct, pac_delta_pct, delta_pct
   } = reconciliation;
   
   const formatCurrency = (value: number | null) => {
@@ -83,6 +85,14 @@ export function FinanceReconciliationCard({
     }
   };
 
+  // Calculate Local Total = Individual + PAC + Party + Transfers + Loans (what we imported)
+  const localTotal = (local_individual_itemized ?? 0) + (local_pac_contributions ?? 0) + 
+    (local_party_contributions ?? 0) + (local_transfers ?? 0) + (local_loans ?? 0);
+  
+  // FEC Itemized Total = Individual + PAC + Party (what we compare against)
+  const fecItemizedTotal = (fec_itemized ?? 0) + (fec_pac_contributions ?? 0) + (fec_party_contributions ?? 0);
+  const localItemizedTotal = (local_individual_itemized ?? 0) + (local_pac_contributions ?? 0) + (local_party_contributions ?? 0);
+
   if (compact) {
     return (
       <div className="p-3 rounded-lg border border-border bg-card">
@@ -93,7 +103,7 @@ export function FinanceReconciliationCard({
           </div>
           {getStatusBadge()}
         </div>
-        <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="grid grid-cols-3 gap-2 text-xs">
           <div>
             <span className="text-muted-foreground">Individual:</span>
             <span className={cn("ml-1 font-medium", getDeltaColor(individual_delta_pct))}>
@@ -104,6 +114,12 @@ export function FinanceReconciliationCard({
             <span className="text-muted-foreground">PAC:</span>
             <span className={cn("ml-1 font-medium", getDeltaColor(pac_delta_pct))}>
               {formatDelta(pac_delta_pct)}
+            </span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Total:</span>
+            <span className={cn("ml-1 font-medium", getDeltaColor(delta_pct))}>
+              {formatDelta(delta_pct)}
             </span>
           </div>
         </div>
@@ -132,7 +148,7 @@ export function FinanceReconciliationCard({
         <CardContent className="space-y-4">
           {/* Category Comparison Table */}
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Apples-to-Apples Comparison</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Itemized Contributions (Apples-to-Apples)</p>
             <div className="rounded-lg border border-border overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-secondary/50">
@@ -184,11 +200,65 @@ export function FinanceReconciliationCard({
                     <td className="text-right p-2">{formatCurrency(fec_party_contributions)}</td>
                     <td className="text-right p-2 text-muted-foreground">—</td>
                   </tr>
-                  <tr className="border-t border-border bg-secondary/30">
-                    <td className="p-2 font-medium">Unitemized</td>
+                  {/* Itemized Subtotal */}
+                  <tr className="border-t-2 border-primary/30 bg-primary/5">
+                    <td className="p-2 font-medium">Itemized Subtotal</td>
+                    <td className="text-right p-2 font-semibold">{formatCurrency(localItemizedTotal)}</td>
+                    <td className="text-right p-2 font-semibold">{formatCurrency(fecItemizedTotal)}</td>
+                    <td className={cn("text-right p-2 font-bold", getDeltaColor(delta_pct))}>
+                      {formatDelta(delta_pct)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* FEC-Only Categories */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">FEC-Only Categories (Not in Itemized Import)</p>
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left p-2 font-medium">Category</th>
+                    <th className="text-right p-2 font-medium">Local</th>
+                    <th className="text-right p-2 font-medium">FEC</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {((fec_transfers ?? 0) > 0 || (local_transfers ?? 0) > 0) && (
+                    <tr className="border-t border-border">
+                      <td className="p-2">Transfers (Line 12)</td>
+                      <td className="text-right p-2">{formatCurrency(local_transfers)}</td>
+                      <td className="text-right p-2">{formatCurrency(fec_transfers)}</td>
+                    </tr>
+                  )}
+                  {((fec_loans ?? 0) > 0 || (local_loans ?? 0) > 0) && (
+                    <tr className="border-t border-border">
+                      <td className="p-2">Candidate Loans</td>
+                      <td className="text-right p-2">{formatCurrency(local_loans)}</td>
+                      <td className="text-right p-2">{formatCurrency(fec_loans)}</td>
+                    </tr>
+                  )}
+                  {(fec_candidate_contribution ?? 0) > 0 && (
+                    <tr className="border-t border-border">
+                      <td className="p-2">Candidate Contribution</td>
+                      <td className="text-right p-2 text-muted-foreground">—</td>
+                      <td className="text-right p-2">{formatCurrency(fec_candidate_contribution)}</td>
+                    </tr>
+                  )}
+                  {(fec_other_receipts ?? 0) > 0 && (
+                    <tr className="border-t border-border">
+                      <td className="p-2">Other Receipts (Line 15)</td>
+                      <td className="text-right p-2 text-muted-foreground">—</td>
+                      <td className="text-right p-2">{formatCurrency(fec_other_receipts)}</td>
+                    </tr>
+                  )}
+                  <tr className="border-t border-border bg-muted/30">
+                    <td className="p-2">Unitemized (Small Donors)</td>
                     <td className="text-right p-2 text-muted-foreground">N/A</td>
                     <td className="text-right p-2">{formatCurrency(fec_unitemized)}</td>
-                    <td className="text-right p-2 text-muted-foreground">—</td>
                   </tr>
                 </tbody>
               </table>

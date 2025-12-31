@@ -669,8 +669,9 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
                         const allSources: FundingSource[] = [];
                         
                         // Add regular donors - but exclude entries already shown as FEC summary categories
+                        // EXCEPT: Show transfer donors with their names for transparency (they just won't count toward totals)
                         donors.forEach(d => {
-                          // Skip loan entries (line 13A) if fecLoans is already shown
+                          // Skip loan entries (line 13A) if fecLoans is already shown as FEC aggregate
                           if (fecLoans > 0 && d.line_number === '13A') {
                             return;
                           }
@@ -678,19 +679,34 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
                           if (fecCandidateContribution > 0 && d.line_number === '11AI') {
                             return;
                           }
-                          // Skip committee transfers (line 12) if fecTransfers is already shown
-                          if (fecTransfers > 0 && d.line_number?.startsWith('12')) {
-                            return;
-                          }
+                          
+                          const isTransfer = d.line_number?.startsWith('12') || d.is_transfer;
                           const displayName = d.display_name || d.name;
-                          allSources.push({
-                            id: d.id,
-                            name: d.name,
-                            amount: d.amount,
-                            sourceType: 'donor',
-                            donor: d,
-                            searchText: [displayName, d.employer, d.contributor_city, d.contributor_state, d.type].filter(Boolean).join(' ').toLowerCase()
-                          });
+                          
+                          // Show transfer donors with their names but mark them as transfers
+                          if (isTransfer) {
+                            allSources.push({
+                              id: d.id,
+                              name: displayName,
+                              amount: d.amount,
+                              sourceType: 'committee_transfer',
+                              donor: d,
+                              badgeLabel: 'Line 12',
+                              badgeStyle: 'border-purple-500/50 text-purple-600 bg-purple-500/10',
+                              description: `Transfer from ${displayName}`,
+                              subLabel: 'Committee transfer',
+                              searchText: [displayName, 'transfer committee'].join(' ').toLowerCase()
+                            });
+                          } else {
+                            allSources.push({
+                              id: d.id,
+                              name: d.name,
+                              amount: d.amount,
+                              sourceType: 'donor',
+                              donor: d,
+                              searchText: [displayName, d.employer, d.contributor_city, d.contributor_state, d.type].filter(Boolean).join(' ').toLowerCase()
+                            });
+                          }
                         });
                         
                         // Add FEC aggregate sources
@@ -736,7 +752,10 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
                           });
                         }
                         
-                        if (fecTransfers > 0) {
+                        // Only show FEC aggregate transfer entry if we don't have imported transfer donors
+                        // (to avoid double-counting - we prefer to show individual transfer sources)
+                        const hasImportedTransfers = donors.some(d => d.line_number?.startsWith('12') || d.is_transfer);
+                        if (fecTransfers > 0 && !hasImportedTransfers) {
                           allSources.push({
                             id: 'committee-transfers',
                             name: 'Committee Transfers',
