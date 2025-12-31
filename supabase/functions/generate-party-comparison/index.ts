@@ -95,6 +95,16 @@ serve(async (req) => {
       }
     }
 
+    // Helper to format score in L/R format
+    const formatScoreLR = (score: number): string => {
+      if (score === 0) return 'C';
+      const absValue = Math.abs(score);
+      if (score >= -3 && score <= 3) {
+        return score < 0 ? `CL${absValue}` : `CR${absValue}`;
+      }
+      return score < 0 ? `L${absValue}` : `R${absValue}`;
+    };
+
     // Build the prompt
     const skippedTopics = skippedAnswers.length > 0 
       ? `\n\nNote: The user marked ${skippedAnswers.length} topic(s) as "not important to me" and these are excluded from this comparison: ${[...new Set(skippedAnswers.map(a => a.topic_name))].join(', ')}.`
@@ -103,6 +113,15 @@ serve(async (req) => {
     const systemPrompt = `You are a seasoned political analyst speaking directly to a client about how their views compare to political party platforms. 
 
 Write in second person ("you", "your positions") - never say "the user" or reference "data provided."
+
+CRITICAL: When referencing any political scores in your analysis, ALWAYS use L/R format:
+- L = Left/Progressive (e.g., L5, L10)
+- R = Right/Conservative (e.g., R5, R10)  
+- CL = Center-Left (e.g., CL2)
+- CR = Center-Right (e.g., CR2)
+- C = Center
+
+NEVER use raw numbers like +5 or -5. Always format scores as L5 or R5.
 
 Be conversational yet insightful, like explaining things over coffee. Reference official party platform positions naturally, e.g., "When it comes to healthcare, you and the Democrats are on the same page - their platform calls for expanding Medicare access."
 
@@ -114,15 +133,15 @@ Party: ${partyName}
 AGREEMENTS (${agreements.length} topics where you and the ${partyName} align):
 ${agreements.map(a => `- Topic: ${a.topic}
   Question: "${a.question_text}"
-  Both lean ${a.user_value > 0 ? 'supportive' : a.user_value < 0 ? 'opposed' : 'neutral'}
+  Both lean ${a.user_value > 0 ? `right (${formatScoreLR(a.user_value)})` : a.user_value < 0 ? `left (${formatScoreLR(a.user_value)})` : 'neutral (C)'}
   ${a.party_source_description ? `Platform source: ${a.party_source_description}` : ''}
   ${a.party_source_url ? `Link: ${a.party_source_url}` : ''}`).join('\n\n')}
 
 DISAGREEMENTS (${disagreements.length} topics where you differ):
 ${disagreements.map(d => `- Topic: ${d.topic}
   Question: "${d.question_text}"
-  You: ${d.user_value > 0 ? 'Support' : d.user_value < 0 ? 'Oppose' : 'Neutral'}
-  ${partyName}: ${d.party_value > 0 ? 'Support' : d.party_value < 0 ? 'Oppose' : 'Neutral'}
+  You: ${formatScoreLR(d.user_value)} (${d.user_value > 0 ? 'Right' : d.user_value < 0 ? 'Left' : 'Center'})
+  ${partyName}: ${formatScoreLR(d.party_value)} (${d.party_value > 0 ? 'Right' : d.party_value < 0 ? 'Left' : 'Center'})
   ${d.party_source_description ? `Platform source: ${d.party_source_description}` : ''}
   ${d.party_source_url ? `Link: ${d.party_source_url}` : ''}`).join('\n\n')}
 `;
@@ -135,26 +154,26 @@ ${disagreements.map(d => `- Topic: ${d.topic}
 Provide a detailed analysis in JSON format:
 
 {
-  "deepAnalysis": "A 2-3 paragraph analysis written directly to the person using 'you' and 'your'. Explain where they align with the ${partyName} platform and where they part ways. Reference official party platform positions naturally. Never say 'the user' or 'based on the data provided'. Write like a political consultant briefing a client: 'On economic issues, you and the ${partyName} are largely in sync...'",
+  "deepAnalysis": "A 2-3 paragraph analysis written directly to the person using 'you' and 'your'. Explain where they align with the ${partyName} platform and where they part ways. Reference official party platform positions naturally. When mentioning scores, use L/R format (L5, R3, etc). Never say 'the user' or 'based on the data provided'. Write like a political consultant briefing a client: 'On economic issues, you and the ${partyName} are largely in sync...'",
   "keyAgreements": ["List 2-4 specific policy areas with brief context"],
   "keyDisagreements": ["List 2-4 specific policy areas with brief context"],
   "sources": [{"title": "Source title", "url": "source url if available", "type": "platform|policy_paper|official_statement"}]
 }
 
-Speak directly and conversationally. Avoid clinical language.`;
+Speak directly and conversationally. When referencing scores, use L/R format. Avoid clinical language.`;
     } else {
       userPrompt = `${comparisonData}
 
 Provide a brief comparison in JSON format:
 
 {
-  "summary": "A 1-2 sentence conversational summary speaking directly to the person. Use 'you' and 'your' - never say 'the user' or 'based on data'. Example: 'You and the ${partyName} see eye-to-eye on climate policy and healthcare access, though you're on opposite sides when it comes to gun rights.'",
+  "summary": "A 1-2 sentence conversational summary speaking directly to the person. Use 'you' and 'your' - never say 'the user' or 'based on data'. When mentioning scores, use L/R format (L5, R3, etc). Example: 'You and the ${partyName} see eye-to-eye on climate policy and healthcare access, though you're on opposite sides when it comes to gun rights.'",
   "keyAgreements": ["Brief 2-3 word description of each agreement area"],
   "keyDisagreements": ["Brief 2-3 word description of each disagreement area"],
   "sources": [{"title": "Source title", "url": "source url if available", "type": "platform|policy_paper|official_statement"}]
 }
 
-Write like you're explaining to a friend where they stand politically. Be direct and personable.`;
+Write like you're explaining to a friend where they stand politically. Use L/R format for any scores. Be direct and personable.`;
     }
 
     console.log(`[generate-party-comparison] Calling Lovable AI Gateway...`);

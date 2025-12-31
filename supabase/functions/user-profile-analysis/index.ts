@@ -170,20 +170,37 @@ serve(async (req) => {
     const greenAlignment = calculatePartyAlignment(userScoresMap, PARTY_PLATFORMS.Green);
     const libertarianAlignment = calculatePartyAlignment(userScoresMap, PARTY_PLATFORMS.Libertarian);
 
-    // Format topic scores for the prompt
+    // Format topic scores for the prompt with L/R format
+    const formatScoreForPrompt = (score: number): string => {
+      if (score === 0) return 'C (Center)';
+      const absValue = Math.abs(score).toFixed(1);
+      if (score >= -3 && score <= 3) {
+        return score < 0 ? `CL${absValue} (Center-Left)` : `CR${absValue} (Center-Right)`;
+      }
+      return score < 0 ? `L${absValue} (Left)` : `R${absValue} (Right)`;
+    };
+
     const topicScoresText = topicScores
       .map((ts: { topicName: string; score: number }) => 
-        `${ts.topicName}: ${ts.score > 0 ? '+' : ''}${ts.score} (${ts.score >= 5 ? 'Progressive' : ts.score <= -5 ? 'Conservative' : 'Moderate'})`)
+        `${ts.topicName}: ${formatScoreForPrompt(ts.score)}`)
       .join('\n');
 
     const systemPrompt = `You are a non-partisan political analyst providing objective summaries of political positions. 
 Be balanced, factual, and avoid any partisan advocacy. Focus on explaining positions clearly without judgment.
-The scoring system: -10 is most conservative, +10 is most progressive, 0 is centrist/moderate.`;
+
+CRITICAL: When referencing scores in your analysis, ALWAYS use the L/R format:
+- L = Left/Progressive (e.g., L5, L10)
+- R = Right/Conservative (e.g., R5, R10)
+- CL = Center-Left (e.g., CL2)
+- CR = Center-Right (e.g., CR2)
+- C = Center
+
+NEVER use raw numbers like +5 or -5. Always use L5 or R5 format.`;
 
     const userPrompt = `Analyze this voter's political profile and provide a comprehensive summary.
 
 User: ${userName || 'Voter'}
-Overall Score: ${overallScore} (on a scale from -10 conservative to +10 progressive)
+Overall Score: ${formatScoreForPrompt(overallScore)}
 Democratic Party Alignment: ${democratAlignment}%
 Republican Party Alignment: ${republicanAlignment}%
 Green Party Alignment: ${greenAlignment}%
@@ -196,6 +213,8 @@ Please provide:
 1. A 2-3 sentence summary of their overall political philosophy
 2. 3-4 key insights about their positions (what makes them unique, any interesting patterns)
 3. A brief comparison to the four major party platforms
+
+IMPORTANT: When mentioning any scores, use L/R format (e.g., "L5", "R3", "CL2"). Never use raw numbers like +5 or -5.
 
 Return your response as JSON with this exact structure:
 {
