@@ -1332,30 +1332,36 @@ export function AnswerCoveragePanel() {
                       const hasFecId = !!candidate.fecCandidateId;
                       const hasCommittee = !!candidate.fecCommitteeId;
                       const financeStatus = calculateFinanceStatus(candidate);
-                      // Calculate "Local Total" as imported itemized NET + FEC non-itemized receipts for apples-to-apples comparison
-                      // Use localItemizedNet which excludes earmark pass-throughs (memo_code = 'X') to prevent double-counting
-                      const localItemizedNet = candidate.localItemizedNet || 0;
-                      const localTransfers = candidate.localTransfers || 0;
-                      const fecTransfers = candidate.fecTransfers || 0;
-                      const transferGap = Math.max(0, fecTransfers - localTransfers); // Transfers missing from local import
-                      // Loan gap: only add loans we HAVEN'T already imported locally (Line 13A)
-                      const localLoans = candidate.localLoans || 0;
-                      const fecLoans = candidate.fecLoans || 0;
-                      const loanGap = Math.max(0, fecLoans - localLoans); // Loans missing from local import
+                      // Calculate "Local Total" = Imported Itemized + FEC-only summary items
+                      // This creates an apples-to-apples comparison with FEC Total Receipts
+                      const localItemized = candidate.localItemized || 0; // Raw imported amount from donors/contributions
                       const fecUnitemized = candidate.fecUnitemized || 0;
-                      // fecOtherReceipts now uses loanGap instead of full fecLoans to avoid double-counting
-                      const fecOtherReceipts = loanGap + (candidate.fecCandidateContribution || 0) + (candidate.fecOtherReceipts || 0) + transferGap;
-                      const localTotal = localItemizedNet + fecUnitemized + fecOtherReceipts;
+                      const fecCandidateContribution = candidate.fecCandidateContribution || 0;
+                      const fecOtherReceipts = candidate.fecOtherReceipts || 0;
+                      const fecLoans = candidate.fecLoans || 0;
+                      const fecTransfers = candidate.fecTransfers || 0;
+                      
+                      // Local Total = What we imported + What we can't import (FEC summary-only items)
+                      const localTotal = localItemized + fecUnitemized + fecCandidateContribution + fecOtherReceipts + fecLoans + fecTransfers;
+                      
+                      // Calculate delta inline: Local Total vs FEC Total Receipts
+                      const fecTotalReceipts = financeStatus.fecTotalReceipts;
+                      const calculatedDelta = fecTotalReceipts !== null && fecTotalReceipts !== undefined
+                        ? localTotal - fecTotalReceipts
+                        : null;
+                      const calculatedDeltaPct = fecTotalReceipts && fecTotalReceipts > 0 
+                        ? (calculatedDelta! / fecTotalReceipts) * 100 
+                        : null;
+                      
                       const syncStatus = candidate.syncStatus;
                       const hasOverride = overrideMap.has(candidate.id);
                       
-                      // Calculate finance badge status
+                      // Calculate finance badge status based on delta
                       const getFinanceBadgeStatus = (): 'ok' | 'warning' | 'error' | null => {
-                        if (!financeStatus.hasData) return null;
-                        if (financeStatus.isBalanced) return 'ok';
-                        // Use otherReceipts as a rough proxy - if > 20% of total, warning, else error
-                        const otherPct = financeStatus.otherReceipts / (financeStatus.fecTotalReceipts || 1) * 100;
-                        if (otherPct <= 30) return 'warning';
+                        if (!financeStatus.hasData || calculatedDeltaPct === null) return null;
+                        const absPct = Math.abs(calculatedDeltaPct);
+                        if (absPct <= 2) return 'ok';
+                        if (absPct <= 5) return 'warning';
                         return 'error';
                       };
 
@@ -1455,7 +1461,7 @@ export function AnswerCoveragePanel() {
                                 <FinanceStatusBadge
                                   status={getFinanceBadgeStatus()}
                                     fecTotalReceipts={financeStatus.fecTotalReceipts}
-                                    localItemized={localItemizedNet}
+                                    localItemized={localItemized}
                                     reconciliationCheckedAt={candidate.reconciliationCheckedAt}
                                   />
                                 </button>
@@ -1486,59 +1492,49 @@ export function AnswerCoveragePanel() {
                                 <div className="space-y-2 text-sm">
                                   <div className="font-medium border-b pb-1 mb-2">Local Total Breakdown</div>
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Imported Itemized (Net)</span>
-                                    <span className="font-medium">{formatCurrency(localItemizedNet)}</span>
+                                    <span className="text-muted-foreground">Imported (Schedule A)</span>
+                                    <span className="font-medium">{formatCurrency(localItemized)}</span>
                                   </div>
-                                  {localTransfers > 0 && (
-                                    <div className="flex justify-between text-xs text-muted-foreground/70 pl-2">
-                                      <span className="italic">↳ includes local transfers</span>
-                                      <span className="italic">{formatCurrency(localTransfers)}</span>
-                                    </div>
-                                  )}
                                   <div className="flex justify-between">
                                     <span className="text-muted-foreground">+ Unitemized (FEC)</span>
                                     <span className="font-medium">{formatCurrency(fecUnitemized)}</span>
                                   </div>
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">+ Loans (FEC Gap)</span>
-                                    <span className="font-medium">{formatCurrency(loanGap)}</span>
-                                  </div>
-                                  {fecLoans > 0 && (
-                                    <div className="flex justify-between text-xs text-muted-foreground/70 pl-2">
-                                      <span className="italic">FEC: {formatCurrency(fecLoans)} − Local: {formatCurrency(localLoans)}</span>
-                                    </div>
-                                  )}
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">+ Candidate (FEC)</span>
-                                    <span className="font-medium">{formatCurrency(candidate.fecCandidateContribution || 0)}</span>
+                                    <span className="text-muted-foreground">+ Candidate Self-Fund (FEC)</span>
+                                    <span className="font-medium">{formatCurrency(fecCandidateContribution)}</span>
                                   </div>
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">+ Other (FEC)</span>
-                                    <span className="font-medium">{formatCurrency(candidate.fecOtherReceipts || 0)}</span>
+                                    <span className="text-muted-foreground">+ Loans (FEC)</span>
+                                    <span className="font-medium">{formatCurrency(fecLoans)}</span>
                                   </div>
-                                  {transferGap > 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">+ Transfer Gap</span>
-                                      <span className="font-medium text-amber-600">{formatCurrency(transferGap)}</span>
-                                    </div>
-                                  )}
-                                  {fecTransfers > 0 && (
-                                    <div className="flex justify-between text-xs text-muted-foreground/70 pl-2">
-                                      <span className="italic">FEC: {formatCurrency(fecTransfers)} − Local: {formatCurrency(localTransfers)}</span>
-                                    </div>
-                                  )}
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">+ Transfers (FEC)</span>
+                                    <span className="font-medium">{formatCurrency(fecTransfers)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">+ Other Receipts (FEC)</span>
+                                    <span className="font-medium">{formatCurrency(fecOtherReceipts)}</span>
+                                  </div>
                                   <div className="flex justify-between border-t pt-2 mt-2">
-                                    <span className="font-medium">Total</span>
+                                    <span className="font-medium">= Local Total</span>
                                     <span className="font-bold">{formatCurrency(localTotal)}</span>
                                   </div>
+                                  {calculatedDeltaPct !== null && (
+                                    <div className="flex justify-between text-xs text-muted-foreground pt-1">
+                                      <span>vs FEC Total Receipts</span>
+                                      <span className={calculatedDeltaPct > 2 ? 'text-amber-600' : calculatedDeltaPct < -2 ? 'text-red-500' : 'text-green-600'}>
+                                        {calculatedDeltaPct > 0 ? '+' : ''}{calculatedDeltaPct.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </PopoverContent>
                             </Popover>
                           </TableCell>
                           <TableCell className="px-2 py-2 whitespace-nowrap">
                             <DeltaBadge
-                              deltaAmount={candidate.deltaAmount}
-                              deltaPct={candidate.deltaPct}
+                              deltaAmount={calculatedDelta}
+                              deltaPct={calculatedDeltaPct}
                             />
                           </TableCell>
                           <TableCell className="px-2 py-2">
