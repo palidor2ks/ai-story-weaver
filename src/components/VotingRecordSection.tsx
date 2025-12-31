@@ -46,8 +46,6 @@ const topicNameToId: Record<string, string> = {
   'Technology': 'technology',
   'Domestic Policy': 'domestic-policy',
   'Gun Policy': 'gun-policy',
-  'Israel/Palestine': 'israel-palestine',
-  'China/Taiwan Conflict': 'china-taiwan',
   'Electoral Reform': 'electoral-reform',
 };
 
@@ -101,6 +99,33 @@ export const VotingRecordSection = ({
       return userScore > 0 ? 'support' : userScore < 0 ? 'oppose' : 'unknown';
     }
   };
+
+  // Calculate alignment stats
+  const alignmentStats = useMemo(() => {
+    let supportCount = 0;
+    let opposeCount = 0;
+    let unknownCount = 0;
+    
+    votes.forEach(vote => {
+      const support = getUserSupport(vote);
+      if (support === 'support') supportCount++;
+      else if (support === 'oppose') opposeCount++;
+      else unknownCount++;
+    });
+    
+    const knownVotes = supportCount + opposeCount;
+    const alignmentPercent = knownVotes > 0 
+      ? Math.round((supportCount / knownVotes) * 100) 
+      : null;
+    
+    return {
+      supportCount,
+      opposeCount,
+      unknownCount,
+      knownVotes,
+      alignmentPercent
+    };
+  }, [votes, userScoreMap, representativeParty]);
 
   const toggleTopic = (topic: string) => {
     setExpandedTopics(prev => {
@@ -175,7 +200,64 @@ export const VotingRecordSection = ({
             </Button>
           </div>
         </div>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground mt-2">
+        
+        {/* Alignment Summary */}
+        {alignmentStats.alignmentPercent !== null && (
+          <div className={cn(
+            "mt-3 p-3 rounded-lg border",
+            alignmentStats.alignmentPercent >= 70 
+              ? "bg-agree/10 border-agree/30" 
+              : alignmentStats.alignmentPercent >= 40 
+                ? "bg-amber-500/10 border-amber-500/30" 
+                : "bg-disagree/10 border-disagree/30"
+          )}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  You align with{' '}
+                  <span className={cn(
+                    "font-bold",
+                    alignmentStats.alignmentPercent >= 70 
+                      ? "text-agree" 
+                      : alignmentStats.alignmentPercent >= 40 
+                        ? "text-amber-600" 
+                        : "text-disagree"
+                  )}>
+                    {alignmentStats.alignmentPercent}%
+                  </span>
+                  {' '}of their legislative activity
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Based on {alignmentStats.knownVotes} bills where your position is known
+                  {alignmentStats.unknownCount > 0 && (
+                    <span> • {alignmentStats.unknownCount} bills in topics you haven't answered</span>
+                  )}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1 text-agree">
+                  <ThumbsUp className="w-3.5 h-3.5" />
+                  {alignmentStats.supportCount}
+                </span>
+                <span className="flex items-center gap-1 text-disagree">
+                  <ThumbsDown className="w-3.5 h-3.5" />
+                  {alignmentStats.opposeCount}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {alignmentStats.alignmentPercent === null && userTopicScores.length === 0 && (
+          <div className="mt-3 p-3 rounded-lg bg-secondary/50 border border-border">
+            <p className="text-sm text-muted-foreground">
+              <HelpCircle className="w-4 h-4 inline mr-1" />
+              Take the quiz to see how you align with this representative's voting record
+            </p>
+          </div>
+        )}
+        
+        <div className="flex items-center gap-4 text-xs text-muted-foreground mt-3">
           <span className="flex items-center gap-1">
             <ThumbsUp className="w-3 h-3 text-agree" /> You'd likely support
           </span>
