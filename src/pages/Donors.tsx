@@ -12,7 +12,7 @@ export const Donors = () => {
   
   const [filters, setFilters] = useState<Partial<DonorFiltersType>>({
     page: 1,
-    pageSize: 24,
+    pageSize: 50,
     sortBy: 'amount',
     sortOrder: 'desc',
     cycle: '',

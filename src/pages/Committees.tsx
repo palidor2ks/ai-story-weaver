@@ -74,7 +74,7 @@ export const Committees = () => {
     cycle,
     designation,
     candidateId,
-    pageSize: 12,
+    pageSize: 50,
   });
 
   const committees = useMemo(
