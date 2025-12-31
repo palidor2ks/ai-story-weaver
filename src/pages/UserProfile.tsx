@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Header } from '@/components/Header';
 import { useAuth } from '@/context/AuthContext';
 import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding, useUpdateProfile } from '@/hooks/useProfile';
@@ -9,7 +9,7 @@ import { usePartyMatchScores } from '@/hooks/usePartyMatchScores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 import { PartyComparisonCard } from '@/components/PartyComparisonCard';
+import { VerificationBadges } from '@/components/VerificationBadges';
 
 interface ProfileAnalysis {
   summary: string;
@@ -401,6 +402,9 @@ export const UserProfile = () => {
                     </span>
                   )}
                 </div>
+                
+                {/* Verification badges */}
+                <VerificationBadges profile={profile} />
               </div>
             </div>
             <Button variant="ghost" size="sm" onClick={handleSignOut} className="gap-2">

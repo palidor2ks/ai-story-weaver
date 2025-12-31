@@ -20,6 +20,16 @@ interface Profile {
   sex: string | null;
   religion: string | null;
   score_version: string;
+  // Verification fields
+  identity_verified: boolean | null;
+  identity_verified_at: string | null;
+  identity_provider: string | null;
+  identity_verification_id: string | null;
+  voter_verified: boolean | null;
+  voter_verified_at: string | null;
+  voter_registration_status: string | null;
+  voter_state: string | null;
+  birth_date: string | null;
 }
 
 interface TopicScore {
