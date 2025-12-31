@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 interface QuestionOption {
@@ -39,16 +39,19 @@ interface Topic {
   icon: string;
 }
 
-interface NewQuestionForm {
+interface QuestionFormData {
   id: string;
   text: string;
   topic_id: string;
   is_onboarding_canonical: boolean;
   onboarding_slot: number | null;
   options: {
+    id: string;
     value: number;
     text: string;
     label: string;
+    is_skip_option: boolean;
+    display_order: number;
   }[];
 }
 
@@ -75,13 +78,20 @@ export function QuestionManagementPanel() {
   const [searchTerm, setSearchTerm] = useState("");
   const [topicFilter, setTopicFilter] = useState<string>("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [newQuestion, setNewQuestion] = useState<NewQuestionForm>({
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [formData, setFormData] = useState<QuestionFormData>({
     id: "",
     text: "",
     topic_id: "",
     is_onboarding_canonical: false,
     onboarding_slot: null,
-    options: DEFAULT_OPTIONS.map(o => ({ ...o })),
+    options: DEFAULT_OPTIONS.map((o, i) => ({ 
+      ...o, 
+      id: "", 
+      is_skip_option: false, 
+      display_order: i + 1 
+    })),
   });
 
   // Fetch all questions with their options
@@ -114,8 +124,7 @@ export function QuestionManagementPanel() {
 
   // Create question mutation
   const createQuestionMutation = useMutation({
-    mutationFn: async (form: NewQuestionForm) => {
-      // First, insert the question
+    mutationFn: async (form: QuestionFormData) => {
       const { error: questionError } = await supabase
         .from('questions')
         .insert({
@@ -128,17 +137,17 @@ export function QuestionManagementPanel() {
 
       if (questionError) throw questionError;
 
-      // Then, insert all the options
-      const optionsToInsert = form.options.map((opt, index) => ({
-        id: `${form.id}-opt-${index + 1}`,
-        question_id: form.id,
-        text: opt.text,
-        value: opt.value,
-        display_order: index + 1,
-        is_skip_option: false,
-      }));
+      const optionsToInsert = form.options
+        .filter(opt => !opt.is_skip_option)
+        .map((opt, index) => ({
+          id: `${form.id}-opt-${index + 1}`,
+          question_id: form.id,
+          text: opt.text,
+          value: opt.value,
+          display_order: index + 1,
+          is_skip_option: false,
+        }));
 
-      // Add the skip option
       optionsToInsert.push({
         id: `${form.id}-skip`,
         question_id: form.id,
@@ -153,7 +162,6 @@ export function QuestionManagementPanel() {
         .insert(optionsToInsert);
 
       if (optionsError) {
-        // Rollback: delete the question if options failed
         await supabase.from('questions').delete().eq('id', form.id);
         throw optionsError;
       }
@@ -172,29 +180,138 @@ export function QuestionManagementPanel() {
     },
   });
 
+  // Update question mutation
+  const updateQuestionMutation = useMutation({
+    mutationFn: async (form: QuestionFormData) => {
+      // Update the question
+      const { error: questionError } = await supabase
+        .from('questions')
+        .update({
+          text: form.text,
+          topic_id: form.topic_id,
+          is_onboarding_canonical: form.is_onboarding_canonical,
+          onboarding_slot: form.onboarding_slot,
+        })
+        .eq('id', form.id);
+
+      if (questionError) throw questionError;
+
+      // Update each option
+      for (const opt of form.options) {
+        if (opt.id) {
+          const { error: optionError } = await supabase
+            .from('question_options')
+            .update({
+              text: opt.text,
+              value: opt.value,
+              display_order: opt.display_order,
+            })
+            .eq('id', opt.id);
+
+          if (optionError) throw optionError;
+        }
+      }
+
+      return form.id;
+    },
+    onSuccess: (questionId) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-questions'] });
+      toast.success(`Question "${questionId}" updated successfully`);
+      setIsEditDialogOpen(false);
+      setEditingQuestion(null);
+      resetForm();
+    },
+    onError: (error) => {
+      console.error('Failed to update question:', error);
+      toast.error(`Failed to update question: ${error.message}`);
+    },
+  });
+
   const resetForm = () => {
-    setNewQuestion({
+    setFormData({
       id: "",
       text: "",
       topic_id: "",
       is_onboarding_canonical: false,
       onboarding_slot: null,
-      options: DEFAULT_OPTIONS.map(o => ({ ...o })),
+      options: DEFAULT_OPTIONS.map((o, i) => ({ 
+        ...o, 
+        id: "", 
+        is_skip_option: false, 
+        display_order: i + 1 
+      })),
     });
   };
 
+  const handleOpenCreate = () => {
+    resetForm();
+    setEditingQuestion(null);
+    setIsCreateDialogOpen(true);
+  };
+
+  const handleOpenEdit = (question: Question) => {
+    setEditingQuestion(question);
+    
+    // Sort options by value to match the expected order
+    const regularOptions = question.question_options
+      .filter(o => !o.is_skip_option)
+      .sort((a, b) => a.value - b.value);
+    
+    const skipOption = question.question_options.find(o => o.is_skip_option);
+    
+    // Map existing options to form data, matching by value
+    const mappedOptions = DEFAULT_OPTIONS.map((defaultOpt, index) => {
+      const existingOpt = regularOptions.find(o => o.value === defaultOpt.value);
+      return {
+        id: existingOpt?.id || "",
+        value: defaultOpt.value,
+        text: existingOpt?.text || "",
+        label: defaultOpt.label,
+        is_skip_option: false,
+        display_order: index + 1,
+      };
+    });
+
+    // Add skip option if exists
+    if (skipOption) {
+      mappedOptions.push({
+        id: skipOption.id,
+        value: skipOption.value,
+        text: skipOption.text,
+        label: "Skip Option",
+        is_skip_option: true,
+        display_order: skipOption.display_order || 6,
+      });
+    }
+
+    setFormData({
+      id: question.id,
+      text: question.text,
+      topic_id: question.topic_id,
+      is_onboarding_canonical: question.is_onboarding_canonical || false,
+      onboarding_slot: question.onboarding_slot,
+      options: mappedOptions,
+    });
+    
+    setIsEditDialogOpen(true);
+  };
+
   const handleTopicChange = (topicId: string) => {
-    const existingIds = questions?.map(q => q.id) || [];
-    const suggestedId = generateQuestionId(topicId, existingIds);
-    setNewQuestion(prev => ({
-      ...prev,
-      topic_id: topicId,
-      id: prev.id || suggestedId,
-    }));
+    if (!editingQuestion) {
+      const existingIds = questions?.map(q => q.id) || [];
+      const suggestedId = generateQuestionId(topicId, existingIds);
+      setFormData(prev => ({
+        ...prev,
+        topic_id: topicId,
+        id: prev.id || suggestedId,
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, topic_id: topicId }));
+    }
   };
 
   const handleOptionTextChange = (index: number, text: string) => {
-    setNewQuestion(prev => ({
+    setFormData(prev => ({
       ...prev,
       options: prev.options.map((opt, i) => 
         i === index ? { ...opt, text } : opt
@@ -202,36 +319,57 @@ export function QuestionManagementPanel() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
-    if (!newQuestion.id.trim()) {
+    if (!formData.id.trim()) {
       toast.error("Question ID is required");
       return;
     }
-    if (!newQuestion.text.trim()) {
+    if (!formData.text.trim()) {
       toast.error("Question text is required");
       return;
     }
-    if (!newQuestion.topic_id) {
+    if (!formData.topic_id) {
       toast.error("Topic is required");
       return;
     }
     
-    const emptyOptions = newQuestion.options.filter(o => !o.text.trim());
+    const regularOptions = formData.options.filter(o => !o.is_skip_option);
+    const emptyOptions = regularOptions.filter(o => !o.text.trim());
     if (emptyOptions.length > 0) {
       toast.error("All 5 answer options are required");
       return;
     }
 
-    // Check for duplicate ID
-    if (questions?.some(q => q.id === newQuestion.id)) {
+    if (questions?.some(q => q.id === formData.id)) {
       toast.error("A question with this ID already exists");
       return;
     }
 
-    createQuestionMutation.mutate(newQuestion);
+    createQuestionMutation.mutate(formData);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.text.trim()) {
+      toast.error("Question text is required");
+      return;
+    }
+    if (!formData.topic_id) {
+      toast.error("Topic is required");
+      return;
+    }
+    
+    const regularOptions = formData.options.filter(o => !o.is_skip_option);
+    const emptyOptions = regularOptions.filter(o => !o.text.trim());
+    if (emptyOptions.length > 0) {
+      toast.error("All 5 answer options are required");
+      return;
+    }
+
+    updateQuestionMutation.mutate(formData);
   };
 
   const toggleQuestion = (questionId: string) => {
@@ -254,7 +392,6 @@ export function QuestionManagementPanel() {
     setExpandedQuestions(new Set());
   };
 
-  // Filter questions
   const filteredQuestions = questions?.filter(q => {
     const matchesSearch = searchTerm === "" || 
       q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -263,7 +400,6 @@ export function QuestionManagementPanel() {
     return matchesSearch && matchesTopic;
   });
 
-  // Calculate stats
   const stats = {
     totalQuestions: questions?.length || 0,
     questionsWithAllOptions: questions?.filter(q => 
@@ -307,6 +443,142 @@ export function QuestionManagementPanel() {
     return topics?.find(t => t.id === topicId)?.name || topicId;
   };
 
+  // Shared form content for create/edit dialogs
+  const renderFormContent = (isEdit: boolean) => (
+    <form onSubmit={isEdit ? handleEditSubmit : handleCreateSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="topic">Topic *</Label>
+          <Select
+            value={formData.topic_id}
+            onValueChange={handleTopicChange}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select topic" />
+            </SelectTrigger>
+            <SelectContent>
+              {topics?.map((topic) => (
+                <SelectItem key={topic.id} value={topic.id}>
+                  {topic.icon} {topic.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="id">Question ID *</Label>
+          <Input
+            id="id"
+            value={formData.id}
+            onChange={(e) => setFormData(prev => ({ 
+              ...prev, 
+              id: e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '') 
+            }))}
+            placeholder="e.g., eco1, imm3"
+            required
+            disabled={isEdit}
+          />
+          {!isEdit && (
+            <p className="text-xs text-muted-foreground">
+              Lowercase letters, numbers, hyphens only
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="text">Question Text *</Label>
+        <Textarea
+          id="text"
+          value={formData.text}
+          onChange={(e) => setFormData(prev => ({ ...prev, text: e.target.value }))}
+          placeholder="Enter the question text..."
+          rows={2}
+          required
+        />
+      </div>
+
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Switch
+            id="onboarding"
+            checked={formData.is_onboarding_canonical}
+            onCheckedChange={(checked) => setFormData(prev => ({ 
+              ...prev, 
+              is_onboarding_canonical: checked,
+              onboarding_slot: checked ? (prev.onboarding_slot || 1) : null 
+            }))}
+          />
+          <Label htmlFor="onboarding">Onboarding Question</Label>
+        </div>
+        
+        {formData.is_onboarding_canonical && (
+          <div className="flex items-center gap-2">
+            <Label htmlFor="slot">Slot #</Label>
+            <Input
+              id="slot"
+              type="number"
+              min={1}
+              max={20}
+              className="w-20"
+              value={formData.onboarding_slot || ""}
+              onChange={(e) => setFormData(prev => ({ 
+                ...prev, 
+                onboarding_slot: parseInt(e.target.value) || null 
+              }))}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <Label>Answer Options * (all 5 required)</Label>
+        <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+          {formData.options.filter(o => !o.is_skip_option).map((option, index) => (
+            <div key={option.value} className="flex items-start gap-3">
+              <div className="w-20 flex-shrink-0 pt-2">
+                {getValueBadge(option.value)}
+              </div>
+              <div className="flex-1">
+                <Textarea
+                  value={option.text}
+                  onChange={(e) => handleOptionTextChange(index, e.target.value)}
+                  placeholder={`${option.label} position...`}
+                  rows={2}
+                  className="resize-none"
+                  required
+                />
+              </div>
+            </div>
+          ))}
+          <p className="text-xs text-muted-foreground mt-2">
+            A "Not important to me" skip option {isEdit ? "is preserved" : "will be added automatically"}.
+          </p>
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={() => isEdit ? setIsEditDialogOpen(false) : setIsCreateDialogOpen(false)}
+        >
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={isEdit ? updateQuestionMutation.isPending : createQuestionMutation.isPending}
+        >
+          {(isEdit ? updateQuestionMutation.isPending : createQuestionMutation.isPending) && (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          )}
+          {isEdit ? "Save Changes" : "Create Question"}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+
   if (questionsLoading) {
     return (
       <div className="flex justify-center py-8">
@@ -323,7 +595,7 @@ export function QuestionManagementPanel() {
           <div className="flex gap-2">
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={() => resetForm()}>
+                <Button onClick={handleOpenCreate}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Question
                 </Button>
@@ -335,135 +607,22 @@ export function QuestionManagementPanel() {
                     Add a new quiz question with all 5 required answer options (L10, L5, Center, R5, R10).
                   </DialogDescription>
                 </DialogHeader>
-                
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="topic">Topic *</Label>
-                      <Select
-                        value={newQuestion.topic_id}
-                        onValueChange={handleTopicChange}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select topic" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {topics?.map((topic) => (
-                            <SelectItem key={topic.id} value={topic.id}>
-                              {topic.icon} {topic.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="id">Question ID *</Label>
-                      <Input
-                        id="id"
-                        value={newQuestion.id}
-                        onChange={(e) => setNewQuestion(prev => ({ ...prev, id: e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, '') }))}
-                        placeholder="e.g., eco1, imm3"
-                        required
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Lowercase letters, numbers, hyphens only
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="text">Question Text *</Label>
-                    <Textarea
-                      id="text"
-                      value={newQuestion.text}
-                      onChange={(e) => setNewQuestion(prev => ({ ...prev, text: e.target.value }))}
-                      placeholder="Enter the question text..."
-                      rows={2}
-                      required
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        id="onboarding"
-                        checked={newQuestion.is_onboarding_canonical}
-                        onCheckedChange={(checked) => setNewQuestion(prev => ({ 
-                          ...prev, 
-                          is_onboarding_canonical: checked,
-                          onboarding_slot: checked ? 1 : null 
-                        }))}
-                      />
-                      <Label htmlFor="onboarding">Onboarding Question</Label>
-                    </div>
-                    
-                    {newQuestion.is_onboarding_canonical && (
-                      <div className="flex items-center gap-2">
-                        <Label htmlFor="slot">Slot #</Label>
-                        <Input
-                          id="slot"
-                          type="number"
-                          min={1}
-                          max={20}
-                          className="w-20"
-                          value={newQuestion.onboarding_slot || ""}
-                          onChange={(e) => setNewQuestion(prev => ({ 
-                            ...prev, 
-                            onboarding_slot: parseInt(e.target.value) || null 
-                          }))}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label>Answer Options * (all 5 required)</Label>
-                    <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
-                      {newQuestion.options.map((option, index) => (
-                        <div key={option.value} className="flex items-start gap-3">
-                          <div className="w-20 flex-shrink-0 pt-2">
-                            {getValueBadge(option.value)}
-                          </div>
-                          <div className="flex-1">
-                            <Textarea
-                              value={option.text}
-                              onChange={(e) => handleOptionTextChange(index, e.target.value)}
-                              placeholder={`${option.label} position...`}
-                              rows={2}
-                              className="resize-none"
-                              required
-                            />
-                          </div>
-                        </div>
-                      ))}
-                      <p className="text-xs text-muted-foreground mt-2">
-                        A "Not important to me" skip option will be added automatically.
-                      </p>
-                    </div>
-                  </div>
-
-                  <DialogFooter>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => setIsCreateDialogOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button 
-                      type="submit" 
-                      disabled={createQuestionMutation.isPending}
-                    >
-                      {createQuestionMutation.isPending && (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      )}
-                      Create Question
-                    </Button>
-                  </DialogFooter>
-                </form>
+                {renderFormContent(false)}
               </DialogContent>
             </Dialog>
+
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+              <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Edit Question</DialogTitle>
+                  <DialogDescription>
+                    Update the question text and answer options for "{editingQuestion?.id}".
+                  </DialogDescription>
+                </DialogHeader>
+                {renderFormContent(true)}
+              </DialogContent>
+            </Dialog>
+
             <Button variant="outline" size="sm" onClick={expandAll}>
               Expand All
             </Button>
@@ -532,30 +691,44 @@ export function QuestionManagementPanel() {
               onOpenChange={() => toggleQuestion(question.id)}
             >
               <div className="border rounded-lg">
-                <CollapsibleTrigger className="w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors">
-                  {expandedQuestions.has(question.id) ? (
-                    <ChevronDown className="h-4 w-4 flex-shrink-0" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 flex-shrink-0" />
-                  )}
-                  <div className="flex-1 text-left">
-                    <div className="font-medium">{question.text}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="outline" className="text-xs">
-                        {question.id}
-                      </Badge>
-                      <Badge variant="secondary" className="text-xs">
-                        {getTopicName(question.topic_id)}
-                      </Badge>
-                      {question.is_onboarding_canonical && (
-                        <Badge className="text-xs bg-primary">
-                          Onboarding #{question.onboarding_slot}
+                <div className="flex items-center">
+                  <CollapsibleTrigger className="flex-1 p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors">
+                    {expandedQuestions.has(question.id) ? (
+                      <ChevronDown className="h-4 w-4 flex-shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 flex-shrink-0" />
+                    )}
+                    <div className="flex-1 text-left">
+                      <div className="font-medium">{question.text}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-xs">
+                          {question.id}
                         </Badge>
-                      )}
+                        <Badge variant="secondary" className="text-xs">
+                          {getTopicName(question.topic_id)}
+                        </Badge>
+                        {question.is_onboarding_canonical && (
+                          <Badge className="text-xs bg-primary">
+                            Onboarding #{question.onboarding_slot}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
+                    {getOptionStatus(question)}
+                  </CollapsibleTrigger>
+                  <div className="pr-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenEdit(question);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                   </div>
-                  {getOptionStatus(question)}
-                </CollapsibleTrigger>
+                </div>
                 
                 <CollapsibleContent>
                   <div className="px-4 pb-4 pt-2 border-t bg-muted/30">
