@@ -240,6 +240,11 @@ export const useSaveQuizResults = () => {
     },
     onSuccess: () => {
       invalidateUserQueries(queryClient, user?.id);
+      
+      // Invalidate AI comparison caches so they refresh with new answers
+      queryClient.invalidateQueries({ queryKey: ['party-comparison'] });
+      queryClient.invalidateQueries({ queryKey: ['rep-comparison'] });
+      queryClient.invalidateQueries({ queryKey: ['quiz-answers-with-questions'] });
     },
     onError: (error) => handleMutationError(error, 'Quiz save'),
   });

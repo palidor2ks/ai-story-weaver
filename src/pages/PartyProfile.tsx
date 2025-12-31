@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScoreText } from '@/components/ScoreText';
+import { RepComparisonSummary } from '@/components/RepComparisonSummary';
+import { usePartyComparison, useGeneratePartyComparison, isPartyComparisonStale } from '@/hooks/usePartyComparison';
 import {
   Accordion,
   AccordionContent,
@@ -24,8 +26,13 @@ import {
   CheckCircle,
   AlertCircle,
   HelpCircle,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useMemo } from 'react';
 
 const iconMap: Record<string, typeof Building2> = {
   Building2,
@@ -35,8 +42,113 @@ const iconMap: Record<string, typeof Building2> = {
 
 export default function PartyProfile() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const { data: party, isLoading, error } = usePartyPlatform(id);
   const { data: userTopicScores = [] } = useUserTopicScores();
+
+  // Fetch cached AI comparison
+  const { data: comparison, isLoading: comparisonLoading } = usePartyComparison(id);
+  const generateComparison = useGeneratePartyComparison();
+
+  // Fetch user's quiz answers for AI comparison
+  const { data: userAnswers = [] } = useQuery({
+    queryKey: ['quiz-answers-with-questions', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      
+      const { data, error } = await supabase
+        .from('quiz_answers')
+        .select(`
+          question_id,
+          value,
+          questions!inner (
+            text,
+            topics!inner (name)
+          )
+        `)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching user answers:', error);
+        return [];
+      }
+
+      return data.map((a: any) => ({
+        question_id: a.question_id,
+        value: a.value,
+        question_text: a.questions.text,
+        topic_name: a.questions.topics.name,
+      }));
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Fetch party's answers for AI comparison
+  const { data: partyAnswersForAI = [] } = useQuery({
+    queryKey: ['party-answers-with-questions', id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data, error } = await supabase
+        .from('party_answers')
+        .select(`
+          question_id,
+          answer_value,
+          source_url,
+          source_description,
+          questions!inner (
+            text,
+            topics!inner (name)
+          )
+        `)
+        .eq('party_id', id);
+
+      if (error) {
+        console.error('Error fetching party answers:', error);
+        return [];
+      }
+
+      return data.map((a: any) => ({
+        question_id: a.question_id,
+        value: a.answer_value,
+        source_url: a.source_url,
+        source_description: a.source_description,
+        question_text: a.questions.text,
+        topic_name: a.questions.topics.name,
+      }));
+    },
+    enabled: !!id,
+    staleTime: 1000 * 60 * 10,
+  });
+
+  // Check if comparison is stale
+  const isStale = useMemo(() => {
+    return isPartyComparisonStale(comparison ?? null, userAnswers, partyAnswersForAI);
+  }, [comparison, userAnswers, partyAnswersForAI]);
+
+  const handleRefreshAI = () => {
+    if (id && party && userAnswers.length > 0 && partyAnswersForAI.length > 0) {
+      generateComparison.mutate({
+        partyId: id,
+        partyName: party.name,
+        userAnswers,
+        partyAnswers: partyAnswersForAI,
+        deepAnalysis: false,
+      });
+    }
+  };
+
+  const handleDigDeeper = () => {
+    if (id && party && userAnswers.length > 0 && partyAnswersForAI.length > 0) {
+      generateComparison.mutate({
+        partyId: id,
+        partyName: party.name,
+        userAnswers,
+        partyAnswers: partyAnswersForAI,
+        deepAnalysis: true,
+      });
+    }
+  };
 
   const userScores = userTopicScores.map(ts => ({
     topicId: ts.topic_id,
@@ -242,6 +354,33 @@ export default function PartyProfile() {
             </CardContent>
           </Card>
         </div>
+
+        {/* AI Comparison Summary */}
+        {user && userAnswers.length > 0 && (
+          <Card className="mb-8 shadow-elevated">
+            <CardHeader>
+              <CardTitle className="font-display flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-accent" />
+                AI Comparison Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RepComparisonSummary
+                summary={comparison?.summary ?? null}
+                deepAnalysis={comparison?.deep_analysis ?? null}
+                keyAgreements={[]}
+                keyDisagreements={[]}
+                sources={comparison?.sources ?? []}
+                isLoading={comparisonLoading}
+                isGenerating={generateComparison.isPending}
+                isStale={isStale && !!comparison}
+                onDigDeeper={handleDigDeeper}
+                onRefresh={handleRefreshAI}
+                hasDeepAnalysis={!!comparison?.deep_analysis}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Topic Scores */}
         {party.topicScores.length > 0 && (
