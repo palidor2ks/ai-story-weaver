@@ -12,12 +12,15 @@ export interface InvertedScoreCandidate {
   answer_count: number;
   saved_score: number | null;
   status: 'INVERTED' | 'OK';
+  source: 'candidates' | 'static_officials';
 }
 
 /**
  * Fetches candidates whose scores appear to be inverted:
  * - Democrats/Independents with positive average scores (should be negative)
  * - Republicans with negative average scores (should be positive)
+ * 
+ * Now includes both candidates table AND static_officials (for federal executives)
  */
 export const useInvertedScoreCandidates = () => {
   return useQuery({
@@ -30,15 +33,47 @@ export const useInvertedScoreCandidates = () => {
       
       if (answersError) throw answersError;
 
-      // Get candidate info
+      // Get candidate info from candidates table
       const { data: candidates, error: candidatesError } = await supabase
         .from('candidates')
         .select('id, name, party, office, state, overall_score');
       
       if (candidatesError) throw candidatesError;
 
-      // Create a map of candidate info
-      const candidateMap = new Map(candidates?.map(c => [c.id, c]) || []);
+      // Get static officials (includes federal_president, federal_vice_president)
+      const { data: staticOfficials, error: staticError } = await supabase
+        .from('static_officials')
+        .select('id, name, party, office, state')
+        .eq('is_active', true);
+      
+      if (staticError) throw staticError;
+
+      // Get candidate_overrides for saved scores (used for static officials)
+      const { data: overrides, error: overridesError } = await supabase
+        .from('candidate_overrides')
+        .select('candidate_id, overall_score');
+      
+      if (overridesError) throw overridesError;
+
+      // Create maps for quick lookups
+      const candidateMap = new Map(candidates?.map(c => [c.id, { ...c, source: 'candidates' as const }]) || []);
+      const staticMap = new Map(staticOfficials?.map(s => [s.id, { ...s, overall_score: null, source: 'static_officials' as const }]) || []);
+      const overrideMap = new Map(overrides?.map(o => [o.candidate_id, o.overall_score]) || []);
+
+      // Merge all officials into a single map (static_officials takes precedence for federal IDs)
+      const allOfficialsMap = new Map<string, { id: string; name: string; party: string; office: string; state: string; overall_score: number | null; source: 'candidates' | 'static_officials' }>();
+      
+      // Add candidates first
+      candidateMap.forEach((c, id) => allOfficialsMap.set(id, c));
+      
+      // Add/override with static officials
+      staticMap.forEach((s, id) => {
+        const overrideScore = overrideMap.get(id);
+        allOfficialsMap.set(id, { 
+          ...s, 
+          overall_score: overrideScore ?? null 
+        });
+      });
 
       // Group answers by candidate and calculate scores
       const scoresByCandidate = new Map<string, number[]>();
@@ -52,27 +87,32 @@ export const useInvertedScoreCandidates = () => {
       const inverted: InvertedScoreCandidate[] = [];
       
       scoresByCandidate.forEach((values, candidateId) => {
-        const candidate = candidateMap.get(candidateId);
-        if (!candidate) return;
+        const official = allOfficialsMap.get(candidateId);
+        if (!official) return;
 
         const avgScore = values.reduce((a, b) => a + b, 0) / values.length;
         const roundedScore = Math.round(avgScore * 100) / 100;
 
+        // Check for inversion based on party
         const isInverted = 
-          ((['Democrat', 'Independent'].includes(candidate.party)) && roundedScore > 0) ||
-          (candidate.party === 'Republican' && roundedScore < 0);
+          ((['Democrat', 'Independent'].includes(official.party)) && roundedScore > 0) ||
+          (official.party === 'Republican' && roundedScore < 0);
 
         if (isInverted) {
+          // Get saved score - check override first, then candidate table
+          const savedScore = overrideMap.get(candidateId) ?? official.overall_score;
+          
           inverted.push({
             candidate_id: candidateId,
-            name: candidate.name,
-            party: candidate.party,
-            office: candidate.office,
-            state: candidate.state,
+            name: official.name,
+            party: official.party,
+            office: official.office,
+            state: official.state,
             calculated_score: roundedScore,
             answer_count: values.length,
-            saved_score: candidate.overall_score,
+            saved_score: savedScore,
             status: 'INVERTED',
+            source: official.source,
           });
         }
       });

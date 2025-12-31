@@ -336,19 +336,38 @@ async function generateChunkAnswers(
 ${relevantBills.map(v => `- ${v.action} ${v.type}${v.number}: "${v.title.slice(0, 80)}" (${v.policy_area})`).join('\n')}`;
   }
 
-  const systemPrompt = `You are a non-partisan political analyst. Determine likely positions for elected officials based on party platform, voting record, public statements, and state context.
+  // Strengthened prompt with explicit party-score direction and descriptive (not normative) framing
+  const systemPrompt = `You are a non-partisan political analyst. Your task is to PREDICT the likely political positions of elected officials based on their party affiliation, voting record, public statements, and state context.
 
-Use LEFT-RIGHT spectrum: -10 = Far LEFT, -5 = Left, 0 = Neutral, +5 = Right, +10 = Far RIGHT.
-Democrats: generally NEGATIVE. Republicans: generally POSITIVE.
-ONLY use: -10, -5, 0, +5, or +10. No intermediate values.
+CRITICAL SCORING RULES:
+- Use LEFT-RIGHT spectrum: -10 = Far LEFT/Progressive, -5 = Left-leaning, 0 = Neutral/Centrist, +5 = Right-leaning, +10 = Far RIGHT/Conservative
+- DEMOCRATS typically have NEGATIVE scores (left-leaning positions)
+- REPUBLICANS typically have POSITIVE scores (right-leaning positions)
+- Independents: score based on their actual policy positions
 
+IMPORTANT: You are predicting what position this official LIKELY HOLDS (descriptive), NOT what policy you think is best (normative). When uncertain, default to typical party-line positions.
+
+Examples:
+- A Republican on gun rights → likely +5 or +10 (supports gun rights)
+- A Democrat on healthcare → likely -5 or -10 (supports government healthcare)
+- A Republican on immigration → likely +5 or +10 (stricter immigration)
+- A Democrat on climate → likely -5 or -10 (supports climate action)
+
+ONLY use values: -10, -5, 0, +5, or +10. No intermediate values.
 Return ONLY valid JSON array, no markdown fences, no extra text.`;
 
   const sourceInstructions = isCongressional && votingRecord.length > 0
     ? `- source_description: CITE SPECIFIC BILL briefly (e.g., "HR1234 Climate Act"). Max 40 chars.`
     : `- source_description: brief source (max 30 chars)`;
 
+  const partyGuidance = candidateParty === 'Republican' 
+    ? 'As a REPUBLICAN, expect mostly POSITIVE scores (+5, +10) reflecting conservative positions.'
+    : candidateParty === 'Democrat'
+    ? 'As a DEMOCRAT, expect mostly NEGATIVE scores (-5, -10) reflecting progressive positions.'
+    : 'Score based on actual policy positions and public statements.';
+
   const userPrompt = `Official: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
+${partyGuidance}
 ${votingContext}
 
 VALID QUESTION IDs (you MUST use EXACTLY one of these for each answer): [${validIdsStr}]
@@ -358,7 +377,7 @@ ${questionsText}
 
 Return JSON array: [{question_id, answer_value, confidence, source_description}, ...]
 - question_id: REQUIRED - Must be EXACTLY one of: ${validIdsStr}
-- answer_value: -10, -5, 0, 5, or 10
+- answer_value: -10, -5, 0, 5, or 10 (Remember: Republican=positive, Democrat=negative typically)
 - confidence: "high"/"medium"/"low"
 ${sourceInstructions}
 
@@ -506,6 +525,44 @@ ONLY JSON array. No markdown.`;
   });
 }
 
+/**
+ * Check if generated answers appear inverted based on party affiliation.
+ * If a Republican has negative average or Democrat has positive average, 
+ * the answers are likely inverted and need correction.
+ */
+function checkAndCorrectInversion(
+  answers: { question_id: string; answer_value: number; source_description: string; source_url: string | null; source_type: string; confidence: string }[],
+  party: string
+): { corrected: boolean; answers: typeof answers } {
+  if (answers.length === 0) return { corrected: false, answers };
+  
+  const avg = answers.reduce((sum, a) => sum + a.answer_value, 0) / answers.length;
+  
+  // Check for inversion based on party
+  // Republican with negative avg (< -1) or Democrat with positive avg (> +1) indicates inversion
+  const isRepublican = party === 'Republican';
+  const isDemocrat = party === 'Democrat';
+  const isInverted = (isRepublican && avg < -1) || (isDemocrat && avg > 1);
+  
+  if (!isInverted) {
+    console.log(`[Inversion Check] ${party}: avg=${avg.toFixed(2)} - OK`);
+    return { corrected: false, answers };
+  }
+  
+  console.log(`[Inversion Check] ${party}: avg=${avg.toFixed(2)} - INVERTED, correcting...`);
+  
+  // Invert all values and snap to valid discrete values
+  const correctedAnswers = answers.map(a => ({
+    ...a,
+    answer_value: snapToValidValue(-a.answer_value), // Invert and snap
+  }));
+  
+  const newAvg = correctedAnswers.reduce((sum, a) => sum + a.answer_value, 0) / correctedAnswers.length;
+  console.log(`[Inversion Check] Corrected avg: ${newAvg.toFixed(2)}`);
+  
+  return { corrected: true, answers: correctedAnswers };
+}
+
 async function generateAnswersInChunks(
   supabase: any,
   candidateId: string,
@@ -514,10 +571,15 @@ async function generateAnswersInChunks(
   candidateOffice: string,
   candidateState: string,
   questions: Question[],
-  votingRecord: LegislationRecord[]
-): Promise<{ generated: number; failed: number }> {
+  votingRecord: LegislationRecord[],
+  applyInversionCorrection: boolean = true
+): Promise<{ generated: number; failed: number; inversionCorrected: boolean }> {
   let totalGenerated = 0;
   let failedChunks = 0;
+  let inversionCorrected = false;
+  
+  // Collect all generated answers for inversion check at the end
+  const allGeneratedAnswers: { question_id: string; answer_value: number; source_description: string; source_url: string | null; source_type: string; confidence: string }[] = [];
   
   // Use smaller chunks (10) for reliable structured output
   const CHUNK_SIZE = 10;
@@ -608,6 +670,9 @@ async function generateAnswersInChunks(
         failedChunks++;
         continue;
       }
+      
+      // Collect for inversion check
+      allGeneratedAnswers.push(...deduplicatedAnswers);
 
       const { error: insertError } = await supabase
         .from('candidate_answers')
@@ -634,7 +699,41 @@ async function generateAnswersInChunks(
     }
   }
   
-  return { generated: totalGenerated, failed: failedChunks };
+  // After all chunks: check for inversion and correct if needed
+  if (applyInversionCorrection && allGeneratedAnswers.length > 0) {
+    const inversionResult = checkAndCorrectInversion(allGeneratedAnswers, candidateParty);
+    
+    if (inversionResult.corrected) {
+      inversionCorrected = true;
+      console.log(`[Inversion] Correcting ${inversionResult.answers.length} inverted answers for ${candidateName}...`);
+      
+      // Update answers with corrected values
+      const correctedAnswersToUpsert = inversionResult.answers.map(a => ({
+        candidate_id: candidateId,
+        question_id: a.question_id,
+        answer_value: a.answer_value,
+        source_description: a.source_description,
+        source_url: a.source_url,
+        source_type: a.source_type,
+        confidence: a.confidence,
+      }));
+      
+      const { error: correctionError } = await supabase
+        .from('candidate_answers')
+        .upsert(correctedAnswersToUpsert, {
+          onConflict: 'candidate_id,question_id',
+          ignoreDuplicates: false,
+        });
+      
+      if (correctionError) {
+        console.error('[Inversion] Failed to save corrected answers:', correctionError);
+      } else {
+        console.log(`[Inversion] Successfully corrected ${correctedAnswersToUpsert.length} answers`);
+      }
+    }
+  }
+  
+  return { generated: totalGenerated, failed: failedChunks, inversionCorrected };
 }
 
 async function updateCandidateScore(
@@ -845,8 +944,8 @@ serve(async (req) => {
       console.log(`Retrieved ${votingRecord.length} legislative records`);
     }
 
-    // Generate answers in chunks
-    const { generated, failed } = await generateAnswersInChunks(
+    // Generate answers in chunks with automatic inversion correction
+    const { generated, failed, inversionCorrected } = await generateAnswersInChunks(
       supabase,
       candidateId,
       officialInfo.name,
@@ -854,8 +953,13 @@ serve(async (req) => {
       officialInfo.office,
       officialInfo.state,
       questionsToGenerate,
-      votingRecord
+      votingRecord,
+      true // Apply inversion correction
     );
+    
+    if (inversionCorrected) {
+      console.log(`[${officialInfo.name}] Inversion was automatically corrected`);
+    }
 
     // Update overall score if we generated any answers
     if (generated > 0) {
@@ -877,6 +981,7 @@ serve(async (req) => {
       failedChunks: failed,
       totalQuestions,
       finalCount: finalAnswers?.length || 0,
+      inversionCorrected,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
