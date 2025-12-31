@@ -733,78 +733,86 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
                                 const isConduit = conduitOrgs.some(c => displayName.toUpperCase().includes(c));
                                 
                                 return (
-                                  <div key={source.id} className={cn(
-                                    "flex items-center justify-between p-4 rounded-lg border",
-                                    isConduit ? "border-amber-500/30 bg-amber-500/5" : "border-border"
-                                  )}>
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <p className="font-medium text-foreground">{displayName}</p>
-                                        {isConduit && (
-                                          <TooltipProvider>
-                                            <Tooltip>
-                                              <TooltipTrigger>
-                                                <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 bg-amber-500/10">
-                                                  Conduit
-                                                </Badge>
-                                              </TooltipTrigger>
-                                              <TooltipContent className="max-w-xs">
-                                                <p className="font-medium mb-1">Pass-Through Organization</p>
-                                                <p className="text-xs">This organization processes donations on behalf of individual donors. 
-                                                The amount shown is the total routed through this conduit — individual donors are listed separately to avoid double-counting.</p>
-                                              </TooltipContent>
-                                            </Tooltip>
-                                          </TooltipProvider>
-                                        )}
-                                        {donor.is_consolidated && donor.name_variations && donor.name_variations.length > 1 && (
-                                          <TooltipProvider>
-                                            <Tooltip>
-                                              <TooltipTrigger>
-                                                <Badge variant="outline" className="text-[10px] border-primary/50 text-primary bg-primary/10">
-                                                  {donor.name_variations.length} merged
-                                                </Badge>
-                                              </TooltipTrigger>
-                                              <TooltipContent className="max-w-xs">
-                                                <p className="font-medium mb-1">Merged Names</p>
-                                                <ul className="text-xs space-y-0.5">
-                                                  {donor.name_variations.slice(0, 10).map((name, i) => (
-                                                    <li key={i}>{name}</li>
-                                                  ))}
-                                                  {donor.name_variations.length > 10 && (
-                                                    <li>...and {donor.name_variations.length - 10} more</li>
-                                                  )}
-                                                </ul>
-                                              </TooltipContent>
-                                            </Tooltip>
-                                          </TooltipProvider>
-                                        )}
+                                  <Link
+                                    key={source.id}
+                                    to={`/donor/${donor.id}`}
+                                    className="block group"
+                                  >
+                                    <div className={cn(
+                                      "flex items-center justify-between p-4 rounded-lg border transition-all",
+                                      isConduit 
+                                        ? "border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50" 
+                                        : "border-border hover:border-primary/30 hover:shadow-sm"
+                                    )}>
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <p className="font-medium text-foreground group-hover:text-primary transition-colors">{displayName}</p>
+                                          {isConduit && (
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger>
+                                                  <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600 bg-amber-500/10">
+                                                    Conduit
+                                                  </Badge>
+                                                </TooltipTrigger>
+                                                <TooltipContent className="max-w-xs">
+                                                  <p className="font-medium mb-1">Pass-Through Organization</p>
+                                                  <p className="text-xs">This organization processes donations on behalf of individual donors. 
+                                                  The amount shown is the total routed through this conduit — individual donors are listed separately to avoid double-counting.</p>
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </TooltipProvider>
+                                          )}
+                                          {donor.is_consolidated && donor.name_variations && donor.name_variations.length > 1 && (
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger>
+                                                  <Badge variant="outline" className="text-[10px] border-primary/50 text-primary bg-primary/10">
+                                                    {donor.name_variations.length} merged
+                                                  </Badge>
+                                                </TooltipTrigger>
+                                                <TooltipContent className="max-w-xs">
+                                                  <p className="font-medium mb-1">Merged Names</p>
+                                                  <ul className="text-xs space-y-0.5">
+                                                    {donor.name_variations.slice(0, 10).map((name, i) => (
+                                                      <li key={i}>{name}</li>
+                                                    ))}
+                                                    {donor.name_variations.length > 10 && (
+                                                      <li>...and {donor.name_variations.length - 10} more</li>
+                                                    )}
+                                                  </ul>
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </TooltipProvider>
+                                          )}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                                          <Badge variant="secondary">{donor.type}</Badge>
+                                          {isConduit && (
+                                            <span className="text-xs text-amber-600">Pass-through</span>
+                                          )}
+                                          {donor.contributor_city && donor.contributor_state && (
+                                            <span className="text-xs text-muted-foreground">
+                                              {donor.contributor_city}, {donor.contributor_state}
+                                            </span>
+                                          )}
+                                          {donor.employer && (
+                                            <span className="text-xs text-muted-foreground">
+                                              • {donor.employer}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
-                                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                                        <Badge variant="secondary">{donor.type}</Badge>
-                                        {isConduit && (
-                                          <span className="text-xs text-amber-600">Pass-through</span>
-                                        )}
-                                        {donor.contributor_city && donor.contributor_state && (
-                                          <span className="text-xs text-muted-foreground">
-                                            {donor.contributor_city}, {donor.contributor_state}
-                                          </span>
-                                        )}
-                                        {donor.employer && (
-                                          <span className="text-xs text-muted-foreground">
-                                            • {donor.employer}
-                                          </span>
-                                        )}
+                                      <div className="text-right">
+                                        <p className={cn("font-bold", isConduit ? "text-amber-600" : "text-foreground")}>
+                                          ${donor.amount.toLocaleString()}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {donor.transaction_count > 1 ? `${donor.transaction_count} contributions` : donor.cycle}
+                                        </p>
                                       </div>
                                     </div>
-                                    <div className="text-right">
-                                      <p className={cn("font-bold", isConduit ? "text-amber-600" : "text-foreground")}>
-                                        ${donor.amount.toLocaleString()}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        {donor.transaction_count > 1 ? `${donor.transaction_count} contributions` : donor.cycle}
-                                      </p>
-                                    </div>
-                                  </div>
+                                  </Link>
                                 );
                               }
                               
