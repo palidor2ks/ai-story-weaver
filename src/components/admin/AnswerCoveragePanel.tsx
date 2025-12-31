@@ -1536,20 +1536,10 @@ export function AnswerCoveragePanel() {
                             </Popover>
                           </TableCell>
                           <TableCell className="px-2 py-2 whitespace-nowrap">
-                            {(() => {
-                              const fecTotal = financeStatus.fecTotalReceipts;
-                              if (fecTotal === null || fecTotal === undefined) {
-                                return <DeltaBadge deltaAmount={null} deltaPct={null} />;
-                              }
-                              const calculatedDelta = localTotal - fecTotal;
-                              const calculatedDeltaPct = fecTotal > 0 ? (calculatedDelta / fecTotal) * 100 : 0;
-                              return (
-                                <DeltaBadge
-                                  deltaAmount={calculatedDelta}
-                                  deltaPct={calculatedDeltaPct}
-                                />
-                              );
-                            })()}
+                            <DeltaBadge
+                              deltaAmount={candidate.deltaAmount}
+                              deltaPct={candidate.deltaPct}
+                            />
                           </TableCell>
                           <TableCell className="px-2 py-2">
                             {hasFecId ? (
