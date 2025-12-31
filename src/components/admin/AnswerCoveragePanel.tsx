@@ -1287,10 +1287,13 @@ export function AnswerCoveragePanel() {
                       const hasCommittee = !!candidate.fecCommitteeId;
                       const financeStatus = calculateFinanceStatus(candidate);
                       // Calculate "Local Total" as imported itemized + FEC non-itemized receipts for apples-to-apples comparison
-                      // Note: fecTransfers NOT included - Line 12 transfers are already in localItemized
+                      // Transfer gap: only add transfers we HAVEN'T already imported locally
                       const localItemized = candidate.localItemized || 0;
+                      const localTransfers = candidate.localTransfers || 0;
+                      const fecTransfers = candidate.fecTransfers || 0;
+                      const transferGap = Math.max(0, fecTransfers - localTransfers); // Transfers missing from local import
                       const fecUnitemized = candidate.fecUnitemized || 0;
-                      const fecOtherReceipts = (candidate.fecLoans || 0) + (candidate.fecCandidateContribution || 0) + (candidate.fecOtherReceipts || 0);
+                      const fecOtherReceipts = (candidate.fecLoans || 0) + (candidate.fecCandidateContribution || 0) + (candidate.fecOtherReceipts || 0) + transferGap;
                       const localTotal = localItemized + fecUnitemized + fecOtherReceipts;
                       const syncStatus = candidate.syncStatus;
                       const hasOverride = overrideMap.has(candidate.id);
@@ -1440,10 +1443,10 @@ export function AnswerCoveragePanel() {
                                     <span className="text-muted-foreground">Imported Itemized</span>
                                     <span className="font-medium">{formatCurrency(localItemized)}</span>
                                   </div>
-                                  {(candidate.fecTransfers || 0) > 0 && (
+                                  {localTransfers > 0 && (
                                     <div className="flex justify-between text-xs text-muted-foreground/70 pl-2">
-                                      <span className="italic">↳ includes Line 12 transfers</span>
-                                      <span className="italic">{formatCurrency(candidate.fecTransfers || 0)}</span>
+                                      <span className="italic">↳ includes local transfers</span>
+                                      <span className="italic">{formatCurrency(localTransfers)}</span>
                                     </div>
                                   )}
                                   <div className="flex justify-between">
@@ -1462,6 +1465,17 @@ export function AnswerCoveragePanel() {
                                     <span className="text-muted-foreground">+ Other (FEC)</span>
                                     <span className="font-medium">{formatCurrency(candidate.fecOtherReceipts || 0)}</span>
                                   </div>
+                                  {transferGap > 0 && (
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">+ Transfer Gap</span>
+                                      <span className="font-medium text-amber-600">{formatCurrency(transferGap)}</span>
+                                    </div>
+                                  )}
+                                  {fecTransfers > 0 && (
+                                    <div className="flex justify-between text-xs text-muted-foreground/70 pl-2">
+                                      <span className="italic">FEC: {formatCurrency(fecTransfers)} − Local: {formatCurrency(localTransfers)}</span>
+                                    </div>
+                                  )}
                                   <div className="flex justify-between border-t pt-2 mt-2">
                                     <span className="font-medium">Total</span>
                                     <span className="font-bold">{formatCurrency(localTotal)}</span>
