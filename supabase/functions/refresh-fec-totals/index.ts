@@ -201,6 +201,7 @@ serve(async (req) => {
             itemized_total: number;
             transfers_total: number;
             earmarked_total: number;
+            loans_total: number;
             contribution_count: number;
           }>();
 
@@ -213,6 +214,7 @@ serve(async (req) => {
                 itemized_total: Number(ct.itemized_total) || 0,
                 transfers_total: Number(ct.transfers_total) || 0,
                 earmarked_total: Number(ct.earmarked_total) || 0,
+                loans_total: Number(ct.loans_total) || 0,
                 contribution_count: Number(ct.contribution_count) || 0,
               });
             }
@@ -232,6 +234,7 @@ serve(async (req) => {
           let localParty = 0;
           let localTransfers = 0;
           let localEarmarked = 0;
+          let localLoans = 0;
 
           for (const committee of committees) {
             const totals = await fetchFECTotals(fecApiKey, committee.fec_committee_id, cycle);
@@ -244,6 +247,7 @@ serve(async (req) => {
               itemized_total: 0,
               transfers_total: 0,
               earmarked_total: 0,
+              loans_total: 0,
               contribution_count: 0,
             };
 
@@ -254,6 +258,7 @@ serve(async (req) => {
             localParty += cmteTotals.party_total;
             localTransfers += cmteTotals.transfers_total;
             localEarmarked += cmteTotals.earmarked_total;
+            localLoans += cmteTotals.loans_total;
             
             if (totals.fecItemized !== null) {
               hasValidData = true;
@@ -280,6 +285,7 @@ serve(async (req) => {
                   local_party_contributions: cmteTotals.party_total,
                   local_transfers: cmteTotals.transfers_total,
                   local_earmarked: cmteTotals.earmarked_total,
+                  local_loans: cmteTotals.loans_total,
                   contribution_count: cmteTotals.contribution_count,
                   last_fec_check: new Date().toISOString()
                 }, { onConflict: 'committee_id,cycle' });
@@ -318,6 +324,7 @@ serve(async (req) => {
                 local_party_contributions: localParty,
                 local_transfers: localTransfers,
                 local_earmarked: localEarmarked,
+                local_loans: localLoans,
                 delta_amount: deltaAmount,
                 delta_pct: deltaPct,
                 individual_delta_amount: individualDeltaAmount,
@@ -397,6 +404,7 @@ serve(async (req) => {
       itemized_total: number;
       transfers_total: number;
       earmarked_total: number;
+      loans_total: number;
       contribution_count: number;
     }>();
 
@@ -409,6 +417,7 @@ serve(async (req) => {
           itemized_total: Number(ct.itemized_total) || 0,
           transfers_total: Number(ct.transfers_total) || 0,
           earmarked_total: Number(ct.earmarked_total) || 0,
+          loans_total: Number(ct.loans_total) || 0,
           contribution_count: Number(ct.contribution_count) || 0,
         });
       }
@@ -428,6 +437,7 @@ serve(async (req) => {
     let localParty = 0;
     let localTransfers = 0;
     let localEarmarked = 0;
+    let localLoans = 0;
 
     for (const committee of committees) {
       const totals = await fetchFECTotals(fecApiKey, committee.fec_committee_id, cycle);
@@ -440,6 +450,7 @@ serve(async (req) => {
         itemized_total: 0,
         transfers_total: 0,
         earmarked_total: 0,
+        loans_total: 0,
         contribution_count: 0,
       };
 
@@ -450,6 +461,7 @@ serve(async (req) => {
       localParty += cmteTotals.party_total;
       localTransfers += cmteTotals.transfers_total;
       localEarmarked += cmteTotals.earmarked_total;
+      localLoans += cmteTotals.loans_total;
       
       if (totals.fecItemized !== null) {
         totalFecItemized += totals.fecItemized;
@@ -476,6 +488,7 @@ serve(async (req) => {
             local_party_contributions: cmteTotals.party_total,
             local_transfers: cmteTotals.transfers_total,
             local_earmarked: cmteTotals.earmarked_total,
+            local_loans: cmteTotals.loans_total,
             contribution_count: cmteTotals.contribution_count,
             last_fec_check: new Date().toISOString()
           }, { onConflict: 'committee_id,cycle' });
@@ -524,6 +537,7 @@ serve(async (req) => {
         local_party_contributions: localParty,
         local_transfers: localTransfers,
         local_earmarked: localEarmarked,
+        local_loans: localLoans,
         delta_amount: deltaAmount,
         delta_pct: deltaPct,
         individual_delta_amount: individualDeltaAmount,

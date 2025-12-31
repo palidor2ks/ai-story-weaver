@@ -371,6 +371,7 @@ export type Database = {
           local_earmarked: number | null
           local_individual_itemized: number | null
           local_itemized: number | null
+          local_loans: number | null
           local_other: number | null
           local_pac_contributions: number | null
           local_party_contributions: number | null
@@ -393,6 +394,7 @@ export type Database = {
           local_earmarked?: number | null
           local_individual_itemized?: number | null
           local_itemized?: number | null
+          local_loans?: number | null
           local_other?: number | null
           local_pac_contributions?: number | null
           local_party_contributions?: number | null
@@ -415,6 +417,7 @@ export type Database = {
           local_earmarked?: number | null
           local_individual_itemized?: number | null
           local_itemized?: number | null
+          local_loans?: number | null
           local_other?: number | null
           local_pac_contributions?: number | null
           local_party_contributions?: number | null
@@ -728,6 +731,7 @@ export type Database = {
           local_individual_itemized: number | null
           local_itemized: number | null
           local_itemized_net: number | null
+          local_loans: number | null
           local_pac_contributions: number | null
           local_party_contributions: number | null
           local_transfers: number | null
@@ -760,6 +764,7 @@ export type Database = {
           local_individual_itemized?: number | null
           local_itemized?: number | null
           local_itemized_net?: number | null
+          local_loans?: number | null
           local_pac_contributions?: number | null
           local_party_contributions?: number | null
           local_transfers?: number | null
@@ -792,6 +797,7 @@ export type Database = {
           local_individual_itemized?: number | null
           local_itemized?: number | null
           local_itemized_net?: number | null
+          local_loans?: number | null
           local_pac_contributions?: number | null
           local_party_contributions?: number | null
           local_transfers?: number | null
@@ -1575,6 +1581,7 @@ export type Database = {
           earmarked_total: number
           individual_total: number
           itemized_total: number
+          loans_total: number
           other_total: number
           pac_total: number
           party_total: number
@@ -1590,6 +1597,7 @@ export type Database = {
           earmarked_total: number
           individual_total: number
           itemized_total: number
+          loans_total: number
           other_total: number
           pac_total: number
           party_total: number
