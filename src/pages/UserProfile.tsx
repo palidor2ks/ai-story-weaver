@@ -61,7 +61,9 @@ export const UserProfile = () => {
 
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [addressInput, setAddressInput] = useState('');
-  const [isRefreshingAI, setIsRefreshingAI] = useState(false);
+  const [isRefreshingRepAI, setIsRefreshingRepAI] = useState(false);
+  const [isRefreshingAnalysis, setIsRefreshingAnalysis] = useState(false);
+  const [isRefreshingParties, setIsRefreshingParties] = useState(false);
 
   // Collect all candidate IDs from civic officials and reps to fetch their scores
   const allOfficialIds = useMemo(() => {
@@ -165,42 +167,68 @@ export const UserProfile = () => {
     setAddressInput('');
   };
 
-  const handleRefreshAIComparisons = async () => {
+  const handleRefreshPoliticalAnalysis = async () => {
+    setIsRefreshingAnalysis(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['profile-analysis'] });
+      toast.success('Political analysis refreshed!');
+    } catch (error) {
+      console.error('Error refreshing analysis:', error);
+      toast.error('Failed to refresh analysis');
+    } finally {
+      setIsRefreshingAnalysis(false);
+    }
+  };
+
+  const handleRefreshPartyComparisons = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.id) {
+      toast.error('Please sign in to refresh party comparisons');
+      return;
+    }
+    
+    setIsRefreshingParties(true);
+    try {
+      const { error } = await supabase
+        .from('user_party_comparisons')
+        .delete()
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      
+      queryClient.invalidateQueries({ queryKey: ['party-comparison'] });
+      toast.success('Party comparisons refreshing...');
+    } catch (error) {
+      console.error('Error refreshing party comparisons:', error);
+      toast.error('Failed to refresh party comparisons');
+    } finally {
+      setIsRefreshingParties(false);
+    }
+  };
+
+  const handleRefreshRepComparisons = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user?.id) {
       toast.error('Please sign in to refresh AI comparisons');
       return;
     }
     
-    setIsRefreshingAI(true);
-    
+    setIsRefreshingRepAI(true);
     try {
-      // Delete all cached rep comparisons for this user
-      const { error: repError } = await supabase
+      const { error } = await supabase
         .from('user_rep_comparisons')
         .delete()
         .eq('user_id', user.id);
       
-      if (repError) throw repError;
+      if (error) throw error;
       
-      // Delete all cached party comparisons for this user
-      const { error: partyError } = await supabase
-        .from('user_party_comparisons')
-        .delete()
-        .eq('user_id', user.id);
-      
-      if (partyError) throw partyError;
-      
-      // Invalidate React Query cache so components regenerate
       queryClient.invalidateQueries({ queryKey: ['rep-comparison'] });
-      queryClient.invalidateQueries({ queryKey: ['party-comparison'] });
-      
-      toast.success('AI comparisons cleared! New summaries will generate automatically.');
+      toast.success('Representative comparisons refreshing...');
     } catch (error) {
-      console.error('Error refreshing AI comparisons:', error);
-      toast.error('Failed to refresh AI comparisons');
+      console.error('Error refreshing rep comparisons:', error);
+      toast.error('Failed to refresh representative comparisons');
     } finally {
-      setIsRefreshingAI(false);
+      setIsRefreshingRepAI(false);
     }
   };
   const getPartyColor = (party: string) => {
@@ -486,9 +514,30 @@ export const UserProfile = () => {
         {/* AI Analysis Summary */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-accent" />
-              AI Political Analysis
+            <CardTitle className="font-display flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-accent" />
+                AI Political Analysis
+              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRefreshPoliticalAnalysis}
+                      disabled={isRefreshingAnalysis || analysisLoading}
+                      className="gap-1.5 text-xs"
+                    >
+                      <RefreshCw className={cn("h-3.5 w-3.5", (isRefreshingAnalysis || analysisLoading) && "animate-spin")} />
+                      Refresh
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Regenerate AI political analysis</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -532,9 +581,30 @@ export const UserProfile = () => {
         {/* Party Alignment */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <Users className="w-5 h-5 text-accent" />
-              Party Alignment
+            <CardTitle className="font-display flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-accent" />
+                Party Alignment
+              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRefreshPartyComparisons}
+                      disabled={isRefreshingParties || partyScoresLoading}
+                      className="gap-1.5 text-xs"
+                    >
+                      <RefreshCw className={cn("h-3.5 w-3.5", isRefreshingParties && "animate-spin")} />
+                      Refresh All
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Regenerate AI comparison summaries for all parties</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -595,12 +665,12 @@ export const UserProfile = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={handleRefreshAIComparisons}
-                          disabled={isRefreshingAI || allRepsLoading}
+                          onClick={handleRefreshRepComparisons}
+                          disabled={isRefreshingRepAI || allRepsLoading}
                           className="gap-1.5 text-xs"
                         >
-                          <Sparkles className={cn("h-3.5 w-3.5", isRefreshingAI && "animate-pulse")} />
-                          {isRefreshingAI ? 'Refreshing...' : 'Refresh AI'}
+                          <Sparkles className={cn("h-3.5 w-3.5", isRefreshingRepAI && "animate-pulse")} />
+                          {isRefreshingRepAI ? 'Refreshing...' : 'Refresh AI'}
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
