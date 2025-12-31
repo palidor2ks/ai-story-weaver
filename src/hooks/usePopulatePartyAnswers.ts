@@ -15,14 +15,19 @@ interface PopulateResult {
   error?: string;
 }
 
+// Unique key for party+topic combination
+const getLoadingKey = (partyId: string, topicId?: string) => 
+  topicId ? `${partyId}:${topicId}` : partyId;
+
 export function usePopulatePartyAnswers() {
-  const [loadingParties, setLoadingParties] = useState<Record<string, boolean>>({});
+  const [loadingKeys, setLoadingKeys] = useState<Record<string, boolean>>({});
   const [progress, setProgress] = useState<Record<string, string>>({});
   const queryClient = useQueryClient();
 
   const populateParty = async (partyId: string, forceRegenerate = false): Promise<PopulateResult> => {
-    setLoadingParties(prev => ({ ...prev, [partyId]: true }));
-    setProgress(prev => ({ ...prev, [partyId]: 'Starting...' }));
+    const key = getLoadingKey(partyId);
+    setLoadingKeys(prev => ({ ...prev, [key]: true }));
+    setProgress(prev => ({ ...prev, [key]: 'Starting...' }));
     
     try {
       const { data, error } = await supabase.functions.invoke('populate-party-answers', {
@@ -41,13 +46,13 @@ export function usePopulatePartyAnswers() {
         } else {
           toast.success(`${result.party}: Generated ${result.inserted || 0} answers`);
         }
-        // Invalidate stats to refresh counts
         queryClient.invalidateQueries({ queryKey: ['party-answer-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['party-answer-stats-by-topic'] });
       }
 
       setProgress(prev => {
         const newProgress = { ...prev };
-        delete newProgress[partyId];
+        delete newProgress[key];
         return newProgress;
       });
       return result;
@@ -56,21 +61,72 @@ export function usePopulatePartyAnswers() {
       toast.error(`${partyId}: ${message}`);
       setProgress(prev => {
         const newProgress = { ...prev };
-        delete newProgress[partyId];
+        delete newProgress[key];
         return newProgress;
       });
       return { success: false, error: message };
     } finally {
-      setLoadingParties(prev => ({ ...prev, [partyId]: false }));
+      setLoadingKeys(prev => ({ ...prev, [key]: false }));
     }
   };
 
-  const isLoading = (partyId: string) => loadingParties[partyId] || false;
-  const getProgress = (partyId: string) => progress[partyId] || null;
-  const isAnyLoading = Object.values(loadingParties).some(Boolean);
+  const populatePartyTopic = async (partyId: string, topicId: string, forceRegenerate = false): Promise<PopulateResult> => {
+    const key = getLoadingKey(partyId, topicId);
+    setLoadingKeys(prev => ({ ...prev, [key]: true }));
+    setProgress(prev => ({ ...prev, [key]: 'Starting...' }));
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('populate-party-answers', {
+        body: { partyId, topicId, skipExisting: !forceRegenerate },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const result = data as PopulateResult;
+      
+      if (result.success) {
+        if (result.skipped) {
+          toast.info(`Topic complete: All questions already have answers`);
+        } else {
+          toast.success(`Generated ${result.inserted || 0} answers for topic`);
+        }
+        queryClient.invalidateQueries({ queryKey: ['party-answer-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['party-answer-stats-by-topic'] });
+      }
+
+      setProgress(prev => {
+        const newProgress = { ...prev };
+        delete newProgress[key];
+        return newProgress;
+      });
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to generate topic answers';
+      toast.error(`Topic generation failed: ${message}`);
+      setProgress(prev => {
+        const newProgress = { ...prev };
+        delete newProgress[key];
+        return newProgress;
+      });
+      return { success: false, error: message };
+    } finally {
+      setLoadingKeys(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const isLoading = (partyId: string, topicId?: string) => 
+    loadingKeys[getLoadingKey(partyId, topicId)] || false;
+  
+  const getProgress = (partyId: string, topicId?: string) => 
+    progress[getLoadingKey(partyId, topicId)] || null;
+  
+  const isAnyLoading = Object.values(loadingKeys).some(Boolean);
 
   return {
     populateParty,
+    populatePartyTopic,
     isLoading,
     getProgress,
     isAnyLoading,
