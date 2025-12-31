@@ -5,12 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Loader2, Plus, RefreshCw, CheckCircle2, ChevronDown, ChevronRight, FileText } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, CheckCircle2, ChevronDown, ChevronRight, FileText, Search } from 'lucide-react';
 import { usePopulatePartyAnswers } from '@/hooks/usePopulatePartyAnswers';
 import { usePartyAnswerStatsByTopic } from '@/hooks/usePartyAnswerStatsByTopic';
 
 export function PartyAnswersPanel() {
-  const { populateParty, populatePartyTopic, isLoading, isAnyLoading } = usePopulatePartyAnswers();
+  const { populateParty, populatePartyTopic, enrichPartySources, isLoading, isEnriching, isAnyLoading } = usePopulatePartyAnswers();
   const { data: partyStats, isLoading: statsLoading } = usePartyAnswerStatsByTopic();
   const [expandedParties, setExpandedParties] = useState<Record<string, boolean>>({});
 
@@ -57,7 +57,9 @@ export function PartyAnswersPanel() {
             {partyStats?.map((party) => {
               const isComplete = party.overallPercentage === 100;
               const loading = isLoading(party.partyId);
+              const enriching = isEnriching(party.partyId);
               const isExpanded = expandedParties[party.partyId];
+              const needsSources = party.overallSourcePercentage < 100 && party.totalAnswers > 0;
 
               return (
                 <Collapsible
@@ -104,7 +106,7 @@ export function PartyAnswersPanel() {
                             <Button
                               variant="default"
                               size="sm"
-                              disabled={loading || isAnyLoading}
+                              disabled={loading || enriching || isAnyLoading}
                               onClick={() => populateParty(party.partyId, false)}
                             >
                               {loading ? (
@@ -121,12 +123,33 @@ export function PartyAnswersPanel() {
                             </Button>
                           )}
 
+                          {needsSources && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={loading || enriching || isAnyLoading}
+                              onClick={() => enrichPartySources(party.partyId)}
+                            >
+                              {enriching ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Finding Sources...
+                                </>
+                              ) : (
+                                <>
+                                  <Search className="h-4 w-4 mr-2" />
+                                  Fill Sources
+                                </>
+                              )}
+                            </Button>
+                          )}
+
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                disabled={loading || isAnyLoading}
+                                disabled={loading || enriching || isAnyLoading}
                               >
                                 <RefreshCw className="h-4 w-4 mr-2" />
                                 Regenerate All
@@ -165,6 +188,8 @@ export function PartyAnswersPanel() {
                             {party.topics.map((topic) => {
                               const topicComplete = topic.percentage === 100;
                               const topicLoading = isLoading(party.partyId, topic.topicId);
+                              const topicEnriching = isEnriching(party.partyId, topic.topicId);
+                              const topicNeedsSources = topic.sourcePercentage < 100 && topic.answerCount > 0;
 
                               return (
                                 <div
@@ -192,13 +217,14 @@ export function PartyAnswersPanel() {
                                     </div>
                                   </div>
 
-                                  <div className="flex gap-2 shrink-0 ml-2">
+                                  <div className="flex gap-1 shrink-0 ml-2">
                                     {!topicComplete && (
                                       <Button
                                         variant="secondary"
                                         size="sm"
-                                        disabled={topicLoading || isAnyLoading}
+                                        disabled={topicLoading || topicEnriching || isAnyLoading}
                                         onClick={() => populatePartyTopic(party.partyId, topic.topicId, false)}
+                                        title="Fill missing answers"
                                       >
                                         {topicLoading ? (
                                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -208,12 +234,27 @@ export function PartyAnswersPanel() {
                                         <span className="ml-1 hidden sm:inline">Fill</span>
                                       </Button>
                                     )}
+                                    {topicNeedsSources && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={topicLoading || topicEnriching || isAnyLoading}
+                                        onClick={() => enrichPartySources(party.partyId, topic.topicId)}
+                                        title="Find sources for existing answers"
+                                      >
+                                        {topicEnriching ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <Search className="h-3 w-3" />
+                                        )}
+                                      </Button>
+                                    )}
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      disabled={topicLoading || isAnyLoading}
+                                      disabled={topicLoading || topicEnriching || isAnyLoading}
                                       onClick={() => populatePartyTopic(party.partyId, topic.topicId, true)}
-                                      title="Regenerate topic"
+                                      title="Regenerate all answers for topic"
                                     >
                                       {topicLoading ? (
                                         <Loader2 className="h-3 w-3 animate-spin" />

@@ -107,3 +107,6 @@ verify_jwt = true
 
 [functions.backfill-conduit-committees]
 verify_jwt = false
+
+[functions.enrich-party-sources]
+verify_jwt = false
