@@ -25,6 +25,7 @@ export type Database = {
           source_description: string | null
           source_type: string | null
           source_url: string | null
+          source_urls: string[] | null
           updated_at: string
         }
         Insert: {
@@ -37,6 +38,7 @@ export type Database = {
           source_description?: string | null
           source_type?: string | null
           source_url?: string | null
+          source_urls?: string[] | null
           updated_at?: string
         }
         Update: {
@@ -49,6 +51,7 @@ export type Database = {
           source_description?: string | null
           source_type?: string | null
           source_url?: string | null
+          source_urls?: string[] | null
           updated_at?: string
         }
         Relationships: [
@@ -979,6 +982,7 @@ export type Database = {
           question_id: string
           source_description: string | null
           source_url: string | null
+          source_urls: string[] | null
           updated_at: string | null
         }
         Insert: {
@@ -991,6 +995,7 @@ export type Database = {
           question_id: string
           source_description?: string | null
           source_url?: string | null
+          source_urls?: string[] | null
           updated_at?: string | null
         }
         Update: {
@@ -1003,6 +1008,7 @@ export type Database = {
           question_id?: string
           source_description?: string | null
           source_url?: string | null
+          source_urls?: string[] | null
           updated_at?: string | null
         }
         Relationships: [
