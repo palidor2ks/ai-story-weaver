@@ -56,6 +56,7 @@ export const UserProfile = () => {
 
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [addressInput, setAddressInput] = useState('');
+  const [isRefreshingAI, setIsRefreshingAI] = useState(false);
 
   // Collect all candidate IDs from civic officials and reps to fetch their scores
   const allOfficialIds = useMemo(() => {
@@ -159,7 +160,35 @@ export const UserProfile = () => {
     setAddressInput('');
   };
 
-
+  const handleRefreshAIComparisons = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.id) {
+      toast.error('Please sign in to refresh AI comparisons');
+      return;
+    }
+    
+    setIsRefreshingAI(true);
+    
+    try {
+      // Delete all cached comparisons for this user
+      const { error } = await supabase
+        .from('user_rep_comparisons')
+        .delete()
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      
+      // Invalidate React Query cache so components regenerate
+      queryClient.invalidateQueries({ queryKey: ['rep-comparison'] });
+      
+      toast.success('AI comparisons cleared! New summaries will generate automatically.');
+    } catch (error) {
+      console.error('Error refreshing AI comparisons:', error);
+      toast.error('Failed to refresh AI comparisons');
+    } finally {
+      setIsRefreshingAI(false);
+    }
+  };
   const getPartyColor = (party: string) => {
     switch (party) {
       case 'Democrat': return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
@@ -552,15 +581,36 @@ export const UserProfile = () => {
               </div>
 
               {profile.address && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleRefreshRepresentatives}
-                  disabled={allRepsLoading}
-                  aria-label="Refresh representatives"
-                >
-                  <RefreshCw className={cn("h-4 w-4", allRepsLoading && "animate-spin")} />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRefreshAIComparisons}
+                          disabled={isRefreshingAI || allRepsLoading}
+                          className="gap-1.5 text-xs"
+                        >
+                          <Sparkles className={cn("h-3.5 w-3.5", isRefreshingAI && "animate-pulse")} />
+                          {isRefreshingAI ? 'Refreshing...' : 'Refresh AI'}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Regenerate AI comparison summaries for all representatives</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleRefreshRepresentatives}
+                    disabled={allRepsLoading}
+                    aria-label="Refresh representatives"
+                  >
+                    <RefreshCw className={cn("h-4 w-4", allRepsLoading && "animate-spin")} />
+                  </Button>
+                </div>
               )}
             </CardTitle>
           </CardHeader>
