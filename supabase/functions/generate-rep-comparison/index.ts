@@ -160,10 +160,11 @@ NEVER use raw numbers like +5 or -5. Always format scores as L5 or R5.
 CRITICAL INSTRUCTION FOR CITING SOURCES:
 - When you see "VOTING RECORD EVIDENCE" sections, you MUST cite the specific bill numbers (H.R.1234, S.567) in your analysis.
 - Weave legislation references naturally into sentences, e.g., "You both support healthcare access - ${candidateName} sponsored H.R.5430 to expand coverage."
-- When no voting record exists, you may reference party platform positions, but clearly indicate this is inferred.
-- Prioritize discussing topics that have voting record evidence over those that are inferred.
+- When no voting record exists, indicate this clearly (e.g., "On this topic, no specific voting record was found").
+- Do NOT assume positions based on party affiliation - only cite documented evidence.
+- If a position shows as neutral/unknown (score 0), acknowledge that no documented position was found.
 
-Be conversational yet insightful, like explaining things over coffee. Maintain neutrality - explain differences without judgment.${skippedTopics}`;
+Be conversational yet insightful, like explaining things over coffee. Maintain strict neutrality - explain differences without judgment and never assume positions based on party.${skippedTopics}`;
 
     // Build structured comparison data that clearly separates voting-record-backed from inferred
     const formatQuestion = (q: typeof sharedQuestions[0], isAgreement: boolean) => {

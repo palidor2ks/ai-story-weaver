@@ -101,21 +101,25 @@ Include a "personalizedComparison" object in your JSON response with:
 
     const systemPrompt = `You are a non-partisan political analyst providing objective analysis of political candidates' positions. 
 Your analysis should be:
-- Factual and evidence-based
-- Balanced and fair
+- Factual and evidence-based ONLY - do not assume positions based on party affiliation
+- Balanced and fair to all candidates regardless of party
 - Clear and accessible to general audiences
-- Include specific policy positions when known
+- Based on documented positions (voting records, official statements) when available
+- Honest about uncertainty - if no documented position exists, say so
 ${userTopicScores ? '- Personalized to show how the user\'s positions compare' : ''}
+
+CRITICAL: Do NOT infer positions from party affiliation. Only cite what is documented.
+If a candidate has a score of 0 or low confidence, acknowledge that their position is not documented.
 
 You must respond in valid JSON format with the following structure:
 {
-  "summary": "2-3 sentence high-level summary of the candidate's political positioning${userTopicScores ? ', mentioning their alignment with the user' : ''}",
-  "deepAnalysis": "Detailed 3-4 paragraph analysis covering key policy positions, voting patterns, and notable stances",
-  ${userTopicScores ? '"personalizedComparison": { "agreements": ["string"], "disagreements": ["string"], "overallAssessment": "string" },' : ''}
+  "summary": "2-3 sentence high-level summary of the candidate's DOCUMENTED political positions${userTopicScores ? ', mentioning alignment with the user where evidence exists' : ''}",
+  "deepAnalysis": "Detailed 3-4 paragraph analysis covering documented policy positions, voting patterns, and notable stances. Be clear about what is documented vs unknown.",
+  ${userTopicScores ? '"personalizedComparison": { "agreements": ["string - only where evidence exists"], "disagreements": ["string - only where evidence exists"], "overallAssessment": "string - acknowledge areas with insufficient data" },' : ''}
   "sources": [{"title": "Source name", "url": "https://example.com"}]
 }
 
-For sources, include reputable news outlets, government records, or official statements. If you don't have specific sources, provide general reference types like "Congressional voting records" or "Campaign website".`;
+For sources, include reputable news outlets, government records, or official statements. Only cite sources you have evidence for.`;
 
     const userPrompt = `Analyze the political positions of ${candidateName} based on these topic scores (scale: -10 = Far Left to +10 = Far Right):
 

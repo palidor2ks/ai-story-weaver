@@ -6,81 +6,77 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Party platform positions (simplified scores on -10 to +10 scale)
-const PARTY_PLATFORMS = {
-  Democrat: {
-    healthcare: 8,
-    economy: 6,
-    immigration: 7,
-    environment: 9,
-    education: 7,
-    'criminal-justice': 6,
-    'civil-rights': 9,
-    'gun-policy': 8,
-    'social-issues': 8,
-    'foreign-policy': 4,
-    'government-reform': 5,
-    'domestic-policy': 6,
-    technology: 5,
-    'electoral-reform': 7,
-    'china-taiwan': 3,
-    'israel-palestine': 4,
-  },
-  Republican: {
-    healthcare: -6,
-    economy: -7,
-    immigration: -8,
-    environment: -5,
-    education: -4,
-    'criminal-justice': -6,
-    'civil-rights': -3,
-    'gun-policy': -9,
-    'social-issues': -7,
-    'foreign-policy': -5,
-    'government-reform': -6,
-    'domestic-policy': -5,
-    technology: -3,
-    'electoral-reform': -4,
-    'china-taiwan': -6,
-    'israel-palestine': -3,
-  },
-  Green: {
-    healthcare: 10,
-    economy: 8,
-    immigration: 9,
-    environment: 10,
-    education: 9,
-    'criminal-justice': 8,
-    'civil-rights': 10,
-    'gun-policy': 7,
-    'social-issues': 10,
-    'foreign-policy': 8,
-    'government-reform': 7,
-    'domestic-policy': 8,
-    technology: 6,
-    'electoral-reform': 9,
-    'china-taiwan': 5,
-    'israel-palestine': 7,
-  },
-  Libertarian: {
-    healthcare: -4,
-    economy: -8,
-    immigration: 5,
-    environment: -2,
-    education: -6,
-    'criminal-justice': 4,
-    'civil-rights': 7,
-    'gun-policy': -10,
-    'social-issues': 6,
-    'foreign-policy': 6,
-    'government-reform': -8,
-    'domestic-policy': -7,
-    technology: -5,
-    'electoral-reform': 3,
-    'china-taiwan': 4,
-    'israel-palestine': 5,
-  },
-};
+// Fetch party scores from database instead of using hardcoded values
+async function fetchPartyScores(supabase: any): Promise<Record<string, Record<string, number>>> {
+  const partyScores: Record<string, Record<string, number>> = {
+    Democrat: {},
+    Republican: {},
+    Green: {},
+    Libertarian: {},
+  };
+  
+  const partyIdMap: Record<string, string> = {
+    democrat: 'Democrat',
+    republican: 'Republican',
+    green: 'Green',
+    libertarian: 'Libertarian',
+  };
+  
+  try {
+    // Fetch party answers with question topic info
+    const { data: partyAnswers, error } = await supabase
+      .from('party_answers')
+      .select(`
+        party_id,
+        answer_value,
+        questions!inner(topic_id)
+      `);
+    
+    if (error) {
+      console.error('Error fetching party answers:', error);
+      return partyScores;
+    }
+    
+    if (!partyAnswers || partyAnswers.length === 0) {
+      console.log('No party answers found in database');
+      return partyScores;
+    }
+    
+    // Group by party and topic, calculate average
+    const partyTopicScores: Record<string, Record<string, { sum: number; count: number }>> = {};
+    
+    for (const answer of partyAnswers) {
+      const partyName = partyIdMap[answer.party_id] || answer.party_id;
+      const topicId = answer.questions?.topic_id;
+      
+      if (!topicId) continue;
+      
+      if (!partyTopicScores[partyName]) {
+        partyTopicScores[partyName] = {};
+      }
+      if (!partyTopicScores[partyName][topicId]) {
+        partyTopicScores[partyName][topicId] = { sum: 0, count: 0 };
+      }
+      
+      partyTopicScores[partyName][topicId].sum += answer.answer_value;
+      partyTopicScores[partyName][topicId].count += 1;
+    }
+    
+    // Calculate averages
+    for (const [party, topics] of Object.entries(partyTopicScores)) {
+      partyScores[party] = {};
+      for (const [topicId, data] of Object.entries(topics)) {
+        partyScores[party][topicId] = data.count > 0 ? data.sum / data.count : 0;
+      }
+    }
+    
+    console.log('Fetched party scores from database');
+  } catch (e) {
+    console.error('Error in fetchPartyScores:', e);
+  }
+  
+  return partyScores;
+}
 
 function calculatePartyAlignment(userScores: Record<string, number>, partyScores: Record<string, number>): number {
   const topics = Object.keys(userScores);
@@ -159,6 +155,9 @@ serve(async (req) => {
       });
     }
 
+    // Fetch party scores from database (evidence-based, not hardcoded)
+    const PARTY_PLATFORMS = await fetchPartyScores(supabase);
+
     // Calculate party alignments
     const userScoresMap: Record<string, number> = {};
     topicScores.forEach((ts: { topicId: string; score: number }) => {
@@ -195,7 +194,9 @@ CRITICAL: When referencing scores in your analysis, ALWAYS use the L/R format:
 - CR = Center-Right (e.g., CR2)
 - C = Center
 
-NEVER use raw numbers like +5 or -5. Always use L5 or R5 format.`;
+NEVER use raw numbers like +5 or -5. Always use L5 or R5 format.
+
+IMPORTANT: Base your analysis ONLY on the user's actual stated positions. Do not make assumptions about their views based on party alignment percentages - those are calculated comparisons, not identities.`;
 
     const userPrompt = `Analyze this voter's political profile and provide a comprehensive summary.
 
@@ -210,11 +211,14 @@ Topic Scores:
 ${topicScoresText}
 
 Please provide:
-1. A 2-3 sentence summary of their overall political philosophy
+1. A 2-3 sentence summary of their overall political philosophy based on their ACTUAL POSITIONS (not party alignment)
 2. 3-4 key insights about their positions (what makes them unique, any interesting patterns)
-3. A brief comparison to the four major party platforms
+3. A brief comparison to the four major party platforms based on documented party positions
 
-IMPORTANT: When mentioning any scores, use L/R format (e.g., "L5", "R3", "CL2"). Never use raw numbers like +5 or -5.
+IMPORTANT: 
+- Base your analysis on the user's stated positions, not assumptions
+- When mentioning any scores, use L/R format (e.g., "L5", "R3", "CL2")
+- Never use raw numbers like +5 or -5
 
 Return your response as JSON with this exact structure:
 {
