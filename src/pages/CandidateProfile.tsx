@@ -31,6 +31,7 @@ import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
 import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
 import { OfficialAvatar } from '@/components/OfficialAvatar';
 import { VotingRecordSection } from '@/components/VotingRecordSection';
+import { ShareProfileButton } from '@/components/ShareProfileButton';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -287,6 +288,19 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
                   candidateId={candidate.id}
                   candidateName={candidate.name}
                   isAlreadyClaimed={isClaimed}
+                />
+                
+                {/* Share Profile Button */}
+                <ShareProfileButton
+                  candidateName={candidate.name}
+                  candidateOffice={candidate.office}
+                  candidateParty={candidate.party}
+                  candidateScore={candidate.overall_score}
+                  userScore={userScore}
+                  matchScore={matchScore}
+                  agreements={agreements}
+                  disagreements={disagreements}
+                  profileUrl={window.location.href}
                 />
               </div>
 
