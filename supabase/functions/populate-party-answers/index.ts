@@ -68,6 +68,85 @@ function snapToValidValue(value: number): number {
 }
 
 /**
+ * Validate that the score is consistent with the source description.
+ * If evidence clearly indicates progressive/conservative stance but score is 0, adjust it.
+ */
+function validateScoreConsistency(
+  answerValue: number,
+  sourceDescription: string,
+  partyId: string
+): number {
+  // Only adjust neutral scores that have evidence suggesting a clear stance
+  if (answerValue !== 0) return answerValue;
+  
+  const lowerDesc = sourceDescription.toLowerCase();
+  
+  // Skip if no real evidence
+  if (lowerDesc.includes('no documented') || lowerDesc.length < 20) {
+    return answerValue;
+  }
+  
+  // Progressive/left-leaning indicators
+  const progressiveIndicators = [
+    'supports comprehensive',
+    'supports universal',
+    'supports expanding',
+    'supports stricter',
+    'supports increasing',
+    'supports strengthening',
+    'advocates for',
+    'pushed for legislation',
+    'strongly supports',
+    'supports federal funding',
+    'supports government-funded',
+    'supports banning',
+    'opposes restrictions',
+    'opposes cuts to',
+    'more likely than republicans to support',
+  ];
+  
+  // Conservative/right-leaning indicators
+  const conservativeIndicators = [
+    'opposes government',
+    'opposes federal',
+    'opposes regulations',
+    'supports deregulation',
+    'supports reducing',
+    'supports limiting government',
+    'supports state rights',
+    'supports parental rights',
+    'supports school choice',
+    'supports second amendment',
+    'opposes tax increases',
+    'supports tax cuts',
+    'supports traditional',
+    'opposes abortion',
+    'more likely than democrats to support',
+  ];
+  
+  const hasProgressiveEvidence = progressiveIndicators.some(
+    indicator => lowerDesc.includes(indicator)
+  );
+  
+  const hasConservativeEvidence = conservativeIndicators.some(
+    indicator => lowerDesc.includes(indicator)
+  );
+  
+  // Only adjust if there's clear evidence one way and not the other
+  if (hasProgressiveEvidence && !hasConservativeEvidence) {
+    console.log(`[Consistency] Adjusting ${partyId} score: Progressive evidence with neutral score -> -5`);
+    return -5;
+  }
+  
+  if (hasConservativeEvidence && !hasProgressiveEvidence) {
+    console.log(`[Consistency] Adjusting ${partyId} score: Conservative evidence with neutral score -> 5`);
+    return 5;
+  }
+  
+  return answerValue;
+}
+
+/**
  * Phase 1: Research party position using Gemini with Google Search grounding
  */
 async function researchPartyPosition(
@@ -312,6 +391,11 @@ Return ONLY a valid JSON array, no other text. Example:
             answerValue = 0;
             confidence = 'low';
             sourceDesc = 'No documented position';
+          }
+          
+          // Apply score consistency validation - adjust 0 scores if evidence suggests otherwise
+          if (hasValidSource) {
+            answerValue = validateScoreConsistency(answerValue, sourceDesc, partyId);
           }
           
           // Use primary source URL from research, fallback to party platform

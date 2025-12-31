@@ -161,6 +161,86 @@ function snapToValidValue(value: number): number {
 }
 
 /**
+ * Validate that the score is consistent with the source description.
+ * If evidence clearly indicates progressive/conservative stance but score is 0, adjust it.
+ */
+function validateScoreConsistency(
+  answerValue: number,
+  sourceDescription: string
+): number {
+  // Only adjust neutral scores that have evidence suggesting a clear stance
+  if (answerValue !== 0) return answerValue;
+  
+  const lowerDesc = sourceDescription.toLowerCase();
+  
+  // Skip if no real evidence
+  if (lowerDesc.includes('no documented') || lowerDesc.length < 20) {
+    return answerValue;
+  }
+  
+  // Progressive/left-leaning indicators
+  const progressiveIndicators = [
+    'supports comprehensive',
+    'supports universal',
+    'supports expanding',
+    'supports stricter',
+    'supports increasing',
+    'supports strengthening',
+    'advocates for',
+    'pushed for legislation',
+    'strongly supports',
+    'supports federal funding',
+    'supports government-funded',
+    'supports banning',
+    'opposes restrictions',
+    'opposes cuts to',
+    'voted for',
+    'sponsored',
+    'cosponsored',
+  ];
+  
+  // Conservative/right-leaning indicators
+  const conservativeIndicators = [
+    'opposes government',
+    'opposes federal',
+    'opposes regulations',
+    'supports deregulation',
+    'supports reducing',
+    'supports limiting government',
+    'supports state rights',
+    'supports parental rights',
+    'supports school choice',
+    'supports second amendment',
+    'opposes tax increases',
+    'supports tax cuts',
+    'supports traditional',
+    'opposes abortion',
+    'voted against',
+  ];
+  
+  const hasProgressiveEvidence = progressiveIndicators.some(
+    indicator => lowerDesc.includes(indicator)
+  );
+  
+  const hasConservativeEvidence = conservativeIndicators.some(
+    indicator => lowerDesc.includes(indicator)
+  );
+  
+  // Only adjust if there's clear evidence one way and not the other
+  if (hasProgressiveEvidence && !hasConservativeEvidence) {
+    console.log(`[Consistency] Adjusting score: Progressive evidence with neutral score -> -5`);
+    return -5;
+  }
+  
+  if (hasConservativeEvidence && !hasProgressiveEvidence) {
+    console.log(`[Consistency] Adjusting score: Conservative evidence with neutral score -> 5`);
+    return 5;
+  }
+  
+  return answerValue;
+}
+
+/**
  * Research candidate position using Gemini with Google Search grounding
  */
 async function researchCandidatePosition(
@@ -512,9 +592,19 @@ ONLY JSON array. No markdown.`;
       }
     }
     
+    // Apply score consistency validation - adjust 0 scores if evidence suggests otherwise
+    let answerValue = snapToValidValue(item.answer_value);
+    const hasValidSource = sourceDesc && 
+      !sourceDesc.toLowerCase().includes('no documented') &&
+      sourceDesc.length > 10;
+    
+    if (hasValidSource) {
+      answerValue = validateScoreConsistency(answerValue, sourceDesc);
+    }
+    
     return {
       question_id: questionId,
-      answer_value: snapToValidValue(item.answer_value),
+      answer_value: answerValue,
       source_description: sourceDesc,
       source_url: sourceUrl,
       source_urls: sourceUrls,
