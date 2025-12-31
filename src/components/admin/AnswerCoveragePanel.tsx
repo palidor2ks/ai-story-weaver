@@ -1287,9 +1287,10 @@ export function AnswerCoveragePanel() {
                       const hasCommittee = !!candidate.fecCommitteeId;
                       const financeStatus = calculateFinanceStatus(candidate);
                       // Calculate "Local Total" as imported itemized + FEC non-itemized receipts for apples-to-apples comparison
+                      // Note: fecTransfers NOT included - Line 12 transfers are already in localItemized
                       const localItemized = candidate.localItemized || 0;
                       const fecUnitemized = candidate.fecUnitemized || 0;
-                      const fecOtherReceipts = (candidate.fecLoans || 0) + (candidate.fecTransfers || 0) + (candidate.fecCandidateContribution || 0) + (candidate.fecOtherReceipts || 0);
+                      const fecOtherReceipts = (candidate.fecLoans || 0) + (candidate.fecCandidateContribution || 0) + (candidate.fecOtherReceipts || 0);
                       const localTotal = localItemized + fecUnitemized + fecOtherReceipts;
                       const syncStatus = candidate.syncStatus;
                       const hasOverride = overrideMap.has(candidate.id);
@@ -1432,13 +1433,19 @@ export function AnswerCoveragePanel() {
                                   {formatCurrency(localTotal)}
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-64 p-3" align="end">
+                              <PopoverContent className="w-72 p-3" align="end">
                                 <div className="space-y-2 text-sm">
                                   <div className="font-medium border-b pb-1 mb-2">Local Total Breakdown</div>
                                   <div className="flex justify-between">
                                     <span className="text-muted-foreground">Imported Itemized</span>
                                     <span className="font-medium">{formatCurrency(localItemized)}</span>
                                   </div>
+                                  {(candidate.fecTransfers || 0) > 0 && (
+                                    <div className="flex justify-between text-xs text-muted-foreground/70 pl-2">
+                                      <span className="italic">↳ includes Line 12 transfers</span>
+                                      <span className="italic">{formatCurrency(candidate.fecTransfers || 0)}</span>
+                                    </div>
+                                  )}
                                   <div className="flex justify-between">
                                     <span className="text-muted-foreground">+ Unitemized (FEC)</span>
                                     <span className="font-medium">{formatCurrency(fecUnitemized)}</span>
@@ -1446,10 +1453,6 @@ export function AnswerCoveragePanel() {
                                   <div className="flex justify-between">
                                     <span className="text-muted-foreground">+ Loans (FEC)</span>
                                     <span className="font-medium">{formatCurrency(candidate.fecLoans || 0)}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">+ Transfers (FEC)</span>
-                                    <span className="font-medium">{formatCurrency(candidate.fecTransfers || 0)}</span>
                                   </div>
                                   <div className="flex justify-between">
                                     <span className="text-muted-foreground">+ Candidate (FEC)</span>
