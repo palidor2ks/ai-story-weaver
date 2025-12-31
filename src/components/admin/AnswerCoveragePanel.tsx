@@ -18,7 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit, Zap } from "lucide-react";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit, Zap, MoreHorizontal } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { CommitteeBreakdown } from "@/components/admin/CommitteeBreakdown";
@@ -203,8 +203,14 @@ export function AnswerCoveragePanel() {
     };
   }, []);
 
-  const formatCurrency = (value?: number | null) => {
+  const formatCurrency = (value?: number | null, compact = false) => {
     if (value === null || value === undefined) return '—';
+    if (compact && Math.abs(value) >= 1000000) {
+      return `$${(value / 1000000).toFixed(1)}M`;
+    }
+    if (compact && Math.abs(value) >= 1000) {
+      return `$${(value / 1000).toFixed(0)}K`;
+    }
     return `$${Math.round(value).toLocaleString()}`;
   };
 
@@ -1254,24 +1260,51 @@ export function AnswerCoveragePanel() {
               </div>
             ) : filteredCandidates.length > 0 ? (
               <div className="rounded-md border overflow-x-auto">
-                <Table className="text-[13px]">
+                <Table className="text-xs">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="px-3 py-3">Name</TableHead>
-                      <TableHead className="w-[56px] px-3 py-3">Party</TableHead>
-                      <TableHead className="w-[60px] px-3 py-3">State</TableHead>
-                      <TableHead className="text-center w-[90px] px-3 py-3">Answers</TableHead>
-                      <TableHead className="w-[70px] px-3 py-3">Tier</TableHead>
-                      <TableHead className="w-[70px] px-3 py-3">Health</TableHead>
-                      <TableHead className="w-[96px] px-3 py-3">Committee</TableHead>
-                      <TableHead className="w-[76px] px-3 py-3">Sync</TableHead>
-                      <TableHead className="w-[86px] px-3 py-3">Finance</TableHead>
-                      <TableHead className="w-[100px] px-3 py-3">FEC Total</TableHead>
-                      <TableHead className="w-[100px] px-3 py-3">
+                      <TableHead className="px-2 py-2 max-w-[140px]">Name</TableHead>
+                      <TableHead className="w-[40px] px-2 py-2">Party</TableHead>
+                      <TableHead className="w-[44px] px-2 py-2">State</TableHead>
+                      <TableHead className="text-center w-[70px] px-2 py-2">Answers</TableHead>
+                      <TableHead className="w-[52px] px-2 py-2">Tier</TableHead>
+                      <TableHead className="w-[44px] px-2 py-2">
                         <TooltipProvider>
                           <Tooltip>
-                            <TooltipTrigger className="flex items-center gap-1 cursor-help">
-                              Local Total
+                            <TooltipTrigger className="cursor-help">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>Health Status</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
+                      <TableHead className="w-[44px] px-2 py-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger className="cursor-help">
+                              <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>Committee Status</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
+                      <TableHead className="w-[52px] px-2 py-2">Sync</TableHead>
+                      <TableHead className="w-[44px] px-2 py-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger className="cursor-help">
+                              <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>Finance Status</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
+                      <TableHead className="w-[72px] px-2 py-2 text-right">FEC</TableHead>
+                      <TableHead className="w-[72px] px-2 py-2 text-right">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger className="flex items-center gap-1 cursor-help justify-end">
+                              Local
                               <HelpCircle className="h-3 w-3 text-muted-foreground" />
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-[280px]">
@@ -1285,9 +1318,9 @@ export function AnswerCoveragePanel() {
                           </Tooltip>
                         </TooltipProvider>
                       </TableHead>
-                      <TableHead className="w-[95px] px-3 py-3">Delta</TableHead>
-                      <TableHead className="w-[88px] px-3 py-3">FEC ID</TableHead>
-                      <TableHead className="text-right w-[116px] px-3 py-3">Actions</TableHead>
+                      <TableHead className="w-[60px] px-2 py-2">Delta</TableHead>
+                      <TableHead className="w-[70px] px-2 py-2">FEC ID</TableHead>
+                      <TableHead className="text-right w-[40px] px-2 py-2"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1328,41 +1361,39 @@ export function AnswerCoveragePanel() {
 
                       return (
                         <TableRow key={candidate.id}>
-                          <TableCell className="font-medium px-3 py-3">
+                          <TableCell className="font-medium px-2 py-2 max-w-[140px]">
                             <Link
                               to={`/candidate/${candidate.id}`}
-                              className="hover:underline text-primary flex items-center gap-1"
+                              className="hover:underline text-primary flex items-center gap-1 truncate"
                             >
-                              {candidate.name}
-                              <ExternalLink className="h-3 w-3" />
+                              <span className="truncate">{candidate.name}</span>
+                              <ExternalLink className="h-2.5 w-2.5 shrink-0" />
                             </Link>
                           </TableCell>
-                          <TableCell className="px-3 py-3">
-                            <Badge className={getPartyBadgeColor(candidate.party)}>
+                          <TableCell className="px-2 py-2">
+                            <Badge className={cn(getPartyBadgeColor(candidate.party), "text-[10px] px-1.5 py-0")}>
                               {getPartyBadge(candidate.party)}
                             </Badge>
                           </TableCell>
-                          <TableCell className="px-3 py-3">{candidate.state}</TableCell>
-                          <TableCell className="text-center px-3 py-3">
+                          <TableCell className="px-2 py-2">{candidate.state}</TableCell>
+                          <TableCell className="text-center px-2 py-2">
                             {isComplete ? (
                               <div className="flex items-center justify-center">
-                                <CheckCircle2 className="h-4 w-4 text-green-500" aria-hidden="true" />
+                                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
                                 <span className="sr-only">100% coverage</span>
                               </div>
                             ) : (
-                              <div className="flex items-center justify-center gap-1 text-sm">
+                              <div className="flex items-center justify-center gap-0.5 text-xs">
                                 <span className={candidate.answerCount === 0 ? 'text-amber-600' : 'text-foreground'}>
                                   {candidate.answerCount}/{candidate.totalQuestions}
                                 </span>
-                                <span className="text-[11px] text-muted-foreground">{candidate.percentage}%</span>
                               </div>
                             )}
                           </TableCell>
-                          <TableCell className="px-3 py-3">
+                          <TableCell className="px-2 py-2">
                             <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} compact />
                           </TableCell>
-                          {/* Health Badge */}
-                          <TableCell className="px-3 py-3">
+                          <TableCell className="px-2 py-2">
                             <CandidateHealthBadge
                               hasFecId={hasFecId}
                               hasCommittee={hasCommittee}
@@ -1371,8 +1402,7 @@ export function AnswerCoveragePanel() {
                               hasOverride={hasOverride}
                             />
                           </TableCell>
-                          {/* Committee Status Badge - NEW COLUMN */}
-                          <TableCell className="px-3 py-3">
+                          <TableCell className="px-2 py-2">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer">
@@ -1409,8 +1439,7 @@ export function AnswerCoveragePanel() {
                               )}
                             </Popover>
                           </TableCell>
-                          {/* Sync Status Badge */}
-                          <TableCell className="px-3 py-3">
+                          <TableCell className="px-2 py-2">
                             <SyncStatusBadge
                               status={syncStatus}
                               lastSyncDate={candidate.lastDonorSync}
@@ -1419,8 +1448,7 @@ export function AnswerCoveragePanel() {
                               compact
                             />
                           </TableCell>
-                          {/* Finance Status Badge */}
-                          <TableCell className="px-3 py-3">
+                          <TableCell className="px-2 py-2">
                           <Popover>
                             <PopoverTrigger asChild>
                               <button className="hover:opacity-80 transition-opacity">
@@ -1444,14 +1472,14 @@ export function AnswerCoveragePanel() {
                               </PopoverContent>
                             </Popover>
                           </TableCell>
-                          <TableCell className="text-right text-sm px-3 py-3 whitespace-nowrap">
-                            <div className="font-medium">{formatCurrency(financeStatus.fecTotalReceipts)}</div>
+                          <TableCell className="text-right px-2 py-2 whitespace-nowrap">
+                            <span className="font-medium text-xs">{formatCurrency(financeStatus.fecTotalReceipts, true)}</span>
                           </TableCell>
-                          <TableCell className="text-right text-sm px-3 py-3 whitespace-nowrap">
+                          <TableCell className="text-right px-2 py-2 whitespace-nowrap">
                             <Popover>
                               <PopoverTrigger asChild>
-                                <button className="font-medium hover:underline cursor-help">
-                                  {formatCurrency(localTotal)}
+                                <button className="font-medium text-xs hover:underline cursor-help">
+                                  {formatCurrency(localTotal, true)}
                                 </button>
                               </PopoverTrigger>
                               <PopoverContent className="w-72 p-3" align="end">
@@ -1507,8 +1535,7 @@ export function AnswerCoveragePanel() {
                               </PopoverContent>
                             </Popover>
                           </TableCell>
-                          {/* Delta Column - calculated from localTotal vs fecTotalReceipts */}
-                          <TableCell className="text-right px-3 py-3 whitespace-nowrap">
+                          <TableCell className="px-2 py-2 whitespace-nowrap">
                             {(() => {
                               const fecTotal = financeStatus.fecTotalReceipts;
                               if (fecTotal === null || fecTotal === undefined) {
@@ -1524,11 +1551,10 @@ export function AnswerCoveragePanel() {
                               );
                             })()}
                           </TableCell>
-                          {/* FEC ID column with mismatch warning - clickable to edit */}
-                          <TableCell className="px-3 py-3">
+                          <TableCell className="px-2 py-2">
                             {hasFecId ? (
                               <div 
-                                className="flex items-center gap-1 cursor-pointer group"
+                                className="flex items-center gap-0.5 cursor-pointer group"
                                 onClick={() => {
                                   setEditDialogTab('fec');
                                   setEditingCandidate(candidate);
@@ -1539,7 +1565,7 @@ export function AnswerCoveragePanel() {
                                   <TooltipProvider>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                        <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
                                       </TooltipTrigger>
                                       <TooltipContent side="left" className="max-w-[260px]">
                                         <p className="font-medium text-amber-600 mb-1">FEC ID Mismatch</p>
@@ -1553,93 +1579,80 @@ export function AnswerCoveragePanel() {
                                 <Badge 
                                   variant="outline" 
                                   className={cn(
-                                    "text-xs font-mono group-hover:border-primary/50 group-hover:bg-primary/5 transition-colors",
+                                    "text-[10px] font-mono px-1 py-0 group-hover:border-primary/50 group-hover:bg-primary/5 transition-colors",
                                     candidate.fecIdMismatch && "border-amber-500/50 text-amber-600"
                                   )}
                                 >
-                                  {candidate.fecCandidateId?.slice(0, 9)}
+                                  {candidate.fecCandidateId?.slice(0, 7)}
                                 </Badge>
-                                <Edit className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                               </div>
                             ) : (
-                              <button
-                                className="text-muted-foreground/50 text-xs hover:text-primary hover:underline"
-                                onClick={() => {
-                                  setEditDialogTab('fec');
-                                  setEditingCandidate(candidate);
-                                }}
-                                title="Click to add FEC IDs"
-                              >
-                                + Add
-                              </button>
+                              <span className="text-muted-foreground/50 text-[10px]">—</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right px-3 py-3">
-                            <div className="flex gap-1 justify-end">
-                              {/* Link FEC ID */}
-                              {!hasFecId && (
+                          <TableCell className="text-right px-2 py-2">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  disabled={fecLoading || anyBatchRunning}
-                                  onClick={() => {
-                                    void (async () => {
-                                      try {
-                                        const result = await fetchFECCandidateId(
-                                          candidate.id,
-                                          candidate.name,
-                                          candidate.state,
-                                          true
-                                        );
-                                        if (result.found && result.updated) {
-                                          toast.success(`Linked: ${result.fecCandidateId}`);
-                                          refetchCandidates();
-                                        } else if (result.found) {
-                                          toast.info(`Found ${result.candidates?.length} matches`);
-                                        } else {
-                                          toast.error(result.error || 'No FEC candidate found');
-                                        }
-                                      } catch (err) {
-                                        console.error('[Admin] Link FEC ID failed:', err);
-                                        toast.error('Failed to link FEC ID');
-                                      }
-                                    })();
-                                  }}
-                                  title="Link FEC ID"
+                                  className="h-6 w-6 p-0"
+                                  disabled={anyBatchRunning || loading || fecLoading || donorLoading}
                                 >
-                                  {fecLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
+                                  {(loading || fecLoading || donorLoading) ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <MoreHorizontal className="h-3.5 w-3.5" />
+                                  )}
                                 </Button>
-                              )}
-                              {/* Fetch/Resume Donors - with Auto-Complete option for partial syncs */}
-                              {hasFecId && candidate.fecCommitteeId && (
-                                syncStatus === 'partial' ? (
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        size="sm"
-                                        variant="default"
-                                        disabled={donorLoading || anyBatchRunning}
-                                        className="bg-amber-600 hover:bg-amber-700 h-7 text-xs"
-                                        title="Resume options"
-                                      >
-                                        {donorLoading ? (
-                                          <Loader2 className="h-3 w-3 animate-spin" />
-                                        ) : (
-                                          <>
-                                            <RotateCcw className="h-3 w-3 mr-1" />
-                                            Resume
-                                            <ChevronDown className="h-3 w-3 ml-1" />
-                                          </>
-                                        )}
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-52">
+                                {/* FEC ID Actions */}
+                                {!hasFecId && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        void (async () => {
+                                          try {
+                                            const result = await fetchFECCandidateId(
+                                              candidate.id,
+                                              candidate.name,
+                                              candidate.state,
+                                              true
+                                            );
+                                            if (result.found && result.updated) {
+                                              toast.success(`Linked: ${result.fecCandidateId}`);
+                                              refetchCandidates();
+                                            } else if (result.found) {
+                                              toast.info(`Found ${result.candidates?.length} matches`);
+                                            } else {
+                                              toast.error(result.error || 'No FEC candidate found');
+                                            }
+                                          } catch (err) {
+                                            console.error('[Admin] Link FEC ID failed:', err);
+                                            toast.error('Failed to link FEC ID');
+                                          }
+                                        })();
+                                      }}
+                                    >
+                                      <Link2 className="h-4 w-4 mr-2" />
+                                      Link FEC ID
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                  </>
+                                )}
+                                
+                                {/* Donor Sync Actions */}
+                                {hasFecId && hasCommittee && (
+                                  <>
+                                    {syncStatus === 'never' && (
                                       <DropdownMenuItem
                                         onSelect={(e) => {
                                           e.preventDefault();
                                           void (async () => {
                                             try {
-                                              toast.info(`Resuming donor sync for ${candidate.name}...`);
+                                              toast.info(`Starting donor sync for ${candidate.name}...`);
                                               const result = await fetchFECDonorsComplete(
                                                 candidate.id,
                                                 candidate.fecCandidateId!,
@@ -1649,9 +1662,9 @@ export function AnswerCoveragePanel() {
                                               );
                                               if (result.success) {
                                                 if (result.hasMore) {
-                                                  toast.info(`Partial sync: ${result.imported} donors. Click Resume to continue.`);
+                                                  toast.info(`Partial sync: ${result.imported} donors. Resume to continue.`);
                                                 } else {
-                                                  toast.success(`Complete: imported ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
+                                                  toast.success(`Complete: ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
                                                 }
                                                 refetchCandidates();
                                               } else {
@@ -1664,266 +1677,202 @@ export function AnswerCoveragePanel() {
                                           })();
                                         }}
                                       >
-                                        <RotateCcw className="h-4 w-4 mr-2" />
-                                        Resume (1 batch)
+                                        <DollarSign className="h-4 w-4 mr-2" />
+                                        Fetch Donors
                                       </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        onSelect={(e) => {
-                                          e.preventDefault();
-                                          void (async () => {
-                                            try {
-                                              const result = await autoResumeSingleCandidate(
-                                                candidate.id,
-                                                candidate.fecCandidateId!,
-                                                candidate.name,
-                                                '2024'
-                                              );
-                                              if (result.success) {
-                                                if (result.hasMore) {
-                                                  toast.warning(`Still incomplete after max attempts. ${result.imported} donors imported.`);
+                                    )}
+                                    {syncStatus === 'partial' && (
+                                      <>
+                                        <DropdownMenuItem
+                                          onSelect={(e) => {
+                                            e.preventDefault();
+                                            void (async () => {
+                                              try {
+                                                toast.info(`Resuming donor sync for ${candidate.name}...`);
+                                                const result = await fetchFECDonorsComplete(
+                                                  candidate.id,
+                                                  candidate.fecCandidateId!,
+                                                  candidate.name,
+                                                  '2024',
+                                                  false
+                                                );
+                                                if (result.success) {
+                                                  if (result.hasMore) {
+                                                    toast.info(`Partial: ${result.imported} donors. Resume to continue.`);
+                                                  } else {
+                                                    toast.success(`Complete: ${result.imported} donors`);
+                                                  }
+                                                  refetchCandidates();
                                                 } else {
-                                                  toast.success(`Complete: imported ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
+                                                  toast.error(result.error || 'Failed');
                                                 }
-                                                refetchCandidates();
-                                              } else {
-                                                toast.error(result.error || 'Failed');
+                                              } catch (err) {
+                                                console.error('[Admin] Resume failed:', err);
+                                                toast.error('Failed to resume');
                                               }
-                                            } catch (err) {
-                                              console.error('[Admin] Auto-resume failed:', err);
-                                              toast.error('Auto-resume failed');
-                                            }
-                                          })();
-                                        }}
-                                      >
-                                        <Sparkles className="h-4 w-4 mr-2 text-purple-600" />
-                                        Auto-Complete (until done)
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        onSelect={(e) => {
-                                          e.preventDefault();
-                                          void (async () => {
-                                            try {
-                                              const result = await forceResyncDonors(
-                                                candidate.id,
-                                                candidate.fecCandidateId!,
-                                                candidate.name,
-                                                '2024'
-                                              );
-                                              if (result.success) {
-                                                if (result.hasMore) {
-                                                  toast.warning(`Still syncing. ${result.imported} donors imported so far.`);
+                                            })();
+                                          }}
+                                        >
+                                          <RotateCcw className="h-4 w-4 mr-2 text-amber-600" />
+                                          Resume (1 batch)
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onSelect={(e) => {
+                                            e.preventDefault();
+                                            void (async () => {
+                                              try {
+                                                const result = await autoResumeSingleCandidate(
+                                                  candidate.id,
+                                                  candidate.fecCandidateId!,
+                                                  candidate.name,
+                                                  '2024'
+                                                );
+                                                if (result.success) {
+                                                  if (result.hasMore) {
+                                                    toast.warning(`Still incomplete. ${result.imported} donors imported.`);
+                                                  } else {
+                                                    toast.success(`Complete: ${result.imported} donors`);
+                                                  }
+                                                  refetchCandidates();
                                                 } else {
-                                                  toast.success(`Re-sync complete: ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
+                                                  toast.error(result.error || 'Failed');
                                                 }
-                                                refetchCandidates();
-                                              } else {
-                                                toast.error(result.error || 'Failed');
+                                              } catch (err) {
+                                                console.error('[Admin] Auto-resume failed:', err);
+                                                toast.error('Auto-resume failed');
                                               }
-                                            } catch (err) {
-                                              console.error('[Admin] Force re-sync failed:', err);
-                                              toast.error('Force re-sync failed');
+                                            })();
+                                          }}
+                                        >
+                                          <Sparkles className="h-4 w-4 mr-2 text-purple-600" />
+                                          Auto-Complete
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        void (async () => {
+                                          try {
+                                            const result = await forceResyncDonors(
+                                              candidate.id,
+                                              candidate.fecCandidateId!,
+                                              candidate.name,
+                                              '2024'
+                                            );
+                                            if (result.success) {
+                                              toast.success(`Re-sync started: ${result.imported} donors`);
+                                              refetchCandidates();
+                                            } else {
+                                              toast.error(result.error || 'Failed');
                                             }
-                                          })();
-                                        }}
-                                        className="text-destructive"
-                                      >
-                                        <RefreshCw className="h-4 w-4 mr-2" />
-                                        Force Re-Sync (clear & reimport)
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                ) : syncStatus === 'complete' ? (
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        disabled={donorLoading || anyBatchRunning}
-                                        className="h-7"
-                                        title="Sync options"
-                                      >
-                                        {donorLoading ? (
-                                          <Loader2 className="h-3 w-3 animate-spin" />
-                                        ) : (
-                                          <>
-                                            <CheckCircle2 className="h-3 w-3 mr-1 text-green-600" />
-                                            <ChevronDown className="h-3 w-3" />
-                                          </>
-                                        )}
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                      <DropdownMenuItem
-                                        onSelect={(e) => {
-                                          e.preventDefault();
-                                          void (async () => {
-                                            try {
-                                              const result = await forceResyncDonors(
-                                                candidate.id,
-                                                candidate.fecCandidateId!,
-                                                candidate.name,
-                                                '2024'
-                                              );
-                                              if (result.success) {
-                                                if (result.hasMore) {
-                                                  toast.warning(`Still syncing. ${result.imported} donors imported so far.`);
-                                                } else {
-                                                  toast.success(`Re-sync complete: ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
-                                                }
-                                                refetchCandidates();
-                                              } else {
-                                                toast.error(result.error || 'Failed');
-                                              }
-                                            } catch (err) {
-                                              console.error('[Admin] Force re-sync failed:', err);
-                                              toast.error('Force re-sync failed');
-                                            }
-                                          })();
-                                        }}
-                                        className="text-destructive"
-                                      >
-                                        <RefreshCw className="h-4 w-4 mr-2" />
-                                        Force Re-Sync (clear & reimport)
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    disabled={donorLoading || anyBatchRunning}
-                                    onClick={() => {
+                                          } catch (err) {
+                                            console.error('[Admin] Force re-sync failed:', err);
+                                            toast.error('Force re-sync failed');
+                                          }
+                                        })();
+                                      }}
+                                      className="text-destructive"
+                                    >
+                                      <RefreshCw className="h-4 w-4 mr-2" />
+                                      Force Re-Sync
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                  </>
+                                )}
+                                
+                                {/* FEC Totals & Finance */}
+                                {hasFecId && hasCommittee && (
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      e.preventDefault();
                                       void (async () => {
                                         try {
-                                          toast.info(`Starting donor sync for ${candidate.name}...`);
-                                          const result = await fetchFECDonorsComplete(
-                                            candidate.id,
-                                            candidate.fecCandidateId!,
-                                            candidate.name,
-                                            '2024',
-                                            false
-                                          );
+                                          toast.info(`Refreshing FEC totals...`);
+                                          const result = await refreshFECTotals(candidate.id, '2024');
                                           if (result.success) {
-                                            if (result.hasMore) {
-                                              toast.info(`Partial sync: ${result.imported} donors. Click Resume to continue.`);
-                                            } else {
-                                              toast.success(`Complete: imported ${result.imported} donors ($${(result.totalRaised || 0).toLocaleString()})`);
-                                            }
+                                            toast.success(`FEC totals updated`);
                                             refetchCandidates();
                                           } else {
                                             toast.error(result.error || 'Failed');
                                           }
                                         } catch (err) {
-                                          console.error('[Admin] Fetch donors failed:', err);
-                                          toast.error('Failed to fetch donors');
+                                          console.error('[Admin] Refresh totals failed:', err);
+                                          toast.error('Failed to refresh');
                                         }
                                       })();
                                     }}
-                                    title="Fetch donors (auto-continues until complete)"
-                                    className="h-7"
                                   >
-                                    {donorLoading ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <DollarSign className="h-3 w-3" />
-                                    )}
-                                  </Button>
-                                )
-                              )}
-                              {/* Refresh FEC Totals (lightweight) */}
-                              {hasFecId && candidate.fecCommitteeId && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={isTotalsLoading(candidate.id) || anyBatchRunning}
-                                  onClick={() => {
-                                    void (async () => {
-                                      try {
-                                        toast.info(`Refreshing FEC totals for ${candidate.name}...`);
-                                        const result = await refreshFECTotals(candidate.id, '2024');
-                                        if (result.success) {
-                                          toast.success(`FEC totals updated: $${(result.fecItemized || 0).toLocaleString()} itemized (${result.deltaPct || 0}% delta)`);
-                                          refetchCandidates();
-                                        } else {
-                                          toast.error(result.error || 'Failed to refresh totals');
+                                    <BarChart3 className="h-4 w-4 mr-2 text-blue-600" />
+                                    Refresh FEC Totals
+                                  </DropdownMenuItem>
+                                )}
+                                {hasFecId && (
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      void (async () => {
+                                        try {
+                                          const result = await triggerReconciliation(candidate.id, '2024');
+                                          if (result.success) {
+                                            toast.success(`Finance refreshed: ${result.status}`);
+                                            refetchCandidates();
+                                          } else {
+                                            toast.error(result.error || 'Failed');
+                                          }
+                                        } catch (err) {
+                                          console.error('[Admin] Reconciliation failed:', err);
+                                          toast.error('Failed to refresh');
                                         }
-                                      } catch (err) {
-                                        console.error('[Admin] Refresh totals failed:', err);
-                                        toast.error('Failed to refresh FEC totals');
-                                      }
-                                    })();
+                                      })();
+                                    }}
+                                  >
+                                    <Calculator className="h-4 w-4 mr-2" />
+                                    Refresh Finance
+                                  </DropdownMenuItem>
+                                )}
+                                
+                                <DropdownMenuSeparator />
+                                
+                                {/* AI Actions */}
+                                {candidate.answerCount < candidate.totalQuestions && (
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      populateCandidate(candidate.id, false);
+                                    }}
+                                  >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Generate AI Answers
+                                  </DropdownMenuItem>
+                                )}
+                                {candidate.answerCount > 0 && (
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      populateCandidate(candidate.id, true);
+                                    }}
+                                  >
+                                    <Sparkles className="h-4 w-4 mr-2" />
+                                    Regenerate Answers
+                                  </DropdownMenuItem>
+                                )}
+                                
+                                <DropdownMenuSeparator />
+                                
+                                {/* Edit */}
+                                <DropdownMenuItem
+                                  onSelect={(e) => {
+                                    e.preventDefault();
+                                    setEditDialogTab('details');
+                                    setEditingCandidate(candidate);
                                   }}
-                                  title="Refresh FEC totals (lightweight, no contribution sync)"
-                                  className="h-7"
                                 >
-                                  {isTotalsLoading(candidate.id) ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <RefreshCw className="h-3 w-3 text-blue-600" />
-                                  )}
-                                </Button>
-                              )}
-                              {/* Refresh Finance Reconciliation */}
-                              {hasFecId && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={isReconcileLoading(candidate.id) || anyBatchRunning}
-                                  onClick={() => {
-                                    void (async () => {
-                                      try {
-                                        const result = await triggerReconciliation(candidate.id, '2024');
-                                        if (result.success) {
-                                          toast.success(`Finance refreshed: ${result.status}`);
-                                          refetchCandidates();
-                                        } else {
-                                          toast.error(result.error || 'Reconciliation failed');
-                                        }
-                                      } catch (err) {
-                                        console.error('[Admin] Reconciliation failed:', err);
-                                        toast.error('Failed to refresh finance');
-                                      }
-                                    })();
-                                  }}
-                                  title="Refresh finance reconciliation"
-                                  className="h-7"
-                                >
-                                  {isReconcileLoading(candidate.id) ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <Calculator className="h-3 w-3" />
-                                  )}
-                                </Button>
-                              )}
-                              {/* Generate answers */}
-                              {candidate.answerCount < candidate.totalQuestions && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={loading || anyBatchRunning}
-                                  onClick={() => populateCandidate(candidate.id, false)}
-                                  title="Generate AI answers"
-                                  className="h-7"
-                                >
-                                  {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                                </Button>
-                              )}
-                              {/* Regenerate answers */}
-                              {candidate.answerCount > 0 && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={loading || anyBatchRunning}
-                                  onClick={() => populateCandidate(candidate.id, true)}
-                                  title="Regenerate answers"
-                                  className="h-7"
-                                >
-                                  {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                                </Button>
-                              )}
-                            </div>
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit Candidate
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       );
