@@ -1173,8 +1173,20 @@ serve(async (req) => {
         );
         
         // Extract conduit info from FEC API response
-        const conduitCommitteeId = contribution?.conduit_committee_id || earmarkInfo.conduitCommitteeId || null;
-        const conduitCommitteeName = contribution?.conduit_committee_name || null;
+        // For Line 12 transfers, the contributor_id IS the transferring committee's FEC ID
+        // This is critical for making transfer sources clickable in the UI
+        let conduitCommitteeId = contribution?.conduit_committee_id || earmarkInfo.conduitCommitteeId || null;
+        let conduitCommitteeName = contribution?.conduit_committee_name || null;
+        
+        // CRITICAL: For Line 12 transfers, use contributor_id as the source committee ID
+        // The FEC API provides this field for committee-to-committee transfers
+        if (classification.isTransfer && contribution?.contributor_id) {
+          conduitCommitteeId = contribution.contributor_id;
+          // Also update the conduit name if not already set
+          if (!conduitCommitteeName && contribution?.contributor_name) {
+            conduitCommitteeName = contribution.contributor_name;
+          }
+        }
         
         contributionBatch.push({
           identity_hash: contributionHash,
