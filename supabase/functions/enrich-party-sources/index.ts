@@ -29,7 +29,31 @@ interface AnswerToEnrich {
 interface GroundingResult {
   sourceDescription: string;
   sourceUrls: string[];
+  keyQuote: string;
   success: boolean;
+}
+
+/**
+ * Create a text fragment URL for deep linking to specific text on a page
+ * Uses the Text Fragments API: https://web.dev/text-fragments/
+ */
+function createTextFragmentUrl(baseUrl: string, quote: string): string {
+  if (!quote || quote.length < 10) return baseUrl;
+  
+  // Remove any existing fragment
+  const urlWithoutFragment = baseUrl.split('#')[0];
+  
+  // Clean the quote: remove special chars that break URL fragments, keep essential punctuation
+  const cleanQuote = quote
+    .replace(/[\n\r\t]/g, ' ')  // Replace newlines/tabs with spaces
+    .replace(/\s+/g, ' ')       // Collapse multiple spaces
+    .trim()
+    .slice(0, 80);              // Limit length for URL compatibility
+  
+  // Encode for URL
+  const encoded = encodeURIComponent(cleanQuote);
+  
+  return `${urlWithoutFragment}#:~:text=${encoded}`;
 }
 
 /**
@@ -45,7 +69,7 @@ async function researchSources(
   
   if (!GOOGLE_GEMINI_API_KEY) {
     console.log('GOOGLE_GEMINI_API_KEY not configured');
-    return { sourceDescription: '', sourceUrls: [], success: false };
+    return { sourceDescription: '', sourceUrls: [], keyQuote: '', success: false };
   }
 
   // Translate answer value to position description
@@ -74,7 +98,13 @@ Search for:
 - Legislative voting patterns
 - Press releases or official statements
 
-Provide a brief 1-2 sentence description citing specific evidence found. If no specific evidence is found, respond with "No documented position found."`
+IMPORTANT: Format your response EXACTLY as follows:
+DESCRIPTION: [1-2 sentence description citing specific evidence found]
+KEY_QUOTE: "[A SHORT verbatim quote (10-30 words) from the most relevant source that directly evidences the position. Must be exact text that appears on the source page.]"
+
+If no specific evidence is found, respond with:
+DESCRIPTION: No documented position found.
+KEY_QUOTE: ""`
             }] 
           }],
           tools: [{ googleSearch: {} }]
@@ -93,12 +123,19 @@ Provide a brief 1-2 sentence description citing specific evidence found. If no s
         return researchSources(partyName, questionText, answerValue, retryCount + 1);
       }
       
-      return { sourceDescription: '', sourceUrls: [], success: false };
+      return { sourceDescription: '', sourceUrls: [], keyQuote: '', success: false };
     }
 
     const data = await response.json();
     
     const researchText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    // Parse the structured response
+    const descriptionMatch = researchText.match(/DESCRIPTION:\s*(.+?)(?=KEY_QUOTE:|$)/s);
+    const keyQuoteMatch = researchText.match(/KEY_QUOTE:\s*"([^"]+)"/);
+    
+    const sourceDescription = descriptionMatch?.[1]?.trim() || researchText.slice(0, 500);
+    const keyQuote = keyQuoteMatch?.[1]?.trim() || '';
     
     // Extract source URLs from grounding metadata
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
@@ -122,16 +159,25 @@ Provide a brief 1-2 sentence description citing specific evidence found. If no s
 
     const uniqueUrls = [...new Set(sourceUrls)].slice(0, 5);
     
+    // Apply text fragment to the first URL if we have a key quote
+    const enhancedUrls = uniqueUrls.map((url, index) => {
+      if (index === 0 && keyQuote) {
+        return createTextFragmentUrl(url, keyQuote);
+      }
+      return url;
+    });
+    
     // Check if we found real evidence (not just "no documented position")
-    const hasRealEvidence = researchText.length > 50 && 
-      !researchText.toLowerCase().includes('no documented position found') &&
-      uniqueUrls.length > 0;
+    const hasRealEvidence = sourceDescription.length > 20 && 
+      !sourceDescription.toLowerCase().includes('no documented position found') &&
+      enhancedUrls.length > 0;
 
-    console.log(`Source research for "${questionText.slice(0, 40)}...": ${researchText.length} chars, ${uniqueUrls.length} sources, success: ${hasRealEvidence}`);
+    console.log(`Source research for "${questionText.slice(0, 40)}...": ${sourceDescription.length} chars, ${enhancedUrls.length} sources, quote: "${keyQuote.slice(0, 30)}...", success: ${hasRealEvidence}`);
     
     return {
-      sourceDescription: researchText.slice(0, 500),
-      sourceUrls: uniqueUrls,
+      sourceDescription,
+      sourceUrls: enhancedUrls,
+      keyQuote,
       success: hasRealEvidence
     };
   } catch (e) {
@@ -144,7 +190,7 @@ Provide a brief 1-2 sentence description citing specific evidence found. If no s
       return researchSources(partyName, questionText, answerValue, retryCount + 1);
     }
     
-    return { sourceDescription: '', sourceUrls: [], success: false };
+    return { sourceDescription: '', sourceUrls: [], keyQuote: '', success: false };
   }
 }
 
