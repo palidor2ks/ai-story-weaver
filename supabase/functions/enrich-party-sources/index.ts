@@ -17,6 +17,22 @@ const PARTY_NAMES: Record<string, string> = {
   libertarian: 'Libertarian Party',
 };
 
+// Official party platform URLs as fallbacks
+const OFFICIAL_PLATFORM_URLS: Record<string, string> = {
+  democrat: 'https://democrats.org/where-we-stand/party-platform/',
+  republican: 'https://gop.com/platform/',
+  green: 'https://gp.org/platform/',
+  libertarian: 'https://lp.org/platform/',
+};
+
+// Known unreliable/broken domains to filter out
+const BLOCKED_DOMAINS = [
+  'republicanviews.org',
+  'democraticviews.org',
+  'conservapedia.com',
+  'rationalwiki.org',
+];
+
 interface AnswerToEnrich {
   id: string;
   party_id: string;
@@ -31,6 +47,64 @@ interface GroundingResult {
   sourceUrls: string[];
   keyQuote: string;
   success: boolean;
+}
+
+/**
+ * Check if a domain is in the blocked list
+ */
+function isBlockedDomain(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return BLOCKED_DOMAINS.some(d => hostname.includes(d));
+  } catch {
+    return true; // Invalid URLs are blocked
+  }
+}
+
+/**
+ * Validate URL is accessible with HEAD request
+ */
+async function validateUrl(url: string, timeout = 5000): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    const response = await fetch(url, { 
+      method: 'HEAD',
+      signal: controller.signal,
+      redirect: 'follow'
+    });
+    
+    clearTimeout(timeoutId);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve Google redirect URLs to final destination
+ */
+async function resolveRedirectUrl(url: string): Promise<string> {
+  if (!url.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')) {
+    return url;
+  }
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(url, { 
+      method: 'HEAD',
+      redirect: 'follow',
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    return response.url; // Final URL after redirects
+  } catch {
+    return url; // Return original if resolution fails
+  }
 }
 
 /**
@@ -60,6 +134,7 @@ function createTextFragmentUrl(baseUrl: string, quote: string): string {
  * Research sources for an existing answer using Gemini with Google Search grounding
  */
 async function researchSources(
+  partyId: string,
   partyName: string,
   questionText: string,
   answerValue: number,
@@ -92,6 +167,16 @@ async function researchSources(
 
 The party ${positionDesc} on this issue (score: ${answerValue} on a -10 to +10 scale).
 
+PRIORITY SOURCES (use these first):
+- Official party websites: democrats.org, gop.com, gp.org, lp.org
+- Government sources: congress.gov, whitehouse.gov, .gov domains
+- Major news outlets: nytimes.com, washingtonpost.com, apnews.com, reuters.com, politico.com
+
+AVOID these unreliable sources:
+- republicanviews.org, democraticviews.org (often broken/outdated)
+- Partisan opinion blogs or unofficial third-party sites
+- Sites with unclear authorship or no verifiable sources
+
 Search for:
 - Official party platform documents
 - Policy statements from party leadership
@@ -120,7 +205,7 @@ KEY_QUOTE: ""`
         const delay = Math.pow(2, retryCount + 1) * 1000;
         console.log(`Retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
         await new Promise(r => setTimeout(r, delay));
-        return researchSources(partyName, questionText, answerValue, retryCount + 1);
+        return researchSources(partyId, partyName, questionText, answerValue, retryCount + 1);
       }
       
       return { sourceDescription: '', sourceUrls: [], keyQuote: '', success: false };
@@ -139,12 +224,12 @@ KEY_QUOTE: ""`
     
     // Extract source URLs from grounding metadata
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
-    const sourceUrls: string[] = [];
+    const rawUrls: string[] = [];
     
     if (groundingMetadata?.groundingChunks) {
       for (const chunk of groundingMetadata.groundingChunks) {
         if (chunk.web?.uri) {
-          sourceUrls.push(chunk.web.uri);
+          rawUrls.push(chunk.web.uri);
         }
       }
     }
@@ -152,15 +237,49 @@ KEY_QUOTE: ""`
     if (groundingMetadata?.groundingSupports) {
       for (const support of groundingMetadata.groundingSupports) {
         if (support.web?.uri) {
-          sourceUrls.push(support.web.uri);
+          rawUrls.push(support.web.uri);
         }
       }
     }
 
-    const uniqueUrls = [...new Set(sourceUrls)].slice(0, 5);
+    // Deduplicate, resolve redirects, and validate URLs
+    const uniqueRawUrls = [...new Set(rawUrls)].slice(0, 5);
+    const validatedUrls: string[] = [];
+    
+    for (const rawUrl of uniqueRawUrls) {
+      // Resolve Google redirect URLs
+      const resolvedUrl = await resolveRedirectUrl(rawUrl);
+      
+      // Skip blocked domains
+      if (isBlockedDomain(resolvedUrl)) {
+        console.log(`Blocked domain filtered: ${resolvedUrl}`);
+        continue;
+      }
+      
+      // Validate URL is accessible
+      const isValid = await validateUrl(resolvedUrl);
+      if (isValid) {
+        validatedUrls.push(resolvedUrl);
+      } else {
+        console.log(`Inaccessible URL filtered: ${resolvedUrl}`);
+      }
+    }
+    
+    // Fallback to official platform if no valid URLs found
+    let finalUrls = validatedUrls;
+    let finalDescription = sourceDescription;
+    
+    if (validatedUrls.length === 0) {
+      const fallbackUrl = OFFICIAL_PLATFORM_URLS[partyId];
+      if (fallbackUrl) {
+        finalUrls = [fallbackUrl];
+        finalDescription = `Based on official ${partyName} platform. ${sourceDescription}`.trim();
+        console.log(`Using fallback URL for ${partyId}: ${fallbackUrl}`);
+      }
+    }
     
     // Apply text fragment to the first URL if we have a key quote
-    const enhancedUrls = uniqueUrls.map((url, index) => {
+    const enhancedUrls = finalUrls.map((url, index) => {
       if (index === 0 && keyQuote) {
         return createTextFragmentUrl(url, keyQuote);
       }
@@ -168,14 +287,14 @@ KEY_QUOTE: ""`
     });
     
     // Check if we found real evidence (not just "no documented position")
-    const hasRealEvidence = sourceDescription.length > 20 && 
-      !sourceDescription.toLowerCase().includes('no documented position found') &&
+    const hasRealEvidence = finalDescription.length > 20 && 
+      !finalDescription.toLowerCase().includes('no documented position found') &&
       enhancedUrls.length > 0;
 
-    console.log(`Source research for "${questionText.slice(0, 40)}...": ${sourceDescription.length} chars, ${enhancedUrls.length} sources, quote: "${keyQuote.slice(0, 30)}...", success: ${hasRealEvidence}`);
+    console.log(`Source research for "${questionText.slice(0, 40)}...": ${finalDescription.length} chars, ${enhancedUrls.length} sources, quote: "${keyQuote.slice(0, 30)}...", success: ${hasRealEvidence}`);
     
     return {
-      sourceDescription,
+      sourceDescription: finalDescription,
       sourceUrls: enhancedUrls,
       keyQuote,
       success: hasRealEvidence
@@ -187,7 +306,7 @@ KEY_QUOTE: ""`
       const delay = Math.pow(2, retryCount + 1) * 1000;
       console.log(`Retrying after error in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
       await new Promise(r => setTimeout(r, delay));
-      return researchSources(partyName, questionText, answerValue, retryCount + 1);
+      return researchSources(partyId, partyName, questionText, answerValue, retryCount + 1);
     }
     
     return { sourceDescription: '', sourceUrls: [], keyQuote: '', success: false };
@@ -281,7 +400,7 @@ serve(async (req) => {
       const topicName = question?.topics?.name || '';
 
       // Research sources
-      const result = await researchSources(partyName, questionText, answer.answer_value);
+      const result = await researchSources(partyId, partyName, questionText, answer.answer_value);
 
       if (result.success) {
         // Update the answer with new sources (keep existing answer_value)

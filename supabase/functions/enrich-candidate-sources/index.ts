@@ -10,11 +10,77 @@ const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+// Known unreliable/broken domains to filter out
+const BLOCKED_DOMAINS = [
+  'republicanviews.org',
+  'democraticviews.org',
+  'conservapedia.com',
+  'rationalwiki.org',
+];
+
 interface GroundingResult {
   sourceDescription: string;
   sourceUrls: string[];
   keyQuote: string;
   success: boolean;
+}
+
+/**
+ * Check if a domain is in the blocked list
+ */
+function isBlockedDomain(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return BLOCKED_DOMAINS.some(d => hostname.includes(d));
+  } catch {
+    return true; // Invalid URLs are blocked
+  }
+}
+
+/**
+ * Validate URL is accessible with HEAD request
+ */
+async function validateUrl(url: string, timeout = 5000): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    const response = await fetch(url, { 
+      method: 'HEAD',
+      signal: controller.signal,
+      redirect: 'follow'
+    });
+    
+    clearTimeout(timeoutId);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve Google redirect URLs to final destination
+ */
+async function resolveRedirectUrl(url: string): Promise<string> {
+  if (!url.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')) {
+    return url;
+  }
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(url, { 
+      method: 'HEAD',
+      redirect: 'follow',
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    return response.url; // Final URL after redirects
+  } catch {
+    return url; // Return original if resolution fails
+  }
 }
 
 /**
@@ -82,6 +148,16 @@ async function researchSources(
 
 The candidate ${positionDesc} on this issue (score: ${answerValue} on a -10 to +10 scale).
 
+PRIORITY SOURCES (use these first):
+- Government sources: congress.gov, senate.gov, house.gov, .gov domains
+- Official campaign websites
+- Major news outlets: nytimes.com, washingtonpost.com, apnews.com, reuters.com, politico.com
+
+AVOID these unreliable sources:
+- republicanviews.org, democraticviews.org (often broken/outdated)
+- Partisan opinion blogs or unofficial third-party sites
+- Sites with unclear authorship or no verifiable sources
+
 Search for:
 - Official voting records and bill sponsorships
 - Public statements and speeches
@@ -130,12 +206,12 @@ KEY_QUOTE: ""`
     
     // Extract source URLs from grounding metadata
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
-    const sourceUrls: string[] = [];
+    const rawUrls: string[] = [];
     
     if (groundingMetadata?.groundingChunks) {
       for (const chunk of groundingMetadata.groundingChunks) {
         if (chunk.web?.uri) {
-          sourceUrls.push(chunk.web.uri);
+          rawUrls.push(chunk.web.uri);
         }
       }
     }
@@ -143,15 +219,36 @@ KEY_QUOTE: ""`
     if (groundingMetadata?.groundingSupports) {
       for (const support of groundingMetadata.groundingSupports) {
         if (support.web?.uri) {
-          sourceUrls.push(support.web.uri);
+          rawUrls.push(support.web.uri);
         }
       }
     }
 
-    const uniqueUrls = [...new Set(sourceUrls)].slice(0, 5);
+    // Deduplicate, resolve redirects, and validate URLs
+    const uniqueRawUrls = [...new Set(rawUrls)].slice(0, 5);
+    const validatedUrls: string[] = [];
+    
+    for (const rawUrl of uniqueRawUrls) {
+      // Resolve Google redirect URLs
+      const resolvedUrl = await resolveRedirectUrl(rawUrl);
+      
+      // Skip blocked domains
+      if (isBlockedDomain(resolvedUrl)) {
+        console.log(`Blocked domain filtered: ${resolvedUrl}`);
+        continue;
+      }
+      
+      // Validate URL is accessible
+      const isValid = await validateUrl(resolvedUrl);
+      if (isValid) {
+        validatedUrls.push(resolvedUrl);
+      } else {
+        console.log(`Inaccessible URL filtered: ${resolvedUrl}`);
+      }
+    }
     
     // Apply text fragment to the first URL if we have a key quote
-    const enhancedUrls = uniqueUrls.map((url, index) => {
+    const enhancedUrls = validatedUrls.map((url, index) => {
       if (index === 0 && keyQuote) {
         return createTextFragmentUrl(url, keyQuote);
       }
