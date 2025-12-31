@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { ScoreText } from '@/components/ScoreText';
 import { RepComparisonSummary } from '@/components/RepComparisonSummary';
+import { TransitionBadge } from '@/components/TransitionBadge';
 import { useRepComparison, useGenerateRepComparison, isComparisonStale } from '@/hooks/useRepComparison';
 import { useCandidateAnswers } from '@/hooks/useCandidateAnswers';
 import { useAuth } from '@/context/AuthContext';
@@ -172,6 +173,12 @@ export function RepresentativeComparisonCard({ official, resolvedScore }: Repres
             <Badge variant="outline" className={cn("text-xs", getPartyColor(official.party))}>
               {official.party}
             </Badge>
+            {official.transition_status && official.transition_status !== 'current' && (
+              <TransitionBadge 
+                status={official.transition_status as 'incoming' | 'outgoing' | 'current' | 'candidate'}
+                newOffice={official.new_office}
+              />
+            )}
           </div>
         </div>
         {resolvedScore !== null ? (
