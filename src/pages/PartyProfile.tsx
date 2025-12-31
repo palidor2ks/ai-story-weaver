@@ -230,12 +230,12 @@ export default function PartyProfile() {
   };
 
   const getAnswerLabel = (value: number) => {
-    if (value >= 8) return 'Strongly Progressive';
-    if (value >= 4) return 'Progressive';
-    if (value >= 1) return 'Lean Progressive';
+    if (value <= -7) return 'Strongly Progressive';
+    if (value <= -3) return 'Progressive';
+    if (value < 0) return 'Lean Progressive';
     if (value === 0) return 'Neutral / Mixed';
-    if (value >= -3) return 'Lean Conservative';
-    if (value >= -7) return 'Conservative';
+    if (value < 4) return 'Lean Conservative';
+    if (value < 8) return 'Conservative';
     return 'Strongly Conservative';
   };
 

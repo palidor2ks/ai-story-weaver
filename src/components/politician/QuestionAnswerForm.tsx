@@ -84,12 +84,12 @@ export function QuestionAnswerForm({
   };
 
   const getPositionLabel = (value: number) => {
-    if (value <= -7) return 'Strongly Conservative';
-    if (value <= -3) return 'Conservative';
-    if (value < 0) return 'Lean Conservative';
+    if (value <= -7) return 'Strongly Progressive';
+    if (value <= -3) return 'Progressive';
+    if (value < 0) return 'Lean Progressive';
     if (value === 0) return 'Neutral/Moderate';
-    if (value < 4) return 'Lean Progressive';
-    if (value < 8) return 'Progressive';
+    if (value < 4) return 'Lean Conservative';
+    if (value < 8) return 'Conservative';
     return 'Strongly Progressive';
   };
 
