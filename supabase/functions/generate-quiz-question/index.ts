@@ -41,35 +41,46 @@ serve(async (req) => {
       );
     }
 
-    const systemPrompt = `You are an expert political scientist helping create balanced, neutral quiz questions for a voter information platform. Your goal is to create questions that accurately capture the political spectrum on various topics.
+    const systemPrompt = `You are an expert political scientist creating quiz questions for a voter information platform.
 
-When creating questions:
-1. The question should be clear, direct, and avoid leading language
-2. Each answer option should represent a genuine political position
-3. Options should span the full political spectrum from far-left to far-right
-4. Avoid strawman positions - each option should be a position real people hold
-5. Use specific policy positions rather than vague ideological labels
+CRITICAL ANSWER FORMAT RULES:
+1. Question: Clear, direct, avoid leading language
+2. Answer options: 5-12 words maximum per option
+3. Use concise stance phrases starting with: "Yes—", "Support", "Oppose", "Consider carefully;", etc.
+4. May include ONE brief qualifier after a dash or semicolon
+5. NO full policy explanations or multi-sentence responses
 
-You must respond with a valid JSON object only, no markdown or explanation.`;
+Respond with valid JSON only, no markdown.`;
 
     const userPrompt = `Generate a quiz question about the topic "${topicName}" (ID: ${topicId}) for a political alignment quiz.
 
-Create a balanced question with 5 answer options representing:
-- L10: Far-left position (strong progressive/left stance)
-- L5: Center-left position (moderate progressive/left stance)
-- C: Centrist/moderate position (balanced or pragmatic stance)
-- R5: Center-right position (moderate conservative/right stance)
-- R10: Far-right position (strong conservative/right stance)
+Create 5 answer options (5-12 words each):
+- L10: Far-left position
+- L5: Center-left position  
+- C: Centrist/moderate position
+- R5: Center-right position
+- R10: Far-right position
 
-Return ONLY a JSON object in this exact format:
+EXAMPLES OF CORRECT FORMAT:
+- "Yes—national database with public access and independent oversight."
+- "Yes—federal database with appropriate privacy protections."
+- "Consider carefully; protect officers' due process rights."
+- "Oppose federal mandate; leave to states."
+- "Strongly support universal coverage."
+- "Support state-level programs with federal funding."
+
+EXAMPLES OF WRONG FORMAT (too long):
+- "The government should implement comprehensive regulations to ensure public safety while balancing individual rights and economic considerations."
+
+Return JSON:
 {
-  "questionText": "Your question here?",
+  "questionText": "Your question?",
   "options": {
-    "L10": "Far-left answer option",
-    "L5": "Center-left answer option",
-    "C": "Centrist answer option",
-    "R5": "Center-right answer option",
-    "R10": "Far-right answer option"
+    "L10": "5-12 word left position",
+    "L5": "5-12 word center-left position",
+    "C": "5-12 word centrist position",
+    "R5": "5-12 word center-right position",
+    "R10": "5-12 word right position"
   }
 }`;
 
