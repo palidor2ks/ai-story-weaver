@@ -3,8 +3,8 @@ import { useCandidateTopicQuestions, CandidateQuestionAnswer } from '@/hooks/use
 import { usePopulateCandidateAnswers } from '@/hooks/usePopulateCandidateAnswers';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, RefreshCw, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
+import { Loader2, RefreshCw, CheckCircle2, XCircle, HelpCircle, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 
 interface CandidateQuestionListProps {
@@ -30,57 +30,70 @@ function getConfidenceBadge(confidence: string | null) {
   }
 }
 
+function getScoreLabel(value: number | null): string {
+  if (value === null) return 'No answer';
+  if (value <= -8) return 'Strong Progressive';
+  if (value <= -4) return 'Progressive';
+  if (value < 0) return 'Lean Progressive';
+  if (value === 0) return 'Neutral / Centrist';
+  if (value <= 3) return 'Lean Conservative';
+  if (value <= 7) return 'Conservative';
+  return 'Strong Conservative';
+}
+
 function QuestionRow({ 
   question, 
   candidateId, 
   candidateName,
   isRegenerating,
+  isExpanded,
+  onToggle,
   onRegenerate 
 }: { 
   question: CandidateQuestionAnswer;
   candidateId: string;
   candidateName: string;
   isRegenerating: boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
   onRegenerate: () => void;
 }) {
   const scoreBadge = getScoreBadge(question.answerValue);
   const confidenceBadge = getConfidenceBadge(question.confidence);
 
   return (
-    <div className="flex items-center gap-2 py-2 px-3 hover:bg-muted/50 rounded-md text-sm">
-      {/* Question text */}
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="flex-1 truncate cursor-help text-muted-foreground">
+    <Collapsible open={isExpanded} onOpenChange={onToggle}>
+      <div className={cn(
+        "rounded-md border border-border/50 transition-colors",
+        isExpanded && "bg-muted/30"
+      )}>
+        <CollapsibleTrigger asChild>
+          <div className="flex items-center gap-2 py-2 px-3 hover:bg-muted/50 cursor-pointer text-sm">
+            {/* Expand indicator */}
+            <div className="w-4 shrink-0">
+              {isExpanded ? (
+                <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+            </div>
+
+            {/* Question text */}
+            <span className="flex-1 truncate text-muted-foreground">
               {question.questionText}
             </span>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-md">
-            <p className="text-sm">{question.questionText}</p>
-            {question.sourceDescription && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Source: {question.sourceDescription}
-              </p>
-            )}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
 
-      {/* Score badge */}
-      <Badge variant="outline" className={cn('text-xs px-1.5 py-0', scoreBadge.className)}>
-        {scoreBadge.text}
-      </Badge>
+            {/* Score badge */}
+            <Badge variant="outline" className={cn('text-xs px-1.5 py-0', scoreBadge.className)}>
+              {scoreBadge.text}
+            </Badge>
 
-      {/* Confidence badge */}
-      <Badge variant="outline" className={cn('text-xs px-1.5 py-0', confidenceBadge.className)}>
-        {confidenceBadge.text}
-      </Badge>
+            {/* Confidence badge */}
+            <Badge variant="outline" className={cn('text-xs px-1.5 py-0', confidenceBadge.className)}>
+              {confidenceBadge.text}
+            </Badge>
 
-      {/* Source indicator */}
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
+            {/* Source indicator */}
             <div className="w-4 h-4 flex items-center justify-center">
               {question.hasSource ? (
                 <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
@@ -90,28 +103,86 @@ function QuestionRow({
                 <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
               )}
             </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            {question.hasSource ? 'Has source' : question.answerValue !== null ? 'No source' : 'No answer'}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
 
-      {/* Regenerate button */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-6 w-6 p-0"
-        onClick={onRegenerate}
-        disabled={isRegenerating}
-      >
-        {isRegenerating ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <RefreshCw className="h-3.5 w-3.5" />
-        )}
-      </Button>
-    </div>
+            {/* Regenerate button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRegenerate();
+              }}
+              disabled={isRegenerating}
+            >
+              {isRegenerating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          <div className="px-3 pb-3 pt-1 ml-4 border-l-2 border-border/50 space-y-2">
+            {/* Score with label */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Score:</span>
+              <Badge variant="outline" className={cn('font-mono', scoreBadge.className)}>
+                {scoreBadge.text}
+              </Badge>
+              <span className="text-muted-foreground">
+                ({getScoreLabel(question.answerValue)})
+              </span>
+              {question.confidence && (
+                <>
+                  <span className="text-muted-foreground">•</span>
+                  <span className="text-muted-foreground">Confidence:</span>
+                  <Badge variant="outline" className={cn('text-xs px-1.5 py-0', confidenceBadge.className)}>
+                    {confidenceBadge.text}
+                  </Badge>
+                </>
+              )}
+            </div>
+
+            {/* AI Explanation */}
+            {question.sourceDescription && (
+              <div className="space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">AI Response:</span>
+                <p className="text-sm text-foreground/80 leading-relaxed">
+                  {question.sourceDescription}
+                </p>
+              </div>
+            )}
+
+            {/* Source URLs */}
+            {question.sourceUrls && question.sourceUrls.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {question.sourceUrls.map((url, idx) => (
+                  <a
+                    key={idx}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Source {idx + 1}
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {!question.sourceDescription && question.answerValue === null && (
+              <p className="text-xs text-muted-foreground italic">
+                No AI response yet. Click regenerate to generate an answer.
+              </p>
+            )}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   );
 }
 
@@ -123,6 +194,7 @@ export function CandidateQuestionList({
 }: CandidateQuestionListProps) {
   const { data: questions, isLoading } = useCandidateTopicQuestions(candidateId, topicId, true);
   const { populateCandidateQuestion, isQuestionLoading } = usePopulateCandidateAnswers();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const handleRegenerate = async (questionId: string) => {
     await populateCandidateQuestion(candidateId, questionId, candidateName);
@@ -157,7 +229,7 @@ export function CandidateQuestionList({
         <span>•</span>
         <span>{sourcedCount}/{answeredCount || 1} sourced</span>
       </div>
-      <div className="max-h-64 overflow-y-auto">
+      <div className="max-h-80 overflow-y-auto space-y-1">
         {questions.map((question) => (
           <QuestionRow
             key={question.questionId}
@@ -165,6 +237,8 @@ export function CandidateQuestionList({
             candidateId={candidateId}
             candidateName={candidateName}
             isRegenerating={isQuestionLoading(candidateId, question.questionId)}
+            isExpanded={expandedId === question.questionId}
+            onToggle={() => setExpandedId(expandedId === question.questionId ? null : question.questionId)}
             onRegenerate={() => handleRegenerate(question.questionId)}
           />
         ))}

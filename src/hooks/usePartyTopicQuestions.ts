@@ -7,6 +7,7 @@ export interface PartyQuestionAnswer {
   answerValue: number | null;
   confidence: string | null;
   sourceDescription: string | null;
+  sourceUrls: string[] | null;
   hasSource: boolean;
 }
 
@@ -27,7 +28,7 @@ export function usePartyTopicQuestions(partyId: string, topicId: string, enabled
       const questionIds = questions.map(q => q.id);
       const { data: answers, error: answersError } = await supabase
         .from('party_answers')
-        .select('question_id, answer_value, confidence, source_description, source_url')
+        .select('question_id, answer_value, confidence, source_description, source_url, source_urls')
         .eq('party_id', partyId)
         .in('question_id', questionIds);
 
@@ -39,13 +40,16 @@ export function usePartyTopicQuestions(partyId: string, topicId: string, enabled
       // Combine questions with their answers
       return questions.map(q => {
         const answer = answerMap.get(q.id);
+        // Combine source_urls array with legacy source_url field
+        const sourceUrls = answer?.source_urls || (answer?.source_url ? [answer.source_url] : null);
         return {
           questionId: q.id,
           questionText: q.text,
           answerValue: answer?.answer_value ?? null,
           confidence: answer?.confidence ?? null,
           sourceDescription: answer?.source_description ?? null,
-          hasSource: !!(answer?.source_description || answer?.source_url),
+          sourceUrls,
+          hasSource: !!(answer?.source_description || answer?.source_url || (answer?.source_urls?.length ?? 0) > 0),
         };
       });
     },

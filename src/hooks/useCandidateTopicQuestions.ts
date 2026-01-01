@@ -8,6 +8,7 @@ export interface CandidateQuestionAnswer {
   answerValue: number | null;
   confidence: string | null;
   sourceDescription: string | null;
+  sourceUrls: string[] | null;
   hasSource: boolean;
 }
 
@@ -32,7 +33,7 @@ export function useCandidateTopicQuestions(
       const questionIds = questions.map(q => q.id);
       const { data: answers, error: answersError } = await supabase
         .from('candidate_answers')
-        .select('question_id, answer_value, confidence, source_description')
+        .select('question_id, answer_value, confidence, source_description, source_url, source_urls')
         .eq('candidate_id', candidateId)
         .in('question_id', questionIds);
 
@@ -49,6 +50,8 @@ export function useCandidateTopicQuestions(
         const sourceDesc = answer?.source_description || '';
         const hasSource = sourceDesc.length > 0 && 
           !sourceDesc.toLowerCase().includes('no documented');
+        // Combine source_urls array with legacy source_url field
+        const sourceUrls = answer?.source_urls || (answer?.source_url ? [answer.source_url] : null);
         
         return {
           questionId: q.id,
@@ -57,6 +60,7 @@ export function useCandidateTopicQuestions(
           answerValue: answer?.answer_value ?? null,
           confidence: answer?.confidence ?? null,
           sourceDescription: answer?.source_description ?? null,
+          sourceUrls,
           hasSource,
         };
       });

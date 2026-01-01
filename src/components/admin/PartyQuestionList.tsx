@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, RefreshCw, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { usePartyTopicQuestions } from '@/hooks/usePartyTopicQuestions';
 import { usePopulatePartyAnswers } from '@/hooks/usePopulatePartyAnswers';
 import { ScoreTextInline } from '@/components/ScoreText';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 
 interface PartyQuestionListProps {
   partyId: string;
@@ -12,9 +14,21 @@ interface PartyQuestionListProps {
   isAnyLoading: boolean;
 }
 
+function getScoreLabel(value: number | null): string {
+  if (value === null) return 'No answer';
+  if (value <= -8) return 'Strong Progressive';
+  if (value <= -4) return 'Progressive';
+  if (value < 0) return 'Lean Progressive';
+  if (value === 0) return 'Neutral / Centrist';
+  if (value <= 3) return 'Lean Conservative';
+  if (value <= 7) return 'Conservative';
+  return 'Strong Conservative';
+}
+
 export function PartyQuestionList({ partyId, topicId, isAnyLoading }: PartyQuestionListProps) {
   const { data: questions, isLoading } = usePartyTopicQuestions(partyId, topicId, true);
   const { populatePartyQuestion, isQuestionLoading } = usePopulatePartyAnswers();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -49,58 +63,139 @@ export function PartyQuestionList({ partyId, topicId, isAnyLoading }: PartyQuest
       {questions.map((q) => {
         const loading = isQuestionLoading(partyId, q.questionId);
         const hasAnswer = q.answerValue !== null;
+        const isExpanded = expandedId === q.questionId;
         
         return (
-          <div
+          <Collapsible
             key={q.questionId}
-            className="flex items-center gap-2 py-2 px-3 rounded-md bg-background/50 hover:bg-background/80 transition-colors text-sm border border-border/50"
+            open={isExpanded}
+            onOpenChange={(open) => setExpandedId(open ? q.questionId : null)}
           >
-            {/* Score */}
-            <div className="w-12 shrink-0 text-center">
-              {hasAnswer ? (
-                <Badge variant="outline" className="font-mono text-xs">
-                  <ScoreTextInline score={q.answerValue!} />
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="text-[10px]">—</Badge>
+            <div
+              className={cn(
+                "rounded-md bg-background/50 border border-border/50 transition-colors",
+                isExpanded && "bg-muted/30"
               )}
-            </div>
-
-            {/* Confidence */}
-            <div className="w-14 shrink-0">
-              {getConfidenceBadge(q.confidence)}
-            </div>
-
-            {/* Source indicator */}
-            <div className="w-5 shrink-0">
-              {q.hasSource ? (
-                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-              ) : hasAnswer ? (
-                <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
-              ) : null}
-            </div>
-
-            {/* Question text */}
-            <p className="flex-1 text-muted-foreground truncate" title={q.questionText}>
-              {q.questionText}
-            </p>
-
-            {/* Regenerate button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 shrink-0"
-              disabled={loading || isAnyLoading}
-              onClick={() => populatePartyQuestion(partyId, q.questionId)}
-              title="Regenerate this answer"
             >
-              {loading ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3 w-3" />
-              )}
-            </Button>
-          </div>
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center gap-2 py-2 px-3 hover:bg-background/80 cursor-pointer text-sm">
+                  {/* Expand indicator */}
+                  <div className="w-4 shrink-0">
+                    {isExpanded ? (
+                      <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                  </div>
+
+                  {/* Score */}
+                  <div className="w-12 shrink-0 text-center">
+                    {hasAnswer ? (
+                      <Badge variant="outline" className="font-mono text-xs">
+                        <ScoreTextInline score={q.answerValue!} />
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-[10px]">—</Badge>
+                    )}
+                  </div>
+
+                  {/* Confidence */}
+                  <div className="w-14 shrink-0">
+                    {getConfidenceBadge(q.confidence)}
+                  </div>
+
+                  {/* Source indicator */}
+                  <div className="w-5 shrink-0">
+                    {q.hasSource ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                    ) : hasAnswer ? (
+                      <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                    ) : null}
+                  </div>
+
+                  {/* Question text */}
+                  <p className="flex-1 text-muted-foreground truncate" title={q.questionText}>
+                    {q.questionText}
+                  </p>
+
+                  {/* Regenerate button */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 shrink-0"
+                    disabled={loading || isAnyLoading}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      populatePartyQuestion(partyId, q.questionId);
+                    }}
+                    title="Regenerate this answer"
+                  >
+                    {loading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3" />
+                    )}
+                  </Button>
+                </div>
+              </CollapsibleTrigger>
+
+              <CollapsibleContent>
+                <div className="px-3 pb-3 pt-1 ml-4 border-l-2 border-border/50 space-y-2">
+                  {/* Score with label */}
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Score:</span>
+                    <Badge variant="outline" className="font-mono">
+                      {hasAnswer ? <ScoreTextInline score={q.answerValue!} /> : '—'}
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      ({getScoreLabel(q.answerValue)})
+                    </span>
+                    {q.confidence && (
+                      <>
+                        <span className="text-muted-foreground">•</span>
+                        <span className="text-muted-foreground">Confidence:</span>
+                        {getConfidenceBadge(q.confidence)}
+                      </>
+                    )}
+                  </div>
+
+                  {/* AI Explanation */}
+                  {q.sourceDescription && (
+                    <div className="space-y-1">
+                      <span className="text-xs font-medium text-muted-foreground">AI Response:</span>
+                      <p className="text-sm text-foreground/80 leading-relaxed">
+                        {q.sourceDescription}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Source URLs */}
+                  {q.sourceUrls && q.sourceUrls.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {q.sourceUrls.map((url, idx) => (
+                        <a
+                          key={idx}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          Source {idx + 1}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {!q.sourceDescription && !hasAnswer && (
+                    <p className="text-xs text-muted-foreground italic">
+                      No AI response yet. Click regenerate to generate an answer.
+                    </p>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
         );
       })}
     </div>
