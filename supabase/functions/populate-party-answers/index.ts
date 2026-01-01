@@ -467,7 +467,7 @@ serve(async (req) => {
   }
 
   try {
-    const { topicId, partyId, batchSize = 10, skipExisting = true } = await req.json();
+    const { topicId, partyId, questionId, batchSize = 10, skipExisting = true } = await req.json();
 
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY is not configured');
@@ -506,7 +506,10 @@ serve(async (req) => {
       .order('topic_id')
       .order('id');
 
-    if (topicId) {
+    // Filter by single question, topic, or get all
+    if (questionId) {
+      query = query.eq('id', questionId);
+    } else if (topicId) {
       query = query.eq('topic_id', topicId);
     }
 

@@ -9,14 +9,25 @@ import { Loader2, Plus, RefreshCw, CheckCircle2, ChevronDown, ChevronRight, File
 import { usePopulatePartyAnswers } from '@/hooks/usePopulatePartyAnswers';
 import { usePartyAnswerStatsByTopic } from '@/hooks/usePartyAnswerStatsByTopic';
 import { ScoreTextInline } from '@/components/ScoreText';
+import { PartyQuestionList } from './PartyQuestionList';
 
 export function PartyAnswersPanel() {
   const { populateParty, populatePartyTopic, enrichPartySources, isLoading, isEnriching, isAnyLoading } = usePopulatePartyAnswers();
   const { data: partyStats, isLoading: statsLoading } = usePartyAnswerStatsByTopic();
   const [expandedParties, setExpandedParties] = useState<Record<string, boolean>>({});
+  const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({});
 
   const toggleExpanded = (partyId: string) => {
     setExpandedParties(prev => ({ ...prev, [partyId]: !prev[partyId] }));
+  };
+
+  const toggleTopicExpanded = (partyId: string, topicId: string) => {
+    const key = `${partyId}:${topicId}`;
+    setExpandedTopics(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const isTopicExpanded = (partyId: string, topicId: string) => {
+    return expandedTopics[`${partyId}:${topicId}`] || false;
   };
 
   const getSourceBadgeColor = (percentage: number) => {
@@ -196,87 +207,110 @@ export function PartyAnswersPanel() {
                               const topicLoading = isLoading(party.partyId, topic.topicId);
                               const topicEnriching = isEnriching(party.partyId, topic.topicId);
                               const topicNeedsSources = topic.sourcePercentage < 100 && topic.answerCount > 0;
+                              const topicExpanded = isTopicExpanded(party.partyId, topic.topicId);
 
                               return (
-                                <div
+                                <Collapsible
                                   key={topic.topicId}
-                                  className="flex items-center justify-between p-3 bg-background rounded-md border"
+                                  open={topicExpanded}
+                                  onOpenChange={() => toggleTopicExpanded(party.partyId, topic.topicId)}
                                 >
-                                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                                    <Badge
-                                      variant={topicComplete ? "default" : "outline"}
-                                      className={`shrink-0 ${topicComplete ? "bg-green-600" : ""}`}
-                                    >
-                                      {topicComplete && <CheckCircle2 className="h-3 w-3 mr-1" />}
-                                      {topic.percentage}%
-                                    </Badge>
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2">
-                                        <p className="font-medium text-sm truncate">{topic.topicName}</p>
-                                        {topic.averageScore !== null && (
-                                          <span className="font-mono text-xs">
-                                            <ScoreTextInline score={topic.averageScore} />
-                                          </span>
+                                  <div className="bg-background rounded-md border overflow-hidden">
+                                    <div className="flex items-center justify-between p-3">
+                                      <CollapsibleTrigger asChild>
+                                        <button className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+                                          {topicExpanded ? (
+                                            <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                                          ) : (
+                                            <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                                          )}
+                                          <Badge
+                                            variant={topicComplete ? "default" : "outline"}
+                                            className={`shrink-0 ${topicComplete ? "bg-green-600" : ""}`}
+                                          >
+                                            {topicComplete && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                                            {topic.percentage}%
+                                          </Badge>
+                                          <div className="min-w-0 flex-1 text-left">
+                                            <div className="flex items-center gap-2">
+                                              <p className="font-medium text-sm truncate">{topic.topicName}</p>
+                                              {topic.averageScore !== null && (
+                                                <span className="font-mono text-xs">
+                                                  <ScoreTextInline score={topic.averageScore} />
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                              <span>{topic.answerCount} / {topic.totalQuestions} questions</span>
+                                              <span>•</span>
+                                              <span className="flex items-center gap-1">
+                                                <span className={`w-2 h-2 rounded-full ${getSourceDotColor(topic.sourcePercentage)}`} />
+                                                {topic.sourcedCount}/{topic.answerCount} sourced ({topic.sourcePercentage}%)
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </button>
+                                      </CollapsibleTrigger>
+
+                                      <div className="flex gap-1 shrink-0 ml-2">
+                                        {!topicComplete && (
+                                          <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            disabled={topicLoading || topicEnriching || isAnyLoading}
+                                            onClick={(e) => { e.stopPropagation(); populatePartyTopic(party.partyId, topic.topicId, false); }}
+                                            title="Fill missing answers"
+                                          >
+                                            {topicLoading ? (
+                                              <Loader2 className="h-3 w-3 animate-spin" />
+                                            ) : (
+                                              <Plus className="h-3 w-3" />
+                                            )}
+                                            <span className="ml-1 hidden sm:inline">Fill</span>
+                                          </Button>
                                         )}
-                                      </div>
-                                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                        <span>{topic.answerCount} / {topic.totalQuestions} questions</span>
-                                        <span>•</span>
-                                        <span className="flex items-center gap-1">
-                                          <span className={`w-2 h-2 rounded-full ${getSourceDotColor(topic.sourcePercentage)}`} />
-                                          {topic.sourcedCount}/{topic.answerCount} sourced ({topic.sourcePercentage}%)
-                                        </span>
+                                        {topicNeedsSources && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            disabled={topicLoading || topicEnriching || isAnyLoading}
+                                            onClick={(e) => { e.stopPropagation(); enrichPartySources(party.partyId, topic.topicId); }}
+                                            title="Find sources for existing answers"
+                                          >
+                                            {topicEnriching ? (
+                                              <Loader2 className="h-3 w-3 animate-spin" />
+                                            ) : (
+                                              <Search className="h-3 w-3" />
+                                            )}
+                                          </Button>
+                                        )}
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          disabled={topicLoading || topicEnriching || isAnyLoading}
+                                          onClick={(e) => { e.stopPropagation(); populatePartyTopic(party.partyId, topic.topicId, true); }}
+                                          title="Regenerate all answers for topic"
+                                        >
+                                          {topicLoading ? (
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                          ) : (
+                                            <RefreshCw className="h-3 w-3" />
+                                          )}
+                                        </Button>
                                       </div>
                                     </div>
-                                  </div>
 
-                                  <div className="flex gap-1 shrink-0 ml-2">
-                                    {!topicComplete && (
-                                      <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        disabled={topicLoading || topicEnriching || isAnyLoading}
-                                        onClick={() => populatePartyTopic(party.partyId, topic.topicId, false)}
-                                        title="Fill missing answers"
-                                      >
-                                        {topicLoading ? (
-                                          <Loader2 className="h-3 w-3 animate-spin" />
-                                        ) : (
-                                          <Plus className="h-3 w-3" />
-                                        )}
-                                        <span className="ml-1 hidden sm:inline">Fill</span>
-                                      </Button>
-                                    )}
-                                    {topicNeedsSources && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        disabled={topicLoading || topicEnriching || isAnyLoading}
-                                        onClick={() => enrichPartySources(party.partyId, topic.topicId)}
-                                        title="Find sources for existing answers"
-                                      >
-                                        {topicEnriching ? (
-                                          <Loader2 className="h-3 w-3 animate-spin" />
-                                        ) : (
-                                          <Search className="h-3 w-3" />
-                                        )}
-                                      </Button>
-                                    )}
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      disabled={topicLoading || topicEnriching || isAnyLoading}
-                                      onClick={() => populatePartyTopic(party.partyId, topic.topicId, true)}
-                                      title="Regenerate all answers for topic"
-                                    >
-                                      {topicLoading ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                      ) : (
-                                        <RefreshCw className="h-3 w-3" />
-                                      )}
-                                    </Button>
+                                    <CollapsibleContent>
+                                      <div className="border-t bg-muted/20 px-3">
+                                        <PartyQuestionList 
+                                          partyId={party.partyId} 
+                                          topicId={topic.topicId}
+                                          isAnyLoading={isAnyLoading}
+                                        />
+                                      </div>
+                                    </CollapsibleContent>
                                   </div>
-                                </div>
+                                </Collapsible>
                               );
                             })}
                           </div>
