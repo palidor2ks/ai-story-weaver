@@ -8,6 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Loader2, Plus, RefreshCw, CheckCircle2, ChevronDown, ChevronRight, FileText, Search } from 'lucide-react';
 import { usePopulatePartyAnswers } from '@/hooks/usePopulatePartyAnswers';
 import { usePartyAnswerStatsByTopic } from '@/hooks/usePartyAnswerStatsByTopic';
+import { ScoreTextInline } from '@/components/ScoreText';
 
 export function PartyAnswersPanel() {
   const { populateParty, populatePartyTopic, enrichPartySources, isLoading, isEnriching, isAnyLoading } = usePopulatePartyAnswers();
@@ -92,6 +93,11 @@ export function PartyAnswersPanel() {
                               <FileText className="h-3 w-3 mr-1" />
                               {party.overallSourcePercentage}% sourced
                             </Badge>
+                            {party.overallScore !== null && (
+                              <Badge variant="outline" className="font-mono text-xs">
+                                <ScoreTextInline score={party.overallScore} />
+                              </Badge>
+                            )}
                             <div className="text-left">
                               <p className="font-medium">{party.partyName}</p>
                               <p className="text-sm text-muted-foreground">
@@ -205,7 +211,14 @@ export function PartyAnswersPanel() {
                                       {topic.percentage}%
                                     </Badge>
                                     <div className="min-w-0 flex-1">
-                                      <p className="font-medium text-sm truncate">{topic.topicName}</p>
+                                      <div className="flex items-center gap-2">
+                                        <p className="font-medium text-sm truncate">{topic.topicName}</p>
+                                        {topic.averageScore !== null && (
+                                          <span className="font-mono text-xs">
+                                            <ScoreTextInline score={topic.averageScore} />
+                                          </span>
+                                        )}
+                                      </div>
                                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                         <span>{topic.answerCount} / {topic.totalQuestions} questions</span>
                                         <span>•</span>
