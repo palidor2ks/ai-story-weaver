@@ -13,6 +13,7 @@ export interface CandidateAnswerCoverage {
   percentage: number;
   sourcedCount: number;           // Answers with valid (non-party-inferred) sources
   sourcePercentage: number;       // Percentage of answers with valid sources
+  overallScore: number | null;    // Political score (-10 to +10)
   coverageTier: CoverageTier;
   confidence: ConfidenceLevel;
   voteCount: number;
@@ -69,7 +70,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       // Get all candidates with coverage tier and confidence
       let candidatesQuery = supabase
         .from('candidates')
-        .select('id, name, party, office, state, coverage_tier, confidence, fec_candidate_id, fec_committee_id, last_donor_sync')
+        .select('id, name, party, office, state, overall_score, coverage_tier, confidence, fec_candidate_id, fec_committee_id, last_donor_sync')
         .order('name', { ascending: true });
 
       if (filters.party && filters.party !== 'all') {
@@ -282,6 +283,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           percentage,
           sourcedCount,
           sourcePercentage,
+          overallScore: c.overall_score ?? null,
           coverageTier: (c.coverage_tier as CoverageTier) || 'tier_3',
           confidence: (c.confidence as ConfidenceLevel) || 'low',
           voteCount: voteCountMap[c.id] || 0,

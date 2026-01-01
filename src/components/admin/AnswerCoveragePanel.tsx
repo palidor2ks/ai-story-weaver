@@ -31,6 +31,7 @@ import { FinanceStatusBadge } from "@/components/admin/FinanceStatusBadge";
 import { DeltaBadge } from "@/components/admin/DeltaBadge";
 import { CandidateHealthBadge } from "@/components/admin/CandidateHealthBadge";
 import { CandidateEditDialog } from "@/components/admin/CandidateEditDialog";
+import { ScoreTextInline } from "@/components/ScoreText";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -1322,6 +1323,7 @@ export function AnswerCoveragePanel() {
                       <TableHead className="w-[40px] px-2 py-2">Party</TableHead>
                       <TableHead className="w-[44px] px-2 py-2">State</TableHead>
                       <TableHead className="text-center w-[70px] px-2 py-2">Answers</TableHead>
+                      <TableHead className="w-[50px] px-2 py-2">Score</TableHead>
                       <TableHead className="w-[52px] px-2 py-2">Tier</TableHead>
                       <TableHead className="w-[44px] px-2 py-2">
                         <TooltipProvider>
@@ -1472,6 +1474,15 @@ export function AnswerCoveragePanel() {
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+                          </TableCell>
+                          <TableCell className="px-2 py-2">
+                            {candidate.overallScore !== null && candidate.overallScore !== undefined ? (
+                              <span className="font-mono text-xs">
+                                <ScoreTextInline score={candidate.overallScore} />
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="px-2 py-2">
                             <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} compact />

@@ -9,6 +9,7 @@ interface TopicStats {
   percentage: number;
   sourcedCount: number;
   sourcePercentage: number;
+  averageScore: number | null;
 }
 
 interface PartyTopicStats {
@@ -20,6 +21,7 @@ interface PartyTopicStats {
   overallPercentage: number;
   totalSourced: number;
   overallSourcePercentage: number;
+  overallScore: number | null;
 }
 
 const PARTIES = [
@@ -48,10 +50,10 @@ export function usePartyAnswerStatsByTopic() {
 
       if (questionsError) throw questionsError;
 
-      // Get all party answers with source info
+      // Get all party answers with source info and answer values
       const { data: answers, error: answersError } = await supabase
         .from('party_answers')
-        .select('party_id, question_id, source_description');
+        .select('party_id, question_id, source_description, answer_value');
 
       if (answersError) throw answersError;
 
@@ -71,9 +73,10 @@ export function usePartyAnswerStatsByTopic() {
         questionsPerTopic[q.topic_id] = (questionsPerTopic[q.topic_id] || 0) + 1;
       });
 
-      // Count answers and sourced answers per party per topic
+      // Count answers, sourced answers, and score sums per party per topic
       const answersPerPartyTopic: Record<string, Record<string, number>> = {};
       const sourcedPerPartyTopic: Record<string, Record<string, number>> = {};
+      const scoreSumsPerPartyTopic: Record<string, Record<string, number>> = {};
       
       answers?.forEach(a => {
         const topicId = questionToTopic[a.question_id];
@@ -82,9 +85,14 @@ export function usePartyAnswerStatsByTopic() {
         if (!answersPerPartyTopic[a.party_id]) {
           answersPerPartyTopic[a.party_id] = {};
           sourcedPerPartyTopic[a.party_id] = {};
+          scoreSumsPerPartyTopic[a.party_id] = {};
         }
         answersPerPartyTopic[a.party_id][topicId] = 
           (answersPerPartyTopic[a.party_id][topicId] || 0) + 1;
+        
+        // Sum up answer values for score calculation
+        scoreSumsPerPartyTopic[a.party_id][topicId] = 
+          (scoreSumsPerPartyTopic[a.party_id][topicId] || 0) + a.answer_value;
         
         if (hasValidSource(a.source_description)) {
           sourcedPerPartyTopic[a.party_id][topicId] = 
@@ -100,6 +108,8 @@ export function usePartyAnswerStatsByTopic() {
           const total = questionsPerTopic[topic.id] || 0;
           const answered = answersPerPartyTopic[party.id]?.[topic.id] || 0;
           const sourced = sourcedPerPartyTopic[party.id]?.[topic.id] || 0;
+          const scoreSum = scoreSumsPerPartyTopic[party.id]?.[topic.id] || 0;
+          const avgScore = answered > 0 ? scoreSum / answered : null;
           return {
             topicId: topic.id,
             topicName: topic.name,
@@ -108,11 +118,14 @@ export function usePartyAnswerStatsByTopic() {
             percentage: total > 0 ? Math.round((answered / total) * 100) : 0,
             sourcedCount: sourced,
             sourcePercentage: answered > 0 ? Math.round((sourced / answered) * 100) : 0,
+            averageScore: avgScore,
           };
         });
 
         const totalAnswers = partyTopics.reduce((sum, t) => sum + t.answerCount, 0);
         const totalSourced = partyTopics.reduce((sum, t) => sum + t.sourcedCount, 0);
+        const totalScoreSum = partyTopics.reduce((sum, t) => sum + (t.averageScore !== null ? t.averageScore * t.answerCount : 0), 0);
+        const overallScore = totalAnswers > 0 ? totalScoreSum / totalAnswers : null;
 
         return {
           partyId: party.id,
@@ -127,6 +140,7 @@ export function usePartyAnswerStatsByTopic() {
           overallSourcePercentage: totalAnswers > 0
             ? Math.round((totalSourced / totalAnswers) * 100)
             : 0,
+          overallScore,
         };
       });
     },
