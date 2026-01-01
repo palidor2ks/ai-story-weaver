@@ -367,16 +367,22 @@ async function researchCandidatePosition(
         body: JSON.stringify({
           contents: [{ 
             parts: [{ 
-              text: `Research ${candidateName} (${candidateOffice}, ${candidateState}) position on: "${questionText}"
+              text: `Research ${candidateName} (${candidateOffice}, ${candidateState}) CURRENT position on: "${questionText}"
 
-Look for:
-- Voting records and bill sponsorships
-- Official statements and speeches
-- Campaign website policy positions
-- News coverage of their stance
-- How representatives from their party typically vote on this issue
+CRITICAL RECENCY REQUIREMENTS:
+- Prioritize RECENT statements and actions (2023-2025) first
+- Work backwards chronologically only if recent evidence is unavailable
+- Note the date/year of any sources you cite
+- For party platform references, use ONLY the latest official platform (2024)
 
-Summarize specific evidence found. If the candidate lacks individual documentation but their party has a well-established position, note that pattern.`
+Look for (in order of priority):
+1. Recent voting records and bill sponsorships (current/recent Congress)
+2. Recent official statements and speeches (2023-2025)
+3. Current campaign website policy positions
+4. Recent news coverage of their stance (last 2 years)
+5. If individual evidence is sparse, note the party's CURRENT (2024) platform position
+
+Summarize specific evidence found with dates. Always cite the most recent evidence available.`
             }] 
           }],
           tools: [{ googleSearch: {} }]
