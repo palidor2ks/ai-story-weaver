@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, RefreshCw, CheckCircle2, XCircle, HelpCircle, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import { getSourceInfo, getSourceBadgeClass } from '@/lib/sourceUtils';
 
 interface CandidateQuestionListProps {
   candidateId: string;
@@ -159,18 +160,24 @@ function QuestionRow({
             {/* Source URLs */}
             {question.sourceUrls && question.sourceUrls.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
-                {question.sourceUrls.map((url, idx) => (
-                  <a
-                    key={idx}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    Source {idx + 1}
-                  </a>
-                ))}
+                {question.sourceUrls.map((url, idx) => {
+                  const sourceInfo = getSourceInfo(url);
+                  return (
+                    <a
+                      key={idx}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cn(
+                        "inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors hover:opacity-80",
+                        getSourceBadgeClass(sourceInfo.type)
+                      )}
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      {sourceInfo.displayName}
+                    </a>
+                  );
+                })}
               </div>
             )}
 

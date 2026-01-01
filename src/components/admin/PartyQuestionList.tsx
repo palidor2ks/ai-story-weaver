@@ -7,6 +7,7 @@ import { usePopulatePartyAnswers } from '@/hooks/usePopulatePartyAnswers';
 import { ScoreTextInline } from '@/components/ScoreText';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import { getSourceInfo, getSourceBadgeClass } from '@/lib/sourceUtils';
 
 interface PartyQuestionListProps {
   partyId: string;
@@ -172,18 +173,24 @@ export function PartyQuestionList({ partyId, topicId, isAnyLoading }: PartyQuest
                   {/* Source URLs */}
                   {q.sourceUrls && q.sourceUrls.length > 0 && (
                     <div className="flex flex-wrap gap-2 pt-1">
-                      {q.sourceUrls.map((url, idx) => (
-                        <a
-                          key={idx}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                          Source {idx + 1}
-                        </a>
-                      ))}
+                      {q.sourceUrls.map((url, idx) => {
+                        const sourceInfo = getSourceInfo(url);
+                        return (
+                          <a
+                            key={idx}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={cn(
+                              "inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors hover:opacity-80",
+                              getSourceBadgeClass(sourceInfo.type)
+                            )}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            {sourceInfo.displayName}
+                          </a>
+                        );
+                      })}
                     </div>
                   )}
 

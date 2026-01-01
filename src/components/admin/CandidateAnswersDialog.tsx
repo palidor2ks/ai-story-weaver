@@ -10,6 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Loader2, RefreshCw, CheckCircle2, XCircle, ChevronDown, ExternalLink, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { getSourceInfo, getSourceBadgeClass } from '@/lib/sourceUtils';
 
 interface CandidateAnswersDialogProps {
   candidateId: string;
@@ -34,6 +35,7 @@ interface QuestionAnswer {
   confidence: string | null;
   sourceDescription: string | null;
   sourceUrls: string[] | null;
+  sourceTitles: string[] | null;
   hasSource: boolean;
 }
 
@@ -86,7 +88,7 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
 
       const { data: answers, error: answersError } = await supabase
         .from('candidate_answers')
-        .select('question_id, answer_value, confidence, source_description, source_url, source_urls')
+        .select('question_id, answer_value, confidence, source_description, source_url, source_urls, source_titles')
         .eq('candidate_id', candidateId);
       if (answersError) throw answersError;
 
@@ -103,6 +105,7 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
             const hasSource = sourceDesc.length > 0 && 
               !sourceDesc.toLowerCase().includes('no documented');
             const sourceUrls = answer?.source_urls || (answer?.source_url ? [answer.source_url] : null);
+            const sourceTitles = (answer as any)?.source_titles || null;
             
             return {
               questionId: q.id,
@@ -111,6 +114,7 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
               confidence: answer?.confidence ?? null,
               sourceDescription: answer?.source_description ?? null,
               sourceUrls,
+              sourceTitles,
               hasSource,
             };
           });
@@ -232,18 +236,25 @@ function QuestionRow({
               <div className="space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">Sources</p>
                 <div className="flex flex-wrap gap-2">
-                  {question.sourceUrls.map((url, idx) => (
-                    <a
-                      key={idx}
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Source {idx + 1}
-                    </a>
-                  ))}
+                  {question.sourceUrls.map((url, idx) => {
+                    const title = question.sourceTitles?.[idx];
+                    const sourceInfo = getSourceInfo(url, title);
+                    return (
+                      <a
+                        key={idx}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(
+                          "inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors hover:opacity-80",
+                          getSourceBadgeClass(sourceInfo.type)
+                        )}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        {sourceInfo.displayName}
+                      </a>
+                    );
+                  })}
                 </div>
               </div>
             )}
