@@ -49,6 +49,7 @@ interface PartyAnswer {
   source_description: string;
   source_url: string | null;
   source_urls: string[];
+  source_titles: string[];
   confidence: string;
   notes: string | null;
 }
@@ -56,7 +57,86 @@ interface PartyAnswer {
 interface GroundingResult {
   researchText: string;
   sourceUrls: string[];
+  sourceTitles: string[];
   success: boolean;
+}
+
+// Blocked domains that should be filtered out
+const BLOCKED_DOMAINS = [
+  'republicanviews.org',
+  'conservapedia.com',
+  'thefederalistpapers.org',
+];
+
+function isBlockedDomain(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return BLOCKED_DOMAINS.some(d => hostname.includes(d));
+  } catch {
+    return false;
+  }
+}
+
+function extractDomainName(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return hostname.charAt(0).toUpperCase() + hostname.slice(1);
+  } catch {
+    return 'Source';
+  }
+}
+
+async function resolveRedirectUrl(url: string): Promise<string> {
+  if (!url.includes('vertexaisearch.cloud.google.com')) {
+    return url;
+  }
+  try {
+    const response = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+    return response.url || url;
+  } catch {
+    // Try to extract URL from the redirect path
+    const match = url.match(/[?&]url=([^&]+)/);
+    if (match) {
+      return decodeURIComponent(match[1]);
+    }
+    return url;
+  }
+}
+
+async function validateUrl(url: string, timeout = 5000): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    // Try HEAD first
+    let response = await fetch(url, { 
+      method: 'HEAD', 
+      redirect: 'follow',
+      signal: controller.signal 
+    });
+    clearTimeout(timeoutId);
+    
+    if (response.ok) return true;
+    
+    // Fallback to GET for servers that reject HEAD
+    if (response.status === 405 || response.status === 403) {
+      const controller2 = new AbortController();
+      const timeoutId2 = setTimeout(() => controller2.abort(), timeout);
+      response = await fetch(url, { 
+        method: 'GET', 
+        redirect: 'follow',
+        signal: controller2.signal 
+      });
+      clearTimeout(timeoutId2);
+      
+      const contentType = response.headers.get('content-type') || '';
+      return response.ok && contentType.includes('text/html');
+    }
+    
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 // Snap AI-generated values to the nearest valid discrete score
@@ -191,7 +271,7 @@ async function researchPartyPosition(
   
   if (!GOOGLE_GEMINI_API_KEY) {
     console.log('GOOGLE_GEMINI_API_KEY not configured, skipping web research');
-    return { researchText: '', sourceUrls: [], success: false };
+    return { researchText: '', sourceUrls: [], sourceTitles: [], success: false };
   }
 
   try {
@@ -231,7 +311,7 @@ Summarize the party's position based on available evidence. If representatives f
         return researchPartyPosition(partyName, questionText, topicName, retryCount + 1);
       }
       
-      return { researchText: '', sourceUrls: [], success: false };
+    return { researchText: '', sourceUrls: [], sourceTitles: [], success: false };
     }
 
     const data = await response.json();
@@ -239,24 +319,18 @@ Summarize the party's position based on available evidence. If representatives f
     // Extract text content
     const researchText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // Extract source URLs from grounding metadata (Gemini 2.0 format)
+    // Extract source URLs and titles from grounding metadata (Gemini 2.0 format)
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
-    const sourceUrls: string[] = [];
+    const rawSources: { url: string; title: string }[] = [];
     
     // Check groundingChunks (primary source for URLs)
     if (groundingMetadata?.groundingChunks) {
       for (const chunk of groundingMetadata.groundingChunks) {
         if (chunk.web?.uri) {
-          sourceUrls.push(chunk.web.uri);
-        }
-      }
-    }
-    
-    // Check groundingSupports for additional URLs
-    if (groundingMetadata?.groundingSupports) {
-      for (const support of groundingMetadata.groundingSupports) {
-        if (support.web?.uri) {
-          sourceUrls.push(support.web.uri);
+          rawSources.push({
+            url: chunk.web.uri,
+            title: chunk.web.title || ''
+          });
         }
       }
     }
@@ -266,14 +340,42 @@ Summarize the party's position based on available evidence. If representatives f
       console.log(`Web searches: ${groundingMetadata.webSearchQueries.join(', ')}`);
     }
 
-    // Deduplicate URLs
-    const uniqueUrls = [...new Set(sourceUrls)].slice(0, 5);
+    // Resolve redirects, validate, and filter blocked domains
+    const resolvedSources: { url: string; title: string }[] = [];
+    const seen = new Set<string>();
+    
+    for (const source of rawSources.slice(0, 8)) {
+      try {
+        const resolvedUrl = await resolveRedirectUrl(source.url);
+        
+        // Skip blocked domains and duplicates
+        if (isBlockedDomain(resolvedUrl) || seen.has(resolvedUrl)) continue;
+        seen.add(resolvedUrl);
+        
+        // Validate URL is accessible
+        const isValid = await validateUrl(resolvedUrl);
+        if (!isValid) {
+          console.log(`Skipping invalid URL: ${resolvedUrl}`);
+          continue;
+        }
+        
+        resolvedSources.push({
+          url: resolvedUrl,
+          title: source.title || extractDomainName(resolvedUrl)
+        });
+        
+        if (resolvedSources.length >= 5) break;
+      } catch (e) {
+        console.log(`Error processing URL ${source.url}:`, e);
+      }
+    }
 
-    console.log(`Grounding research for "${questionText.slice(0, 40)}...": ${researchText.length} chars, ${uniqueUrls.length} sources`);
+    console.log(`Grounding research for "${questionText.slice(0, 40)}...": ${researchText.length} chars, ${resolvedSources.length} valid sources`);
     
     return {
       researchText: researchText.slice(0, 2000),
-      sourceUrls: uniqueUrls,
+      sourceUrls: resolvedSources.map(s => s.url),
+      sourceTitles: resolvedSources.map(s => s.title),
       success: researchText.length > 50
     };
   } catch (e) {
@@ -287,7 +389,7 @@ Summarize the party's position based on available evidence. If representatives f
       return researchPartyPosition(partyName, questionText, topicName, retryCount + 1);
     }
     
-    return { researchText: '', sourceUrls: [], success: false };
+    return { researchText: '', sourceUrls: [], sourceTitles: [], success: false };
   }
 }
 
@@ -439,6 +541,7 @@ Return ONLY a valid JSON array, no other text. Example:
           // Use primary source URL from research, fallback to party platform
           const primaryUrl = research?.sourceUrls?.[0] || partyContext.officialPlatformUrl;
           const allSourceUrls = research?.sourceUrls || [];
+          const allSourceTitles = research?.sourceTitles || [];
           
           return {
             party_id: partyId,
@@ -447,6 +550,7 @@ Return ONLY a valid JSON array, no other text. Example:
             source_description: sourceDesc,
             source_url: primaryUrl,
             source_urls: allSourceUrls,
+            source_titles: allSourceTitles,
             confidence: confidence,
             notes: item.notes || null,
           };

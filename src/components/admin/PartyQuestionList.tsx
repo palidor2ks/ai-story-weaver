@@ -174,7 +174,8 @@ export function PartyQuestionList({ partyId, topicId, isAnyLoading }: PartyQuest
                   {q.sourceUrls && q.sourceUrls.length > 0 && (
                     <div className="flex flex-wrap gap-2 pt-1">
                       {q.sourceUrls.map((url, idx) => {
-                        const sourceInfo = getSourceInfo(url);
+                        const sourceTitle = q.sourceTitles?.[idx] || undefined;
+                        const sourceInfo = getSourceInfo(url, sourceTitle);
                         return (
                           <a
                             key={idx}

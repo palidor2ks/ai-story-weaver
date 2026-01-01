@@ -32,6 +32,7 @@ interface GeneratedAnswer {
   source_description: string;
   source_url: string | null;
   source_urls: string[];
+  source_titles: string[];
   source_type: string;
   confidence: 'high' | 'medium' | 'low';
 }
@@ -49,7 +50,83 @@ interface LegislationRecord {
 interface GroundingResult {
   researchText: string;
   sourceUrls: string[];
+  sourceTitles: string[];
   success: boolean;
+}
+
+// Blocked domains that should be filtered out
+const BLOCKED_DOMAINS = [
+  'republicanviews.org',
+  'conservapedia.com',
+  'thefederalistpapers.org',
+];
+
+function isBlockedDomain(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return BLOCKED_DOMAINS.some(d => hostname.includes(d));
+  } catch {
+    return false;
+  }
+}
+
+function extractDomainName(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return hostname.charAt(0).toUpperCase() + hostname.slice(1);
+  } catch {
+    return 'Source';
+  }
+}
+
+async function resolveRedirectUrl(url: string): Promise<string> {
+  if (!url.includes('vertexaisearch.cloud.google.com')) {
+    return url;
+  }
+  try {
+    const response = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+    return response.url || url;
+  } catch {
+    const match = url.match(/[?&]url=([^&]+)/);
+    if (match) {
+      return decodeURIComponent(match[1]);
+    }
+    return url;
+  }
+}
+
+async function validateUrl(url: string, timeout = 5000): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    let response = await fetch(url, { 
+      method: 'HEAD', 
+      redirect: 'follow',
+      signal: controller.signal 
+    });
+    clearTimeout(timeoutId);
+    
+    if (response.ok) return true;
+    
+    if (response.status === 405 || response.status === 403) {
+      const controller2 = new AbortController();
+      const timeoutId2 = setTimeout(() => controller2.abort(), timeout);
+      response = await fetch(url, { 
+        method: 'GET', 
+        redirect: 'follow',
+        signal: controller2.signal 
+      });
+      clearTimeout(timeoutId2);
+      
+      const contentType = response.headers.get('content-type') || '';
+      return response.ok && contentType.includes('text/html');
+    }
+    
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 // Check if candidate ID is a congressional bioguide ID
@@ -278,7 +355,7 @@ async function researchCandidatePosition(
   const maxRetries = 2;
   
   if (!GOOGLE_GEMINI_API_KEY) {
-    return { researchText: '', sourceUrls: [], success: false };
+    return { researchText: '', sourceUrls: [], sourceTitles: [], success: false };
   }
 
   try {
@@ -319,30 +396,24 @@ Summarize specific evidence found. If the candidate lacks individual documentati
         return researchCandidatePosition(candidateName, candidateOffice, candidateState, questionText, topicName, retryCount + 1);
       }
       
-      return { researchText: '', sourceUrls: [], success: false };
+      return { researchText: '', sourceUrls: [], sourceTitles: [], success: false };
     }
 
     const data = await response.json();
     const researchText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // Extract source URLs from grounding metadata (Gemini 2.0 format)
+    // Extract source URLs and titles from grounding metadata (Gemini 2.0 format)
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
-    const sourceUrls: string[] = [];
+    const rawSources: { url: string; title: string }[] = [];
     
     // Check groundingChunks (primary source for URLs)
     if (groundingMetadata?.groundingChunks) {
       for (const chunk of groundingMetadata.groundingChunks) {
         if (chunk.web?.uri) {
-          sourceUrls.push(chunk.web.uri);
-        }
-      }
-    }
-    
-    // Check groundingSupports for additional URLs
-    if (groundingMetadata?.groundingSupports) {
-      for (const support of groundingMetadata.groundingSupports) {
-        if (support.web?.uri) {
-          sourceUrls.push(support.web.uri);
+          rawSources.push({
+            url: chunk.web.uri,
+            title: chunk.web.title || ''
+          });
         }
       }
     }
@@ -352,13 +423,42 @@ Summarize specific evidence found. If the candidate lacks individual documentati
       console.log(`Web searches: ${groundingMetadata.webSearchQueries.join(', ')}`);
     }
 
-    const uniqueUrls = [...new Set(sourceUrls)].slice(0, 5);
+    // Resolve redirects, validate, and filter blocked domains
+    const resolvedSources: { url: string; title: string }[] = [];
+    const seen = new Set<string>();
+    
+    for (const source of rawSources.slice(0, 8)) {
+      try {
+        const resolvedUrl = await resolveRedirectUrl(source.url);
+        
+        // Skip blocked domains and duplicates
+        if (isBlockedDomain(resolvedUrl) || seen.has(resolvedUrl)) continue;
+        seen.add(resolvedUrl);
+        
+        // Validate URL is accessible
+        const isValid = await validateUrl(resolvedUrl);
+        if (!isValid) {
+          console.log(`Skipping invalid URL: ${resolvedUrl}`);
+          continue;
+        }
+        
+        resolvedSources.push({
+          url: resolvedUrl,
+          title: source.title || extractDomainName(resolvedUrl)
+        });
+        
+        if (resolvedSources.length >= 5) break;
+      } catch (e) {
+        console.log(`Error processing URL ${source.url}:`, e);
+      }
+    }
 
-    console.log(`Grounding for ${candidateName} on "${questionText.slice(0, 40)}...": ${researchText.length} chars, ${uniqueUrls.length} sources`);
+    console.log(`Grounding for ${candidateName} on "${questionText.slice(0, 40)}...": ${researchText.length} chars, ${resolvedSources.length} valid sources`);
 
     return {
       researchText: researchText.slice(0, 2000),
-      sourceUrls: uniqueUrls,
+      sourceUrls: resolvedSources.map(s => s.url),
+      sourceTitles: resolvedSources.map(s => s.title),
       success: researchText.length > 50
     };
   } catch (e) {
@@ -372,7 +472,7 @@ Summarize specific evidence found. If the candidate lacks individual documentati
       return researchCandidatePosition(candidateName, candidateOffice, candidateState, questionText, topicName, retryCount + 1);
     }
     
-    return { researchText: '', sourceUrls: [], success: false };
+    return { researchText: '', sourceUrls: [], sourceTitles: [], success: false };
   }
 }
 
@@ -609,12 +709,14 @@ ONLY JSON array. No markdown.`;
     const research = researchResults.get(questionId);
     const sourceDesc = (item.source_description || 'No documented position').slice(0, 50);
     
-    // Determine source URL: research > bill > congress profile > null
+    // Determine source URL and titles: research > bill > congress profile > null
     let sourceUrl = congressGovUrl;
     let sourceUrls: string[] = [];
+    let sourceTitles: string[] = [];
     
     if (research?.sourceUrls && research.sourceUrls.length > 0) {
       sourceUrls = research.sourceUrls;
+      sourceTitles = research.sourceTitles || [];
       sourceUrl = research.sourceUrls[0];
     } else if (isCongressional) {
       const billInfo = extractBillInfo(sourceDesc);
@@ -643,6 +745,7 @@ ONLY JSON array. No markdown.`;
       source_description: sourceDesc,
       source_url: sourceUrl,
       source_urls: sourceUrls,
+      source_titles: sourceTitles,
       source_type: isCongressional ? 'voting_record' : 'web_research',
       confidence: item.confidence || 'medium',
     };
@@ -767,6 +870,7 @@ async function generateAnswersInChunks(
         source_description: answer.source_description,
         source_url: answer.source_url,
         source_urls: answer.source_urls,
+        source_titles: answer.source_titles,
         source_type: answer.source_type,
         confidence: answer.confidence,
       }));
@@ -805,6 +909,7 @@ async function generateAnswersInChunks(
         source_description: a.source_description,
         source_url: a.source_url,
         source_urls: a.source_urls,
+        source_titles: a.source_titles,
         source_type: a.source_type,
         confidence: a.confidence,
       }));
