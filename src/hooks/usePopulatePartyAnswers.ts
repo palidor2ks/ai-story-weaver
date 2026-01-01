@@ -116,6 +116,41 @@ export function usePopulatePartyAnswers() {
     }
   };
 
+  const populatePartyQuestion = async (partyId: string, questionId: string): Promise<PopulateResult> => {
+    const key = `question:${partyId}:${questionId}`;
+    setLoadingKeys(prev => ({ ...prev, [key]: true }));
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('populate-party-answers', {
+        body: { partyId, questionId, skipExisting: false },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const result = data as PopulateResult;
+      
+      if (result.success) {
+        toast.success('Question answer regenerated');
+        queryClient.invalidateQueries({ queryKey: ['party-answer-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['party-answer-stats-by-topic'] });
+        queryClient.invalidateQueries({ queryKey: ['party-topic-questions'] });
+      }
+
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to regenerate question';
+      toast.error(message);
+      return { success: false, error: message };
+    } finally {
+      setLoadingKeys(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const isQuestionLoading = (partyId: string, questionId: string) =>
+    loadingKeys[`question:${partyId}:${questionId}`] || false;
+
   const enrichPartySources = async (partyId: string, topicId?: string): Promise<PopulateResult> => {
     const key = `enrich:${getLoadingKey(partyId, topicId)}`;
     setLoadingKeys(prev => ({ ...prev, [key]: true }));
@@ -178,9 +213,11 @@ export function usePopulatePartyAnswers() {
   return {
     populateParty,
     populatePartyTopic,
+    populatePartyQuestion,
     enrichPartySources,
     isLoading,
     isEnriching,
+    isQuestionLoading,
     getProgress,
     isAnyLoading,
   };
