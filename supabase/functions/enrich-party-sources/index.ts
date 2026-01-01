@@ -48,6 +48,7 @@ interface AnswerToEnrich {
 interface GroundingResult {
   sourceDescription: string;
   sourceUrls: string[];
+  sourceTitles: string[];
   keyQuote: string;
   success: boolean;
 }
@@ -65,13 +66,26 @@ function isBlockedDomain(url: string): boolean {
 }
 
 /**
- * Validate URL is accessible with HEAD request
+ * Extract a clean domain name for display
+ */
+function extractDomainName(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    return hostname.charAt(0).toUpperCase() + hostname.slice(1);
+  } catch {
+    return 'Source';
+  }
+}
+
+/**
+ * Validate URL is accessible with HEAD request, fallback to GET
  */
 async function validateUrl(url: string, timeout = 5000): Promise<boolean> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     
+    // Try HEAD first
     const response = await fetch(url, { 
       method: 'HEAD',
       signal: controller.signal,
@@ -79,7 +93,20 @@ async function validateUrl(url: string, timeout = 5000): Promise<boolean> {
     });
     
     clearTimeout(timeoutId);
-    return response.ok;
+    if (response.ok) return true;
+    
+    // Fallback to GET for servers that reject HEAD
+    const controller2 = new AbortController();
+    const timeoutId2 = setTimeout(() => controller2.abort(), timeout);
+    
+    const getResponse = await fetch(url, { 
+      method: 'GET',
+      signal: controller2.signal,
+      redirect: 'follow'
+    });
+    
+    clearTimeout(timeoutId2);
+    return getResponse.ok && (getResponse.headers.get('content-type')?.includes('text/html') ?? true);
   } catch {
     return false;
   }
@@ -147,7 +174,7 @@ async function researchSources(
   
   if (!GOOGLE_GEMINI_API_KEY) {
     console.log('GOOGLE_GEMINI_API_KEY not configured');
-    return { sourceDescription: '', sourceUrls: [], keyQuote: '', success: false };
+    return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
   }
 
   // Translate answer value to position description
@@ -211,7 +238,7 @@ KEY_QUOTE: ""`
         return researchSources(partyId, partyName, questionText, answerValue, retryCount + 1);
       }
       
-      return { sourceDescription: '', sourceUrls: [], keyQuote: '', success: false };
+      return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
     }
 
     const data = await response.json();
@@ -225,14 +252,14 @@ KEY_QUOTE: ""`
     const sourceDescription = descriptionMatch?.[1]?.trim() || researchText.slice(0, 500);
     const keyQuote = keyQuoteMatch?.[1]?.trim() || '';
     
-    // Extract source URLs from grounding metadata
+    // Extract source URLs and titles from grounding metadata
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
-    const rawUrls: string[] = [];
+    const rawSources: { uri: string; title?: string }[] = [];
     
     if (groundingMetadata?.groundingChunks) {
       for (const chunk of groundingMetadata.groundingChunks) {
         if (chunk.web?.uri) {
-          rawUrls.push(chunk.web.uri);
+          rawSources.push({ uri: chunk.web.uri, title: chunk.web.title });
         }
       }
     }
@@ -240,18 +267,21 @@ KEY_QUOTE: ""`
     if (groundingMetadata?.groundingSupports) {
       for (const support of groundingMetadata.groundingSupports) {
         if (support.web?.uri) {
-          rawUrls.push(support.web.uri);
+          rawSources.push({ uri: support.web.uri, title: support.web.title });
         }
       }
     }
 
-    // Deduplicate, resolve redirects, and validate URLs
-    const uniqueRawUrls = [...new Set(rawUrls)].slice(0, 5);
-    const validatedUrls: string[] = [];
+    // Deduplicate by URL, resolve redirects, and validate URLs
+    const seenUrls = new Set<string>();
+    const validatedSources: { url: string; title: string }[] = [];
     
-    for (const rawUrl of uniqueRawUrls) {
+    for (const source of rawSources.slice(0, 5)) {
+      if (seenUrls.has(source.uri)) continue;
+      seenUrls.add(source.uri);
+      
       // Resolve Google redirect URLs
-      const resolvedUrl = await resolveRedirectUrl(rawUrl);
+      const resolvedUrl = await resolveRedirectUrl(source.uri);
       
       // Skip blocked domains
       if (isBlockedDomain(resolvedUrl)) {
@@ -262,32 +292,35 @@ KEY_QUOTE: ""`
       // Validate URL is accessible
       const isValid = await validateUrl(resolvedUrl);
       if (isValid) {
-        validatedUrls.push(resolvedUrl);
+        const displayName = source.title || extractDomainName(resolvedUrl);
+        validatedSources.push({ url: resolvedUrl, title: displayName });
       } else {
         console.log(`Inaccessible URL filtered: ${resolvedUrl}`);
       }
     }
     
-    // Fallback to official platform if no valid URLs found
-    let finalUrls = validatedUrls;
+    // Fallback to official platform if no valid sources found
+    let finalSources = validatedSources;
     let finalDescription = sourceDescription;
     
-    if (validatedUrls.length === 0) {
+    if (validatedSources.length === 0) {
       const fallbackUrl = OFFICIAL_PLATFORM_URLS[partyId];
       if (fallbackUrl) {
-        finalUrls = [fallbackUrl];
+        finalSources = [{ url: fallbackUrl, title: `${partyName} Platform` }];
         finalDescription = `Based on official ${partyName} platform. ${sourceDescription}`.trim();
         console.log(`Using fallback URL for ${partyId}: ${fallbackUrl}`);
       }
     }
     
     // Apply text fragment to the first URL if we have a key quote
-    const enhancedUrls = finalUrls.map((url, index) => {
+    const enhancedUrls = finalSources.map((source, index) => {
       if (index === 0 && keyQuote) {
-        return createTextFragmentUrl(url, keyQuote);
+        return createTextFragmentUrl(source.url, keyQuote);
       }
-      return url;
+      return source.url;
     });
+    
+    const sourceTitles = finalSources.map(s => s.title);
     
     // Check if we found real evidence (not just "no documented position")
     const hasRealEvidence = finalDescription.length > 20 && 
@@ -299,6 +332,7 @@ KEY_QUOTE: ""`
     return {
       sourceDescription: finalDescription,
       sourceUrls: enhancedUrls,
+      sourceTitles,
       keyQuote,
       success: hasRealEvidence
     };
@@ -312,7 +346,7 @@ KEY_QUOTE: ""`
       return researchSources(partyId, partyName, questionText, answerValue, retryCount + 1);
     }
     
-    return { sourceDescription: '', sourceUrls: [], keyQuote: '', success: false };
+    return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
   }
 }
 
@@ -426,6 +460,7 @@ serve(async (req) => {
             .update({
               source_description: result.sourceDescription,
               source_urls: result.sourceUrls,
+              source_titles: result.sourceTitles,
               source_url: result.sourceUrls[0] || null,
               updated_at: new Date().toISOString()
             })

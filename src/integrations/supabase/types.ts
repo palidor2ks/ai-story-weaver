@@ -23,6 +23,7 @@ export type Database = {
           id: string
           question_id: string
           source_description: string | null
+          source_titles: string[] | null
           source_type: string | null
           source_url: string | null
           source_urls: string[] | null
@@ -36,6 +37,7 @@ export type Database = {
           id?: string
           question_id: string
           source_description?: string | null
+          source_titles?: string[] | null
           source_type?: string | null
           source_url?: string | null
           source_urls?: string[] | null
@@ -49,6 +51,7 @@ export type Database = {
           id?: string
           question_id?: string
           source_description?: string | null
+          source_titles?: string[] | null
           source_type?: string | null
           source_url?: string | null
           source_urls?: string[] | null
@@ -981,6 +984,7 @@ export type Database = {
           party_id: string
           question_id: string
           source_description: string | null
+          source_titles: string[] | null
           source_url: string | null
           source_urls: string[] | null
           updated_at: string | null
@@ -994,6 +998,7 @@ export type Database = {
           party_id: string
           question_id: string
           source_description?: string | null
+          source_titles?: string[] | null
           source_url?: string | null
           source_urls?: string[] | null
           updated_at?: string | null
@@ -1007,6 +1012,7 @@ export type Database = {
           party_id?: string
           question_id?: string
           source_description?: string | null
+          source_titles?: string[] | null
           source_url?: string | null
           source_urls?: string[] | null
           updated_at?: string | null
