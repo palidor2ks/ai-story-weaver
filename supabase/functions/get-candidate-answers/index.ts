@@ -173,12 +173,12 @@ function validateScoreConsistency(
   
   const lowerDesc = sourceDescription.toLowerCase();
   
-  // Skip if no real evidence
-  if (lowerDesc.includes('no documented') || lowerDesc.length < 20) {
+  // Skip if truly no evidence
+  if (lowerDesc.includes('no documented') && lowerDesc.length < 50) {
     return answerValue;
   }
   
-  // Progressive/left-leaning indicators
+  // Progressive/left-leaning indicators (expanded for evidence-informed scoring)
   const progressiveIndicators = [
     'supports comprehensive',
     'supports universal',
@@ -197,9 +197,21 @@ function validateScoreConsistency(
     'voted for',
     'sponsored',
     'cosponsored',
+    // Evidence-informed indicators
+    'generally supports',
+    'typically supports',
+    'party supports',
+    'democrats support',
+    'democratic party supports',
+    'has advocated for',
+    'favors expanding',
+    'favors increasing',
+    'supports protections for',
+    'supports rights for',
+    'supports access to',
   ];
   
-  // Conservative/right-leaning indicators
+  // Conservative/right-leaning indicators (expanded for evidence-informed scoring)
   const conservativeIndicators = [
     'opposes government',
     'opposes federal',
@@ -216,6 +228,18 @@ function validateScoreConsistency(
     'supports traditional',
     'opposes abortion',
     'voted against',
+    // Evidence-informed indicators
+    'generally opposes',
+    'typically opposes',
+    'party opposes',
+    'republicans support',
+    'republican party supports',
+    'has advocated against',
+    'favors limiting',
+    'favors reducing',
+    'opposes mandates',
+    'opposes requirements',
+    'supports lower taxes',
   ];
   
   const hasProgressiveEvidence = progressiveIndicators.some(
@@ -273,8 +297,9 @@ Look for:
 - Official statements and speeches
 - Campaign website policy positions
 - News coverage of their stance
+- How representatives from their party typically vote on this issue
 
-Summarize specific evidence found. If no documented position exists, say "No documented position found."`
+Summarize specific evidence found. If the candidate lacks individual documentation but their party has a well-established position, note that pattern.`
             }] 
           }],
           tools: [{ googleSearch: {} }]
@@ -460,17 +485,27 @@ ${relevantBills.map(v => `- ${v.action} ${v.type}${v.number}: "${v.title.slice(0
 
   const systemPrompt = `You are a non-partisan political analyst scoring candidate positions based on RESEARCH and VOTING RECORDS provided.
 
-EVIDENCE-BASED SCORING RULES:
-- ONLY assign non-zero scores when RESEARCH or VOTING RECORDS contain SPECIFIC EVIDENCE
-- If research says "No documented position" or lacks evidence: answer_value = 0, confidence = "low"
-- NEVER infer position from party label alone
+EVIDENCE-INFORMED SCORING APPROACH:
+- Score based on ALL evidence in RESEARCH including:
+  * Individual voting records and bill sponsorships
+  * Official statements and campaign positions
+  * How representatives from their party typically vote on this issue
+  * Well-established party positions when individual evidence is sparse
+- If research shows a clear directional lean (from individual OR party patterns), assign a score reflecting that lean
+- Use 0 (neutral) ONLY when research shows genuine centrism, mixed positions, or truly unaddressed topics
 
 SCORING SCALE:
-- -10 = Far Left/Progressive (documented)
-- -5 = Left-leaning (documented)
-- 0 = Neutral, centrist, OR UNKNOWN (use when no evidence)
-- +5 = Right-leaning (documented)
-- +10 = Far Right/Conservative (documented)
+- -10 = Strong Progressive/Left position
+- -5 = Moderate Progressive/Left lean  
+- 0 = Genuinely neutral, centrist, or mixed position
+- +5 = Moderate Conservative/Right lean
+- +10 = Strong Conservative/Right position
+
+ASSIGNMENT LOGIC:
+- Individual voting records take priority over party patterns
+- When individual evidence is sparse, use party voting patterns as guidance
+- "Party typically supports X" -> Use party tendency to inform score with confidence "medium"
+- Only use 0 when evidence shows genuine neutrality or topic is unaddressed
 
 ONLY use values: -10, -5, 0, +5, or +10. Return ONLY valid JSON array.`;
 

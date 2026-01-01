@@ -81,12 +81,12 @@ function validateScoreConsistency(
   
   const lowerDesc = sourceDescription.toLowerCase();
   
-  // Skip if no real evidence
-  if (lowerDesc.includes('no documented') || lowerDesc.length < 20) {
+  // Skip if truly no evidence
+  if (lowerDesc.includes('no documented') && lowerDesc.length < 50) {
     return answerValue;
   }
   
-  // Progressive/left-leaning indicators
+  // Progressive/left-leaning indicators (expanded for evidence-informed scoring)
   const progressiveIndicators = [
     'supports comprehensive',
     'supports universal',
@@ -103,9 +103,25 @@ function validateScoreConsistency(
     'opposes restrictions',
     'opposes cuts to',
     'more likely than republicans to support',
+    // Evidence-informed indicators
+    'generally supports',
+    'typically supports',
+    'party supports',
+    'democrats support',
+    'democratic party supports',
+    'democrats favor',
+    'democratic party favors',
+    'democrats generally',
+    'has advocated for',
+    'party platform supports',
+    'favors expanding',
+    'favors increasing',
+    'supports protections for',
+    'supports rights for',
+    'supports access to',
   ];
   
-  // Conservative/right-leaning indicators
+  // Conservative/right-leaning indicators (expanded for evidence-informed scoring)
   const conservativeIndicators = [
     'opposes government',
     'opposes federal',
@@ -122,6 +138,22 @@ function validateScoreConsistency(
     'supports traditional',
     'opposes abortion',
     'more likely than democrats to support',
+    // Evidence-informed indicators
+    'generally opposes',
+    'typically opposes',
+    'party opposes',
+    'republicans support',
+    'republican party supports',
+    'republicans favor',
+    'republican party favors',
+    'republicans generally',
+    'has advocated against',
+    'party platform opposes',
+    'favors limiting',
+    'favors reducing',
+    'opposes mandates',
+    'opposes requirements',
+    'supports lower taxes',
   ];
   
   const hasProgressiveEvidence = progressiveIndicators.some(
@@ -171,15 +203,16 @@ async function researchPartyPosition(
         body: JSON.stringify({
           contents: [{ 
             parts: [{ 
-              text: `Research the ${partyName}'s official documented position on: "${questionText}"
-              
+              text: `Research the ${partyName}'s position on: "${questionText}"
+
 Look for:
 - Official party platform documents
 - Policy statements from party leadership
-- Recent legislative positions
+- How party representatives typically vote on this issue
+- Common understanding of the party's stance in political discourse
 
-Summarize what you find with specific citations. If you cannot find a documented position, say "No documented position found."`
-            }] 
+Summarize the party's position based on available evidence. If representatives from this party generally support or oppose something, note that pattern. Include specific examples when possible.`
+            }]
           }],
           tools: [{ googleSearch: {} }]
         })
@@ -282,28 +315,33 @@ async function getPartyStances(
     return `${i + 1}. [${q.id}] ${q.text}${researchContext}`;
   }).join('\n\n');
 
-  // NEUTRAL, EVIDENCE-ONLY PROMPT
+  // EVIDENCE-INFORMED SCORING PROMPT
   const systemPrompt = `You are a non-partisan political analyst scoring party positions based on RESEARCH FINDINGS provided.
 
-EVIDENCE-BASED SCORING RULES:
-- ONLY assign non-zero scores when RESEARCH FINDINGS contain SPECIFIC EVIDENCE:
-  * Official party platform statements with citations
-  * Policy positions from party leadership
-  * Congressional voting patterns
-- If RESEARCH FINDINGS say "No documented position" or lack evidence: answer_value = 0, confidence = "low"
-- Source MUST be from the research, not assumed
+EVIDENCE-INFORMED SCORING APPROACH:
+- Score based on ALL evidence in RESEARCH FINDINGS including:
+  * Official party platform statements
+  * How party representatives typically vote
+  * Well-established party positions in political discourse
+  * Patterns of support/opposition among party members
+- If research shows a clear directional lean (even without explicit official documentation), assign a score reflecting that lean
+- Use 0 (neutral) ONLY when research shows genuine bipartisan agreement, mixed positions within the party, or truly novel/unaddressed topics
 
 SCORING SCALE:
-- -10 = Far Left/Progressive position (documented in research)
-- -5 = Left-leaning position (documented in research)
-- 0 = Neutral, no clear position, OR NOT DOCUMENTED (use when research lacks evidence)
-- +5 = Right-leaning position (documented in research)
-- +10 = Far Right/Conservative position (documented in research)
+- -10 = Strong Progressive/Left position
+- -5 = Moderate Progressive/Left lean
+- 0 = Genuinely neutral, mixed, OR topic not applicable to party ideology
+- +5 = Moderate Conservative/Right lean
+- +10 = Strong Conservative/Right position
 
-CRITICAL: 
-- Only score what the RESEARCH FINDINGS explicitly document
-- When research is empty or says "no documented position", return 0 with confidence "low"
-- You MUST use ONLY these exact values: -10, -5, 0, +5, or +10`;
+ASSIGNMENT LOGIC:
+- "Democrats support X" / "Republicans oppose X" -> Assign appropriate directional score
+- "Party generally favors" / "Party typically opposes" -> Assign -5 or +5
+- "Party has advocated for" / "Many party members support" -> Assign -5 or +5
+- "Representatives typically vote for/against" -> Use voting pattern to determine score
+- Only use 0 when evidence shows genuine ambiguity or cross-party consensus
+
+You MUST use ONLY these exact values: -10, -5, 0, +5, or +10`;
 
   const userPrompt = `Score the ${partyContext.name}'s positions based on the RESEARCH FINDINGS provided for each question.
 
