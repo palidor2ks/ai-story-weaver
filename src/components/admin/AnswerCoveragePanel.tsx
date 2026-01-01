@@ -31,7 +31,7 @@ import { FinanceStatusBadge } from "@/components/admin/FinanceStatusBadge";
 import { DeltaBadge } from "@/components/admin/DeltaBadge";
 import { CandidateHealthBadge } from "@/components/admin/CandidateHealthBadge";
 import { CandidateEditDialog } from "@/components/admin/CandidateEditDialog";
-import { CandidateAnswersPopover } from "@/components/admin/CandidateAnswersPopover";
+import { CandidateAnswersDialog } from "@/components/admin/CandidateAnswersDialog";
 import { ScoreTextInline } from "@/components/ScoreText";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -113,6 +113,9 @@ export function AnswerCoveragePanel() {
   // Edit dialog state
   const [editingCandidate, setEditingCandidate] = useState<CandidateAnswerCoverage | null>(null);
   const [editDialogTab, setEditDialogTab] = useState<'details' | 'fec'>('details');
+  
+  // Answer management dialog state
+  const [answerDialogCandidate, setAnswerDialogCandidate] = useState<{ id: string; name: string } | null>(null);
 
   const { data: candidates, isLoading: candidatesLoading, refetch: refetchCandidates } = useCandidatesAnswerCoverage({
     party: partyFilter,
@@ -1446,33 +1449,26 @@ export function AnswerCoveragePanel() {
                           </TableCell>
                           <TableCell className="px-2 py-2">{candidate.state}</TableCell>
                           <TableCell className="text-center px-2 py-2">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button className="hover:opacity-80 transition-opacity cursor-pointer">
-                                  {isComplete ? (
-                                    <div className="flex items-center justify-center gap-1">
-                                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
-                                      <span className={`w-2 h-2 rounded-full ${getSourceDotColor(candidate.sourcePercentage)}`} />
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center justify-center gap-1 text-xs">
-                                      <span className={candidate.answerCount === 0 ? 'text-amber-600' : 'text-foreground'}>
-                                        {candidate.answerCount}/{candidate.totalQuestions}
-                                      </span>
-                                      {candidate.answerCount > 0 && (
-                                        <span className={`w-2 h-2 rounded-full ${getSourceDotColor(candidate.sourcePercentage)}`} />
-                                      )}
-                                    </div>
+                            <button 
+                              className="hover:opacity-80 transition-opacity cursor-pointer"
+                              onClick={() => setAnswerDialogCandidate({ id: candidate.id, name: candidate.name })}
+                            >
+                              {isComplete ? (
+                                <div className="flex items-center justify-center gap-1">
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
+                                  <span className={`w-2 h-2 rounded-full ${getSourceDotColor(candidate.sourcePercentage)}`} />
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center gap-1 text-xs">
+                                  <span className={candidate.answerCount === 0 ? 'text-amber-600' : 'text-foreground'}>
+                                    {candidate.answerCount}/{candidate.totalQuestions}
+                                  </span>
+                                  {candidate.answerCount > 0 && (
+                                    <span className={`w-2 h-2 rounded-full ${getSourceDotColor(candidate.sourcePercentage)}`} />
                                   )}
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="p-0" align="start">
-                                <CandidateAnswersPopover
-                                  candidateId={candidate.id}
-                                  candidateName={candidate.name}
-                                />
-                              </PopoverContent>
-                            </Popover>
+                                </div>
+                              )}
+                            </button>
                           </TableCell>
                           <TableCell className="px-2 py-2">
                             {candidate.overallScore !== null && candidate.overallScore !== undefined ? (
@@ -2033,6 +2029,18 @@ export function AnswerCoveragePanel() {
             confidence: editingCandidate.confidence || 'low',
           }}
           defaultTab={editDialogTab}
+        />
+      )}
+
+      {/* Candidate Answers Dialog */}
+      {answerDialogCandidate && (
+        <CandidateAnswersDialog
+          open={!!answerDialogCandidate}
+          onOpenChange={(open) => {
+            if (!open) setAnswerDialogCandidate(null);
+          }}
+          candidateId={answerDialogCandidate.id}
+          candidateName={answerDialogCandidate.name}
         />
       )}
     </Card>
