@@ -36,6 +36,7 @@ const WORKER_LIMIT_DELAY_MS = 10000; // 10 seconds for worker limit errors
 
 export function usePopulateCandidateAnswers() {
   const [loadingCandidates, setLoadingCandidates] = useState<Record<string, boolean>>({});
+  const [loadingQuestions, setLoadingQuestions] = useState<Record<string, boolean>>({});
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null);
   const queryClient = useQueryClient();
   
@@ -284,18 +285,67 @@ export function usePopulateCandidateAnswers() {
 
   const getQueueLength = useCallback(() => queueRef.current.length, []);
 
+  // Populate a single question for a candidate
+  const populateCandidateQuestion = async (
+    candidateId: string,
+    questionId: string,
+    candidateName?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const loadingKey = `${candidateId}-${questionId}`;
+    setLoadingQuestions(prev => ({ ...prev, [loadingKey]: true }));
+
+    try {
+      const { data, error } = await supabase.functions.invoke('get-candidate-answers', {
+        body: { 
+          candidateId, 
+          questionIds: [questionId],
+          forceRegenerate: true 
+        },
+      });
+
+      if (error) throw new Error(error.message);
+
+      const generated = data?.generated || 0;
+      
+      if (generated > 0) {
+        toast.success(`Regenerated answer for ${candidateName || 'candidate'}`);
+      } else {
+        toast.info('No answer generated');
+      }
+
+      // Invalidate queries
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['candidate-topic-questions', candidateId] }),
+        queryClient.invalidateQueries({ queryKey: ['candidates-answer-coverage'] }),
+        queryClient.invalidateQueries({ queryKey: ['candidate-answers', candidateId] }),
+      ]);
+
+      return { success: generated > 0 };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to regenerate answer';
+      toast.error(message);
+      return { success: false, error: message };
+    } finally {
+      setLoadingQuestions(prev => ({ ...prev, [loadingKey]: false }));
+    }
+  };
+
   const isLoading = (candidateId: string) => loadingCandidates[candidateId] || false;
+  const isQuestionLoading = (candidateId: string, questionId: string) => 
+    loadingQuestions[`${candidateId}-${questionId}`] || false;
   const isAnyLoading = Object.values(loadingCandidates).some(Boolean);
   const isBatchRunning = batchProgress !== null;
 
   return {
     populateCandidate,
+    populateCandidateQuestion,
     populateBatch,
     pauseBatch,
     resumeBatch,
     cancelBatch,
     getQueueLength,
     isLoading,
+    isQuestionLoading,
     isAnyLoading,
     isBatchRunning,
     batchProgress,
