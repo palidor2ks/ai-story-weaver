@@ -16,8 +16,14 @@ interface GeneratedQuestion {
   };
 }
 
+interface NewsResearch {
+  context: string;
+  success: boolean;
+}
+
 const MAX_WORDS_PER_OPTION = 15;
 const MAX_RETRIES = 2;
+const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(w => w.length > 0).length;
@@ -34,12 +40,85 @@ function validateOptionLengths(options: GeneratedQuestion['options']): { valid: 
   return { valid: violations.length === 0, violations };
 }
 
+// Phase 1: Research recent news and trending topics using Gemini with Google Search grounding
+async function researchTopicNews(topicName: string): Promise<NewsResearch> {
+  if (!GOOGLE_GEMINI_API_KEY) {
+    console.log('GOOGLE_GEMINI_API_KEY not configured, skipping news research');
+    return { context: '', success: false };
+  }
+
+  try {
+    console.log(`Researching recent news for topic: ${topicName}`);
+    
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `Research RECENT news and trending discussions about "${topicName}" in U.S. politics from the past 30 days.
+
+Find:
+1. Recent headlines and news stories (past 30 days)
+2. Current legislative debates, bills, or proposals
+3. Trending social media discussions or viral political topics
+4. Recent policy announcements, court decisions, or executive actions
+5. Specific events, votes, or controversies
+
+Provide a brief, factual summary (3-5 bullet points) of the most relevant and timely angles on this topic that would make good quiz questions. Focus on what's being actively debated RIGHT NOW.
+
+Keep it politically neutral and factual.`
+            }]
+          }],
+          tools: [{ googleSearch: {} }]
+        })
+      }
+    );
+
+    if (!response.ok) {
+      console.error(`Gemini news research error: ${response.status}`);
+      return { context: '', success: false };
+    }
+
+    const data = await response.json();
+    const researchText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    if (researchText.length < 50) {
+      console.log('Insufficient news research results');
+      return { context: '', success: false };
+    }
+    
+    console.log(`News research completed: ${researchText.length} chars`);
+    return { context: researchText.slice(0, 2000), success: true };
+    
+  } catch (e) {
+    console.error('News research error:', e);
+    return { context: '', success: false };
+  }
+}
+
 async function generateQuestion(
   topicId: string,
   topicName: string,
   apiKey: string,
   retryCount: number = 0
 ): Promise<{ success: true; data: GeneratedQuestion } | { success: false; error: string; status: number }> {
+  
+  // Phase 1: Research recent news (only on first attempt)
+  let newsContext = '';
+  if (retryCount === 0) {
+    const research = await researchTopicNews(topicName);
+    if (research.success) {
+      newsContext = `
+
+RECENT NEWS & TRENDING TOPICS (use these to make the question timely and relevant):
+${research.context}
+
+Generate a question that connects to these current events or debates when possible.`;
+    }
+  }
   
   const systemPrompt = `You are an expert political scientist creating quiz questions for a voter information platform.
 
@@ -50,6 +129,8 @@ CRITICAL ANSWER FORMAT RULES:
 4. May include ONE brief qualifier after a dash or semicolon
 5. NO full policy explanations or multi-sentence responses
 
+IMPORTANT: When current events context is provided, incorporate it to make questions timely and relevant to what's happening NOW.
+
 Respond with valid JSON only, no markdown.`;
 
   const retryNote = retryCount > 0 
@@ -57,7 +138,7 @@ Respond with valid JSON only, no markdown.`;
     : '';
 
   const userPrompt = `Generate a quiz question about the topic "${topicName}" (ID: ${topicId}) for a political alignment quiz.
-
+${newsContext}
 Create 5 answer options (5-12 words each):
 - L10: Far-left position
 - L5: Center-left position  
