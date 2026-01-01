@@ -31,6 +31,7 @@ import { FinanceStatusBadge } from "@/components/admin/FinanceStatusBadge";
 import { DeltaBadge } from "@/components/admin/DeltaBadge";
 import { CandidateHealthBadge } from "@/components/admin/CandidateHealthBadge";
 import { CandidateEditDialog } from "@/components/admin/CandidateEditDialog";
+import { CandidateAnswersPopover } from "@/components/admin/CandidateAnswersPopover";
 import { ScoreTextInline } from "@/components/ScoreText";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -1445,9 +1446,9 @@ export function AnswerCoveragePanel() {
                           </TableCell>
                           <TableCell className="px-2 py-2">{candidate.state}</TableCell>
                           <TableCell className="text-center px-2 py-2">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="hover:opacity-80 transition-opacity cursor-pointer">
                                   {isComplete ? (
                                     <div className="flex items-center justify-center gap-1">
                                       <CheckCircle2 className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
@@ -1463,17 +1464,15 @@ export function AnswerCoveragePanel() {
                                       )}
                                     </div>
                                   )}
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  <p className="font-medium">{candidate.answerCount}/{candidate.totalQuestions} answers</p>
-                                  {candidate.answerCount > 0 && (
-                                    <p className="text-xs text-muted-foreground">
-                                      {candidate.sourcedCount}/{candidate.answerCount} with sources ({candidate.sourcePercentage}%)
-                                    </p>
-                                  )}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="p-0" align="start">
+                                <CandidateAnswersPopover
+                                  candidateId={candidate.id}
+                                  candidateName={candidate.name}
+                                />
+                              </PopoverContent>
+                            </Popover>
                           </TableCell>
                           <TableCell className="px-2 py-2">
                             {candidate.overallScore !== null && candidate.overallScore !== undefined ? (
