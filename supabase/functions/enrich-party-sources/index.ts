@@ -34,6 +34,17 @@ const BLOCKED_DOMAINS = [
   'democraticviews.org',
   'conservapedia.com',
   'rationalwiki.org',
+  // Video platforms (block iframe embedding, hard to cite specific quotes)
+  'youtube.com',
+  'youtu.be',
+  'vimeo.com',
+  'dailymotion.com',
+  'tiktok.com',
+  // Social media platforms (often block embedding, ephemeral content)
+  'facebook.com',
+  'instagram.com',
+  'twitter.com',
+  'x.com',
 ];
 
 interface AnswerToEnrich {
