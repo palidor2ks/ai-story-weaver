@@ -473,7 +473,7 @@ For each question, provide a JSON array with objects containing:
 - answer_value: MUST be exactly one of these integers: -10, -5, 0, 5, or 10
   * Use 0 if research shows no documented position
 - confidence: "high" (explicit documented statement), "medium" (inferred from evidence), "low" (no documented position - must be 0)
-- source_description: Brief citation from research (e.g., "2024 Platform, healthcare section") or "No documented position"
+- source_description: Affirmative position statement explicitly stating what the party supports or opposes, citing specific evidence. Format: "[Party Name] [explicitly supports/opposes] [specific policy], citing [source evidence]." Example: "Democratic Party explicitly supports enacting federal laws to prohibit discrimination, including the Equality Act, per 2024 party platform." Use "No documented position found" only when research shows no evidence.
 - notes: Brief explanation if needed, null otherwise
 
 Return ONLY a valid JSON array, no other text. Example:
