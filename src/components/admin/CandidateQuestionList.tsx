@@ -161,7 +161,8 @@ function QuestionRow({
             {question.sourceUrls && question.sourceUrls.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
                 {question.sourceUrls.map((url, idx) => {
-                  const sourceInfo = getSourceInfo(url);
+                  const sourceTitle = question.sourceTitles?.[idx] || undefined;
+                  const sourceInfo = getSourceInfo(url, sourceTitle);
                   return (
                     <a
                       key={idx}
