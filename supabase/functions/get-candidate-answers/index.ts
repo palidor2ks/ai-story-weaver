@@ -59,6 +59,17 @@ const BLOCKED_DOMAINS = [
   'republicanviews.org',
   'conservapedia.com',
   'thefederalistpapers.org',
+  // Video platforms (block iframe embedding, hard to cite specific quotes)
+  'youtube.com',
+  'youtu.be',
+  'vimeo.com',
+  'dailymotion.com',
+  'tiktok.com',
+  // Social media platforms (often block embedding, ephemeral content)
+  'facebook.com',
+  'instagram.com',
+  'twitter.com',
+  'x.com',
 ];
 
 function isBlockedDomain(url: string): boolean {
