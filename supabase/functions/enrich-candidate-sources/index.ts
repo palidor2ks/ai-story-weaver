@@ -172,13 +172,19 @@ async function researchSources(
         body: JSON.stringify({
           contents: [{ 
             parts: [{ 
-              text: `Find official sources documenting ${candidateName}'s${officeContext}${partyContext} position on: "${questionText}"
+              text: `Find official sources documenting ${candidateName}'s${officeContext}${partyContext} CURRENT position on: "${questionText}"
 
 The candidate ${positionDesc} on this issue (score: ${answerValue} on a -10 to +10 scale).
 
+CRITICAL RECENCY REQUIREMENTS:
+- Prioritize RECENT statements and actions (2023-2025) first
+- Work backwards chronologically only if recent evidence is unavailable
+- For party platform references, use ONLY the latest official platform (2024)
+- Avoid outdated articles from previous election cycles (2020 or earlier)
+
 PRIORITY SOURCES (use these first):
 - Government sources: congress.gov, senate.gov, house.gov, .gov domains
-- Official campaign websites
+- Official campaign websites (current/2024 campaign)
 - Major news outlets: nytimes.com, washingtonpost.com, apnews.com, reuters.com, politico.com
 
 AVOID these unreliable sources:
@@ -186,12 +192,12 @@ AVOID these unreliable sources:
 - Partisan opinion blogs or unofficial third-party sites
 - Sites with unclear authorship or no verifiable sources
 
-Search for:
-- Official voting records and bill sponsorships
-- Public statements and speeches
-- Campaign website policy positions
-- Press releases or interviews
-- Legislative actions
+Search for (in order of priority):
+1. Recent voting records and bill sponsorships (current Congress)
+2. Recent public statements and speeches (2023-2025)
+3. Current campaign website policy positions
+4. Recent press releases or interviews (last 2 years)
+5. Recent legislative actions
 
 IMPORTANT: Format your response EXACTLY as follows:
 DESCRIPTION: [1-2 sentence description citing specific evidence found (bill numbers, dates, quotes)]

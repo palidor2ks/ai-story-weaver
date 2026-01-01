@@ -193,12 +193,18 @@ async function researchSources(
         body: JSON.stringify({
           contents: [{ 
             parts: [{ 
-              text: `Find official sources documenting the ${partyName}'s position on: "${questionText}"
+              text: `Find official sources documenting the ${partyName}'s CURRENT position on: "${questionText}"
 
 The party ${positionDesc} on this issue (score: ${answerValue} on a -10 to +10 scale).
 
+CRITICAL RECENCY REQUIREMENTS:
+- Use ONLY the LATEST official party platform (2024 or most recent)
+- Do NOT reference outdated platforms from previous election cycles
+- Prioritize recent statements from party leadership (2023-2025)
+- Work backwards chronologically only if recent evidence is unavailable
+
 PRIORITY SOURCES (use these first):
-- Official party websites: democrats.org, gop.com, gp.org, lp.org
+- Official party websites: democrats.org, gop.com, gp.org, lp.org (2024 platform)
 - Government sources: congress.gov, whitehouse.gov, .gov domains
 - Major news outlets: nytimes.com, washingtonpost.com, apnews.com, reuters.com, politico.com
 
@@ -206,12 +212,13 @@ AVOID these unreliable sources:
 - republicanviews.org, democraticviews.org (often broken/outdated)
 - Partisan opinion blogs or unofficial third-party sites
 - Sites with unclear authorship or no verifiable sources
+- Outdated articles from previous election cycles (2020 or earlier)
 
-Search for:
-- Official party platform documents
-- Policy statements from party leadership
-- Legislative voting patterns
-- Press releases or official statements
+Search for (in order of priority):
+1. Official 2024 party platform documents
+2. Recent policy statements from current party leadership (2023-2025)
+3. Recent legislative voting patterns (current Congress)
+4. Recent press releases or official statements (last 2 years)
 
 IMPORTANT: Format your response EXACTLY as follows:
 DESCRIPTION: [1-2 sentence description citing specific evidence found]

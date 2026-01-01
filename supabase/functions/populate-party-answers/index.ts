@@ -283,15 +283,22 @@ async function researchPartyPosition(
         body: JSON.stringify({
           contents: [{ 
             parts: [{ 
-              text: `Research the ${partyName}'s position on: "${questionText}"
+              text: `Research the ${partyName}'s CURRENT position on: "${questionText}"
 
-Look for:
-- Official party platform documents
-- Policy statements from party leadership
-- How party representatives typically vote on this issue
-- Common understanding of the party's stance in political discourse
+CRITICAL RECENCY REQUIREMENTS:
+- Use ONLY the LATEST official party platform (2024 or most recent available)
+- Do NOT reference outdated platforms from previous election cycles (2020, 2016, etc.)
+- Prioritize recent statements from party leadership (2023-2025 first)
+- Work backwards chronologically only if recent evidence is unavailable
+- Note the date/year of any sources you cite
 
-Summarize the party's position based on available evidence. If representatives from this party generally support or oppose something, note that pattern. Include specific examples when possible.`
+Look for (in order of priority):
+1. Official 2024 party platform document
+2. Recent policy statements from current party leadership (2023-2025)
+3. Recent voting patterns of party representatives in current Congress
+4. Current party positions in recent political discourse
+
+Summarize the party's CURRENT position based on the most recent available evidence. Include specific examples with dates when possible.`
             }]
           }],
           tools: [{ googleSearch: {} }]
