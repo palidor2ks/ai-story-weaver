@@ -130,11 +130,13 @@ export function usePopulatePartyAnswers() {
         throw new Error(error.message);
       }
 
-      const result = data as PopulateResult & { enriched?: number };
+      const result = data as PopulateResult & { enriched?: number; status?: string; totalToEnrich?: number };
       
       if (result.success) {
         if (result.skipped) {
           toast.info(`All answers already have sources`);
+        } else if (result.status === 'processing') {
+          toast.info(`Source enrichment started for ${result.totalToEnrich} answers. Check edge function logs for progress.`);
         } else {
           toast.success(`Enriched ${result.enriched || 0} answers with sources`);
         }

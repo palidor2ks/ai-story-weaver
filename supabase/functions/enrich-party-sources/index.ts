@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// Declare EdgeRuntime for background tasks
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -390,58 +393,64 @@ serve(async (req) => {
       );
     }
 
-    let enriched = 0;
-    let failed = 0;
-
-    // Process answers one at a time with delay to avoid rate limits
-    for (const answer of answersNeedingSources) {
-      const question = answer.questions as any;
-      const questionText = question?.text || '';
-      const topicName = question?.topics?.name || '';
-
-      // Research sources
-      const result = await researchSources(partyId, partyName, questionText, answer.answer_value);
-
-      if (result.success) {
-        // Update the answer with new sources (keep existing answer_value)
-        const { error: updateError } = await supabase
-          .from('party_answers')
-          .update({
-            source_description: result.sourceDescription,
-            source_urls: result.sourceUrls,
-            source_url: result.sourceUrls[0] || null,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', answer.id);
-
-        if (updateError) {
-          console.error(`Error updating answer ${answer.id}:`, updateError);
-          failed++;
-        } else {
-          enriched++;
-          console.log(`Enriched answer for "${questionText.slice(0, 30)}..." with ${result.sourceUrls.length} sources`);
-        }
-      } else {
-        failed++;
-      }
-
-      // Delay between calls to avoid rate limiting
-      await new Promise(r => setTimeout(r, 1500));
-    }
-
-    console.log(`[enrich-party-sources] Complete: ${enriched} enriched, ${failed} failed`);
-
-    return new Response(
+    // Return immediate response and process in background
+    const response = new Response(
       JSON.stringify({
         success: true,
+        status: 'processing',
         party: partyName,
         partyId,
-        processed: answersNeedingSources.length,
-        enriched,
-        failed
+        totalToEnrich: answersNeedingSources.length,
+        message: `Started enrichment for ${answersNeedingSources.length} answers`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+
+    // Process enrichment in background
+    EdgeRuntime.waitUntil((async () => {
+      let enriched = 0;
+      let failed = 0;
+
+      // Process answers one at a time with delay to avoid rate limits
+      for (const answer of answersNeedingSources) {
+        const question = answer.questions as any;
+        const questionText = question?.text || '';
+
+        // Research sources
+        const result = await researchSources(partyId, partyName, questionText, answer.answer_value);
+
+        if (result.success) {
+          // Update the answer with new sources (keep existing answer_value)
+          const { error: updateError } = await supabase
+            .from('party_answers')
+            .update({
+              source_description: result.sourceDescription,
+              source_urls: result.sourceUrls,
+              source_url: result.sourceUrls[0] || null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', answer.id);
+
+          if (updateError) {
+            console.error(`Error updating answer ${answer.id}:`, updateError);
+            failed++;
+          } else {
+            enriched++;
+            console.log(`[${enriched}/${answersNeedingSources.length}] Enriched: "${questionText.slice(0, 30)}..." with ${result.sourceUrls.length} sources`);
+          }
+        } else {
+          failed++;
+          console.log(`[${enriched + failed}/${answersNeedingSources.length}] Failed to enrich: "${questionText.slice(0, 30)}..."`);
+        }
+
+        // Delay between calls to avoid rate limiting
+        await new Promise(r => setTimeout(r, 1500));
+      }
+
+      console.log(`[enrich-party-sources] Complete: ${enriched} enriched, ${failed} failed out of ${answersNeedingSources.length}`);
+    })());
+
+    return response;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[enrich-party-sources] Error:', errorMessage);
