@@ -20,7 +20,11 @@ export type Database = {
           candidate_id: string
           confidence: string | null
           created_at: string
+          discrepancy_note: string | null
+          evidence_type: string | null
+          has_discrepancy: boolean | null
           id: string
+          public_statement_summary: string | null
           question_id: string
           source_description: string | null
           source_titles: string[] | null
@@ -28,13 +32,18 @@ export type Database = {
           source_url: string | null
           source_urls: string[] | null
           updated_at: string
+          voting_record_summary: string | null
         }
         Insert: {
           answer_value: number
           candidate_id: string
           confidence?: string | null
           created_at?: string
+          discrepancy_note?: string | null
+          evidence_type?: string | null
+          has_discrepancy?: boolean | null
           id?: string
+          public_statement_summary?: string | null
           question_id: string
           source_description?: string | null
           source_titles?: string[] | null
@@ -42,13 +51,18 @@ export type Database = {
           source_url?: string | null
           source_urls?: string[] | null
           updated_at?: string
+          voting_record_summary?: string | null
         }
         Update: {
           answer_value?: number
           candidate_id?: string
           confidence?: string | null
           created_at?: string
+          discrepancy_note?: string | null
+          evidence_type?: string | null
+          has_discrepancy?: boolean | null
           id?: string
+          public_statement_summary?: string | null
           question_id?: string
           source_description?: string | null
           source_titles?: string[] | null
@@ -56,6 +70,7 @@ export type Database = {
           source_url?: string | null
           source_urls?: string[] | null
           updated_at?: string
+          voting_record_summary?: string | null
         }
         Relationships: [
           {
@@ -141,6 +156,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "candidate_committees_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_voting_coverage"
+            referencedColumns: ["candidate_id"]
+          },
           {
             foreignKeyName: "candidate_committees_candidate_id_fkey"
             columns: ["candidate_id"]
@@ -272,6 +294,13 @@ export type Database = {
           topic_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "candidate_topic_scores_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_voting_coverage"
+            referencedColumns: ["candidate_id"]
+          },
           {
             foreignKeyName: "candidate_topic_scores_candidate_id_fkey"
             columns: ["candidate_id"]
@@ -645,6 +674,13 @@ export type Database = {
             foreignKeyName: "donors_candidate_id_fkey"
             columns: ["candidate_id"]
             isOneToOne: false
+            referencedRelation: "candidate_voting_coverage"
+            referencedColumns: ["candidate_id"]
+          },
+          {
+            foreignKeyName: "donors_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
             referencedRelation: "candidates"
             referencedColumns: ["id"]
           },
@@ -979,10 +1015,14 @@ export type Database = {
           answer_value: number
           confidence: string | null
           created_at: string | null
+          discrepancy_note: string | null
+          evidence_type: string | null
+          has_discrepancy: boolean | null
           id: string
           notes: string | null
           party_id: string
           question_id: string
+          rep_voting_summary: string | null
           source_description: string | null
           source_titles: string[] | null
           source_url: string | null
@@ -993,10 +1033,14 @@ export type Database = {
           answer_value: number
           confidence?: string | null
           created_at?: string | null
+          discrepancy_note?: string | null
+          evidence_type?: string | null
+          has_discrepancy?: boolean | null
           id?: string
           notes?: string | null
           party_id: string
           question_id: string
+          rep_voting_summary?: string | null
           source_description?: string | null
           source_titles?: string[] | null
           source_url?: string | null
@@ -1007,10 +1051,14 @@ export type Database = {
           answer_value?: number
           confidence?: string | null
           created_at?: string | null
+          discrepancy_note?: string | null
+          evidence_type?: string | null
+          has_discrepancy?: boolean | null
           id?: string
           notes?: string | null
           party_id?: string
           question_id?: string
+          rep_voting_summary?: string | null
           source_description?: string | null
           source_titles?: string[] | null
           source_url?: string | null
@@ -1698,6 +1746,13 @@ export type Database = {
             foreignKeyName: "votes_candidate_id_fkey"
             columns: ["candidate_id"]
             isOneToOne: false
+            referencedRelation: "candidate_voting_coverage"
+            referencedColumns: ["candidate_id"]
+          },
+          {
+            foreignKeyName: "votes_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
             referencedRelation: "candidates"
             referencedColumns: ["id"]
           },
@@ -1721,6 +1776,18 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      candidate_voting_coverage: {
+        Row: {
+          candidate_id: string | null
+          last_vote_date: string | null
+          name: string | null
+          office: string | null
+          party: Database["public"]["Enums"]["party_type"] | null
+          topics_covered: number | null
+          total_votes_stored: number | null
+        }
+        Relationships: []
       }
       donor_attributed_impact: {
         Row: {

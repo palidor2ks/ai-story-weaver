@@ -35,6 +35,11 @@ interface GeneratedAnswer {
   source_titles: string[];
   source_type: string;
   confidence: 'high' | 'medium' | 'low';
+  evidence_type: 'voting_record' | 'public_statement' | 'inferred' | 'mixed';
+  voting_record_summary?: string;
+  public_statement_summary?: string;
+  has_discrepancy?: boolean;
+  discrepancy_note?: string;
 }
 
 interface LegislationRecord {
@@ -770,6 +775,31 @@ ONLY JSON array. No markdown.`;
       answerValue = validateScoreConsistency(answerValue, sourceDesc);
     }
     
+    // Determine evidence type based on source
+    const hasVotingRecord = isCongressional && votingRecord.length > 0;
+    const hasResearch = research?.success && research.researchText.length > 50;
+    let evidenceType: 'voting_record' | 'public_statement' | 'inferred' | 'mixed' = 'mixed';
+    
+    if (hasVotingRecord && sourceDesc.toLowerCase().includes('voted') || sourceDesc.toLowerCase().includes('sponsor')) {
+      evidenceType = 'voting_record';
+    } else if (hasResearch && !hasVotingRecord) {
+      evidenceType = 'public_statement';
+    } else if (!hasVotingRecord && !hasResearch) {
+      evidenceType = 'inferred';
+    }
+    
+    // Build voting record summary if available
+    let votingRecordSummary: string | undefined;
+    if (hasVotingRecord) {
+      const relevantBills = votingRecord.filter(v => {
+        const policyArea = v.policy_area?.toLowerCase() || '';
+        return policyArea.includes(questionId.slice(0, 3).toLowerCase());
+      }).slice(0, 3);
+      if (relevantBills.length > 0) {
+        votingRecordSummary = relevantBills.map(b => `${b.action} ${b.type}${b.number}`).join(', ');
+      }
+    }
+    
     return {
       question_id: questionId,
       answer_value: answerValue,
@@ -779,6 +809,11 @@ ONLY JSON array. No markdown.`;
       source_titles: sourceTitles,
       source_type: isCongressional ? 'voting_record' : 'web_research',
       confidence: item.confidence || 'medium',
+      evidence_type: evidenceType,
+      voting_record_summary: votingRecordSummary,
+      public_statement_summary: hasResearch ? research?.researchText?.slice(0, 200) : undefined,
+      has_discrepancy: false,
+      discrepancy_note: undefined,
     };
   });
 }
@@ -904,6 +939,11 @@ async function generateAnswersInChunks(
         source_titles: answer.source_titles,
         source_type: answer.source_type,
         confidence: answer.confidence,
+        evidence_type: answer.evidence_type,
+        voting_record_summary: answer.voting_record_summary,
+        public_statement_summary: answer.public_statement_summary,
+        has_discrepancy: answer.has_discrepancy,
+        discrepancy_note: answer.discrepancy_note,
       }));
 
       const { error: insertError } = await supabase

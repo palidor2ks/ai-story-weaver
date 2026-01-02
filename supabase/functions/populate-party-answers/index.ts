@@ -52,6 +52,17 @@ interface PartyAnswer {
   source_titles: string[];
   confidence: string;
   notes: string | null;
+  evidence_type?: 'platform' | 'inferred_from_reps' | 'mixed';
+  rep_voting_summary?: string;
+  has_discrepancy?: boolean;
+  discrepancy_note?: string;
+}
+
+interface RepConsensus {
+  avgScore: number;
+  count: number;
+  confidence: string;
+  highConfidenceCount: number;
 }
 
 interface GroundingResult {
@@ -147,6 +158,71 @@ async function validateUrl(url: string, timeout = 5000): Promise<boolean> {
     return false;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Query representative voting consensus for a given question and party
+ * This aggregates candidate_answers from party representatives to infer party position
+ */
+async function getRepresentativeConsensus(
+  questionId: string,
+  partyId: string,
+  supabase: any
+): Promise<RepConsensus | null> {
+  // Map party_id to party name in candidates table
+  const partyName = partyId === 'democrat' ? 'Democrat' 
+                  : partyId === 'republican' ? 'Republican'
+                  : null;
+  
+  if (!partyName) {
+    console.log(`[RepConsensus] No rep aggregation for party: ${partyId}`);
+    return null; // Only works for major parties with reps
+  }
+  
+  try {
+    // Query candidate_answers joined with candidates filtered by party
+    const { data, error } = await supabase
+      .from('candidate_answers')
+      .select(`
+        answer_value,
+        confidence,
+        candidate_id,
+        candidates!inner(party)
+      `)
+      .eq('question_id', questionId)
+      .eq('candidates.party', partyName)
+      .in('confidence', ['high', 'medium']);
+    
+    if (error) {
+      console.error(`[RepConsensus] Query error for ${questionId}:`, error);
+      return null;
+    }
+    
+    if (!data || data.length < 10) {
+      console.log(`[RepConsensus] Insufficient data for ${questionId}: ${data?.length || 0} reps (need 10+)`);
+      return null; // Need meaningful sample
+    }
+    
+    const avgScore = data.reduce((sum: number, d: any) => sum + d.answer_value, 0) / data.length;
+    const highConfidenceCount = data.filter((d: any) => d.confidence === 'high').length;
+    
+    // Snap to valid value
+    const snappedScore = [-10, -5, 0, 5, 10].reduce((prev, curr) => 
+      Math.abs(curr - avgScore) < Math.abs(prev - avgScore) ? curr : prev
+    );
+    
+    console.log(`[RepConsensus] ${partyName} on ${questionId}: ${data.length} reps, avg=${avgScore.toFixed(2)}, snapped=${snappedScore}`);
+    
+    return {
+      avgScore: snappedScore,
+      count: data.length,
+      confidence: highConfidenceCount > data.length * 0.3 ? 'medium' : 'low',
+      highConfidenceCount
+    };
+  } catch (e) {
+    console.error(`[RepConsensus] Error for ${questionId}:`, e);
+    return null;
   }
 }
 
@@ -420,12 +496,14 @@ Summarize the party's CURRENT position based on evidence that DIRECTLY addresses
 
 /**
  * Phase 2: Score party position based on grounded research
+ * With fallback to representative voting aggregation
  */
 async function getPartyStances(
   questions: Question[],
   partyId: string,
   partyContext: typeof PARTY_CONTEXT.democrat,
-  researchResults: Map<string, GroundingResult>
+  researchResults: Map<string, GroundingResult>,
+  supabase: any
 ): Promise<PartyAnswer[]> {
   // Build questions with research context
   const questionsWithResearch = questions.map((q, i) => {
@@ -576,6 +654,11 @@ Return ONLY a valid JSON array, no other text. Example:
             console.log(`[Source Cleanup] Clearing ${research.sourceUrls.length} irrelevant sources for ${questionId} (no position found)`);
           }
           
+          let evidenceType: 'platform' | 'inferred_from_reps' | 'mixed' = 'platform';
+          let repVotingSummary: string | undefined;
+          let hasDiscrepancy = false;
+          let discrepancyNote: string | undefined;
+          
           return {
             party_id: partyId,
             question_id: questionId,
@@ -586,12 +669,67 @@ Return ONLY a valid JSON array, no other text. Example:
             source_titles: allSourceTitles,
             confidence: confidence,
             notes: item.notes || null,
+            evidence_type: evidenceType,
+            rep_voting_summary: repVotingSummary,
+            has_discrepancy: hasDiscrepancy,
+            discrepancy_note: discrepancyNote,
           };
         });
     }
   } catch (e) {
     console.error(`Failed to parse AI response for ${partyId}:`, e);
     console.error('Raw content:', content.slice(0, 500));
+  }
+
+  // Phase 3: Apply representative voting fallback for answers with no documented position
+  console.log(`Checking rep consensus fallback for ${answers.filter(a => a.confidence === 'low').length} undocumented answers...`);
+  
+  for (let i = 0; i < answers.length; i++) {
+    const answer = answers[i];
+    
+    // Only try fallback if no documented position was found
+    if (answer.confidence === 'low' && answer.answer_value === 0) {
+      const repConsensus = await getRepresentativeConsensus(answer.question_id, partyId, supabase);
+      
+      if (repConsensus && Math.abs(repConsensus.avgScore) >= 3) {
+        console.log(`[RepFallback] Using rep consensus for ${answer.question_id}: ${repConsensus.avgScore} from ${repConsensus.count} reps`);
+        
+        answers[i] = {
+          ...answer,
+          answer_value: repConsensus.avgScore,
+          confidence: repConsensus.confidence,
+          source_description: `${partyContext.name} position inferred from voting patterns of ${repConsensus.count} party representatives.`,
+          evidence_type: 'inferred_from_reps',
+          rep_voting_summary: `Aggregated from ${repConsensus.count} reps (${repConsensus.highConfidenceCount} high confidence). Average position: ${repConsensus.avgScore > 0 ? 'Conservative' : 'Progressive'} (${Math.abs(repConsensus.avgScore)}/10).`,
+          notes: `No explicit party platform statement. Position derived from how ${repConsensus.count} ${partyContext.name} representatives voted on this issue.`,
+          // Clear URLs since this is database-derived
+          source_url: null,
+          source_urls: [],
+          source_titles: [],
+        };
+      }
+    } else if (answer.confidence !== 'low' && answer.answer_value !== 0) {
+      // Check for discrepancy between platform position and rep voting
+      const repConsensus = await getRepresentativeConsensus(answer.question_id, partyId, supabase);
+      
+      if (repConsensus && repConsensus.count >= 10) {
+        // Check if platform and rep voting disagree significantly
+        const platformDirection = answer.answer_value > 0 ? 1 : -1;
+        const repDirection = repConsensus.avgScore > 0 ? 1 : -1;
+        
+        if (platformDirection !== repDirection && Math.abs(repConsensus.avgScore) >= 3) {
+          console.log(`[Discrepancy] Platform vs Reps for ${answer.question_id}: Platform=${answer.answer_value}, Reps=${repConsensus.avgScore}`);
+          
+          answers[i] = {
+            ...answer,
+            evidence_type: 'mixed',
+            has_discrepancy: true,
+            rep_voting_summary: `${repConsensus.count} party representatives averaged ${repConsensus.avgScore > 0 ? 'Conservative' : 'Progressive'} (${Math.abs(repConsensus.avgScore)}/10).`,
+            discrepancy_note: `Party platform indicates ${answer.answer_value > 0 ? 'conservative' : 'progressive'} stance, but ${repConsensus.count} party representatives typically vote ${repConsensus.avgScore > 0 ? 'conservatively' : 'progressively'} on this issue.`,
+          };
+        }
+      }
+    }
   }
 
   console.log(`Parsed ${answers.length} valid answers for ${partyContext.name}`);
@@ -728,8 +866,8 @@ serve(async (req) => {
           console.log(`Researched ${batch.length} questions, ${researchResults.size} with results`);
         }
 
-        // Phase 2: Score based on research
-        const answers = await getPartyStances(batch, partyId, partyContext, researchResults);
+        // Phase 2: Score based on research (with rep consensus fallback)
+        const answers = await getPartyStances(batch, partyId, partyContext, researchResults, supabase);
 
         if (answers.length > 0) {
           const { error: upsertError } = await supabase
