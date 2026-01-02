@@ -80,7 +80,7 @@ serve(async (req) => {
         const mappedTopic = topicMapping[policyArea] || 'Domestic Policy';
         
         votes.push({
-          id: `${bioguideId}-sponsored-${bill.type}${bill.number}`,
+          id: `${bioguideId}-${bill.congress || 0}-sponsored-${bill.type}${bill.number}`,
           bill_id: `${bill.type}.${bill.number}`,
           bill_name: bill.title || `${bill.type} ${bill.number}`,
           candidate_id: bioguideId,
@@ -110,7 +110,7 @@ serve(async (req) => {
         const mappedTopic = topicMapping[policyArea] || 'Domestic Policy';
         
         votes.push({
-          id: `${bioguideId}-cosponsored-${bill.type}${bill.number}`,
+          id: `${bioguideId}-${bill.congress || 0}-cosponsored-${bill.type}${bill.number}`,
           bill_id: `${bill.type}.${bill.number}`,
           bill_name: bill.title || `${bill.type} ${bill.number}`,
           candidate_id: bioguideId,
@@ -150,10 +150,15 @@ serve(async (req) => {
           date: v.date,
         }));
 
-      if (votesToInsert.length > 0) {
-        const { error: upsertError, count } = await supabase
+      // Deduplicate by ID to prevent "cannot affect row a second time" error
+      const uniqueVotes = Array.from(
+        new Map(votesToInsert.map(v => [v.id, v])).values()
+      );
+
+      if (uniqueVotes.length > 0) {
+        const { error: upsertError } = await supabase
           .from('votes')
-          .upsert(votesToInsert, { 
+          .upsert(uniqueVotes, { 
             onConflict: 'id',
             ignoreDuplicates: false 
           });
@@ -161,7 +166,7 @@ serve(async (req) => {
         if (upsertError) {
           console.error('Error persisting votes:', upsertError);
         } else {
-          persisted = votesToInsert.length;
+          persisted = uniqueVotes.length;
           console.log(`Persisted ${persisted} votes for ${bioguideId}`);
         }
       }
