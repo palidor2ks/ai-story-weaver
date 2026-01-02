@@ -150,6 +150,15 @@ function isBioguideId(candidateId: string): boolean {
   return /^[A-Z]\d{6}$/.test(candidateId);
 }
 
+function resolveBioguideId(
+  candidateId: string,
+  officialInfo?: { bioguide_id?: string | null }
+): string | null {
+  if (officialInfo?.bioguide_id) return officialInfo.bioguide_id;
+  if (isBioguideId(candidateId)) return candidateId;
+  return null;
+}
+
 // Check if the office indicates a congressional member
 function isCongressionalOffice(office: string): boolean {
   const lowerOffice = office.toLowerCase();
@@ -580,15 +589,14 @@ async function generateVotingRecordAnswers(
   candidateParty: string,
   candidateOffice: string,
   candidateState: string,
-  candidateId: string,
+  bioguideId: string | null,
   questions: Question[],
   votingRecord: LegislationRecord[]
 ): Promise<GeneratedAnswer[]> {
   if (!LOVABLE_API_KEY) return [];
-  const isCongressional = isBioguideId(candidateId) && isCongressionalOffice(candidateOffice);
-  if (!isCongressional || votingRecord.length === 0 || questions.length === 0) return [];
+  if (!bioguideId || votingRecord.length === 0 || questions.length === 0) return [];
 
-  const congressGovUrl = buildCongressGovProfileUrl(candidateId, candidateName);
+  const congressGovUrl = buildCongressGovProfileUrl(bioguideId, candidateName);
   const validQuestionIds = questions.map(q => q.id);
   const validIdsStr = validQuestionIds.join(', ');
 
@@ -812,13 +820,15 @@ async function generateChunkAnswers(
   candidateParty: string,
   candidateOffice: string,
   candidateState: string,
-  candidateId: string,
+  bioguideId: string | null,
   questions: Question[],
   votingRecord: LegislationRecord[],
   researchResults: Map<string, GroundingResult>
 ): Promise<GeneratedAnswer[]> {
-  const isCongressional = isBioguideId(candidateId) && isCongressionalOffice(candidateOffice);
-  const congressGovUrl = isCongressional ? buildCongressGovProfileUrl(candidateId, candidateName) : null;
+  const isCongressional = !!bioguideId;
+  const congressGovUrl = isCongressional && bioguideId
+    ? buildCongressGovProfileUrl(bioguideId, candidateName)
+    : null;
   const validQuestionIds = questions.map(q => q.id);
   const validIdsStr = validQuestionIds.join(', ');
 
@@ -1068,8 +1078,9 @@ function validateAnswerQuality(
       !a.source_description.toLowerCase().includes('typical') &&
       !a.source_description.toLowerCase().includes('no documented') &&
       a.source_description.length > 5;
+    const isInference = a.evidence_type === 'inferred';
     
-    if (a.answer_value !== 0 && !hasValidSource && a.confidence !== 'high') {
+    if (a.answer_value !== 0 && !hasValidSource && a.confidence !== 'high' && !isInference) {
       console.log(`[Validation] Resetting unsourced answer for ${a.question_id}: ${a.answer_value} -> 0`);
       rejectedCount++;
       return { ...a, answer_value: 0, confidence: 'low' as const, source_description: 'No documented position' };
@@ -1093,7 +1104,8 @@ async function generateAnswersInChunks(
   candidateOffice: string,
   candidateState: string,
   questions: Question[],
-  votingRecord: LegislationRecord[]
+  votingRecord: LegislationRecord[],
+  bioguideId: string | null
 ): Promise<{ generated: number; failed: number; validationRejected: number; researched: number }> {
   let totalGenerated = 0;
   let failedChunks = 0;
@@ -1118,10 +1130,10 @@ async function generateAnswersInChunks(
     try {
       // Phase 1: Voting record answers (highest priority)
       let votingAnswers: GeneratedAnswer[] = [];
-      if (isBioguideId(candidateId) && isCongressionalOffice(candidateOffice) && votingRecord.length > 0) {
+      if (bioguideId && votingRecord.length > 0) {
         votingAnswers = await generateVotingRecordAnswers(
           candidateName, candidateParty, candidateOffice, candidateState,
-          candidateId, chunk, votingRecord
+          bioguideId, chunk, votingRecord
         );
         votingAnswers.forEach(a => answersById.set(a.question_id, a));
         if (votingAnswers.length > 0) {
@@ -1153,7 +1165,7 @@ async function generateAnswersInChunks(
       if (questionsNeedingResearch.length > 0) {
         researchAnswers = await generateChunkAnswers(
           candidateName, candidateParty, candidateOffice, candidateState,
-          candidateId, questionsNeedingResearch, votingRecord, researchResults
+          bioguideId, questionsNeedingResearch, votingRecord, researchResults
         );
         researchAnswers.forEach(a => {
           if (!answersById.has(a.question_id)) {
@@ -1342,15 +1354,15 @@ serve(async (req) => {
     console.log(`Found ${existingCount} existing answers for ${candidateId}`);
 
     // Get candidate info
-    let officialInfo: { id: string; name: string; party: string; office: string; state: string } | null = null;
+    let officialInfo: { id: string; name: string; party: string; office: string; state: string; bioguide_id?: string | null } | null = null;
 
     if (candidateName && candidateParty && candidateOffice && candidateState) {
       officialInfo = { id: candidateId, name: candidateName, party: candidateParty, office: candidateOffice, state: candidateState };
     } else {
-      const { data: candidate } = await supabase.from('candidates').select('id, name, party, office, state').eq('id', candidateId).maybeSingle();
+      const { data: candidate } = await supabase.from('candidates').select('id, name, party, office, state, bioguide_id').eq('id', candidateId).maybeSingle();
       if (candidate) officialInfo = candidate;
       else {
-        const { data: staticOfficial } = await supabase.from('static_officials').select('id, name, party, office, state').eq('id', candidateId).maybeSingle();
+        const { data: staticOfficial } = await supabase.from('static_officials').select('id, name, party, office, state, bioguide_id').eq('id', candidateId).maybeSingle();
         if (staticOfficial) officialInfo = staticOfficial;
       }
     }
@@ -1388,18 +1400,19 @@ serve(async (req) => {
 
     console.log(`Generating ${missingBefore} missing answers for ${officialInfo.name}...`);
 
-    const isCongressional = isBioguideId(candidateId) && isCongressionalOffice(officialInfo.office);
+    const bioguideId = resolveBioguideId(candidateId, officialInfo);
+    const isCongressional = !!bioguideId;
     let votingRecord: LegislationRecord[] = [];
     
     if (isCongressional) {
-      console.log(`Fetching voting record for congressional member ${candidateId}...`);
-      votingRecord = await fetchMemberVotingRecord(candidateId);
+      console.log(`Fetching voting record for congressional member ${bioguideId}...`);
+      votingRecord = await fetchMemberVotingRecord(bioguideId!);
       console.log(`Retrieved ${votingRecord.length} legislative records`);
     }
 
     const { generated, failed, validationRejected, researched } = await generateAnswersInChunks(
       supabase, candidateId, officialInfo.name, officialInfo.party,
-      officialInfo.office, officialInfo.state, questionsToGenerate, votingRecord
+      officialInfo.office, officialInfo.state, questionsToGenerate, votingRecord, bioguideId
     );
     
     if (validationRejected > 0) {
