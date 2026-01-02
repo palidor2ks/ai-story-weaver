@@ -183,38 +183,37 @@ async function researchSources(
         body: JSON.stringify({
           contents: [{ 
             parts: [{ 
-              text: `Find official sources documenting ${candidateName}'s${officeContext}${partyContext} CURRENT position on: "${questionText}"
+              text: `Find official sources documenting ${candidateName}'s${officeContext}${partyContext} CURRENT position on this SPECIFIC question: "${questionText}"
 
 The candidate ${positionDesc} on this issue (score: ${answerValue} on a -10 to +10 scale).
 
-CRITICAL RECENCY REQUIREMENTS:
+CRITICAL: Only cite sources that DIRECTLY address this specific question.
+Do NOT include sources that are about the general topic but don't discuss the specific issue.
+
+RECENCY REQUIREMENTS:
 - Prioritize RECENT statements and actions (2023-2025) first
 - Work backwards chronologically only if recent evidence is unavailable
 - For party platform references, use ONLY the latest official platform (2024)
-- Avoid outdated articles from previous election cycles (2020 or earlier)
+
+SOURCE RELEVANCE REQUIREMENTS:
+- The source MUST explicitly discuss the specific issue in the question
+- Biography pages or general profile pages are NOT valid unless they address this issue
+- If no sources directly address this question, respond with "No documented position found"
 
 PRIORITY SOURCES (use these first):
-- Government sources: congress.gov, senate.gov, house.gov, .gov domains
-- Official campaign websites (current/2024 campaign)
-- Major news outlets: nytimes.com, washingtonpost.com, apnews.com, reuters.com, politico.com
+- Government sources with content about THIS specific policy
+- Campaign website sections addressing THIS issue
+- News articles covering the candidate's stance on THIS exact question
 
 AVOID these unreliable sources:
 - republicanviews.org, democraticviews.org (often broken/outdated)
-- Partisan opinion blogs or unofficial third-party sites
-- Sites with unclear authorship or no verifiable sources
-
-Search for (in order of priority):
-1. Recent voting records and bill sponsorships (current Congress)
-2. Recent public statements and speeches (2023-2025)
-3. Current campaign website policy positions
-4. Recent press releases or interviews (last 2 years)
-5. Recent legislative actions
+- General "about the candidate" pages that don't address this issue
 
 IMPORTANT: Format your response EXACTLY as follows:
-DESCRIPTION: [1-2 sentence description citing specific evidence found (bill numbers, dates, quotes)]
-KEY_QUOTE: "[A SHORT verbatim quote (10-30 words) from the most relevant source that directly evidences the position. Must be exact text that appears on the source page.]"
+DESCRIPTION: [1-2 sentence description citing specific evidence that addresses THIS question (bill numbers, dates, quotes)]
+KEY_QUOTE: "[A SHORT verbatim quote (10-30 words) from the source that directly evidences the position on THIS issue.]"
 
-If no specific evidence is found, respond with:
+If no sources directly address this specific question, respond with:
 DESCRIPTION: No documented position found.
 KEY_QUOTE: ""`
             }] 
