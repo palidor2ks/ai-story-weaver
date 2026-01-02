@@ -70,7 +70,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       // Get all candidates with coverage tier and confidence
       let candidatesQuery = supabase
         .from('candidates')
-        .select('id, bioguide_id, name, party, office, state, overall_score, coverage_tier, confidence, fec_candidate_id, fec_committee_id, last_donor_sync')
+        .select('id, name, party, office, state, overall_score, coverage_tier, confidence, fec_candidate_id, fec_committee_id, last_donor_sync')
         .order('name', { ascending: true });
 
       if (filters.party && filters.party !== 'all') {
@@ -119,23 +119,14 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         return desc.length > 10;
       };
 
-      // Build map to translate bioguide IDs to canonical candidate IDs
-      const bioguideToCandidateId = new Map<string, string>();
-      (candidates || []).forEach(c => {
-        if (c.bioguide_id) {
-          bioguideToCandidateId.set(c.bioguide_id, c.id);
-        }
-      });
-
-      // Get vote counts per candidate (resolve any legacy bioguide IDs to canonical IDs)
+      // Get vote counts per candidate
       const { data: votesData } = await supabase
         .from('votes')
         .select('candidate_id');
       
       const voteCountMap: Record<string, number> = {};
       (votesData || []).forEach(row => {
-        const resolvedId = bioguideToCandidateId.get(row.candidate_id) || row.candidate_id;
-        voteCountMap[resolvedId] = (voteCountMap[resolvedId] || 0) + 1;
+        voteCountMap[row.candidate_id] = (voteCountMap[row.candidate_id] || 0) + 1;
       });
 
       // Get donor counts per candidate

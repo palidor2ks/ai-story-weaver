@@ -21,31 +21,15 @@ export function useVotingRecordsStats() {
   return useQuery({
     queryKey: ['voting-records-stats'],
     queryFn: async (): Promise<VotingRecordStats> => {
-      // Get total votes and unique candidates with votes (resolve bioguide IDs to canonical candidate IDs)
+      // Get total votes and unique candidates with votes
       const { data: votesData, error: votesError } = await supabase
         .from('votes')
         .select('candidate_id, topic, date');
 
       if (votesError) throw votesError;
 
-      // Build map of bioguide_id -> candidate.id so legacy vote rows still aggregate correctly
-      const { data: candidateMapData, error: candidateMapError } = await supabase
-        .from('candidates')
-        .select('id, bioguide_id');
-
-      if (candidateMapError) throw candidateMapError;
-
-      const bioguideToCandidateId = new Map<string, string>();
-      (candidateMapData || []).forEach(c => {
-        if (c.bioguide_id) {
-          bioguideToCandidateId.set(c.bioguide_id, c.id);
-        }
-      });
-
       const totalVotes = votesData?.length || 0;
-      const uniqueCandidates = new Set(
-        (votesData || []).map(v => bioguideToCandidateId.get(v.candidate_id) || v.candidate_id)
-      );
+      const uniqueCandidates = new Set(votesData?.map(v => v.candidate_id) || []);
       const membersWithVotes = uniqueCandidates.size;
 
       // Count by topic

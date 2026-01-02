@@ -326,7 +326,6 @@ export type Database = {
           coverage_tier: Database["public"]["Enums"]["coverage_tier"] | null
           created_at: string | null
           district: string | null
-          bioguide_id: string | null
           fec_candidate_id: string | null
           fec_committee_id: string | null
           id: string
@@ -350,7 +349,6 @@ export type Database = {
           coverage_tier?: Database["public"]["Enums"]["coverage_tier"] | null
           created_at?: string | null
           district?: string | null
-          bioguide_id?: string | null
           fec_candidate_id?: string | null
           fec_committee_id?: string | null
           id: string
@@ -374,7 +372,6 @@ export type Database = {
           coverage_tier?: Database["public"]["Enums"]["coverage_tier"] | null
           created_at?: string | null
           district?: string | null
-          bioguide_id?: string | null
           fec_candidate_id?: string | null
           fec_committee_id?: string | null
           id?: string
