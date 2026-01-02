@@ -409,7 +409,7 @@ Only return 0 if you truly cannot make a reasonable inference based on general p
 "${question.text}"
 ${relatedContext}
 
-Return ONLY a JSON object: {"score": <-10|-5|0|5|10>, "reasoning": "<one sentence explanation>"}`;
+Return ONLY a JSON object: {"score": <-10|-5|0|5|10>, "reasoning": "<2-3 sentence explanation of WHY this party would likely hold this position, referencing their core values, guiding principles, or related policy positions they are known for>"}`;
 
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

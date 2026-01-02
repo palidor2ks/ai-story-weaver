@@ -105,13 +105,31 @@ export function PartyQuestionList({ partyId, topicId, isAnyLoading }: PartyQuest
                     {getConfidenceBadge(q.confidence)}
                   </div>
 
-                  {/* Source indicator */}
-                  <div className="w-5 shrink-0">
-                    {q.hasSource ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                    ) : hasAnswer ? (
-                      <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
-                    ) : null}
+                  {/* Evidence type indicator */}
+                  <div className="w-20 shrink-0">
+                    {q.evidenceType === 'ai_inferred' && (
+                      <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
+                        AI Inferred
+                      </Badge>
+                    )}
+                    {q.evidenceType === 'inferred_from_reps' && (
+                      <Badge variant="outline" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[10px]">
+                        Rep Votes
+                      </Badge>
+                    )}
+                    {q.evidenceType === 'platform' && (
+                      <Badge variant="outline" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[10px]">
+                        Platform
+                      </Badge>
+                    )}
+                    {q.evidenceType === 'mixed' && (
+                      <Badge variant="outline" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 text-[10px]">
+                        Mixed
+                      </Badge>
+                    )}
+                    {!q.evidenceType && hasAnswer && (
+                      <AlertCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
                   </div>
 
                   {/* Question text */}
@@ -160,39 +178,61 @@ export function PartyQuestionList({ partyId, topicId, isAnyLoading }: PartyQuest
                     )}
                   </div>
 
-                  {/* AI Explanation */}
-                  {q.sourceDescription && (
-                    <div className="space-y-1">
-                      <span className="text-xs font-medium text-muted-foreground">AI Response:</span>
-                      <p className="text-sm text-foreground/80 leading-relaxed">
-                        {q.sourceDescription}
-                      </p>
+                  {/* AI Inferred - Show logic explanation instead of source links */}
+                  {q.evidenceType === 'ai_inferred' ? (
+                    <div className="space-y-2">
+                      <div className="bg-amber-50 dark:bg-amber-900/20 rounded-md p-3 border border-amber-200 dark:border-amber-800">
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 mb-1.5">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          AI Logic
+                        </div>
+                        {q.sourceDescription && (
+                          <p className="text-sm text-foreground/80 leading-relaxed">
+                            {q.sourceDescription}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-amber-600/70 dark:text-amber-400/60 mt-2 italic">
+                          No official documentation or voting records found. This position was inferred based on general party ideology.
+                        </p>
+                      </div>
                     </div>
-                  )}
+                  ) : (
+                    <>
+                      {/* AI Explanation for sourced positions */}
+                      {q.sourceDescription && (
+                        <div className="space-y-1">
+                          <span className="text-xs font-medium text-muted-foreground">AI Response:</span>
+                          <p className="text-sm text-foreground/80 leading-relaxed">
+                            {q.sourceDescription}
+                          </p>
+                        </div>
+                      )}
 
-                  {/* Source URLs */}
-                  {q.sourceUrls && q.sourceUrls.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {q.sourceUrls.map((url, idx) => {
-                        const sourceTitle = q.sourceTitles?.[idx] || undefined;
-                        const sourceInfo = getSourceInfo(url, sourceTitle);
-                        return (
-                          <a
-                            key={idx}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={cn(
-                              "inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors hover:opacity-80",
-                              getSourceBadgeClass(sourceInfo.type)
-                            )}
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            {sourceInfo.displayName}
-                          </a>
-                        );
-                      })}
-                    </div>
+                      {/* Source URLs */}
+                      {q.sourceUrls && q.sourceUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {q.sourceUrls.map((url, idx) => {
+                            const sourceTitle = q.sourceTitles?.[idx] || undefined;
+                            const sourceInfo = getSourceInfo(url, sourceTitle);
+                            return (
+                              <a
+                                key={idx}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border transition-colors hover:opacity-80",
+                                  getSourceBadgeClass(sourceInfo.type)
+                                )}
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                {sourceInfo.displayName}
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {!q.sourceDescription && !hasAnswer && (
