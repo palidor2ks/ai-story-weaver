@@ -66,7 +66,7 @@ serve(async (req) => {
     const votes: VoteRecord[] = [];
 
     // Fetch sponsored legislation to understand member's positions
-    const sponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/sponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=50`;
+    const sponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/sponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=250`;
     console.log(`Fetching sponsored legislation from: ${sponsoredUrl.replace(CONGRESS_API_KEY, 'REDACTED')}`);
     
     const sponsoredResponse = await fetch(sponsoredUrl);
@@ -75,7 +75,7 @@ serve(async (req) => {
       const sponsoredData = await sponsoredResponse.json();
       const sponsoredBills = sponsoredData.sponsoredLegislation || [];
       
-      for (const bill of sponsoredBills.slice(0, 25)) {
+      for (const bill of sponsoredBills) {
         const policyArea = bill.policyArea?.name || 'General';
         const mappedTopic = topicMapping[policyArea] || 'Domestic Policy';
         
@@ -98,14 +98,14 @@ serve(async (req) => {
     }
 
     // Fetch cosponsored legislation
-    const cosponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/cosponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=50`;
+    const cosponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/cosponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=250`;
     const cosponsoredResponse = await fetch(cosponsoredUrl);
     
     if (cosponsoredResponse.ok) {
       const cosponsoredData = await cosponsoredResponse.json();
       const cosponsoredBills = cosponsoredData.cosponsoredLegislation || [];
       
-      for (const bill of cosponsoredBills.slice(0, 25)) {
+      for (const bill of cosponsoredBills) {
         const policyArea = bill.policyArea?.name || 'General';
         const mappedTopic = topicMapping[policyArea] || 'Domestic Policy';
         
