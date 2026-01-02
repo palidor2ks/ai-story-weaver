@@ -65,70 +65,113 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const votes: VoteRecord[] = [];
 
-    // Fetch sponsored legislation to understand member's positions
-    const sponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/sponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=250`;
-    console.log(`Fetching sponsored legislation from: ${sponsoredUrl.replace(CONGRESS_API_KEY, 'REDACTED')}`);
+    // Fetch ALL sponsored legislation with pagination
+    let sponsoredOffset = 0;
+    let totalSponsored = 0;
+    let hasMoreSponsored = true;
     
-    const sponsoredResponse = await fetch(sponsoredUrl);
+    console.log(`Fetching sponsored legislation with pagination...`);
     
-    if (sponsoredResponse.ok) {
-      const sponsoredData = await sponsoredResponse.json();
-      const sponsoredBills = sponsoredData.sponsoredLegislation || [];
+    while (hasMoreSponsored) {
+      const sponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/sponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=250&offset=${sponsoredOffset}`;
+      console.log(`Fetching sponsored page at offset ${sponsoredOffset}`);
       
-      for (const bill of sponsoredBills) {
-        const policyArea = bill.policyArea?.name || 'General';
-        const mappedTopic = topicMapping[policyArea] || 'Domestic Policy';
+      const sponsoredResponse = await fetch(sponsoredUrl);
+      
+      if (sponsoredResponse.ok) {
+        const sponsoredData = await sponsoredResponse.json();
+        const sponsoredBills = sponsoredData.sponsoredLegislation || [];
         
-        votes.push({
-          id: `${bioguideId}-${bill.congress || 0}-sponsored-${bill.type}${bill.number}`,
-          bill_id: `${bill.type}.${bill.number}`,
-          bill_name: bill.title || `${bill.type} ${bill.number}`,
-          candidate_id: bioguideId,
-          position: 'Sponsored',
-          topic: mappedTopic,
-          description: bill.latestAction?.text || 'Legislation sponsored by this member',
-          date: bill.introducedDate || bill.latestAction?.actionDate || new Date().toISOString().split('T')[0],
-          congress: bill.congress,
-          policy_area: policyArea,
-        });
+        for (const bill of sponsoredBills) {
+          const policyArea = bill.policyArea?.name || 'General';
+          const mappedTopic = topicMapping[policyArea] || 'Domestic Policy';
+          
+          votes.push({
+            id: `${bioguideId}-${bill.congress || 0}-sponsored-${bill.type}${bill.number}`,
+            bill_id: `${bill.type}.${bill.number}`,
+            bill_name: bill.title || `${bill.type} ${bill.number}`,
+            candidate_id: bioguideId,
+            position: 'Sponsored',
+            topic: mappedTopic,
+            description: bill.latestAction?.text || 'Legislation sponsored by this member',
+            date: bill.introducedDate || bill.latestAction?.actionDate || new Date().toISOString().split('T')[0],
+            congress: bill.congress,
+            policy_area: policyArea,
+          });
+        }
+        
+        totalSponsored += sponsoredBills.length;
+        
+        // Check if there are more pages (API returned full 250 results)
+        if (sponsoredBills.length === 250) {
+          sponsoredOffset += 250;
+          // Add small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } else {
+          hasMoreSponsored = false;
+        }
+      } else {
+        console.error(`Congress API error for sponsored: ${sponsoredResponse.status}`);
+        hasMoreSponsored = false;
       }
-      console.log(`Found ${sponsoredBills.length} sponsored bills`);
-    } else {
-      console.error(`Congress API error for sponsored: ${sponsoredResponse.status}`);
     }
+    console.log(`Found ${totalSponsored} total sponsored bills`);
 
-    // Fetch cosponsored legislation
-    const cosponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/cosponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=250`;
-    const cosponsoredResponse = await fetch(cosponsoredUrl);
+    // Fetch ALL cosponsored legislation with pagination
+    let cosponsoredOffset = 0;
+    let totalCosponsored = 0;
+    let hasMoreCosponsored = true;
     
-    if (cosponsoredResponse.ok) {
-      const cosponsoredData = await cosponsoredResponse.json();
-      const cosponsoredBills = cosponsoredData.cosponsoredLegislation || [];
+    console.log(`Fetching cosponsored legislation with pagination...`);
+    
+    while (hasMoreCosponsored) {
+      const cosponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/cosponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=250&offset=${cosponsoredOffset}`;
+      console.log(`Fetching cosponsored page at offset ${cosponsoredOffset}`);
       
-      for (const bill of cosponsoredBills) {
-        const policyArea = bill.policyArea?.name || 'General';
-        const mappedTopic = topicMapping[policyArea] || 'Domestic Policy';
+      const cosponsoredResponse = await fetch(cosponsoredUrl);
+      
+      if (cosponsoredResponse.ok) {
+        const cosponsoredData = await cosponsoredResponse.json();
+        const cosponsoredBills = cosponsoredData.cosponsoredLegislation || [];
         
-        votes.push({
-          id: `${bioguideId}-${bill.congress || 0}-cosponsored-${bill.type}${bill.number}`,
-          bill_id: `${bill.type}.${bill.number}`,
-          bill_name: bill.title || `${bill.type} ${bill.number}`,
-          candidate_id: bioguideId,
-          position: 'Cosponsored',
-          topic: mappedTopic,
-          description: bill.latestAction?.text || 'Legislation cosponsored by this member',
-          date: bill.introducedDate || bill.latestAction?.actionDate || new Date().toISOString().split('T')[0],
-          congress: bill.congress,
-          policy_area: policyArea,
-        });
+        for (const bill of cosponsoredBills) {
+          const policyArea = bill.policyArea?.name || 'General';
+          const mappedTopic = topicMapping[policyArea] || 'Domestic Policy';
+          
+          votes.push({
+            id: `${bioguideId}-${bill.congress || 0}-cosponsored-${bill.type}${bill.number}`,
+            bill_id: `${bill.type}.${bill.number}`,
+            bill_name: bill.title || `${bill.type} ${bill.number}`,
+            candidate_id: bioguideId,
+            position: 'Cosponsored',
+            topic: mappedTopic,
+            description: bill.latestAction?.text || 'Legislation cosponsored by this member',
+            date: bill.introducedDate || bill.latestAction?.actionDate || new Date().toISOString().split('T')[0],
+            congress: bill.congress,
+            policy_area: policyArea,
+          });
+        }
+        
+        totalCosponsored += cosponsoredBills.length;
+        
+        // Check if there are more pages
+        if (cosponsoredBills.length === 250) {
+          cosponsoredOffset += 250;
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } else {
+          hasMoreCosponsored = false;
+        }
+      } else {
+        console.error(`Congress API error for cosponsored: ${cosponsoredResponse.status}`);
+        hasMoreCosponsored = false;
       }
-      console.log(`Found ${cosponsoredBills.length} cosponsored bills`);
     }
+    console.log(`Found ${totalCosponsored} total cosponsored bills`);
 
     // Sort by date descending
     votes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    console.log(`Found ${votes.length} legislative actions for ${bioguideId}`);
+    console.log(`Found ${votes.length} total legislative actions for ${bioguideId}`);
 
     // Persist votes to database if requested
     let persisted = 0;
