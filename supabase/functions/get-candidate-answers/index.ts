@@ -880,20 +880,18 @@ async function generateAnswersInChunks(
       const researchResults = new Map<string, GroundingResult>();
       
       if (hasGrounding) {
-        // For congressional members with voting records, only research questions without clear bill matches
-        const needsResearch = !isBioguideId(candidateId) || votingRecord.length < 20;
-        
-        if (needsResearch) {
-          for (const q of chunk) {
-            const research = await researchCandidatePosition(
-              candidateName, candidateOffice, candidateState, q.text, q.topic_id
-            );
-            researchResults.set(q.id, research);
-            if (research.success) totalResearched++;
-            
-            // Rate limiting: 2 second delay for reliability
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
+        // Always research - voting records alone don't cover all question topics
+        // Even congressional members with extensive voting records need web research
+        // for topics not directly covered by their legislative activity
+        for (const q of chunk) {
+          const research = await researchCandidatePosition(
+            candidateName, candidateOffice, candidateState, q.text, q.topic_id
+          );
+          researchResults.set(q.id, research);
+          if (research.success) totalResearched++;
+          
+          // Rate limiting: 2 second delay for reliability
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
       
