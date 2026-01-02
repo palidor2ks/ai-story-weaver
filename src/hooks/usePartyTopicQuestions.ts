@@ -10,6 +10,7 @@ export interface PartyQuestionAnswer {
   sourceUrls: string[] | null;
   sourceTitles: string[] | null;
   hasSource: boolean;
+  evidenceType: string | null;
 }
 
 export function usePartyTopicQuestions(partyId: string, topicId: string, enabled = false) {
@@ -29,7 +30,7 @@ export function usePartyTopicQuestions(partyId: string, topicId: string, enabled
       const questionIds = questions.map(q => q.id);
       const { data: answers, error: answersError } = await supabase
         .from('party_answers')
-        .select('question_id, answer_value, confidence, source_description, source_url, source_urls, source_titles')
+        .select('question_id, answer_value, confidence, source_description, source_url, source_urls, source_titles, evidence_type')
         .eq('party_id', partyId)
         .in('question_id', questionIds);
 
@@ -53,6 +54,7 @@ export function usePartyTopicQuestions(partyId: string, topicId: string, enabled
           sourceUrls,
           sourceTitles,
           hasSource: !!(answer?.source_description || answer?.source_url || (answer?.source_urls?.length ?? 0) > 0),
+          evidenceType: answer?.evidence_type ?? null,
         };
       });
     },
