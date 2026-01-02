@@ -538,7 +538,7 @@ function extractAnswersFromText(content: string): any[] {
     const confidence = confMatch ? confMatch[1] : 'medium';
     
     const srcMatch = segment.match(/"source_description"\s*:\s*"([^"]*)"/);
-    const source_description = srcMatch ? srcMatch[1].slice(0, 50) : 'Party position';
+    const source_description = srcMatch ? srcMatch[1].slice(0, 500) : 'No documented position';
     
     recovered.push({ question_id, answer_value, confidence, source_description });
   }
@@ -649,7 +649,7 @@ Return JSON array: [{question_id, answer_value, confidence, source_description},
 - question_id: REQUIRED - Must be one of: ${validIdsStr}
 - answer_value: -10, -5, 0, 5, or 10 (Use 0 when no evidence)
 - confidence: "high" (specific evidence), "medium" (inferred), "low" (no evidence - must be 0)
-- source_description: Affirmative position statement explicitly stating what the official supports or opposes. Format: "[Name] [supports/opposes] [specific policy], per [evidence]." DO NOT include URLs, domain names, or website addresses in this field - links are displayed separately in the UI. Example: "Rep. Smith explicitly supports expanding federal gun background checks, voted YES on H.R. 8." Use "No documented position found" only when research shows no evidence.
+- source_description: REQUIRED detailed affirmative position statement (100-300 words). Format: "[Name] [supports/opposes] [specific policy]. [Evidence: specific bill references, voting dates, statement quotes, or policy actions]." DO NOT include URLs, domain names, or website addresses - links are displayed separately. Example: "Rep. Smith explicitly supports expanding federal gun background checks. She sponsored H.R. 8 (Universal Background Checks Act) and voted YES on the Bipartisan Background Checks Act in 2021. In floor remarks, Smith stated: 'We must close the loopholes that allow dangerous individuals to obtain firearms.' Her voting record shows consistent support for gun safety measures including the Assault Weapons Ban." Use "No documented position found" only when research shows no evidence.
 
 ONLY JSON array. No markdown.`;
 
@@ -735,7 +735,7 @@ ONLY JSON array. No markdown.`;
   return parsed.map((item: any) => {
     const questionId = String(item.question_id || '').replace(/[\[\]]/g, '');
     const research = researchResults.get(questionId);
-    const sourceDesc = (item.source_description || 'No documented position').slice(0, 50);
+    const sourceDesc = (item.source_description || 'No documented position').slice(0, 500);
     
     // CRITICAL: Clear sources when no position was found to avoid showing irrelevant links
     const noPositionFound = sourceDesc.toLowerCase().includes('no documented') || 
