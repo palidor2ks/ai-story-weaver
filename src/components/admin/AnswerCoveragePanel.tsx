@@ -7,6 +7,7 @@ import { useEnrichCandidateSources } from "@/hooks/useCandidateAnswers";
 import { useFECIntegration } from "@/hooks/useFECIntegration";
 import { useAdminErrors } from "@/hooks/useAdminErrors";
 import { useCandidateOverrides } from "@/hooks/useCandidateOverrides";
+import { useVotingRecordsStats, useVotingRecordsSync } from "@/hooks/useVotingRecordsSync";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit, Zap, MoreHorizontal } from "lucide-react";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit, Zap, MoreHorizontal, Gavel } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { CommitteeBreakdown } from "@/components/admin/CommitteeBreakdown";
@@ -137,6 +138,8 @@ export function AnswerCoveragePanel() {
   const { populateCandidate, populateBatch, pauseBatch, resumeBatch, cancelBatch, isLoading, isBatchRunning, batchProgress } = usePopulateCandidateAnswers();
   const { recalculateAll, isRecalculatingAll } = useRecalculateCoverageTiers();
   const { mutate: enrichSources, isPending: isEnrichingSource } = useEnrichCandidateSources();
+  const { data: votingStats, isLoading: votingStatsLoading } = useVotingRecordsStats();
+  const { syncAllVotes, progress: voteSyncProgress, issyncing: isVoteSyncing } = useVotingRecordsSync();
   const { 
     fetchFECCandidateId, 
     fetchFECCommittees,
@@ -905,6 +908,112 @@ export function AnswerCoveragePanel() {
             </div>
             <div className="text-2xl font-bold text-green-600">{syncStats_.complete}</div>
           </div>
+        </div>
+        {/* Voting Records Stats */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Gavel className="h-4 w-4" />
+              Congressional Voting Records
+            </div>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      syncAllVotes.mutate();
+                      toast.info('Started voting records sync...', { description: 'Fetching congressional voting data from Congress.gov' });
+                    }}
+                    disabled={isVoteSyncing}
+                  >
+                    {isVoteSyncing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Sync Votes
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Fetch sponsored & cosponsored bills from Congress.gov for all 540 federal legislators</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <FileText className="h-4 w-4" />
+                Total Votes
+              </div>
+              <div className="text-2xl font-bold">{votingStats?.totalVotes?.toLocaleString() || 0}</div>
+            </div>
+
+            <div className="bg-muted/30 rounded-lg p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <Users className="h-4 w-4" />
+                Members Synced
+              </div>
+              <div className="text-2xl font-bold">
+                {votingStats?.membersWithVotes || 0}
+                <span className="text-sm text-muted-foreground font-normal"> / {votingStats?.totalFederalLegislators || 540}</span>
+              </div>
+            </div>
+
+            <div className="bg-blue-500/10 rounded-lg p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <BarChart3 className="h-4 w-4 text-blue-600" />
+                Topics Covered
+              </div>
+              <div className="text-2xl font-bold text-blue-600">
+                {Object.keys(votingStats?.topicCounts || {}).length}
+              </div>
+            </div>
+
+            <div className="bg-green-500/10 rounded-lg p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                Coverage
+              </div>
+              <div className="text-2xl font-bold text-green-600">
+                {votingStats?.totalFederalLegislators 
+                  ? Math.round((votingStats.membersWithVotes / votingStats.totalFederalLegislators) * 100) 
+                  : 0}%
+              </div>
+            </div>
+          </div>
+
+          {/* Voting Sync Progress */}
+          {isVoteSyncing && voteSyncProgress && (
+            <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                  <span className="font-medium">Syncing: {voteSyncProgress.current || 'Starting...'}</span>
+                </span>
+                <span className="text-muted-foreground">
+                  {voteSyncProgress.completed} / {voteSyncProgress.total}
+                </span>
+              </div>
+              <Progress 
+                value={(voteSyncProgress.completed / voteSyncProgress.total) * 100} 
+                className="h-2" 
+              />
+              {voteSyncProgress.errors.length > 0 && (
+                <p className="text-xs text-destructive">
+                  {voteSyncProgress.errors.length} error(s)
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Overall Progress */}
