@@ -294,22 +294,29 @@ async function researchPartyPosition(
         body: JSON.stringify({
           contents: [{ 
             parts: [{ 
-              text: `Research the ${partyName}'s CURRENT position on: "${questionText}"
+              text: `Research the ${partyName}'s CURRENT position on this SPECIFIC question: "${questionText}"
 
-CRITICAL RECENCY REQUIREMENTS:
+CRITICAL: Only cite sources that DIRECTLY address this specific question.
+Do NOT include sources that are about the general topic but don't discuss the specific issue.
+
+RECENCY REQUIREMENTS:
 - Use ONLY the LATEST official party platform (2024 or most recent available)
 - Do NOT reference outdated platforms from previous election cycles (2020, 2016, etc.)
 - Prioritize recent statements from party leadership (2023-2025 first)
 - Work backwards chronologically only if recent evidence is unavailable
-- Note the date/year of any sources you cite
+
+SOURCE RELEVANCE REQUIREMENTS:
+- The source MUST explicitly discuss the specific issue in the question
+- General topic pages that don't mention the specific issue are NOT valid sources
+- If no sources directly address this question, say "No relevant sources found"
 
 Look for (in order of priority):
-1. Official 2024 party platform document
-2. Recent policy statements from current party leadership (2023-2025)
-3. Recent voting patterns of party representatives in current Congress
-4. Current party positions in recent political discourse
+1. Official 2024 party platform document sections addressing THIS question
+2. Recent policy statements specifically about THIS issue (2023-2025)
+3. Recent voting patterns on bills related to THIS specific issue
+4. Current party positions in discourse about THIS specific question
 
-Summarize the party's CURRENT position based on the most recent available evidence. Include specific examples with dates when possible.`
+Summarize the party's CURRENT position based on evidence that DIRECTLY addresses this question. If no sources discuss this specific issue, clearly state that.`
             }]
           }],
           tools: [{ googleSearch: {} }]
@@ -556,10 +563,18 @@ Return ONLY a valid JSON array, no other text. Example:
             answerValue = validateScoreConsistency(answerValue, sourceDesc, partyId);
           }
           
-          // Use primary source URL from research, fallback to party platform
-          const primaryUrl = research?.sourceUrls?.[0] || partyContext.officialPlatformUrl;
-          const allSourceUrls = research?.sourceUrls || [];
-          const allSourceTitles = research?.sourceTitles || [];
+          // CRITICAL: Clear sources when no position was found to avoid showing irrelevant links
+          const noPositionFound = sourceDesc.toLowerCase().includes('no documented position') || 
+                                   confidence === 'low';
+          
+          // Use primary source URL from research, fallback to party platform (only if position found)
+          const primaryUrl = noPositionFound ? null : (research?.sourceUrls?.[0] || partyContext.officialPlatformUrl);
+          const allSourceUrls = noPositionFound ? [] : (research?.sourceUrls || []);
+          const allSourceTitles = noPositionFound ? [] : (research?.sourceTitles || []);
+          
+          if (noPositionFound && research?.sourceUrls?.length) {
+            console.log(`[Source Cleanup] Clearing ${research.sourceUrls.length} irrelevant sources for ${questionId} (no position found)`);
+          }
           
           return {
             party_id: partyId,

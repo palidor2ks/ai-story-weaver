@@ -378,22 +378,28 @@ async function researchCandidatePosition(
         body: JSON.stringify({
           contents: [{ 
             parts: [{ 
-              text: `Research ${candidateName} (${candidateOffice}, ${candidateState}) CURRENT position on: "${questionText}"
+              text: `Research ${candidateName} (${candidateOffice}, ${candidateState}) CURRENT position on this SPECIFIC question: "${questionText}"
 
-CRITICAL RECENCY REQUIREMENTS:
+CRITICAL: Only cite sources that DIRECTLY address this specific question.
+Do NOT include sources that are about the general topic but don't discuss the specific issue.
+
+RECENCY REQUIREMENTS:
 - Prioritize RECENT statements and actions (2023-2025) first
 - Work backwards chronologically only if recent evidence is unavailable
-- Note the date/year of any sources you cite
 - For party platform references, use ONLY the latest official platform (2024)
 
-Look for (in order of priority):
-1. Recent voting records and bill sponsorships (current/recent Congress)
-2. Recent official statements and speeches (2023-2025)
-3. Current campaign website policy positions
-4. Recent news coverage of their stance (last 2 years)
-5. If individual evidence is sparse, note the party's CURRENT (2024) platform position
+SOURCE RELEVANCE REQUIREMENTS:
+- The source MUST explicitly discuss the specific issue in the question
+- General biography pages or topic overviews that don't mention this issue are NOT valid
+- If no sources directly address this question, say "No relevant sources found"
 
-Summarize specific evidence found with dates. Always cite the most recent evidence available.`
+Look for (in order of priority):
+1. Recent voting records and bill sponsorships on THIS specific issue
+2. Recent official statements specifically about THIS question (2023-2025)
+3. Campaign website sections addressing THIS specific policy
+4. Recent news coverage of their stance on THIS exact issue (last 2 years)
+
+Summarize specific evidence that DIRECTLY addresses this question. If no sources discuss this specific issue, clearly state that.`
             }] 
           }],
           tools: [{ googleSearch: {} }]
@@ -726,24 +732,32 @@ ONLY JSON array. No markdown.`;
     const research = researchResults.get(questionId);
     const sourceDesc = (item.source_description || 'No documented position').slice(0, 50);
     
+    // CRITICAL: Clear sources when no position was found to avoid showing irrelevant links
+    const noPositionFound = sourceDesc.toLowerCase().includes('no documented') || 
+                             item.confidence === 'low';
+    
     // Determine source URL and titles: research > bill > congress profile > null
-    let sourceUrl = congressGovUrl;
+    let sourceUrl = noPositionFound ? null : congressGovUrl;
     let sourceUrls: string[] = [];
     let sourceTitles: string[] = [];
     
-    if (research?.sourceUrls && research.sourceUrls.length > 0) {
-      sourceUrls = research.sourceUrls;
-      sourceTitles = research.sourceTitles || [];
-      sourceUrl = research.sourceUrls[0];
-    } else if (isCongressional) {
-      const billInfo = extractBillInfo(sourceDesc);
-      if (billInfo) {
-        const matchingBill = votingRecord.find(
-          v => v.type.toUpperCase() === billInfo.type && v.number === billInfo.number
-        );
-        const congress = matchingBill?.congress || 118;
-        sourceUrl = buildBillUrl(billInfo.type, billInfo.number, congress);
+    if (!noPositionFound) {
+      if (research?.sourceUrls && research.sourceUrls.length > 0) {
+        sourceUrls = research.sourceUrls;
+        sourceTitles = research.sourceTitles || [];
+        sourceUrl = research.sourceUrls[0];
+      } else if (isCongressional) {
+        const billInfo = extractBillInfo(sourceDesc);
+        if (billInfo) {
+          const matchingBill = votingRecord.find(
+            v => v.type.toUpperCase() === billInfo.type && v.number === billInfo.number
+          );
+          const congress = matchingBill?.congress || 118;
+          sourceUrl = buildBillUrl(billInfo.type, billInfo.number, congress);
+        }
       }
+    } else if (research?.sourceUrls?.length) {
+      console.log(`[Source Cleanup] Clearing ${research.sourceUrls.length} irrelevant sources for ${questionId} (no position found)`);
     }
     
     // Apply score consistency validation - adjust 0 scores if evidence suggests otherwise

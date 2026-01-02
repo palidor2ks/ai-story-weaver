@@ -204,38 +204,37 @@ async function researchSources(
         body: JSON.stringify({
           contents: [{ 
             parts: [{ 
-              text: `Find official sources documenting the ${partyName}'s CURRENT position on: "${questionText}"
+              text: `Find official sources documenting the ${partyName}'s CURRENT position on this SPECIFIC question: "${questionText}"
 
 The party ${positionDesc} on this issue (score: ${answerValue} on a -10 to +10 scale).
 
-CRITICAL RECENCY REQUIREMENTS:
+CRITICAL: Only cite sources that DIRECTLY address this specific question.
+Do NOT include sources that are about the general topic but don't discuss the specific issue.
+
+RECENCY REQUIREMENTS:
 - Use ONLY the LATEST official party platform (2024 or most recent)
-- Do NOT reference outdated platforms from previous election cycles
 - Prioritize recent statements from party leadership (2023-2025)
-- Work backwards chronologically only if recent evidence is unavailable
+
+SOURCE RELEVANCE REQUIREMENTS:
+- The source MUST explicitly discuss the specific issue in the question
+- General party pages that don't mention this issue are NOT valid sources
+- If no sources directly address this question, respond with "No documented position found"
 
 PRIORITY SOURCES (use these first):
-- Official party websites: democrats.org, gop.com, gp.org, lp.org (2024 platform)
-- Government sources: congress.gov, whitehouse.gov, .gov domains
-- Major news outlets: nytimes.com, washingtonpost.com, apnews.com, reuters.com, politico.com
+- Official party websites with content about THIS specific issue
+- Government sources discussing THIS policy
+- Major news outlets covering the party's stance on THIS exact issue
 
 AVOID these unreliable sources:
 - republicanviews.org, democraticviews.org (often broken/outdated)
 - Partisan opinion blogs or unofficial third-party sites
-- Sites with unclear authorship or no verifiable sources
-- Outdated articles from previous election cycles (2020 or earlier)
-
-Search for (in order of priority):
-1. Official 2024 party platform documents
-2. Recent policy statements from current party leadership (2023-2025)
-3. Recent legislative voting patterns (current Congress)
-4. Recent press releases or official statements (last 2 years)
+- General "what does X party believe" articles that don't cite this issue
 
 IMPORTANT: Format your response EXACTLY as follows:
-DESCRIPTION: [1-2 sentence description citing specific evidence found]
-KEY_QUOTE: "[A SHORT verbatim quote (10-30 words) from the most relevant source that directly evidences the position. Must be exact text that appears on the source page.]"
+DESCRIPTION: [1-2 sentence description citing specific evidence that addresses THIS question]
+KEY_QUOTE: "[A SHORT verbatim quote (10-30 words) from the source that directly evidences the position on THIS issue.]"
 
-If no specific evidence is found, respond with:
+If no sources directly address this specific question, respond with:
 DESCRIPTION: No documented position found.
 KEY_QUOTE: ""`
             }] 
