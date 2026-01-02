@@ -139,7 +139,7 @@ export function AnswerCoveragePanel() {
   const { recalculateAll, isRecalculatingAll } = useRecalculateCoverageTiers();
   const { mutate: enrichSources, isPending: isEnrichingSource } = useEnrichCandidateSources();
   const { data: votingStats, isLoading: votingStatsLoading } = useVotingRecordsStats();
-  const { syncAllVotes, progress: voteSyncProgress, issyncing: isVoteSyncing } = useVotingRecordsSync();
+  const { syncAllVotes, syncSingleMember, progress: voteSyncProgress, issyncing: isVoteSyncing } = useVotingRecordsSync();
   const { 
     fetchFECCandidateId, 
     fetchFECCommittees,
@@ -1442,6 +1442,16 @@ export function AnswerCoveragePanel() {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger className="cursor-help">
+                              <Gavel className="h-3.5 w-3.5 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>Congressional Voting Records</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
+                      <TableHead className="w-[44px] px-2 py-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger className="cursor-help">
                               <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
                             </TooltipTrigger>
                             <TooltipContent>Health Status</TooltipContent>
@@ -1590,6 +1600,21 @@ export function AnswerCoveragePanel() {
                           </TableCell>
                           <TableCell className="px-2 py-2">
                             <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} compact />
+                          </TableCell>
+                          <TableCell className="text-center px-2 py-2">
+                            {candidate.id.match(/^[A-Z][0-9]{6}$/) ? (
+                              <Badge 
+                                variant="outline" 
+                                className={cn(
+                                  "text-[10px] px-1.5 py-0",
+                                  candidate.voteCount > 0 ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800" : ""
+                                )}
+                              >
+                                {candidate.voteCount || 0}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-[10px]">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="px-2 py-2">
                             <CandidateHealthBadge
@@ -2018,6 +2043,35 @@ export function AnswerCoveragePanel() {
                                 )}
                                 
                                 <DropdownMenuSeparator />
+                                
+                                {/* Voting Records Actions - only for federal legislators */}
+                                {candidate.id.match(/^[A-Z][0-9]{6}$/) && (
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      void (async () => {
+                                        try {
+                                          toast.info(`Syncing votes for ${candidate.name}...`);
+                                          await syncSingleMember.mutateAsync(candidate.id);
+                                          toast.success(`Synced voting records for ${candidate.name}`);
+                                          refetchCandidates();
+                                        } catch (err) {
+                                          console.error('[Admin] Sync votes failed:', err);
+                                          toast.error('Failed to sync voting records');
+                                        }
+                                      })();
+                                    }}
+                                    disabled={syncSingleMember.isPending}
+                                  >
+                                    <Gavel className="h-4 w-4 mr-2" />
+                                    Sync Votes
+                                    {candidate.voteCount > 0 && (
+                                      <span className="ml-auto text-xs text-muted-foreground">
+                                        ({candidate.voteCount})
+                                      </span>
+                                    )}
+                                  </DropdownMenuItem>
+                                )}
                                 
                                 {/* AI Actions */}
                                 {candidate.answerCount < candidate.totalQuestions && (
