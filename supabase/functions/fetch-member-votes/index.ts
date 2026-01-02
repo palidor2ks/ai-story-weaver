@@ -199,18 +199,25 @@ serve(async (req) => {
       );
 
       if (uniqueVotes.length > 0) {
-        const { error: upsertError } = await supabase
-          .from('votes')
-          .upsert(uniqueVotes, { 
-            onConflict: 'id',
-            ignoreDuplicates: false 
-          });
+        const CHUNK_SIZE = 500;
 
-        if (upsertError) {
-          console.error('Error persisting votes:', upsertError);
-        } else {
-          persisted = uniqueVotes.length;
-          console.log(`Persisted ${persisted} votes for ${bioguideId}`);
+        for (let i = 0; i < uniqueVotes.length; i += CHUNK_SIZE) {
+          const chunk = uniqueVotes.slice(i, i + CHUNK_SIZE);
+
+          const { error: upsertError } = await supabase
+            .from('votes')
+            .upsert(chunk, { 
+              onConflict: 'id',
+              ignoreDuplicates: false 
+            });
+
+          if (upsertError) {
+            console.error('Error persisting votes chunk:', upsertError);
+            throw new Error(upsertError.message || 'Failed to persist votes');
+          }
+
+          persisted += chunk.length;
+          console.log(`Persisted ${persisted}/${uniqueVotes.length} votes for ${bioguideId}`);
         }
       }
     }

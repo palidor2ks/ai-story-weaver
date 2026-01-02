@@ -1,3 +1,10 @@
+-- Ensure updated_at column exists before referencing it below
+ALTER TABLE candidate_committees
+ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+
+-- Backfill updated_at for any existing rows
+UPDATE candidate_committees SET updated_at = COALESCE(updated_at, now());
+
 -- Cleanup: Mark external committees (J/U/B/D) as inactive for all candidates
 UPDATE candidate_committees 
 SET active = false, updated_at = now()
