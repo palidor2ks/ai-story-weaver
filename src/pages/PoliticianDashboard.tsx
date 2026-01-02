@@ -5,6 +5,7 @@ import { useClaimedProfile, usePoliticianRole, useUpsertCandidateAnswer, useDele
 import { useCandidateAnswers, CandidateAnswer } from '@/hooks/useCandidateAnswers';
 import { Header } from '@/components/Header';
 import { QuestionAnswerForm } from '@/components/politician/QuestionAnswerForm';
+import { QuestionUpdateAlert } from '@/components/QuestionUpdateAlert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -231,6 +232,9 @@ export default function PoliticianDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Question Update Notifications */}
+        <QuestionUpdateAlert candidateId={claimedProfile.id} className="mb-8" />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">

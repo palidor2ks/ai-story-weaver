@@ -14,9 +14,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search, Pencil, Sparkles, XCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search, Pencil, Sparkles, XCircle, Users } from "lucide-react";
 import { toast } from "sonner";
-
+import { useQuestionAnswerCounts } from "@/hooks/useQuestionUpdateNotifications";
 interface QuestionOption {
   id: string;
   question_id: string;
@@ -236,6 +237,31 @@ function BulkGenerateDialog({ open, onOpenChange, topics, onGenerate, progress }
   );
 }
 
+// Answer Count Warning Component for edit dialog
+function AnswerCountWarning({ questionId }: { questionId: string }) {
+  const { data: counts, isLoading } = useQuestionAnswerCounts(questionId);
+
+  if (isLoading || !counts || counts.total === 0) {
+    return null;
+  }
+
+  return (
+    <Alert variant="default" className="border-yellow-500/50 bg-yellow-50/50 dark:bg-yellow-950/20">
+      <AlertTriangle className="h-4 w-4 text-yellow-600" />
+      <AlertDescription className="flex items-center gap-2">
+        <Users className="h-4 w-4 text-yellow-600" />
+        <span className="text-sm">
+          <strong>{counts.total}</strong> answers exist for this question
+          ({counts.users} user{counts.users !== 1 ? 's' : ''}, 
+          {counts.candidates} candidate{counts.candidates !== 1 ? 's' : ''}, 
+          {counts.parties} part{counts.parties !== 1 ? 'ies' : 'y'}).
+          Changing the question text will notify them to update their responses.
+        </span>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 export function QuestionManagementPanel() {
   const queryClient = useQueryClient();
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
@@ -357,6 +383,9 @@ export function QuestionManagementPanel() {
   // Update question mutation
   const updateQuestionMutation = useMutation({
     mutationFn: async (form: QuestionFormData) => {
+      const originalQuestion = editingQuestion;
+      const textChanged = originalQuestion?.text !== form.text;
+      
       // Update the question
       const { error: questionError } = await supabase
         .from('questions')
@@ -383,6 +412,75 @@ export function QuestionManagementPanel() {
             .eq('id', opt.id);
 
           if (optionError) throw optionError;
+        }
+      }
+
+      // If text changed, create notifications for affected entities
+      if (textChanged && originalQuestion) {
+        try {
+          // Get affected user IDs
+          const { data: userAnswers } = await supabase
+            .from('quiz_answers')
+            .select('user_id')
+            .eq('question_id', form.id);
+          
+          // Get affected candidate IDs
+          const { data: candidateAnswers } = await supabase
+            .from('candidate_answers')
+            .select('candidate_id')
+            .eq('question_id', form.id);
+          
+          // Get affected party IDs
+          const { data: partyAnswers } = await supabase
+            .from('party_answers')
+            .select('party_id')
+            .eq('question_id', form.id);
+
+          // Create unique lists
+          const uniqueUserIds = [...new Set(userAnswers?.map(a => a.user_id) || [])];
+          const uniqueCandidateIds = [...new Set(candidateAnswers?.map(a => a.candidate_id) || [])];
+          const uniquePartyIds = [...new Set(partyAnswers?.map(a => a.party_id) || [])];
+
+          // Prepare notifications
+          const notifications = [
+            ...uniqueUserIds.map(id => ({
+              question_id: form.id,
+              entity_type: 'user' as const,
+              entity_id: id,
+              old_question_text: originalQuestion.text,
+              new_question_text: form.text,
+            })),
+            ...uniqueCandidateIds.map(id => ({
+              question_id: form.id,
+              entity_type: 'candidate' as const,
+              entity_id: id,
+              old_question_text: originalQuestion.text,
+              new_question_text: form.text,
+            })),
+            ...uniquePartyIds.map(id => ({
+              question_id: form.id,
+              entity_type: 'party' as const,
+              entity_id: id,
+              old_question_text: originalQuestion.text,
+              new_question_text: form.text,
+            })),
+          ];
+
+          if (notifications.length > 0) {
+            const { error: notifyError } = await supabase
+              .from('question_update_notifications')
+              .insert(notifications);
+
+            if (notifyError) {
+              console.error('Failed to create notifications:', notifyError);
+              // Don't throw - we still want the update to succeed
+            } else {
+              console.log(`Created ${notifications.length} update notifications`);
+            }
+          }
+        } catch (e) {
+          console.error('Error creating notifications:', e);
+          // Don't throw - notification failure shouldn't block the update
         }
       }
 
@@ -844,34 +942,35 @@ export function QuestionManagementPanel() {
         </div>
       </div>
 
-      {/* AI Generate Button - Only show for new questions */}
-      {!isEdit && (
-        <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-dashed">
-          <Sparkles className="h-5 w-5 text-primary" />
-          <span className="text-sm text-muted-foreground flex-1">
-            Generate question and answers with AI
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleGenerateWithAI}
-            disabled={isGenerating || !formData.topic_id}
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4 mr-2" />
-                Generate with AI
-              </>
-            )}
-          </Button>
-        </div>
-      )}
+      {/* AI Generate Button - Show for both create and edit */}
+      <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-dashed">
+        <Sparkles className="h-5 w-5 text-primary" />
+        <span className="text-sm text-muted-foreground flex-1">
+          {isEdit ? "Regenerate question and answers with AI" : "Generate question and answers with AI"}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleGenerateWithAI}
+          disabled={isGenerating || !formData.topic_id}
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4 mr-2" />
+              {isEdit ? "Regenerate with AI" : "Generate with AI"}
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* Warning about affected answers when editing */}
+      {isEdit && <AnswerCountWarning questionId={formData.id} />}
 
       <div className="space-y-2">
         <Label htmlFor="text">Question Text *</Label>

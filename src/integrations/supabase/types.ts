@@ -1258,6 +1258,53 @@ export type Database = {
           },
         ]
       }
+      question_update_notifications: {
+        Row: {
+          created_at: string | null
+          dismissed_at: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          is_read: boolean | null
+          new_question_text: string
+          old_question_text: string
+          question_id: string
+          updated_answer_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          dismissed_at?: string | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          is_read?: boolean | null
+          new_question_text: string
+          old_question_text: string
+          question_id: string
+          updated_answer_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          dismissed_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          is_read?: boolean | null
+          new_question_text?: string
+          old_question_text?: string
+          question_id?: string
+          updated_answer_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_update_notifications_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       questions: {
         Row: {
           created_at: string | null

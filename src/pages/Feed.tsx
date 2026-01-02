@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
+import { QuestionUpdateAlert } from '@/components/QuestionUpdateAlert';
 import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile, useUserTopics } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
@@ -329,6 +330,9 @@ export const Feed = () => {
               : 'Add your address to see your local representatives.'}
           </p>
         </div>
+
+        {/* Question Update Notifications */}
+        <QuestionUpdateAlert className="mb-6" />
 
         {/* Address Status */}
         {!hasAddress && (
