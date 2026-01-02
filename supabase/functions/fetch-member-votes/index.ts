@@ -199,7 +199,7 @@ serve(async (req) => {
       );
 
       if (uniqueVotes.length > 0) {
-        const CHUNK_SIZE = 500;
+        const CHUNK_SIZE = 100;
 
         for (let i = 0; i < uniqueVotes.length; i += CHUNK_SIZE) {
           const chunk = uniqueVotes.slice(i, i + CHUNK_SIZE);
@@ -208,7 +208,8 @@ serve(async (req) => {
             .from('votes')
             .upsert(chunk, { 
               onConflict: 'id',
-              ignoreDuplicates: false 
+              ignoreDuplicates: false,
+              returning: 'minimal',
             });
 
           if (upsertError) {
