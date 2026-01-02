@@ -568,6 +568,245 @@ function parseAIResponse(content: string, finishReason?: string): any[] {
   throw new Error('No JSON array found in response');
 }
 
+function hasDocumentedPosition(answer: GeneratedAnswer | null | undefined): boolean {
+  if (!answer) return false;
+  if (answer.answer_value === 0) return false;
+  const desc = answer.source_description?.toLowerCase() || '';
+  return desc.length > 10 && !desc.includes('no documented');
+}
+
+async function generateVotingRecordAnswers(
+  candidateName: string,
+  candidateParty: string,
+  candidateOffice: string,
+  candidateState: string,
+  candidateId: string,
+  questions: Question[],
+  votingRecord: LegislationRecord[]
+): Promise<GeneratedAnswer[]> {
+  if (!LOVABLE_API_KEY) return [];
+  const isCongressional = isBioguideId(candidateId) && isCongressionalOffice(candidateOffice);
+  if (!isCongressional || votingRecord.length === 0 || questions.length === 0) return [];
+
+  const congressGovUrl = buildCongressGovProfileUrl(candidateId, candidateName);
+  const validQuestionIds = questions.map(q => q.id);
+  const validIdsStr = validQuestionIds.join(', ');
+
+  const questionsText = questions.map((q, i) => {
+    let questionStr = `Question ${i + 1}:\n  ID: "${q.id}"\n  Text: ${q.text}`;
+    
+    if (q.question_options && q.question_options.length > 0) {
+      const sortedOptions = [...q.question_options].sort((a, b) => a.value - b.value);
+      const optionsStr = sortedOptions.map(opt => `    (${opt.value}) ${opt.text}`).join('\n');
+      questionStr += `\n  Options:\n${optionsStr}`;
+    }
+    return questionStr;
+  }).join('\n\n');
+
+  const votingContext = votingRecord.slice(0, 40).map(v => 
+    `- ${v.action} ${v.type}${v.number} (${v.policy_area}) — ${v.title}`
+  ).join('\n');
+
+  const systemPrompt = `You are a political analyst mapping SPECIFIC voting records to question positions.
+
+Use ONLY the voting record provided. Do NOT guess or infer beyond the documented votes/sponsorships.
+If no voting record directly relates to a question, return 0 with confidence "low" and description "No relevant voting record found".
+
+SCORING:
+-10 strong progressive, -5 lean progressive, 0 no clear record, +5 lean conservative, +10 strong conservative.
+Use "high" confidence only when citing clear votes/bills.`;
+
+  const userPrompt = `Official: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
+
+VOTING RECORD (most recent first):
+${votingContext}
+
+Questions:
+${questionsText}
+
+Return ONLY JSON array: [{question_id, answer_value, confidence, source_description}]
+- question_id MUST be one of: ${validIdsStr}
+- answer_value must be -10, -5, 0, 5, or 10
+- confidence: "high" when tied to a specific vote, otherwise "low" with answer_value 0
+- source_description: cite exact bills/votes with bill numbers/dates. Use "No relevant voting record found" when none apply. No URLs.`;
+
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!response.ok) {
+    console.error('AI voting record error:', response.status);
+    return [];
+  }
+
+  const aiResponse = await response.json();
+  const content = aiResponse.choices?.[0]?.message?.content || '';
+  let parsed: any[] = [];
+
+  if (content) {
+    try { parsed = parseAIResponse(content); } catch (e) { parsed = []; }
+  }
+
+  if (parsed.length === 0) return [];
+
+  return parsed
+    .map((item: any) => {
+      const questionId = String(item.question_id || '').replace(/[\[\]]/g, '');
+      if (!validQuestionIds.includes(questionId)) return null;
+
+      const sourceDesc = (item.source_description || 'No relevant voting record found').slice(0, 500);
+      const answerValue = snapToValidValue(item.answer_value);
+      const confidence = item.confidence === 'high' ? 'high' : 'low';
+
+      // Find matching bill URL if referenced
+      let sourceUrl: string | null = null;
+      let sourceTitle: string | undefined;
+      const billInfo = extractBillInfo(sourceDesc);
+      if (billInfo) {
+        const matchingBill = votingRecord.find(
+          v => v.type.toUpperCase() === billInfo.type && v.number === billInfo.number
+        );
+        const congress = matchingBill?.congress || 118;
+        sourceUrl = buildBillUrl(billInfo.type, billInfo.number, congress);
+        sourceTitle = matchingBill?.title;
+      } else {
+        sourceUrl = congressGovUrl;
+      }
+
+      const urlList = sourceUrl ? [sourceUrl] : [];
+      const titleList = sourceTitle ? [sourceTitle] : [];
+
+      return {
+        question_id: questionId,
+        answer_value: answerValue,
+        source_description: sourceDesc,
+        source_url: sourceUrl,
+        source_urls: urlList,
+        source_titles: titleList,
+        source_type: 'voting_record',
+        confidence,
+        evidence_type: 'voting_record' as const,
+        voting_record_summary: sourceTitle,
+        public_statement_summary: undefined,
+        has_discrepancy: false,
+        discrepancy_note: undefined,
+      } as GeneratedAnswer;
+    })
+    .filter((a: GeneratedAnswer | null) => {
+      if (!a) return false;
+      const desc = a.source_description?.toLowerCase() || '';
+      return !(a.answer_value === 0 && desc.includes('no relevant voting record'));
+    });
+}
+
+async function inferCandidateAnswers(
+  candidateName: string,
+  candidateParty: string,
+  candidateOffice: string,
+  candidateState: string,
+  questions: Question[]
+): Promise<GeneratedAnswer[]> {
+  if (!LOVABLE_API_KEY || questions.length === 0) return [];
+
+  const validQuestionIds = questions.map(q => q.id);
+  const validIdsStr = validQuestionIds.join(', ');
+
+  const questionsText = questions.map((q, i) => {
+    let questionStr = `Question ${i + 1}:\n  ID: "${q.id}"\n  Text: ${q.text}`;
+    if (q.question_options && q.question_options.length > 0) {
+      const sortedOptions = [...q.question_options].sort((a, b) => a.value - b.value);
+      const optionsStr = sortedOptions.map(opt => `    (${opt.value}) ${opt.text}`).join('\n');
+      questionStr += `\n  Options:\n${optionsStr}`;
+    }
+    return questionStr;
+  }).join('\n\n');
+
+  const systemPrompt = `You are a cautious political analyst providing LOW-CONFIDENCE inferences when no evidence exists.
+Use general party ideology, office responsibilities, and typical stance patterns.
+These are NOT documented facts—mark every answer as inferred and avoid definitive language.`;
+
+  const userPrompt = `Candidate: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
+
+No documented sources were found. Provide a reasonable inferred lean for each question based on general ideology.
+
+Questions:
+${questionsText}
+
+Return ONLY JSON array: [{question_id, answer_value, source_description}]
+- question_id must be one of: ${validIdsStr}
+- answer_value: -10, -5, 0, 5, or 10 (avoid 0 unless truly unknowable)
+- source_description: 1-2 sentence inference noting lack of documentation (e.g., "Inference based on ${candidateParty} platform..."). No URLs.`;
+
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: 3000,
+    }),
+  });
+
+  if (!response.ok) {
+    console.error('AI inference error:', response.status);
+    return [];
+  }
+
+  const aiResponse = await response.json();
+  const content = aiResponse.choices?.[0]?.message?.content || '';
+  let parsed: any[] = [];
+
+  if (content) {
+    try { parsed = parseAIResponse(content); } catch (e) { parsed = []; }
+  }
+
+  if (parsed.length === 0) return [];
+
+  return parsed
+    .map((item: any) => {
+      const questionId = String(item.question_id || '').replace(/[\[\]]/g, '');
+      if (!validQuestionIds.includes(questionId)) return null;
+
+      const answerValue = snapToValidValue(item.answer_value);
+      const sourceDesc = (item.source_description || 'Position inferred from ideology; no documented sources found.').slice(0, 500);
+
+      return {
+        question_id: questionId,
+        answer_value: answerValue,
+        source_description: sourceDesc,
+        source_url: null,
+        source_urls: [],
+        source_titles: [],
+        source_type: 'web_research',
+        confidence: 'low' as const,
+        evidence_type: 'inferred' as const,
+        voting_record_summary: undefined,
+        public_statement_summary: undefined,
+        has_discrepancy: false,
+        discrepancy_note: undefined,
+      } as GeneratedAnswer;
+    })
+    .filter((a: GeneratedAnswer | null) => !!a);
+}
+
 async function generateChunkAnswers(
   candidateName: string,
   candidateParty: string,
@@ -874,16 +1113,30 @@ async function generateAnswersInChunks(
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
     console.log(`Generating chunk ${i + 1}/${chunks.length} (${chunk.length} questions)...`);
+    const answersById = new Map<string, GeneratedAnswer>();
     
     try {
-      // Phase 1: Research with Gemini grounding (for non-congressional or supplemental research)
+      // Phase 1: Voting record answers (highest priority)
+      let votingAnswers: GeneratedAnswer[] = [];
+      if (isBioguideId(candidateId) && isCongressionalOffice(candidateOffice) && votingRecord.length > 0) {
+        votingAnswers = await generateVotingRecordAnswers(
+          candidateName, candidateParty, candidateOffice, candidateState,
+          candidateId, chunk, votingRecord
+        );
+        votingAnswers.forEach(a => answersById.set(a.question_id, a));
+        if (votingAnswers.length > 0) {
+          console.log(`[Voting] ${votingAnswers.length} answers derived from voting record in chunk ${i + 1}`);
+        }
+      }
+
+      // Identify remaining questions needing research
+      const questionsNeedingResearch = chunk.filter(q => !answersById.has(q.id));
+
+      // Phase 2: Research with Gemini grounding (for unanswered questions)
       const researchResults = new Map<string, GroundingResult>();
       
-      if (hasGrounding) {
-        // Always research - voting records alone don't cover all question topics
-        // Even congressional members with extensive voting records need web research
-        // for topics not directly covered by their legislative activity
-        for (const q of chunk) {
+      if (hasGrounding && questionsNeedingResearch.length > 0) {
+        for (const q of questionsNeedingResearch) {
           const research = await researchCandidatePosition(
             candidateName, candidateOffice, candidateState, q.text, q.topic_id
           );
@@ -896,10 +1149,41 @@ async function generateAnswersInChunks(
       }
       
       // Phase 2: Generate answers with research context
-      const answers = await generateChunkAnswers(
-        candidateName, candidateParty, candidateOffice, candidateState,
-        candidateId, chunk, votingRecord, researchResults
-      );
+      let researchAnswers: GeneratedAnswer[] = [];
+      if (questionsNeedingResearch.length > 0) {
+        researchAnswers = await generateChunkAnswers(
+          candidateName, candidateParty, candidateOffice, candidateState,
+          candidateId, questionsNeedingResearch, votingRecord, researchResults
+        );
+        researchAnswers.forEach(a => {
+          if (!answersById.has(a.question_id)) {
+            answersById.set(a.question_id, a);
+          }
+        });
+      }
+
+      // Phase 3: AI inference for unanswered or neutral positions
+      const unresolvedQuestions = chunk.filter(q => {
+        const existing = answersById.get(q.id);
+        if (!existing) return true;
+        const desc = existing.source_description?.toLowerCase() || '';
+        return existing.answer_value === 0 || desc.includes('no documented position');
+      });
+
+      if (unresolvedQuestions.length > 0) {
+        const inferredAnswers = await inferCandidateAnswers(
+          candidateName, candidateParty, candidateOffice, candidateState, unresolvedQuestions
+        );
+
+        inferredAnswers.forEach(a => {
+          const existing = answersById.get(a.question_id);
+          if (!hasDocumentedPosition(existing)) {
+            answersById.set(a.question_id, a);
+          }
+        });
+      }
+
+      const answers = Array.from(answersById.values());
       
       if (answers.length === 0) {
         failedChunks++;
