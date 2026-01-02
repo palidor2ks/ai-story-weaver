@@ -52,7 +52,7 @@ interface PartyAnswer {
   source_titles: string[];
   confidence: string;
   notes: string | null;
-  evidence_type?: 'platform' | 'inferred_from_reps' | 'mixed';
+  evidence_type?: 'platform' | 'inferred_from_reps' | 'ai_inferred' | 'mixed';
   rep_voting_summary?: string;
   has_discrepancy?: boolean;
   discrepancy_note?: string;
@@ -77,13 +77,11 @@ const BLOCKED_DOMAINS = [
   'republicanviews.org',
   'conservapedia.com',
   'thefederalistpapers.org',
-  // Video platforms (block iframe embedding, hard to cite specific quotes)
   'youtube.com',
   'youtu.be',
   'vimeo.com',
   'dailymotion.com',
   'tiktok.com',
-  // Social media platforms (often block embedding, ephemeral content)
   'facebook.com',
   'instagram.com',
   'twitter.com',
@@ -116,7 +114,6 @@ async function resolveRedirectUrl(url: string): Promise<string> {
     const response = await fetch(url, { method: 'HEAD', redirect: 'follow' });
     return response.url || url;
   } catch {
-    // Try to extract URL from the redirect path
     const match = url.match(/[?&]url=([^&]+)/);
     if (match) {
       return decodeURIComponent(match[1]);
@@ -130,7 +127,6 @@ async function validateUrl(url: string, timeout = 5000): Promise<boolean> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     
-    // Try HEAD first
     let response = await fetch(url, { 
       method: 'HEAD', 
       redirect: 'follow',
@@ -140,7 +136,6 @@ async function validateUrl(url: string, timeout = 5000): Promise<boolean> {
     
     if (response.ok) return true;
     
-    // Fallback to GET for servers that reject HEAD
     if (response.status === 405 || response.status === 403) {
       const controller2 = new AbortController();
       const timeoutId2 = setTimeout(() => controller2.abort(), timeout);
@@ -162,26 +157,24 @@ async function validateUrl(url: string, timeout = 5000): Promise<boolean> {
 }
 
 /**
- * Query representative voting consensus for a given question and party
- * This aggregates candidate_answers from party representatives to infer party position
+ * PHASE 1: Query representative voting consensus for a given question and party
+ * This is now the PRIMARY source - actions speak louder than words
  */
 async function getRepresentativeConsensus(
   questionId: string,
   partyId: string,
   supabase: any
 ): Promise<RepConsensus | null> {
-  // Map party_id to party name in candidates table
   const partyName = partyId === 'democrat' ? 'Democrat' 
                   : partyId === 'republican' ? 'Republican'
                   : null;
   
   if (!partyName) {
     console.log(`[RepConsensus] No rep aggregation for party: ${partyId}`);
-    return null; // Only works for major parties with reps
+    return null;
   }
   
   try {
-    // Query candidate_answers joined with candidates filtered by party
     const { data, error } = await supabase
       .from('candidate_answers')
       .select(`
@@ -201,23 +194,26 @@ async function getRepresentativeConsensus(
     
     if (!data || data.length < 10) {
       console.log(`[RepConsensus] Insufficient data for ${questionId}: ${data?.length || 0} reps (need 10+)`);
-      return null; // Need meaningful sample
+      return null;
     }
     
     const avgScore = data.reduce((sum: number, d: any) => sum + d.answer_value, 0) / data.length;
     const highConfidenceCount = data.filter((d: any) => d.confidence === 'high').length;
     
-    // Snap to valid value
     const snappedScore = [-10, -5, 0, 5, 10].reduce((prev, curr) => 
       Math.abs(curr - avgScore) < Math.abs(prev - avgScore) ? curr : prev
     );
     
-    console.log(`[RepConsensus] ${partyName} on ${questionId}: ${data.length} reps, avg=${avgScore.toFixed(2)}, snapped=${snappedScore}`);
+    // Strong consensus = HIGH confidence (>30% high confidence answers)
+    // Weak consensus = MEDIUM confidence
+    const confidence = highConfidenceCount > data.length * 0.3 ? 'high' : 'medium';
+    
+    console.log(`[RepConsensus] ${partyName} on ${questionId}: ${data.length} reps, avg=${avgScore.toFixed(2)}, snapped=${snappedScore}, confidence=${confidence}`);
     
     return {
       avgScore: snappedScore,
       count: data.length,
-      confidence: highConfidenceCount > data.length * 0.3 ? 'medium' : 'low',
+      confidence,
       highConfidenceCount
     };
   } catch (e) {
@@ -226,7 +222,6 @@ async function getRepresentativeConsensus(
   }
 }
 
-// Snap AI-generated values to the nearest valid discrete score
 function snapToValidValue(value: number): number {
   const validValues = [-10, -5, 0, 5, 10];
   return validValues.reduce((prev, curr) => 
@@ -235,118 +230,8 @@ function snapToValidValue(value: number): number {
 }
 
 /**
- * Validate that the score is consistent with the source description.
- * If evidence clearly indicates progressive/conservative stance but score is 0, adjust it.
- */
-function validateScoreConsistency(
-  answerValue: number,
-  sourceDescription: string,
-  partyId: string
-): number {
-  // Only adjust neutral scores that have evidence suggesting a clear stance
-  if (answerValue !== 0) return answerValue;
-  
-  const lowerDesc = sourceDescription.toLowerCase();
-  
-  // Skip if truly no evidence
-  if (lowerDesc.includes('no documented') && lowerDesc.length < 50) {
-    return answerValue;
-  }
-  
-  // Progressive/left-leaning indicators (expanded for evidence-informed scoring)
-  const progressiveIndicators = [
-    'supports comprehensive',
-    'supports universal',
-    'supports expanding',
-    'supports stricter',
-    'supports increasing',
-    'supports strengthening',
-    'advocates for',
-    'pushed for legislation',
-    'strongly supports',
-    'supports federal funding',
-    'supports government-funded',
-    'supports banning',
-    'opposes restrictions',
-    'opposes cuts to',
-    'more likely than republicans to support',
-    // Evidence-informed indicators
-    'generally supports',
-    'typically supports',
-    'party supports',
-    'democrats support',
-    'democratic party supports',
-    'democrats favor',
-    'democratic party favors',
-    'democrats generally',
-    'has advocated for',
-    'party platform supports',
-    'favors expanding',
-    'favors increasing',
-    'supports protections for',
-    'supports rights for',
-    'supports access to',
-  ];
-  
-  // Conservative/right-leaning indicators (expanded for evidence-informed scoring)
-  const conservativeIndicators = [
-    'opposes government',
-    'opposes federal',
-    'opposes regulations',
-    'supports deregulation',
-    'supports reducing',
-    'supports limiting government',
-    'supports state rights',
-    'supports parental rights',
-    'supports school choice',
-    'supports second amendment',
-    'opposes tax increases',
-    'supports tax cuts',
-    'supports traditional',
-    'opposes abortion',
-    'more likely than democrats to support',
-    // Evidence-informed indicators
-    'generally opposes',
-    'typically opposes',
-    'party opposes',
-    'republicans support',
-    'republican party supports',
-    'republicans favor',
-    'republican party favors',
-    'republicans generally',
-    'has advocated against',
-    'party platform opposes',
-    'favors limiting',
-    'favors reducing',
-    'opposes mandates',
-    'opposes requirements',
-    'supports lower taxes',
-  ];
-  
-  const hasProgressiveEvidence = progressiveIndicators.some(
-    indicator => lowerDesc.includes(indicator)
-  );
-  
-  const hasConservativeEvidence = conservativeIndicators.some(
-    indicator => lowerDesc.includes(indicator)
-  );
-  
-  // Only adjust if there's clear evidence one way and not the other
-  if (hasProgressiveEvidence && !hasConservativeEvidence) {
-    console.log(`[Consistency] Adjusting ${partyId} score: Progressive evidence with neutral score -> -5`);
-    return -5;
-  }
-  
-  if (hasConservativeEvidence && !hasProgressiveEvidence) {
-    console.log(`[Consistency] Adjusting ${partyId} score: Conservative evidence with neutral score -> 5`);
-    return 5;
-  }
-  
-  return answerValue;
-}
-
-/**
- * Phase 1: Research party position using Gemini with Google Search grounding
+ * PHASE 2: Research party position using Gemini with Google Search grounding
+ * Only called for questions WITHOUT strong rep consensus
  */
 async function researchPartyPosition(
   partyName: string,
@@ -404,7 +289,6 @@ Summarize the party's CURRENT position based on evidence that DIRECTLY addresses
       const errorBody = await response.text();
       console.error(`Gemini grounding error: ${response.status} - ${errorBody}`);
       
-      // Retry on transient errors
       if (retryCount < maxRetries && (response.status === 429 || response.status >= 500)) {
         const delay = Math.pow(2, retryCount + 1) * 1000;
         console.log(`Retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
@@ -412,19 +296,15 @@ Summarize the party's CURRENT position based on evidence that DIRECTLY addresses
         return researchPartyPosition(partyName, questionText, topicName, retryCount + 1);
       }
       
-    return { researchText: '', sourceUrls: [], sourceTitles: [], success: false };
+      return { researchText: '', sourceUrls: [], sourceTitles: [], success: false };
     }
 
     const data = await response.json();
-    
-    // Extract text content
     const researchText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // Extract source URLs and titles from grounding metadata (Gemini 2.0 format)
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
     const rawSources: { url: string; title: string }[] = [];
     
-    // Check groundingChunks (primary source for URLs)
     if (groundingMetadata?.groundingChunks) {
       for (const chunk of groundingMetadata.groundingChunks) {
         if (chunk.web?.uri) {
@@ -436,12 +316,10 @@ Summarize the party's CURRENT position based on evidence that DIRECTLY addresses
       }
     }
     
-    // Log web searches performed
     if (groundingMetadata?.webSearchQueries) {
       console.log(`Web searches: ${groundingMetadata.webSearchQueries.join(', ')}`);
     }
 
-    // Resolve redirects, validate, and filter blocked domains
     const resolvedSources: { url: string; title: string }[] = [];
     const seen = new Set<string>();
     
@@ -449,11 +327,9 @@ Summarize the party's CURRENT position based on evidence that DIRECTLY addresses
       try {
         const resolvedUrl = await resolveRedirectUrl(source.url);
         
-        // Skip blocked domains and duplicates
         if (isBlockedDomain(resolvedUrl) || seen.has(resolvedUrl)) continue;
         seen.add(resolvedUrl);
         
-        // Validate URL is accessible
         const isValid = await validateUrl(resolvedUrl);
         if (!isValid) {
           console.log(`Skipping invalid URL: ${resolvedUrl}`);
@@ -482,7 +358,6 @@ Summarize the party's CURRENT position based on evidence that DIRECTLY addresses
   } catch (e) {
     console.error('Gemini grounding error:', e);
     
-    // Retry on network errors
     if (retryCount < maxRetries) {
       const delay = Math.pow(2, retryCount + 1) * 1000;
       console.log(`Retrying after error in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
@@ -495,17 +370,102 @@ Summarize the party's CURRENT position based on evidence that DIRECTLY addresses
 }
 
 /**
- * Phase 2: Score party position based on grounded research
- * With fallback to representative voting aggregation
+ * PHASE 3: AI Inference as final fallback
+ * Uses general party ideology when no rep data or platform exists
  */
-async function getPartyStances(
+async function inferPartyPosition(
+  question: Question,
+  partyId: string,
+  partyContext: typeof PARTY_CONTEXT.democrat,
+  relatedAnswers: PartyAnswer[]
+): Promise<{ score: number; reasoning: string } | null> {
+  if (!LOVABLE_API_KEY) return null;
+  
+  const systemPrompt = `You are a political analyst inferring a party's likely position on a topic where no explicit documentation exists.
+
+IMPORTANT: This is an INFERENCE based on general party ideology and related positions, NOT a documented fact.
+
+Party Context:
+- Democrats typically favor: government programs, regulations, progressive social policies, environmental protection, worker protections
+- Republicans typically favor: smaller government, deregulation, traditional values, free markets, states' rights
+- Libertarians typically favor: minimal government, individual liberty, free markets, non-intervention
+- Greens typically favor: environmental protection, social justice, grassroots democracy, peace
+
+Scoring:
+- -10 = Strong Progressive/Left (typical Democrat/Green position)
+- -5 = Moderate Progressive/Left lean
+- 0 = Cannot reasonably infer (truly novel or genuinely bipartisan topic)
+- +5 = Moderate Conservative/Right lean
+- +10 = Strong Conservative/Right (typical Republican position)
+
+Only return 0 if you truly cannot make a reasonable inference based on general party ideology.`;
+
+  const relatedContext = relatedAnswers.length > 0 
+    ? `\nRelated positions from the same topic that were documented:\n${relatedAnswers.map(a => `- Score ${a.answer_value}: ${a.source_description.slice(0, 100)}`).join('\n')}`
+    : '';
+
+  const userPrompt = `Based on ${partyContext.name}'s general ideology, what would their likely position be on this question:
+
+"${question.text}"
+${relatedContext}
+
+Return ONLY a JSON object: {"score": <-10|-5|0|5|10>, "reasoning": "<one sentence explanation>"}`;
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 200,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`[AIInference] API error: ${response.status}`);
+      return null;
+    }
+
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content || '';
+    
+    const jsonMatch = content.match(/\{[\s\S]*?\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      const score = snapToValidValue(parsed.score || 0);
+      const reasoning = parsed.reasoning || 'Inferred from general party ideology.';
+      
+      console.log(`[AIInference] ${partyId} on ${question.id}: score=${score}, reason=${reasoning}`);
+      return { score, reasoning };
+    }
+  } catch (e) {
+    console.error(`[AIInference] Error for ${question.id}:`, e);
+  }
+  
+  return null;
+}
+
+/**
+ * Score web research results for questions that need it
+ */
+async function scoreResearchResults(
   questions: Question[],
   partyId: string,
   partyContext: typeof PARTY_CONTEXT.democrat,
-  researchResults: Map<string, GroundingResult>,
-  supabase: any
-): Promise<PartyAnswer[]> {
-  // Build questions with research context
+  researchResults: Map<string, GroundingResult>
+): Promise<Map<string, { score: number; confidence: string; description: string }>> {
+  const results = new Map<string, { score: number; confidence: string; description: string }>();
+  
+  if (questions.length === 0) return results;
+  
   const questionsWithResearch = questions.map((q, i) => {
     const research = researchResults.get(q.id);
     let researchContext = '';
@@ -520,220 +480,338 @@ async function getPartyStances(
     return `${i + 1}. [${q.id}] ${q.text}${researchContext}`;
   }).join('\n\n');
 
-  // EVIDENCE-INFORMED SCORING PROMPT
   const systemPrompt = `You are a non-partisan political analyst scoring party positions based on RESEARCH FINDINGS provided.
 
 EVIDENCE-INFORMED SCORING APPROACH:
-- Score based on ALL evidence in RESEARCH FINDINGS including:
-  * Official party platform statements
-  * How party representatives typically vote
-  * Well-established party positions in political discourse
-  * Patterns of support/opposition among party members
-- If research shows a clear directional lean (even without explicit official documentation), assign a score reflecting that lean
-- Use 0 (neutral) ONLY when research shows genuine bipartisan agreement, mixed positions within the party, or truly novel/unaddressed topics
+- Score based on ALL evidence in RESEARCH FINDINGS
+- If research shows a clear directional lean, assign a score reflecting that lean
+- Use 0 (neutral) ONLY when research shows genuine bipartisan agreement or truly novel topics
 
 SCORING SCALE:
 - -10 = Strong Progressive/Left position
 - -5 = Moderate Progressive/Left lean
-- 0 = Genuinely neutral, mixed, OR topic not applicable to party ideology
+- 0 = Genuinely neutral, mixed, OR no documented position
 - +5 = Moderate Conservative/Right lean
 - +10 = Strong Conservative/Right position
 
-ASSIGNMENT LOGIC:
-- "Democrats support X" / "Republicans oppose X" -> Assign appropriate directional score
-- "Party generally favors" / "Party typically opposes" -> Assign -5 or +5
-- "Party has advocated for" / "Many party members support" -> Assign -5 or +5
-- "Representatives typically vote for/against" -> Use voting pattern to determine score
-- Only use 0 when evidence shows genuine ambiguity or cross-party consensus
-
 You MUST use ONLY these exact values: -10, -5, 0, +5, or +10`;
 
-  const userPrompt = `Score the ${partyContext.name}'s positions based on the RESEARCH FINDINGS provided for each question.
+  const userPrompt = `Score the ${partyContext.name}'s positions based on the RESEARCH FINDINGS provided.
 
 Questions with Research:
 ${questionsWithResearch}
 
 For each question, provide a JSON array with objects containing:
-- question_id: EXACTLY as shown in brackets (e.g., "gun1", "cr2") - do NOT include the brackets
-- answer_value: MUST be exactly one of these integers: -10, -5, 0, 5, or 10
-  * Use 0 if research shows no documented position
-- confidence: "high" (explicit documented statement), "medium" (inferred from evidence), "low" (no documented position - must be 0)
-- source_description: Affirmative position statement explicitly stating what the party supports or opposes. Format: "[Party Name] [explicitly supports/opposes] [specific policy], per [document/source name]." DO NOT include URLs, domain names, or website addresses in this field - links are displayed separately in the UI. Example: "Democratic Party explicitly supports enacting federal laws to prohibit discrimination, including the Equality Act, per 2024 party platform." Use "No documented position found" only when research shows no evidence.
-- notes: Brief explanation if needed, null otherwise
+- question_id: EXACTLY as shown in brackets (do NOT include brackets)
+- answer_value: MUST be exactly one of: -10, -5, 0, 5, or 10 (use 0 if no documented position)
+- confidence: "high" (explicit statement), "medium" (inferred from evidence), "low" (no documented position)
+- source_description: Affirmative position statement. Format: "[Party Name] [supports/opposes] [policy], per [source]." NO URLs. Use "No documented position found" when research shows no evidence.
 
-Return ONLY a valid JSON array, no other text. Example:
-[{"question_id": "gun1", "answer_value": 0, "confidence": "low", "source_description": "No documented position", "notes": null}]`;
+Return ONLY a valid JSON array.`;
 
-  console.log(`Scoring ${partyContext.name} stances on ${questions.length} questions with research context...`);
-
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.2,
-      max_tokens: 4000,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`AI Gateway error for ${partyId}:`, response.status, errorText);
-    throw new Error(`AI Gateway error: ${response.status}`);
-  }
-
-  const aiResponse = await response.json();
-  const content = aiResponse.choices?.[0]?.message?.content || '';
-
-  // Build a set of valid question IDs for validation
-  const validQuestionIds = new Set(questions.map(q => q.id));
-
-  // Parse JSON from response
-  let answers: PartyAnswer[] = [];
   try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 4000,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`AI Gateway error:`, response.status);
+      return results;
+    }
+
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content || '';
+
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
-      let cleanedJson = jsonMatch[0]
+      const cleanedJson = jsonMatch[0]
         .replace(/:\s*\+(\d)/g, ': $1')
         .replace(/,\s*}/g, '}')
         .replace(/,\s*]/g, ']');
       
       const parsed = JSON.parse(cleanedJson);
+      const validQuestionIds = new Set(questions.map(q => q.id));
       
-      answers = parsed
-        .filter((item: any) => {
-          const cleanId = String(item.question_id).replace(/[\[\]]/g, '');
-          if (!validQuestionIds.has(cleanId)) {
-            console.warn(`Skipping invalid question_id: ${item.question_id}`);
-            return false;
-          }
-          return true;
-        })
-        .map((item: any) => {
-          const questionId = String(item.question_id).replace(/[\[\]]/g, '');
-          const research = researchResults.get(questionId);
-          
-          const hasValidSource = item.source_description && 
-            !item.source_description.toLowerCase().includes('no documented') &&
-            item.source_description.length > 10;
-          
-          let answerValue = snapToValidValue(item.answer_value);
-          let confidence = item.confidence || 'medium';
-          let sourceDesc = item.source_description || 'No documented position';
-          
-          // Enforce evidence-only: if no valid source, must be 0
-          if (!hasValidSource && answerValue !== 0) {
-            console.log(`Resetting unsourced answer for ${questionId}: ${answerValue} -> 0`);
-            answerValue = 0;
-            confidence = 'low';
-            sourceDesc = 'No documented position';
-          }
-          
-          // Apply score consistency validation - adjust 0 scores if evidence suggests otherwise
-          if (hasValidSource) {
-            answerValue = validateScoreConsistency(answerValue, sourceDesc, partyId);
-          }
-          
-          // CRITICAL: Clear sources when no position was found to avoid showing irrelevant links
-          const noPositionFound = sourceDesc.toLowerCase().includes('no documented position') || 
-                                   confidence === 'low';
-          
-          // Use primary source URL from research, fallback to party platform (only if position found)
-          const primaryUrl = noPositionFound ? null : (research?.sourceUrls?.[0] || partyContext.officialPlatformUrl);
-          const allSourceUrls = noPositionFound ? [] : (research?.sourceUrls || []);
-          const allSourceTitles = noPositionFound ? [] : (research?.sourceTitles || []);
-          
-          if (noPositionFound && research?.sourceUrls?.length) {
-            console.log(`[Source Cleanup] Clearing ${research.sourceUrls.length} irrelevant sources for ${questionId} (no position found)`);
-          }
-          
-          let evidenceType: 'platform' | 'inferred_from_reps' | 'mixed' = 'platform';
-          let repVotingSummary: string | undefined;
-          let hasDiscrepancy = false;
-          let discrepancyNote: string | undefined;
-          
-          return {
-            party_id: partyId,
-            question_id: questionId,
-            answer_value: answerValue,
-            source_description: sourceDesc,
-            source_url: primaryUrl,
-            source_urls: allSourceUrls,
-            source_titles: allSourceTitles,
-            confidence: confidence,
-            notes: item.notes || null,
-            evidence_type: evidenceType,
-            rep_voting_summary: repVotingSummary,
-            has_discrepancy: hasDiscrepancy,
-            discrepancy_note: discrepancyNote,
-          };
+      for (const item of parsed) {
+        const questionId = String(item.question_id).replace(/[\[\]]/g, '');
+        if (!validQuestionIds.has(questionId)) continue;
+        
+        const score = snapToValidValue(item.answer_value || 0);
+        const confidence = item.confidence || 'medium';
+        const description = item.source_description || 'No documented position';
+        
+        // If no valid source, force score to 0
+        const hasValidSource = description && 
+          !description.toLowerCase().includes('no documented') &&
+          description.length > 10;
+        
+        results.set(questionId, {
+          score: hasValidSource ? score : 0,
+          confidence: hasValidSource ? confidence : 'low',
+          description: hasValidSource ? description : 'No documented position found'
         });
+      }
     }
   } catch (e) {
-    console.error(`Failed to parse AI response for ${partyId}:`, e);
-    console.error('Raw content:', content.slice(0, 500));
+    console.error('Error scoring research results:', e);
+  }
+  
+  return results;
+}
+
+/**
+ * Main processing function with reordered evidence hierarchy:
+ * 1. Rep Consensus (HIGH confidence) - actions speak louder than words
+ * 2. Web Research/Platform (MEDIUM confidence) - official statements
+ * 3. AI Inference (LOW confidence) - educated guess
+ */
+async function processQuestionsWithHierarchy(
+  questions: Question[],
+  partyId: string,
+  partyContext: typeof PARTY_CONTEXT.democrat,
+  supabase: any,
+  hasGrounding: boolean
+): Promise<{ answers: PartyAnswer[]; researched: number }> {
+  const answers: PartyAnswer[] = [];
+  const questionsNeedingResearch: Question[] = [];
+  const repConsensusMap = new Map<string, RepConsensus>();
+  let totalResearched = 0;
+
+  // ============================================
+  // PHASE 1: Check rep consensus for ALL questions FIRST
+  // ============================================
+  console.log(`[Phase1] Checking rep consensus for ${questions.length} questions...`);
+  
+  for (const q of questions) {
+    const consensus = await getRepresentativeConsensus(q.id, partyId, supabase);
+    
+    if (consensus && Math.abs(consensus.avgScore) >= 3) {
+      // Strong consensus found - use it as primary answer
+      repConsensusMap.set(q.id, consensus);
+      
+      answers.push({
+        party_id: partyId,
+        question_id: q.id,
+        answer_value: consensus.avgScore,
+        source_description: `${partyContext.name} position based on voting patterns of ${consensus.count} party representatives.`,
+        source_url: null,
+        source_urls: [],
+        source_titles: [],
+        confidence: consensus.confidence, // 'high' if >30% high confidence reps, else 'medium'
+        notes: `Position derived from how ${consensus.count} ${partyContext.name} representatives (${consensus.highConfidenceCount} with high confidence) voted on this issue. Actions speak louder than words.`,
+        evidence_type: 'inferred_from_reps',
+        rep_voting_summary: `${consensus.count} reps averaged ${consensus.avgScore > 0 ? 'Conservative' : 'Progressive'} position (${consensus.avgScore}/10).`,
+        has_discrepancy: false,
+        discrepancy_note: undefined,
+      });
+      
+      console.log(`[Phase1] ${q.id}: Used rep consensus (${consensus.count} reps, score=${consensus.avgScore})`);
+    } else {
+      // No strong consensus - needs web research
+      questionsNeedingResearch.push(q);
+    }
   }
 
-  // Phase 3: Apply representative voting fallback for answers with no documented position
-  console.log(`Checking rep consensus fallback for ${answers.filter(a => a.confidence === 'low').length} undocumented answers...`);
-  
-  for (let i = 0; i < answers.length; i++) {
-    const answer = answers[i];
+  console.log(`[Phase1] Complete: ${answers.length} from rep consensus, ${questionsNeedingResearch.length} need research`);
+
+  // ============================================
+  // PHASE 2: Web research for questions WITHOUT rep consensus
+  // ============================================
+  if (questionsNeedingResearch.length > 0 && hasGrounding) {
+    console.log(`[Phase2] Researching ${questionsNeedingResearch.length} questions via web...`);
     
-    // Only try fallback if no documented position was found
-    if (answer.confidence === 'low' && answer.answer_value === 0) {
-      const repConsensus = await getRepresentativeConsensus(answer.question_id, partyId, supabase);
+    const researchResults = new Map<string, GroundingResult>();
+    
+    for (const q of questionsNeedingResearch) {
+      const research = await researchPartyPosition(partyContext.name, q.text, q.topic_name);
+      researchResults.set(q.id, research);
+      if (research.success) totalResearched++;
       
-      if (repConsensus && Math.abs(repConsensus.avgScore) >= 3) {
-        console.log(`[RepFallback] Using rep consensus for ${answer.question_id}: ${repConsensus.avgScore} from ${repConsensus.count} reps`);
+      // Rate limiting
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
+    // Score the research results
+    const scoredResults = await scoreResearchResults(
+      questionsNeedingResearch, 
+      partyId, 
+      partyContext, 
+      researchResults
+    );
+    
+    const questionsNeedingInference: Question[] = [];
+    
+    for (const q of questionsNeedingResearch) {
+      const research = researchResults.get(q.id);
+      const scored = scoredResults.get(q.id);
+      
+      if (scored && scored.score !== 0 && scored.confidence !== 'low') {
+        // Valid research result - check for discrepancy with weak rep data
+        const weakConsensus = await getRepresentativeConsensus(q.id, partyId, supabase);
         
-        answers[i] = {
-          ...answer,
-          answer_value: repConsensus.avgScore,
-          confidence: repConsensus.confidence,
-          source_description: `${partyContext.name} position inferred from voting patterns of ${repConsensus.count} party representatives.`,
-          evidence_type: 'inferred_from_reps',
-          rep_voting_summary: `Aggregated from ${repConsensus.count} reps (${repConsensus.highConfidenceCount} high confidence). Average position: ${repConsensus.avgScore > 0 ? 'Conservative' : 'Progressive'} (${Math.abs(repConsensus.avgScore)}/10).`,
-          notes: `No explicit party platform statement. Position derived from how ${repConsensus.count} ${partyContext.name} representatives voted on this issue.`,
-          // Clear URLs since this is database-derived
+        let hasDiscrepancy = false;
+        let discrepancyNote: string | undefined;
+        let repVotingSummary: string | undefined;
+        
+        if (weakConsensus && weakConsensus.count >= 5) {
+          const platformDirection = scored.score > 0 ? 1 : -1;
+          const repDirection = weakConsensus.avgScore > 0 ? 1 : -1;
+          
+          if (platformDirection !== repDirection) {
+            hasDiscrepancy = true;
+            repVotingSummary = `${weakConsensus.count} reps averaged ${weakConsensus.avgScore > 0 ? 'Conservative' : 'Progressive'} (${weakConsensus.avgScore}/10).`;
+            discrepancyNote = `Platform indicates ${scored.score > 0 ? 'conservative' : 'progressive'} stance, but ${weakConsensus.count} representatives vote ${weakConsensus.avgScore > 0 ? 'conservatively' : 'progressively'}.`;
+            console.log(`[Phase2] Discrepancy detected for ${q.id}: platform=${scored.score}, reps=${weakConsensus.avgScore}`);
+          }
+        }
+        
+        answers.push({
+          party_id: partyId,
+          question_id: q.id,
+          answer_value: scored.score,
+          source_description: scored.description,
+          source_url: research?.sourceUrls?.[0] || partyContext.officialPlatformUrl,
+          source_urls: research?.sourceUrls || [],
+          source_titles: research?.sourceTitles || [],
+          confidence: 'medium', // Platform/research always medium
+          notes: null,
+          evidence_type: hasDiscrepancy ? 'mixed' : 'platform',
+          rep_voting_summary: repVotingSummary,
+          has_discrepancy: hasDiscrepancy,
+          discrepancy_note: discrepancyNote,
+        });
+        
+        console.log(`[Phase2] ${q.id}: Used web research (score=${scored.score})`);
+      } else {
+        // No valid research - needs AI inference
+        questionsNeedingInference.push(q);
+      }
+    }
+
+    // ============================================
+    // PHASE 3: AI Inference for remaining questions
+    // ============================================
+    if (questionsNeedingInference.length > 0) {
+      console.log(`[Phase3] AI inference for ${questionsNeedingInference.length} questions...`);
+      
+      // Get related answered questions for context
+      const answeredByTopic = new Map<string, PartyAnswer[]>();
+      for (const a of answers) {
+        const q = questions.find(q => q.id === a.question_id);
+        if (q && a.answer_value !== 0) {
+          const existing = answeredByTopic.get(q.topic_id) || [];
+          existing.push(a);
+          answeredByTopic.set(q.topic_id, existing);
+        }
+      }
+      
+      for (const q of questionsNeedingInference) {
+        const relatedAnswers = answeredByTopic.get(q.topic_id) || [];
+        const inference = await inferPartyPosition(q, partyId, partyContext, relatedAnswers);
+        
+        if (inference && inference.score !== 0) {
+          answers.push({
+            party_id: partyId,
+            question_id: q.id,
+            answer_value: inference.score,
+            source_description: `${partyContext.name} position inferred from general party ideology. ${inference.reasoning}`,
+            source_url: null,
+            source_urls: [],
+            source_titles: [],
+            confidence: 'low', // AI inference is always low confidence
+            notes: 'No official documentation or voting record found. Position estimated from general party ideology and related stances.',
+            evidence_type: 'ai_inferred',
+            rep_voting_summary: undefined,
+            has_discrepancy: false,
+            discrepancy_note: undefined,
+          });
+          
+          console.log(`[Phase3] ${q.id}: AI inferred (score=${inference.score})`);
+        } else {
+          // Truly no position can be determined
+          answers.push({
+            party_id: partyId,
+            question_id: q.id,
+            answer_value: 0,
+            source_description: 'No documented position found',
+            source_url: null,
+            source_urls: [],
+            source_titles: [],
+            confidence: 'low',
+            notes: 'No official documentation, voting record, or reasonable ideological inference available.',
+            evidence_type: undefined,
+            rep_voting_summary: undefined,
+            has_discrepancy: false,
+            discrepancy_note: undefined,
+          });
+          
+          console.log(`[Phase3] ${q.id}: No position determinable`);
+        }
+        
+        // Small delay between inference calls
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+  } else if (questionsNeedingResearch.length > 0) {
+    // No grounding available - go straight to AI inference
+    console.log(`[Phase3] No grounding, AI inference for ${questionsNeedingResearch.length} questions...`);
+    
+    for (const q of questionsNeedingResearch) {
+      const inference = await inferPartyPosition(q, partyId, partyContext, []);
+      
+      if (inference && inference.score !== 0) {
+        answers.push({
+          party_id: partyId,
+          question_id: q.id,
+          answer_value: inference.score,
+          source_description: `${partyContext.name} position inferred from general party ideology. ${inference.reasoning}`,
           source_url: null,
           source_urls: [],
           source_titles: [],
-        };
+          confidence: 'low',
+          notes: 'No official documentation or voting record found. Position estimated from general party ideology.',
+          evidence_type: 'ai_inferred',
+          rep_voting_summary: undefined,
+          has_discrepancy: false,
+          discrepancy_note: undefined,
+        });
+      } else {
+        answers.push({
+          party_id: partyId,
+          question_id: q.id,
+          answer_value: 0,
+          source_description: 'No documented position found',
+          source_url: null,
+          source_urls: [],
+          source_titles: [],
+          confidence: 'low',
+          notes: null,
+          evidence_type: undefined,
+          rep_voting_summary: undefined,
+          has_discrepancy: false,
+          discrepancy_note: undefined,
+        });
       }
-    } else if (answer.confidence !== 'low' && answer.answer_value !== 0) {
-      // Check for discrepancy between platform position and rep voting
-      const repConsensus = await getRepresentativeConsensus(answer.question_id, partyId, supabase);
       
-      if (repConsensus && repConsensus.count >= 10) {
-        // Check if platform and rep voting disagree significantly
-        const platformDirection = answer.answer_value > 0 ? 1 : -1;
-        const repDirection = repConsensus.avgScore > 0 ? 1 : -1;
-        
-        if (platformDirection !== repDirection && Math.abs(repConsensus.avgScore) >= 3) {
-          console.log(`[Discrepancy] Platform vs Reps for ${answer.question_id}: Platform=${answer.answer_value}, Reps=${repConsensus.avgScore}`);
-          
-          answers[i] = {
-            ...answer,
-            evidence_type: 'mixed',
-            has_discrepancy: true,
-            rep_voting_summary: `${repConsensus.count} party representatives averaged ${repConsensus.avgScore > 0 ? 'Conservative' : 'Progressive'} (${Math.abs(repConsensus.avgScore)}/10).`,
-            discrepancy_note: `Party platform indicates ${answer.answer_value > 0 ? 'conservative' : 'progressive'} stance, but ${repConsensus.count} party representatives typically vote ${repConsensus.avgScore > 0 ? 'conservatively' : 'progressively'} on this issue.`,
-          };
-        }
-      }
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
 
-  console.log(`Parsed ${answers.length} valid answers for ${partyContext.name}`);
-  return answers;
+  console.log(`Processing complete: ${answers.length} total answers, ${totalResearched} researched`);
+  return { answers, researched: totalResearched };
 }
 
 serve(async (req) => {
@@ -781,7 +859,6 @@ serve(async (req) => {
       .order('topic_id')
       .order('id');
 
-    // Filter by single question, topic, or get all
     if (questionId) {
       query = query.eq('id', questionId);
     } else if (topicId) {
@@ -797,7 +874,6 @@ serve(async (req) => {
       });
     }
 
-    // Format questions
     let formattedQuestions: Question[] = questions.map(q => ({
       id: q.id,
       text: q.text,
@@ -807,7 +883,6 @@ serve(async (req) => {
 
     console.log(`Found ${formattedQuestions.length} total questions`);
 
-    // If skipExisting, filter out questions with answers
     if (skipExisting) {
       const { data: existingAnswers, error: existingError } = await supabase
         .from('party_answers')
@@ -839,7 +914,7 @@ serve(async (req) => {
 
     console.log(`Processing ${formattedQuestions.length} questions for ${partyContext.name}...`);
 
-    // Process in batches (smaller batch size for grounding to manage rate limits)
+    // Process in batches
     let totalInserted = 0;
     let totalErrors = 0;
     let totalResearched = 0;
@@ -851,23 +926,15 @@ serve(async (req) => {
       console.log(`Processing batch ${batchNum}/${totalBatches} (${batch.length} questions)`);
 
       try {
-        // Phase 1: Research each question with Gemini grounding
-        const researchResults = new Map<string, GroundingResult>();
+        const { answers, researched } = await processQuestionsWithHierarchy(
+          batch,
+          partyId,
+          partyContext,
+          supabase,
+          hasGrounding
+        );
         
-        if (hasGrounding) {
-          for (const q of batch) {
-            const research = await researchPartyPosition(partyContext.name, q.text, q.topic_name);
-            researchResults.set(q.id, research);
-            if (research.success) totalResearched++;
-            
-            // Rate limiting: 2 second delay between grounding calls for reliability
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-          console.log(`Researched ${batch.length} questions, ${researchResults.size} with results`);
-        }
-
-        // Phase 2: Score based on research (with rep consensus fallback)
-        const answers = await getPartyStances(batch, partyId, partyContext, researchResults, supabase);
+        totalResearched += researched;
 
         if (answers.length > 0) {
           const { error: upsertError } = await supabase
@@ -890,7 +957,6 @@ serve(async (req) => {
         totalErrors += batch.length;
       }
 
-      // Delay between batches
       if (i + batchSize < formattedQuestions.length) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
@@ -902,19 +968,21 @@ serve(async (req) => {
       success: true,
       party: partyContext.name,
       partyId,
-      questionsProcessed: formattedQuestions.length,
-      inserted: totalInserted,
+      questionsProcessed: totalInserted,
       errors: totalErrors,
-      researched: totalResearched,
-      groundingEnabled: hasGrounding,
+      questionsResearched: totalResearched,
+      hasGrounding,
+      evidenceHierarchy: ['inferred_from_reps (HIGH)', 'platform (MEDIUM)', 'ai_inferred (LOW)'],
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Error in populate-party-answers function:', errorMessage);
-    return new Response(JSON.stringify({ error: errorMessage }), {
+  } catch (error) {
+    console.error('Edge function error:', error);
+    return new Response(JSON.stringify({ 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      details: String(error)
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
