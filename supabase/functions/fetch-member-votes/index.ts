@@ -63,6 +63,15 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Resolve the canonical candidate ID to store in votes (prefer local candidate primary key)
+    const { data: candidateRecord } = await supabase
+      .from('candidates')
+      .select('id, bioguide_id')
+      .or(`id.eq.${bioguideId},bioguide_id.eq.${bioguideId}`)
+      .maybeSingle();
+
+    const targetCandidateId = candidateRecord?.id || bioguideId;
     const votes: VoteRecord[] = [];
 
     // Fetch ALL sponsored legislation with pagination
@@ -90,7 +99,7 @@ serve(async (req) => {
             id: `${bioguideId}-${bill.congress || 0}-sponsored-${bill.type}${bill.number}`,
             bill_id: `${bill.type}.${bill.number}`,
             bill_name: bill.title || `${bill.type} ${bill.number}`,
-            candidate_id: bioguideId,
+            candidate_id: targetCandidateId,
             position: 'Sponsored',
             topic: mappedTopic,
             description: bill.latestAction?.text || 'Legislation sponsored by this member',
@@ -142,7 +151,7 @@ serve(async (req) => {
             id: `${bioguideId}-${bill.congress || 0}-cosponsored-${bill.type}${bill.number}`,
             bill_id: `${bill.type}.${bill.number}`,
             bill_name: bill.title || `${bill.type} ${bill.number}`,
-            candidate_id: bioguideId,
+            candidate_id: targetCandidateId,
             position: 'Cosponsored',
             topic: mappedTopic,
             description: bill.latestAction?.text || 'Legislation cosponsored by this member',
