@@ -638,7 +638,7 @@ Return JSON array: [{question_id, answer_value, confidence, source_description},
 - question_id: REQUIRED - Must be one of: ${validIdsStr}
 - answer_value: -10, -5, 0, 5, or 10 (Use 0 when no evidence)
 - confidence: "high" (specific evidence), "medium" (inferred), "low" (no evidence - must be 0)
-- source_description: Affirmative position statement explicitly stating what the official supports or opposes, citing specific evidence. Format: "[Name] [supports/opposes] [specific policy], citing [evidence]." Example: "Rep. Smith explicitly supports expanding federal gun background checks, voted YES on H.R. 8." Use "No documented position found" only when research shows no evidence.
+- source_description: Affirmative position statement explicitly stating what the official supports or opposes. Format: "[Name] [supports/opposes] [specific policy], per [evidence]." DO NOT include URLs, domain names, or website addresses in this field - links are displayed separately in the UI. Example: "Rep. Smith explicitly supports expanding federal gun background checks, voted YES on H.R. 8." Use "No documented position found" only when research shows no evidence.
 
 ONLY JSON array. No markdown.`;
 
