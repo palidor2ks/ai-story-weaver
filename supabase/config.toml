@@ -113,3 +113,6 @@ verify_jwt = false
 
 [functions.enrich-candidate-sources]
 verify_jwt = false
+
+[functions.sync-voting-records]
+verify_jwt = false
