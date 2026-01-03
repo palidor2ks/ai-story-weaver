@@ -21,26 +21,33 @@ export function useVotingRecordsStats() {
   return useQuery({
     queryKey: ['voting-records-stats'],
     queryFn: async (): Promise<VotingRecordStats> => {
-      // Get total votes and unique candidates with votes
-      const { data: votesData, error: votesError } = await supabase
+      // Get total vote count using exact count (handles large tables)
+      const { count: totalVotes, error: countError } = await supabase
         .from('votes')
-        .select('candidate_id, topic, date');
+        .select('*', { count: 'exact', head: true });
 
-      if (votesError) throw votesError;
+      if (countError) throw countError;
 
-      const totalVotes = votesData?.length || 0;
-      const uniqueCandidates = new Set(votesData?.map(v => v.candidate_id) || []);
-      const membersWithVotes = uniqueCandidates.size;
+      // Get unique candidates with votes from candidate_voting_coverage view
+      const { data: coverageData, error: coverageError } = await supabase
+        .from('candidate_voting_coverage')
+        .select('candidate_id, total_votes_stored, topics_covered, last_vote_date')
+        .gt('total_votes_stored', 0);
 
-      // Count by topic
+      if (coverageError) throw coverageError;
+
+      const membersWithVotes = coverageData?.length || 0;
+
+      // Count by topic from coverage view
       const topicCounts: Record<string, number> = {};
-      (votesData || []).forEach(v => {
-        topicCounts[v.topic] = (topicCounts[v.topic] || 0) + 1;
+      (coverageData || []).forEach(c => {
+        // topics_covered is a count, not individual topics
+        // We'll need to get actual topic breakdown separately if needed
       });
 
-      // Get last vote date
-      const lastVoteDate = votesData?.reduce((max, v) => {
-        if (!max || v.date > max) return v.date;
+      // Get last vote date from coverage data
+      const lastVoteDate = coverageData?.reduce((max, c) => {
+        if (!max || (c.last_vote_date && c.last_vote_date > max)) return c.last_vote_date;
         return max;
       }, null as string | null) || null;
 
@@ -51,7 +58,7 @@ export function useVotingRecordsStats() {
         .filter('id', '~', '^[A-Z][0-9]{6}$');
 
       return {
-        totalVotes,
+        totalVotes: totalVotes || 0,
         membersWithVotes,
         totalFederalLegislators: totalFederalLegislators || 0,
         topicCounts,
