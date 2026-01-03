@@ -262,15 +262,17 @@ function normalizeTopicName(topic: string): string {
 function extractQuestionKeywords(questionText: string): string[] {
   const text = questionText.toLowerCase();
   const keywordGroups: Record<string, string[]> = {
-    gun: ['gun', 'firearm', 'weapon', 'background check', 'second amendment', 'ammunition'],
-    immigration: ['immigration', 'immigrant', 'border', 'migrant', 'asylum', 'deportation', 'visa'],
-    healthcare: ['healthcare', 'health care', 'medicare', 'medicaid', 'insurance', 'hospital', 'medical'],
-    abortion: ['abortion', 'reproductive', 'roe', 'pro-choice', 'pro-life'],
-    climate: ['climate', 'environment', 'carbon', 'emission', 'renewable', 'fossil fuel', 'clean energy'],
-    tax: ['tax', 'taxation', 'tariff', 'revenue'],
-    education: ['education', 'school', 'student', 'teacher', 'college', 'university'],
-    lgbtq: ['lgbtq', 'gay', 'transgender', 'same-sex', 'marriage equality'],
-    voting: ['voting', 'election', 'ballot', 'voter id', 'gerrymandering'],
+    gun: ['gun', 'firearm', 'weapon', 'background check', 'second amendment', 'ammunition', 'nics', 'atf', 'concealed', 'assault weapon', 'rifle', 'pistol', 'red flag', 'universal background'],
+    immigration: ['immigration', 'immigrant', 'border', 'migrant', 'asylum', 'deportation', 'visa', 'daca', 'dreamer', 'citizenship'],
+    healthcare: ['healthcare', 'health care', 'medicare', 'medicaid', 'insurance', 'hospital', 'medical', 'prescription', 'drug price', 'obamacare', 'aca'],
+    abortion: ['abortion', 'reproductive', 'roe', 'pro-choice', 'pro-life', 'planned parenthood', 'contraception'],
+    climate: ['climate', 'environment', 'carbon', 'emission', 'renewable', 'fossil fuel', 'clean energy', 'epa', 'pollution', 'greenhouse'],
+    tax: ['tax', 'taxation', 'tariff', 'revenue', 'irs'],
+    education: ['education', 'school', 'student', 'teacher', 'college', 'university', 'loan', 'tuition'],
+    lgbtq: ['lgbtq', 'gay', 'transgender', 'same-sex', 'marriage equality', 'gender identity'],
+    voting: ['voting', 'election', 'ballot', 'voter id', 'gerrymandering', 'filibuster'],
+    labor: ['union', 'labor', 'worker', 'minimum wage', 'overtime'],
+    military: ['military', 'defense', 'veteran', 'pentagon', 'armed forces'],
   };
   
   const matches: string[] = [];
@@ -283,10 +285,10 @@ function extractQuestionKeywords(questionText: string): string[] {
 }
 
 // Fetch stored votes from the database (actual floor votes)
+// NOTE: Returns ALL votes for the candidate - topic/keyword filtering happens in generateVotingRecordAnswers
 async function fetchStoredVotes(
   supabase: any,
-  candidateId: string,
-  topicIds: string[]
+  candidateId: string
 ): Promise<StoredVote[]> {
   try {
     const { data, error } = await supabase
@@ -294,7 +296,7 @@ async function fetchStoredVotes(
       .select('bill_id, bill_name, position, topic, date')
       .eq('candidate_id', candidateId)
       .order('date', { ascending: false })
-      .limit(200);
+      .limit(500); // Increased limit to ensure we have enough for cross-topic keyword matching
     
     if (error) {
       console.error('[VotesDB] Error fetching votes:', error);
@@ -303,17 +305,6 @@ async function fetchStoredVotes(
     
     const votes = data || [];
     console.log(`[VotesDB] Found ${votes.length} stored floor votes for ${candidateId}`);
-    
-    // Filter to relevant topics using normalized comparison
-    if (topicIds.length > 0) {
-      const normalizedTopicIds = topicIds.map(normalizeTopicName);
-      const filtered = votes.filter((v: StoredVote) => 
-        normalizedTopicIds.includes(normalizeTopicName(v.topic))
-      );
-      console.log(`[VotesDB] ${filtered.length} votes match requested topics (normalized: ${topicIds.join(', ')} -> ${normalizedTopicIds.join(', ')})`);
-      return filtered;
-    }
-    
     return votes;
   } catch (e) {
     console.error('[VotesDB] Exception fetching votes:', e);
@@ -1362,15 +1353,41 @@ async function generateAnswersInChunks(
         });
       }
 
-      // Phase 3: AI inference for unanswered or neutral positions
+      // Phase 3: AI inference for truly unresolved positions ONLY
+      // CRITICAL: Only infer when:
+      // 1. No answer exists at all, OR
+      // 2. Answer is 0 AND has no sources AND description says "no documented"
       const unresolvedQuestions = chunk.filter(q => {
         const existing = answersById.get(q.id);
         if (!existing) return true;
+        
+        // If we have sources, don't overwrite with inference
+        if (existing.source_urls && existing.source_urls.length > 0) {
+          console.log(`[Phase3] Skipping ${q.id}: has ${existing.source_urls.length} sources`);
+          return false;
+        }
+        
+        // If answer has a non-zero value, don't infer
+        if (existing.answer_value !== 0) {
+          console.log(`[Phase3] Skipping ${q.id}: has non-zero value ${existing.answer_value}`);
+          return false;
+        }
+        
+        // Only infer if truly no position found
         const desc = existing.source_description?.toLowerCase() || '';
-        return existing.answer_value === 0 || desc.includes('no documented position');
+        const needsInference = desc.includes('no documented position') || 
+                               desc.includes('no relevant voting record') ||
+                               desc.length < 20;
+        
+        if (needsInference) {
+          console.log(`[Phase3] Will infer ${q.id}: value=0, no sources, desc="${desc.slice(0, 50)}..."`);
+        }
+        return needsInference;
       });
 
       if (unresolvedQuestions.length > 0) {
+        console.log(`[Phase3] Running inference for ${unresolvedQuestions.length} truly unresolved questions`);
+        
         // Pass existing answers for context (helps inform inference with related positions)
         const existingAnswersForContext = Array.from(answersById.values());
         const inferredAnswers = await inferCandidateAnswers(
@@ -1380,6 +1397,11 @@ async function generateAnswersInChunks(
 
         inferredAnswers.forEach(a => {
           const existing = answersById.get(a.question_id);
+          // Double-check: never overwrite if existing has sources
+          if (existing?.source_urls?.length) {
+            console.log(`[Phase3] Preserving ${a.question_id}: existing has sources`);
+            return;
+          }
           if (!hasDocumentedPosition(existing)) {
             answersById.set(a.question_id, a);
           }
@@ -1596,21 +1618,19 @@ serve(async (req) => {
     let storedVotes: StoredVote[] = [];
     
     if (isCongressional) {
-      // Get unique topic IDs from questions to generate
-      const topicIds = [...new Set(questionsToGenerate.map(q => q.topic_id))];
-      
       console.log(`Fetching voting record for congressional member ${candidateId}...`);
       
-      // Fetch BOTH: sponsored legislation from Congress.gov AND stored floor votes from database
+      // Fetch BOTH: sponsored legislation from Congress.gov AND ALL stored floor votes from database
+      // Topic/keyword filtering happens in generateVotingRecordAnswers for cross-topic matching
       const [congressApiRecords, dbVotes] = await Promise.all([
         fetchMemberVotingRecord(candidateId),
-        fetchStoredVotes(supabase, candidateId, topicIds)
+        fetchStoredVotes(supabase, candidateId)
       ]);
       
       votingRecord = congressApiRecords;
       storedVotes = dbVotes;
       
-      console.log(`Retrieved ${votingRecord.length} sponsored bills + ${storedVotes.length} stored floor votes`);
+      console.log(`Retrieved ${votingRecord.length} sponsored bills + ${storedVotes.length} stored floor votes (all topics)`);
     }
 
     const { generated, failed, validationRejected, researched } = await generateAnswersInChunks(
