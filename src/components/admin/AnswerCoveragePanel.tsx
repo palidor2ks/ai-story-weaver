@@ -139,7 +139,16 @@ export function AnswerCoveragePanel() {
   const { recalculateAll, isRecalculatingAll } = useRecalculateCoverageTiers();
   const { mutate: enrichSources, isPending: isEnrichingSource } = useEnrichCandidateSources();
   const { data: votingStats, isLoading: votingStatsLoading } = useVotingRecordsStats();
-  const { syncAllVotes, syncSingleMember, progress: voteSyncProgress, issyncing: isVoteSyncing } = useVotingRecordsSync();
+  const { 
+    syncAllVotes, 
+    syncAllFloorVotes,
+    syncSingleMember, 
+    syncSingleMemberFloorVotes,
+    progress: voteSyncProgress, 
+    floorVoteProgress,
+    issyncing: isVoteSyncing,
+    isFloorVoteSyncing 
+  } = useVotingRecordsSync();
   const { 
     fetchFECCandidateId, 
     fetchFECCommittees,
@@ -916,43 +925,113 @@ export function AnswerCoveragePanel() {
               <Gavel className="h-4 w-4" />
               Congressional Voting Records
             </div>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      syncAllVotes.mutate();
-                      toast.info('Started voting records sync...', { description: 'Fetching congressional voting data from Congress.gov' });
-                    }}
-                    disabled={isVoteSyncing}
-                  >
-                    {isVoteSyncing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Syncing...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Sync Votes
-                      </>
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Fetch sponsored & cosponsored bills from Congress.gov for all 540 federal legislators</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <div className="flex items-center gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        syncAllVotes.mutate();
+                        toast.info('Started legislation sync...', { description: 'Fetching sponsored & cosponsored bills from Congress.gov' });
+                      }}
+                      disabled={isVoteSyncing || isFloorVoteSyncing}
+                    >
+                      {isVoteSyncing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Syncing...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4 mr-2" />
+                          Sync Legislation
+                        </>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Fetch sponsored & cosponsored bills for all federal legislators</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        syncAllFloorVotes.mutate();
+                        toast.info('Started floor votes sync...', { description: 'Fetching roll call votes from Congress.gov' });
+                      }}
+                      disabled={isVoteSyncing || isFloorVoteSyncing}
+                    >
+                      {isFloorVoteSyncing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Syncing...
+                        </>
+                      ) : (
+                        <>
+                          <Vote className="h-4 w-4 mr-2" />
+                          Sync Floor Votes
+                        </>
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Fetch Yea/Nay floor votes for all federal legislators</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </div>
 
+          {/* Two-column layout for Legislative Actions vs Floor Votes */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Legislative Actions Card */}
+            <div className="bg-muted/30 rounded-lg p-4 space-y-3 border border-muted">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <FileText className="h-4 w-4 text-blue-600" />
+                  Legislative Actions
+                </div>
+                <Badge variant="outline" className="text-xs">Sponsored / Cosponsored</Badge>
+              </div>
+              <div className="text-3xl font-bold text-blue-600">
+                {votingStats?.totalLegislativeActions?.toLocaleString() || 0}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Bills and resolutions (co)sponsored by members
+              </div>
+            </div>
+
+            {/* Floor Votes Card */}
+            <div className="bg-muted/30 rounded-lg p-4 space-y-3 border border-muted">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Vote className="h-4 w-4 text-green-600" />
+                  Floor Votes
+                </div>
+                <Badge variant="outline" className="text-xs">Yea / Nay / Present</Badge>
+              </div>
+              <div className="text-3xl font-bold text-green-600">
+                {votingStats?.totalFloorVotes?.toLocaleString() || 0}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Actual roll call votes cast on the floor
+              </div>
+            </div>
+          </div>
+
+          {/* Coverage Stats Row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-muted/50 rounded-lg p-4 space-y-1">
               <div className="flex items-center gap-2 text-muted-foreground text-sm">
                 <FileText className="h-4 w-4" />
-                Total Votes
+                Total Records
               </div>
               <div className="text-2xl font-bold">{votingStats?.totalVotes?.toLocaleString() || 0}</div>
             </div>
@@ -968,13 +1047,13 @@ export function AnswerCoveragePanel() {
               </div>
             </div>
 
-            <div className="bg-blue-500/10 rounded-lg p-4 space-y-1">
+            <div className="bg-purple-500/10 rounded-lg p-4 space-y-1">
               <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <BarChart3 className="h-4 w-4 text-blue-600" />
-                Topics Covered
+                <Vote className="h-4 w-4 text-purple-600" />
+                With Floor Votes
               </div>
-              <div className="text-2xl font-bold text-blue-600">
-                {Object.keys(votingStats?.topicCounts || {}).length}
+              <div className="text-2xl font-bold text-purple-600">
+                {votingStats?.membersWithFloorVotes || 0}
               </div>
             </div>
 
@@ -991,13 +1070,13 @@ export function AnswerCoveragePanel() {
             </div>
           </div>
 
-          {/* Voting Sync Progress */}
+          {/* Voting Sync Progress - Legislation */}
           {isVoteSyncing && voteSyncProgress && (
             <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4 space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                  <span className="font-medium">Syncing: {voteSyncProgress.current || 'Starting...'}</span>
+                  <span className="font-medium">Syncing Legislation: {voteSyncProgress.current || 'Starting...'}</span>
                 </span>
                 <span className="text-muted-foreground">
                   {voteSyncProgress.completed} / {voteSyncProgress.total}
@@ -1010,6 +1089,30 @@ export function AnswerCoveragePanel() {
               {voteSyncProgress.errors.length > 0 && (
                 <p className="text-xs text-destructive">
                   {voteSyncProgress.errors.length} error(s)
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Floor Vote Sync Progress */}
+          {isFloorVoteSyncing && floorVoteProgress && (
+            <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-green-600" />
+                  <span className="font-medium">Syncing Floor Votes: {floorVoteProgress.current || 'Starting...'}</span>
+                </span>
+                <span className="text-muted-foreground">
+                  {floorVoteProgress.completed} / {floorVoteProgress.total}
+                </span>
+              </div>
+              <Progress 
+                value={(floorVoteProgress.completed / floorVoteProgress.total) * 100} 
+                className="h-2" 
+              />
+              {floorVoteProgress.errors.length > 0 && (
+                <p className="text-xs text-destructive">
+                  {floorVoteProgress.errors.length} error(s)
                 </p>
               )}
             </div>
@@ -2078,31 +2181,56 @@ export function AnswerCoveragePanel() {
                                 
                                 {/* Voting Records Actions - only for federal legislators */}
                                 {candidate.id.match(/^[A-Z][0-9]{6}$/) && (
-                                  <DropdownMenuItem
-                                    onSelect={(e) => {
-                                      e.preventDefault();
-                                      void (async () => {
-                                        try {
-                                          toast.info(`Syncing votes for ${candidate.name}...`);
-                                          await syncSingleMember.mutateAsync(candidate.id);
-                                          toast.success(`Synced voting records for ${candidate.name}`);
-                                          refetchCandidates();
-                                        } catch (err) {
-                                          console.error('[Admin] Sync votes failed:', err);
-                                          toast.error('Failed to sync voting records');
-                                        }
-                                      })();
-                                    }}
-                                    disabled={syncSingleMember.isPending}
-                                  >
-                                    <Gavel className="h-4 w-4 mr-2" />
-                                    Sync Votes
-                                    {candidate.voteCount > 0 && (
-                                      <span className="ml-auto text-xs text-muted-foreground">
-                                        ({candidate.voteCount})
-                                      </span>
-                                    )}
-                                  </DropdownMenuItem>
+                                  <>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        void (async () => {
+                                          try {
+                                            toast.info(`Syncing legislation for ${candidate.name}...`);
+                                            await syncSingleMember.mutateAsync(candidate.id);
+                                            toast.success(`Synced legislation for ${candidate.name}`);
+                                            refetchCandidates();
+                                          } catch (err) {
+                                            console.error('[Admin] Sync votes failed:', err);
+                                            toast.error('Failed to sync legislation');
+                                          }
+                                        })();
+                                      }}
+                                      disabled={syncSingleMember.isPending || syncSingleMemberFloorVotes.isPending}
+                                    >
+                                      <FileText className="h-4 w-4 mr-2" />
+                                      Sync Legislation
+                                      {candidate.voteCount > 0 && (
+                                        <span className="ml-auto text-xs text-muted-foreground">
+                                          ({candidate.voteCount})
+                                        </span>
+                                      )}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        void (async () => {
+                                          try {
+                                            toast.info(`Syncing floor votes for ${candidate.name}...`);
+                                            await syncSingleMemberFloorVotes.mutateAsync({ 
+                                              bioguideId: candidate.id, 
+                                              office: candidate.office || '' 
+                                            });
+                                            toast.success(`Synced floor votes for ${candidate.name}`);
+                                            refetchCandidates();
+                                          } catch (err) {
+                                            console.error('[Admin] Sync floor votes failed:', err);
+                                            toast.error('Failed to sync floor votes');
+                                          }
+                                        })();
+                                      }}
+                                      disabled={syncSingleMember.isPending || syncSingleMemberFloorVotes.isPending}
+                                    >
+                                      <Vote className="h-4 w-4 mr-2" />
+                                      Sync Floor Votes
+                                    </DropdownMenuItem>
+                                  </>
                                 )}
                                 
                                 {/* AI Actions */}
