@@ -20,7 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit, Zap, MoreHorizontal, Gavel } from "lucide-react";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit, Zap, MoreHorizontal } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { CommitteeBreakdown } from "@/components/admin/CommitteeBreakdown";
@@ -922,7 +922,7 @@ export function AnswerCoveragePanel() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-medium">
-              <Gavel className="h-4 w-4" />
+              <Vote className="h-4 w-4" />
               Congressional Voting Records
             </div>
             <div className="flex items-center gap-2">
@@ -1545,9 +1545,19 @@ export function AnswerCoveragePanel() {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger className="cursor-help">
-                              <Gavel className="h-3.5 w-3.5 text-muted-foreground" />
+                              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                             </TooltipTrigger>
-                            <TooltipContent>Congressional Voting Records</TooltipContent>
+                            <TooltipContent>Legislative Actions (Sponsored/Cosponsored)</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
+                      <TableHead className="w-[44px] px-2 py-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger className="cursor-help">
+                              <Vote className="h-3.5 w-3.5 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>Floor Votes (Yea/Nay/Present)</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </TableHead>
@@ -1704,6 +1714,7 @@ export function AnswerCoveragePanel() {
                           <TableCell className="px-2 py-2">
                             <CoverageTierBadge tier={candidate.coverageTier} showTooltip={false} compact />
                           </TableCell>
+                          {/* Legislative Actions Column */}
                           <TableCell className="text-center px-2 py-2">
                             {candidate.id.match(/^[A-Z][0-9]{6}$/) ? (
                               <TooltipProvider>
@@ -1719,31 +1730,70 @@ export function AnswerCoveragePanel() {
                                             ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800"
                                             : candidate.voteSyncStatus === 'error'
                                               ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800"
-                                              : candidate.voteCount > 0 
+                                              : candidate.legislativeActionsCount > 0 
                                                 ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800" 
                                                 : ""
                                       )}
                                     >
-                                      {candidate.voteCount || 0}
+                                      {candidate.legislativeActionsCount || 0}
                                       {candidate.expectedVoteCount !== null && (
                                         <span className="text-muted-foreground">/{candidate.expectedVoteCount}</span>
                                       )}
                                     </Badge>
                                   </TooltipTrigger>
                                   <TooltipContent side="top" className="max-w-xs">
-                                    <p className="text-sm">
+                                    <p className="text-sm font-medium">Legislative Actions</p>
+                                    <p className="text-xs text-muted-foreground">
                                       {candidate.expectedVoteCount !== null 
-                                        ? `${candidate.voteCount} of ${candidate.expectedVoteCount} votes synced`
+                                        ? `${candidate.legislativeActionsCount} of ${candidate.expectedVoteCount} sponsored/cosponsored bills synced`
                                         : 'Never synced'}
                                     </p>
                                     {candidate.lastVoteSyncAt && (
-                                      <p className="text-xs text-muted-foreground">
+                                      <p className="text-xs text-muted-foreground mt-1">
                                         Last sync: {formatDistanceToNow(new Date(candidate.lastVoteSyncAt), { addSuffix: true })}
                                       </p>
                                     )}
-                                    {candidate.voteSyncStatus === 'error' && (
-                                      <p className="text-xs text-red-500">Sync failed - click to retry</p>
-                                    )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              <span className="text-muted-foreground text-[10px]">—</span>
+                            )}
+                          </TableCell>
+                          {/* Floor Votes Column */}
+                          <TableCell className="text-center px-2 py-2">
+                            {candidate.id.match(/^[A-Z][0-9]{6}$/) ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge 
+                                      variant="outline" 
+                                      className={cn(
+                                        "text-[10px] px-1.5 py-0 cursor-default",
+                                        candidate.floorVoteSyncStatus === 'complete' 
+                                          ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800" 
+                                          : candidate.floorVoteSyncStatus === 'partial'
+                                            ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800"
+                                            : candidate.floorVoteSyncStatus === 'error'
+                                              ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800"
+                                              : candidate.floorVotesCount > 0 
+                                                ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800" 
+                                                : ""
+                                      )}
+                                    >
+                                      {candidate.floorVotesCount || 0}
+                                      {candidate.expectedFloorVotes !== null && (
+                                        <span className="text-muted-foreground">/{candidate.expectedFloorVotes}</span>
+                                      )}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-xs">
+                                    <p className="text-sm font-medium">Floor Votes</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {candidate.expectedFloorVotes !== null 
+                                        ? `${candidate.floorVotesCount} of ${candidate.expectedFloorVotes} roll-call votes synced`
+                                        : 'Never synced'}
+                                    </p>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
