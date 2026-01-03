@@ -158,16 +158,18 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
     if (persistVotes && votes.length > 0) {
       console.log(`[BG] Persisting ${votes.length} votes to database for ${bioguideId}...`);
       
-      // Map to votes table schema
+      // Map to votes table schema - use correct position and action_type
       const votesToInsert = votes.map(v => ({
         id: v.id,
         bill_id: v.bill_id,
         bill_name: v.bill_name.slice(0, 500),
         candidate_id: v.candidate_id,
-        position: 'Yea' as const,
+        position: v.position, // 'Sponsored' or 'Cosponsored' - NOT 'Yea'
+        action_type: v.position === 'Sponsored' ? 'sponsored' : 'cosponsored',
         topic: v.topic,
         description: v.description?.slice(0, 1000) || null,
         date: v.date,
+        congress: v.congress,
       }));
 
       // Deduplicate by ID

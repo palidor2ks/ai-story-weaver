@@ -1715,12 +1715,16 @@ export type Database = {
           candidate_id: string
           created_at: string | null
           expected_cosponsored: number | null
+          expected_floor_votes: number | null
           expected_sponsored: number | null
           expected_total: number | null
+          floor_vote_sync_error: string | null
           id: string
+          last_floor_vote_date: string | null
           last_sync_completed_at: string | null
           last_sync_started_at: string | null
           persisted_count: number | null
+          persisted_floor_votes: number | null
           sync_error: string | null
           updated_at: string | null
         }
@@ -1728,12 +1732,16 @@ export type Database = {
           candidate_id: string
           created_at?: string | null
           expected_cosponsored?: number | null
+          expected_floor_votes?: number | null
           expected_sponsored?: number | null
           expected_total?: number | null
+          floor_vote_sync_error?: string | null
           id?: string
+          last_floor_vote_date?: string | null
           last_sync_completed_at?: string | null
           last_sync_started_at?: string | null
           persisted_count?: number | null
+          persisted_floor_votes?: number | null
           sync_error?: string | null
           updated_at?: string | null
         }
@@ -1741,12 +1749,16 @@ export type Database = {
           candidate_id?: string
           created_at?: string | null
           expected_cosponsored?: number | null
+          expected_floor_votes?: number | null
           expected_sponsored?: number | null
           expected_total?: number | null
+          floor_vote_sync_error?: string | null
           id?: string
+          last_floor_vote_date?: string | null
           last_sync_completed_at?: string | null
           last_sync_started_at?: string | null
           persisted_count?: number | null
+          persisted_floor_votes?: number | null
           sync_error?: string | null
           updated_at?: string | null
         }
@@ -1754,34 +1766,49 @@ export type Database = {
       }
       votes: {
         Row: {
+          action_type: string | null
           bill_id: string
           bill_name: string
           candidate_id: string
+          chamber: string | null
+          congress: number | null
           date: string
           description: string | null
           id: string
           position: Database["public"]["Enums"]["vote_position"]
+          session: number | null
           topic: string
+          vote_number: number | null
         }
         Insert: {
+          action_type?: string | null
           bill_id: string
           bill_name: string
           candidate_id: string
+          chamber?: string | null
+          congress?: number | null
           date: string
           description?: string | null
           id: string
           position: Database["public"]["Enums"]["vote_position"]
+          session?: number | null
           topic: string
+          vote_number?: number | null
         }
         Update: {
+          action_type?: string | null
           bill_id?: string
           bill_name?: string
           candidate_id?: string
+          chamber?: string | null
+          congress?: number | null
           date?: string
           description?: string | null
           id?: string
           position?: Database["public"]["Enums"]["vote_position"]
+          session?: number | null
           topic?: string
+          vote_number?: number | null
         }
         Relationships: [
           {
