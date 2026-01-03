@@ -201,6 +201,12 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
       }
     }
 
+    // Deduplicate votes for accurate expected count
+    const uniqueVoteIds = new Set(votes.map(v => 
+      `${bioguideId}-${v.congress || 0}-${v.position === 'Sponsored' ? 'sponsored' : 'cosponsored'}-${v.bill_id.replace('.', '')}`
+    ));
+    const uniqueExpected = uniqueVoteIds.size;
+
     // Log successful sync status
     const { error: statusError } = await supabase
       .from('vote_sync_status')
@@ -208,7 +214,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
         candidate_id: bioguideId,
         expected_sponsored: totalSponsored,
         expected_cosponsored: totalCosponsored,
-        expected_total: totalSponsored + totalCosponsored,
+        expected_total: uniqueExpected, // Use unique count, not raw total
         persisted_count: persisted,
         last_sync_started_at: syncStartedAt,
         last_sync_completed_at: new Date().toISOString(),
