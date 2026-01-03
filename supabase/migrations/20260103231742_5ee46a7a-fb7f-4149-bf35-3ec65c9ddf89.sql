@@ -1,0 +1,1 @@
+ALTER TABLE votes ADD COLUMN IF NOT EXISTS action_type text DEFAULT 'sponsored'

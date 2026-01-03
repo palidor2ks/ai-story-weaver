@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Loader2, RefreshCw, CheckCircle2, XCircle, ChevronDown, ExternalLink, Sparkles } from 'lucide-react';
+import { Loader2, RefreshCw, CheckCircle2, XCircle, ChevronDown, ExternalLink, Sparkles, Vote, FileText, Globe, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getSourceInfo, getSourceBadgeClass } from '@/lib/sourceUtils';
@@ -36,6 +36,7 @@ interface QuestionAnswer {
   sourceDescription: string | null;
   sourceUrls: string[] | null;
   sourceTitles: string[] | null;
+  evidenceType: string | null;
   hasSource: boolean;
 }
 
@@ -71,6 +72,23 @@ function getConfidenceBadge(confidence: string | null) {
   }
 }
 
+function getEvidenceBadge(evidenceType: string | null) {
+  if (!evidenceType) return { text: 'Unknown', icon: Globe, className: 'bg-muted text-muted-foreground' };
+  
+  switch (evidenceType.toLowerCase()) {
+    case 'voting_record':
+      return { text: 'Floor Vote', icon: Vote, className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' };
+    case 'public_statement':
+      return { text: 'Statement', icon: FileText, className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' };
+    case 'mixed':
+      return { text: 'Mixed', icon: Globe, className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' };
+    case 'inferred':
+      return { text: 'Inferred', icon: Brain, className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' };
+    default:
+      return { text: evidenceType, icon: Globe, className: 'bg-muted text-muted-foreground' };
+  }
+}
+
 function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
   return useQuery({
     queryKey: ['candidate-answers-dialog', candidateId],
@@ -88,7 +106,7 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
 
       const { data: answers, error: answersError } = await supabase
         .from('candidate_answers')
-        .select('question_id, answer_value, confidence, source_description, source_url, source_urls, source_titles')
+        .select('question_id, answer_value, confidence, source_description, source_url, source_urls, source_titles, evidence_type')
         .eq('candidate_id', candidateId);
       if (answersError) throw answersError;
 
@@ -101,11 +119,17 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
           .filter(q => q.topic_id === topic.id)
           .map(q => {
             const answer = answerMap.get(q.id);
-            const sourceDesc = answer?.source_description || '';
-            const hasSource = sourceDesc.length > 0 && 
-              !sourceDesc.toLowerCase().includes('no documented');
             const sourceUrls = answer?.source_urls || (answer?.source_url ? [answer.source_url] : null);
             const sourceTitles = (answer as any)?.source_titles || null;
+            const evidenceType = (answer as any)?.evidence_type || null;
+            
+            // Fix hasSource to be truthful:
+            // - Has source if we have actual source URLs
+            // - OR if evidence_type is voting_record (floor votes or sponsored bills)
+            // - NOT if it's just a long AI inference description
+            const hasSource = (sourceUrls && sourceUrls.length > 0) || 
+                              evidenceType === 'voting_record' ||
+                              evidenceType === 'public_statement';
             
             return {
               questionId: q.id,
@@ -115,6 +139,7 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
               sourceDescription: answer?.source_description ?? null,
               sourceUrls,
               sourceTitles,
+              evidenceType,
               hasSource,
             };
           });
@@ -167,6 +192,17 @@ function QuestionRow({
             <div className="flex-1 min-w-0">
               <p className="text-sm leading-snug">{question.questionText}</p>
             </div>
+
+            {(() => {
+              const evidenceBadge = getEvidenceBadge(question.evidenceType);
+              const EvidenceIcon = evidenceBadge.icon;
+              return (
+                <Badge variant="outline" className={cn('text-xs px-2 py-0.5 shrink-0 gap-1', evidenceBadge.className)}>
+                  <EvidenceIcon className="h-3 w-3" />
+                  {evidenceBadge.text.split(' ')[0]}
+                </Badge>
+              );
+            })()}
 
             <Badge variant="outline" className={cn('text-xs px-2 py-0.5 shrink-0', scoreBadge.className)}>
               {scoreBadge.text}

@@ -65,6 +65,10 @@ interface StoredVote {
   position: string;
   topic: string;
   date: string;
+  action_type?: string;
+  vote_number?: number;
+  congress?: number;
+  chamber?: string;
 }
 
 // Blocked domains that should be filtered out
@@ -284,31 +288,38 @@ function extractQuestionKeywords(questionText: string): string[] {
   return [...new Set(matches)];
 }
 
-// Fetch stored votes from the database (actual floor votes)
-// NOTE: Returns ALL votes for the candidate - topic/keyword filtering happens in generateVotingRecordAnswers
+// Fetch stored votes from the database - returns BOTH floor votes and legislative actions
+// NOTE: Returns ALL records for the candidate - filtering happens in generateVotingRecordAnswers
 async function fetchStoredVotes(
   supabase: any,
   candidateId: string
-): Promise<StoredVote[]> {
+): Promise<{ floorVotes: StoredVote[]; legislativeActions: StoredVote[] }> {
   try {
     const { data, error } = await supabase
       .from('votes')
-      .select('bill_id, bill_name, position, topic, date')
+      .select('bill_id, bill_name, position, topic, date, action_type, vote_number, congress, chamber')
       .eq('candidate_id', candidateId)
       .order('date', { ascending: false })
-      .limit(500); // Increased limit to ensure we have enough for cross-topic keyword matching
+      .limit(1000); // Increased limit to get both floor votes and legislative actions
     
     if (error) {
       console.error('[VotesDB] Error fetching votes:', error);
-      return [];
+      return { floorVotes: [], legislativeActions: [] };
     }
     
-    const votes = data || [];
-    console.log(`[VotesDB] Found ${votes.length} stored floor votes for ${candidateId}`);
-    return votes;
+    const allVotes = data || [];
+    
+    // Separate floor votes from legislative actions
+    const floorVotes = allVotes.filter((v: StoredVote) => v.action_type === 'floor_vote');
+    const legislativeActions = allVotes.filter((v: StoredVote) => 
+      v.action_type === 'sponsored' || v.action_type === 'cosponsored' || !v.action_type
+    );
+    
+    console.log(`[VotesDB] Found ${floorVotes.length} floor votes + ${legislativeActions.length} legislative actions for ${candidateId}`);
+    return { floorVotes, legislativeActions };
   } catch (e) {
     console.error('[VotesDB] Exception fetching votes:', e);
-    return [];
+    return { floorVotes: [], legislativeActions: [] };
   }
 }
 
@@ -695,29 +706,45 @@ async function generateVotingRecordAnswers(
     return questionStr;
   }).join('\n\n');
 
-  // Build voting context from BOTH sponsored bills AND stored floor votes
+  // Build voting context from floor votes AND legislative actions
   let votingContext = '';
   
-  // Add stored floor votes first (highest priority - actual votes)
-  if (relevantStoredVotes.length > 0) {
-    const floorVotesText = relevantStoredVotes.slice(0, 30).map(v => 
-      `- Voted ${v.position} on "${v.bill_name.slice(0, 80)}" (${v.date.slice(0, 10)}) [${v.topic}]`
+  // Add floor votes first (highest priority - actual roll call votes)
+  if (relevantStoredVotes.filter(v => v.action_type === 'floor_vote').length > 0) {
+    const actualFloorVotes = relevantStoredVotes.filter(v => v.action_type === 'floor_vote');
+    const floorVotesText = actualFloorVotes.slice(0, 20).map(v => 
+      `- VOTED ${v.position.toUpperCase()} on "${v.bill_name.slice(0, 80)}" (${v.date.slice(0, 10)}) [${v.topic}]`
     ).join('\n');
-    votingContext += `FLOOR VOTES (Actual Congressional Votes):\n${floorVotesText}\n\n`;
+    votingContext += `ROLL CALL FLOOR VOTES (Actual Congressional Votes - HIGHEST PRIORITY):\n${floorVotesText}\n\n`;
   }
   
-  // Add sponsored/cosponsored legislation
-  if (votingRecord.length > 0) {
-    const sponsoredText = votingRecord.slice(0, 20).map(v => 
-      `- ${v.action} ${v.type}${v.number} (${v.policy_area}) — ${v.title}`
+  // Add legislative actions (sponsored/cosponsored)
+  const legislativeActionVotes = relevantStoredVotes.filter(v => 
+    v.action_type === 'sponsored' || v.action_type === 'cosponsored' || !v.action_type
+  );
+  if (legislativeActionVotes.length > 0) {
+    const actionsText = legislativeActionVotes.slice(0, 20).map(v => 
+      `- ${(v.position || v.action_type || 'Sponsored').toUpperCase()} "${v.bill_name.slice(0, 80)}" (${v.date.slice(0, 10)}) [${v.topic}]`
     ).join('\n');
-    votingContext += `SPONSORED LEGISLATION:\n${sponsoredText}`;
+    votingContext += `LEGISLATIVE ACTIONS (Bills Sponsored/Cosponsored):\n${actionsText}\n\n`;
+  }
+  
+  // Add Congress.gov API records as supplementary
+  if (votingRecord.length > 0) {
+    const sponsoredText = votingRecord.slice(0, 15).map(v => 
+      `- ${v.action} ${v.type}${v.number} (${v.policy_area}) — ${v.title.slice(0, 60)}`
+    ).join('\n');
+    votingContext += `ADDITIONAL SPONSORED LEGISLATION (Congress.gov):\n${sponsoredText}`;
   }
 
   const systemPrompt = `You are a political analyst mapping SPECIFIC voting records to question positions.
 
-Use ONLY the voting record provided. Do NOT guess or infer beyond the documented votes/sponsorships.
-FLOOR VOTES are the highest quality evidence - prioritize these over sponsored legislation.
+EVIDENCE PRIORITY (use in this order):
+1. ROLL CALL FLOOR VOTES are the HIGHEST quality evidence - an actual Yea/Nay vote shows exactly where they stand
+2. LEGISLATIVE ACTIONS (sponsored/cosponsored bills) are strong evidence - sponsoring shows active support
+3. If no relevant evidence, return 0 with confidence "low"
+
+Do NOT guess or infer beyond the documented votes/sponsorships.
 If no voting record directly relates to a question, return 0 with confidence "low" and description "No relevant voting record found".
 
 SCORING:
@@ -1197,17 +1224,35 @@ ONLY JSON array. No markdown.`;
       answerValue = validateScoreConsistency(answerValue, sourceDesc);
     }
     
-    // Determine evidence type based on source
+    // Determine evidence type based on source - fix the precedence bug
     const hasVotingRecord = isCongressional && votingRecord.length > 0;
     const hasResearch = research?.success && research.researchText.length > 50;
+    const descLower = sourceDesc.toLowerCase();
     let evidenceType: 'voting_record' | 'public_statement' | 'inferred' | 'mixed' = 'mixed';
     
-    if (hasVotingRecord && sourceDesc.toLowerCase().includes('voted') || sourceDesc.toLowerCase().includes('sponsor')) {
+    // Check for actual floor vote citations
+    const hasFloorVoteCitation = descLower.includes('voted yea') || 
+                                  descLower.includes('voted nay') || 
+                                  descLower.includes('voted yes') || 
+                                  descLower.includes('voted no');
+    const hasSponsorshipCitation = descLower.includes('sponsored') || descLower.includes('cosponsored');
+    
+    if (hasFloorVoteCitation) {
       evidenceType = 'voting_record';
-    } else if (hasResearch && !hasVotingRecord) {
+    } else if (hasSponsorshipCitation && hasVotingRecord) {
+      evidenceType = 'voting_record';
+    } else if (hasResearch && research.sourceUrls.length > 0) {
       evidenceType = 'public_statement';
     } else if (!hasVotingRecord && !hasResearch) {
       evidenceType = 'inferred';
+    }
+    
+    // Fix source_type - set based on actual source, not just being congressional
+    let sourceType = 'web_research';
+    if (hasFloorVoteCitation || hasSponsorshipCitation) {
+      sourceType = 'voting_record';
+    } else if (research?.sourceUrls?.length) {
+      sourceType = 'public_statement';
     }
     
     // Build voting record summary if available
@@ -1229,7 +1274,7 @@ ONLY JSON array. No markdown.`;
       source_url: sourceUrl,
       source_urls: sourceUrls,
       source_titles: sourceTitles,
-      source_type: isCongressional ? 'voting_record' : 'web_research',
+      source_type: sourceType,
       confidence: item.confidence || 'medium',
       evidence_type: evidenceType,
       voting_record_summary: votingRecordSummary,
@@ -1283,7 +1328,8 @@ async function generateAnswersInChunks(
   candidateState: string,
   questions: Question[],
   votingRecord: LegislationRecord[],
-  storedVotes: StoredVote[] = []
+  floorVotes: StoredVote[] = [],
+  legislativeActions: StoredVote[] = []
 ): Promise<{ generated: number; failed: number; validationRejected: number; researched: number }> {
   let totalGenerated = 0;
   let failedChunks = 0;
@@ -1298,8 +1344,10 @@ async function generateAnswersInChunks(
     chunks.push(questions.slice(i, i + CHUNK_SIZE));
   }
   
+  // Combine floor votes and legislative actions for legacy code
+  const storedVotes = [...floorVotes, ...legislativeActions];
   const hasVotingData = votingRecord.length > 0 || storedVotes.length > 0;
-  console.log(`Processing ${questions.length} questions in ${chunks.length} chunks for ${candidateName}, grounding=${hasGrounding}, storedVotes=${storedVotes.length}`);
+  console.log(`Processing ${questions.length} questions in ${chunks.length} chunks for ${candidateName}, grounding=${hasGrounding}, floorVotes=${floorVotes.length}, legislativeActions=${legislativeActions.length}`);
   
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
@@ -1615,27 +1663,28 @@ serve(async (req) => {
 
     const isCongressional = isBioguideId(candidateId) && isCongressionalOffice(officialInfo.office);
     let votingRecord: LegislationRecord[] = [];
-    let storedVotes: StoredVote[] = [];
+    let floorVotes: StoredVote[] = [];
+    let legislativeActions: StoredVote[] = [];
     
     if (isCongressional) {
       console.log(`Fetching voting record for congressional member ${candidateId}...`);
       
-      // Fetch BOTH: sponsored legislation from Congress.gov AND ALL stored floor votes from database
-      // Topic/keyword filtering happens in generateVotingRecordAnswers for cross-topic matching
+      // Fetch BOTH: sponsored legislation from Congress.gov AND stored votes from database
       const [congressApiRecords, dbVotes] = await Promise.all([
         fetchMemberVotingRecord(candidateId),
         fetchStoredVotes(supabase, candidateId)
       ]);
       
       votingRecord = congressApiRecords;
-      storedVotes = dbVotes;
+      floorVotes = dbVotes.floorVotes;
+      legislativeActions = dbVotes.legislativeActions;
       
-      console.log(`Retrieved ${votingRecord.length} sponsored bills + ${storedVotes.length} stored floor votes (all topics)`);
+      console.log(`Retrieved ${votingRecord.length} Congress API records + ${floorVotes.length} floor votes + ${legislativeActions.length} legislative actions`);
     }
 
     const { generated, failed, validationRejected, researched } = await generateAnswersInChunks(
       supabase, candidateId, officialInfo.name, officialInfo.party,
-      officialInfo.office, officialInfo.state, questionsToGenerate, votingRecord, storedVotes
+      officialInfo.office, officialInfo.state, questionsToGenerate, votingRecord, floorVotes, legislativeActions
     );
     
     if (validationRejected > 0) {
