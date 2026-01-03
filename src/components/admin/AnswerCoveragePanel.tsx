@@ -1603,15 +1603,47 @@ export function AnswerCoveragePanel() {
                           </TableCell>
                           <TableCell className="text-center px-2 py-2">
                             {candidate.id.match(/^[A-Z][0-9]{6}$/) ? (
-                              <Badge 
-                                variant="outline" 
-                                className={cn(
-                                  "text-[10px] px-1.5 py-0",
-                                  candidate.voteCount > 0 ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800" : ""
-                                )}
-                              >
-                                {candidate.voteCount || 0}
-                              </Badge>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge 
+                                      variant="outline" 
+                                      className={cn(
+                                        "text-[10px] px-1.5 py-0 cursor-default",
+                                        candidate.voteSyncStatus === 'complete' 
+                                          ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800" 
+                                          : candidate.voteSyncStatus === 'partial'
+                                            ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800"
+                                            : candidate.voteSyncStatus === 'error'
+                                              ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800"
+                                              : candidate.voteCount > 0 
+                                                ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800" 
+                                                : ""
+                                      )}
+                                    >
+                                      {candidate.voteCount || 0}
+                                      {candidate.expectedVoteCount !== null && (
+                                        <span className="text-muted-foreground">/{candidate.expectedVoteCount}</span>
+                                      )}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-xs">
+                                    <p className="text-sm">
+                                      {candidate.expectedVoteCount !== null 
+                                        ? `${candidate.voteCount} of ${candidate.expectedVoteCount} votes synced`
+                                        : 'Never synced'}
+                                    </p>
+                                    {candidate.lastVoteSyncAt && (
+                                      <p className="text-xs text-muted-foreground">
+                                        Last sync: {formatDistanceToNow(new Date(candidate.lastVoteSyncAt), { addSuffix: true })}
+                                      </p>
+                                    )}
+                                    {candidate.voteSyncStatus === 'error' && (
+                                      <p className="text-xs text-red-500">Sync failed - click to retry</p>
+                                    )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             ) : (
                               <span className="text-muted-foreground text-[10px]">—</span>
                             )}

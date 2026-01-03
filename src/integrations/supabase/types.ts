@@ -1710,6 +1710,48 @@ export type Database = {
           },
         ]
       }
+      vote_sync_status: {
+        Row: {
+          candidate_id: string
+          created_at: string | null
+          expected_cosponsored: number | null
+          expected_sponsored: number | null
+          expected_total: number | null
+          id: string
+          last_sync_completed_at: string | null
+          last_sync_started_at: string | null
+          persisted_count: number | null
+          sync_error: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string | null
+          expected_cosponsored?: number | null
+          expected_sponsored?: number | null
+          expected_total?: number | null
+          id?: string
+          last_sync_completed_at?: string | null
+          last_sync_started_at?: string | null
+          persisted_count?: number | null
+          sync_error?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string | null
+          expected_cosponsored?: number | null
+          expected_sponsored?: number | null
+          expected_total?: number | null
+          id?: string
+          last_sync_completed_at?: string | null
+          last_sync_started_at?: string | null
+          persisted_count?: number | null
+          sync_error?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       votes: {
         Row: {
           bill_id: string
