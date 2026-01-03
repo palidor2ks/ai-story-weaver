@@ -3,10 +3,11 @@ import { useCandidateTopicQuestions, CandidateQuestionAnswer } from '@/hooks/use
 import { usePopulateCandidateAnswers } from '@/hooks/usePopulateCandidateAnswers';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, RefreshCw, CheckCircle2, XCircle, HelpCircle, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { Loader2, RefreshCw, ChevronDown, ChevronUp, ExternalLink, Lightbulb } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { getSourceInfo, getSourceBadgeClass } from '@/lib/sourceUtils';
+import { ScoreTextInline } from '@/components/ScoreText';
 
 interface CandidateQuestionListProps {
   candidateId: string;
@@ -15,19 +16,22 @@ interface CandidateQuestionListProps {
   topicName: string;
 }
 
-function getScoreBadge(value: number | null) {
-  if (value === null) return { text: '—', className: 'bg-muted text-muted-foreground' };
-  if (value < 0) return { text: `L${Math.abs(value)}`, className: 'bg-flag-blue text-white' };
-  if (value > 0) return { text: `R${value}`, className: 'bg-flag-red text-white' };
-  return { text: '0', className: 'bg-muted text-muted-foreground' };
-}
-
 function getConfidenceBadge(confidence: string | null) {
   switch (confidence) {
-    case 'high': return { text: 'high', className: 'bg-green-600 text-white' };
-    case 'medium': return { text: 'med', className: 'bg-amber-500 text-white' };
-    case 'low': return { text: 'low', className: 'bg-red-500 text-white' };
+    case 'high': return { text: 'high', className: 'bg-green-100 text-green-700 border-green-200' };
+    case 'medium': return { text: 'medium', className: 'bg-amber-100 text-amber-700 border-amber-200' };
+    case 'low': return { text: 'low', className: 'bg-red-100 text-red-700 border-red-200' };
     default: return { text: '—', className: 'bg-muted text-muted-foreground' };
+  }
+}
+
+function getEvidenceBadge(evidenceType: string | null) {
+  switch (evidenceType) {
+    case 'voting_record': return { text: 'Voting Record', className: 'bg-blue-100 text-blue-700 border-blue-200' };
+    case 'public_statement': return { text: 'Public Statement', className: 'bg-green-100 text-green-700 border-green-200' };
+    case 'inferred': return { text: 'AI Inferred', className: 'bg-amber-100 text-amber-700 border-amber-200' };
+    case 'mixed': return { text: 'Mixed', className: 'bg-purple-100 text-purple-700 border-purple-200' };
+    default: return { text: 'Web Research', className: 'bg-teal-100 text-teal-700 border-teal-200' };
   }
 }
 
@@ -59,8 +63,9 @@ function QuestionRow({
   onToggle: () => void;
   onRegenerate: () => void;
 }) {
-  const scoreBadge = getScoreBadge(question.answerValue);
   const confidenceBadge = getConfidenceBadge(question.confidence);
+  const evidenceBadge = getEvidenceBadge(question.evidenceType);
+  const isInferred = question.evidenceType === 'inferred';
 
   return (
     <Collapsible open={isExpanded} onOpenChange={onToggle}>
@@ -79,37 +84,37 @@ function QuestionRow({
               )}
             </div>
 
+            {/* Score - using ScoreTextInline for L/R format */}
+            <div className="w-14 shrink-0">
+              {question.answerValue !== null ? (
+                <ScoreTextInline score={question.answerValue} />
+              ) : (
+                <span className="text-xs text-muted-foreground">—</span>
+              )}
+            </div>
+
+            {/* Confidence badge */}
+            <Badge variant="outline" className={cn('text-xs px-1.5 py-0 shrink-0', confidenceBadge.className)}>
+              {confidenceBadge.text}
+            </Badge>
+
+            {/* Evidence type badge */}
+            {question.answerValue !== null && (
+              <Badge variant="outline" className={cn('text-xs px-1.5 py-0 shrink-0', evidenceBadge.className)}>
+                {evidenceBadge.text}
+              </Badge>
+            )}
+
             {/* Question text */}
             <span className="flex-1 truncate text-muted-foreground">
               {question.questionText}
             </span>
 
-            {/* Score badge */}
-            <Badge variant="outline" className={cn('text-xs px-1.5 py-0', scoreBadge.className)}>
-              {scoreBadge.text}
-            </Badge>
-
-            {/* Confidence badge */}
-            <Badge variant="outline" className={cn('text-xs px-1.5 py-0', confidenceBadge.className)}>
-              {confidenceBadge.text}
-            </Badge>
-
-            {/* Source indicator */}
-            <div className="w-4 h-4 flex items-center justify-center">
-              {question.hasSource ? (
-                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-              ) : question.answerValue !== null ? (
-                <XCircle className="h-3.5 w-3.5 text-red-500" />
-              ) : (
-                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-              )}
-            </div>
-
             {/* Regenerate button */}
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0"
+              className="h-6 w-6 p-0 shrink-0"
               onClick={(e) => {
                 e.stopPropagation();
                 onRegenerate();
@@ -128,11 +133,13 @@ function QuestionRow({
         <CollapsibleContent>
           <div className="px-3 pb-3 pt-1 ml-4 border-l-2 border-border/50 space-y-2">
             {/* Score with label */}
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-2 text-xs flex-wrap">
               <span className="text-muted-foreground">Score:</span>
-              <Badge variant="outline" className={cn('font-mono', scoreBadge.className)}>
-                {scoreBadge.text}
-              </Badge>
+              {question.answerValue !== null ? (
+                <ScoreTextInline score={question.answerValue} />
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
               <span className="text-muted-foreground">
                 ({getScoreLabel(question.answerValue)})
               </span>
@@ -147,8 +154,25 @@ function QuestionRow({
               )}
             </div>
 
-            {/* AI Explanation */}
-            {question.sourceDescription && (
+            {/* AI Inference special handling - amber box */}
+            {isInferred && question.sourceDescription && (
+              <div className="bg-amber-50 border border-amber-200 rounded-md p-3 space-y-2">
+                <div className="flex items-center gap-2 text-amber-700">
+                  <Lightbulb className="h-4 w-4" />
+                  <span className="text-xs font-medium">AI Logic</span>
+                </div>
+                <p className="text-sm text-amber-900 leading-relaxed">
+                  {question.sourceDescription}
+                </p>
+                <p className="text-xs text-amber-600 italic">
+                  This position was inferred based on general party ideology and typical policy patterns, 
+                  as no specific documented stance was found.
+                </p>
+              </div>
+            )}
+
+            {/* Regular AI Response for non-inferred */}
+            {!isInferred && question.sourceDescription && (
               <div className="space-y-1">
                 <span className="text-xs font-medium text-muted-foreground">AI Response:</span>
                 <p className="text-sm text-foreground/80 leading-relaxed">
@@ -157,8 +181,8 @@ function QuestionRow({
               </div>
             )}
 
-            {/* Source URLs */}
-            {question.sourceUrls && question.sourceUrls.length > 0 && (
+            {/* Source URLs - only for non-inferred answers */}
+            {!isInferred && question.sourceUrls && question.sourceUrls.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
                 {question.sourceUrls.map((url, idx) => {
                   const sourceTitle = question.sourceTitles?.[idx] || undefined;
