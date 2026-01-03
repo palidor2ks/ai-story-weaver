@@ -17,8 +17,12 @@ export interface CandidateAnswerCoverage {
   coverageTier: CoverageTier;
   confidence: ConfidenceLevel;
   voteCount: number;
+  legislativeActionsCount: number;  // Sponsored/cosponsored bills
+  floorVotesCount: number;          // Actual Yea/Nay roll-call votes
   expectedVoteCount: number | null;  // Expected from Congress.gov API
+  expectedFloorVotes: number | null; // Expected floor votes
   voteSyncStatus: 'never' | 'partial' | 'complete' | 'error'; // Aggregated vote sync status
+  floorVoteSyncStatus: 'never' | 'partial' | 'complete' | 'error'; // Floor vote sync status
   lastVoteSyncAt: string | null;  // When votes were last synced
   donorCount: number;
   fecCandidateId: string | null;
@@ -122,18 +126,22 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         return desc.length > 10;
       };
 
-      // Get vote counts per candidate
+      // Get vote counts per candidate (split by action type)
       // Use aggregated view to avoid the 1,000 row default limit on direct table selects
       const { data: votingCoverageData, error: votingCoverageError } = await supabase
         .from('candidate_voting_coverage')
-        .select('candidate_id, total_votes_stored');
+        .select('candidate_id, total_votes_stored, legislative_actions_count, floor_votes_count');
 
       if (votingCoverageError) throw votingCoverageError;
 
-      const voteCountMap: Record<string, number> = {};
+      const voteCountMap: Record<string, { total: number; legislative: number; floor: number }> = {};
       (votingCoverageData || []).forEach(row => {
         if (!row.candidate_id) return;
-        voteCountMap[row.candidate_id] = row.total_votes_stored || 0;
+        voteCountMap[row.candidate_id] = {
+          total: row.total_votes_stored || 0,
+          legislative: row.legislative_actions_count || 0,
+          floor: row.floor_votes_count || 0
+        };
       });
 
       // Get donor counts per candidate
@@ -217,14 +225,17 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       // Get vote sync status from vote_sync_status table
       const { data: voteSyncData } = await supabase
         .from('vote_sync_status')
-        .select('candidate_id, expected_total, persisted_count, last_sync_completed_at, sync_error');
+        .select('candidate_id, expected_total, persisted_count, expected_floor_votes, persisted_floor_votes, last_sync_completed_at, sync_error, floor_vote_sync_error');
 
       interface VoteSyncRecord {
         candidate_id: string;
         expected_total: number | null;
         persisted_count: number | null;
+        expected_floor_votes: number | null;
+        persisted_floor_votes: number | null;
         last_sync_completed_at: string | null;
         sync_error: string | null;
+        floor_vote_sync_error: string | null;
       }
 
       const voteSyncMap: Record<string, VoteSyncRecord> = {};
@@ -297,7 +308,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         // Validate FEC ID prefix
         const fecIdValidation = validateFecIdPrefix(c.fec_candidate_id, c.office);
         
-        // Vote sync status
+        // Vote sync status (legislative actions)
         const voteSyncRecord = voteSyncMap[c.id];
         const expectedVoteCount = voteSyncRecord?.expected_total ?? null;
         const persistedVoteCount = voteSyncRecord?.persisted_count ?? 0;
@@ -311,6 +322,23 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
             voteSyncStatus = 'complete';
           }
         }
+        
+        // Floor vote sync status
+        const expectedFloorVotes = voteSyncRecord?.expected_floor_votes ?? null;
+        const persistedFloorVotes = voteSyncRecord?.persisted_floor_votes ?? 0;
+        let floorVoteSyncStatus: 'never' | 'partial' | 'complete' | 'error' = 'never';
+        if (voteSyncRecord?.floor_vote_sync_error) {
+          floorVoteSyncStatus = 'error';
+        } else if (expectedFloorVotes !== null) {
+          if (persistedFloorVotes < expectedFloorVotes) {
+            floorVoteSyncStatus = 'partial';
+          } else {
+            floorVoteSyncStatus = 'complete';
+          }
+        }
+        
+        // Get vote counts from the view
+        const voteCounts = voteCountMap[c.id] || { total: 0, legislative: 0, floor: 0 };
         
         return {
           id: c.id,
@@ -326,9 +354,13 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           overallScore: c.overall_score ?? null,
           coverageTier: (c.coverage_tier as CoverageTier) || 'tier_3',
           confidence: (c.confidence as ConfidenceLevel) || 'low',
-          voteCount: voteCountMap[c.id] || 0,
+          voteCount: voteCounts.total,
+          legislativeActionsCount: voteCounts.legislative,
+          floorVotesCount: voteCounts.floor,
           expectedVoteCount,
+          expectedFloorVotes,
           voteSyncStatus,
+          floorVoteSyncStatus,
           lastVoteSyncAt: voteSyncRecord?.last_sync_completed_at || null,
           donorCount: donorCountMap[c.id] || 0,
           fecCandidateId: c.fec_candidate_id || null,
