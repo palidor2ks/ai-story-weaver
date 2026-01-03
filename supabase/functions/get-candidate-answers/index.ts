@@ -1138,6 +1138,12 @@ function validateAnswerQuality(
   let rejectedCount = 0;
   
   const validatedAnswers = answers.map(a => {
+    // EXEMPT inferred answers - they are intentionally ideology-based
+    // and should not be validated against web research standards
+    if (a.evidence_type === 'inferred') {
+      return a; // Keep inferred answers as-is
+    }
+    
     const hasValidSource = a.source_description && 
       !a.source_description.toLowerCase().includes('party platform') &&
       !a.source_description.toLowerCase().includes('typical') &&
