@@ -711,87 +711,140 @@ Return ONLY JSON array: [{question_id, answer_value, confidence, source_descript
     });
 }
 
+/**
+ * PHASE 3: AI Inference with educational reasoning
+ * Mirrors the party answer flow - provides detailed 2-3 sentence explanations
+ * of WHY a candidate would hold a position based on party ideology
+ */
+async function inferCandidatePosition(
+  question: Question,
+  candidateName: string,
+  candidateParty: string,
+  candidateOffice: string,
+  candidateState: string,
+  relatedAnswers: GeneratedAnswer[]
+): Promise<{ score: number; reasoning: string } | null> {
+  if (!LOVABLE_API_KEY) return null;
+  
+  const partyLower = candidateParty.toLowerCase();
+  
+  const systemPrompt = `You are a political analyst inferring a candidate's likely position on a topic where no explicit documentation exists.
+
+IMPORTANT: This is an INFERENCE based on general party ideology and related positions, NOT a documented fact.
+
+Party Context:
+- Democrats typically favor: government programs, regulations, progressive social policies, environmental protection, worker protections
+- Republicans typically favor: smaller government, deregulation, traditional values, free markets, states' rights
+- Libertarians typically favor: minimal government, individual liberty, free markets, non-intervention
+- Independents may vary; consider office and state context
+
+Scoring:
+- -10 = Strong Progressive/Left (typical Democrat position)
+- -5 = Moderate Progressive/Left lean
+- 0 = Cannot reasonably infer (truly novel or genuinely bipartisan topic)
+- +5 = Moderate Conservative/Right lean
+- +10 = Strong Conservative/Right (typical Republican position)
+
+Only return 0 if you truly cannot make a reasonable inference based on general party ideology.`;
+
+  const relatedContext = relatedAnswers.length > 0 
+    ? `\nRelated positions from this candidate that were documented:\n${relatedAnswers.slice(0, 3).map(a => `- Score ${a.answer_value}: ${a.source_description?.slice(0, 100)}`).join('\n')}`
+    : '';
+
+  const userPrompt = `Based on ${candidateName}'s party affiliation (${candidateParty}) and general party ideology, what would their likely position be on this question:
+
+"${question.text}"
+${relatedContext}
+
+Return ONLY a JSON object: {"score": <-10|-5|0|5|10>, "reasoning": "<2-3 sentence explanation of WHY this ${candidateParty} ${candidateOffice.toLowerCase()} would likely hold this position, referencing core party values, guiding principles, or how representatives from their party typically vote on this issue>"}`;
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 300,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`[AIInference] API error: ${response.status}`);
+      return null;
+    }
+
+    const aiResponse = await response.json();
+    const content = aiResponse.choices?.[0]?.message?.content || '';
+    
+    const jsonMatch = content.match(/\{[\s\S]*?\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      const score = snapToValidValue(parsed.score || 0);
+      const reasoning = parsed.reasoning || 'Inferred from general party ideology.';
+      
+      console.log(`[AIInference] ${candidateName} on ${question.id}: score=${score}`);
+      return { score, reasoning };
+    }
+  } catch (e) {
+    console.error(`[AIInference] Error for ${question.id}:`, e);
+  }
+  
+  return null;
+}
+
+/**
+ * Batch AI inference for multiple questions
+ * Uses inferCandidatePosition for each question with related context
+ */
 async function inferCandidateAnswers(
   candidateName: string,
   candidateParty: string,
   candidateOffice: string,
   candidateState: string,
-  questions: Question[]
+  questions: Question[],
+  existingAnswers: GeneratedAnswer[] = []
 ): Promise<GeneratedAnswer[]> {
   if (!LOVABLE_API_KEY || questions.length === 0) return [];
 
-  const validQuestionIds = questions.map(q => q.id);
-  const validIdsStr = validQuestionIds.join(', ');
-
-  const questionsText = questions.map((q, i) => {
-    let questionStr = `Question ${i + 1}:\n  ID: "${q.id}"\n  Text: ${q.text}`;
-    if (q.question_options && q.question_options.length > 0) {
-      const sortedOptions = [...q.question_options].sort((a, b) => a.value - b.value);
-      const optionsStr = sortedOptions.map(opt => `    (${opt.value}) ${opt.text}`).join('\n');
-      questionStr += `\n  Options:\n${optionsStr}`;
+  const results: GeneratedAnswer[] = [];
+  
+  // Group existing answers by topic for context
+  const answersByTopic = new Map<string, GeneratedAnswer[]>();
+  for (const a of existingAnswers) {
+    if (a.answer_value !== 0 && a.source_description && !a.source_description.toLowerCase().includes('no documented')) {
+      const q = questions.find(q => q.id === a.question_id);
+      if (q) {
+        const existing = answersByTopic.get(q.topic_id) || [];
+        existing.push(a);
+        answersByTopic.set(q.topic_id, existing);
+      }
     }
-    return questionStr;
-  }).join('\n\n');
-
-  const systemPrompt = `You are a cautious political analyst providing LOW-CONFIDENCE inferences when no evidence exists.
-Use general party ideology, office responsibilities, and typical stance patterns.
-These are NOT documented facts—mark every answer as inferred and avoid definitive language.`;
-
-  const userPrompt = `Candidate: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
-
-No documented sources were found. Provide a reasonable inferred lean for each question based on general ideology.
-
-Questions:
-${questionsText}
-
-Return ONLY JSON array: [{question_id, answer_value, source_description}]
-- question_id must be one of: ${validIdsStr}
-- answer_value: -10, -5, 0, 5, or 10 (avoid 0 unless truly unknowable)
-- source_description: 1-2 sentence inference noting lack of documentation (e.g., "Inference based on ${candidateParty} platform..."). No URLs.`;
-
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      max_tokens: 3000,
-    }),
-  });
-
-  if (!response.ok) {
-    console.error('AI inference error:', response.status);
-    return [];
   }
 
-  const aiResponse = await response.json();
-  const content = aiResponse.choices?.[0]?.message?.content || '';
-  let parsed: any[] = [];
-
-  if (content) {
-    try { parsed = parseAIResponse(content); } catch (e) { parsed = []; }
-  }
-
-  if (parsed.length === 0) return [];
-
-  return parsed
-    .map((item: any) => {
-      const questionId = String(item.question_id || '').replace(/[\[\]]/g, '');
-      if (!validQuestionIds.includes(questionId)) return null;
-
-      const answerValue = snapToValidValue(item.answer_value);
-      const sourceDesc = (item.source_description || 'Position inferred from ideology; no documented sources found.').slice(0, 500);
-
-      return {
-        question_id: questionId,
-        answer_value: answerValue,
-        source_description: sourceDesc,
+  for (const q of questions) {
+    const relatedAnswers = answersByTopic.get(q.topic_id) || [];
+    const inference = await inferCandidatePosition(
+      q, candidateName, candidateParty, candidateOffice, candidateState, relatedAnswers
+    );
+    
+    if (inference && inference.score !== 0) {
+      // Format the source description to match party answer style
+      const partyLabel = candidateParty.includes('Democrat') ? 'Democratic' 
+                       : candidateParty.includes('Republican') ? 'Republican'
+                       : candidateParty;
+      
+      results.push({
+        question_id: q.id,
+        answer_value: inference.score,
+        source_description: `Position inferred from ${partyLabel} Party ideology. ${inference.reasoning}`,
         source_url: null,
         source_urls: [],
         source_titles: [],
@@ -802,9 +855,31 @@ Return ONLY JSON array: [{question_id, answer_value, source_description}]
         public_statement_summary: undefined,
         has_discrepancy: false,
         discrepancy_note: undefined,
-      } as GeneratedAnswer;
-    })
-    .filter((a: GeneratedAnswer | null) => !!a);
+      } as GeneratedAnswer);
+    } else {
+      // No position can be inferred
+      results.push({
+        question_id: q.id,
+        answer_value: 0,
+        source_description: 'No documented position found and insufficient context for inference.',
+        source_url: null,
+        source_urls: [],
+        source_titles: [],
+        source_type: 'web_research',
+        confidence: 'low' as const,
+        evidence_type: 'inferred' as const,
+        voting_record_summary: undefined,
+        public_statement_summary: undefined,
+        has_discrepancy: false,
+        discrepancy_note: undefined,
+      } as GeneratedAnswer);
+    }
+    
+    // Small delay between inference calls to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  return results;
 }
 
 async function generateChunkAnswers(
@@ -1171,8 +1246,11 @@ async function generateAnswersInChunks(
       });
 
       if (unresolvedQuestions.length > 0) {
+        // Pass existing answers for context (helps inform inference with related positions)
+        const existingAnswersForContext = Array.from(answersById.values());
         const inferredAnswers = await inferCandidateAnswers(
-          candidateName, candidateParty, candidateOffice, candidateState, unresolvedQuestions
+          candidateName, candidateParty, candidateOffice, candidateState, 
+          unresolvedQuestions, existingAnswersForContext
         );
 
         inferredAnswers.forEach(a => {
