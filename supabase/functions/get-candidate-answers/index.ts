@@ -704,7 +704,7 @@ Return ONLY JSON array: [{question_id, answer_value, confidence, source_descript
         discrepancy_note: undefined,
       } as GeneratedAnswer;
     })
-    .filter((a: GeneratedAnswer | null) => {
+    .filter((a: GeneratedAnswer | null): a is GeneratedAnswer => {
       if (!a) return false;
       const desc = a.source_description?.toLowerCase() || '';
       return !(a.answer_value === 0 && desc.includes('no relevant voting record'));
