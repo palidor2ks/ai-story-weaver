@@ -1849,7 +1849,10 @@ export type Database = {
       candidate_voting_coverage: {
         Row: {
           candidate_id: string | null
+          floor_votes_count: number | null
+          last_floor_vote_date: string | null
           last_vote_date: string | null
+          legislative_actions_count: number | null
           name: string | null
           office: string | null
           party: Database["public"]["Enums"]["party_type"] | null
