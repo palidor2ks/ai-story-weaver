@@ -44,46 +44,21 @@ interface VoteRecord {
   policy_area?: string;
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+// Background processing function
+async function processVoteSync(bioguideId: string, persistVotes: boolean, syncStartedAt: string) {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const votes: VoteRecord[] = [];
 
-  const syncStartedAt = new Date().toISOString();
-  
   try {
-    const body = await req.json().catch(() => null);
-
-    if (!body || typeof body !== 'object') {
-      throw new Error('Request body must be valid JSON');
-    }
-
-    const { bioguideId: directId, memberId, member_id, persistVotes = false } = body as Record<string, unknown>;
-    const bioguideId = (directId || memberId || member_id) as string | undefined;
-    
-    console.log(`Fetching votes for member: ${bioguideId}, persist=${persistVotes}`);
-
-    if (!CONGRESS_API_KEY) {
-      throw new Error('Congress.gov API key not configured');
-    }
-
-    if (!bioguideId) {
-      throw new Error('bioguideId (or memberId/member_id) is required');
-    }
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const votes: VoteRecord[] = [];
-
     // Fetch ALL sponsored legislation with pagination
     let sponsoredOffset = 0;
     let totalSponsored = 0;
     let hasMoreSponsored = true;
     
-    console.log(`Fetching sponsored legislation with pagination...`);
+    console.log(`[BG] Fetching sponsored legislation for ${bioguideId}...`);
     
     while (hasMoreSponsored) {
       const sponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/sponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=250&offset=${sponsoredOffset}`;
-      console.log(`Fetching sponsored page at offset ${sponsoredOffset}`);
       
       const sponsoredResponse = await fetch(sponsoredUrl);
       
@@ -111,31 +86,28 @@ serve(async (req) => {
         
         totalSponsored += sponsoredBills.length;
         
-        // Check if there are more pages (API returned full 250 results)
         if (sponsoredBills.length === 250) {
           sponsoredOffset += 250;
-          // Add small delay to avoid rate limiting
           await new Promise(resolve => setTimeout(resolve, 100));
         } else {
           hasMoreSponsored = false;
         }
       } else {
-        console.error(`Congress API error for sponsored: ${sponsoredResponse.status}`);
+        console.error(`[BG] Congress API error for sponsored: ${sponsoredResponse.status}`);
         hasMoreSponsored = false;
       }
     }
-    console.log(`Found ${totalSponsored} total sponsored bills`);
+    console.log(`[BG] Found ${totalSponsored} total sponsored bills for ${bioguideId}`);
 
     // Fetch ALL cosponsored legislation with pagination
     let cosponsoredOffset = 0;
     let totalCosponsored = 0;
     let hasMoreCosponsored = true;
     
-    console.log(`Fetching cosponsored legislation with pagination...`);
+    console.log(`[BG] Fetching cosponsored legislation for ${bioguideId}...`);
     
     while (hasMoreCosponsored) {
       const cosponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/cosponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=250&offset=${cosponsoredOffset}`;
-      console.log(`Fetching cosponsored page at offset ${cosponsoredOffset}`);
       
       const cosponsoredResponse = await fetch(cosponsoredUrl);
       
@@ -163,7 +135,6 @@ serve(async (req) => {
         
         totalCosponsored += cosponsoredBills.length;
         
-        // Check if there are more pages
         if (cosponsoredBills.length === 250) {
           cosponsoredOffset += 250;
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -171,44 +142,40 @@ serve(async (req) => {
           hasMoreCosponsored = false;
         }
       } else {
-        console.error(`Congress API error for cosponsored: ${cosponsoredResponse.status}`);
+        console.error(`[BG] Congress API error for cosponsored: ${cosponsoredResponse.status}`);
         hasMoreCosponsored = false;
       }
     }
-    console.log(`Found ${totalCosponsored} total cosponsored bills`);
+    console.log(`[BG] Found ${totalCosponsored} total cosponsored bills for ${bioguideId}`);
 
     // Sort by date descending
     votes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    console.log(`Found ${votes.length} total legislative actions for ${bioguideId}`);
+    console.log(`[BG] Found ${votes.length} total legislative actions for ${bioguideId}`);
 
     // Persist votes to database if requested
     let persisted = 0;
     if (persistVotes && votes.length > 0) {
-      console.log(`Persisting ${votes.length} votes to database...`);
+      console.log(`[BG] Persisting ${votes.length} votes to database for ${bioguideId}...`);
       
-      // Map to votes table schema (position must be valid enum)
-      const votesToInsert = votes
-        .filter(v => ['Yea', 'Nay', 'Present', 'Not Voting'].includes(v.position as string) === false)
-        .map(v => ({
-          id: v.id,
-          bill_id: v.bill_id,
-          bill_name: v.bill_name.slice(0, 500), // Truncate if needed
-          candidate_id: v.candidate_id,
-          // Map Sponsored/Cosponsored to Yea (they support the bill)
-          position: 'Yea' as const,
-          topic: v.topic,
-          description: v.description?.slice(0, 1000) || null,
-          date: v.date,
-        }));
+      // Map to votes table schema
+      const votesToInsert = votes.map(v => ({
+        id: v.id,
+        bill_id: v.bill_id,
+        bill_name: v.bill_name.slice(0, 500),
+        candidate_id: v.candidate_id,
+        position: 'Yea' as const,
+        topic: v.topic,
+        description: v.description?.slice(0, 1000) || null,
+        date: v.date,
+      }));
 
-      // Deduplicate by ID to prevent "cannot affect row a second time" error
+      // Deduplicate by ID
       const uniqueVotes = Array.from(
         new Map(votesToInsert.map(v => [v.id, v])).values()
       );
 
       if (uniqueVotes.length > 0) {
-        // Use smaller chunks and minimal returning to avoid statement timeouts
         const CHUNK_SIZE = 100;
 
         for (let i = 0; i < uniqueVotes.length; i += CHUNK_SIZE) {
@@ -222,17 +189,19 @@ serve(async (req) => {
             });
 
           if (upsertError) {
-            console.error('Error persisting votes chunk:', upsertError);
+            console.error(`[BG] Error persisting votes chunk for ${bioguideId}:`, upsertError);
             throw new Error(upsertError.message || 'Failed to persist votes');
           }
 
           persisted += chunk.length;
-          console.log(`Persisted ${persisted}/${uniqueVotes.length} votes for ${bioguideId}`);
+          if (persisted % 500 === 0 || persisted === uniqueVotes.length) {
+            console.log(`[BG] Persisted ${persisted}/${uniqueVotes.length} votes for ${bioguideId}`);
+          }
         }
       }
     }
 
-    // Log sync status to vote_sync_status table
+    // Log successful sync status
     const { error: statusError } = await supabase
       .from('vote_sync_status')
       .upsert({
@@ -248,49 +217,102 @@ serve(async (req) => {
       }, { onConflict: 'candidate_id' });
 
     if (statusError) {
-      console.error('Failed to log sync status:', statusError);
+      console.error(`[BG] Failed to log sync status for ${bioguideId}:`, statusError);
     } else {
-      console.log(`Logged sync status: ${persisted}/${totalSponsored + totalCosponsored} for ${bioguideId}`);
+      console.log(`[BG] Completed sync for ${bioguideId}: ${persisted}/${totalSponsored + totalCosponsored} votes`);
     }
 
-    return new Response(JSON.stringify({ 
-      votes: votes,
-      total: votes.length,
-      persisted,
-      sponsoredCount: votes.filter(v => v.position === 'Sponsored').length,
-      cosponsoredCount: votes.filter(v => v.position === 'Cosponsored').length,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[BG] Error in vote sync for ${bioguideId}:`, errorMessage);
+    
+    // Log failed sync status
+    await supabase
+      .from('vote_sync_status')
+      .upsert({
+        candidate_id: bioguideId,
+        sync_error: errorMessage,
+        last_sync_started_at: syncStartedAt,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'candidate_id' });
+  }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const syncStartedAt = new Date().toISOString();
+  
+  try {
+    const body = await req.json().catch(() => null);
+
+    if (!body || typeof body !== 'object') {
+      throw new Error('Request body must be valid JSON');
+    }
+
+    const { bioguideId: directId, memberId, member_id, persistVotes = false } = body as Record<string, unknown>;
+    const bioguideId = (directId || memberId || member_id) as string | undefined;
+    
+    console.log(`Received vote sync request for: ${bioguideId}, persist=${persistVotes}`);
+
+    if (!CONGRESS_API_KEY) {
+      throw new Error('Congress.gov API key not configured');
+    }
+
+    if (!bioguideId) {
+      throw new Error('bioguideId (or memberId/member_id) is required');
+    }
+
+    // Mark sync as started in database immediately
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    await supabase
+      .from('vote_sync_status')
+      .upsert({
+        candidate_id: bioguideId,
+        last_sync_started_at: syncStartedAt,
+        sync_error: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'candidate_id' });
+
+    // Use EdgeRuntime.waitUntil for background processing to avoid timeout
+    // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+      console.log(`Starting background sync for ${bioguideId}`);
+      // @ts-ignore
+      EdgeRuntime.waitUntil(processVoteSync(bioguideId, persistVotes as boolean, syncStartedAt));
+      
+      return new Response(JSON.stringify({ 
+        status: 'processing',
+        message: `Vote sync started for ${bioguideId}. Check vote_sync_status table for progress.`,
+        bioguideId,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } else {
+      // Fallback: run synchronously (may timeout for large syncs)
+      console.log(`EdgeRuntime.waitUntil not available, running synchronously for ${bioguideId}`);
+      await processVoteSync(bioguideId, persistVotes as boolean, syncStartedAt);
+      
+      return new Response(JSON.stringify({ 
+        status: 'completed',
+        message: `Vote sync completed for ${bioguideId}`,
+        bioguideId,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error in fetch-member-votes function:', errorMessage);
     
-    // Log failed sync status
-    try {
-      const clonedBody = await req.clone().json().catch(() => null);
-      const clonedBioguideId = clonedBody?.bioguideId || clonedBody?.memberId || clonedBody?.member_id || null;
-      if (clonedBioguideId) {
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-        await supabase
-          .from('vote_sync_status')
-          .upsert({
-            candidate_id: clonedBioguideId,
-            sync_error: errorMessage,
-            last_sync_started_at: syncStartedAt,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'candidate_id' });
-      }
-    } catch (logError) {
-      console.error('Failed to log error status:', logError);
-    }
-    
     return new Response(JSON.stringify({ 
       error: errorMessage,
-      votes: [] 
+      status: 'error'
     }), {
-      status: 500,
+      status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
