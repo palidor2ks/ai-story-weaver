@@ -7,6 +7,7 @@ export interface CandidateQuestionAnswer {
   topicId: string;
   answerValue: number | null;
   confidence: string | null;
+  evidenceType: string | null;
   sourceDescription: string | null;
   sourceUrls: string[] | null;
   sourceTitles: string[] | null;
@@ -34,7 +35,7 @@ export function useCandidateTopicQuestions(
       const questionIds = questions.map(q => q.id);
       const { data: answers, error: answersError } = await supabase
         .from('candidate_answers')
-        .select('question_id, answer_value, confidence, source_description, source_url, source_urls, source_titles')
+        .select('question_id, answer_value, confidence, evidence_type, source_description, source_url, source_urls, source_titles')
         .eq('candidate_id', candidateId)
         .in('question_id', questionIds);
 
@@ -61,6 +62,7 @@ export function useCandidateTopicQuestions(
           topicId: q.topic_id,
           answerValue: answer?.answer_value ?? null,
           confidence: answer?.confidence ?? null,
+          evidenceType: answer?.evidence_type ?? null,
           sourceDescription: answer?.source_description ?? null,
           sourceUrls,
           sourceTitles,
