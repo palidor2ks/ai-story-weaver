@@ -52,7 +52,14 @@ serve(async (req) => {
   const syncStartedAt = new Date().toISOString();
   
   try {
-    const { bioguideId, persistVotes = false } = await req.json();
+    const body = await req.json().catch(() => null);
+
+    if (!body || typeof body !== 'object') {
+      throw new Error('Request body must be valid JSON');
+    }
+
+    const { bioguideId: directId, memberId, member_id, persistVotes = false } = body as Record<string, unknown>;
+    const bioguideId = (directId || memberId || member_id) as string | undefined;
     
     console.log(`Fetching votes for member: ${bioguideId}, persist=${persistVotes}`);
 
@@ -61,7 +68,7 @@ serve(async (req) => {
     }
 
     if (!bioguideId) {
-      throw new Error('bioguideId is required');
+      throw new Error('bioguideId (or memberId/member_id) is required');
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -262,13 +269,14 @@ serve(async (req) => {
     
     // Log failed sync status
     try {
-      const { bioguideId } = await req.clone().json().catch(() => ({ bioguideId: null }));
-      if (bioguideId) {
+      const clonedBody = await req.clone().json().catch(() => null);
+      const clonedBioguideId = clonedBody?.bioguideId || clonedBody?.memberId || clonedBody?.member_id || null;
+      if (clonedBioguideId) {
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
         await supabase
           .from('vote_sync_status')
           .upsert({
-            candidate_id: bioguideId,
+            candidate_id: clonedBioguideId,
             sync_error: errorMessage,
             last_sync_started_at: syncStartedAt,
             updated_at: new Date().toISOString(),
