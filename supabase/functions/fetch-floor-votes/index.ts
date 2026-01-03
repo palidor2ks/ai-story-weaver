@@ -88,6 +88,24 @@ interface MemberPosition {
   votePosition: 'Yea' | 'Nay' | 'Present' | 'Not Voting';
 }
 
+// Map API's voteCast values to our position enum
+function mapVoteCast(voteCast: string): 'Yea' | 'Nay' | 'Present' | 'Not Voting' {
+  const vote = (voteCast || '').toLowerCase().trim();
+  switch (vote) {
+    case 'aye':
+    case 'yea':
+    case 'yes':
+      return 'Yea';
+    case 'nay':
+    case 'no':
+      return 'Nay';
+    case 'present':
+      return 'Present';
+    default:
+      return 'Not Voting';
+  }
+}
+
 // Fetch member positions for a specific vote
 async function fetchVoteMemberPositions(
   chamber: 'house' | 'senate',
@@ -96,7 +114,8 @@ async function fetchVoteMemberPositions(
   voteNumber: number
 ): Promise<MemberPosition[]> {
   const chamberPath = chamber === 'house' ? 'house-vote' : 'senate-vote';
-  const url = `https://api.congress.gov/v3/${chamberPath}/${congress}/${session}/${voteNumber}?api_key=${CONGRESS_API_KEY}`;
+  // Add /members to get individual member positions
+  const url = `https://api.congress.gov/v3/${chamberPath}/${congress}/${session}/${voteNumber}/members?api_key=${CONGRESS_API_KEY}`;
   
   try {
     const response = await fetch(url);
@@ -106,24 +125,25 @@ async function fetchVoteMemberPositions(
     }
     
     const data = await response.json();
-    const voteData = data.vote || data;
-    
-    // Extract member positions from the vote data
     const positions: MemberPosition[] = [];
     
-    // Congress.gov API returns positions in different formats
-    // Check for 'members' array or position-specific arrays
-    if (voteData.members) {
-      for (const member of voteData.members) {
-        if (member.bioguideId) {
-          positions.push({
-            bioguideId: member.bioguideId,
-            memberName: member.memberName || member.name || '',
-            party: member.party || '',
-            state: member.state || '',
-            votePosition: member.votePosition || member.position || 'Not Voting',
-          });
-        }
+    // Congress.gov API returns: houseRollCallVoteMemberVotes or senateRollCallVoteMemberVotes
+    const memberVotesKey = chamber === 'house' ? 'houseRollCallVoteMemberVotes' : 'senateRollCallVoteMemberVotes';
+    const memberVotes = data[memberVotesKey] || data;
+    
+    // Navigate to the item array - API structure: {results: {item: [...]}} or {item: [...]}
+    const results = memberVotes.results || memberVotes;
+    const items = Array.isArray(results) ? results : (results.item || []);
+    
+    for (const member of items) {
+      if (member.bioguideId) {
+        positions.push({
+          bioguideId: member.bioguideId,
+          memberName: `${member.firstName || ''} ${member.lastName || ''}`.trim(),
+          party: member.voteParty || member.party || '',
+          state: member.voteState || member.state || '',
+          votePosition: mapVoteCast(member.voteCast || member.votePosition || ''),
+        });
       }
     }
     
@@ -152,21 +172,35 @@ async function fetchVotesList(
     }
     
     const data = await response.json();
-    const votes = (data.votes || []).map((v: any) => ({
+    
+    // Congress.gov API returns houseRollCallVotes or senateRollCallVotes
+    const votesKey = chamber === 'house' ? 'houseRollCallVotes' : 'senateRollCallVotes';
+    const rawVotes = data[votesKey] || data.votes || [];
+    
+    console.log(`[BG] API response keys: ${Object.keys(data).join(', ')}, ${votesKey} count: ${rawVotes.length}`);
+    
+    const votes = rawVotes.map((v: any) => ({
       rollCallNumber: v.rollCallNumber || v.number,
       congress: v.congress || congress,
-      session: v.session || 1,
+      session: v.sessionNumber || v.session || 1,  // API uses sessionNumber
       chamber: chamber,
-      date: v.date || v.actionDate,
-      question: v.question || '',
-      description: v.description || v.title || '',
+      date: v.startDate || v.updateDate || v.date || v.actionDate,  // API uses startDate
+      question: v.voteQuestion || v.question || '',
+      description: v.legislationType && v.legislationNumber 
+        ? `${v.legislationType}${v.legislationNumber}` 
+        : (v.description || v.title || ''),
       result: v.result || '',
-      bill: v.bill ? {
+      bill: v.legislationType ? {
+        number: v.legislationNumber,
+        type: v.legislationType,
+        title: `${v.legislationType}${v.legislationNumber}`,
+        congress: v.congress || congress,
+      } : (v.bill ? {
         number: v.bill.number,
         type: v.bill.type,
         title: v.bill.title,
         congress: v.bill.congress || congress,
-      } : undefined,
+      } : undefined),
       nomination: v.nomination,
     }));
     
