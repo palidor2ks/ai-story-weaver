@@ -1993,7 +1993,13 @@ export type Database = {
       coverage_tier: "tier_1" | "tier_2" | "tier_3"
       donor_type: "Individual" | "PAC" | "Organization" | "Unknown"
       party_type: "Democrat" | "Republican" | "Independent" | "Other"
-      vote_position: "Yea" | "Nay" | "Present" | "Not Voting"
+      vote_position:
+        | "Yea"
+        | "Nay"
+        | "Present"
+        | "Not Voting"
+        | "Sponsored"
+        | "Cosponsored"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2126,7 +2132,14 @@ export const Constants = {
       coverage_tier: ["tier_1", "tier_2", "tier_3"],
       donor_type: ["Individual", "PAC", "Organization", "Unknown"],
       party_type: ["Democrat", "Republican", "Independent", "Other"],
-      vote_position: ["Yea", "Nay", "Present", "Not Voting"],
+      vote_position: [
+        "Yea",
+        "Nay",
+        "Present",
+        "Not Voting",
+        "Sponsored",
+        "Cosponsored",
+      ],
     },
   },
 } as const
