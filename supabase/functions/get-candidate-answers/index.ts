@@ -253,6 +253,35 @@ async function fetchMemberVotingRecord(bioguideId: string): Promise<LegislationR
   return records;
 }
 
+// Normalize topic names for consistent matching (handles "domestic-policy" vs "Domestic Policy")
+function normalizeTopicName(topic: string): string {
+  return topic.toLowerCase().replace(/[-_\s]+/g, '');
+}
+
+// Extract keywords from question text for cross-topic vote matching
+function extractQuestionKeywords(questionText: string): string[] {
+  const text = questionText.toLowerCase();
+  const keywordGroups: Record<string, string[]> = {
+    gun: ['gun', 'firearm', 'weapon', 'background check', 'second amendment', 'ammunition'],
+    immigration: ['immigration', 'immigrant', 'border', 'migrant', 'asylum', 'deportation', 'visa'],
+    healthcare: ['healthcare', 'health care', 'medicare', 'medicaid', 'insurance', 'hospital', 'medical'],
+    abortion: ['abortion', 'reproductive', 'roe', 'pro-choice', 'pro-life'],
+    climate: ['climate', 'environment', 'carbon', 'emission', 'renewable', 'fossil fuel', 'clean energy'],
+    tax: ['tax', 'taxation', 'tariff', 'revenue'],
+    education: ['education', 'school', 'student', 'teacher', 'college', 'university'],
+    lgbtq: ['lgbtq', 'gay', 'transgender', 'same-sex', 'marriage equality'],
+    voting: ['voting', 'election', 'ballot', 'voter id', 'gerrymandering'],
+  };
+  
+  const matches: string[] = [];
+  for (const keywords of Object.values(keywordGroups)) {
+    if (keywords.some(kw => text.includes(kw))) {
+      matches.push(...keywords);
+    }
+  }
+  return [...new Set(matches)];
+}
+
 // Fetch stored votes from the database (actual floor votes)
 async function fetchStoredVotes(
   supabase: any,
@@ -275,10 +304,13 @@ async function fetchStoredVotes(
     const votes = data || [];
     console.log(`[VotesDB] Found ${votes.length} stored floor votes for ${candidateId}`);
     
-    // Filter to relevant topics if provided
+    // Filter to relevant topics using normalized comparison
     if (topicIds.length > 0) {
-      const filtered = votes.filter((v: StoredVote) => topicIds.includes(v.topic));
-      console.log(`[VotesDB] ${filtered.length} votes match requested topics`);
+      const normalizedTopicIds = topicIds.map(normalizeTopicName);
+      const filtered = votes.filter((v: StoredVote) => 
+        normalizedTopicIds.includes(normalizeTopicName(v.topic))
+      );
+      console.log(`[VotesDB] ${filtered.length} votes match requested topics (normalized: ${topicIds.join(', ')} -> ${normalizedTopicIds.join(', ')})`);
       return filtered;
     }
     
@@ -642,10 +674,24 @@ async function generateVotingRecordAnswers(
 
   // Get topic IDs for the questions in this chunk
   const chunkTopicIds = [...new Set(questions.map(q => q.topic_id))];
+  const normalizedChunkTopicIds = chunkTopicIds.map(normalizeTopicName);
   
-  // Filter stored votes to relevant topics for this chunk
-  const relevantStoredVotes = storedVotes.filter(v => chunkTopicIds.includes(v.topic));
-  console.log(`[VotingRecord] Using ${relevantStoredVotes.length} topic-relevant floor votes + ${votingRecord.length} sponsored bills`);
+  // Extract keywords from all questions for cross-topic matching
+  const allQuestionKeywords = questions.flatMap(q => extractQuestionKeywords(q.text));
+  const uniqueKeywords = [...new Set(allQuestionKeywords)];
+  
+  // Filter stored votes: match by normalized topic OR by keyword in bill name
+  const relevantStoredVotes = storedVotes.filter(v => {
+    const normalizedVoteTopic = normalizeTopicName(v.topic);
+    const matchesTopic = normalizedChunkTopicIds.includes(normalizedVoteTopic);
+    
+    // Also check if bill name contains any question keywords (cross-topic matching)
+    const billNameLower = v.bill_name.toLowerCase();
+    const matchesKeyword = uniqueKeywords.some(kw => billNameLower.includes(kw));
+    
+    return matchesTopic || matchesKeyword;
+  });
+  console.log(`[VotingRecord] Using ${relevantStoredVotes.length} relevant floor votes (topic + keyword match from ${storedVotes.length} total) + ${votingRecord.length} sponsored bills`);
 
   const questionsText = questions.map((q, i) => {
     let questionStr = `Question ${i + 1}:\n  ID: "${q.id}"\n  Text: ${q.text}`;
@@ -1122,9 +1168,9 @@ ONLY JSON array. No markdown.`;
     const research = researchResults.get(questionId);
     const sourceDesc = (item.source_description || 'No documented position').slice(0, 500);
     
-    // CRITICAL: Clear sources when no position was found to avoid showing irrelevant links
-    const noPositionFound = sourceDesc.toLowerCase().includes('no documented') || 
-                             item.confidence === 'low';
+    // CRITICAL: Only clear sources when truly no position found - preserve sources with low confidence if they exist
+    const noPositionFound = sourceDesc.toLowerCase().includes('no documented position') ||
+                             (item.confidence === 'low' && (!research?.sourceUrls?.length));
     
     // Determine source URL and titles: research > bill > congress profile > null
     let sourceUrl = noPositionFound ? null : congressGovUrl;
