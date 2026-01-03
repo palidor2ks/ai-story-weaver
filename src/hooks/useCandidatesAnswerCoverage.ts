@@ -120,13 +120,17 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       };
 
       // Get vote counts per candidate
-      const { data: votesData } = await supabase
-        .from('votes')
-        .select('candidate_id');
-      
+      // Use aggregated view to avoid the 1,000 row default limit on direct table selects
+      const { data: votingCoverageData, error: votingCoverageError } = await supabase
+        .from('candidate_voting_coverage')
+        .select('candidate_id, total_votes_stored');
+
+      if (votingCoverageError) throw votingCoverageError;
+
       const voteCountMap: Record<string, number> = {};
-      (votesData || []).forEach(row => {
-        voteCountMap[row.candidate_id] = (voteCountMap[row.candidate_id] || 0) + 1;
+      (votingCoverageData || []).forEach(row => {
+        if (!row.candidate_id) return;
+        voteCountMap[row.candidate_id] = row.total_votes_stored || 0;
       });
 
       // Get donor counts per candidate
