@@ -17,6 +17,9 @@ export interface CandidateAnswerCoverage {
   coverageTier: CoverageTier;
   confidence: ConfidenceLevel;
   voteCount: number;
+  expectedVoteCount: number | null;  // Expected from Congress.gov API
+  voteSyncStatus: 'never' | 'partial' | 'complete' | 'error'; // Aggregated vote sync status
+  lastVoteSyncAt: string | null;  // When votes were last synced
   donorCount: number;
   fecCandidateId: string | null;
   fecCommitteeId: string | null;
@@ -211,6 +214,24 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         }
       });
 
+      // Get vote sync status from vote_sync_status table
+      const { data: voteSyncData } = await supabase
+        .from('vote_sync_status')
+        .select('candidate_id, expected_total, persisted_count, last_sync_completed_at, sync_error');
+
+      interface VoteSyncRecord {
+        candidate_id: string;
+        expected_total: number | null;
+        persisted_count: number | null;
+        last_sync_completed_at: string | null;
+        sync_error: string | null;
+      }
+
+      const voteSyncMap: Record<string, VoteSyncRecord> = {};
+      (voteSyncData || []).forEach(row => {
+        voteSyncMap[row.candidate_id] = row;
+      });
+
       // Count answers and sourced answers per candidate
       const answerCountMap: Record<string, number> = {};
       const sourcedCountMap: Record<string, number> = {};
@@ -276,6 +297,21 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         // Validate FEC ID prefix
         const fecIdValidation = validateFecIdPrefix(c.fec_candidate_id, c.office);
         
+        // Vote sync status
+        const voteSyncRecord = voteSyncMap[c.id];
+        const expectedVoteCount = voteSyncRecord?.expected_total ?? null;
+        const persistedVoteCount = voteSyncRecord?.persisted_count ?? 0;
+        let voteSyncStatus: 'never' | 'partial' | 'complete' | 'error' = 'never';
+        if (voteSyncRecord?.sync_error) {
+          voteSyncStatus = 'error';
+        } else if (voteSyncRecord) {
+          if (expectedVoteCount !== null && persistedVoteCount < expectedVoteCount) {
+            voteSyncStatus = 'partial';
+          } else if (voteSyncRecord.last_sync_completed_at) {
+            voteSyncStatus = 'complete';
+          }
+        }
+        
         return {
           id: c.id,
           name: c.name,
@@ -291,6 +327,9 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           coverageTier: (c.coverage_tier as CoverageTier) || 'tier_3',
           confidence: (c.confidence as ConfidenceLevel) || 'low',
           voteCount: voteCountMap[c.id] || 0,
+          expectedVoteCount,
+          voteSyncStatus,
+          lastVoteSyncAt: voteSyncRecord?.last_sync_completed_at || null,
           donorCount: donorCountMap[c.id] || 0,
           fecCandidateId: c.fec_candidate_id || null,
           fecCommitteeId: c.fec_committee_id || null,

@@ -49,6 +49,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const syncStartedAt = new Date().toISOString();
+  
   try {
     const { bioguideId, persistVotes = false } = await req.json();
     
@@ -223,6 +225,27 @@ serve(async (req) => {
       }
     }
 
+    // Log sync status to vote_sync_status table
+    const { error: statusError } = await supabase
+      .from('vote_sync_status')
+      .upsert({
+        candidate_id: bioguideId,
+        expected_sponsored: totalSponsored,
+        expected_cosponsored: totalCosponsored,
+        expected_total: totalSponsored + totalCosponsored,
+        persisted_count: persisted,
+        last_sync_started_at: syncStartedAt,
+        last_sync_completed_at: new Date().toISOString(),
+        sync_error: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'candidate_id' });
+
+    if (statusError) {
+      console.error('Failed to log sync status:', statusError);
+    } else {
+      console.log(`Logged sync status: ${persisted}/${totalSponsored + totalCosponsored} for ${bioguideId}`);
+    }
+
     return new Response(JSON.stringify({ 
       votes: votes,
       total: votes.length,
@@ -236,6 +259,25 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error in fetch-member-votes function:', errorMessage);
+    
+    // Log failed sync status
+    try {
+      const { bioguideId } = await req.clone().json().catch(() => ({ bioguideId: null }));
+      if (bioguideId) {
+        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        await supabase
+          .from('vote_sync_status')
+          .upsert({
+            candidate_id: bioguideId,
+            sync_error: errorMessage,
+            last_sync_started_at: syncStartedAt,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'candidate_id' });
+      }
+    } catch (logError) {
+      console.error('Failed to log error status:', logError);
+    }
+    
     return new Response(JSON.stringify({ 
       error: errorMessage,
       votes: [] 
