@@ -59,6 +59,14 @@ interface GroundingResult {
   success: boolean;
 }
 
+interface StoredVote {
+  bill_id: string;
+  bill_name: string;
+  position: string;
+  topic: string;
+  date: string;
+}
+
 // Blocked domains that should be filtered out
 const BLOCKED_DOMAINS = [
   'republicanviews.org',
@@ -243,6 +251,42 @@ async function fetchMemberVotingRecord(bioguideId: string): Promise<LegislationR
   }
   
   return records;
+}
+
+// Fetch stored votes from the database (actual floor votes)
+async function fetchStoredVotes(
+  supabase: any,
+  candidateId: string,
+  topicIds: string[]
+): Promise<StoredVote[]> {
+  try {
+    const { data, error } = await supabase
+      .from('votes')
+      .select('bill_id, bill_name, position, topic, date')
+      .eq('candidate_id', candidateId)
+      .order('date', { ascending: false })
+      .limit(200);
+    
+    if (error) {
+      console.error('[VotesDB] Error fetching votes:', error);
+      return [];
+    }
+    
+    const votes = data || [];
+    console.log(`[VotesDB] Found ${votes.length} stored floor votes for ${candidateId}`);
+    
+    // Filter to relevant topics if provided
+    if (topicIds.length > 0) {
+      const filtered = votes.filter((v: StoredVote) => topicIds.includes(v.topic));
+      console.log(`[VotesDB] ${filtered.length} votes match requested topics`);
+      return filtered;
+    }
+    
+    return votes;
+  } catch (e) {
+    console.error('[VotesDB] Exception fetching votes:', e);
+    return [];
+  }
 }
 
 // Snap to valid discrete score
@@ -582,15 +626,26 @@ async function generateVotingRecordAnswers(
   candidateState: string,
   candidateId: string,
   questions: Question[],
-  votingRecord: LegislationRecord[]
+  votingRecord: LegislationRecord[],
+  storedVotes: StoredVote[] = []
 ): Promise<GeneratedAnswer[]> {
   if (!LOVABLE_API_KEY) return [];
   const isCongressional = isBioguideId(candidateId) && isCongressionalOffice(candidateOffice);
-  if (!isCongressional || votingRecord.length === 0 || questions.length === 0) return [];
+  
+  // Require either sponsored legislation OR stored floor votes
+  const hasVotingData = votingRecord.length > 0 || storedVotes.length > 0;
+  if (!isCongressional || !hasVotingData || questions.length === 0) return [];
 
   const congressGovUrl = buildCongressGovProfileUrl(candidateId, candidateName);
   const validQuestionIds = questions.map(q => q.id);
   const validIdsStr = validQuestionIds.join(', ');
+
+  // Get topic IDs for the questions in this chunk
+  const chunkTopicIds = [...new Set(questions.map(q => q.topic_id))];
+  
+  // Filter stored votes to relevant topics for this chunk
+  const relevantStoredVotes = storedVotes.filter(v => chunkTopicIds.includes(v.topic));
+  console.log(`[VotingRecord] Using ${relevantStoredVotes.length} topic-relevant floor votes + ${votingRecord.length} sponsored bills`);
 
   const questionsText = questions.map((q, i) => {
     let questionStr = `Question ${i + 1}:\n  ID: "${q.id}"\n  Text: ${q.text}`;
@@ -603,22 +658,38 @@ async function generateVotingRecordAnswers(
     return questionStr;
   }).join('\n\n');
 
-  const votingContext = votingRecord.slice(0, 40).map(v => 
-    `- ${v.action} ${v.type}${v.number} (${v.policy_area}) — ${v.title}`
-  ).join('\n');
+  // Build voting context from BOTH sponsored bills AND stored floor votes
+  let votingContext = '';
+  
+  // Add stored floor votes first (highest priority - actual votes)
+  if (relevantStoredVotes.length > 0) {
+    const floorVotesText = relevantStoredVotes.slice(0, 30).map(v => 
+      `- Voted ${v.position} on "${v.bill_name.slice(0, 80)}" (${v.date.slice(0, 10)}) [${v.topic}]`
+    ).join('\n');
+    votingContext += `FLOOR VOTES (Actual Congressional Votes):\n${floorVotesText}\n\n`;
+  }
+  
+  // Add sponsored/cosponsored legislation
+  if (votingRecord.length > 0) {
+    const sponsoredText = votingRecord.slice(0, 20).map(v => 
+      `- ${v.action} ${v.type}${v.number} (${v.policy_area}) — ${v.title}`
+    ).join('\n');
+    votingContext += `SPONSORED LEGISLATION:\n${sponsoredText}`;
+  }
 
   const systemPrompt = `You are a political analyst mapping SPECIFIC voting records to question positions.
 
 Use ONLY the voting record provided. Do NOT guess or infer beyond the documented votes/sponsorships.
+FLOOR VOTES are the highest quality evidence - prioritize these over sponsored legislation.
 If no voting record directly relates to a question, return 0 with confidence "low" and description "No relevant voting record found".
 
 SCORING:
 -10 strong progressive, -5 lean progressive, 0 no clear record, +5 lean conservative, +10 strong conservative.
-Use "high" confidence only when citing clear votes/bills.`;
+Use "high" confidence only when citing clear floor votes or direct sponsorship.`;
 
   const userPrompt = `Official: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
 
-VOTING RECORD (most recent first):
+VOTING RECORD (prioritize floor votes, then sponsored legislation):
 ${votingContext}
 
 Questions:
@@ -627,8 +698,8 @@ ${questionsText}
 Return ONLY JSON array: [{question_id, answer_value, confidence, source_description}]
 - question_id MUST be one of: ${validIdsStr}
 - answer_value must be -10, -5, 0, 5, or 10
-- confidence: "high" when tied to a specific vote, otherwise "low" with answer_value 0
-- source_description: cite exact bills/votes with bill numbers/dates. Use "No relevant voting record found" when none apply. No URLs.`;
+- confidence: "high" when tied to a specific floor vote or bill sponsorship, otherwise "low" with answer_value 0
+- source_description: cite exact floor votes (e.g., "Voted Yea on...") or bills (e.g., "Sponsored H.R.1234...") with dates. Use "No relevant voting record found" when none apply. No URLs.`;
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
@@ -1174,7 +1245,8 @@ async function generateAnswersInChunks(
   candidateOffice: string,
   candidateState: string,
   questions: Question[],
-  votingRecord: LegislationRecord[]
+  votingRecord: LegislationRecord[],
+  storedVotes: StoredVote[] = []
 ): Promise<{ generated: number; failed: number; validationRejected: number; researched: number }> {
   let totalGenerated = 0;
   let failedChunks = 0;
@@ -1189,7 +1261,8 @@ async function generateAnswersInChunks(
     chunks.push(questions.slice(i, i + CHUNK_SIZE));
   }
   
-  console.log(`Processing ${questions.length} questions in ${chunks.length} chunks for ${candidateName}, grounding=${hasGrounding}`);
+  const hasVotingData = votingRecord.length > 0 || storedVotes.length > 0;
+  console.log(`Processing ${questions.length} questions in ${chunks.length} chunks for ${candidateName}, grounding=${hasGrounding}, storedVotes=${storedVotes.length}`);
   
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
@@ -1197,12 +1270,12 @@ async function generateAnswersInChunks(
     const answersById = new Map<string, GeneratedAnswer>();
     
     try {
-      // Phase 1: Voting record answers (highest priority)
+      // Phase 1: Voting record answers (highest priority) - use BOTH sponsored bills AND stored floor votes
       let votingAnswers: GeneratedAnswer[] = [];
-      if (isBioguideId(candidateId) && isCongressionalOffice(candidateOffice) && votingRecord.length > 0) {
+      if (isBioguideId(candidateId) && isCongressionalOffice(candidateOffice) && hasVotingData) {
         votingAnswers = await generateVotingRecordAnswers(
           candidateName, candidateParty, candidateOffice, candidateState,
-          candidateId, chunk, votingRecord
+          candidateId, chunk, votingRecord, storedVotes
         );
         votingAnswers.forEach(a => answersById.set(a.question_id, a));
         if (votingAnswers.length > 0) {
@@ -1474,16 +1547,29 @@ serve(async (req) => {
 
     const isCongressional = isBioguideId(candidateId) && isCongressionalOffice(officialInfo.office);
     let votingRecord: LegislationRecord[] = [];
+    let storedVotes: StoredVote[] = [];
     
     if (isCongressional) {
+      // Get unique topic IDs from questions to generate
+      const topicIds = [...new Set(questionsToGenerate.map(q => q.topic_id))];
+      
       console.log(`Fetching voting record for congressional member ${candidateId}...`);
-      votingRecord = await fetchMemberVotingRecord(candidateId);
-      console.log(`Retrieved ${votingRecord.length} legislative records`);
+      
+      // Fetch BOTH: sponsored legislation from Congress.gov AND stored floor votes from database
+      const [congressApiRecords, dbVotes] = await Promise.all([
+        fetchMemberVotingRecord(candidateId),
+        fetchStoredVotes(supabase, candidateId, topicIds)
+      ]);
+      
+      votingRecord = congressApiRecords;
+      storedVotes = dbVotes;
+      
+      console.log(`Retrieved ${votingRecord.length} sponsored bills + ${storedVotes.length} stored floor votes`);
     }
 
     const { generated, failed, validationRejected, researched } = await generateAnswersInChunks(
       supabase, candidateId, officialInfo.name, officialInfo.party,
-      officialInfo.office, officialInfo.state, questionsToGenerate, votingRecord
+      officialInfo.office, officialInfo.state, questionsToGenerate, votingRecord, storedVotes
     );
     
     if (validationRejected > 0) {
