@@ -334,6 +334,7 @@ export type Database = {
           last_answers_sync: string | null
           last_donor_sync: string | null
           last_updated: string | null
+          lis_member_id: string | null
           name: string
           office: string
           overall_score: number | null
@@ -357,6 +358,7 @@ export type Database = {
           last_answers_sync?: string | null
           last_donor_sync?: string | null
           last_updated?: string | null
+          lis_member_id?: string | null
           name: string
           office: string
           overall_score?: number | null
@@ -380,6 +382,7 @@ export type Database = {
           last_answers_sync?: string | null
           last_donor_sync?: string | null
           last_updated?: string | null
+          lis_member_id?: string | null
           name?: string
           office?: string
           overall_score?: number | null

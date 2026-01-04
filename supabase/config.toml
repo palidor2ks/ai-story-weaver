@@ -116,3 +116,9 @@ verify_jwt = false
 
 [functions.sync-voting-records]
 verify_jwt = false
+
+[functions.fetch-floor-votes]
+verify_jwt = false
+
+[functions.sync-lis-member-ids]
+verify_jwt = false

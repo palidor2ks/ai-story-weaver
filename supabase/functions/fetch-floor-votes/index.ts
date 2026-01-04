@@ -6,14 +6,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const CONGRESS_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 // Configuration
-const MAX_ROLLCALLS_PER_CONGRESS = 50; // Cap per congress to avoid timeout
-const BATCH_SIZE = 25; // Persist every N votes
-const DEFAULT_CONGRESS_LIST = [118, 117, 116]; // Last 3 congresses (~6 years)
+const BATCH_SIZE = 25;
+// Match the congress coverage of fetch-member-votes (sponsored/cosponsored legislation)
+const DEFAULT_CONGRESS_LIST = [119, 118, 117, 116, 115, 114, 113];
+const RATE_LIMIT_DELAY = 50; // ms between API calls
 
 // Map policy areas to our topics
 const topicMapping: Record<string, string> = {
@@ -64,39 +64,37 @@ interface FloorVote {
   chamber: 'house' | 'senate';
 }
 
-interface CongressVote {
-  rollCallNumber: number;
-  congress: number;
-  session: number;
-  chamber: string;
-  date: string;
-  question: string;
-  description?: string;
-  result: string;
-  bill?: {
-    number: number;
-    type: string;
-    title?: string;
-    congress?: number;
-  };
-  nomination?: {
-    number: string;
-    description?: string;
-  };
+// Simple XML tag extraction (no external library needed)
+function extractTag(xml: string, tag: string): string | null {
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i');
+  const match = xml.match(regex);
+  return match ? match[1].trim() : null;
 }
 
-interface MemberPosition {
-  bioguideId: string;
-  memberName: string;
-  party: string;
-  state: string;
-  votePosition: 'Yea' | 'Nay' | 'Present' | 'Not Voting';
+function extractAllTags(xml: string, tag: string): string[] {
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'gi');
+  const matches = xml.matchAll(regex);
+  return Array.from(matches).map(m => m[1].trim());
 }
 
-// Map API's voteCast values to our position enum
-function mapVoteCast(voteCast: string): 'Yea' | 'Nay' | 'Present' | 'Not Voting' {
-  const vote = (voteCast || '').toLowerCase().trim();
-  switch (vote) {
+function extractAttribute(xml: string, attr: string): string | null {
+  const regex = new RegExp(`${attr}="([^"]*)"`, 'i');
+  const match = xml.match(regex);
+  return match ? match[1] : null;
+}
+
+// Map congress number to calendar years
+function congressToYears(congress: number): [number, number] {
+  // 118th Congress = 2023-2024
+  // Formula: firstYear = (congress - 1) * 2 + 1789
+  const firstYear = (congress - 1) * 2 + 1789;
+  return [firstYear, firstYear + 1];
+}
+
+// Map vote position strings to our enum
+function mapVotePosition(vote: string): 'Yea' | 'Nay' | 'Present' | 'Not Voting' {
+  const v = (vote || '').toLowerCase().trim();
+  switch (v) {
     case 'aye':
     case 'yea':
     case 'yes':
@@ -111,116 +109,9 @@ function mapVoteCast(voteCast: string): 'Yea' | 'Nay' | 'Present' | 'Not Voting'
   }
 }
 
-// Fetch member positions for a specific vote
-async function fetchVoteMemberPositions(
-  chamber: 'house' | 'senate',
-  congress: number,
-  session: number,
-  voteNumber: number
-): Promise<MemberPosition[]> {
-  const chamberPath = chamber === 'house' ? 'house-vote' : 'senate-vote';
-  const url = `https://api.congress.gov/v3/${chamberPath}/${congress}/${session}/${voteNumber}/members?api_key=${CONGRESS_API_KEY}`;
-  
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.log(`[BG] Failed to fetch vote ${voteNumber} members: ${response.status}`);
-      return [];
-    }
-    
-    const data = await response.json();
-    const positions: MemberPosition[] = [];
-    
-    // Congress.gov API returns: houseRollCallVoteMemberVotes or senateRollCallVoteMemberVotes
-    const memberVotesKey = chamber === 'house' ? 'houseRollCallVoteMemberVotes' : 'senateRollCallVoteMemberVotes';
-    const memberVotes = data[memberVotesKey] || data;
-    
-    // Navigate to the item array - API structure: {results: {item: [...]}} or {item: [...]}
-    const results = memberVotes.results || memberVotes;
-    const items = Array.isArray(results) ? results : (results.item || []);
-    
-    for (const member of items) {
-      // API returns bioguideID (capital ID), not bioguideId
-      const bioguide = member.bioguideID || member.bioguideId;
-      if (bioguide) {
-        positions.push({
-          bioguideId: bioguide,
-          memberName: `${member.firstName || ''} ${member.lastName || ''}`.trim(),
-          party: member.voteParty || member.party || '',
-          state: member.voteState || member.state || '',
-          votePosition: mapVoteCast(member.voteCast || member.votePosition || ''),
-        });
-      }
-    }
-    
-    return positions;
-  } catch (e) {
-    console.error(`Error fetching vote ${voteNumber} members:`, e);
-    return [];
-  }
-}
-
-// Fetch list of votes for a congress/session
-async function fetchVotesList(
-  chamber: 'house' | 'senate',
-  congress: number,
-  offset: number = 0,
-  limit: number = 250
-): Promise<{ votes: CongressVote[]; hasMore: boolean }> {
-  const chamberPath = chamber === 'house' ? 'house-vote' : 'senate-vote';
-  const url = `https://api.congress.gov/v3/${chamberPath}/${congress}?api_key=${CONGRESS_API_KEY}&offset=${offset}&limit=${limit}`;
-  
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.log(`Failed to fetch ${chamber} votes for congress ${congress}: ${response.status}`);
-      return { votes: [], hasMore: false };
-    }
-    
-    const data = await response.json();
-    
-    // Congress.gov API returns houseRollCallVotes or senateRollCallVotes
-    const votesKey = chamber === 'house' ? 'houseRollCallVotes' : 'senateRollCallVotes';
-    const rawVotes = data[votesKey] || data.votes || [];
-    
-    console.log(`[BG] API response keys: ${Object.keys(data).join(', ')}, ${votesKey} count: ${rawVotes.length}`);
-    
-    const votes = rawVotes.map((v: any) => ({
-      rollCallNumber: v.rollCallNumber || v.number,
-      congress: v.congress || congress,
-      session: v.sessionNumber || v.session || 1,
-      chamber: chamber,
-      date: v.startDate || v.updateDate || v.date || v.actionDate,
-      question: v.voteQuestion || v.question || '',
-      description: v.legislationType && v.legislationNumber 
-        ? `${v.legislationType}${v.legislationNumber}` 
-        : (v.description || v.title || ''),
-      result: v.result || '',
-      bill: v.legislationType ? {
-        number: v.legislationNumber,
-        type: v.legislationType,
-        title: `${v.legislationType}${v.legislationNumber}`,
-        congress: v.congress || congress,
-      } : (v.bill ? {
-        number: v.bill.number,
-        type: v.bill.type,
-        title: v.bill.title,
-        congress: v.bill.congress || congress,
-      } : undefined),
-      nomination: v.nomination,
-    }));
-    
-    const hasMore = votes.length === limit;
-    return { votes, hasMore };
-  } catch (e) {
-    console.error(`Error fetching ${chamber} votes:`, e);
-    return { votes: [], hasMore: false };
-  }
-}
-
-// Infer topic from vote description and bill info
-function inferTopic(vote: CongressVote): string {
-  const text = `${vote.question} ${vote.description || ''} ${vote.bill?.title || ''}`.toLowerCase();
+// Infer topic from vote description
+function inferTopic(question: string, description: string): string {
+  const text = `${question} ${description}`.toLowerCase();
   
   const topicKeywords: Record<string, string[]> = {
     'Healthcare': ['health', 'medicare', 'medicaid', 'hospital', 'medical', 'drug', 'prescription', 'insurance'],
@@ -245,43 +136,210 @@ function inferTopic(vote: CongressVote): string {
   return 'Domestic Policy';
 }
 
-// Preflight check: verify member exists in recent roll calls
-async function checkMemberExists(
-  bioguideId: string,
-  chamber: 'house' | 'senate',
-  congress: number
-): Promise<{ exists: boolean; sampleVote?: CongressVote }> {
-  console.log(`[BG] Preflight: checking if ${bioguideId} exists in ${chamber} roll calls for congress ${congress}...`);
+// Fetch and parse a House roll call vote from clerk.house.gov
+async function fetchHouseVote(
+  year: number,
+  rollNumber: number,
+  bioguideId: string
+): Promise<{ vote: FloorVote | null; metadata: any }> {
+  const paddedRoll = String(rollNumber).padStart(3, '0');
+  const url = `https://clerk.house.gov/evs/${year}/roll${paddedRoll}.xml`;
   
-  // Fetch just the first few votes to check membership
-  const { votes } = await fetchVotesList(chamber, congress, 0, 10);
-  
-  if (votes.length === 0) {
-    console.log(`[BG] Preflight: no votes found for ${chamber} congress ${congress}`);
-    return { exists: false };
-  }
-  
-  // Check the first 3 votes for this member
-  for (const vote of votes.slice(0, 3)) {
-    const positions = await fetchVoteMemberPositions(
-      chamber,
-      vote.congress,
-      vote.session,
-      vote.rollCallNumber
-    );
-    
-    const found = positions.some(p => p.bioguideId === bioguideId);
-    console.log(`[BG] Preflight vote ${vote.rollCallNumber}: ${positions.length} members, ${bioguideId} found: ${found}`);
-    
-    if (found) {
-      return { exists: true, sampleVote: vote };
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return { vote: null, metadata: { status: response.status } };
     }
     
-    await new Promise(resolve => setTimeout(resolve, 100));
+    const xml = await response.text();
+    
+    // Extract vote metadata
+    const congress = extractTag(xml, 'congress') || '';
+    const session = extractTag(xml, 'session') || '1';
+    const chamber = 'house';
+    const voteQuestion = extractTag(xml, 'vote-question') || '';
+    const voteDesc = extractTag(xml, 'vote-desc') || '';
+    const actionDate = extractTag(xml, 'action-date');
+    const actionTime = extractTag(xml, 'action-time');
+    
+    // Parse date (format: 10-Jan-2024)
+    let voteDate = '';
+    if (actionDate) {
+      // Parse "10-Jan-2024" format
+      const dateMatch = actionDate.match(/(\d+)-(\w+)-(\d+)/);
+      if (dateMatch) {
+        const months: Record<string, string> = {
+          Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+          Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12'
+        };
+        const [, day, mon, yr] = dateMatch;
+        voteDate = `${yr}-${months[mon] || '01'}-${day.padStart(2, '0')}`;
+      }
+    }
+    
+    // Extract bill info if available
+    const legNum = extractTag(xml, 'legis-num') || '';
+    const billId = legNum || `VOTE-${congress}-${session}-${rollNumber}`;
+    const billName = voteDesc || voteQuestion;
+    
+    // Find member by bioguide ID (name-id attribute)
+    // Pattern: <legislator ... name-id="B001292" ...>
+    const memberPattern = new RegExp(
+      `<legislator[^>]*name-id="${bioguideId}"[^>]*>([^<]*)</legislator>`,
+      'i'
+    );
+    const memberMatch = xml.match(memberPattern);
+    
+    if (!memberMatch) {
+      return { vote: null, metadata: { found: false, bioguideId } };
+    }
+    
+    // Extract vote from the recorded-vote block containing this member
+    // Pattern: <recorded-vote><legislator ... name-id="B001292" ...>Name</legislator><vote>Aye</vote></recorded-vote>
+    const voteBlockPattern = new RegExp(
+      `<recorded-vote>\\s*<legislator[^>]*name-id="${bioguideId}"[^>]*>[^<]*</legislator>\\s*<vote>([^<]*)</vote>\\s*</recorded-vote>`,
+      'i'
+    );
+    const voteMatch = xml.match(voteBlockPattern);
+    
+    if (!voteMatch) {
+      return { vote: null, metadata: { found: false, noVoteBlock: true } };
+    }
+    
+    const position = mapVotePosition(voteMatch[1]);
+    
+    return {
+      vote: {
+        id: `${bioguideId}-floor-house-${year}-${rollNumber}`,
+        bill_id: billId,
+        bill_name: billName.slice(0, 500),
+        candidate_id: bioguideId,
+        position,
+        action_type: 'floor_vote',
+        topic: inferTopic(voteQuestion, voteDesc),
+        description: `${voteQuestion}. ${voteDesc}`.slice(0, 1000),
+        date: voteDate || `${year}-01-01`,
+        vote_number: rollNumber,
+        congress: parseInt(congress) || 0,
+        session: parseInt(session) || 1,
+        chamber,
+      },
+      metadata: { found: true, position, congress, session },
+    };
+  } catch (error) {
+    console.error(`[House] Error fetching roll ${rollNumber} for ${year}:`, error);
+    return { vote: null, metadata: { error: String(error) } };
   }
+}
+
+// Fetch Senate vote list for a congress/session from senate.gov
+async function fetchSenateVoteList(
+  congress: number,
+  session: number
+): Promise<{ voteNumbers: string[]; error?: string }> {
+  const url = `https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_${congress}_${session}.xml`;
   
-  console.log(`[BG] Preflight: ${bioguideId} NOT found in recent ${chamber} roll calls`);
-  return { exists: false };
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return { voteNumbers: [], error: `HTTP ${response.status}` };
+    }
+    
+    const xml = await response.text();
+    
+    // Extract vote numbers from <vote_number> tags
+    const voteNumbers = extractAllTags(xml, 'vote_number');
+    
+    console.log(`[Senate] Congress ${congress} Session ${session}: found ${voteNumbers.length} votes`);
+    
+    return { voteNumbers };
+  } catch (error) {
+    console.error(`[Senate] Error fetching vote list for ${congress}/${session}:`, error);
+    return { voteNumbers: [], error: String(error) };
+  }
+}
+
+// Fetch a single Senate vote and find member's position
+async function fetchSenateVote(
+  congress: number,
+  session: number,
+  voteNumber: string,
+  lisId: string,
+  bioguideId: string
+): Promise<{ vote: FloorVote | null; metadata: any }> {
+  const paddedVote = voteNumber.padStart(5, '0');
+  const url = `https://www.senate.gov/legislative/LIS/roll_call_votes/vote${congress}${session}/vote_${congress}_${session}_${paddedVote}.xml`;
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return { vote: null, metadata: { status: response.status } };
+    }
+    
+    const xml = await response.text();
+    
+    // Extract vote metadata
+    const voteQuestion = extractTag(xml, 'vote_question_text') || extractTag(xml, 'question') || '';
+    const voteTitle = extractTag(xml, 'vote_title') || '';
+    const voteDate = extractTag(xml, 'vote_date') || '';
+    const voteResult = extractTag(xml, 'vote_result') || '';
+    
+    // Extract document info for bill ID
+    const docNum = extractTag(xml, 'document_short_title') || extractTag(xml, 'issue') || '';
+    const billId = docNum || `VOTE-${congress}-${session}-${voteNumber}`;
+    const billName = voteTitle || voteQuestion;
+    
+    // Find member by lis_member_id
+    // Pattern: <member><lis_member_id>S354</lis_member_id>...<vote_cast>Yea</vote_cast>...</member>
+    const memberPattern = new RegExp(
+      `<member>[\\s\\S]*?<lis_member_id>${lisId}</lis_member_id>[\\s\\S]*?<vote_cast>([^<]*)</vote_cast>[\\s\\S]*?</member>`,
+      'i'
+    );
+    const memberMatch = xml.match(memberPattern);
+    
+    if (!memberMatch) {
+      return { vote: null, metadata: { found: false, lisId } };
+    }
+    
+    const position = mapVotePosition(memberMatch[1]);
+    
+    // Parse date (format varies: January 3, 2024 or 2024-01-03)
+    let formattedDate = voteDate;
+    if (voteDate.includes(',')) {
+      // "January 3, 2024" format
+      const dateMatch = voteDate.match(/(\w+)\s+(\d+),\s+(\d+)/);
+      if (dateMatch) {
+        const months: Record<string, string> = {
+          January: '01', February: '02', March: '03', April: '04', May: '05', June: '06',
+          July: '07', August: '08', September: '09', October: '10', November: '11', December: '12'
+        };
+        const [, mon, day, yr] = dateMatch;
+        formattedDate = `${yr}-${months[mon] || '01'}-${day.padStart(2, '0')}`;
+      }
+    }
+    
+    return {
+      vote: {
+        id: `${bioguideId}-floor-senate-${congress}-${session}-${voteNumber}`,
+        bill_id: billId,
+        bill_name: billName.slice(0, 500),
+        candidate_id: bioguideId,
+        position,
+        action_type: 'floor_vote',
+        topic: inferTopic(voteQuestion, voteTitle),
+        description: `${voteQuestion}. ${voteTitle}`.slice(0, 1000),
+        date: formattedDate || `${(congress - 1) * 2 + 1789}-01-01`,
+        vote_number: parseInt(voteNumber),
+        congress,
+        session,
+        chamber: 'senate',
+      },
+      metadata: { found: true, position, congress, session },
+    };
+  } catch (error) {
+    console.error(`[Senate] Error fetching vote ${voteNumber} for ${congress}/${session}:`, error);
+    return { vote: null, metadata: { error: String(error) } };
+  }
 }
 
 // Persist a batch of votes to DB
@@ -320,136 +378,207 @@ async function persistVotesBatch(
   return newTotal;
 }
 
-// Background processing function - syncs floor votes across multiple congresses
-async function processFloorVoteSync(
+// Process House floor votes for all congresses
+async function processHouseFloorVotes(
+  supabase: any,
   bioguideId: string,
-  chamber: 'house' | 'senate',
-  congressList: number[],
-  syncStartedAt: string
-) {
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  congressList: number[]
+): Promise<{ totalPersisted: number; lastVoteDate: string | null; error?: string }> {
   let pendingVotes: FloorVote[] = [];
   let totalPersisted = 0;
-  let totalRollCallsProcessed = 0;
   let lastVoteDate: string | null = null;
-  const congressesWithVotes: number[] = [];
-
-  try {
-    console.log(`[BG] Starting floor vote sync for ${bioguideId} in ${chamber} across congresses: ${congressList.join(', ')}...`);
+  
+  console.log(`[House] Processing floor votes for ${bioguideId} across ${congressList.length} congresses...`);
+  
+  for (const congress of congressList) {
+    const [year1, year2] = congressToYears(congress);
     
-    // Process each congress
-    for (const congress of congressList) {
-      console.log(`[BG] === Processing Congress ${congress} ===`);
+    for (const year of [year1, year2]) {
+      let rollNumber = 1;
+      let consecutiveMisses = 0;
+      let foundInYear = 0;
       
-      // Preflight check for this congress
-      const { exists } = await checkMemberExists(bioguideId, chamber, congress);
+      console.log(`[House] Processing ${year} (Congress ${congress})...`);
       
-      if (!exists) {
-        console.log(`[BG] ${bioguideId} not found in ${chamber} for Congress ${congress}, skipping...`);
-        continue;
-      }
-      
-      congressesWithVotes.push(congress);
-      console.log(`[BG] ${bioguideId} found in Congress ${congress}. Processing up to ${MAX_ROLLCALLS_PER_CONGRESS} roll calls...`);
-      
-      // Process votes for this congress
-      let offset = 0;
-      let hasMore = true;
-      let congressRollCalls = 0;
-      
-      while (hasMore && congressRollCalls < MAX_ROLLCALLS_PER_CONGRESS) {
-        const remaining = MAX_ROLLCALLS_PER_CONGRESS - congressRollCalls;
-        const fetchLimit = Math.min(250, remaining);
+      // Iterate through roll calls until we hit 10 consecutive 404s
+      while (consecutiveMisses < 10 && rollNumber < 1000) {
+        const { vote, metadata } = await fetchHouseVote(year, rollNumber, bioguideId);
         
-        const { votes: votesList, hasMore: more } = await fetchVotesList(chamber, congress, offset, fetchLimit);
-        hasMore = more && congressRollCalls + votesList.length < MAX_ROLLCALLS_PER_CONGRESS;
+        if (metadata.status === 404) {
+          consecutiveMisses++;
+          rollNumber++;
+          continue;
+        }
         
-        console.log(`[BG] Congress ${congress}: Processing ${votesList.length} votes (offset ${offset})...`);
+        consecutiveMisses = 0;
         
-        for (const vote of votesList) {
-          if (congressRollCalls >= MAX_ROLLCALLS_PER_CONGRESS) break;
-          congressRollCalls++;
-          totalRollCallsProcessed++;
+        if (vote) {
+          pendingVotes.push(vote);
+          foundInYear++;
           
-          const positions = await fetchVoteMemberPositions(
-            chamber,
-            vote.congress,
-            vote.session,
-            vote.rollCallNumber
-          );
-          
-          const memberPosition = positions.find(p => p.bioguideId === bioguideId);
-          
-          if (memberPosition) {
-            const billId = vote.bill 
-              ? `${vote.bill.type}${vote.bill.number}` 
-              : `VOTE-${congress}-${vote.session}-${vote.rollCallNumber}`;
-            
-            const billName = vote.bill?.title || vote.description || vote.question;
-            
-            pendingVotes.push({
-              id: `${bioguideId}-floor-${congress}-${vote.session}-${vote.rollCallNumber}`,
-              bill_id: billId,
-              bill_name: billName.slice(0, 500),
-              candidate_id: bioguideId,
-              position: memberPosition.votePosition,
-              action_type: 'floor_vote',
-              topic: inferTopic(vote),
-              description: `${vote.question}. ${vote.description || ''}`.slice(0, 1000),
-              date: vote.date,
-              vote_number: vote.rollCallNumber,
-              congress: vote.congress,
-              session: vote.session,
-              chamber: chamber,
-            });
-            
-            // Track latest vote date
-            if (!lastVoteDate || new Date(vote.date) > new Date(lastVoteDate)) {
-              lastVoteDate = vote.date;
-            }
-            
-            // Persist in batches
-            if (pendingVotes.length >= BATCH_SIZE) {
-              totalPersisted = await persistVotesBatch(supabase, pendingVotes, bioguideId, totalPersisted);
-              pendingVotes = [];
-            }
+          if (!lastVoteDate || vote.date > lastVoteDate) {
+            lastVoteDate = vote.date;
           }
           
-          // Rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          // Progress log every 25 roll calls
-          if (congressRollCalls % 25 === 0) {
-            console.log(`[BG] Congress ${congress}: ${congressRollCalls}/${MAX_ROLLCALLS_PER_CONGRESS} roll calls, ${totalPersisted + pendingVotes.length} total votes`);
+          // Persist in batches
+          if (pendingVotes.length >= BATCH_SIZE) {
+            totalPersisted = await persistVotesBatch(supabase, pendingVotes, bioguideId, totalPersisted);
+            pendingVotes = [];
           }
         }
         
-        offset += votesList.length;
+        rollNumber++;
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+        
+        // Progress log every 100 roll calls
+        if (rollNumber % 100 === 0) {
+          console.log(`[House] ${year}: processed ${rollNumber} roll calls, found ${foundInYear} votes`);
+        }
       }
       
-      console.log(`[BG] Congress ${congress} complete: ${congressRollCalls} roll calls processed`);
+      console.log(`[House] ${year} complete: ${foundInYear} votes found`);
+    }
+  }
+  
+  // Persist remaining votes
+  if (pendingVotes.length > 0) {
+    totalPersisted = await persistVotesBatch(supabase, pendingVotes, bioguideId, totalPersisted);
+  }
+  
+  return { totalPersisted, lastVoteDate };
+}
+
+// Process Senate floor votes for all congresses
+async function processSenateFloorVotes(
+  supabase: any,
+  bioguideId: string,
+  lisId: string,
+  congressList: number[]
+): Promise<{ totalPersisted: number; lastVoteDate: string | null; error?: string }> {
+  let pendingVotes: FloorVote[] = [];
+  let totalPersisted = 0;
+  let lastVoteDate: string | null = null;
+  
+  console.log(`[Senate] Processing floor votes for ${bioguideId} (LIS: ${lisId}) across ${congressList.length} congresses...`);
+  
+  for (const congress of congressList) {
+    for (const session of [1, 2]) {
+      const { voteNumbers, error } = await fetchSenateVoteList(congress, session);
+      
+      if (error) {
+        console.log(`[Senate] Skipping Congress ${congress} Session ${session}: ${error}`);
+        continue;
+      }
+      
+      if (voteNumbers.length === 0) {
+        console.log(`[Senate] No votes for Congress ${congress} Session ${session}`);
+        continue;
+      }
+      
+      console.log(`[Senate] Processing ${voteNumbers.length} votes for Congress ${congress} Session ${session}...`);
+      
+      let foundInSession = 0;
+      
+      for (const voteNum of voteNumbers) {
+        const { vote } = await fetchSenateVote(congress, session, voteNum, lisId, bioguideId);
+        
+        if (vote) {
+          pendingVotes.push(vote);
+          foundInSession++;
+          
+          if (!lastVoteDate || vote.date > lastVoteDate) {
+            lastVoteDate = vote.date;
+          }
+          
+          // Persist in batches
+          if (pendingVotes.length >= BATCH_SIZE) {
+            totalPersisted = await persistVotesBatch(supabase, pendingVotes, bioguideId, totalPersisted);
+            pendingVotes = [];
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      }
+      
+      console.log(`[Senate] Congress ${congress} Session ${session} complete: ${foundInSession} votes found`);
+    }
+  }
+  
+  // Persist remaining votes
+  if (pendingVotes.length > 0) {
+    totalPersisted = await persistVotesBatch(supabase, pendingVotes, bioguideId, totalPersisted);
+  }
+  
+  return { totalPersisted, lastVoteDate };
+}
+
+// Background processing function
+async function processFloorVoteSync(
+  bioguideId: string,
+  chamber: 'house' | 'senate',
+  congressList: number[]
+) {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  
+  try {
+    console.log(`[BG] Starting floor vote sync for ${bioguideId} in ${chamber}...`);
+    console.log(`[BG] Congresses: ${congressList.join(', ')}`);
+    
+    let result: { totalPersisted: number; lastVoteDate: string | null; error?: string };
+    
+    if (chamber === 'senate') {
+      // Get LIS ID for Senate member
+      const { data: candidate, error: fetchError } = await supabase
+        .from('candidates')
+        .select('lis_member_id, name')
+        .eq('id', bioguideId)
+        .single();
+      
+      if (fetchError || !candidate) {
+        throw new Error(`Candidate ${bioguideId} not found`);
+      }
+      
+      if (!candidate.lis_member_id) {
+        // Try to fetch LIS ID from congress-legislators
+        console.log(`[BG] No LIS ID found for ${candidate.name}, attempting to fetch...`);
+        
+        const legResponse = await fetch('https://theunitedstates.io/congress-legislators/legislators-current.json');
+        if (legResponse.ok) {
+          const legislators = await legResponse.json();
+          const match = legislators.find((l: any) => l.id.bioguide === bioguideId);
+          
+          if (match?.id?.lis) {
+            await supabase
+              .from('candidates')
+              .update({ lis_member_id: match.id.lis })
+              .eq('id', bioguideId);
+            
+            console.log(`[BG] Updated ${candidate.name} with LIS ID: ${match.id.lis}`);
+            result = await processSenateFloorVotes(supabase, bioguideId, match.id.lis, congressList);
+          } else {
+            throw new Error(`LIS member ID not found for Senate member ${candidate.name}. Run sync-lis-member-ids first.`);
+          }
+        } else {
+          throw new Error(`Could not fetch LIS ID data`);
+        }
+      } else {
+        result = await processSenateFloorVotes(supabase, bioguideId, candidate.lis_member_id, congressList);
+      }
+    } else {
+      result = await processHouseFloorVotes(supabase, bioguideId, congressList);
     }
     
-    // Persist any remaining votes
-    if (pendingVotes.length > 0) {
-      totalPersisted = await persistVotesBatch(supabase, pendingVotes, bioguideId, totalPersisted);
-    }
-    
-    console.log(`[BG] Completed: ${totalRollCallsProcessed} total roll calls across ${congressesWithVotes.length} congresses, ${totalPersisted} votes persisted for ${bioguideId}`);
+    console.log(`[BG] Completed: ${result.totalPersisted} floor votes persisted for ${bioguideId}`);
     
     // Final status update
-    const statusMessage = congressesWithVotes.length === 0 
-      ? `Not a seated ${chamber} member in any of the requested congresses (${congressList.join(', ')}). No roll-call votes available.`
-      : null;
-    
     await supabase
       .from('vote_sync_status')
       .upsert({
         candidate_id: bioguideId,
-        expected_floor_votes: totalRollCallsProcessed,
-        persisted_floor_votes: totalPersisted,
-        last_floor_vote_date: lastVoteDate,
-        floor_vote_sync_error: statusMessage,
+        expected_floor_votes: result.totalPersisted,
+        persisted_floor_votes: result.totalPersisted,
+        last_floor_vote_date: result.lastVoteDate,
+        floor_vote_sync_error: null,
         last_sync_completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'candidate_id' });
@@ -462,7 +591,6 @@ async function processFloorVoteSync(
       .from('vote_sync_status')
       .upsert({
         candidate_id: bioguideId,
-        persisted_floor_votes: totalPersisted,
         floor_vote_sync_error: errorMessage,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'candidate_id' });
@@ -486,79 +614,68 @@ serve(async (req) => {
     const { 
       bioguideId, 
       chamber = 'house',
-      congressList,
-    } = body as Record<string, unknown>;
+      congressList = DEFAULT_CONGRESS_LIST,
+    } = body;
 
-    // Use provided congressList or default to recent 3 congresses
-    const validCongressList: number[] = Array.isArray(congressList) 
-      ? congressList.map(c => Number(c)).filter(c => !isNaN(c))
-      : DEFAULT_CONGRESS_LIST;
-
-    console.log(`Received floor vote sync request for: ${bioguideId}, chamber=${chamber}, congresses=${validCongressList.join(', ')}`);
-
-    if (!CONGRESS_API_KEY) {
-      throw new Error('Congress.gov API key not configured');
-    }
-
-    if (!bioguideId) {
-      throw new Error('bioguideId is required');
+    if (!bioguideId || typeof bioguideId !== 'string') {
+      throw new Error('bioguideId is required and must be a string');
     }
 
     const validChamber = chamber === 'senate' ? 'senate' : 'house';
+    const validCongressList = Array.isArray(congressList) ? congressList : DEFAULT_CONGRESS_LIST;
+
+    console.log(`[fetch-floor-votes] Request: ${bioguideId}, chamber=${validChamber}, congresses=${validCongressList.join(',')}`);
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Mark sync as started
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     await supabase
       .from('vote_sync_status')
       .upsert({
-        candidate_id: bioguideId as string,
+        candidate_id: bioguideId,
         last_sync_started_at: syncStartedAt,
         floor_vote_sync_error: null,
-        updated_at: new Date().toISOString(),
+        updated_at: syncStartedAt,
       }, { onConflict: 'candidate_id' });
 
-    const totalMaxRollCalls = MAX_ROLLCALLS_PER_CONGRESS * validCongressList.length;
-
+    // Use background processing
     // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
-    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
-      console.log(`Starting background floor vote sync for ${bioguideId} across ${validCongressList.length} congresses`);
+    if (typeof globalThis.EdgeRuntime !== 'undefined' && globalThis.EdgeRuntime.waitUntil) {
       // @ts-ignore
-      EdgeRuntime.waitUntil(processFloorVoteSync(
-        bioguideId as string, 
-        validChamber, 
-        validCongressList, 
-        syncStartedAt
-      ));
-
+      globalThis.EdgeRuntime.waitUntil(processFloorVoteSync(bioguideId, validChamber, validCongressList));
+      
       return new Response(JSON.stringify({
         status: 'processing',
-        message: `Floor vote sync started for ${bioguideId}. Processing up to ${totalMaxRollCalls} roll calls across congresses ${validCongressList.join(', ')}.`,
-        bioguideId,
+        message: `Floor vote sync started for ${bioguideId} (${validChamber})`,
         chamber: validChamber,
-        congressList: validCongressList,
+        congresses: validCongressList,
+        startedAt: syncStartedAt,
       }), {
+        status: 202,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else {
-      console.log(`Running floor vote sync synchronously for ${bioguideId}`);
-      await processFloorVoteSync(bioguideId as string, validChamber, validCongressList, syncStartedAt);
-
+      // Fallback: run synchronously
+      await processFloorVoteSync(bioguideId, validChamber, validCongressList);
+      
       return new Response(JSON.stringify({
         status: 'completed',
-        message: `Floor vote sync completed for ${bioguideId}`,
-        bioguideId,
+        message: `Floor vote sync completed for ${bioguideId} (${validChamber})`,
+        chamber: validChamber,
+        congresses: validCongressList,
       }), {
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Error in fetch-floor-votes function:', errorMessage);
+    console.error('[fetch-floor-votes] Error:', errorMessage);
 
     return new Response(JSON.stringify({
+      status: 'error',
       error: errorMessage,
-      status: 'error'
     }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

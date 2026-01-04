@@ -193,8 +193,9 @@ export function useVotingRecordsSync() {
             // Determine chamber from office
             const chamber = member.office?.toLowerCase().includes('senator') ? 'senate' : 'house';
             
+            // Edge function now uses clerk.house.gov and senate.gov XML sources
             const { data, error } = await supabase.functions.invoke('fetch-floor-votes', {
-              body: { bioguideId: member.id, chamber, congress: 118 },
+              body: { bioguideId: member.id, chamber },
             });
 
             if (error) {
@@ -250,8 +251,10 @@ export function useVotingRecordsSync() {
     mutationFn: async ({ bioguideId, office }: { bioguideId: string; office: string }) => {
       const chamber = office?.toLowerCase().includes('senator') ? 'senate' : 'house';
       
+      // Edge function now uses clerk.house.gov and senate.gov XML sources
+      // and defaults to congresses [119, 118, 117, 116, 115, 114, 113]
       const { data, error } = await supabase.functions.invoke('fetch-floor-votes', {
-        body: { bioguideId, chamber, congress: 118 },
+        body: { bioguideId, chamber },
       });
 
       if (error) throw error;
