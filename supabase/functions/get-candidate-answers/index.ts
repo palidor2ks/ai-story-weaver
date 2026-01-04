@@ -1243,7 +1243,9 @@ ONLY JSON array. No markdown.`;
       evidenceType = 'voting_record';
     } else if (hasResearch && research.sourceUrls.length > 0) {
       evidenceType = 'public_statement';
-    } else if (!hasVotingRecord && !hasResearch) {
+    } else {
+      // No specific evidence found (voting record exists but no match, or no web sources)
+      // Mark as inferred so Phase 3 can provide ideology-based reasoning
       evidenceType = 'inferred';
     }
     
@@ -1421,7 +1423,13 @@ async function generateAnswersInChunks(
           return false;
         }
         
-        // Only infer if truly no position found
+        // Catch mixed/inferred evidence with no actual content
+        if ((existing.evidence_type === 'mixed' || existing.evidence_type === 'inferred') && existing.answer_value === 0) {
+          console.log(`[Phase3] Will infer ${q.id}: ${existing.evidence_type} evidence with no value`);
+          return true;
+        }
+        
+        // Also infer if truly no position found in description
         const desc = existing.source_description?.toLowerCase() || '';
         const needsInference = desc.includes('no documented position') || 
                                desc.includes('no relevant voting record') ||
