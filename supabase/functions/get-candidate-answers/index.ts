@@ -1693,6 +1693,9 @@ async function generateAnswersInChunks(
       
       allGeneratedAnswers.push(...deduplicatedAnswers);
 
+      // Valid source_type values per database constraint
+      const validSourceTypes = ['voting_record', 'public_statement', 'campaign_website', 'interview', 'legislation', 'web_research', 'other'];
+      
       const answersToInsert = deduplicatedAnswers.map(answer => ({
         candidate_id: candidateId,
         question_id: answer.question_id,
@@ -1701,7 +1704,7 @@ async function generateAnswersInChunks(
         source_url: answer.source_url,
         source_urls: answer.source_urls,
         source_titles: answer.source_titles,
-        source_type: answer.source_type,
+        source_type: validSourceTypes.includes(answer.source_type || '') ? answer.source_type : 'other',
         confidence: answer.confidence,
         evidence_type: answer.evidence_type,
         voting_record_summary: answer.voting_record_summary,
@@ -1768,6 +1771,9 @@ async function generateAnswersInChunks(
         validationResult.answers = Array.from(answerMap.values());
       }
       
+      // Valid source_type values per database constraint
+      const validSourceTypesForValidation = ['voting_record', 'public_statement', 'campaign_website', 'interview', 'legislation', 'web_research', 'other'];
+      
       const validatedToUpsert = validationResult.answers.map(a => ({
         candidate_id: candidateId,
         question_id: a.question_id,
@@ -1776,7 +1782,7 @@ async function generateAnswersInChunks(
         source_url: a.source_url,
         source_urls: a.source_urls,
         source_titles: a.source_titles,
-        source_type: a.source_type,
+        source_type: validSourceTypesForValidation.includes(a.source_type || '') ? a.source_type : 'other',
         confidence: a.confidence,
         evidence_type: a.evidence_type,
       }));
