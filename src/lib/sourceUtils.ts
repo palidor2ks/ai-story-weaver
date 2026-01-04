@@ -27,10 +27,15 @@ const KNOWN_DOMAINS: Record<string, string> = {
   'votesmart.org': 'VoteSmart',
   'govtrack.us': 'GovTrack',
   'wikipedia.org': 'Wikipedia',
+  // Social media platforms
+  'twitter.com': 'Twitter',
+  'x.com': 'X (Twitter)',
+  'facebook.com': 'Facebook',
+  'instagram.com': 'Instagram',
 };
 
 // Source type categorization
-export type SourceType = 'government' | 'news' | 'party' | 'reference' | 'other';
+export type SourceType = 'government' | 'news' | 'party' | 'reference' | 'social_media' | 'other';
 
 interface SourceInfo {
   displayName: string;
@@ -58,6 +63,7 @@ function getSourceType(domain: string): SourceType {
   if (['democrats.org', 'gop.com', 'gp.org', 'lp.org'].includes(domain)) return 'party';
   if (['nytimes.com', 'washingtonpost.com', 'apnews.com', 'reuters.com', 'politico.com', 'cnn.com', 'foxnews.com', 'npr.org', 'bbc.com', 'thehill.com'].includes(domain)) return 'news';
   if (['ballotpedia.org', 'opensecrets.org', 'votesmart.org', 'govtrack.us', 'wikipedia.org'].includes(domain)) return 'reference';
+  if (['twitter.com', 'x.com', 'facebook.com', 'instagram.com'].includes(domain)) return 'social_media';
   return 'other';
 }
 
@@ -114,6 +120,8 @@ export function getSourceBadgeClass(type: SourceType): string {
       return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800';
     case 'reference':
       return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800';
+    case 'social_media':
+      return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800';
     default:
       return 'bg-muted text-muted-foreground border-border';
   }

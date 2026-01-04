@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Loader2, RefreshCw, CheckCircle2, XCircle, ChevronDown, ExternalLink, Sparkles, Vote, FileText, Globe, Brain } from 'lucide-react';
+import { Loader2, RefreshCw, CheckCircle2, XCircle, ChevronDown, ExternalLink, Sparkles, Vote, FileText, Globe, Brain, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getSourceInfo, getSourceBadgeClass } from '@/lib/sourceUtils';
@@ -80,6 +80,8 @@ function getEvidenceBadge(evidenceType: string | null) {
       return { text: 'Floor Vote', icon: Vote, className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' };
     case 'public_statement':
       return { text: 'Statement', icon: FileText, className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' };
+    case 'social_media':
+      return { text: 'Social Media', icon: MessageCircle, className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300' };
     case 'mixed':
       return { text: 'Mixed', icon: Globe, className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' };
     case 'inferred':
@@ -126,10 +128,12 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
             // Fix hasSource to be truthful:
             // - Has source if we have actual source URLs
             // - OR if evidence_type is voting_record (floor votes or sponsored bills)
+            // - OR if evidence_type is public_statement or social_media
             // - NOT if it's just a long AI inference description
             const hasSource = (sourceUrls && sourceUrls.length > 0) || 
                               evidenceType === 'voting_record' ||
-                              evidenceType === 'public_statement';
+                              evidenceType === 'public_statement' ||
+                              evidenceType === 'social_media';
             
             return {
               questionId: q.id,
