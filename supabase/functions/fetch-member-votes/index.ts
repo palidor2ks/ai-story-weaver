@@ -249,26 +249,61 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
       );
 
       if (uniqueVotes.length > 0) {
-        const CHUNK_SIZE = 100;
+        // Use smaller chunk size to avoid statement timeouts
+        const CHUNK_SIZE = 50;
+        const MAX_RETRIES = 3;
+        const RETRY_DELAY_MS = 10000; // 10s for timeout errors
 
         for (let i = 0; i < uniqueVotes.length; i += CHUNK_SIZE) {
           const chunk = uniqueVotes.slice(i, i + CHUNK_SIZE);
+          let retries = 0;
+          let success = false;
 
-          const { error: upsertError } = await supabase
-            .from('votes')
-            .upsert(chunk, { 
-              onConflict: 'id',
-              ignoreDuplicates: false
-            });
+          while (!success && retries < MAX_RETRIES) {
+            try {
+              const { error: upsertError } = await supabase
+                .from('votes')
+                .upsert(chunk, { 
+                  onConflict: 'id',
+                  ignoreDuplicates: false
+                });
 
-          if (upsertError) {
-            console.error(`[BG] Error persisting votes chunk for ${bioguideId}:`, upsertError);
-            throw new Error(upsertError.message || 'Failed to persist votes');
-          }
+              if (upsertError) {
+                // Check for timeout/worker limit errors
+                const isRetryable = 
+                  upsertError.message?.includes('statement timeout') ||
+                  upsertError.message?.includes('WORKER_LIMIT') ||
+                  (upsertError as { code?: string }).code === '546';
+                
+                if (isRetryable && retries < MAX_RETRIES - 1) {
+                  retries++;
+                  console.log(`[BG] Retryable error for ${bioguideId}, attempt ${retries}/${MAX_RETRIES}: ${upsertError.message}`);
+                  await new Promise(r => setTimeout(r, RETRY_DELAY_MS * retries));
+                  continue;
+                }
+                
+                throw new Error(upsertError.message || 'Failed to persist votes');
+              }
 
-          persisted += chunk.length;
-          if (persisted % 500 === 0 || persisted === uniqueVotes.length) {
-            console.log(`[BG] Persisted ${persisted}/${uniqueVotes.length} votes for ${bioguideId}`);
+              success = true;
+              persisted += chunk.length;
+              
+              if (persisted % 500 === 0 || persisted === uniqueVotes.length) {
+                console.log(`[BG] Persisted ${persisted}/${uniqueVotes.length} votes for ${bioguideId}`);
+              }
+            } catch (chunkError: unknown) {
+              const errMsg = chunkError instanceof Error ? chunkError.message : 'Unknown error';
+              
+              // Check if retryable
+              if (errMsg.includes('statement timeout') && retries < MAX_RETRIES - 1) {
+                retries++;
+                console.log(`[BG] Timeout for ${bioguideId}, attempt ${retries}/${MAX_RETRIES}`);
+                await new Promise(r => setTimeout(r, RETRY_DELAY_MS * retries));
+                continue;
+              }
+              
+              throw chunkError;
+            }
           }
         }
       }

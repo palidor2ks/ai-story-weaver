@@ -125,3 +125,6 @@ verify_jwt = false
 
 [functions.backfill-bill-summaries]
 verify_jwt = false
+
+[functions.backfill-vote-congress-numbers]
+verify_jwt = false
