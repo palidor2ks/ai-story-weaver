@@ -70,10 +70,16 @@ export function BillSummaryDashboard() {
         )}
 
         {/* Summary Statistics */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-muted/50 rounded-lg p-4 text-center">
             <div className="text-sm text-muted-foreground mb-1">Total Votes</div>
             <div className="text-2xl font-bold">{stats.totalVotes.toLocaleString()}</div>
+          </div>
+          
+          <div className="bg-muted/50 rounded-lg p-4 text-center">
+            <div className="text-sm text-muted-foreground mb-1">Processable</div>
+            <div className="text-2xl font-bold">{stats.processableVotes.toLocaleString()}</div>
+            <div className="text-xs text-muted-foreground">with bill IDs</div>
           </div>
           
           <div className="bg-green-500/10 rounded-lg p-4 text-center border border-green-500/20">
@@ -82,13 +88,13 @@ export function BillSummaryDashboard() {
               With Summary
             </div>
             <div className="text-2xl font-bold text-green-600">{stats.withSummary.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">{stats.coveragePct}% coverage</div>
+            <div className="text-xs text-muted-foreground">{stats.coveragePct}% of processable</div>
           </div>
           
           <div className="bg-amber-500/10 rounded-lg p-4 text-center border border-amber-500/20">
             <div className="flex items-center justify-center gap-1 text-sm text-amber-600 mb-1">
               <XCircle className="h-3.5 w-3.5" />
-              No Summary Available
+              No Summary
             </div>
             <div className="text-2xl font-bold text-amber-600">{stats.noSummaryAvailable.toLocaleString()}</div>
           </div>
@@ -101,19 +107,30 @@ export function BillSummaryDashboard() {
             <div className="text-2xl font-bold text-blue-600">{stats.pending.toLocaleString()}</div>
           </div>
           
-          <div className="bg-destructive/10 rounded-lg p-4 text-center border border-destructive/20">
-            <div className="flex items-center justify-center gap-1 text-sm text-destructive mb-1">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              Missing Congress
-            </div>
-            <div className="text-2xl font-bold text-destructive">{stats.missingCongress.toLocaleString()}</div>
+          <div className="bg-muted/30 rounded-lg p-4 text-center border border-muted">
+            <div className="text-sm text-muted-foreground mb-1">Floor Votes</div>
+            <div className="text-2xl font-bold text-muted-foreground">{stats.floorVotesNoBill.toLocaleString()}</div>
+            <div className="text-xs text-muted-foreground">no bill ID</div>
           </div>
         </div>
+        
+        {/* Missing Congress Warning */}
+        {stats.missingCongress > 0 && (
+          <div className="bg-destructive/10 rounded-lg p-4 border border-destructive/20">
+            <div className="flex items-center gap-2 text-destructive mb-1">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="font-medium">{stats.missingCongress.toLocaleString()} votes missing congress number</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Run "Backfill Congress #s" first — these votes cannot have summaries fetched until congress numbers are added.
+            </p>
+          </div>
+        )}
 
         {/* Overall Progress */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Overall Coverage</span>
+            <span className="text-muted-foreground">Coverage of Processable Votes</span>
             <span className="font-medium">{stats.coveragePct}%</span>
           </div>
           <Progress value={stats.coveragePct} className="h-3" />

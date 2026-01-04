@@ -85,23 +85,55 @@ async function fetchBillSummary(
   }
 }
 
+// Check if bill_id is a floor vote ID (not a real bill)
+function isFloorVoteId(billId: string): boolean {
+  return billId.startsWith('VOTE-') || billId.startsWith('vote-');
+}
+
 // Parse bill_id to extract type and number
 function parseBillId(billId: string): { type: string; number: number } | null {
-  const cleaned = billId.replace(/\s+/g, '').replace(/\./g, '');
-  const match = cleaned.match(/^([A-Z]+)(\d+)$/i);
-  if (match) {
-    return { type: match[1].toUpperCase(), number: parseInt(match[2], 10) };
+  // Skip floor vote IDs
+  if (isFloorVoteId(billId)) {
+    return null;
   }
+  
+  // Remove all spaces, periods, and normalize
+  const cleaned = billId.replace(/\s+/g, '').replace(/\./g, '').toUpperCase();
+  
+  // Match patterns like HR4535, HJRES105, SCONRES50
+  const match = cleaned.match(/^(HR|S|HRES|SRES|HJRES|SJRES|HCONRES|SCONRES)(\d+)$/);
+  if (match) {
+    return { type: match[1], number: parseInt(match[2], 10) };
+  }
+  
+  // Try looser match for edge cases
+  const looseMatch = cleaned.match(/^([A-Z]+)(\d+)$/);
+  if (looseMatch) {
+    console.log(`[BillSummary] Using loose match for bill_id: ${billId} -> ${looseMatch[1]}${looseMatch[2]}`);
+    return { type: looseMatch[1], number: parseInt(looseMatch[2], 10) };
+  }
+  
   return null;
 }
 
 // Process a single vote and return result
 async function processVote(vote: VoteRecord): Promise<SummaryResult> {
+  // Skip floor vote IDs - mark them so we don't process again
+  if (isFloorVoteId(vote.bill_id)) {
+    return { 
+      voteId: vote.id, 
+      summary: '[FLOOR_VOTE]', 
+      success: true 
+    };
+  }
+
   const parsed = parseBillId(vote.bill_id);
   if (!parsed || !vote.congress) {
+    console.log(`[BillSummary] Could not parse bill_id: ${vote.bill_id}`);
     return { voteId: vote.id, summary: null, success: false };
   }
 
+  console.log(`[BillSummary] Fetching summary for ${parsed.type}${parsed.number} (Congress ${vote.congress})`);
   const summary = await fetchBillSummary(vote.congress, parsed.type, parsed.number);
   return { 
     voteId: vote.id, 
@@ -137,12 +169,13 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Build query for votes missing summaries (must have congress number)
+    // Build query for votes missing summaries (must have congress number, exclude floor vote IDs)
     let query = supabase
       .from('votes')
       .select('id, bill_id, congress, action_type')
       .is('bill_summary', null)
       .not('congress', 'is', null)
+      .not('bill_id', 'ilike', 'VOTE-%')  // Exclude floor vote IDs
       .order('date', { ascending: false })
       .range(offset, offset + batchSize - 1);
 
@@ -215,12 +248,13 @@ serve(async (req) => {
       await new Promise(r => setTimeout(r, DELAY_BETWEEN_BATCHES));
     }
 
-    // Count remaining votes without summaries
+    // Count remaining votes without summaries (excluding floor vote IDs)
     const { count: remaining } = await supabase
       .from('votes')
       .select('id', { count: 'exact', head: true })
       .is('bill_summary', null)
-      .not('congress', 'is', null);
+      .not('congress', 'is', null)
+      .not('bill_id', 'ilike', 'VOTE-%');
 
     const elapsed = (Date.now() - startTime) / 1000;
     const rate = updated / elapsed;

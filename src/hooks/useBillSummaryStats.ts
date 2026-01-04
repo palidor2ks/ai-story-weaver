@@ -33,6 +33,8 @@ interface SummaryStats {
   noSummaryAvailable: number;
   pending: number;
   missingCongress: number;
+  floorVotesNoBill: number;  // Floor votes with VOTE-xxx IDs
+  processableVotes: number;   // Votes that can have summaries fetched
   coveragePct: number;
   byCongress: CongressStats[];
   byActionType: ActionTypeStats[];
@@ -48,6 +50,7 @@ export function useBillSummaryStats() {
         totalResult,
         withSummaryResult,
         noSummaryResult,
+        floorVoteResult,
         missingCongressResult,
         congressStatsResult,
         actionStatsResult,
@@ -56,16 +59,22 @@ export function useBillSummaryStats() {
         // Total votes
         supabase.from('votes').select('*', { count: 'exact', head: true }),
         
-        // With actual summary (not '[NO_SUMMARY]')
+        // With actual summary (not '[NO_SUMMARY]' or '[FLOOR_VOTE]')
         supabase.from('votes')
           .select('*', { count: 'exact', head: true })
           .not('bill_summary', 'is', null)
-          .neq('bill_summary', '[NO_SUMMARY]'),
+          .neq('bill_summary', '[NO_SUMMARY]')
+          .neq('bill_summary', '[FLOOR_VOTE]'),
         
         // Marked as no summary available
         supabase.from('votes')
           .select('*', { count: 'exact', head: true })
           .eq('bill_summary', '[NO_SUMMARY]'),
+        
+        // Floor votes (VOTE-xxx IDs that can't have summaries)
+        supabase.from('votes')
+          .select('*', { count: 'exact', head: true })
+          .ilike('bill_id', 'VOTE-%'),
         
         // Missing congress number
         supabase.from('votes')
@@ -96,8 +105,12 @@ export function useBillSummaryStats() {
       const totalVotes = totalResult.count || 0;
       const withSummary = withSummaryResult.count || 0;
       const noSummaryAvailable = noSummaryResult.count || 0;
+      const floorVotesNoBill = floorVoteResult.count || 0;
       const missingCongress = missingCongressResult.count || 0;
-      const pending = totalVotes - withSummary - noSummaryAvailable;
+      
+      // Processable = votes with actual bill IDs and congress numbers
+      const processableVotes = totalVotes - floorVotesNoBill - missingCongress;
+      const pending = processableVotes - withSummary - noSummaryAvailable;
 
       // Process congress stats
       const congressMap = new Map<number, { total: number; summary: number; noSummary: number }>();
@@ -184,9 +197,11 @@ export function useBillSummaryStats() {
         totalVotes,
         withSummary,
         noSummaryAvailable,
-        pending,
+        pending: Math.max(0, pending),
         missingCongress,
-        coveragePct: totalVotes > 0 ? Math.round((withSummary / totalVotes) * 100) : 0,
+        floorVotesNoBill,
+        processableVotes: Math.max(0, processableVotes),
+        coveragePct: processableVotes > 0 ? Math.round((withSummary / processableVotes) * 100) : 0,
         byCongress,
         byActionType,
         topCandidates
