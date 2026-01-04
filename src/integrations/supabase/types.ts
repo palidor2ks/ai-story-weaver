@@ -776,6 +776,7 @@ export type Database = {
           individual_delta_amount: number | null
           individual_delta_pct: number | null
           local_earmarked: number | null
+          local_gross_individual: number | null
           local_individual_itemized: number | null
           local_itemized: number | null
           local_itemized_net: number | null
@@ -784,6 +785,7 @@ export type Database = {
           local_pac_contributions: number | null
           local_party_contributions: number | null
           local_transfers: number | null
+          memo_x_amount: number | null
           notes: string | null
           pac_delta_amount: number | null
           pac_delta_pct: number | null
@@ -810,6 +812,7 @@ export type Database = {
           individual_delta_amount?: number | null
           individual_delta_pct?: number | null
           local_earmarked?: number | null
+          local_gross_individual?: number | null
           local_individual_itemized?: number | null
           local_itemized?: number | null
           local_itemized_net?: number | null
@@ -818,6 +821,7 @@ export type Database = {
           local_pac_contributions?: number | null
           local_party_contributions?: number | null
           local_transfers?: number | null
+          memo_x_amount?: number | null
           notes?: string | null
           pac_delta_amount?: number | null
           pac_delta_pct?: number | null
@@ -844,6 +848,7 @@ export type Database = {
           individual_delta_amount?: number | null
           individual_delta_pct?: number | null
           local_earmarked?: number | null
+          local_gross_individual?: number | null
           local_individual_itemized?: number | null
           local_itemized?: number | null
           local_itemized_net?: number | null
@@ -852,6 +857,7 @@ export type Database = {
           local_pac_contributions?: number | null
           local_party_contributions?: number | null
           local_transfers?: number | null
+          memo_x_amount?: number | null
           notes?: string | null
           pac_delta_amount?: number | null
           pac_delta_pct?: number | null
@@ -1931,6 +1937,7 @@ export type Database = {
         Returns: {
           contribution_count: number
           earmarked_total: number
+          gross_individual_total: number
           individual_total: number
           itemized_total: number
           loans_total: number
@@ -1948,6 +1955,7 @@ export type Database = {
           committee_id: string
           contribution_count: number
           earmarked_total: number
+          gross_individual_total: number
           individual_total: number
           itemized_total: number
           loans_total: number

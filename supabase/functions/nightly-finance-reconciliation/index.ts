@@ -170,7 +170,9 @@ serve(async (req) => {
         }
 
         const totals = categoryTotals?.[0] || categoryTotals || {};
-        const localIndividualItemized = Number(totals.individual_total) || 0;
+        const localIndividualItemized = Number(totals.individual_total) || 0;  // Net (excludes memo_code='X')
+        const localGrossIndividual = Number(totals.gross_individual_total) || 0;  // Gross (includes memo_code='X' for FEC comparison)
+        const memoXAmount = localGrossIndividual - localIndividualItemized;  // Amount in memo_code='X' entries
         const localPacContributions = Number(totals.pac_total) || 0;
         const localPartyContributions = Number(totals.party_total) || 0;
         const localItemized = Number(totals.itemized_total) || 0;
@@ -222,7 +224,7 @@ serve(async (req) => {
           }
         }
 
-        console.log(`[RECONCILIATION] ${candidate.name}: ${contributionCount} contributions - Individual: $${localIndividualItemized}, Org: $${localOrganization}, PAC: $${localPacContributions}, Party: $${localPartyContributions}`);
+        console.log(`[RECONCILIATION] ${candidate.name}: ${contributionCount} contributions - Individual(net): $${localIndividualItemized}, Gross: $${localGrossIndividual}, memo_X: $${memoXAmount}, Org: $${localOrganization}, PAC: $${localPacContributions}, Party: $${localPartyContributions}`);
 
         // Fetch fresh FEC totals for each committee (with category-level data)
         let fecItemized = 0;
@@ -294,8 +296,9 @@ serve(async (req) => {
         const fecDataBalanced = Math.abs(calculatedTotal - fecTotalReceipts) < 1;
         
         // Calculate category-level deltas (apples-to-apples comparisons)
-        // Individual: local_individual_itemized vs fec_itemized (both are Line 11A/11AI)
-        const individualDeltaAmount = localIndividualItemized - fecItemized;
+        // Individual: use GROSS local (includes memo_code='X') vs fec_itemized for fair comparison
+        // FEC's individual_itemized_contributions includes memo_code='X' entries
+        const individualDeltaAmount = localGrossIndividual - fecItemized;
         const individualDeltaPct = fecItemized > 0 
           ? Math.round((individualDeltaAmount / fecItemized) * 10000) / 100 
           : 0;
@@ -316,9 +319,9 @@ serve(async (req) => {
         const localTotal = localItemized + localTransfers + localLoans + localOther;
         
         // Compare local vs FEC at the comparable itemized level (Ind + PAC + Party)
-        // This is the "apples-to-apples" comparison for imported data
+        // Use GROSS individual total for FEC comparison (includes memo_code='X')
         const fecComparableItemized = fecItemized + fecPacContributions + fecPartyContributions;
-        const localComparableItemized = localIndividualItemized + localPacContributions + localPartyContributions;
+        const localComparableItemized = localGrossIndividual + localPacContributions + localPartyContributions;
         
         // Overall delta: compare comparable itemized totals
         const deltaAmount = localComparableItemized - fecComparableItemized;
@@ -344,6 +347,8 @@ serve(async (req) => {
             local_earmarked: localEarmarked,
             // Category-level local data
             local_individual_itemized: localIndividualItemized,
+            local_gross_individual: localGrossIndividual,
+            memo_x_amount: memoXAmount,
             local_pac_contributions: localPacContributions,
             local_party_contributions: localPartyContributions,
             local_loans: localLoans,
