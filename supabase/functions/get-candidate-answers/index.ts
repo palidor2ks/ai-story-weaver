@@ -275,6 +275,7 @@ function normalizeTopicName(topic: string): string {
 }
 
 // Extract keywords from question text for cross-topic vote matching
+// PART F: Expanded with civil rights keywords
 function extractQuestionKeywords(questionText: string): string[] {
   const text = questionText.toLowerCase();
   const keywordGroups: Record<string, string[]> = {
@@ -289,6 +290,14 @@ function extractQuestionKeywords(questionText: string): string[] {
     voting: ['voting', 'election', 'ballot', 'voter id', 'gerrymandering', 'filibuster'],
     labor: ['union', 'labor', 'worker', 'minimum wage', 'overtime'],
     military: ['military', 'defense', 'veteran', 'pentagon', 'armed forces'],
+    // PART F: Civil rights keywords added
+    civilrights: [
+      'affirmative action', 'dei', 'diversity', 'equity', 'inclusion',
+      'equal protection', 'civil rights act', 'title vi', 'title vii',
+      'discrimination', 'race-based', 'admissions', 'racial preference',
+      'minority', 'underrepresented', 'disparate impact', 'equal opportunity',
+      'racial justice', 'systemic racism', 'reparations', 'voting rights act'
+    ],
   };
   
   const matches: string[] = [];
@@ -332,6 +341,169 @@ async function fetchStoredVotes(
   } catch (e) {
     console.error('[VotesDB] Exception fetching votes:', e);
     return { floorVotes: [], legislativeActions: [] };
+  }
+}
+
+// PART E: Fetch bill summary from Congress.gov API
+async function fetchBillSummary(
+  congress: number, 
+  billType: string, 
+  billNumber: number
+): Promise<string | null> {
+  if (!CONGRESS_GOV_API_KEY) return null;
+  
+  try {
+    const typeMap: Record<string, string> = {
+      'HR': 'hr', 'S': 's', 'HRES': 'hres', 'SRES': 'sres',
+      'HJRES': 'hjres', 'SJRES': 'sjres', 'HCONRES': 'hconres', 'SCONRES': 'sconres'
+    };
+    const apiType = typeMap[billType.toUpperCase()] || 'hr';
+    
+    const url = `https://api.congress.gov/v3/bill/${congress}/${apiType}/${billNumber}/summaries?api_key=${CONGRESS_GOV_API_KEY}`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    const summaries = data.summaries || [];
+    
+    // Get the most recent/detailed summary
+    if (summaries.length === 0) return null;
+    const latestSummary = summaries[summaries.length - 1];
+    return latestSummary.text?.slice(0, 1500) || null; // Cap at 1500 chars
+  } catch (e) {
+    console.log(`[BillSummary] Error fetching summary for ${billType}${billNumber}:`, e);
+    return null;
+  }
+}
+
+// PART E: Analyze votes with bill summaries for deeper matching
+async function analyzeVotesWithSummaries(
+  candidateName: string,
+  candidateParty: string,
+  candidateId: string,
+  unansweredQuestions: Question[],
+  storedVotes: StoredVote[]
+): Promise<GeneratedAnswer[]> {
+  if (unansweredQuestions.length === 0 || storedVotes.length === 0) return [];
+  
+  console.log(`[DeepAnalysis] Analyzing ${storedVotes.length} votes for ${unansweredQuestions.length} unanswered questions`);
+  
+  // Get promising bills (recent, with action types)
+  const promisingBills = storedVotes
+    .filter(v => v.congress && v.bill_id)
+    .slice(0, 30); // Limit initial pool
+  
+  // Fetch summaries for top candidates (limit to 8 to avoid rate limits)
+  const billsWithSummaries: Array<StoredVote & { summary: string }> = [];
+  const MAX_SUMMARY_FETCHES = 8;
+  const DELAY_BETWEEN_FETCHES = 100; // 100ms delay to respect rate limits
+  
+  for (const vote of promisingBills.slice(0, MAX_SUMMARY_FETCHES)) {
+    // Extract bill type and number from bill_id (e.g., "HR1234" -> "HR", 1234)
+    const match = vote.bill_id.match(/^([A-Z]+)(\d+)$/i);
+    if (!match) continue;
+    
+    const billType = match[1].toUpperCase();
+    const billNumber = parseInt(match[2], 10);
+    const congress = vote.congress || 118;
+    
+    const summary = await fetchBillSummary(congress, billType, billNumber);
+    if (summary && summary.length > 50) {
+      billsWithSummaries.push({ ...vote, summary });
+    }
+    
+    // Small delay between API calls
+    await new Promise(r => setTimeout(r, DELAY_BETWEEN_FETCHES));
+  }
+  
+  if (billsWithSummaries.length === 0) {
+    console.log('[DeepAnalysis] No bill summaries retrieved');
+    return [];
+  }
+  
+  console.log(`[DeepAnalysis] Retrieved ${billsWithSummaries.length} bill summaries for deeper analysis`);
+  
+  // Use AI to match summaries to questions
+  const questionsText = unansweredQuestions.map(q => 
+    `- ${q.id}: "${q.text}"`
+  ).join('\n');
+  
+  const billsText = billsWithSummaries.map(b => 
+    `BILL ${b.bill_id} (${b.position || 'Sponsored'} on ${b.date?.slice(0,10)}):\n${b.summary.slice(0, 600)}`
+  ).join('\n\n');
+  
+  const prompt = `Analyze if any of these bills are DIRECTLY relevant to answering these policy questions.
+
+QUESTIONS (unanswered):
+${questionsText}
+
+BILL SUMMARIES:
+${billsText}
+
+For each question, if a bill summary directly addresses the topic:
+- Return the question_id, the relevant bill_id, and a brief explanation of how the bill relates
+- Assign an answer_value based on whether sponsoring/voting for the bill indicates progressive (-10 to -5) or conservative (+5 to +10) stance
+
+Return JSON array: [{question_id, answer_value, bill_id, source_description}]
+Only include questions where you found a DIRECT match. If no match, omit that question.`;
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: 'You are a legislative analyst. Only identify matches when the bill summary DIRECTLY addresses the policy question.' },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 2000,
+      }),
+    });
+
+    if (!response.ok) {
+      console.log(`[DeepAnalysis] AI request failed: ${response.status}`);
+      return [];
+    }
+
+    const aiData = await response.json();
+    const content = aiData.choices?.[0]?.message?.content || '';
+    
+    const parsed = parseAIResponse(content);
+    return parsed.map((item: any) => {
+      const matchedBill = billsWithSummaries.find(b => b.bill_id === item.bill_id);
+      const billUrl = matchedBill 
+        ? buildBillUrl(
+            matchedBill.bill_id.replace(/\d+/,''), 
+            parseInt(matchedBill.bill_id.replace(/[A-Z]+/i,'')), 
+            matchedBill.congress || 118
+          )
+        : null;
+      
+      return {
+        question_id: item.question_id,
+        answer_value: snapToValidValue(item.answer_value),
+        source_description: item.source_description?.slice(0, 500) || 'Based on bill analysis',
+        source_url: billUrl,
+        source_urls: billUrl ? [billUrl] : [],
+        source_titles: matchedBill ? [matchedBill.bill_name?.slice(0, 100)] : [],
+        source_type: 'voting_record',
+        confidence: 'medium' as const,
+        evidence_type: 'voting_record' as const,
+      } as GeneratedAnswer;
+    });
+  } catch (e) {
+    console.log('[DeepAnalysis] Failed to parse AI response:', e);
+    return [];
   }
 }
 
@@ -934,68 +1106,42 @@ Return ONLY a JSON object: {"score": <-10|-5|0|5|10>, "reasoning": "<2-3 sentenc
     const jsonMatch = content.match(/\{[\s\S]*?\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
-      const score = snapToValidValue(parsed.score || 0);
-      const reasoning = parsed.reasoning || 'Inferred from general party ideology.';
-      
-      console.log(`[AIInference] ${candidateName} on ${question.id}: score=${score}`);
-      return { score, reasoning };
+      return {
+        score: snapToValidValue(parsed.score || 0),
+        reasoning: parsed.reasoning || 'Position inferred from party ideology.'
+      };
     }
   } catch (e) {
-    console.error(`[AIInference] Error for ${question.id}:`, e);
+    console.error('[AIInference] Parse error:', e);
   }
   
   return null;
 }
 
-/**
- * Batch AI inference for multiple questions
- * Uses inferCandidatePosition for each question with related context
- */
 async function inferCandidateAnswers(
   candidateName: string,
   candidateParty: string,
   candidateOffice: string,
   candidateState: string,
   questions: Question[],
-  existingAnswers: GeneratedAnswer[] = []
+  relatedAnswers: GeneratedAnswer[] = []
 ): Promise<GeneratedAnswer[]> {
-  if (!LOVABLE_API_KEY || questions.length === 0) return [];
-
   const results: GeneratedAnswer[] = [];
   
-  // Group existing answers by topic for context
-  const answersByTopic = new Map<string, GeneratedAnswer[]>();
-  for (const a of existingAnswers) {
-    if (a.answer_value !== 0 && a.source_description && !a.source_description.toLowerCase().includes('no documented')) {
-      const q = questions.find(q => q.id === a.question_id);
-      if (q) {
-        const existing = answersByTopic.get(q.topic_id) || [];
-        existing.push(a);
-        answersByTopic.set(q.topic_id, existing);
-      }
-    }
-  }
-
   for (const q of questions) {
-    const relatedAnswers = answersByTopic.get(q.topic_id) || [];
     const inference = await inferCandidatePosition(
       q, candidateName, candidateParty, candidateOffice, candidateState, relatedAnswers
     );
     
     if (inference && inference.score !== 0) {
-      // Format the source description to match party answer style
-      const partyLabel = candidateParty.includes('Democrat') ? 'Democratic' 
-                       : candidateParty.includes('Republican') ? 'Republican'
-                       : candidateParty;
-      
       results.push({
         question_id: q.id,
         answer_value: inference.score,
-        source_description: `Position inferred from ${partyLabel} Party ideology. ${inference.reasoning}`,
+        source_description: inference.reasoning.slice(0, 500),
         source_url: null,
         source_urls: [],
         source_titles: [],
-        source_type: 'other',
+        source_type: 'inference',
         confidence: 'low' as const,
         evidence_type: 'inferred' as const,
         voting_record_summary: undefined,
@@ -1197,9 +1343,19 @@ ONLY JSON array. No markdown.`;
     const questionId = String(item.question_id || '').replace(/[\[\]]/g, '');
     const research = researchResults.get(questionId);
     const sourceDesc = (item.source_description || 'No documented position').slice(0, 500);
+    const lowerDesc = sourceDesc.toLowerCase();
     
-    // CRITICAL: Only clear sources when truly no position found - preserve sources with low confidence if they exist
-    const noPositionFound = sourceDesc.toLowerCase().includes('no documented position') ||
+    // PART B: Enforce score-description contract
+    // If score is non-zero but description says "no documented position", treat as invalid
+    let answerValue = snapToValidValue(item.answer_value);
+    const isContradictory = answerValue !== 0 && lowerDesc.includes('no documented position');
+    if (isContradictory) {
+      console.log(`[Contract] Contradictory output for ${questionId}: score ${answerValue} but "no documented position" -> routing to inference`);
+      answerValue = 0; // Will be picked up by post-validation inference
+    }
+    
+    // Determine if truly no position found (used for source cleanup)
+    const noPositionFound = lowerDesc.includes('no documented position') ||
                              (item.confidence === 'low' && (!research?.sourceUrls?.length));
     
     // Determine source URL and titles: research > bill > congress profile > null
@@ -1227,41 +1383,42 @@ ONLY JSON array. No markdown.`;
     }
     
     // Apply score consistency validation - adjust 0 scores if evidence suggests otherwise
-    let answerValue = snapToValidValue(item.answer_value);
     const hasValidSource = sourceDesc && 
-      !sourceDesc.toLowerCase().includes('no documented') &&
+      !lowerDesc.includes('no documented') &&
       sourceDesc.length > 10;
     
     if (hasValidSource) {
       answerValue = validateScoreConsistency(answerValue, sourceDesc);
     }
     
-    // Determine evidence type based on source - fix the precedence bug
+    // PART C: Determine evidence type based on FINAL stored URLs (post-cleanup)
     const hasVotingRecord = isCongressional && votingRecord.length > 0;
-    const hasResearch = research?.success && research.researchText.length > 50;
-    const descLower = sourceDesc.toLowerCase();
-    let evidenceType: 'voting_record' | 'public_statement' | 'social_media' | 'inferred' | 'mixed' = 'mixed';
+    const descLowerClean = sourceDesc.toLowerCase();
     
     // Check for actual floor vote citations
-    const hasFloorVoteCitation = descLower.includes('voted yea') || 
-                                  descLower.includes('voted nay') || 
-                                  descLower.includes('voted yes') || 
-                                  descLower.includes('voted no');
-    const hasSponsorshipCitation = descLower.includes('sponsored') || descLower.includes('cosponsored');
+    const hasFloorVoteCitation = descLowerClean.includes('voted yea') || 
+                                  descLowerClean.includes('voted nay') || 
+                                  descLowerClean.includes('voted yes') || 
+                                  descLowerClean.includes('voted no');
+    const hasSponsorshipCitation = descLowerClean.includes('sponsored') || descLowerClean.includes('cosponsored');
     
-    // Check if primary sources are from social media
-    const hasSocialMediaSource = research?.sourceUrls?.some(url => isSocialMediaDomain(url)) || false;
+    // Check if stored sources are from social media (use FINAL sourceUrls, not research)
+    const hasSocialMediaSource = sourceUrls.some(url => isSocialMediaDomain(url));
+    const hasStoredUrls = sourceUrls.length > 0;
+    
+    // Evidence type based on FINAL stored URLs
+    let evidenceType: 'voting_record' | 'public_statement' | 'social_media' | 'inferred' | 'mixed' = 'inferred';
     
     if (hasFloorVoteCitation) {
       evidenceType = 'voting_record';
     } else if (hasSponsorshipCitation && hasVotingRecord) {
       evidenceType = 'voting_record';
-    } else if (hasResearch && research.sourceUrls.length > 0) {
-      // Check if the primary source is social media
-      evidenceType = hasSocialMediaSource ? 'social_media' : 'public_statement';
+    } else if (hasStoredUrls && hasSocialMediaSource) {
+      evidenceType = 'social_media';
+    } else if (hasStoredUrls) {
+      evidenceType = 'public_statement';
     } else {
-      // No specific evidence found (voting record exists but no match, or no web sources)
-      // Mark as inferred so Phase 3 can provide ideology-based reasoning
+      // No stored URLs = mark as inferred so Phase 3 can provide ideology-based reasoning
       evidenceType = 'inferred';
     }
     
@@ -1269,7 +1426,7 @@ ONLY JSON array. No markdown.`;
     let sourceType = 'web_research';
     if (hasFloorVoteCitation || hasSponsorshipCitation) {
       sourceType = 'voting_record';
-    } else if (research?.sourceUrls?.length) {
+    } else if (hasStoredUrls) {
       sourceType = 'public_statement';
     }
     
@@ -1296,21 +1453,22 @@ ONLY JSON array. No markdown.`;
       confidence: item.confidence || 'medium',
       evidence_type: evidenceType,
       voting_record_summary: votingRecordSummary,
-      public_statement_summary: hasResearch ? research?.researchText?.slice(0, 200) : undefined,
+      public_statement_summary: research?.success ? research?.researchText?.slice(0, 200) : undefined,
       has_discrepancy: false,
       discrepancy_note: undefined,
     };
   });
 }
 
+// PART D: Validation converts unsourced non-zero to inferred instead of resetting to 0
 function validateAnswerQuality(
-  answers: GeneratedAnswer[]
-): { answers: GeneratedAnswer[]; rejectedCount: number } {
-  let rejectedCount = 0;
+  answers: GeneratedAnswer[],
+  candidateParty: string
+): { answers: GeneratedAnswer[]; convertedToInferredCount: number } {
+  let convertedToInferredCount = 0;
   
   const validatedAnswers = answers.map(a => {
-    // EXEMPT inferred answers - they are intentionally ideology-based
-    // and should not be validated against web research standards
+    // EXEMPT already-inferred answers - they are intentionally ideology-based
     if (a.evidence_type === 'inferred') {
       return a; // Keep inferred answers as-is
     }
@@ -1321,20 +1479,30 @@ function validateAnswerQuality(
       !a.source_description.toLowerCase().includes('no documented') &&
       a.source_description.length > 5;
     
-    if (a.answer_value !== 0 && !hasValidSource && a.confidence !== 'high') {
-      console.log(`[Validation] Resetting unsourced answer for ${a.question_id}: ${a.answer_value} -> 0`);
-      rejectedCount++;
-      return { ...a, answer_value: 0, confidence: 'low' as const, source_description: 'No documented position' };
+    const hasStoredUrls = a.source_urls && a.source_urls.length > 0;
+    
+    // PART D: Instead of resetting to 0, convert to inferred with the existing score
+    if (a.answer_value !== 0 && !hasValidSource && !hasStoredUrls && a.confidence !== 'high') {
+      console.log(`[Validation] Converting unsourced answer for ${a.question_id} to inferred (keeping score ${a.answer_value})`);
+      convertedToInferredCount++;
+      return { 
+        ...a, 
+        evidence_type: 'inferred' as const, 
+        confidence: 'low' as const, 
+        source_description: `Position inferred from ${candidateParty} party alignment. ${a.source_description.slice(0, 300)}`,
+        source_urls: [],
+        source_titles: [],
+      };
     }
     
     return a;
   });
   
-  if (rejectedCount > 0) {
-    console.log(`[Validation] Reset ${rejectedCount} unsourced answers to neutral`);
+  if (convertedToInferredCount > 0) {
+    console.log(`[Validation] Converted ${convertedToInferredCount} unsourced answers to inferred`);
   }
   
-  return { answers: validatedAnswers, rejectedCount };
+  return { answers: validatedAnswers, convertedToInferredCount };
 }
 
 async function generateAnswersInChunks(
@@ -1348,10 +1516,10 @@ async function generateAnswersInChunks(
   votingRecord: LegislationRecord[],
   floorVotes: StoredVote[] = [],
   legislativeActions: StoredVote[] = []
-): Promise<{ generated: number; failed: number; validationRejected: number; researched: number }> {
+): Promise<{ generated: number; failed: number; validationConverted: number; researched: number }> {
   let totalGenerated = 0;
   let failedChunks = 0;
-  let totalValidationRejected = 0;
+  let totalValidationConverted = 0;
   let totalResearched = 0;
   
   const allGeneratedAnswers: GeneratedAnswer[] = [];
@@ -1382,7 +1550,24 @@ async function generateAnswersInChunks(
         );
         votingAnswers.forEach(a => answersById.set(a.question_id, a));
         if (votingAnswers.length > 0) {
-          console.log(`[Voting] ${votingAnswers.length} answers derived from voting record in chunk ${i + 1}`);
+          console.log(`[Phase1] ${votingAnswers.length} answers derived from voting record in chunk ${i + 1}`);
+        }
+      }
+
+      // Phase 1.5 (NEW): Deep bill analysis for unanswered questions
+      const phase1AnsweredIds = new Set(votingAnswers.filter(a => a.answer_value !== 0).map(a => a.question_id));
+      const unansweredAfterPhase1 = chunk.filter(q => !phase1AnsweredIds.has(q.id));
+      
+      if (unansweredAfterPhase1.length > 0 && storedVotes.length > 0) {
+        console.log(`[Phase1.5] Deep analyzing ${unansweredAfterPhase1.length} unanswered questions via bill summaries`);
+        const deepAnswers = await analyzeVotesWithSummaries(
+          candidateName, candidateParty, candidateId, unansweredAfterPhase1, storedVotes
+        );
+        for (const deepAnswer of deepAnswers) {
+          if (deepAnswer.answer_value !== 0 && !answersById.has(deepAnswer.question_id)) {
+            answersById.set(deepAnswer.question_id, deepAnswer);
+            console.log(`[Phase1.5] Found match for ${deepAnswer.question_id} via bill summary`);
+          }
         }
       }
 
@@ -1546,12 +1731,43 @@ async function generateAnswersInChunks(
     }
   }
   
-  // Validate answer quality
+  // PART A & D: Validate answer quality - convert unsourced to inferred instead of resetting
   if (allGeneratedAnswers.length > 0) {
-    const validationResult = validateAnswerQuality(allGeneratedAnswers);
-    totalValidationRejected = validationResult.rejectedCount;
+    const validationResult = validateAnswerQuality(allGeneratedAnswers, candidateParty);
+    totalValidationConverted = validationResult.convertedToInferredCount;
     
-    if (validationResult.rejectedCount > 0) {
+    if (validationResult.convertedToInferredCount > 0) {
+      // Re-run inference for answers that were converted to inferred with value 0
+      const answersNeedingInference = validationResult.answers.filter(a => 
+        a.evidence_type === 'inferred' && a.answer_value === 0
+      );
+      
+      if (answersNeedingInference.length > 0) {
+        console.log(`[PostValidation] Running inference for ${answersNeedingInference.length} answers that were reset`);
+        
+        // Get question objects for inference
+        const questionsForInference = answersNeedingInference.map(a => ({
+          id: a.question_id,
+          text: a.source_description || '', // Use description as proxy for question text
+          topic_id: 'unknown'
+        }));
+        
+        const reInferredAnswers = await inferCandidateAnswers(
+          candidateName, candidateParty, candidateOffice, candidateState,
+          questionsForInference as Question[],
+          validationResult.answers.filter(a => a.answer_value !== 0)
+        );
+        
+        // Merge re-inferred answers
+        const answerMap = new Map(validationResult.answers.map(a => [a.question_id, a]));
+        for (const inferred of reInferredAnswers) {
+          if (inferred.answer_value !== 0) {
+            answerMap.set(inferred.question_id, inferred);
+          }
+        }
+        validationResult.answers = Array.from(answerMap.values());
+      }
+      
       const validatedToUpsert = validationResult.answers.map(a => ({
         candidate_id: candidateId,
         question_id: a.question_id,
@@ -1562,6 +1778,7 @@ async function generateAnswersInChunks(
         source_titles: a.source_titles,
         source_type: a.source_type,
         confidence: a.confidence,
+        evidence_type: a.evidence_type,
       }));
       
       await supabase
@@ -1570,7 +1787,7 @@ async function generateAnswersInChunks(
     }
   }
   
-  return { generated: totalGenerated, failed: failedChunks, validationRejected: totalValidationRejected, researched: totalResearched };
+  return { generated: totalGenerated, failed: failedChunks, validationConverted: totalValidationConverted, researched: totalResearched };
 }
 
 async function updateCandidateScore(supabase: any, candidateId: string, candidateName: string): Promise<void> {
@@ -1706,13 +1923,13 @@ serve(async (req) => {
       console.log(`Retrieved ${votingRecord.length} Congress API records + ${floorVotes.length} floor votes + ${legislativeActions.length} legislative actions`);
     }
 
-    const { generated, failed, validationRejected, researched } = await generateAnswersInChunks(
+    const { generated, failed, validationConverted, researched } = await generateAnswersInChunks(
       supabase, candidateId, officialInfo.name, officialInfo.party,
       officialInfo.office, officialInfo.state, questionsToGenerate, votingRecord, floorVotes, legislativeActions
     );
     
-    if (validationRejected > 0) {
-      console.log(`[Quality] ${validationRejected} answers reset to neutral for lacking sources`);
+    if (validationConverted > 0) {
+      console.log(`[Quality] ${validationConverted} answers converted to inferred`);
     }
 
     await updateCandidateScore(supabase, candidateId, officialInfo.name);
@@ -1726,7 +1943,7 @@ serve(async (req) => {
       generated,
       failed,
       researched,
-      validationRejected,
+      validationConverted,
       missingBefore,
       totalQuestions,
       groundingEnabled: !!GOOGLE_GEMINI_API_KEY,
