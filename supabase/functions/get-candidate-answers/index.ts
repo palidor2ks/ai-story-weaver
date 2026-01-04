@@ -1423,9 +1423,9 @@ async function generateAnswersInChunks(
           return false;
         }
         
-        // Catch mixed/inferred evidence with no actual content
-        if ((existing.evidence_type === 'mixed' || existing.evidence_type === 'inferred') && existing.answer_value === 0) {
-          console.log(`[Phase3] Will infer ${q.id}: ${existing.evidence_type} evidence with no value`);
+        // Catch ANY evidence type with no actual content (including stale 'public_statement' with no sources)
+        if (existing.answer_value === 0 && (!existing.source_urls || existing.source_urls.length === 0)) {
+          console.log(`[Phase3] Will infer ${q.id}: ${existing.evidence_type} evidence with no value and no sources`);
           return true;
         }
         
