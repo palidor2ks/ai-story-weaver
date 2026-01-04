@@ -10,6 +10,10 @@ const CONGRESS_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+// Configuration
+const MAX_ROLLCALLS = 100; // Cap to avoid timeout
+const BATCH_SIZE = 25; // Persist every N votes
+
 // Map policy areas to our topics
 const topicMapping: Record<string, string> = {
   'Health': 'Healthcare',
@@ -114,7 +118,6 @@ async function fetchVoteMemberPositions(
   voteNumber: number
 ): Promise<MemberPosition[]> {
   const chamberPath = chamber === 'house' ? 'house-vote' : 'senate-vote';
-  // Add /members to get individual member positions
   const url = `https://api.congress.gov/v3/${chamberPath}/${congress}/${session}/${voteNumber}/members?api_key=${CONGRESS_API_KEY}`;
   
   try {
@@ -134,15 +137,6 @@ async function fetchVoteMemberPositions(
     // Navigate to the item array - API structure: {results: {item: [...]}} or {item: [...]}
     const results = memberVotes.results || memberVotes;
     const items = Array.isArray(results) ? results : (results.item || []);
-    
-    // Log first few votes' structure for debugging
-    if (voteNumber <= 3) {
-      console.log(`[BG] Vote ${voteNumber} response keys: ${Object.keys(data).join(', ')}, items count: ${items.length}`);
-      if (items.length > 0) {
-        const first = items[0];
-        console.log(`[BG] First member: bioguideID=${first.bioguideID}, bioguideId=${first.bioguideId}, voteCast=${first.voteCast}`);
-      }
-    }
     
     for (const member of items) {
       // API returns bioguideID (capital ID), not bioguideId
@@ -193,9 +187,9 @@ async function fetchVotesList(
     const votes = rawVotes.map((v: any) => ({
       rollCallNumber: v.rollCallNumber || v.number,
       congress: v.congress || congress,
-      session: v.sessionNumber || v.session || 1,  // API uses sessionNumber
+      session: v.sessionNumber || v.session || 1,
       chamber: chamber,
-      date: v.startDate || v.updateDate || v.date || v.actionDate,  // API uses startDate
+      date: v.startDate || v.updateDate || v.date || v.actionDate,
       question: v.voteQuestion || v.question || '',
       description: v.legislationType && v.legislationNumber 
         ? `${v.legislationType}${v.legislationNumber}` 
@@ -227,7 +221,6 @@ async function fetchVotesList(
 function inferTopic(vote: CongressVote): string {
   const text = `${vote.question} ${vote.description || ''} ${vote.bill?.title || ''}`.toLowerCase();
   
-  // Check for specific policy keywords
   const topicKeywords: Record<string, string[]> = {
     'Healthcare': ['health', 'medicare', 'medicaid', 'hospital', 'medical', 'drug', 'prescription', 'insurance'],
     'Economy': ['tax', 'budget', 'fiscal', 'spending', 'appropriation', 'debt', 'economic', 'trade', 'tariff'],
@@ -251,6 +244,81 @@ function inferTopic(vote: CongressVote): string {
   return 'Domestic Policy';
 }
 
+// Preflight check: verify member exists in recent roll calls
+async function checkMemberExists(
+  bioguideId: string,
+  chamber: 'house' | 'senate',
+  congress: number
+): Promise<{ exists: boolean; sampleVote?: CongressVote }> {
+  console.log(`[BG] Preflight: checking if ${bioguideId} exists in ${chamber} roll calls for congress ${congress}...`);
+  
+  // Fetch just the first few votes to check membership
+  const { votes } = await fetchVotesList(chamber, congress, 0, 10);
+  
+  if (votes.length === 0) {
+    console.log(`[BG] Preflight: no votes found for ${chamber} congress ${congress}`);
+    return { exists: false };
+  }
+  
+  // Check the first 3 votes for this member
+  for (const vote of votes.slice(0, 3)) {
+    const positions = await fetchVoteMemberPositions(
+      chamber,
+      vote.congress,
+      vote.session,
+      vote.rollCallNumber
+    );
+    
+    const found = positions.some(p => p.bioguideId === bioguideId);
+    console.log(`[BG] Preflight vote ${vote.rollCallNumber}: ${positions.length} members, ${bioguideId} found: ${found}`);
+    
+    if (found) {
+      return { exists: true, sampleVote: vote };
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  console.log(`[BG] Preflight: ${bioguideId} NOT found in recent ${chamber} roll calls`);
+  return { exists: false };
+}
+
+// Persist a batch of votes to DB
+async function persistVotesBatch(
+  supabase: any,
+  votes: FloorVote[],
+  bioguideId: string,
+  currentPersisted: number
+): Promise<number> {
+  if (votes.length === 0) return currentPersisted;
+  
+  // Deduplicate by ID
+  const uniqueVotes = Array.from(new Map(votes.map(v => [v.id, v])).values());
+  
+  const { error } = await supabase
+    .from('votes')
+    .upsert(uniqueVotes as any, { onConflict: 'id', ignoreDuplicates: false });
+  
+  if (error) {
+    console.error(`[BG] Error persisting batch:`, error);
+    throw new Error(error.message);
+  }
+  
+  const newTotal = currentPersisted + uniqueVotes.length;
+  
+  // Update progress in vote_sync_status
+  await supabase
+    .from('vote_sync_status')
+    .upsert({
+      candidate_id: bioguideId,
+      persisted_floor_votes: newTotal,
+      updated_at: new Date().toISOString(),
+    } as any, { onConflict: 'candidate_id' });
+  
+  console.log(`[BG] Persisted batch of ${uniqueVotes.length} votes, total: ${newTotal}`);
+  return newTotal;
+}
+
 // Background processing function
 async function processFloorVoteSync(
   bioguideId: string,
@@ -259,27 +327,55 @@ async function processFloorVoteSync(
   syncStartedAt: string
 ) {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const votes: FloorVote[] = [];
+  let pendingVotes: FloorVote[] = [];
+  let totalPersisted = 0;
 
   try {
-    console.log(`[BG] Fetching ${chamber} floor votes for ${bioguideId} in congress ${congress}...`);
+    console.log(`[BG] Starting floor vote sync for ${bioguideId} in ${chamber} congress ${congress}...`);
     
+    // STEP 1: Preflight check - is this member in roll calls?
+    const { exists } = await checkMemberExists(bioguideId, chamber, congress);
+    
+    if (!exists) {
+      // Member not found - update status and exit early
+      console.log(`[BG] ${bioguideId} is not a seated ${chamber} member in congress ${congress}. Exiting.`);
+      
+      await supabase
+        .from('vote_sync_status')
+        .upsert({
+          candidate_id: bioguideId,
+          expected_floor_votes: 0,
+          persisted_floor_votes: 0,
+          last_floor_vote_date: null,
+          floor_vote_sync_error: `Not a seated ${chamber} member in Congress ${congress}. No roll-call votes available.`,
+          last_sync_completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'candidate_id' });
+      
+      return;
+    }
+    
+    console.log(`[BG] Preflight passed. ${bioguideId} is seated. Processing up to ${MAX_ROLLCALLS} roll calls...`);
+    
+    // STEP 2: Fetch and process votes with incremental storage
     let offset = 0;
     let hasMore = true;
-    let totalVotesChecked = 0;
+    let rollCallsProcessed = 0;
+    let lastVoteDate: string | null = null;
     
-    // Fetch all votes for this congress
-    while (hasMore && offset < 2000) { // Safety limit
-      const { votes: votesList, hasMore: more } = await fetchVotesList(chamber, congress, offset);
-      hasMore = more;
+    while (hasMore && rollCallsProcessed < MAX_ROLLCALLS) {
+      const remaining = MAX_ROLLCALLS - rollCallsProcessed;
+      const fetchLimit = Math.min(250, remaining);
       
-      console.log(`[BG] Processing ${votesList.length} votes (offset ${offset})...`);
+      const { votes: votesList, hasMore: more } = await fetchVotesList(chamber, congress, offset, fetchLimit);
+      hasMore = more && rollCallsProcessed + votesList.length < MAX_ROLLCALLS;
       
-      // For each vote, fetch member positions and find our target member
+      console.log(`[BG] Processing ${votesList.length} votes (offset ${offset}, limit ${fetchLimit})...`);
+      
       for (const vote of votesList) {
-        totalVotesChecked++;
+        if (rollCallsProcessed >= MAX_ROLLCALLS) break;
+        rollCallsProcessed++;
         
-        // Fetch member positions for this vote
         const positions = await fetchVoteMemberPositions(
           chamber,
           vote.congress,
@@ -287,14 +383,7 @@ async function processFloorVoteSync(
           vote.rollCallNumber
         );
         
-        // Find our member's position
         const memberPosition = positions.find(p => p.bioguideId === bioguideId);
-        
-        // Log first few attempts to help debug matching
-        if (totalVotesChecked <= 3) {
-          const sampleIds = positions.slice(0, 5).map(p => p.bioguideId).join(', ');
-          console.log(`[BG] Vote ${vote.rollCallNumber}: Looking for ${bioguideId} in ${positions.length} positions. Sample: ${sampleIds}. Found: ${!!memberPosition}`);
-        }
         
         if (memberPosition) {
           const billId = vote.bill 
@@ -303,7 +392,7 @@ async function processFloorVoteSync(
           
           const billName = vote.bill?.title || vote.description || vote.question;
           
-          votes.push({
+          pendingVotes.push({
             id: `${bioguideId}-floor-${congress}-${vote.session}-${vote.rollCallNumber}`,
             bill_id: billId,
             bill_name: billName.slice(0, 500),
@@ -318,75 +407,50 @@ async function processFloorVoteSync(
             session: vote.session,
             chamber: chamber,
           });
+          
+          // Track latest vote date
+          if (!lastVoteDate || new Date(vote.date) > new Date(lastVoteDate)) {
+            lastVoteDate = vote.date;
+          }
+          
+          // Persist in batches of BATCH_SIZE
+          if (pendingVotes.length >= BATCH_SIZE) {
+            totalPersisted = await persistVotesBatch(supabase, pendingVotes, bioguideId, totalPersisted);
+            pendingVotes = [];
+          }
         }
         
-        // Rate limiting - small delay between vote fetches
+        // Rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Progress log every 25 roll calls
+        if (rollCallsProcessed % 25 === 0) {
+          console.log(`[BG] Processed ${rollCallsProcessed}/${MAX_ROLLCALLS} roll calls, found ${totalPersisted + pendingVotes.length} votes for ${bioguideId}`);
+        }
       }
       
       offset += votesList.length;
-      
-      // Progress log every 100 votes
-      if (totalVotesChecked % 100 === 0) {
-        console.log(`[BG] Checked ${totalVotesChecked} votes, found ${votes.length} for ${bioguideId}`);
-      }
     }
     
-    console.log(`[BG] Found ${votes.length} floor votes for ${bioguideId} out of ${totalVotesChecked} total votes`);
-    
-    // Persist votes to database
-    let persisted = 0;
-    if (votes.length > 0) {
-      console.log(`[BG] Persisting ${votes.length} floor votes...`);
-      
-      // Deduplicate by ID
-      const uniqueVotes = Array.from(
-        new Map(votes.map(v => [v.id, v])).values()
-      );
-      
-      const CHUNK_SIZE = 100;
-      for (let i = 0; i < uniqueVotes.length; i += CHUNK_SIZE) {
-        const chunk = uniqueVotes.slice(i, i + CHUNK_SIZE);
-        
-        const { error: upsertError } = await supabase
-          .from('votes')
-          .upsert(chunk, { 
-            onConflict: 'id',
-            ignoreDuplicates: false
-          });
-        
-        if (upsertError) {
-          console.error(`[BG] Error persisting floor votes:`, upsertError);
-          throw new Error(upsertError.message);
-        }
-        
-        persisted += chunk.length;
-      }
+    // Persist any remaining votes
+    if (pendingVotes.length > 0) {
+      totalPersisted = await persistVotesBatch(supabase, pendingVotes, bioguideId, totalPersisted);
     }
     
-    // Get last vote date
-    const lastVoteDate = votes.length > 0 
-      ? votes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date
-      : null;
+    console.log(`[BG] Completed: ${rollCallsProcessed} roll calls processed, ${totalPersisted} votes persisted for ${bioguideId}`);
     
-    // Update sync status
-    const { error: statusError } = await supabase
+    // Final status update
+    await supabase
       .from('vote_sync_status')
       .upsert({
         candidate_id: bioguideId,
-        expected_floor_votes: totalVotesChecked,
-        persisted_floor_votes: persisted,
+        expected_floor_votes: rollCallsProcessed,
+        persisted_floor_votes: totalPersisted,
         last_floor_vote_date: lastVoteDate,
         floor_vote_sync_error: null,
         last_sync_completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'candidate_id' });
-    
-    if (statusError) {
-      console.error(`[BG] Failed to update sync status:`, statusError);
-    } else {
-      console.log(`[BG] Completed floor vote sync: ${persisted} votes persisted`);
-    }
     
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -396,6 +460,7 @@ async function processFloorVoteSync(
       .from('vote_sync_status')
       .upsert({
         candidate_id: bioguideId,
+        persisted_floor_votes: totalPersisted,
         floor_vote_sync_error: errorMessage,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'candidate_id' });
@@ -419,7 +484,7 @@ serve(async (req) => {
     const { 
       bioguideId, 
       chamber = 'house',
-      congress = 118, // Current congress
+      congress = 118,
     } = body as Record<string, unknown>;
 
     console.log(`Received floor vote sync request for: ${bioguideId}, chamber=${chamber}, congress=${congress}`);
@@ -432,7 +497,6 @@ serve(async (req) => {
       throw new Error('bioguideId is required');
     }
 
-    // Validate chamber
     const validChamber = chamber === 'senate' ? 'senate' : 'house';
 
     // Mark sync as started
@@ -446,7 +510,6 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       }, { onConflict: 'candidate_id' });
 
-    // Use EdgeRuntime.waitUntil for background processing
     // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
       console.log(`Starting background floor vote sync for ${bioguideId}`);
@@ -460,7 +523,7 @@ serve(async (req) => {
 
       return new Response(JSON.stringify({
         status: 'processing',
-        message: `Floor vote sync started for ${bioguideId}. Check vote_sync_status for progress.`,
+        message: `Floor vote sync started for ${bioguideId}. Processing up to ${MAX_ROLLCALLS} roll calls.`,
         bioguideId,
         chamber: validChamber,
         congress,
@@ -468,7 +531,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } else {
-      // Fallback: run synchronously
       console.log(`Running floor vote sync synchronously for ${bioguideId}`);
       await processFloorVoteSync(bioguideId as string, validChamber, congress as number, syncStartedAt);
 
