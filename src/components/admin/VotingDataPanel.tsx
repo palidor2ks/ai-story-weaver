@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, RefreshCw, Database, FileText, Users, CheckCircle2, AlertTriangle, Hash } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Loader2, RefreshCw, Database, FileText, Users, CheckCircle2, AlertTriangle, Hash, ChevronDown, Zap } from "lucide-react";
+import { BillSummaryDashboard } from "./BillSummaryDashboard";
 import { toast } from "sonner";
 
 interface BackfillProgress {
@@ -13,7 +15,10 @@ interface BackfillProgress {
   updated: number;
   remaining: number;
   message?: string;
+  rate?: number;
 }
+
+type BackfillSpeed = 'conservative' | 'normal' | 'fast';
 
 export function VotingDataPanel() {
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useVotingRecordsStats();
@@ -34,6 +39,8 @@ export function VotingDataPanel() {
   });
   const [missingCongressCount, setMissingCongressCount] = useState<number | null>(null);
   const [missingSummaryCount, setMissingSummaryCount] = useState<number | null>(null);
+  const [summarySpeed, setSummarySpeed] = useState<BackfillSpeed>('normal');
+  const [showDashboard, setShowDashboard] = useState(false);
 
   // Fetch missing counts on mount
   const fetchMissingCounts = async () => {
@@ -114,12 +121,12 @@ export function VotingDataPanel() {
     
     let totalUpdated = 0;
     let remaining = missingSummaryCount || 0;
+    const batchSize = summarySpeed === 'fast' ? 300 : summarySpeed === 'conservative' ? 100 : 200;
     
     try {
-      // Run in batches with auto-continue
       while (remaining > 0) {
         const { data, error } = await supabase.functions.invoke('backfill-bill-summaries', {
-          body: { batchSize: 50 }
+          body: { batchSize, speed: summarySpeed }
         });
         
         if (error) throw error;
@@ -131,13 +138,14 @@ export function VotingDataPanel() {
           status: remaining > 0 ? 'running' : 'complete',
           updated: totalUpdated,
           remaining,
-          message: `Updated ${totalUpdated} summaries`
+          message: `${data.processingRate?.toFixed(1) || '?'}/sec`,
+          rate: data.processingRate
         });
         
         if (data.status === 'complete') break;
         
-        // Delay to respect rate limits
-        await new Promise(r => setTimeout(r, 1000));
+        // Minimal delay - rate limiting handled in edge function
+        await new Promise(r => setTimeout(r, 300));
       }
       
       toast.success(`Backfilled ${totalUpdated} bill summaries`);
@@ -252,8 +260,14 @@ export function VotingDataPanel() {
                 <Progress 
                   value={((summaryBackfill.updated) / (summaryBackfill.updated + summaryBackfill.remaining)) * 100} 
                 />
-                <div className="text-xs text-muted-foreground">
-                  Updated {summaryBackfill.updated.toLocaleString()}, {summaryBackfill.remaining.toLocaleString()} remaining
+                <div className="text-xs text-muted-foreground flex items-center gap-2">
+                  <span>Updated {summaryBackfill.updated.toLocaleString()}, {summaryBackfill.remaining.toLocaleString()} remaining</span>
+                  {summaryBackfill.rate && (
+                    <Badge variant="outline" className="text-xs">
+                      <Zap className="h-3 w-3 mr-1" />
+                      {summaryBackfill.rate.toFixed(1)}/sec
+                    </Badge>
+                  )}
                 </div>
               </div>
             )}
@@ -286,18 +300,31 @@ export function VotingDataPanel() {
             Backfill Congress #s
           </Button>
           
-          <Button 
-            variant="outline" 
-            onClick={handleBackfillSummaries}
-            disabled={summaryBackfill.status === 'running'}
-          >
-            {summaryBackfill.status === 'running' ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <FileText className="h-4 w-4 mr-2" />
-            )}
-            Backfill Bill Summaries
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleBackfillSummaries}
+              disabled={summaryBackfill.status === 'running'}
+              className="flex-1"
+            >
+              {summaryBackfill.status === 'running' ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4 mr-2" />
+              )}
+              Backfill Summaries
+            </Button>
+            <select 
+              value={summarySpeed}
+              onChange={(e) => setSummarySpeed(e.target.value as BackfillSpeed)}
+              disabled={summaryBackfill.status === 'running'}
+              className="border rounded px-2 py-1 text-sm bg-background"
+            >
+              <option value="conservative">Slow</option>
+              <option value="normal">Normal</option>
+              <option value="fast">Fast</option>
+            </select>
+          </div>
           
           <Button 
             variant="outline"
@@ -367,6 +394,21 @@ export function VotingDataPanel() {
             </div>
           </div>
         </div>
+        {/* Bill Summary Dashboard Toggle */}
+        <Collapsible open={showDashboard} onOpenChange={setShowDashboard}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="w-full justify-between">
+              <span className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Bill Summary Dashboard
+              </span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${showDashboard ? 'rotate-180' : ''}`} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-4">
+            <BillSummaryDashboard />
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );
