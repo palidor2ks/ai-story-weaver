@@ -2201,7 +2201,13 @@ export function AnswerCoveragePanel() {
                                       className="text-destructive"
                                     >
                                       <RefreshCw className="h-4 w-4 mr-2" />
-                                      Force Re-Sync
+                                      {(() => {
+                                        const finStatus = getFinanceBadgeStatus();
+                                        if (finStatus === 'error' || finStatus === 'warning') {
+                                          return 'Clear & Re-Import All';
+                                        }
+                                        return 'Force Re-Sync';
+                                      })()}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                   </>
