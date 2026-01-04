@@ -35,7 +35,7 @@ interface GeneratedAnswer {
   source_titles: string[];
   source_type: string;
   confidence: 'high' | 'medium' | 'low';
-  evidence_type: 'voting_record' | 'public_statement' | 'inferred' | 'mixed';
+  evidence_type: 'voting_record' | 'public_statement' | 'social_media' | 'inferred' | 'mixed';
   voting_record_summary?: string;
   public_statement_summary?: string;
   has_discrepancy?: boolean;
@@ -71,6 +71,14 @@ interface StoredVote {
   chamber?: string;
 }
 
+// Social media platforms - allow but handle specially (archive quotes)
+const SOCIAL_MEDIA_DOMAINS = [
+  'facebook.com',
+  'instagram.com',
+  'twitter.com',
+  'x.com',
+];
+
 // Blocked domains that should be filtered out
 const BLOCKED_DOMAINS = [
   'republicanviews.org',
@@ -82,17 +90,21 @@ const BLOCKED_DOMAINS = [
   'vimeo.com',
   'dailymotion.com',
   'tiktok.com',
-  // Social media platforms (often block embedding, ephemeral content)
-  'facebook.com',
-  'instagram.com',
-  'twitter.com',
-  'x.com',
 ];
 
 function isBlockedDomain(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
     return BLOCKED_DOMAINS.some(d => hostname.includes(d));
+  } catch {
+    return false;
+  }
+}
+
+function isSocialMediaDomain(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return SOCIAL_MEDIA_DOMAINS.some(d => hostname.includes(d));
   } catch {
     return false;
   }
@@ -1228,7 +1240,7 @@ ONLY JSON array. No markdown.`;
     const hasVotingRecord = isCongressional && votingRecord.length > 0;
     const hasResearch = research?.success && research.researchText.length > 50;
     const descLower = sourceDesc.toLowerCase();
-    let evidenceType: 'voting_record' | 'public_statement' | 'inferred' | 'mixed' = 'mixed';
+    let evidenceType: 'voting_record' | 'public_statement' | 'social_media' | 'inferred' | 'mixed' = 'mixed';
     
     // Check for actual floor vote citations
     const hasFloorVoteCitation = descLower.includes('voted yea') || 
@@ -1237,12 +1249,16 @@ ONLY JSON array. No markdown.`;
                                   descLower.includes('voted no');
     const hasSponsorshipCitation = descLower.includes('sponsored') || descLower.includes('cosponsored');
     
+    // Check if primary sources are from social media
+    const hasSocialMediaSource = research?.sourceUrls?.some(url => isSocialMediaDomain(url)) || false;
+    
     if (hasFloorVoteCitation) {
       evidenceType = 'voting_record';
     } else if (hasSponsorshipCitation && hasVotingRecord) {
       evidenceType = 'voting_record';
     } else if (hasResearch && research.sourceUrls.length > 0) {
-      evidenceType = 'public_statement';
+      // Check if the primary source is social media
+      evidenceType = hasSocialMediaSource ? 'social_media' : 'public_statement';
     } else {
       // No specific evidence found (voting record exists but no match, or no web sources)
       // Mark as inferred so Phase 3 can provide ideology-based reasoning
