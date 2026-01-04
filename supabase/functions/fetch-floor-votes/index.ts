@@ -365,11 +365,12 @@ async function persistVotesBatch(
   
   const newTotal = currentPersisted + uniqueVotes.length;
   
-  // Update progress in vote_sync_status
+  // Update progress in vote_sync_status (set expected = persisted since we discover votes incrementally)
   await supabase
     .from('vote_sync_status')
     .upsert({
       candidate_id: bioguideId,
+      expected_floor_votes: newTotal,
       persisted_floor_votes: newTotal,
       updated_at: new Date().toISOString(),
     } as any, { onConflict: 'candidate_id' });
