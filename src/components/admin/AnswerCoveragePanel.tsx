@@ -119,6 +119,9 @@ export function AnswerCoveragePanel() {
   
   // Answer management dialog state
   const [answerDialogCandidate, setAnswerDialogCandidate] = useState<{ id: string; name: string } | null>(null);
+  
+  // Batch reconciliation state
+  const [isBatchReconciling, setIsBatchReconciling] = useState(false);
 
   const { data: candidates, isLoading: candidatesLoading, refetch: refetchCandidates } = useCandidatesAnswerCoverage({
     party: partyFilter,
@@ -164,6 +167,7 @@ export function AnswerCoveragePanel() {
     cancelSyncAll,
     clearSyncAllProgress,
     triggerReconciliation,
+    runBatchReconciliation,
     refreshFECTotals,
     batchRefreshFECTotals,
     isLoading: isFECLoading, 
@@ -798,6 +802,34 @@ export function AnswerCoveragePanel() {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
+                
+                <DropdownMenuSeparator />
+                
+                <DropdownMenuItem 
+                  onSelect={async (e) => {
+                    e.preventDefault();
+                    setIsBatchReconciling(true);
+                    try {
+                      const result = await runBatchReconciliation('2024', 200);
+                      toast.success(`Reconciliation complete: ${result.success} OK, ${result.warnings} warnings, ${result.failed} errors`);
+                      refetchCandidates();
+                    } catch (err) {
+                      console.error('[Admin] Batch reconciliation failed:', err);
+                      toast.error('Failed to run reconciliation');
+                    } finally {
+                      setIsBatchReconciling(false);
+                    }
+                  }}
+                  className="text-purple-600"
+                  disabled={isBatchReconciling}
+                >
+                  {isBatchReconciling ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Calculator className="h-4 w-4 mr-2" />
+                  )}
+                  Run Reconciliation
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
