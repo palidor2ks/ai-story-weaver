@@ -539,27 +539,47 @@ async function processFloorVoteSync(
       }
       
       if (!candidate.lis_member_id) {
-        // Try to fetch LIS ID from congress-legislators
-        console.log(`[BG] No LIS ID found for ${candidate.name}, attempting to fetch...`);
+        // Try to fetch LIS ID from congress-legislators (GitHub raw)
+        console.log(`[BG] No LIS ID found for ${candidate.name}, attempting to fetch from GitHub...`);
         
-        const legResponse = await fetch('https://raw.githubusercontent.com/unitedstates/congress-legislators/gh-pages/legislators-current.json');
-        if (legResponse.ok) {
-          const legislators = await legResponse.json();
-          const match = legislators.find((l: any) => l.id.bioguide === bioguideId);
+        const LIS_MAPPING_URL = 'https://raw.githubusercontent.com/unitedstates/congress-legislators/gh-pages/legislators-current.json';
+        console.log(`[BG] Fetching LIS mapping from: ${LIS_MAPPING_URL}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        
+        try {
+          const legResponse = await fetch(LIS_MAPPING_URL, { signal: controller.signal });
+          clearTimeout(timeoutId);
           
-          if (match?.id?.lis) {
-            await supabase
-              .from('candidates')
-              .update({ lis_member_id: match.id.lis })
-              .eq('id', bioguideId);
+          console.log(`[BG] LIS mapping fetch status: ${legResponse.status}`);
+          
+          if (legResponse.ok) {
+            const legislators = await legResponse.json();
+            console.log(`[BG] Fetched ${legislators.length} legislators from mapping`);
             
-            console.log(`[BG] Updated ${candidate.name} with LIS ID: ${match.id.lis}`);
-            result = await processSenateFloorVotes(supabase, bioguideId, match.id.lis, congressList);
+            const match = legislators.find((l: any) => l.id.bioguide === bioguideId);
+            
+            if (match?.id?.lis) {
+              await supabase
+                .from('candidates')
+                .update({ lis_member_id: match.id.lis })
+                .eq('id', bioguideId);
+              
+              console.log(`[BG] Updated ${candidate.name} with LIS ID: ${match.id.lis}`);
+              result = await processSenateFloorVotes(supabase, bioguideId, match.id.lis, congressList);
+            } else {
+              throw new Error(`LIS member ID not found in mapping for Senate member ${candidate.name} (${bioguideId}). Run sync-lis-member-ids first.`);
+            }
           } else {
-            throw new Error(`LIS member ID not found for Senate member ${candidate.name}. Run sync-lis-member-ids first.`);
+            throw new Error(`Could not fetch LIS ID data: HTTP ${legResponse.status}`);
           }
-        } else {
-          throw new Error(`Could not fetch LIS ID data`);
+        } catch (fetchErr: any) {
+          clearTimeout(timeoutId);
+          if (fetchErr.name === 'AbortError') {
+            throw new Error(`LIS mapping fetch timed out after 15s`);
+          }
+          throw fetchErr;
         }
       } else {
         result = await processSenateFloorVotes(supabase, bioguideId, candidate.lis_member_id, congressList);

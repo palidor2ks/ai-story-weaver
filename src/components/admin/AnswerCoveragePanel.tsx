@@ -36,6 +36,7 @@ import { CandidateAnswersDialog } from "@/components/admin/CandidateAnswersDialo
 import { ScoreTextInline } from "@/components/ScoreText";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
 
@@ -983,6 +984,34 @@ export function AnswerCoveragePanel() {
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Fetch Yea/Nay floor votes for all federal legislators</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={async () => {
+                        toast.info('Syncing Senate LIS IDs...', { description: 'Fetching LIS member IDs from GitHub' });
+                        try {
+                          const { data, error } = await supabase.functions.invoke('sync-lis-member-ids');
+                          if (error) throw error;
+                          toast.success(`LIS sync complete: ${data.updated} updated, ${data.alreadySet} already set`);
+                          refetchCandidates();
+                        } catch (err: any) {
+                          console.error('[Admin] LIS sync failed:', err);
+                          toast.error('LIS sync failed', { description: err.message });
+                        }
+                      }}
+                      disabled={isVoteSyncing || isFloorVoteSyncing}
+                    >
+                      <Users className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Sync Senate LIS member IDs (required for floor votes)</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
