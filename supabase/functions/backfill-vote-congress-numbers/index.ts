@@ -120,19 +120,29 @@ async function processBackfill(batchSize: number, offset: number) {
     }
   }
   
-  // Count remaining
-  const { count: remaining } = await supabase
-    .from('votes')
-    .select('*', { count: 'exact', head: true })
-    .is('congress', null);
+  // Count remaining with retry on null
+  let remainingCount = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { count, error: countError } = await supabase
+      .from('votes')
+      .select('*', { count: 'exact', head: true })
+      .is('congress', null);
+    
+    if (!countError && count !== null) {
+      remainingCount = count;
+      break;
+    }
+    console.log(`[Backfill] Count query attempt ${attempt + 1} returned null, retrying...`);
+    await new Promise(r => setTimeout(r, 200));
+  }
   
-  console.log(`[Backfill] Batch complete: updated=${updated}, failed=${failed}, remaining=${remaining}`);
+  console.log(`[Backfill] Batch complete: updated=${updated}, failed=${failed}, remaining=${remainingCount}`);
   
   return {
     updated,
     failed,
-    remaining: remaining || 0,
-    status: remaining && remaining > 0 ? 'in_progress' : 'complete',
+    remaining: remainingCount,
+    status: remainingCount > 0 ? 'in_progress' : 'complete',
   };
 }
 
