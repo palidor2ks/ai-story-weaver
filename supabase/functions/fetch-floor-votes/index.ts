@@ -120,7 +120,7 @@ async function fetchVoteMemberPositions(
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      console.log(`Failed to fetch vote ${voteNumber} members: ${response.status}`);
+      console.log(`[BG] Failed to fetch vote ${voteNumber} members: ${response.status}`);
       return [];
     }
     
@@ -134,6 +134,14 @@ async function fetchVoteMemberPositions(
     // Navigate to the item array - API structure: {results: {item: [...]}} or {item: [...]}
     const results = memberVotes.results || memberVotes;
     const items = Array.isArray(results) ? results : (results.item || []);
+    
+    // Log first vote's structure for debugging
+    if (voteNumber <= 5) {
+      console.log(`[BG] Vote ${voteNumber} response keys: ${Object.keys(data).join(', ')}, items count: ${items.length}`);
+      if (items.length > 0) {
+        console.log(`[BG] First member keys: ${Object.keys(items[0]).join(', ')}`);
+      }
+    }
     
     for (const member of items) {
       if (member.bioguideId) {
