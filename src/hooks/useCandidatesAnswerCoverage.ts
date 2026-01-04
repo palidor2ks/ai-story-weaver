@@ -35,7 +35,9 @@ export interface CandidateAnswerCoverage {
   localEarmarked: number;        // Earmarked contributions
   localLoans: number;            // Candidate loans (Line 13A)
   // Category-level local data
-  localIndividualItemized: number; // Individuals (Line 11A)
+  localIndividualItemized: number; // Individuals NET (excludes memo_code='X')
+  localGrossIndividual: number;    // Individuals GROSS (includes memo_code='X' for FEC comparison)
+  memoXAmount: number;             // Amount in memo_code='X' entries (gross - net)
   localPacContributions: number;   // PACs (Line 11C)
   localPartyContributions: number; // Party (Line 11B)
   localOrganization: number;       // Organizations (11A non-individual)
@@ -182,6 +184,8 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         local_earmarked: number | null;
         local_loans: number | null;
         local_individual_itemized: number | null;
+        local_gross_individual: number | null;
+        memo_x_amount: number | null;
         local_pac_contributions: number | null;
         local_party_contributions: number | null;
         local_organization: number | null;
@@ -394,6 +398,8 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           localLoans: rec?.local_loans || 0,
           // Category-level local data
           localIndividualItemized: rec?.local_individual_itemized || 0,
+          localGrossIndividual: rec?.local_gross_individual || 0,
+          memoXAmount: rec?.memo_x_amount || 0,
           localPacContributions: rec?.local_pac_contributions || 0,
           localPartyContributions: rec?.local_party_contributions || 0,
           localOrganization: rec?.local_organization || 0,

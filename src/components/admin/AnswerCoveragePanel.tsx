@@ -1925,6 +1925,8 @@ export function AnswerCoveragePanel() {
                               <PopoverContent className="w-96 p-3" align="end">
                                 <FinanceCategoryBreakdown
                                   localIndividualItemized={candidate.localIndividualItemized}
+                                  localGrossIndividual={candidate.localGrossIndividual}
+                                  memoXAmount={candidate.memoXAmount}
                                   localPacContributions={candidate.localPacContributions}
                                   localPartyContributions={candidate.localPartyContributions}
                                   fecItemized={candidate.fecItemized}
