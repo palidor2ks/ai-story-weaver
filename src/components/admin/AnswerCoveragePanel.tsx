@@ -30,6 +30,7 @@ import { RecentErrorsPanel } from "@/components/admin/RecentErrorsPanel";
 import { SyncStatusBadge } from "@/components/admin/SyncStatusBadge";
 import { FinanceStatusBadge } from "@/components/admin/FinanceStatusBadge";
 import { DeltaBadge } from "@/components/admin/DeltaBadge";
+import { FinanceCategoryBreakdown } from "@/components/admin/FinanceCategoryBreakdown";
 import { CandidateHealthBadge } from "@/components/admin/CandidateHealthBadge";
 import { CandidateEditDialog } from "@/components/admin/CandidateEditDialog";
 import { CandidateAnswersDialog } from "@/components/admin/CandidateAnswersDialog";
@@ -1921,52 +1922,45 @@ export function AnswerCoveragePanel() {
                                   {formatCurrency(localTotal, true)}
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-80 p-3" align="end">
-                                <div className="space-y-2 text-sm">
-                                  <div className="font-medium border-b pb-1 mb-2">Local Total Breakdown</div>
+                              <PopoverContent className="w-96 p-3" align="end">
+                                <FinanceCategoryBreakdown
+                                  localIndividualItemized={candidate.localIndividualItemized}
+                                  localPacContributions={candidate.localPacContributions}
+                                  localPartyContributions={candidate.localPartyContributions}
+                                  fecItemized={candidate.fecItemized}
+                                  fecPacContributions={candidate.fecPacContributions}
+                                  fecPartyContributions={candidate.fecPartyContributions}
+                                  individualDeltaPct={candidate.individualDeltaPct}
+                                  pacDeltaPct={candidate.pacDeltaPct}
+                                />
+                                
+                                {/* Additional FEC-only items */}
+                                <div className="border-t mt-3 pt-3 space-y-1.5 text-xs">
+                                  <div className="font-medium text-muted-foreground mb-2">Additional Receipts (FEC Summary Only)</div>
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Imported Itemized (Schedule A)</span>
-                                    <span className="font-medium">{formatCurrency(localItemized)}</span>
-                                  </div>
-                                  {localTransfers > 0 && (
-                                    <div className="text-xs text-muted-foreground/70 pl-2 -mt-1">
-                                      (incl. {formatCurrency(localTransfers)} transfers)
-                                    </div>
-                                  )}
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">+ Unitemized (FEC summary)</span>
-                                    <span className="font-medium">{formatCurrency(fecUnitemized)}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">+ Loans (FEC summary)</span>
-                                    <span className="font-medium">{formatCurrency(fecLoans)}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">+ Candidate Self-Fund (FEC)</span>
-                                    <span className="font-medium">{formatCurrency(fecCandidateContribution)}</span>
+                                    <span className="text-muted-foreground">Unitemized (&lt;$200)</span>
+                                    <span>{formatCurrency(fecUnitemized)}</span>
                                   </div>
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">+ Other Receipts (FEC)</span>
-                                    <span className="font-medium">{formatCurrency(fecOtherReceipts)}</span>
+                                    <span className="text-muted-foreground">Transfers</span>
+                                    <span>{formatCurrency(fecTransfers)}</span>
                                   </div>
-                                  {transferGap > 0 && (
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">+ Transfer Gap (not imported)</span>
-                                      <span className="font-medium">{formatCurrency(transferGap)}</span>
-                                    </div>
-                                  )}
-                                  <div className="flex justify-between border-t pt-2 mt-2">
-                                    <span className="font-medium">= Local Total</span>
-                                    <span className="font-bold">{formatCurrency(localTotal)}</span>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Loans</span>
+                                    <span>{formatCurrency(fecLoans)}</span>
                                   </div>
-                                  {calculatedDeltaPct !== null && (
-                                    <div className="flex justify-between text-xs text-muted-foreground pt-1">
-                                      <span>vs FEC Total Receipts</span>
-                                      <span className={calculatedDeltaPct > 2 ? 'text-amber-600' : calculatedDeltaPct < -2 ? 'text-red-500' : 'text-green-600'}>
-                                        {calculatedDeltaPct > 0 ? '+' : ''}{calculatedDeltaPct.toFixed(1)}%
-                                      </span>
-                                    </div>
-                                  )}
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Candidate Self-Fund</span>
+                                    <span>{formatCurrency(fecCandidateContribution)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Other</span>
+                                    <span>{formatCurrency(fecOtherReceipts)}</span>
+                                  </div>
+                                  <div className="flex justify-between border-t pt-1.5 mt-1.5">
+                                    <span className="font-medium">FEC Total Receipts</span>
+                                    <span className="font-bold">{formatCurrency(fecTotalReceipts)}</span>
+                                  </div>
                                 </div>
                               </PopoverContent>
                             </Popover>
@@ -1975,6 +1969,8 @@ export function AnswerCoveragePanel() {
                             <DeltaBadge
                               deltaAmount={candidate.deltaAmount}
                               deltaPct={candidate.deltaPct}
+                              individualDeltaPct={candidate.individualDeltaPct}
+                              pacDeltaPct={candidate.pacDeltaPct}
                             />
                           </TableCell>
                           <TableCell className="px-2 py-2">
