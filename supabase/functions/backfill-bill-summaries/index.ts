@@ -127,9 +127,28 @@ async function processVote(vote: VoteRecord): Promise<SummaryResult> {
     };
   }
 
+  // Skip full-text bill titles (not parseable IDs) - typically > 50 chars
+  if (vote.bill_id.length > 50) {
+    console.log(`[BillSummary] Skipping full-text title: ${vote.bill_id.substring(0, 40)}...`);
+    return { 
+      voteId: vote.id, 
+      summary: '[TITLE_NOT_ID]', 
+      success: true 
+    };
+  }
+
   const parsed = parseBillId(vote.bill_id);
-  if (!parsed || !vote.congress) {
+  if (!parsed) {
     console.log(`[BillSummary] Could not parse bill_id: ${vote.bill_id}`);
+    return { 
+      voteId: vote.id, 
+      summary: '[UNPARSEABLE]', 
+      success: true 
+    };
+  }
+  
+  if (!vote.congress) {
+    console.log(`[BillSummary] Missing congress for vote ${vote.id}`);
     return { voteId: vote.id, summary: null, success: false };
   }
 

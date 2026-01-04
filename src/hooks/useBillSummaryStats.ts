@@ -33,8 +33,10 @@ interface SummaryStats {
   noSummaryAvailable: number;
   pending: number;
   missingCongress: number;
-  floorVotesNoBill: number;  // Floor votes with VOTE-xxx IDs
-  processableVotes: number;   // Votes that can have summaries fetched
+  floorVotesNoBill: number;       // Floor votes with VOTE-xxx IDs
+  fullTextTitles: number;         // Full-text bill titles (not IDs)
+  unparseableBillIds: number;     // Bill IDs that couldn't be parsed
+  processableVotes: number;       // Votes that can have summaries fetched
   coveragePct: number;
   byCongress: CongressStats[];
   byActionType: ActionTypeStats[];
@@ -51,6 +53,8 @@ export function useBillSummaryStats() {
         withSummaryResult,
         noSummaryResult,
         floorVoteResult,
+        fullTextTitleResult,
+        unparseableResult,
         missingCongressResult,
         congressStatsResult,
         actionStatsResult,
@@ -59,12 +63,14 @@ export function useBillSummaryStats() {
         // Total votes
         supabase.from('votes').select('*', { count: 'exact', head: true }),
         
-        // With actual summary (not '[NO_SUMMARY]' or '[FLOOR_VOTE]')
+        // With actual summary (not special markers)
         supabase.from('votes')
           .select('*', { count: 'exact', head: true })
           .not('bill_summary', 'is', null)
           .neq('bill_summary', '[NO_SUMMARY]')
-          .neq('bill_summary', '[FLOOR_VOTE]'),
+          .neq('bill_summary', '[FLOOR_VOTE]')
+          .neq('bill_summary', '[TITLE_NOT_ID]')
+          .neq('bill_summary', '[UNPARSEABLE]'),
         
         // Marked as no summary available
         supabase.from('votes')
@@ -75,6 +81,16 @@ export function useBillSummaryStats() {
         supabase.from('votes')
           .select('*', { count: 'exact', head: true })
           .ilike('bill_id', 'VOTE-%'),
+        
+        // Full-text titles (marked as such)
+        supabase.from('votes')
+          .select('*', { count: 'exact', head: true })
+          .eq('bill_summary', '[TITLE_NOT_ID]'),
+        
+        // Unparseable bill IDs
+        supabase.from('votes')
+          .select('*', { count: 'exact', head: true })
+          .eq('bill_summary', '[UNPARSEABLE]'),
         
         // Missing congress number
         supabase.from('votes')
@@ -106,11 +122,14 @@ export function useBillSummaryStats() {
       const withSummary = withSummaryResult.count || 0;
       const noSummaryAvailable = noSummaryResult.count || 0;
       const floorVotesNoBill = floorVoteResult.count || 0;
+      const fullTextTitles = fullTextTitleResult.count || 0;
+      const unparseableBillIds = unparseableResult.count || 0;
       const missingCongress = missingCongressResult.count || 0;
       
-      // Processable = votes with actual bill IDs and congress numbers
-      const processableVotes = totalVotes - floorVotesNoBill - missingCongress;
-      const pending = processableVotes - withSummary - noSummaryAvailable;
+      // Processable = votes with actual bill IDs, congress numbers, and parseable format
+      const notProcessable = floorVotesNoBill + fullTextTitles + unparseableBillIds + missingCongress;
+      const processableVotes = Math.max(0, totalVotes - notProcessable);
+      const pending = Math.max(0, processableVotes - withSummary - noSummaryAvailable);
 
       // Process congress stats
       const congressMap = new Map<number, { total: number; summary: number; noSummary: number }>();
@@ -197,10 +216,12 @@ export function useBillSummaryStats() {
         totalVotes,
         withSummary,
         noSummaryAvailable,
-        pending: Math.max(0, pending),
+        pending,
         missingCongress,
         floorVotesNoBill,
-        processableVotes: Math.max(0, processableVotes),
+        fullTextTitles,
+        unparseableBillIds,
+        processableVotes,
         coveragePct: processableVotes > 0 ? Math.round((withSummary / processableVotes) * 100) : 0,
         byCongress,
         byActionType,
