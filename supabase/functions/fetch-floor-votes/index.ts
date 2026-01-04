@@ -144,9 +144,11 @@ async function fetchVoteMemberPositions(
     }
     
     for (const member of items) {
-      if (member.bioguideId) {
+      // API returns bioguideID (capital ID), not bioguideId
+      const bioguide = member.bioguideID || member.bioguideId;
+      if (bioguide) {
         positions.push({
-          bioguideId: member.bioguideId,
+          bioguideId: bioguide,
           memberName: `${member.firstName || ''} ${member.lastName || ''}`.trim(),
           party: member.voteParty || member.party || '',
           state: member.voteState || member.state || '',
