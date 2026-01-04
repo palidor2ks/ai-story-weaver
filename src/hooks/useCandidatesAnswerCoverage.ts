@@ -34,7 +34,13 @@ export interface CandidateAnswerCoverage {
   localTransfers: number;        // Committee transfers
   localEarmarked: number;        // Earmarked contributions
   localLoans: number;            // Candidate loans (Line 13A)
-  fecItemized: number | null;    // FEC itemized contributions
+  // Category-level local data
+  localIndividualItemized: number; // Individuals (Line 11A)
+  localPacContributions: number;   // PACs (Line 11C)
+  localPartyContributions: number; // Party (Line 11B)
+  localOrganization: number;       // Organizations (11A non-individual)
+  // FEC category data
+  fecItemized: number | null;    // FEC itemized contributions (individuals)
   fecUnitemized: number | null;  // FEC unitemized contributions
   fecTotalReceipts: number | null; // FEC total receipts
   fecPacContributions: number;   // FEC PAC contributions (line 11C)
@@ -43,9 +49,15 @@ export interface CandidateAnswerCoverage {
   fecTransfers: number;          // Committee transfers (line 12)
   fecCandidateContribution: number; // Candidate self-contribution (non-loan)
   fecOtherReceipts: number;      // Other receipts
+  // Overall delta
   deltaAmount: number | null;    // Difference between local NET and FEC
   deltaPct: number | null;       // Percentage difference
   reconciliationStatus: string | null; // ok, warning, error
+  // Category-level deltas
+  individualDeltaAmount: number | null;
+  individualDeltaPct: number | null;
+  pacDeltaAmount: number | null;
+  pacDeltaPct: number | null;
   // Sync status
   hasPartialSync: boolean;       // True if any committee has has_more = true (incomplete sync)
   lastDonorSync: string | null;  // Last donor sync date from candidates table
@@ -169,6 +181,10 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         local_transfers: number | null;
         local_earmarked: number | null;
         local_loans: number | null;
+        local_individual_itemized: number | null;
+        local_pac_contributions: number | null;
+        local_party_contributions: number | null;
+        local_organization: number | null;
         fec_itemized: number | null;
         fec_unitemized: number | null;
         fec_total_receipts: number | null;
@@ -180,6 +196,10 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         fec_other_receipts: number | null;
         delta_amount: number | null;
         delta_pct: number | null;
+        individual_delta_amount: number | null;
+        individual_delta_pct: number | null;
+        pac_delta_amount: number | null;
+        pac_delta_pct: number | null;
         status: string | null;
         checked_at: string | null;
       }
@@ -372,6 +392,12 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           localTransfers: rec?.local_transfers || 0,
           localEarmarked: rec?.local_earmarked || 0,
           localLoans: rec?.local_loans || 0,
+          // Category-level local data
+          localIndividualItemized: rec?.local_individual_itemized || 0,
+          localPacContributions: rec?.local_pac_contributions || 0,
+          localPartyContributions: rec?.local_party_contributions || 0,
+          localOrganization: rec?.local_organization || 0,
+          // FEC data
           fecItemized: rec?.fec_itemized ?? null,
           fecUnitemized: rec?.fec_unitemized ?? null,
           fecTotalReceipts: rec?.fec_total_receipts ?? null,
@@ -381,9 +407,16 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           fecTransfers: rec?.fec_transfers || 0,
           fecCandidateContribution: rec?.fec_candidate_contribution || 0,
           fecOtherReceipts: rec?.fec_other_receipts || 0,
+          // Overall delta
           deltaAmount: rec?.delta_amount ?? null,
           deltaPct: rec?.delta_pct ?? null,
           reconciliationStatus: rec?.status || null,
+          // Category-level deltas
+          individualDeltaAmount: rec?.individual_delta_amount ?? null,
+          individualDeltaPct: rec?.individual_delta_pct ?? null,
+          pacDeltaAmount: rec?.pac_delta_amount ?? null,
+          pacDeltaPct: rec?.pac_delta_pct ?? null,
+          // Sync status
           hasPartialSync,
           lastDonorSync: c.last_donor_sync || null,
           lastSyncDate: lastSyncMap[c.id] || null,
