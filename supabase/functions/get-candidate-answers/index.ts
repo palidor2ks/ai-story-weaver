@@ -1118,7 +1118,147 @@ Return ONLY a JSON object: {"score": <-10|-5|0|5|10>, "reasoning": "<2-3 sentenc
   return null;
 }
 
-async function inferCandidateAnswers(
+/**
+ * Search for direct statements from the candidate on social media, interviews, articles
+ * Uses Gemini with Google Search grounding to find direct quotes
+ */
+async function searchCandidateStatements(
+  candidateName: string,
+  candidateParty: string,
+  candidateOffice: string,
+  candidateState: string,
+  question: Question
+): Promise<{
+  found: boolean;
+  score: number;
+  description: string;
+  sourceUrls: string[];
+  sourceTitles: string[];
+  evidenceType: 'public_statement' | 'social_media' | null;
+}> {
+  if (!GOOGLE_GEMINI_API_KEY) {
+    return { found: false, score: 0, description: '', sourceUrls: [], sourceTitles: [], evidenceType: null };
+  }
+
+  const searchPrompt = `Search for DIRECT STATEMENTS by ${candidateName} (${candidateParty} ${candidateOffice} from ${candidateState}) on this specific topic: "${question.text}"
+
+PRIORITY SOURCES (in order):
+1. Social media posts (X/Twitter, Facebook, Instagram) where they directly address this
+2. Video interviews or podcasts (local news, town halls) where they state their position
+3. Op-eds or articles WRITTEN BY ${candidateName}
+4. Direct quotes in news articles where they specifically address this issue
+5. Campaign website or official press releases
+
+REQUIREMENTS:
+- Must be a DIRECT QUOTE or clear statement from the candidate themselves
+- Not a summary or interpretation by a journalist (unless directly quoting the candidate)
+- Recent statements preferred (2022-2025)
+- Provide the actual quote if possible
+
+If you find a direct statement, respond with JSON:
+{
+  "found": true,
+  "quote": "<the actual quote or clear paraphrase of their statement>",
+  "source_type": "social_media" | "interview" | "op_ed" | "news_quote" | "campaign",
+  "position_lean": "progressive" | "conservative" | "moderate",
+  "strength": "strong" | "moderate"
+}
+
+If NO direct statement can be found from the candidate on this specific topic, respond with:
+{"found": false}`;
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: searchPrompt }] }],
+          tools: [{ google_search: {} }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 500 },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      console.error(`[StatementSearch] API error: ${response.status}`);
+      return { found: false, score: 0, description: '', sourceUrls: [], sourceTitles: [], evidenceType: null };
+    }
+
+    const data = await response.json();
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    // Extract grounding metadata for sources
+    const groundingMeta = data.candidates?.[0]?.groundingMetadata;
+    const groundingChunks = groundingMeta?.groundingChunks || [];
+    
+    // Parse the response
+    const jsonMatch = content.match(/\{[\s\S]*?\}/);
+    if (!jsonMatch) {
+      return { found: false, score: 0, description: '', sourceUrls: [], sourceTitles: [], evidenceType: null };
+    }
+    
+    const parsed = JSON.parse(jsonMatch[0]);
+    
+    if (!parsed.found) {
+      return { found: false, score: 0, description: '', sourceUrls: [], sourceTitles: [], evidenceType: null };
+    }
+    
+    // Calculate score from position
+    let score = 0;
+    if (parsed.position_lean === 'progressive') {
+      score = parsed.strength === 'strong' ? -10 : -5;
+    } else if (parsed.position_lean === 'conservative') {
+      score = parsed.strength === 'strong' ? 10 : 5;
+    }
+    
+    // Build description
+    const description = parsed.quote 
+      ? `${candidateName} stated: "${parsed.quote.slice(0, 300)}"` 
+      : `${candidateName} has expressed a ${parsed.position_lean} position on this issue.`;
+    
+    // Extract source URLs from grounding
+    const sourceUrls: string[] = [];
+    const sourceTitles: string[] = [];
+    
+    for (const chunk of groundingChunks) {
+      if (chunk.web?.uri && !isBlockedDomain(chunk.web.uri)) {
+        const resolvedUrl = await resolveRedirectUrl(chunk.web.uri);
+        if (!sourceUrls.includes(resolvedUrl)) {
+          sourceUrls.push(resolvedUrl);
+          sourceTitles.push(chunk.web.title || extractDomainName(resolvedUrl));
+        }
+      }
+      if (sourceUrls.length >= 3) break;
+    }
+    
+    // Determine evidence type
+    const isSocialMedia = parsed.source_type === 'social_media' || 
+                          sourceUrls.some(url => isSocialMediaDomain(url));
+    const evidenceType: 'public_statement' | 'social_media' = isSocialMedia ? 'social_media' : 'public_statement';
+    
+    console.log(`[StatementSearch] Found ${evidenceType} for "${question.text.slice(0, 50)}...": score=${score}`);
+    
+    return {
+      found: true,
+      score: snapToValidValue(score),
+      description: description.slice(0, 500),
+      sourceUrls,
+      sourceTitles,
+      evidenceType,
+    };
+  } catch (e) {
+    console.error('[StatementSearch] Error:', e);
+    return { found: false, score: 0, description: '', sourceUrls: [], sourceTitles: [], evidenceType: null };
+  }
+}
+
+/**
+ * PHASE 3 ENHANCED: Search for statements before falling back to pure ideology inference
+ * This runs for questions that remain unresolved after voting record and web research phases
+ */
+async function inferWithResearch(
   candidateName: string,
   candidateParty: string,
   candidateOffice: string,
@@ -1127,51 +1267,92 @@ async function inferCandidateAnswers(
   relatedAnswers: GeneratedAnswer[] = []
 ): Promise<GeneratedAnswer[]> {
   const results: GeneratedAnswer[] = [];
+  const MAX_STATEMENT_SEARCHES = 10;
+  let statementSearchCount = 0;
   
   for (const q of questions) {
-    const inference = await inferCandidatePosition(
-      q, candidateName, candidateParty, candidateOffice, candidateState, relatedAnswers
-    );
+    let answer: GeneratedAnswer | null = null;
     
-    if (inference && inference.score !== 0) {
-      results.push({
-        question_id: q.id,
-        answer_value: inference.score,
-        source_description: inference.reasoning.slice(0, 500),
-        source_url: null,
-        source_urls: [],
-        source_titles: [],
-        source_type: 'inference',
-        confidence: 'low' as const,
-        evidence_type: 'inferred' as const,
-        voting_record_summary: undefined,
-        public_statement_summary: undefined,
-        has_discrepancy: false,
-        discrepancy_note: undefined,
-      } as GeneratedAnswer);
-    } else {
-      // No position can be inferred
-      results.push({
-        question_id: q.id,
-        answer_value: 0,
-        source_description: 'No documented position found and insufficient context for inference.',
-        source_url: null,
-        source_urls: [],
-        source_titles: [],
-        source_type: 'other',
-        confidence: 'low' as const,
-        evidence_type: 'inferred' as const,
-        voting_record_summary: undefined,
-        public_statement_summary: undefined,
-        has_discrepancy: false,
-        discrepancy_note: undefined,
-      } as GeneratedAnswer);
+    // Step 1: Try targeted statement search (limited to avoid slowdowns)
+    if (statementSearchCount < MAX_STATEMENT_SEARCHES) {
+      const statementSearch = await searchCandidateStatements(
+        candidateName, candidateParty, candidateOffice, candidateState, q
+      );
+      statementSearchCount++;
+      
+      if (statementSearch.found && statementSearch.score !== 0) {
+        // Found a direct statement! Use it instead of pure ideology inference
+        answer = {
+          question_id: q.id,
+          answer_value: statementSearch.score,
+          source_description: statementSearch.description,
+          source_url: statementSearch.sourceUrls[0] || null,
+          source_urls: statementSearch.sourceUrls,
+          source_titles: statementSearch.sourceTitles,
+          source_type: statementSearch.evidenceType === 'social_media' ? 'public_statement' : 'public_statement',
+          confidence: 'medium' as const, // Upgrade from 'low' since we found a source
+          evidence_type: statementSearch.evidenceType || 'public_statement',
+          voting_record_summary: undefined,
+          public_statement_summary: statementSearch.description.slice(0, 200),
+          has_discrepancy: false,
+          discrepancy_note: undefined,
+        };
+        console.log(`[Phase3+Research] Found direct statement for ${q.id}: score=${answer.answer_value}`);
+      }
+      
+      // Rate limit between statement searches
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
     
-    // Small delay between inference calls to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Step 2: Fall back to pure ideology inference if no statement found
+    if (!answer) {
+      const inference = await inferCandidatePosition(
+        q, candidateName, candidateParty, candidateOffice, candidateState, relatedAnswers
+      );
+      
+      if (inference && inference.score !== 0) {
+        answer = {
+          question_id: q.id,
+          answer_value: inference.score,
+          source_description: inference.reasoning.slice(0, 500),
+          source_url: null,
+          source_urls: [],
+          source_titles: [],
+          source_type: 'other',
+          confidence: 'low' as const,
+          evidence_type: 'inferred' as const,
+          voting_record_summary: undefined,
+          public_statement_summary: undefined,
+          has_discrepancy: false,
+          discrepancy_note: undefined,
+        };
+      } else {
+        // No position can be inferred
+        answer = {
+          question_id: q.id,
+          answer_value: 0,
+          source_description: 'No documented position found and insufficient context for inference.',
+          source_url: null,
+          source_urls: [],
+          source_titles: [],
+          source_type: 'other',
+          confidence: 'low' as const,
+          evidence_type: 'inferred' as const,
+          voting_record_summary: undefined,
+          public_statement_summary: undefined,
+          has_discrepancy: false,
+          discrepancy_note: undefined,
+        };
+      }
+      
+      // Small delay between inference calls
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    results.push(answer);
   }
 
+  console.log(`[Phase3+Research] Processed ${questions.length} questions: ${statementSearchCount} statement searches, ${results.filter(r => r.evidence_type !== 'inferred').length} found via research`);
   return results;
 }
 
@@ -1647,7 +1828,7 @@ async function generateAnswersInChunks(
         
         // Pass existing answers for context (helps inform inference with related positions)
         const existingAnswersForContext = Array.from(answersById.values());
-        const inferredAnswers = await inferCandidateAnswers(
+        const inferredAnswers = await inferWithResearch(
           candidateName, candidateParty, candidateOffice, candidateState, 
           unresolvedQuestions, existingAnswersForContext
         );
@@ -1755,7 +1936,7 @@ async function generateAnswersInChunks(
           topic_id: 'unknown'
         }));
         
-        const reInferredAnswers = await inferCandidateAnswers(
+        const reInferredAnswers = await inferWithResearch(
           candidateName, candidateParty, candidateOffice, candidateState,
           questionsForInference as Question[],
           validationResult.answers.filter(a => a.answer_value !== 0)
