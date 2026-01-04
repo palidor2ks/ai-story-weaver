@@ -601,6 +601,33 @@ export function useFECIntegration() {
     }
   };
 
+  // Batch reconciliation for all candidates with FEC data
+  const runBatchReconciliation = async (cycle = '2024', limit = 100): Promise<{ success: number; failed: number; warnings: number }> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('nightly-finance-reconciliation', {
+        body: { cycle, limit, onlyWithData: true, onlyStale: false }
+      });
+
+      if (error) {
+        console.error('[BATCH-RECONCILIATION] Invoke error:', error);
+        return { success: 0, failed: 1, warnings: 0 };
+      }
+
+      if (data?.success) {
+        const details = data.details || [];
+        const success = details.filter((d: { status: string }) => d.status === 'ok').length;
+        const warnings = details.filter((d: { status: string }) => d.status === 'warning').length;
+        const failed = details.filter((d: { status: string }) => d.status === 'error').length;
+        return { success, failed, warnings };
+      }
+
+      return { success: 0, failed: 1, warnings: 0 };
+    } catch (err) {
+      console.error('[BATCH-RECONCILIATION] Exception:', err);
+      return { success: 0, failed: 1, warnings: 0 };
+    }
+  };
+
   // Legacy single-call version for backwards compatibility
   const fetchFECDonors = async (
     candidateId: string,
@@ -970,6 +997,7 @@ export function useFECIntegration() {
     cancelSyncAll,
     clearSyncAllProgress,
     triggerReconciliation,
+    runBatchReconciliation,
     forceResyncDonors,
     refreshFECTotals,
     batchRefreshFECTotals,
