@@ -70,16 +70,16 @@ export function BillSummaryDashboard() {
         )}
 
         {/* Summary Statistics */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           <div className="bg-muted/50 rounded-lg p-4 text-center">
             <div className="text-sm text-muted-foreground mb-1">Total Votes</div>
             <div className="text-2xl font-bold">{stats.totalVotes.toLocaleString()}</div>
           </div>
           
-          <div className="bg-muted/50 rounded-lg p-4 text-center">
-            <div className="text-sm text-muted-foreground mb-1">Processable</div>
-            <div className="text-2xl font-bold">{stats.processableVotes.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">with bill IDs</div>
+          <div className="bg-primary/10 rounded-lg p-4 text-center border border-primary/20">
+            <div className="text-sm text-primary mb-1">Processable</div>
+            <div className="text-2xl font-bold text-primary">{stats.processableVotes.toLocaleString()}</div>
+            <div className="text-xs text-muted-foreground">can fetch summaries</div>
           </div>
           
           <div className="bg-green-500/10 rounded-lg p-4 text-center border border-green-500/20">
@@ -88,7 +88,7 @@ export function BillSummaryDashboard() {
               With Summary
             </div>
             <div className="text-2xl font-bold text-green-600">{stats.withSummary.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">{stats.coveragePct}% of processable</div>
+            <div className="text-xs text-muted-foreground">{stats.coveragePct}% coverage</div>
           </div>
           
           <div className="bg-amber-500/10 rounded-lg p-4 text-center border border-amber-500/20">
@@ -97,6 +97,7 @@ export function BillSummaryDashboard() {
               No Summary
             </div>
             <div className="text-2xl font-bold text-amber-600">{stats.noSummaryAvailable.toLocaleString()}</div>
+            <div className="text-xs text-muted-foreground">bill has no CRS summary</div>
           </div>
           
           <div className="bg-blue-500/10 rounded-lg p-4 text-center border border-blue-500/20">
@@ -105,12 +106,30 @@ export function BillSummaryDashboard() {
               Pending
             </div>
             <div className="text-2xl font-bold text-blue-600">{stats.pending.toLocaleString()}</div>
+            <div className="text-xs text-muted-foreground">ready to fetch</div>
           </div>
-          
-          <div className="bg-muted/30 rounded-lg p-4 text-center border border-muted">
-            <div className="text-sm text-muted-foreground mb-1">Floor Votes</div>
-            <div className="text-2xl font-bold text-muted-foreground">{stats.floorVotesNoBill.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">no bill ID</div>
+        </div>
+
+        {/* Not Processable Breakdown */}
+        <div className="bg-muted/30 rounded-lg p-4 border border-muted">
+          <div className="text-sm font-medium mb-3">Not Processable (excluded from backfill)</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div>
+              <div className="text-lg font-bold text-muted-foreground">{stats.floorVotesNoBill.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">Floor Votes (VOTE-xxx)</div>
+            </div>
+            <div>
+              <div className="text-lg font-bold text-muted-foreground">{stats.missingCongress.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">Missing Congress #</div>
+            </div>
+            <div>
+              <div className="text-lg font-bold text-muted-foreground">{stats.fullTextTitles.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">Full-Text Titles</div>
+            </div>
+            <div>
+              <div className="text-lg font-bold text-muted-foreground">{stats.unparseableBillIds.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">Unparseable IDs</div>
+            </div>
           </div>
         </div>
         
@@ -119,10 +138,10 @@ export function BillSummaryDashboard() {
           <div className="bg-destructive/10 rounded-lg p-4 border border-destructive/20">
             <div className="flex items-center gap-2 text-destructive mb-1">
               <AlertTriangle className="h-4 w-4" />
-              <span className="font-medium">{stats.missingCongress.toLocaleString()} votes missing congress number</span>
+              <span className="font-medium">{stats.missingCongress.toLocaleString()} votes blocked — missing congress number</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Run "Backfill Congress #s" first — these votes cannot have summaries fetched until congress numbers are added.
+              Run "Backfill Congress #s" first to unblock these votes for summary fetching.
             </p>
           </div>
         )}
