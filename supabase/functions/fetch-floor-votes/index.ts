@@ -8,12 +8,14 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const CONGRESS_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
 
 // Configuration
 const BATCH_SIZE = 25;
 // Match the congress coverage of fetch-member-votes (sponsored/cosponsored legislation)
 const DEFAULT_CONGRESS_LIST = [119, 118, 117, 116, 115, 114, 113];
 const RATE_LIMIT_DELAY = 50; // ms between API calls
+const SUMMARY_FETCH_DELAY = 100; // ms between summary API calls
 
 // Map policy areas to our topics
 const topicMapping: Record<string, string> = {
@@ -62,6 +64,61 @@ interface FloorVote {
   congress: number;
   session: number;
   chamber: 'house' | 'senate';
+  bill_summary?: string | null;
+  summary_fetched_at?: string | null;
+}
+
+// Fetch CRS bill summary from Congress.gov API - NO character limit
+async function fetchBillSummary(
+  congress: number,
+  billType: string,
+  billNumber: number
+): Promise<string | null> {
+  if (!CONGRESS_API_KEY) return null;
+
+  try {
+    const typeMap: Record<string, string> = {
+      'HR': 'hr', 'S': 's', 'HRES': 'hres', 'SRES': 'sres',
+      'HJRES': 'hjres', 'SJRES': 'sjres', 'HCONRES': 'hconres', 'SCONRES': 'sconres'
+    };
+    const apiType = typeMap[billType.toUpperCase()] || 'hr';
+
+    const url = `https://api.congress.gov/v3/bill/${congress}/${apiType}/${billNumber}/summaries?api_key=${CONGRESS_API_KEY}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const summaries = data.summaries || [];
+
+    if (summaries.length === 0) return '[NO_SUMMARY]';
+
+    // Get the most recent/detailed summary - FULL text, no character limit
+    const latestSummary = summaries[summaries.length - 1];
+    return latestSummary.text || '[NO_SUMMARY]';
+  } catch (e) {
+    console.log(`[BillSummary] Error fetching summary for ${billType}${billNumber}:`, e);
+    return null;
+  }
+}
+
+// Parse bill_id to extract type and number for summary fetching
+function parseBillId(billId: string): { type: string; number: number } | null {
+  // Handle formats: "HR.1234", "HR1234", "H.R. 1234", "S.1234", "VOTE-119-1-123", etc.
+  // Skip vote placeholders that don't represent real bills
+  if (billId.startsWith('VOTE-')) return null;
+  
+  const cleaned = billId.replace(/\s+/g, '').replace(/\./g, '');
+  const match = cleaned.match(/^([A-Z]+)(\d+)$/i);
+  if (match) {
+    return { type: match[1].toUpperCase(), number: parseInt(match[2], 10) };
+  }
+  return null;
 }
 
 // Simple XML tag extraction (no external library needed)
@@ -342,7 +399,7 @@ async function fetchSenateVote(
   }
 }
 
-// Persist a batch of votes to DB
+// Persist a batch of votes to DB and fetch summaries for new votes
 async function persistVotesBatch(
   supabase: any,
   votes: FloorVote[],
@@ -353,6 +410,29 @@ async function persistVotesBatch(
   
   // Deduplicate by ID
   const uniqueVotes = Array.from(new Map(votes.map(v => [v.id, v])).values());
+  
+  // Fetch summaries for votes that don't have them yet (limit to avoid rate limits)
+  const SUMMARY_BATCH_LIMIT = 10;
+  let summariesFetched = 0;
+  
+  for (const vote of uniqueVotes.slice(0, SUMMARY_BATCH_LIMIT)) {
+    if (!vote.bill_summary) {
+      const parsed = parseBillId(vote.bill_id);
+      if (parsed && vote.congress) {
+        const summary = await fetchBillSummary(vote.congress, parsed.type, parsed.number);
+        if (summary) {
+          vote.bill_summary = summary;
+          vote.summary_fetched_at = new Date().toISOString();
+          summariesFetched++;
+        }
+        await new Promise(r => setTimeout(r, SUMMARY_FETCH_DELAY));
+      }
+    }
+  }
+  
+  if (summariesFetched > 0) {
+    console.log(`[BG] Fetched ${summariesFetched} bill summaries for batch`);
+  }
   
   const { error } = await supabase
     .from('votes')

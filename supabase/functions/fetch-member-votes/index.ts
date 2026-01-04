@@ -42,6 +42,49 @@ interface VoteRecord {
   date: string;
   congress?: number;
   policy_area?: string;
+  bill_type?: string;
+  bill_number?: number;
+  bill_summary?: string | null;
+  summary_fetched_at?: string | null;
+}
+
+// Fetch CRS bill summary from Congress.gov API - NO character limit
+async function fetchBillSummary(
+  congress: number,
+  billType: string,
+  billNumber: number
+): Promise<string | null> {
+  if (!CONGRESS_API_KEY) return null;
+
+  try {
+    const typeMap: Record<string, string> = {
+      'HR': 'hr', 'S': 's', 'HRES': 'hres', 'SRES': 'sres',
+      'HJRES': 'hjres', 'SJRES': 'sjres', 'HCONRES': 'hconres', 'SCONRES': 'sconres'
+    };
+    const apiType = typeMap[billType.toUpperCase()] || 'hr';
+
+    const url = `https://api.congress.gov/v3/bill/${congress}/${apiType}/${billNumber}/summaries?api_key=${CONGRESS_API_KEY}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const summaries = data.summaries || [];
+
+    if (summaries.length === 0) return '[NO_SUMMARY]';
+
+    // Get the most recent/detailed summary - FULL text, no character limit
+    const latestSummary = summaries[summaries.length - 1];
+    return latestSummary.text || '[NO_SUMMARY]';
+  } catch (e) {
+    console.log(`[BillSummary] Error fetching summary for ${billType}${billNumber}:`, e);
+    return null;
+  }
 }
 
 // Background processing function
@@ -81,6 +124,8 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
             date: bill.introducedDate || bill.latestAction?.actionDate || new Date().toISOString().split('T')[0],
             congress: bill.congress,
             policy_area: policyArea,
+            bill_type: bill.type,
+            bill_number: bill.number,
           });
         }
         
@@ -130,6 +175,8 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
             date: bill.introducedDate || bill.latestAction?.actionDate || new Date().toISOString().split('T')[0],
             congress: bill.congress,
             policy_area: policyArea,
+            bill_type: bill.type,
+            bill_number: bill.number,
           });
         }
         
@@ -153,23 +200,47 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
 
     console.log(`[BG] Found ${votes.length} total legislative actions for ${bioguideId}`);
 
+    // Fetch bill summaries for votes (limit to avoid rate limits during sync)
+    // We'll fetch summaries for the most recent bills first
+    const SUMMARY_FETCH_LIMIT = 100;
+    const DELAY_BETWEEN_FETCHES = 100;
+    
+    console.log(`[BG] Fetching bill summaries for up to ${SUMMARY_FETCH_LIMIT} bills...`);
+    let summariesFetched = 0;
+    
+    for (const vote of votes.slice(0, SUMMARY_FETCH_LIMIT)) {
+      if (vote.bill_type && vote.bill_number && vote.congress) {
+        const summary = await fetchBillSummary(vote.congress, vote.bill_type, vote.bill_number);
+        if (summary) {
+          vote.bill_summary = summary;
+          vote.summary_fetched_at = new Date().toISOString();
+          summariesFetched++;
+        }
+        await new Promise(r => setTimeout(r, DELAY_BETWEEN_FETCHES));
+      }
+    }
+    
+    console.log(`[BG] Fetched ${summariesFetched} bill summaries for ${bioguideId}`);
+
     // Persist votes to database if requested
     let persisted = 0;
     if (persistVotes && votes.length > 0) {
       console.log(`[BG] Persisting ${votes.length} votes to database for ${bioguideId}...`);
       
-      // Map to votes table schema - use correct position and action_type
+      // Map to votes table schema
       const votesToInsert = votes.map(v => ({
         id: v.id,
         bill_id: v.bill_id,
         bill_name: v.bill_name.slice(0, 500),
         candidate_id: v.candidate_id,
-        position: v.position, // 'Sponsored' or 'Cosponsored' - NOT 'Yea'
+        position: v.position,
         action_type: v.position === 'Sponsored' ? 'sponsored' : 'cosponsored',
         topic: v.topic,
         description: v.description?.slice(0, 1000) || null,
         date: v.date,
         congress: v.congress,
+        bill_summary: v.bill_summary || null,
+        summary_fetched_at: v.summary_fetched_at || null,
       }));
 
       // Deduplicate by ID
@@ -216,7 +287,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
         candidate_id: bioguideId,
         expected_sponsored: totalSponsored,
         expected_cosponsored: totalCosponsored,
-        expected_total: uniqueExpected, // Use unique count, not raw total
+        expected_total: uniqueExpected,
         persisted_count: persisted,
         last_sync_started_at: syncStartedAt,
         last_sync_completed_at: new Date().toISOString(),
@@ -227,7 +298,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
     if (statusError) {
       console.error(`[BG] Failed to log sync status for ${bioguideId}:`, statusError);
     } else {
-      console.log(`[BG] Completed sync for ${bioguideId}: ${persisted}/${totalSponsored + totalCosponsored} votes`);
+      console.log(`[BG] Completed sync for ${bioguideId}: ${persisted}/${totalSponsored + totalCosponsored} votes, ${summariesFetched} summaries`);
     }
 
   } catch (error: unknown) {

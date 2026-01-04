@@ -1772,6 +1772,7 @@ export type Database = {
           action_type: string | null
           bill_id: string
           bill_name: string
+          bill_summary: string | null
           candidate_id: string
           chamber: string | null
           congress: number | null
@@ -1780,6 +1781,7 @@ export type Database = {
           id: string
           position: Database["public"]["Enums"]["vote_position"]
           session: number | null
+          summary_fetched_at: string | null
           topic: string
           vote_number: number | null
         }
@@ -1787,6 +1789,7 @@ export type Database = {
           action_type?: string | null
           bill_id: string
           bill_name: string
+          bill_summary?: string | null
           candidate_id: string
           chamber?: string | null
           congress?: number | null
@@ -1795,6 +1798,7 @@ export type Database = {
           id: string
           position: Database["public"]["Enums"]["vote_position"]
           session?: number | null
+          summary_fetched_at?: string | null
           topic: string
           vote_number?: number | null
         }
@@ -1802,6 +1806,7 @@ export type Database = {
           action_type?: string | null
           bill_id?: string
           bill_name?: string
+          bill_summary?: string | null
           candidate_id?: string
           chamber?: string | null
           congress?: number | null
@@ -1810,6 +1815,7 @@ export type Database = {
           id?: string
           position?: Database["public"]["Enums"]["vote_position"]
           session?: number | null
+          summary_fetched_at?: string | null
           topic?: string
           vote_number?: number | null
         }

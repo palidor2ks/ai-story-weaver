@@ -69,6 +69,8 @@ interface StoredVote {
   vote_number?: number;
   congress?: number;
   chamber?: string;
+  bill_summary?: string | null;
+  summary_fetched_at?: string | null;
 }
 
 // Social media platforms - allow but handle specially (archive quotes)
@@ -310,7 +312,7 @@ function extractQuestionKeywords(questionText: string): string[] {
 }
 
 // Fetch stored votes from the database - returns BOTH floor votes and legislative actions
-// NOTE: Returns ALL records for the candidate - filtering happens in generateVotingRecordAnswers
+// Now includes bill_summary from cached CRS summaries
 async function fetchStoredVotes(
   supabase: any,
   candidateId: string
@@ -318,10 +320,10 @@ async function fetchStoredVotes(
   try {
     const { data, error } = await supabase
       .from('votes')
-      .select('bill_id, bill_name, position, topic, date, action_type, vote_number, congress, chamber')
+      .select('bill_id, bill_name, position, topic, date, action_type, vote_number, congress, chamber, bill_summary, summary_fetched_at')
       .eq('candidate_id', candidateId)
       .order('date', { ascending: false })
-      .limit(1000); // Increased limit to get both floor votes and legislative actions
+      .limit(1000);
     
     if (error) {
       console.error('[VotesDB] Error fetching votes:', error);
@@ -336,7 +338,8 @@ async function fetchStoredVotes(
       v.action_type === 'sponsored' || v.action_type === 'cosponsored' || !v.action_type
     );
     
-    console.log(`[VotesDB] Found ${floorVotes.length} floor votes + ${legislativeActions.length} legislative actions for ${candidateId}`);
+    const withSummaries = allVotes.filter((v: StoredVote) => v.bill_summary && v.bill_summary !== '[NO_SUMMARY]').length;
+    console.log(`[VotesDB] Found ${floorVotes.length} floor votes + ${legislativeActions.length} legislative actions for ${candidateId} (${withSummaries} with summaries)`);
     return { floorVotes, legislativeActions };
   } catch (e) {
     console.error('[VotesDB] Exception fetching votes:', e);
@@ -344,45 +347,12 @@ async function fetchStoredVotes(
   }
 }
 
-// PART E: Fetch bill summary from Congress.gov API
-async function fetchBillSummary(
-  congress: number, 
-  billType: string, 
-  billNumber: number
-): Promise<string | null> {
-  if (!CONGRESS_GOV_API_KEY) return null;
-  
-  try {
-    const typeMap: Record<string, string> = {
-      'HR': 'hr', 'S': 's', 'HRES': 'hres', 'SRES': 'sres',
-      'HJRES': 'hjres', 'SJRES': 'sjres', 'HCONRES': 'hconres', 'SCONRES': 'sconres'
-    };
-    const apiType = typeMap[billType.toUpperCase()] || 'hr';
-    
-    const url = `https://api.congress.gov/v3/bill/${congress}/${apiType}/${billNumber}/summaries?api_key=${CONGRESS_GOV_API_KEY}`;
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-    
-    const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) return null;
-    
-    const data = await response.json();
-    const summaries = data.summaries || [];
-    
-    // Get the most recent/detailed summary
-    if (summaries.length === 0) return null;
-    const latestSummary = summaries[summaries.length - 1];
-    return latestSummary.text?.slice(0, 1500) || null; // Cap at 1500 chars
-  } catch (e) {
-    console.log(`[BillSummary] Error fetching summary for ${billType}${billNumber}:`, e);
-    return null;
-  }
-}
+// DEPRECATED: fetchBillSummary is no longer used during answer generation
+// Bill summaries are now cached in the votes table during sync
+// Keeping this for reference but it should not be called
 
-// PART E: Analyze votes with bill summaries for deeper matching
+// PART E: Analyze votes with cached bill summaries for deeper matching
+// Now uses pre-cached summaries from the database instead of live API calls
 async function analyzeVotesWithSummaries(
   candidateName: string,
   candidateParty: string,
@@ -394,40 +364,17 @@ async function analyzeVotesWithSummaries(
   
   console.log(`[DeepAnalysis] Analyzing ${storedVotes.length} votes for ${unansweredQuestions.length} unanswered questions`);
   
-  // Get promising bills (recent, with action types)
-  const promisingBills = storedVotes
-    .filter(v => v.congress && v.bill_id)
-    .slice(0, 30); // Limit initial pool
-  
-  // Fetch summaries for top candidates (limit to 8 to avoid rate limits)
-  const billsWithSummaries: Array<StoredVote & { summary: string }> = [];
-  const MAX_SUMMARY_FETCHES = 8;
-  const DELAY_BETWEEN_FETCHES = 100; // 100ms delay to respect rate limits
-  
-  for (const vote of promisingBills.slice(0, MAX_SUMMARY_FETCHES)) {
-    // Extract bill type and number from bill_id (e.g., "HR1234" -> "HR", 1234)
-    const match = vote.bill_id.match(/^([A-Z]+)(\d+)$/i);
-    if (!match) continue;
-    
-    const billType = match[1].toUpperCase();
-    const billNumber = parseInt(match[2], 10);
-    const congress = vote.congress || 118;
-    
-    const summary = await fetchBillSummary(congress, billType, billNumber);
-    if (summary && summary.length > 50) {
-      billsWithSummaries.push({ ...vote, summary });
-    }
-    
-    // Small delay between API calls
-    await new Promise(r => setTimeout(r, DELAY_BETWEEN_FETCHES));
-  }
+  // Filter to votes that have cached summaries (not null and not [NO_SUMMARY])
+  const billsWithSummaries = storedVotes
+    .filter(v => v.bill_summary && v.bill_summary !== '[NO_SUMMARY]' && v.congress && v.bill_id)
+    .slice(0, 50); // Can analyze more bills now since no API calls needed
   
   if (billsWithSummaries.length === 0) {
-    console.log('[DeepAnalysis] No bill summaries retrieved');
+    console.log('[DeepAnalysis] No cached bill summaries available');
     return [];
   }
   
-  console.log(`[DeepAnalysis] Retrieved ${billsWithSummaries.length} bill summaries for deeper analysis`);
+  console.log(`[DeepAnalysis] Using ${billsWithSummaries.length} cached bill summaries for analysis`);
   
   // Use AI to match summaries to questions
   const questionsText = unansweredQuestions.map(q => 
@@ -435,7 +382,7 @@ async function analyzeVotesWithSummaries(
   ).join('\n');
   
   const billsText = billsWithSummaries.map(b => 
-    `BILL ${b.bill_id} (${b.position || 'Sponsored'} on ${b.date?.slice(0,10)}):\n${b.summary.slice(0, 600)}`
+    `BILL ${b.bill_id} (${b.position || 'Sponsored'} on ${b.date?.slice(0,10)}):\n${b.bill_summary!.slice(0, 800)}`
   ).join('\n\n');
   
   const prompt = `Analyze if any of these bills are DIRECTLY relevant to answering these policy questions.
@@ -483,26 +430,27 @@ Only include questions where you found a DIRECT match. If no match, omit that qu
       const matchedBill = billsWithSummaries.find(b => b.bill_id === item.bill_id);
       const billUrl = matchedBill 
         ? buildBillUrl(
-            matchedBill.bill_id.replace(/\d+/,''), 
-            parseInt(matchedBill.bill_id.replace(/[A-Z]+/i,'')), 
+            matchedBill.bill_id.replace(/[^A-Z]/gi, ''),
+            parseInt(matchedBill.bill_id.replace(/[^0-9]/g, ''), 10),
             matchedBill.congress || 118
           )
         : null;
       
       return {
         question_id: item.question_id,
-        answer_value: snapToValidValue(item.answer_value),
-        source_description: item.source_description?.slice(0, 500) || 'Based on bill analysis',
+        answer_value: item.answer_value,
+        source_description: item.source_description,
         source_url: billUrl,
         source_urls: billUrl ? [billUrl] : [],
-        source_titles: matchedBill ? [matchedBill.bill_name?.slice(0, 100)] : [],
+        source_titles: matchedBill ? [`${matchedBill.bill_id}: ${matchedBill.bill_name?.slice(0, 80)}`] : [],
         source_type: 'voting_record',
-        confidence: 'medium' as const,
+        confidence: 'high' as const,
         evidence_type: 'voting_record' as const,
-      } as GeneratedAnswer;
+        voting_record_summary: item.source_description,
+      };
     });
   } catch (e) {
-    console.log('[DeepAnalysis] Failed to parse AI response:', e);
+    console.error('[DeepAnalysis] Error:', e);
     return [];
   }
 }

@@ -122,3 +122,6 @@ verify_jwt = false
 
 [functions.sync-lis-member-ids]
 verify_jwt = false
+
+[functions.backfill-bill-summaries]
+verify_jwt = false
