@@ -127,13 +127,17 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
             
             // Fix hasSource to be truthful:
             // - Has source if we have actual source URLs
-            // - OR if evidence_type is voting_record (floor votes or sponsored bills)
-            // - OR if evidence_type is public_statement or social_media
-            // - NOT if it's just a long AI inference description
-            const hasSource = (sourceUrls && sourceUrls.length > 0) || 
-                              evidenceType === 'voting_record' ||
-                              evidenceType === 'public_statement' ||
-                              evidenceType === 'social_media';
+            // - OR if evidence_type is voting_record (floor votes/sponsored bills have data, not URLs)
+            const hasActualUrls = sourceUrls && sourceUrls.length > 0;
+            const hasSource = hasActualUrls || evidenceType === 'voting_record';
+            
+            // Override evidence type display if no actual sources exist
+            // "public_statement" or "social_media" without URLs should show as "inferred"
+            const displayEvidenceType = 
+              (evidenceType === 'public_statement' || evidenceType === 'social_media') && 
+              !hasActualUrls 
+                ? 'inferred' 
+                : evidenceType;
             
             return {
               questionId: q.id,
@@ -143,7 +147,7 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
               sourceDescription: answer?.source_description ?? null,
               sourceUrls,
               sourceTitles,
-              evidenceType,
+              evidenceType: displayEvidenceType,
               hasSource,
             };
           });
