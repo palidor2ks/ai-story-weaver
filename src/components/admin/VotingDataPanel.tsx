@@ -81,10 +81,11 @@ export function VotingDataPanel() {
     setCongressBackfill({ status: 'running', updated: 0, remaining: missingCongressCount || 0 });
     
     let totalUpdated = 0;
-    let remaining = missingCongressCount || 0;
+    let batchesWithNoUpdates = 0;
+    const MAX_EMPTY_BATCHES = 3; // Stop after 3 consecutive batches with no updates
     
     try {
-      while (remaining > 0) {
+      while (true) {
         const { data, error } = await supabase.functions.invoke('backfill-vote-congress-numbers', {
           body: { batchSize: 1000 }
         });
@@ -92,16 +93,34 @@ export function VotingDataPanel() {
         if (error) throw error;
         
         totalUpdated += data.updated || 0;
-        remaining = data.remaining || 0;
+        
+        // Use previous remaining if null returned (query failed)
+        const remaining = data.remaining ?? congressBackfill.remaining;
         
         setCongressBackfill({
-          status: remaining > 0 ? 'running' : 'complete',
+          status: 'running',
           updated: totalUpdated,
           remaining,
           message: data.message
         });
         
-        if (data.status === 'complete') break;
+        // Exit condition 1: Server says complete
+        if (data.status === 'complete') {
+          setCongressBackfill(prev => ({ ...prev, status: 'complete' }));
+          break;
+        }
+        
+        // Exit condition 2: Multiple batches with no updates (truly done or all failing)
+        if ((data.updated || 0) === 0) {
+          batchesWithNoUpdates++;
+          if (batchesWithNoUpdates >= MAX_EMPTY_BATCHES) {
+            console.log('[Backfill] Stopping after multiple empty batches');
+            setCongressBackfill(prev => ({ ...prev, status: 'complete' }));
+            break;
+          }
+        } else {
+          batchesWithNoUpdates = 0; // Reset counter on successful batch
+        }
         
         // Small delay between batches
         await new Promise(r => setTimeout(r, 500));
@@ -288,7 +307,7 @@ export function VotingDataPanel() {
           <Button 
             variant="outline" 
             onClick={handleBackfillCongressNumbers}
-            disabled={congressBackfill.status === 'running' || missingCongressCount === 0}
+            disabled={congressBackfill.status === 'running'}
           >
             {congressBackfill.status === 'running' ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -297,7 +316,9 @@ export function VotingDataPanel() {
             ) : (
               <Hash className="h-4 w-4 mr-2" />
             )}
-            Backfill Congress #s
+            {congressBackfill.status === 'complete' && missingCongressCount && missingCongressCount > 0 
+              ? `Resume (${missingCongressCount.toLocaleString()})` 
+              : 'Backfill Congress #s'}
           </Button>
           
           <div className="flex gap-2">
