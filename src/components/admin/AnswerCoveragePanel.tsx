@@ -1891,10 +1891,12 @@ export function AnswerCoveragePanel() {
                               <button className="hover:opacity-80 transition-opacity">
                                 <FinanceStatusBadge
                                   status={getFinanceBadgeStatus()}
-                                    fecTotalReceipts={financeStatus.fecTotalReceipts}
-                                    localItemized={localItemized}
-                                    reconciliationCheckedAt={candidate.reconciliationCheckedAt}
-                                  />
+                                  deltaPct={calculatedDeltaPct}
+                                  deltaAmount={calculatedDelta}
+                                  fecTotalReceipts={financeStatus.fecTotalReceipts}
+                                  localItemized={localItemized}
+                                  reconciliationCheckedAt={candidate.reconciliationCheckedAt}
+                                />
                                 </button>
                               </PopoverTrigger>
                               <PopoverContent className="w-72 p-3" align="start">
