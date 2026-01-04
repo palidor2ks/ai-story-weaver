@@ -2205,6 +2205,38 @@ export function AnswerCoveragePanel() {
                                         </DropdownMenuItem>
                                       </>
                                     )}
+                                    {/* Sync New Data - when complete but delta is negative (local < FEC) */}
+                                    {syncStatus === 'complete' && (candidate.deltaPct ?? 0) < -2 && (
+                                      <DropdownMenuItem
+                                        onSelect={(e) => {
+                                          e.preventDefault();
+                                          void (async () => {
+                                            try {
+                                              toast.info(`Syncing new contributions for ${candidate.name}...`);
+                                              const result = await fetchFECDonorsComplete(
+                                                candidate.id,
+                                                candidate.fecCandidateId!,
+                                                candidate.name,
+                                                '2024',
+                                                false
+                                              );
+                                              if (result.success) {
+                                                toast.success(`Synced: ${result.imported} new records`);
+                                                refetchCandidates();
+                                              } else {
+                                                toast.error(result.error || 'Failed');
+                                              }
+                                            } catch (err) {
+                                              console.error('[Admin] Sync new data failed:', err);
+                                              toast.error('Failed to sync new data');
+                                            }
+                                          })();
+                                        }}
+                                      >
+                                        <Download className="h-4 w-4 mr-2 text-blue-600" />
+                                        Sync New Data
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem
                                       onSelect={(e) => {
                                         e.preventDefault();
