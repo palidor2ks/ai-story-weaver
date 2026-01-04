@@ -10,8 +10,8 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 // congress-legislators repo has bioguide to LIS mappings
-const LEGISLATORS_CURRENT_URL = 'https://theunitedstates.io/congress-legislators/legislators-current.json';
-const LEGISLATORS_HISTORICAL_URL = 'https://theunitedstates.io/congress-legislators/legislators-historical.json';
+const LEGISLATORS_CURRENT_URL = 'https://raw.githubusercontent.com/unitedstates/congress-legislators/gh-pages/legislators-current.json';
+const LEGISLATORS_HISTORICAL_URL = 'https://raw.githubusercontent.com/unitedstates/congress-legislators/gh-pages/legislators-historical.json';
 
 interface LegislatorId {
   bioguide: string;

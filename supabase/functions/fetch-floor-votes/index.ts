@@ -542,7 +542,7 @@ async function processFloorVoteSync(
         // Try to fetch LIS ID from congress-legislators
         console.log(`[BG] No LIS ID found for ${candidate.name}, attempting to fetch...`);
         
-        const legResponse = await fetch('https://theunitedstates.io/congress-legislators/legislators-current.json');
+        const legResponse = await fetch('https://raw.githubusercontent.com/unitedstates/congress-legislators/gh-pages/legislators-current.json');
         if (legResponse.ok) {
           const legislators = await legResponse.json();
           const match = legislators.find((l: any) => l.id.bioguide === bioguideId);
