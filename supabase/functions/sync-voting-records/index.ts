@@ -47,11 +47,15 @@ serve(async (req) => {
     }
 
     // Get all federal legislators (bioguide IDs match pattern ^[A-Z][0-9]{6}$)
-    const { data: legislators, error: legError } = await supabase
+    // PostgREST doesn't support regex, so we fetch and filter in JS
+    const { data: allCandidates, error: legError } = await supabase
       .from('candidates')
       .select('id, name')
-      .filter('id', '~', '^[A-Z][0-9]{6}$')
       .order('name');
+
+    // Filter to bioguide IDs (one uppercase letter + 6 digits)
+    const bioguidePattern = /^[A-Z][0-9]{6}$/;
+    const legislators = (allCandidates || []).filter(c => bioguidePattern.test(c.id));
 
     if (legError) {
       console.error('[sync-voting-records] Error fetching legislators:', legError);
