@@ -135,11 +135,12 @@ async function fetchVoteMemberPositions(
     const results = memberVotes.results || memberVotes;
     const items = Array.isArray(results) ? results : (results.item || []);
     
-    // Log first vote's structure for debugging
-    if (voteNumber <= 5) {
+    // Log first few votes' structure for debugging
+    if (voteNumber <= 3) {
       console.log(`[BG] Vote ${voteNumber} response keys: ${Object.keys(data).join(', ')}, items count: ${items.length}`);
       if (items.length > 0) {
-        console.log(`[BG] First member keys: ${Object.keys(items[0]).join(', ')}`);
+        const first = items[0];
+        console.log(`[BG] First member: bioguideID=${first.bioguideID}, bioguideId=${first.bioguideId}, voteCast=${first.voteCast}`);
       }
     }
     
@@ -288,6 +289,12 @@ async function processFloorVoteSync(
         
         // Find our member's position
         const memberPosition = positions.find(p => p.bioguideId === bioguideId);
+        
+        // Log first few attempts to help debug matching
+        if (totalVotesChecked <= 3) {
+          const sampleIds = positions.slice(0, 5).map(p => p.bioguideId).join(', ');
+          console.log(`[BG] Vote ${vote.rollCallNumber}: Looking for ${bioguideId} in ${positions.length} positions. Sample: ${sampleIds}. Found: ${!!memberPosition}`);
+        }
         
         if (memberPosition) {
           const billId = vote.bill 
