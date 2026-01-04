@@ -60,6 +60,9 @@ export function FinanceCategoryBreakdown({
   pacDeltaPct,
   className,
 }: FinanceCategoryBreakdownProps) {
+  // Fallback: use net if gross is not yet populated
+  const effectiveGrossIndividual = localGrossIndividual > 0 ? localGrossIndividual : localIndividualItemized;
+  
   // Calculate party delta (simple since we have the values)
   const partyDeltaPct = fecPartyContributions > 0 
     ? ((localPartyContributions - fecPartyContributions) / fecPartyContributions) * 100
@@ -69,9 +72,9 @@ export function FinanceCategoryBreakdown({
   const categories: CategoryData[] = [
     {
       label: 'Individuals (11A)',
-      local: localGrossIndividual,  // Use GROSS for fair comparison with FEC
+      local: effectiveGrossIndividual,  // Use effective GROSS for fair comparison with FEC
       fec: fecItemized,
-      deltaAmount: fecItemized !== null ? localGrossIndividual - fecItemized : null,
+      deltaAmount: fecItemized !== null ? effectiveGrossIndividual - fecItemized : null,
       deltaPct: individualDeltaPct,
     },
     {
@@ -90,8 +93,8 @@ export function FinanceCategoryBreakdown({
     },
   ];
 
-  // Calculate subtotals using GROSS individual
-  const localSubtotal = localGrossIndividual + localPacContributions + localPartyContributions;
+  // Calculate subtotals using effective GROSS individual
+  const localSubtotal = effectiveGrossIndividual + localPacContributions + localPartyContributions;
   const fecSubtotal = (fecItemized ?? 0) + fecPacContributions + fecPartyContributions;
   const subtotalDelta = localSubtotal - fecSubtotal;
   const subtotalDeltaPct = fecSubtotal > 0 ? (subtotalDelta / fecSubtotal) * 100 : 0;

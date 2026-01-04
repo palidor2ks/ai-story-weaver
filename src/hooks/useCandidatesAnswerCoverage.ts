@@ -398,8 +398,8 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
           localLoans: rec?.local_loans || 0,
           // Category-level local data
           localIndividualItemized: rec?.local_individual_itemized || 0,
-          localGrossIndividual: rec?.local_gross_individual || 0,
-          memoXAmount: rec?.memo_x_amount || 0,
+        localGrossIndividual: rec?.local_gross_individual ?? rec?.local_individual_itemized ?? 0,
+        memoXAmount: rec?.memo_x_amount ?? 0,
           localPacContributions: rec?.local_pac_contributions || 0,
           localPartyContributions: rec?.local_party_contributions || 0,
           localOrganization: rec?.local_organization || 0,
