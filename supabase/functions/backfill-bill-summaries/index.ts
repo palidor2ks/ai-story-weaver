@@ -188,25 +188,31 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Build query for votes missing summaries (must have congress number, exclude floor vote IDs)
+    // Optimized query: use simpler filters and smaller limit to avoid statement timeout
+    // The ILIKE filter on large tables is expensive - we'll filter VOTE- prefixed IDs in JS
+    const effectiveBatchSize = Math.min(batchSize, 100); // Cap batch size to prevent timeout
+    
     let query = supabase
       .from('votes')
       .select('id, bill_id, congress, action_type')
       .is('bill_summary', null)
       .not('congress', 'is', null)
-      .not('bill_id', 'ilike', 'VOTE-%')  // Exclude floor vote IDs
-      .order('date', { ascending: false })
-      .range(offset, offset + batchSize - 1);
+      .limit(effectiveBatchSize + 50); // Fetch extra to account for filtered rows
 
     if (candidateId) {
       query = query.eq('candidate_id', candidateId);
     }
 
-    const { data: votes, error } = await query;
+    const { data: rawVotes, error } = await query;
 
     if (error) {
       throw new Error(`Failed to fetch votes: ${error.message}`);
     }
+
+    // Filter out floor vote IDs in JS (cheaper than ILIKE in DB on large tables)
+    const votes = (rawVotes || [])
+      .filter(v => !v.bill_id.toUpperCase().startsWith('VOTE-'))
+      .slice(0, effectiveBatchSize);
 
     if (!votes || votes.length === 0) {
       return new Response(JSON.stringify({
@@ -267,13 +273,13 @@ serve(async (req) => {
       await new Promise(r => setTimeout(r, DELAY_BETWEEN_BATCHES));
     }
 
-    // Count remaining votes without summaries (excluding floor vote IDs)
+    // Simplified remaining count - just check for null summaries with congress
+    // Skip the ILIKE filter to avoid timeout on large tables
     const { count: remaining } = await supabase
       .from('votes')
       .select('id', { count: 'exact', head: true })
       .is('bill_summary', null)
-      .not('congress', 'is', null)
-      .not('bill_id', 'ilike', 'VOTE-%');
+      .not('congress', 'is', null);
 
     const elapsed = (Date.now() - startTime) / 1000;
     const rate = updated / elapsed;
