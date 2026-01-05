@@ -1716,10 +1716,16 @@ export function AnswerCoveragePanel() {
                       const syncStatus = candidate.syncStatus;
                       const hasOverride = overrideMap.has(candidate.id);
                       
-                      // Calculate finance badge status based on delta
+                      // Use database-calculated delta (apples-to-apples: itemized vs itemized)
                       const getFinanceBadgeStatus = (): 'ok' | 'warning' | 'error' | null => {
-                        if (!financeStatus.hasData || calculatedDeltaPct === null) return null;
-                        const absPct = Math.abs(calculatedDeltaPct);
+                        if (!financeStatus.hasData) return null;
+                        // Use reconciliation status from DB if available
+                        if (candidate.reconciliationStatus) {
+                          return candidate.reconciliationStatus as 'ok' | 'warning' | 'error';
+                        }
+                        // Fallback to calculating from DB deltaPct
+                        if (candidate.deltaPct === null || candidate.deltaPct === undefined) return null;
+                        const absPct = Math.abs(candidate.deltaPct);
                         if (absPct <= 2) return 'ok';
                         if (absPct <= 5) return 'warning';
                         return 'error';
@@ -1924,8 +1930,8 @@ export function AnswerCoveragePanel() {
                               <button className="hover:opacity-80 transition-opacity">
                                 <FinanceStatusBadge
                                   status={getFinanceBadgeStatus()}
-                                  deltaPct={calculatedDeltaPct}
-                                  deltaAmount={calculatedDelta}
+                                  deltaPct={candidate.deltaPct}
+                                  deltaAmount={candidate.deltaAmount}
                                   fecTotalReceipts={financeStatus.fecTotalReceipts}
                                   localItemized={localItemized}
                                   reconciliationCheckedAt={candidate.reconciliationCheckedAt}
