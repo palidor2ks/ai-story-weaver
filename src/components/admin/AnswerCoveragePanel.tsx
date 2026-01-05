@@ -1687,22 +1687,23 @@ export function AnswerCoveragePanel() {
                       const hasFecId = !!candidate.fecCandidateId;
                       const hasCommittee = !!candidate.fecCommitteeId;
                       const financeStatus = calculateFinanceStatus(candidate);
-                      // Calculate "Local Total" = Imported Itemized + FEC-only summary items
+                      // Calculate "Local Total" = Local Itemized + Local Transfers + FEC-only summary items
                       // This creates an apples-to-apples comparison with FEC Total Receipts
-                      const localItemized = candidate.localItemized || 0; // Raw imported amount from donors/contributions
-                      const localTransfers = candidate.localTransfers || 0; // Transfers already included in localItemized
+                      const localItemized = candidate.localItemized || 0; // Itemized contributions (Line 11)
+                      const localTransfers = candidate.localTransfers || 0; // Committee transfers (Line 12) - tracked separately
                       const fecUnitemized = candidate.fecUnitemized || 0;
                       const fecCandidateContribution = candidate.fecCandidateContribution || 0;
                       const fecOtherReceipts = candidate.fecOtherReceipts || 0;
                       const fecLoans = candidate.fecLoans || 0;
                       const fecTransfers = candidate.fecTransfers || 0;
                       
-                      // Transfers ARE included in localItemized (Line 12), so only add the gap
-                      // Loans are NOT included in localItemized (Line 13A excluded), so add full FEC amount
+                      // Local imports = itemized + transfers (tracked separately in our DB)
+                      // Add FEC-only items that we can't import: unitemized, candidate contributions, loans, other
+                      // For transfers: add our local transfers + any gap we haven't imported yet
                       const transferGap = Math.max(0, fecTransfers - localTransfers);
                       
-                      // Local Total = What we imported + What we can't import (FEC summary-only items)
-                      const localTotal = localItemized + fecUnitemized + fecCandidateContribution + fecOtherReceipts + transferGap + fecLoans;
+                      // Local Total = Local Itemized + Local Transfers + FEC-only summary items
+                      const localTotal = localItemized + localTransfers + fecUnitemized + fecCandidateContribution + fecOtherReceipts + transferGap + fecLoans;
                       
                       // Calculate delta inline: Local Total vs FEC Total Receipts
                       const fecTotalReceipts = financeStatus.fecTotalReceipts;
