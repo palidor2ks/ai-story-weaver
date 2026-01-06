@@ -294,10 +294,17 @@ export function VotingDataPanel() {
             {summaryBackfill.status === 'running' && (
               <div className="space-y-2 mt-3">
                 <Progress 
-                  value={((summaryBackfill.updated) / (summaryBackfill.updated + summaryBackfill.remaining)) * 100} 
+                  value={missingSummaryCount && missingSummaryCount > 0 
+                    ? (summaryBackfill.updated / missingSummaryCount) * 100 
+                    : undefined} 
                 />
                 <div className="text-xs text-muted-foreground flex items-center gap-2">
-                  <span>Updated {summaryBackfill.updated.toLocaleString()}, {summaryBackfill.remaining.toLocaleString()} remaining</span>
+                  <span>
+                    Updated {summaryBackfill.updated.toLocaleString()}
+                    {missingSummaryCount && missingSummaryCount > 0 && (
+                      <span className="text-muted-foreground/60"> of ~{missingSummaryCount.toLocaleString()}</span>
+                    )}
+                  </span>
                   {summaryBackfill.rate && (
                     <Badge variant="outline" className="text-xs">
                       <Zap className="h-3 w-3 mr-1" />
