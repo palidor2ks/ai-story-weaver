@@ -188,19 +188,29 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Optimized query: use simpler filters and smaller limit to avoid statement timeout
-    // The ILIKE filter on large tables is expensive - we'll filter VOTE- prefixed IDs in JS
-    const effectiveBatchSize = Math.min(batchSize, 100); // Cap batch size to prevent timeout
+    // Ultra-minimal query to avoid statement timeout on large votes table
+    // Only fetch 50 rows max to stay well within timeout limits
+    const effectiveBatchSize = Math.min(batchSize, 50);
     
+    // Build query - if candidateId provided, use it for indexed lookup
+    // Otherwise just grab any 50 rows with null summary
     let query = supabase
       .from('votes')
-      .select('id, bill_id, congress, action_type')
-      .is('bill_summary', null)
-      .not('congress', 'is', null)
-      .limit(effectiveBatchSize + 50); // Fetch extra to account for filtered rows
-
+      .select('id, bill_id, congress, action_type');
+    
     if (candidateId) {
-      query = query.eq('candidate_id', candidateId);
+      // Candidate ID filter uses index - safe to add other filters
+      query = query
+        .eq('candidate_id', candidateId)
+        .is('bill_summary', null)
+        .not('congress', 'is', null)
+        .limit(effectiveBatchSize);
+    } else {
+      // No candidate filter - use absolute minimal query
+      // Just get some rows with null summary, filter rest in JS
+      query = query
+        .is('bill_summary', null)
+        .limit(effectiveBatchSize);
     }
 
     const { data: rawVotes, error } = await query;
@@ -209,9 +219,9 @@ serve(async (req) => {
       throw new Error(`Failed to fetch votes: ${error.message}`);
     }
 
-    // Filter out floor vote IDs in JS (cheaper than ILIKE in DB on large tables)
+    // Filter in JS: remove VOTE- IDs and rows missing congress number
     const votes = (rawVotes || [])
-      .filter(v => !v.bill_id.toUpperCase().startsWith('VOTE-'))
+      .filter(v => v.congress && !v.bill_id.toUpperCase().startsWith('VOTE-'))
       .slice(0, effectiveBatchSize);
 
     if (!votes || votes.length === 0) {
@@ -273,18 +283,14 @@ serve(async (req) => {
       await new Promise(r => setTimeout(r, DELAY_BETWEEN_BATCHES));
     }
 
-    // Simplified remaining count - just check for null summaries with congress
-    // Skip the ILIKE filter to avoid timeout on large tables
-    const { count: remaining } = await supabase
-      .from('votes')
-      .select('id', { count: 'exact', head: true })
-      .is('bill_summary', null)
-      .not('congress', 'is', null);
+    // Skip the expensive remaining count query to avoid timeout
+    // Return -1 to indicate "unknown" - the UI can handle this gracefully
+    const remaining = -1;
 
     const elapsed = (Date.now() - startTime) / 1000;
     const rate = updated / elapsed;
 
-    console.log(`[Backfill] Completed: ${updated} updated, ${failed} failed, ${remaining || 0} remaining (${rate.toFixed(1)}/sec)`);
+    console.log(`[Backfill] Completed: ${updated} updated, ${failed} failed (${rate.toFixed(1)}/sec)`);
 
     return new Response(JSON.stringify({
       status: remaining && remaining > 0 ? 'in_progress' : 'complete',
