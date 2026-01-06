@@ -474,105 +474,21 @@ function snapToValidValue(value: number): number {
 
 /**
  * Validate that the score is consistent with the source description.
- * If evidence clearly indicates progressive/conservative stance but score is 0, adjust it.
+ * IMPORTANT: This function is DISABLED because it assumed a fixed left/right scale.
+ * Each question now has its own option-specific scale, so generic keyword matching
+ * cannot reliably determine which direction to adjust scores.
+ * 
+ * The AI prompts now include question options to ensure proper scoring at generation time.
  */
 function validateScoreConsistency(
   answerValue: number,
   sourceDescription: string
 ): number {
-  // Only adjust neutral scores that have evidence suggesting a clear stance
-  if (answerValue !== 0) return answerValue;
-  
-  const lowerDesc = sourceDescription.toLowerCase();
-  
-  // Skip if truly no evidence
-  if (lowerDesc.includes('no documented') && lowerDesc.length < 50) {
-    return answerValue;
-  }
-  
-  // Progressive/left-leaning indicators (expanded for evidence-informed scoring)
-  const progressiveIndicators = [
-    'supports comprehensive',
-    'supports universal',
-    'supports expanding',
-    'supports stricter',
-    'supports increasing',
-    'supports strengthening',
-    'advocates for',
-    'pushed for legislation',
-    'strongly supports',
-    'supports federal funding',
-    'supports government-funded',
-    'supports banning',
-    'opposes restrictions',
-    'opposes cuts to',
-    'voted for',
-    'sponsored',
-    'cosponsored',
-    // Evidence-informed indicators
-    'generally supports',
-    'typically supports',
-    'party supports',
-    'democrats support',
-    'democratic party supports',
-    'has advocated for',
-    'favors expanding',
-    'favors increasing',
-    'supports protections for',
-    'supports rights for',
-    'supports access to',
-  ];
-  
-  // Conservative/right-leaning indicators (expanded for evidence-informed scoring)
-  const conservativeIndicators = [
-    'opposes government',
-    'opposes federal',
-    'opposes regulations',
-    'supports deregulation',
-    'supports reducing',
-    'supports limiting government',
-    'supports state rights',
-    'supports parental rights',
-    'supports school choice',
-    'supports second amendment',
-    'opposes tax increases',
-    'supports tax cuts',
-    'supports traditional',
-    'opposes abortion',
-    'voted against',
-    // Evidence-informed indicators
-    'generally opposes',
-    'typically opposes',
-    'party opposes',
-    'republicans support',
-    'republican party supports',
-    'has advocated against',
-    'favors limiting',
-    'favors reducing',
-    'opposes mandates',
-    'opposes requirements',
-    'supports lower taxes',
-  ];
-  
-  const hasProgressiveEvidence = progressiveIndicators.some(
-    indicator => lowerDesc.includes(indicator)
-  );
-  
-  const hasConservativeEvidence = conservativeIndicators.some(
-    indicator => lowerDesc.includes(indicator)
-  );
-  
-  // Only adjust if there's clear evidence one way and not the other
-  if (hasProgressiveEvidence && !hasConservativeEvidence) {
-    console.log(`[Consistency] Adjusting score: Progressive evidence with neutral score -> -5`);
-    return -5;
-  }
-  
-  if (hasConservativeEvidence && !hasProgressiveEvidence) {
-    console.log(`[Consistency] Adjusting score: Conservative evidence with neutral score -> 5`);
-    return 5;
-  }
-  
+  // DISABLED: Cannot use generic keywords to adjust scores because
+  // the meaning of -10 vs +10 varies by question.
+  // For example, "supports protections" might be +10 on one question
+  // but -10 on another (if the question is about limiting protections).
+  // The AI now receives question options and should score correctly at generation time.
   return answerValue;
 }
 
@@ -891,10 +807,20 @@ If no voting record directly relates to a question, return 0 with confidence "lo
 CRITICAL SCORING INSTRUCTIONS:
 - Each question has specific answer OPTIONS with assigned values (-10, -5, 0, +5, +10)
 - You MUST use the answer_value that corresponds to the position shown by the voting evidence
-- READ THE OPTIONS CAREFULLY: The same value (e.g., +10) means different things for different questions
-- For example: If options show "+10 = Strongly support federal protections" and the candidate cosponsored pro-LGBTQ legislation, use +10
-- Another example: If options show "-10 = Strongly oppose" and evidence shows opposition, use -10
-- Match the voting evidence to the MEANING of each option, not a generic left/right scale
+- READ THE OPTIONS CAREFULLY: The same value (e.g., +10) means different things for different questions!
+
+BILL INTENT ANALYSIS - What does sponsoring a bill mean?
+- "Equality Act", "Protection Act", "Rights Act" = SUPPORT for those rights → use the "support" option value
+- "Disapproving the rule..." = OPPOSITION to that rule  
+- "Prohibiting...", "Banning..." = OPPOSITION to the subject
+- "No [X] for [Y]" = OPPOSITION to X (e.g., "No Place for LGBTQ+ Hate Act" = SUPPORTS LGBTQ+ protections)
+- Sponsoring a pro-LGBTQ+ bill = supports LGBTQ+ rights → if question asks about protections, use the "support protections" option
+
+EXAMPLE:
+- Question: "Should there be federal protections for LGBTQ+?"  
+- Options: -10="Strongly oppose", +10="Strongly support"
+- Evidence: "Cosponsored Equality Act, No Place for LGBTQ+ Hate Act"
+- These are PRO-protection bills → candidate SUPPORTS protections → use +10
 
 Use "high" confidence only when citing clear floor votes or direct sponsorship.`;
 
@@ -1021,18 +947,22 @@ async function inferCandidatePosition(
 
 IMPORTANT: This is an INFERENCE based on general party ideology and related positions, NOT a documented fact.
 
-Party Context:
-- Democrats typically favor: government programs, regulations, progressive social policies, environmental protection, worker protections
-- Republicans typically favor: smaller government, deregulation, traditional values, free markets, states' rights
-- Libertarians typically favor: minimal government, individual liberty, free markets, non-intervention
-- Independents may vary; consider office and state context
+CRITICAL: Use the QUESTION OPTIONS to determine the correct answer_value:
+1. Read the question and its OPTIONS carefully
+2. Determine what position a typical member of this party would take
+3. Select the answer_value from the OPTIONS that matches that position
+4. DO NOT assume -10 = progressive or +10 = conservative - read the actual option text!
 
-CRITICAL SCORING INSTRUCTIONS:
-- You will be given the SPECIFIC OPTIONS for this question with their assigned values
-- You MUST use the answer_value that matches the party's typical position on this issue
-- READ THE OPTIONS CAREFULLY: +10 might mean "support" for one question and "oppose" for another
-- Example: If options show "+10 = Strongly support federal protections" and Democrats typically support such protections, use +10 for Democrats
-- Example: If options show "-10 = Strongly oppose regulations" and Democrats typically oppose deregulation, use -10 for Democrats
+Party Tendencies (use to determine which OPTION to select):
+- Democrats typically: support government programs, support regulations, favor progressive social policies, favor environmental protection, support worker protections, support civil rights expansions
+- Republicans typically: favor smaller government, support deregulation, favor traditional values, support free markets, favor states' rights, support religious liberty
+- Libertarians typically: favor minimal government, support individual liberty, favor free markets, oppose intervention
+
+EXAMPLE:
+- Question: "Should there be federal protections for LGBTQ+ individuals?"
+- Options: -10="Strongly oppose", 0="Neutral", +10="Strongly support"
+- For a Democrat → typically support protections → use +10
+- For a Republican → typically oppose federal mandate → use -10
 
 Only return 0 if you truly cannot make a reasonable inference based on general party ideology.`;
 
@@ -1385,31 +1315,36 @@ async function generateChunkAnswers(
 ${relevantBills.map(v => `- ${v.action} ${v.type}${v.number}: "${v.title.slice(0, 60)}" (${v.policy_area})`).join('\n')}`;
   }
 
-  const systemPrompt = `You are a non-partisan political analyst scoring candidate positions based on RESEARCH and VOTING RECORDS provided.
+const systemPrompt = `You are a non-partisan political analyst scoring candidate positions based on RESEARCH and VOTING RECORDS provided.
 
-EVIDENCE-INFORMED SCORING APPROACH:
-- Score based on ALL evidence in RESEARCH including:
-  * Individual voting records and bill sponsorships
-  * Official statements and campaign positions
-  * How representatives from their party typically vote on this issue
-  * Well-established party positions when individual evidence is sparse
-- If research shows a clear directional lean (from individual OR party patterns), assign a score reflecting that lean
-- Use 0 (neutral) ONLY when research shows genuine centrism, mixed positions, or truly unaddressed topics
+CRITICAL SCORING INSTRUCTIONS - READ CAREFULLY:
+- Each question has SPECIFIC OPTIONS with assigned values (-10, -5, 0, +5, +10)
+- You MUST use the answer_value that matches the candidate's position as shown by the evidence
+- DO NOT use a generic progressive/conservative scale - the meaning of each value varies by question!
 
-SCORING SCALE:
-- -10 = Strong Progressive/Left position
-- -5 = Moderate Progressive/Left lean  
-- 0 = Genuinely neutral, centrist, or mixed position
-- +5 = Moderate Conservative/Right lean
-- +10 = Strong Conservative/Right position
+EXAMPLES OF QUESTION-SPECIFIC SCORING:
+- Question: "Should there be federal protections for X?" 
+  - Options might be: -10 = "Strongly oppose protections" ... +10 = "Strongly support protections"
+  - If candidate sponsored pro-protection bills → use +10
+  - If candidate voted against protections → use -10
+  
+- Question: "Should the government regulate X?"
+  - Options might be: -10 = "No regulation" ... +10 = "Strong regulation"  
+  - If candidate opposes regulation → use -10
+  - If candidate supports regulation → use +10
 
-ASSIGNMENT LOGIC:
-- Individual voting records take priority over party patterns
-- When individual evidence is sparse, use party voting patterns as guidance
-- "Party typically supports X" -> Use party tendency to inform score with confidence "medium"
-- Only use 0 when evidence shows genuine neutrality or topic is unaddressed
+BILL INTENT ANALYSIS - Understand what sponsoring a bill means:
+- "Equality Act", "Protection Act", "Rights Act" = SUPPORT for those rights (use the supporting option value)
+- "Disapproving the rule..." = OPPOSITION to that rule
+- "Prohibiting..." = OPPOSITION to the subject
+- "No [X] for [Y]" = OPPOSITION to X
 
-ONLY use values: -10, -5, 0, +5, or +10. Return ONLY valid JSON array.`;
+EVIDENCE PRIORITY:
+1. Individual voting records and bill sponsorships (highest priority)
+2. Official statements and campaign positions
+3. Party voting patterns (only when individual evidence is sparse)
+
+ONLY use values: -10, -5, 0, +5, or +10 from the OPTIONS provided. Return ONLY valid JSON array.`;
 
   const userPrompt = `Official: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
 ${votingContext}
