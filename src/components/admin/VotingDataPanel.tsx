@@ -139,11 +139,12 @@ export function VotingDataPanel() {
     setSummaryBackfill({ status: 'running', updated: 0, remaining: missingSummaryCount || 0 });
     
     let totalUpdated = 0;
-    let remaining = missingSummaryCount || 0;
-    const batchSize = summarySpeed === 'fast' ? 300 : summarySpeed === 'conservative' ? 100 : 200;
+    let batchesWithNoUpdates = 0;
+    const MAX_EMPTY_BATCHES = 3;
+    const batchSize = summarySpeed === 'fast' ? 50 : summarySpeed === 'conservative' ? 30 : 50;
     
     try {
-      while (remaining > 0) {
+      while (true) {
         const { data, error } = await supabase.functions.invoke('backfill-bill-summaries', {
           body: { batchSize, speed: summarySpeed }
         });
@@ -151,17 +152,33 @@ export function VotingDataPanel() {
         if (error) throw error;
         
         totalUpdated += data.updated || 0;
-        remaining = data.remaining ?? remaining - (data.updated || 0);
         
+        // Update UI - remaining may be null (unknown)
         setSummaryBackfill({
-          status: remaining > 0 ? 'running' : 'complete',
+          status: 'running',
           updated: totalUpdated,
-          remaining,
+          remaining: data.remaining ?? -1,
           message: `${data.processingRate?.toFixed(1) || '?'}/sec`,
           rate: data.processingRate
         });
         
-        if (data.status === 'complete') break;
+        // Exit condition 1: Server says complete (no rows found)
+        if (data.status === 'complete') {
+          setSummaryBackfill(prev => ({ ...prev, status: 'complete', remaining: 0 }));
+          break;
+        }
+        
+        // Exit condition 2: Multiple batches with no updates
+        if ((data.updated || 0) === 0) {
+          batchesWithNoUpdates++;
+          if (batchesWithNoUpdates >= MAX_EMPTY_BATCHES) {
+            console.log('[Backfill] Stopping after multiple empty batches');
+            setSummaryBackfill(prev => ({ ...prev, status: 'complete' }));
+            break;
+          }
+        } else {
+          batchesWithNoUpdates = 0;
+        }
         
         // Minimal delay - rate limiting handled in edge function
         await new Promise(r => setTimeout(r, 300));
