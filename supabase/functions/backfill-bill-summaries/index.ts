@@ -177,7 +177,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { batchSize = 200, candidateId, offset = 0, speed = 'normal' } = body;
+    const { batchSize = 50, candidateId, speed = 'normal' } = body;
 
     // Adjust concurrency based on speed setting
     const concurrentLimit = speed === 'fast' ? 8 : speed === 'conservative' ? 3 : CONCURRENT_LIMIT;
@@ -188,41 +188,58 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Ultra-minimal query to avoid statement timeout on large votes table
-    // Only fetch 50 rows max to stay well within timeout limits
+    // Query uses partial index: votes_pending_summaries_idx
+    // WHERE bill_summary IS NULL AND congress IS NOT NULL
+    // This should be fast now with the index
     const effectiveBatchSize = Math.min(batchSize, 50);
     
-    // Build query - if candidateId provided, use it for indexed lookup
-    // Otherwise just grab any 50 rows with null summary
     let query = supabase
       .from('votes')
-      .select('id, bill_id, congress, action_type');
+      .select('id, bill_id, congress, action_type')
+      .is('bill_summary', null)
+      .not('congress', 'is', null)
+      .order('id', { ascending: true })
+      .limit(effectiveBatchSize);
     
     if (candidateId) {
-      // Candidate ID filter uses index - safe to add other filters
-      query = query
-        .eq('candidate_id', candidateId)
-        .is('bill_summary', null)
-        .not('congress', 'is', null)
-        .limit(effectiveBatchSize);
-    } else {
-      // No candidate filter - use absolute minimal query
-      // Just get some rows with null summary, filter rest in JS
-      query = query
-        .is('bill_summary', null)
-        .limit(effectiveBatchSize);
+      query = query.eq('candidate_id', candidateId);
     }
 
+    const startTime = Date.now();
     const { data: rawVotes, error } = await query;
 
     if (error) {
       throw new Error(`Failed to fetch votes: ${error.message}`);
     }
 
-    // Filter in JS: remove VOTE- IDs and rows missing congress number
-    const votes = (rawVotes || [])
-      .filter(v => v.congress && !v.bill_id.toUpperCase().startsWith('VOTE-'))
-      .slice(0, effectiveBatchSize);
+    // Filter out VOTE- IDs in JS (mark them instead of skipping entirely)
+    const votes = rawVotes || [];
+    const processableVotes = votes.filter(v => !v.bill_id.toUpperCase().startsWith('VOTE-'));
+
+    // If all fetched votes are VOTE- prefixed, mark them and continue
+    if (votes.length > 0 && processableVotes.length === 0) {
+      console.log(`[Backfill] All ${votes.length} votes are floor votes, marking them...`);
+      
+      for (const vote of votes) {
+        await supabase
+          .from('votes')
+          .update({ 
+            bill_summary: '[FLOOR_VOTE]',
+            summary_fetched_at: new Date().toISOString()
+          })
+          .eq('id', vote.id);
+      }
+      
+      return new Response(JSON.stringify({
+        status: 'in_progress',
+        message: `Marked ${votes.length} floor votes`,
+        updated: votes.length,
+        failed: 0,
+        remaining: null, // Unknown - keep looping
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     if (!votes || votes.length === 0) {
       return new Response(JSON.stringify({
@@ -235,14 +252,13 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[Backfill] Processing ${votes.length} votes with ${concurrentLimit} concurrent calls...`);
+    console.log(`[Backfill] Processing ${processableVotes.length} votes (${votes.length - processableVotes.length} floor votes) with ${concurrentLimit} concurrent calls...`);
 
     let updated = 0;
     let failed = 0;
-    const startTime = Date.now();
 
     // Process in parallel chunks
-    const chunks = chunk(votes as VoteRecord[], concurrentLimit);
+    const chunks = chunk(processableVotes as VoteRecord[], concurrentLimit);
     
     for (const batch of chunks) {
       // Process batch in parallel
@@ -283,22 +299,18 @@ serve(async (req) => {
       await new Promise(r => setTimeout(r, DELAY_BETWEEN_BATCHES));
     }
 
-    // Skip the expensive remaining count query to avoid timeout
-    // Return -1 to indicate "unknown" - the UI can handle this gracefully
-    const remaining = -1;
-
     const elapsed = (Date.now() - startTime) / 1000;
     const rate = updated / elapsed;
 
     console.log(`[Backfill] Completed: ${updated} updated, ${failed} failed (${rate.toFixed(1)}/sec)`);
 
+    // Return in_progress if we processed anything - let UI decide when to stop
     return new Response(JSON.stringify({
-      status: remaining && remaining > 0 ? 'in_progress' : 'complete',
-      message: `Processed ${votes.length} votes at ${rate.toFixed(1)}/sec`,
+      status: updated > 0 ? 'in_progress' : 'complete',
+      message: `Processed ${processableVotes.length} votes at ${rate.toFixed(1)}/sec`,
       updated,
       failed,
-      remaining: remaining || 0,
-      nextOffset: offset + batchSize,
+      remaining: null, // Don't run expensive count - UI tracks progress
       processingRate: rate,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
