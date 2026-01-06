@@ -376,10 +376,16 @@ async function analyzeVotesWithSummaries(
   
   console.log(`[DeepAnalysis] Using ${billsWithSummaries.length} cached bill summaries for analysis`);
   
-  // Use AI to match summaries to questions
-  const questionsText = unansweredQuestions.map(q => 
-    `- ${q.id}: "${q.text}"`
-  ).join('\n');
+  // Use AI to match summaries to questions - include options for accurate scoring
+  const questionsText = unansweredQuestions.map(q => {
+    let qStr = `- ${q.id}: "${q.text}"`;
+    if (q.question_options && q.question_options.length > 0) {
+      const sortedOptions = [...q.question_options].sort((a, b) => a.value - b.value);
+      const optionsStr = sortedOptions.map(opt => `    (${opt.value}) ${opt.text}`).join('\n');
+      qStr += `\n  OPTIONS:\n${optionsStr}`;
+    }
+    return qStr;
+  }).join('\n');
   
   const billsText = billsWithSummaries.map(b => 
     `BILL ${b.bill_id} (${b.position || 'Sponsored'} on ${b.date?.slice(0,10)}):\n${b.bill_summary!.slice(0, 800)}`
@@ -387,7 +393,7 @@ async function analyzeVotesWithSummaries(
   
   const prompt = `Analyze if any of these bills are DIRECTLY relevant to answering these policy questions.
 
-QUESTIONS (unanswered):
+QUESTIONS (unanswered) - EACH HAS SPECIFIC OPTIONS WITH VALUES:
 ${questionsText}
 
 BILL SUMMARIES:
@@ -395,7 +401,10 @@ ${billsText}
 
 For each question, if a bill summary directly addresses the topic:
 - Return the question_id, the relevant bill_id, and a brief explanation of how the bill relates
-- Assign an answer_value based on whether sponsoring/voting for the bill indicates progressive (-10 to -5) or conservative (+5 to +10) stance
+- CRITICAL: Look at the OPTIONS for each question to determine the correct answer_value
+- Use the answer_value that matches what sponsoring/voting for the bill indicates
+- Example: If a question's +10 option is "Strongly support federal protections" and the candidate sponsored a pro-protection bill, use +10
+- Example: If a question's -10 option is "Strongly oppose" and evidence shows opposition, use -10
 
 Return JSON array: [{question_id, answer_value, bill_id, source_description}]
 Only include questions where you found a DIRECT match. If no match, omit that question.`;
@@ -879,8 +888,14 @@ EVIDENCE PRIORITY (use in this order):
 Do NOT guess or infer beyond the documented votes/sponsorships.
 If no voting record directly relates to a question, return 0 with confidence "low" and description "No relevant voting record found".
 
-SCORING:
--10 strong progressive, -5 lean progressive, 0 no clear record, +5 lean conservative, +10 strong conservative.
+CRITICAL SCORING INSTRUCTIONS:
+- Each question has specific answer OPTIONS with assigned values (-10, -5, 0, +5, +10)
+- You MUST use the answer_value that corresponds to the position shown by the voting evidence
+- READ THE OPTIONS CAREFULLY: The same value (e.g., +10) means different things for different questions
+- For example: If options show "+10 = Strongly support federal protections" and the candidate cosponsored pro-LGBTQ legislation, use +10
+- Another example: If options show "-10 = Strongly oppose" and evidence shows opposition, use -10
+- Match the voting evidence to the MEANING of each option, not a generic left/right scale
+
 Use "high" confidence only when citing clear floor votes or direct sponsorship.`;
 
   const userPrompt = `Official: ${candidateName} (${candidateParty}) - ${candidateOffice}, ${candidateState}
@@ -995,6 +1010,13 @@ async function inferCandidatePosition(
   
   const partyLower = candidateParty.toLowerCase();
   
+  // Build options string for the question
+  let optionsContext = '';
+  if (question.question_options && question.question_options.length > 0) {
+    const sortedOptions = [...question.question_options].sort((a, b) => a.value - b.value);
+    optionsContext = `\nQUESTION OPTIONS (use these values):\n${sortedOptions.map(opt => `  (${opt.value}) ${opt.text}`).join('\n')}`;
+  }
+  
   const systemPrompt = `You are a political analyst inferring a candidate's likely position on a topic where no explicit documentation exists.
 
 IMPORTANT: This is an INFERENCE based on general party ideology and related positions, NOT a documented fact.
@@ -1005,12 +1027,12 @@ Party Context:
 - Libertarians typically favor: minimal government, individual liberty, free markets, non-intervention
 - Independents may vary; consider office and state context
 
-Scoring:
-- -10 = Strong Progressive/Left (typical Democrat position)
-- -5 = Moderate Progressive/Left lean
-- 0 = Cannot reasonably infer (truly novel or genuinely bipartisan topic)
-- +5 = Moderate Conservative/Right lean
-- +10 = Strong Conservative/Right (typical Republican position)
+CRITICAL SCORING INSTRUCTIONS:
+- You will be given the SPECIFIC OPTIONS for this question with their assigned values
+- You MUST use the answer_value that matches the party's typical position on this issue
+- READ THE OPTIONS CAREFULLY: +10 might mean "support" for one question and "oppose" for another
+- Example: If options show "+10 = Strongly support federal protections" and Democrats typically support such protections, use +10 for Democrats
+- Example: If options show "-10 = Strongly oppose regulations" and Democrats typically oppose deregulation, use -10 for Democrats
 
 Only return 0 if you truly cannot make a reasonable inference based on general party ideology.`;
 
@@ -1021,9 +1043,12 @@ Only return 0 if you truly cannot make a reasonable inference based on general p
   const userPrompt = `Based on ${candidateName}'s party affiliation (${candidateParty}) and general party ideology, what would their likely position be on this question:
 
 "${question.text}"
+${optionsContext}
 ${relatedContext}
 
-Return ONLY a JSON object: {"score": <-10|-5|0|5|10>, "reasoning": "<2-3 sentence explanation of WHY this ${candidateParty} ${candidateOffice.toLowerCase()} would likely hold this position, referencing core party values, guiding principles, or how representatives from their party typically vote on this issue>"}`;
+IMPORTANT: Use the answer_value from the OPTIONS that matches what a typical ${candidateParty} would choose.
+
+Return ONLY a JSON object: {"score": <value from options>, "reasoning": "<2-3 sentence explanation of WHY this ${candidateParty} ${candidateOffice.toLowerCase()} would likely hold this position, referencing core party values, guiding principles, or how representatives from their party typically vote on this issue>"}`;
 
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -1088,7 +1113,15 @@ async function searchCandidateStatements(
     return { found: false, score: 0, description: '', sourceUrls: [], sourceTitles: [], evidenceType: null };
   }
 
+  // Build options context for the prompt
+  let optionsContext = '';
+  if (question.question_options && question.question_options.length > 0) {
+    const sortedOptions = [...question.question_options].sort((a, b) => a.value - b.value);
+    optionsContext = `\nQUESTION OPTIONS (use these answer_values):\n${sortedOptions.map(opt => `  (${opt.value}) ${opt.text}`).join('\n')}`;
+  }
+
   const searchPrompt = `Search for DIRECT STATEMENTS by ${candidateName} (${candidateParty} ${candidateOffice} from ${candidateState}) on this specific topic: "${question.text}"
+${optionsContext}
 
 PRIORITY SOURCES (in order):
 1. Social media posts (X/Twitter, Facebook, Instagram) where they directly address this
@@ -1108,9 +1141,11 @@ If you find a direct statement, respond with JSON:
   "found": true,
   "quote": "<the actual quote or clear paraphrase of their statement>",
   "source_type": "social_media" | "interview" | "op_ed" | "news_quote" | "campaign",
-  "position_lean": "progressive" | "conservative" | "moderate",
-  "strength": "strong" | "moderate"
+  "answer_value": <the value from the OPTIONS that best matches their stated position>
 }
+
+CRITICAL: Use the answer_value from the OPTIONS list that matches what the candidate stated.
+For example, if options show "+10 = Strongly support" and they expressed strong support, use 10.
 
 If NO direct statement can be found from the candidate on this specific topic, respond with:
 {"found": false}`;
@@ -1153,9 +1188,12 @@ If NO direct statement can be found from the candidate on this specific topic, r
       return { found: false, score: 0, description: '', sourceUrls: [], sourceTitles: [], evidenceType: null };
     }
     
-    // Calculate score from position
+    // Use the answer_value directly from the AI response (now option-aware)
+    // Fallback to old position_lean logic for backwards compatibility
     let score = 0;
-    if (parsed.position_lean === 'progressive') {
+    if (typeof parsed.answer_value === 'number') {
+      score = parsed.answer_value;
+    } else if (parsed.position_lean === 'progressive') {
       score = parsed.strength === 'strong' ? -10 : -5;
     } else if (parsed.position_lean === 'conservative') {
       score = parsed.strength === 'strong' ? 10 : 5;
@@ -1164,7 +1202,7 @@ If NO direct statement can be found from the candidate on this specific topic, r
     // Build description
     const description = parsed.quote 
       ? `${candidateName} stated: "${parsed.quote.slice(0, 300)}"` 
-      : `${candidateName} has expressed a ${parsed.position_lean} position on this issue.`;
+      : `${candidateName} has expressed a position on this issue.`;
     
     // Extract source URLs from grounding
     const sourceUrls: string[] = [];
