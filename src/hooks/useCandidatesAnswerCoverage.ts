@@ -77,9 +77,11 @@ interface Filters {
   coverageFilter?: 'all' | 'none' | 'low' | 'full';
 }
 
-export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean }) {
+export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean; limit?: number }) {
+  const limit = options?.limit;
+  
   return useQuery({
-    queryKey: ['candidates-answer-coverage', filters],
+    queryKey: ['candidates-answer-coverage', filters, limit ?? 'all'],
     enabled: options?.enabled !== false, // Default to true, but allow disabling
     placeholderData: (previousData) => previousData, // Keep previous data during filter transitions
     queryFn: async (): Promise<CandidateAnswerCoverage[]> => {
@@ -90,7 +92,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
 
       if (questionsError) throw questionsError;
 
-      // Get all candidates with coverage tier and confidence
+      // Get candidates with coverage tier and confidence
       let candidatesQuery = supabase
         .from('candidates')
         .select('id, name, party, office, state, overall_score, coverage_tier, confidence, fec_candidate_id, fec_committee_id, last_donor_sync')
@@ -102,6 +104,11 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
 
       if (filters.state && filters.state !== 'all') {
         candidatesQuery = candidatesQuery.eq('state', filters.state);
+      }
+
+      // Apply limit for progressive loading (first N candidates)
+      if (limit) {
+        candidatesQuery = candidatesQuery.range(0, limit - 1);
       }
 
       const { data: candidates, error: candidatesError } = await candidatesQuery;
@@ -425,6 +432,38 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
     },
     staleTime: 30000,
   });
+}
+
+// Progressive loading wrapper: loads first 20 instantly, then all in background
+export function useCandidatesAnswerCoverageProgressive(filters: Filters = {}, options?: { enabled?: boolean }) {
+  const INITIAL_LIMIT = 20;
+  
+  // Phase 1: Quick load first 20 candidates
+  const initialQuery = useCandidatesAnswerCoverage(filters, { 
+    ...options, 
+    limit: INITIAL_LIMIT 
+  });
+  
+  // Phase 2: Load ALL after initial is done (different query key due to limit)
+  const fullQuery = useCandidatesAnswerCoverage(filters, { 
+    enabled: options?.enabled !== false && initialQuery.isSuccess,
+    // No limit = fetch all
+  });
+  
+  // Merge: show initial data immediately, then swap to full data when ready
+  const candidates = fullQuery.data ?? initialQuery.data;
+  const isInitialLoading = initialQuery.isLoading;
+  const isLoadingMore = initialQuery.isSuccess && fullQuery.isFetching;
+  const totalLoaded = candidates?.length ?? 0;
+  
+  return {
+    data: candidates,
+    isLoading: isInitialLoading,
+    isFetching: initialQuery.isFetching || fullQuery.isFetching,
+    isLoadingMore,
+    totalLoaded,
+    refetch: fullQuery.refetch,
+  };
 }
 
 export function useCandidateAnswerStats() {

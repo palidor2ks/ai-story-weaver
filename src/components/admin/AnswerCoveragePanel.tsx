@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/pagination";
 
 const PAGE_SIZE = 20;
-import { useCandidatesAnswerCoverage, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
+import { useCandidatesAnswerCoverageProgressive, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
 import { useEnrichCandidateSources } from "@/hooks/useCandidateAnswers";
 import { useFECIntegration } from "@/hooks/useFECIntegration";
@@ -155,7 +155,7 @@ export function AnswerCoveragePanel() {
     coverageFilter,
   }), [partyFilter, stateFilter, coverageFilter]);
 
-  const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, refetch: refetchCandidates } = useCandidatesAnswerCoverage(
+  const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, isLoadingMore, refetch: refetchCandidates } = useCandidatesAnswerCoverageProgressive(
     queryFilters,
     { enabled: hasSelectedFilters }
   );
@@ -2714,6 +2714,15 @@ export function AnswerCoveragePanel() {
                     })}
                   </TableBody>
                 </Table>
+                
+                {/* Progressive loading indicator */}
+                {isLoadingMore && (
+                  <div className="flex items-center justify-center gap-2 py-3 bg-muted/30 border-t text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading more candidates...
+                  </div>
+                )}
+                
                 {/* Pagination */}
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between p-4 border-t">
