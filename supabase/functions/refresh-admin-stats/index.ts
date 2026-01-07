@@ -37,10 +37,17 @@ Deno.serve(async (req) => {
       console.log(`[refresh-admin-stats] RPC returned ${actionCounts?.length || 0} action types in ${Date.now() - rpcStart}ms`);
       console.log("[refresh-admin-stats] Action counts:", JSON.stringify(actionCounts));
 
-      // Parse action counts
-      const sponsored = Number(actionCounts?.find((r: { action_type: string; count: number }) => r.action_type === "Sponsored")?.count || 0);
-      const cosponsored = Number(actionCounts?.find((r: { action_type: string; count: number }) => r.action_type === "Cosponsored")?.count || 0);
-      const floorVoteCount = Number(actionCounts?.find((r: { action_type: string; count: number }) => r.action_type === "floor_vote")?.count || 0);
+      // Parse action counts (normalize to lowercase for resilient matching)
+      const countMap: Record<string, number> = {};
+      actionCounts?.forEach((r: { action_type: string; count: number }) => {
+        const key = String(r.action_type || "").toLowerCase().trim();
+        countMap[key] = Number(r.count || 0);
+      });
+      console.log("[refresh-admin-stats] Normalized count map:", JSON.stringify(countMap));
+
+      const sponsored = countMap["sponsored"] || 0;
+      const cosponsored = countMap["cosponsored"] || 0;
+      const floorVoteCount = countMap["floor_vote"] || 0;
       
       const legislativeActions = sponsored + cosponsored;
       const floorVotes = floorVoteCount;
