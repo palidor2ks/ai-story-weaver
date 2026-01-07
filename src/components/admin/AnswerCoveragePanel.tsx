@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useSyncStats, TopicCoverage } from "@/hooks/useSyncStats";
+import { useSyncStats } from "@/hooks/useSyncStats";
 import { useCandidatesAnswerCoverage, useCandidateAnswerStats, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
 import { useEnrichCandidateSources } from "@/hooks/useCandidateAnswers";
@@ -13,7 +13,6 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -34,6 +33,7 @@ import { FinanceCategoryBreakdown } from "@/components/admin/FinanceCategoryBrea
 import { CandidateHealthBadge } from "@/components/admin/CandidateHealthBadge";
 import { CandidateEditDialog } from "@/components/admin/CandidateEditDialog";
 import { CandidateAnswersDialog } from "@/components/admin/CandidateAnswersDialog";
+import { ColumnHeaderFilter } from "@/components/admin/ColumnHeaderFilter";
 import { ScoreTextInline } from "@/components/ScoreText";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -77,27 +77,7 @@ function getCycleDateRange(cycle: string): string {
   return `Jan ${startYear} – Dec ${cycleYear}`;
 }
 
-function TopicCoverageItem({ topic }: { topic: TopicCoverage }) {
-  return (
-    <div className="flex items-center gap-3 py-2 px-3 hover:bg-muted/50 rounded-md transition-colors">
-      <span className="text-lg w-8">{topic.icon}</span>
-      <div className="flex-1 min-w-0">
-        <span className="text-sm font-medium truncate">{topic.topicName}</span>
-      </div>
-      <div className="flex items-center gap-3 text-sm">
-        <span className="text-muted-foreground whitespace-nowrap">
-          {topic.totalActualAnswers.toLocaleString()} / {topic.totalPotentialAnswers.toLocaleString()}
-        </span>
-        <div className="w-16">
-          <Progress value={topic.coveragePercent} className="h-2" />
-        </div>
-        <span className={`font-medium w-14 text-right ${getCoverageColor(topic.coveragePercent)}`}>
-          {topic.coveragePercent}%
-        </span>
-      </div>
-    </div>
-  );
-}
+// Removed TopicCoverageItem - no longer needed
 
 export function AnswerCoveragePanel() {
   const { data: syncStats, isLoading: syncLoading, refetch: refetchSyncStats, isRefetching } = useSyncStats();
@@ -112,6 +92,9 @@ export function AnswerCoveragePanel() {
   const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
   const [deltaFilter, setDeltaFilter] = useState<'all' | 'within' | 'minor' | 'major' | 'no_data'>('all');
   const [syncFilter, setSyncFilter] = useState<'all' | 'needs_sync' | 'partial' | 'complete' | 'has_committee' | 'no_committee' | 'has_donors' | 'no_donors' | 'fec_mismatch'>('all');
+  const [scoreFilter, setScoreFilter] = useState<'all' | 'left' | 'center' | 'right'>('all');
+  const [tierFilter, setTierFilter] = useState<'all' | 'T1' | 'T2' | 'T3'>('all');
+  const [fecIdFilter, setFecIdFilter] = useState<'all' | 'has_id' | 'missing' | 'mismatch'>('all');
   
   // Edit dialog state
   const [editingCandidate, setEditingCandidate] = useState<CandidateAnswerCoverage | null>(null);
@@ -360,8 +343,35 @@ export function AnswerCoveragePanel() {
       result = result.filter(c => c.fecIdMismatch);
     }
     
+    // Apply score filter
+    if (scoreFilter === 'left') {
+      result = result.filter(c => c.overallScore !== null && c.overallScore < -3);
+    } else if (scoreFilter === 'center') {
+      result = result.filter(c => c.overallScore !== null && c.overallScore >= -3 && c.overallScore <= 3);
+    } else if (scoreFilter === 'right') {
+      result = result.filter(c => c.overallScore !== null && c.overallScore > 3);
+    }
+    
+    // Apply tier filter
+    if (tierFilter === 'T1') {
+      result = result.filter(c => c.coverageTier === 'tier_1');
+    } else if (tierFilter === 'T2') {
+      result = result.filter(c => c.coverageTier === 'tier_2');
+    } else if (tierFilter === 'T3') {
+      result = result.filter(c => c.coverageTier === 'tier_3');
+    }
+    
+    // Apply FEC ID filter
+    if (fecIdFilter === 'has_id') {
+      result = result.filter(c => !!c.fecCandidateId);
+    } else if (fecIdFilter === 'missing') {
+      result = result.filter(c => !c.fecCandidateId);
+    } else if (fecIdFilter === 'mismatch') {
+      result = result.filter(c => c.fecIdMismatch);
+    }
+    
     return result;
-  }, [baseFilteredCandidates, financeFilter, deltaFilter, syncFilter]);
+  }, [baseFilteredCandidates, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter]);
   const handleFillAll = async () => {
     try {
       if (!candidates) return;
@@ -1443,236 +1453,274 @@ export function AnswerCoveragePanel() {
           </div>
         )}
 
-        {/* Tabs for Rep vs Topic view */}
-        <Tabs defaultValue="representatives" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="representatives">By Representative</TabsTrigger>
-            <TabsTrigger value="topics">By Topic</TabsTrigger>
-          </TabsList>
+        {/* Search and High-Volume Mode */}
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
 
-          <TabsContent value="representatives" className="mt-4 space-y-4">
-            {/* Search and Filters */}
-            <div className="flex flex-wrap gap-3 items-center">
-              <div className="relative flex-1 min-w-[200px] max-w-xs">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-
-              <Select value={coverageFilter} onValueChange={(v) => setCoverageFilter(v as typeof coverageFilter)}>
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="Coverage" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Coverage</SelectItem>
-                  <SelectItem value="none">No Answers</SelectItem>
-                  <SelectItem value="low">Low (&lt;50%)</SelectItem>
-                  <SelectItem value="full">Full (100%)</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={financeFilter} onValueChange={(v) => setFinanceFilter(v as typeof financeFilter)}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Finance" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Finance</SelectItem>
-                  <SelectItem value="mismatch">FEC Mismatch</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={deltaFilter} onValueChange={(v) => setDeltaFilter(v as typeof deltaFilter)}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Delta" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Delta</SelectItem>
-                  <SelectItem value="within">Within ±2%</SelectItem>
-                  <SelectItem value="minor">Minor (2-5%)</SelectItem>
-                  <SelectItem value="major">Major (&gt;5%)</SelectItem>
-                  <SelectItem value="no_data">No Data</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={syncFilter} onValueChange={(v) => setSyncFilter(v as typeof syncFilter)}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Sync Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sync Status</SelectItem>
-                  <SelectItem value="no_committee">No Committee ({noCommitteeCandidates.length})</SelectItem>
-                  <SelectItem value="needs_sync">Needs Sync ({needsSyncCandidates.length})</SelectItem>
-                  <SelectItem value="partial">Partial ({partialSyncCandidates.length})</SelectItem>
-                  <SelectItem value="complete">Complete ({completeSyncCandidates.length})</SelectItem>
-                  {fecIdMismatchCandidates.length > 0 && (
-                    <SelectItem value="fec_mismatch" className="text-amber-600">
-                      ⚠️ FEC ID Mismatch ({fecIdMismatchCandidates.length})
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-
-              <Select value={partyFilter} onValueChange={setPartyFilter}>
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="Party" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PARTIES.map((party) => (
-                    <SelectItem key={party} value={party}>
-                      {party === 'all' ? 'All Parties' : party}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={stateFilter} onValueChange={setStateFilter}>
-                <SelectTrigger className="w-[100px]">
-                  <SelectValue placeholder="State" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All States</SelectItem>
-                  {states?.map((state) => (
-                    <SelectItem key={state} value={state}>{state}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* High-Volume Mode Toggle */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-md border">
-                <Zap className={cn("h-4 w-4", highVolumeMode ? "text-amber-500" : "text-muted-foreground")} />
-                <label htmlFor="high-volume-mode" className="text-sm font-medium cursor-pointer">
-                  High-Volume Mode
-                </label>
-                <button
-                  id="high-volume-mode"
-                  role="switch"
-                  aria-checked={highVolumeMode}
-                  onClick={() => setHighVolumeMode(!highVolumeMode)}
-                  className={cn(
-                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-                    highVolumeMode ? "bg-amber-500" : "bg-muted-foreground/30"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition-transform",
-                      highVolumeMode ? "translate-x-4" : "translate-x-0"
-                    )}
-                  />
+          {/* High-Volume Mode Toggle */}
+          <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-md border">
+            <Zap className={cn("h-4 w-4", highVolumeMode ? "text-amber-500" : "text-muted-foreground")} />
+            <label htmlFor="high-volume-mode" className="text-sm font-medium cursor-pointer">
+              High-Volume Mode
+            </label>
+            <button
+              id="high-volume-mode"
+              role="switch"
+              aria-checked={highVolumeMode}
+              onClick={() => setHighVolumeMode(!highVolumeMode)}
+              className={cn(
+                "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                highVolumeMode ? "bg-amber-500" : "bg-muted-foreground/30"
+              )}
+            >
+              <span
+                className={cn(
+                  "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition-transform",
+                  highVolumeMode ? "translate-x-4" : "translate-x-0"
+                )}
+              />
+            </button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="text-muted-foreground hover:text-foreground">
+                  <HelpCircle className="h-3.5 w-3.5" />
                 </button>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="text-muted-foreground hover:text-foreground">
-                      <HelpCircle className="h-3.5 w-3.5" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 text-sm">
-                    <p className="font-medium mb-1">High-Volume Mode</p>
-                    <p className="text-muted-foreground">
-                      Uses smaller batches (25 vs 100 records per call) for faster returns 
-                      and smoother progress on massive candidates like Adam Schiff.
-                    </p>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 text-sm">
+                <p className="font-medium mb-1">High-Volume Mode</p>
+                <p className="text-muted-foreground">
+                  Uses smaller batches (25 vs 100 records per call) for faster returns 
+                  and smoother progress on massive candidates like Adam Schiff.
+                </p>
+              </PopoverContent>
+            </Popover>
+          </div>
+          
+          {/* Active filters indicator */}
+          {(partyFilter !== 'all' || stateFilter !== 'all' || coverageFilter !== 'all' || syncFilter !== 'all' || deltaFilter !== 'all' || financeFilter !== 'all' || scoreFilter !== 'all' || tierFilter !== 'all' || fecIdFilter !== 'all') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setPartyFilter('all');
+                setStateFilter('all');
+                setCoverageFilter('all');
+                setSyncFilter('all');
+                setDeltaFilter('all');
+                setFinanceFilter('all');
+                setScoreFilter('all');
+                setTierFilter('all');
+                setFecIdFilter('all');
+              }}
+              className="text-xs h-8"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear Filters
+            </Button>
+          )}
+        </div>
 
-            {/* Candidates Table */}
-            {candidatesLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : filteredCandidates.length > 0 ? (
-              <div className="rounded-md border overflow-x-auto">
-                <Table className="text-xs">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="px-2 py-2 max-w-[140px]">Name</TableHead>
-                      <TableHead className="w-[40px] px-2 py-2">Party</TableHead>
-                      <TableHead className="w-[44px] px-2 py-2">State</TableHead>
-                      <TableHead className="text-center w-[70px] px-2 py-2">Answers</TableHead>
-                      <TableHead className="w-[50px] px-2 py-2">Score</TableHead>
-                      <TableHead className="w-[52px] px-2 py-2">Tier</TableHead>
-                      <TableHead className="w-[44px] px-2 py-2">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger className="cursor-help">
-                              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>Legislative Actions (Sponsored/Cosponsored)</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                      <TableHead className="w-[44px] px-2 py-2">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger className="cursor-help">
-                              <Vote className="h-3.5 w-3.5 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>Floor Votes (Yea/Nay/Present)</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                      <TableHead className="w-[44px] px-2 py-2">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger className="cursor-help">
-                              <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>Health Status</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                      <TableHead className="w-[44px] px-2 py-2">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger className="cursor-help">
-                              <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>Committee Status</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                      <TableHead className="w-[52px] px-2 py-2">Sync</TableHead>
-                      <TableHead className="w-[44px] px-2 py-2">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger className="cursor-help">
-                              <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>Finance Status</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                      <TableHead className="w-[72px] px-2 py-2 text-right">FEC</TableHead>
-                      <TableHead className="w-[72px] px-2 py-2 text-right">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger className="flex items-center gap-1 cursor-help justify-end">
-                              Local
-                              <HelpCircle className="h-3 w-3 text-muted-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="max-w-[280px]">
-                              <p className="font-medium mb-1">Local + Non-Itemized Receipts</p>
-                              <p className="text-xs text-muted-foreground">
-                                Imported itemized contributions + FEC-reported unitemized + other receipts 
-                                (loans, transfers, candidate contributions). 
-                                This provides an apples-to-apples comparison with FEC Total.
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                      <TableHead className="w-[60px] px-2 py-2">Delta</TableHead>
-                      <TableHead className="w-[70px] px-2 py-2">FEC ID</TableHead>
-                      <TableHead className="text-right w-[40px] px-2 py-2"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+        {/* Candidates Table */}
+        {candidatesLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : filteredCandidates.length > 0 ? (
+          <div className="rounded-md border overflow-x-auto">
+            <Table className="text-xs">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="px-2 py-2 max-w-[140px]">Name</TableHead>
+                  <TableHead className="w-[50px] px-2 py-2">
+                    <ColumnHeaderFilter
+                      label="Party"
+                      value={partyFilter}
+                      onChange={setPartyFilter}
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'Democrat', label: 'D' },
+                        { value: 'Republican', label: 'R' },
+                        { value: 'Independent', label: 'I' },
+                        { value: 'Other', label: 'O' },
+                      ]}
+                    />
+                  </TableHead>
+                  <TableHead className="w-[55px] px-2 py-2">
+                    <ColumnHeaderFilter
+                      label="State"
+                      value={stateFilter}
+                      onChange={setStateFilter}
+                      options={[
+                        { value: 'all', label: 'All States' },
+                        ...(states?.map(s => ({ value: s, label: s })) || [])
+                      ]}
+                    />
+                  </TableHead>
+                  <TableHead className="text-center w-[70px] px-2 py-2">
+                    <ColumnHeaderFilter
+                      label="Answers"
+                      value={coverageFilter}
+                      onChange={(v) => setCoverageFilter(v as typeof coverageFilter)}
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'none', label: 'None (0%)' },
+                        { value: 'low', label: 'Low (<50%)' },
+                        { value: 'full', label: 'Full (100%)' },
+                      ]}
+                    />
+                  </TableHead>
+                  <TableHead className="w-[55px] px-2 py-2">
+                    <ColumnHeaderFilter
+                      label="Score"
+                      value={scoreFilter}
+                      onChange={(v) => setScoreFilter(v as typeof scoreFilter)}
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'left', label: 'Left (<-3)' },
+                        { value: 'center', label: 'Center' },
+                        { value: 'right', label: 'Right (>3)' },
+                      ]}
+                    />
+                  </TableHead>
+                  <TableHead className="w-[52px] px-2 py-2">
+                    <ColumnHeaderFilter
+                      label="Tier"
+                      value={tierFilter}
+                      onChange={(v) => setTierFilter(v as typeof tierFilter)}
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'T1', label: 'Tier 1' },
+                        { value: 'T2', label: 'Tier 2' },
+                        { value: 'T3', label: 'Tier 3' },
+                      ]}
+                    />
+                  </TableHead>
+                  <TableHead className="w-[44px] px-2 py-2">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger className="cursor-help">
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>Legislative Actions (Sponsored/Cosponsored)</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
+                  <TableHead className="w-[44px] px-2 py-2">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger className="cursor-help">
+                          <Vote className="h-3.5 w-3.5 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>Floor Votes (Yea/Nay/Present)</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
+                  <TableHead className="w-[44px] px-2 py-2">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger className="cursor-help">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>Health Status</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
+                  <TableHead className="w-[44px] px-2 py-2">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger className="cursor-help">
+                          <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>Committee Status</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
+                  <TableHead className="w-[65px] px-2 py-2">
+                    <ColumnHeaderFilter
+                      label="Sync"
+                      value={syncFilter}
+                      onChange={(v) => setSyncFilter(v as typeof syncFilter)}
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'no_committee', label: 'No Committee', count: noCommitteeCandidates.length },
+                        { value: 'needs_sync', label: 'Needs Sync', count: needsSyncCandidates.length },
+                        { value: 'partial', label: 'Partial', count: partialSyncCandidates.length },
+                        { value: 'complete', label: 'Complete', count: completeSyncCandidates.length },
+                        ...(fecIdMismatchCandidates.length > 0 ? [
+                          { value: 'fec_mismatch', label: '⚠️ FEC Mismatch', count: fecIdMismatchCandidates.length, className: 'text-amber-600' }
+                        ] : [])
+                      ]}
+                    />
+                  </TableHead>
+                  <TableHead className="w-[55px] px-2 py-2">
+                    <ColumnHeaderFilter
+                      label={<DollarSign className="h-3.5 w-3.5" />}
+                      value={financeFilter}
+                      onChange={(v) => setFinanceFilter(v as typeof financeFilter)}
+                      options={[
+                        { value: 'all', label: 'All Finance' },
+                        { value: 'mismatch', label: 'FEC Mismatch' },
+                      ]}
+                    />
+                  </TableHead>
+                  <TableHead className="w-[72px] px-2 py-2 text-right">FEC</TableHead>
+                  <TableHead className="w-[72px] px-2 py-2 text-right">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger className="flex items-center gap-1 cursor-help justify-end">
+                          Local
+                          <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[280px]">
+                          <p className="font-medium mb-1">Local + Non-Itemized Receipts</p>
+                          <p className="text-xs text-muted-foreground">
+                            Imported itemized contributions + FEC-reported unitemized + other receipts 
+                            (loans, transfers, candidate contributions). 
+                            This provides an apples-to-apples comparison with FEC Total.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableHead>
+                  <TableHead className="w-[65px] px-2 py-2">
+                    <ColumnHeaderFilter
+                      label="Delta"
+                      value={deltaFilter}
+                      onChange={(v) => setDeltaFilter(v as typeof deltaFilter)}
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'within', label: 'Within ±2%' },
+                        { value: 'minor', label: 'Minor (2-5%)' },
+                        { value: 'major', label: 'Major (>5%)' },
+                        { value: 'no_data', label: 'No Data' },
+                      ]}
+                    />
+                  </TableHead>
+                  <TableHead className="w-[75px] px-2 py-2">
+                    <ColumnHeaderFilter
+                      label="FEC ID"
+                      value={fecIdFilter}
+                      onChange={(v) => setFecIdFilter(v as typeof fecIdFilter)}
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'has_id', label: 'Has ID', count: candidatesWithFecId.length },
+                        { value: 'missing', label: 'Missing', count: candidatesWithoutFecId.length },
+                        { value: 'mismatch', label: 'Mismatch', count: fecIdMismatchCandidates.length },
+                      ]}
+                    />
+                  </TableHead>
+                  <TableHead className="text-right w-[40px] px-2 py-2"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                     {filteredCandidates.slice(0, 100).map((candidate) => {
                       const loading = isLoading(candidate.id);
                       const fecLoading = isFECLoading(candidate.id);
@@ -2464,21 +2512,6 @@ export function AnswerCoveragePanel() {
                 </p>
               </div>
             )}
-          </TabsContent>
-
-          <TabsContent value="topics" className="mt-4">
-            <div className="space-y-1">
-              {syncStats?.topicCoverage.map(topic => (
-                <TopicCoverageItem key={topic.topicId} topic={topic} />
-              ))}
-            </div>
-            {(!syncStats?.topicCoverage || syncStats.topicCoverage.length === 0) && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No topics found
-              </p>
-            )}
-          </TabsContent>
-        </Tabs>
       </CardContent>
 
       {/* Candidate Edit Dialog */}
