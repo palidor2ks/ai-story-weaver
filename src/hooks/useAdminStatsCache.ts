@@ -19,6 +19,8 @@ export interface CandidateAnswerStats {
   noAnswers: number;
   lowCoverage: number;
   fullCoverage: number;
+  totalAnswers: number;
+  totalSourced: number;
 }
 
 export interface FecStats {

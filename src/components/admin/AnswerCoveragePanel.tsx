@@ -240,14 +240,14 @@ export function AnswerCoveragePanel() {
 
   // FEC stats from cache (moved to line 516)
 
-  // Source coverage stats from candidates
+  // Source coverage stats from cached stats (stable, doesn't change on filter)
   const sourceStats = useMemo(() => {
-    if (!candidates) return { totalSourced: 0, totalAnswers: 0, sourcePercentage: 0 };
-    const totalSourced = candidates.reduce((sum, c) => sum + c.sourcedCount, 0);
-    const totalAnswers = candidates.reduce((sum, c) => sum + c.answerCount, 0);
+    const stats = candidateStatsCache?.data;
+    const totalSourced = stats?.totalSourced || 0;
+    const totalAnswers = stats?.totalAnswers || 0;
     const sourcePercentage = totalAnswers > 0 ? Math.round((totalSourced / totalAnswers) * 100) : 0;
     return { totalSourced, totalAnswers, sourcePercentage };
-  }, [candidates]);
+  }, [candidateStatsCache]);
 
   const getSourceBadgeColor = (percentage: number) => {
     if (percentage >= 70) return 'bg-green-600 text-white';

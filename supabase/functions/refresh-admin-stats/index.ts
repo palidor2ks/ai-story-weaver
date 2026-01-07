@@ -134,10 +134,16 @@ Deno.serve(async (req) => {
       let noAnswers = 0;
       let lowCoverage = 0;
       let fullCoverage = 0;
+      let totalAnswers = 0;
+      let totalSourced = 0;
 
       coverageData.forEach((c) => {
         const answerCount = c.answer_count || 0;
+        const sourcedCount = c.sourced_count || 0;
         const answerPct = totalQuestions > 0 ? (answerCount / totalQuestions) * 100 : 0;
+        
+        totalAnswers += answerCount;
+        totalSourced += sourcedCount;
         
         if (answerCount === 0) noAnswers++;
         else if (answerPct < 30) lowCoverage++;
@@ -154,6 +160,8 @@ Deno.serve(async (req) => {
         noAnswers,
         lowCoverage,
         fullCoverage,
+        totalAnswers,
+        totalSourced,
       };
 
       console.log("[refresh-admin-stats] Answer stats:", answerStats);
