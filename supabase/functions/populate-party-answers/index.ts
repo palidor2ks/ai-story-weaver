@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -230,6 +230,28 @@ function snapToValidValue(value: number): number {
 }
 
 /**
+ * Smart truncation that preserves sentence/word boundaries
+ */
+function smartTruncate(text: string, maxLength: number): string {
+  if (!text || text.length <= maxLength) return text || '';
+  
+  // Try to end at a sentence boundary first
+  const sentenceEnd = text.slice(0, maxLength).lastIndexOf('. ');
+  if (sentenceEnd > maxLength * 0.6) {
+    return text.slice(0, sentenceEnd + 1);
+  }
+  
+  // Fall back to word boundary
+  const lastSpace = text.slice(0, maxLength).lastIndexOf(' ');
+  if (lastSpace > maxLength * 0.7) {
+    return text.slice(0, lastSpace) + '...';
+  }
+  
+  // Last resort: hard cut with ellipsis
+  return text.slice(0, maxLength - 3) + '...';
+}
+
+/**
  * PHASE 2: Research party position using Gemini with Google Search grounding
  * Only called for questions WITHOUT strong rep consensus
  */
@@ -350,7 +372,7 @@ Summarize the party's CURRENT position based on evidence that DIRECTLY addresses
     console.log(`Grounding research for "${questionText.slice(0, 40)}...": ${researchText.length} chars, ${resolvedSources.length} valid sources`);
     
     return {
-      researchText: researchText.slice(0, 2000),
+      researchText: smartTruncate(researchText, 2000),
       sourceUrls: resolvedSources.map(s => s.url),
       sourceTitles: resolvedSources.map(s => s.title),
       success: researchText.length > 50
@@ -401,7 +423,7 @@ Scoring:
 Only return 0 if you truly cannot make a reasonable inference based on general party ideology.`;
 
   const relatedContext = relatedAnswers.length > 0 
-    ? `\nRelated positions from the same topic that were documented:\n${relatedAnswers.map(a => `- Score ${a.answer_value}: ${a.source_description.slice(0, 100)}`).join('\n')}`
+    ? `\nRelated positions from the same topic that were documented:\n${relatedAnswers.map(a => `- Score ${a.answer_value}: ${smartTruncate(a.source_description, 200)}`).join('\n')}`
     : '';
 
   const userPrompt = `Based on ${partyContext.name}'s general ideology, what would their likely position be on this question:
@@ -470,7 +492,7 @@ async function scoreResearchResults(
     const research = researchResults.get(q.id);
     let researchContext = '';
     if (research?.success && research.researchText) {
-      researchContext = `\n  RESEARCH FINDINGS: ${research.researchText.slice(0, 500)}`;
+      researchContext = `\n  RESEARCH FINDINGS: ${smartTruncate(research.researchText, 800)}`;
       if (research.sourceUrls.length > 0) {
         researchContext += `\n  SOURCES: ${research.sourceUrls.join(', ')}`;
       }
