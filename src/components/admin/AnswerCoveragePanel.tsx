@@ -1,6 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSyncStats } from "@/hooks/useSyncStats";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+
+const PAGE_SIZE = 20;
 import { useCandidatesAnswerCoverage, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
 import { useEnrichCandidateSources } from "@/hooks/useCandidateAnswers";
@@ -122,6 +132,21 @@ export function AnswerCoveragePanel() {
   
   // Batch reconciliation state
   const [isBatchReconciling, setIsBatchReconciling] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Check if any filter is selected (defer loading until filter is applied)
+  const hasSelectedFilters = partyFilter !== 'all' || 
+    stateFilter !== 'all' || 
+    coverageFilter !== 'all' || 
+    searchQuery.length > 0 ||
+    financeFilter !== 'all' ||
+    deltaFilter !== 'all' ||
+    syncFilter !== 'all' ||
+    scoreFilter !== 'all' ||
+    tierFilter !== 'all' ||
+    fecIdFilter !== 'all';
 
   const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, refetch: refetchCandidates } = useCandidatesAnswerCoverage({
     party: partyFilter,
@@ -384,6 +409,20 @@ export function AnswerCoveragePanel() {
     
     return result;
   }, [baseFilteredCandidates, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredCandidates.length / PAGE_SIZE);
+  const paginatedCandidates = filteredCandidates.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  // Reset to page 1 when any filter changes
+  const filterDependencies = [partyFilter, stateFilter, coverageFilter, searchQuery, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter];
+  useMemo(() => {
+    setCurrentPage(1);
+  }, filterDependencies);
+
   const handleFillAll = async () => {
     try {
       if (!candidates) return;
@@ -1664,11 +1703,21 @@ export function AnswerCoveragePanel() {
         </div>
 
         {/* Candidates Table */}
-        {candidatesLoading && !candidates ? (
+        {!hasSelectedFilters ? (
+          <div className="text-center py-12 border rounded-md">
+            <Search className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+            <p className="text-lg font-medium text-muted-foreground">
+              Select a filter to view candidates
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Use the Party, State, or other filters above to load the candidate list.
+            </p>
+          </div>
+        ) : candidatesLoading && !candidates ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        ) : filteredCandidates.length > 0 ? (
+        ) : paginatedCandidates.length > 0 ? (
           <div className="rounded-md border overflow-x-auto relative">
             {isTableRefetching && (
               <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
@@ -1861,7 +1910,7 @@ export function AnswerCoveragePanel() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                    {filteredCandidates.slice(0, 100).map((candidate) => {
+                    {paginatedCandidates.map((candidate) => {
                       const loading = isLoading(candidate.id);
                       const fecLoading = isFECLoading(candidate.id);
                       const donorLoading = isDonorLoading(candidate.id);
@@ -2629,26 +2678,70 @@ export function AnswerCoveragePanel() {
                     })}
                   </TableBody>
                 </Table>
-                {filteredCandidates.length > 100 && (
-                  <div className="p-4 text-center text-sm text-muted-foreground border-t">
-                    Showing first 100 of {filteredCandidates.length} candidates. Use filters to narrow down.
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between p-4 border-t">
+                    <span className="text-sm text-muted-foreground">
+                      Showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, filteredCandidates.length)} of {filteredCandidates.length}
+                    </span>
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious 
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                          />
+                        </PaginationItem>
+                        {/* Show page numbers */}
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum: number;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          return (
+                            <PaginationItem key={pageNum}>
+                              <PaginationLink
+                                onClick={() => setCurrentPage(pageNum)}
+                                isActive={currentPage === pageNum}
+                                className="cursor-pointer"
+                              >
+                                {pageNum}
+                              </PaginationLink>
+                            </PaginationItem>
+                          );
+                        })}
+                        <PaginationItem>
+                          <PaginationNext 
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
+                {paginatedCandidates.length === 0 && filteredCandidates.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No candidates match the current filters.
                   </div>
                 )}
               </div>
             ) : (
               <div className="text-center py-12">
-                <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                <Search className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
                 <p className="text-lg font-medium">
-                  {searchQuery ? 'No matches found' : 'All candidates covered!'}
+                  {searchQuery ? 'No matches found' : 'No candidates match filters'}
                 </p>
                 <p className="text-muted-foreground">
                   {searchQuery
                     ? `No candidates matching "${searchQuery}"`
-                    : coverageFilter === 'none'
-                    ? 'No candidates without answers found.'
-                    : coverageFilter === 'low'
-                    ? 'No candidates with low coverage found.'
-                    : 'No candidates match the current filters.'}
+                    : 'Try adjusting your filter criteria.'}
                 </p>
               </div>
             )}
