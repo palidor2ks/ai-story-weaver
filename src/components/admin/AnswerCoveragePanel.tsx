@@ -349,6 +349,10 @@ export function AnswerCoveragePanel() {
       result = result.filter(c => !!c.fecCommitteeId);
     } else if (syncFilter === 'fec_mismatch') {
       result = result.filter(c => c.fecIdMismatch);
+    } else if (syncFilter === 'has_donors') {
+      result = result.filter(c => c.donorCount > 0);
+    } else if (syncFilter === 'no_donors') {
+      result = result.filter(c => c.donorCount === 0);
     }
     
     // Apply score filter
