@@ -108,7 +108,7 @@ export function AnswerCoveragePanel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [stateFilter, setStateFilter] = useState<string>('all');
-  const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('none');
+  const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('all');
   const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
   const [deltaFilter, setDeltaFilter] = useState<'all' | 'within' | 'minor' | 'major' | 'no_data'>('all');
   const [syncFilter, setSyncFilter] = useState<'all' | 'needs_sync' | 'partial' | 'complete' | 'has_committee' | 'no_committee' | 'has_donors' | 'no_donors' | 'fec_mismatch'>('all');
