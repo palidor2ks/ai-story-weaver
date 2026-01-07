@@ -1057,8 +1057,43 @@ export function AnswerCoveragePanel() {
             <div className="flex items-center gap-2 text-sm font-medium">
               <Vote className="h-4 w-4" />
               Congressional Voting Records
+              {votingStatsCache?.updatedAt && (
+                <span className="text-xs text-muted-foreground">
+                  (Updated {formatDistanceToNow(new Date(votingStatsCache.updatedAt), { addSuffix: true })})
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        refreshStats("voting_records_stats", {
+                          onSuccess: () => {
+                            setJustRefreshed("voting");
+                            setTimeout(() => setJustRefreshed(null), 2000);
+                          }
+                        });
+                      }}
+                      disabled={isRefreshingStats}
+                    >
+                      {justRefreshed === "voting" ? (
+                        <Check className="h-4 w-4 text-green-600" />
+                      ) : isRefreshingStats ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Refresh cached voting stats</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
