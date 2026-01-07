@@ -148,11 +148,17 @@ export function AnswerCoveragePanel() {
     tierFilter !== 'all' ||
     fecIdFilter !== 'all';
 
-  const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, refetch: refetchCandidates } = useCandidatesAnswerCoverage({
+  // Memoize filter object to prevent unnecessary query key changes
+  const queryFilters = useMemo(() => ({
     party: partyFilter,
     state: stateFilter,
     coverageFilter,
-  });
+  }), [partyFilter, stateFilter, coverageFilter]);
+
+  const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, refetch: refetchCandidates } = useCandidatesAnswerCoverage(
+    queryFilters,
+    { enabled: hasSelectedFilters }
+  );
   
   // Error tracking for Phase 2
   const { errors: adminErrors, addError, dismissError, clearErrors, hasRecentError } = useAdminErrors();
