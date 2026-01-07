@@ -26,9 +26,31 @@ Deno.serve(async (req) => {
     if (statKey === "voting_records_stats" || statKey === "all") {
       console.log("[refresh-admin-stats] Fetching voting records stats...");
       
-      // Compute all totals from vote_sync_status (fast, no timeouts)
-      // This avoids expensive count queries on the large votes table
-      console.log("[refresh-admin-stats] Fetching vote_sync_status for all counts...");
+      // Use RPC to get accurate counts from votes table (fast grouped query)
+      console.log("[refresh-admin-stats] Calling get_vote_action_counts RPC...");
+      const rpcStart = Date.now();
+      const { data: actionCounts, error: rpcError } = await supabase.rpc("get_vote_action_counts");
+      
+      if (rpcError) {
+        console.error("[refresh-admin-stats] RPC error:", rpcError);
+      }
+      console.log(`[refresh-admin-stats] RPC returned ${actionCounts?.length || 0} action types in ${Date.now() - rpcStart}ms`);
+      console.log("[refresh-admin-stats] Action counts:", JSON.stringify(actionCounts));
+
+      // Parse action counts
+      const sponsored = Number(actionCounts?.find((r: { action_type: string; count: number }) => r.action_type === "Sponsored")?.count || 0);
+      const cosponsored = Number(actionCounts?.find((r: { action_type: string; count: number }) => r.action_type === "Cosponsored")?.count || 0);
+      const floorVoteCount = Number(actionCounts?.find((r: { action_type: string; count: number }) => r.action_type === "floor_vote")?.count || 0);
+      
+      const legislativeActions = sponsored + cosponsored;
+      const floorVotes = floorVoteCount;
+      const totalRecords = legislativeActions + floorVotes;
+
+      console.log(`[refresh-admin-stats] Parsed counts: sponsored=${sponsored}, cosponsored=${cosponsored}, floor=${floorVotes}`);
+      console.log(`[refresh-admin-stats] Totals: legislative=${legislativeActions}, floor=${floorVotes}, total=${totalRecords}`);
+
+      // Get member counts from vote_sync_status (fast, small table)
+      console.log("[refresh-admin-stats] Fetching vote_sync_status for member counts...");
       const syncStart = Date.now();
       const { data: syncStatus, error: syncError } = await supabase
         .from("vote_sync_status")
@@ -39,26 +61,16 @@ Deno.serve(async (req) => {
       }
       console.log(`[refresh-admin-stats] vote_sync_status fetched ${syncStatus?.length || 0} rows in ${Date.now() - syncStart}ms`);
 
-      // Sum up totals from sync status
-      let legislativeActions = 0;
-      let floorVotes = 0;
+      // Count members with data
       let membersSynced = 0;
       let membersWithFloorVotes = 0;
-
       syncStatus?.forEach(s => {
         const persisted = s.persisted_count || 0;
         const floor = s.persisted_floor_votes || 0;
-        
-        legislativeActions += persisted;
-        floorVotes += floor;
-        
         if (persisted > 0 || floor > 0) membersSynced++;
         if (floor > 0) membersWithFloorVotes++;
       });
 
-      const totalRecords = legislativeActions + floorVotes;
-
-      console.log(`[refresh-admin-stats] Computed from sync_status: legislative=${legislativeActions}, floor=${floorVotes}, total=${totalRecords}`);
       console.log(`[refresh-admin-stats] Members synced: ${membersSynced}, with floor votes: ${membersWithFloorVotes}`);
 
       // Get total federal candidates for coverage - using limit(1) instead of head:true
