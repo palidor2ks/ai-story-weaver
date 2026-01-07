@@ -8,7 +8,7 @@ import { Header } from "@/components/Header";
 import { AnswerCoveragePanel } from "@/components/admin/AnswerCoveragePanel";
 import { ClaimReviewPanel } from "@/components/admin/ClaimReviewPanel";
 import { DonorAliasesPanel } from "@/components/admin/DonorAliasesPanel";
-import { VotingDataPanel } from "@/components/admin/VotingDataPanel";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -417,8 +417,6 @@ export default function Admin() {
           </Dialog>
         </div>
 
-        <VotingDataPanel />
-        
         <AnswerCoveragePanel />
 
         <Tabs defaultValue="officials" className="w-full">

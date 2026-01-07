@@ -36,96 +36,81 @@ export function useSyncStats() {
   return useQuery({
     queryKey: ['sync-stats'],
     queryFn: async (): Promise<SyncStats> => {
-      // Get all candidates
-      const { data: candidates, error: candidatesError } = await supabase
-        .from('candidates')
-        .select('id, name, party, last_answers_sync');
-
-      if (candidatesError) throw candidatesError;
-
-      // Get all questions
-      const { data: questions, error: questionsError } = await supabase
-        .from('questions')
-        .select('id, topic_id');
-
-      if (questionsError) throw questionsError;
-
-      // Get all topics
-      const { data: topics, error: topicsError } = await supabase
-        .from('topics')
-        .select('id, name, icon');
-
-      if (topicsError) throw topicsError;
-
-      // Get all answers (paginate because PostgREST commonly caps responses to 1000 rows)
-      const PAGE_SIZE = 1000;
-      let from = 0;
-      const allAnswers: Array<{ question_id: string; candidate_id: string }> = [];
-
-      while (true) {
-        const { data, error } = await supabase
+      // Use efficient COUNT queries instead of fetching all rows
+      const [
+        candidatesResult,
+        questionsResult,
+        topicsResult,
+        answersCountResult,
+        lastSyncResult,
+        answersByTopicResult
+      ] = await Promise.all([
+        // Get candidate count and basic info
+        supabase
+          .from('candidates')
+          .select('id, name, party, last_answers_sync'),
+        // Get questions with topic IDs
+        supabase
+          .from('questions')
+          .select('id, topic_id'),
+        // Get all topics
+        supabase
+          .from('topics')
+          .select('id, name, icon'),
+        // Get total answer count efficiently
+        supabase
           .from('candidate_answers')
-          .select('id, question_id, candidate_id')
-          .order('id', { ascending: true })
-          .range(from, from + PAGE_SIZE - 1);
+          .select('*', { count: 'exact', head: true }),
+        // Get last sync time from most recently synced candidate
+        supabase
+          .from('candidates')
+          .select('last_answers_sync')
+          .not('last_answers_sync', 'is', null)
+          .order('last_answers_sync', { ascending: false })
+          .limit(1),
+        // Get answer counts grouped by topic (via question_id join)
+        supabase
+          .from('candidate_answers')
+          .select('question_id')
+      ]);
 
-        if (error) throw error;
+      if (candidatesResult.error) throw candidatesResult.error;
+      if (questionsResult.error) throw questionsResult.error;
+      if (topicsResult.error) throw topicsResult.error;
 
-        (data || []).forEach((row) => {
-          allAnswers.push({ question_id: row.question_id, candidate_id: row.candidate_id });
-        });
-
-        if (!data || data.length < PAGE_SIZE) break;
-
-        from += PAGE_SIZE;
-        if (from > 500000) break; // safety guard
-      }
-
-      const totalCandidates = candidates?.length || 0;
-      const totalQuestions = questions?.length || 0;
+      const candidates = candidatesResult.data || [];
+      const questions = questionsResult.data || [];
+      const topics = topicsResult.data || [];
+      const totalActualAnswers = answersCountResult.count || 0;
+      
+      const totalCandidates = candidates.length;
+      const totalQuestions = questions.length;
       const totalPotentialAnswers = totalCandidates * totalQuestions;
-      const totalActualAnswers = allAnswers?.length || 0;
       const overallCoveragePercent = totalPotentialAnswers > 0 
         ? Math.round((totalActualAnswers / totalPotentialAnswers) * 1000) / 10
         : 0;
 
-      // Find most recent sync
-      const syncTimes = candidates
-        ?.filter(c => c.last_answers_sync)
-        .map(c => new Date(c.last_answers_sync!).getTime()) || [];
-      const lastSyncTime = syncTimes.length > 0 
-        ? new Date(Math.max(...syncTimes)).toISOString()
-        : null;
+      // Get last sync time
+      const lastSyncTime = lastSyncResult.data?.[0]?.last_answers_sync || null;
 
-      // Calculate per-candidate coverage
-      const answerCountByCandidate = new Map<string, number>();
-      allAnswers?.forEach(a => {
-        answerCountByCandidate.set(a.candidate_id, (answerCountByCandidate.get(a.candidate_id) || 0) + 1);
+      // Build question -> topic mapping
+      const questionToTopic = new Map<string, string>();
+      questions.forEach(q => questionToTopic.set(q.id, q.topic_id));
+
+      // Count answers per topic from the answers we fetched
+      const topicAnswerCounts = new Map<string, number>();
+      (answersByTopicResult.data || []).forEach(a => {
+        const topicId = questionToTopic.get(a.question_id);
+        if (topicId) {
+          topicAnswerCounts.set(topicId, (topicAnswerCounts.get(topicId) || 0) + 1);
+        }
       });
 
-      const candidateCoverage: CandidateCoverage[] = (candidates || [])
-        .map(c => {
-          const answerCount = answerCountByCandidate.get(c.id) || 0;
-          return {
-            candidateId: c.id,
-            name: c.name,
-            party: c.party,
-            answerCount,
-            totalQuestions,
-            coveragePercent: totalQuestions > 0 
-              ? Math.round((answerCount / totalQuestions) * 1000) / 10
-              : 0,
-          };
-        })
-        .sort((a, b) => b.coveragePercent - a.coveragePercent);
-
       // Calculate per-topic coverage
-      const topicCoverage: TopicCoverage[] = (topics || []).map(topic => {
-        const topicQuestions = questions?.filter(q => q.topic_id === topic.id) || [];
-        const topicQuestionIds = new Set(topicQuestions.map(q => q.id));
-        
-        const topicAnswers = allAnswers?.filter(a => topicQuestionIds.has(a.question_id)) || [];
+      const topicCoverage: TopicCoverage[] = topics.map(topic => {
+        const topicQuestions = questions.filter(q => q.topic_id === topic.id);
         const totalPotentialForTopic = totalCandidates * topicQuestions.length;
+        const totalActualForTopic = topicAnswerCounts.get(topic.id) || 0;
 
         return {
           topicId: topic.id,
@@ -134,12 +119,16 @@ export function useSyncStats() {
           totalQuestions: topicQuestions.length,
           totalCandidates,
           totalPotentialAnswers: totalPotentialForTopic,
-          totalActualAnswers: topicAnswers.length,
+          totalActualAnswers: totalActualForTopic,
           coveragePercent: totalPotentialForTopic > 0 
-            ? Math.round((topicAnswers.length / totalPotentialForTopic) * 1000) / 10
+            ? Math.round((totalActualForTopic / totalPotentialForTopic) * 1000) / 10
             : 0,
         };
       }).sort((a, b) => b.coveragePercent - a.coveragePercent);
+
+      // Skip per-candidate coverage calculation (expensive) - return empty array
+      // The AnswerCoveragePanel already fetches this data separately with useCandidatesAnswerCoverage
+      const candidateCoverage: CandidateCoverage[] = [];
 
       return {
         totalCandidates,
@@ -152,7 +141,7 @@ export function useSyncStats() {
         topicCoverage,
       };
     },
-    staleTime: 1000 * 60, // 1 minute
-    refetchInterval: 1000 * 60 * 5, // Auto-refresh every 5 minutes
+    staleTime: 1000 * 60 * 2, // 2 minutes (increased from 1)
+    refetchInterval: 1000 * 60 * 10, // Auto-refresh every 10 minutes (increased from 5)
   });
 }
