@@ -123,7 +123,7 @@ export function AnswerCoveragePanel() {
   // Batch reconciliation state
   const [isBatchReconciling, setIsBatchReconciling] = useState(false);
 
-  const { data: candidates, isLoading: candidatesLoading, refetch: refetchCandidates } = useCandidatesAnswerCoverage({
+  const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, refetch: refetchCandidates } = useCandidatesAnswerCoverage({
     party: partyFilter,
     state: stateFilter,
     coverageFilter,
@@ -517,10 +517,13 @@ export function AnswerCoveragePanel() {
   const noAnswersCount = candidateStats?.noAnswers || 0;
   const lowCoverageCount = candidateStats?.lowCoverage || 0;
 
-  const isLoading_ = syncLoading || statsLoading || candidatesLoading || votingStatsLoading || fecStatsLoading;
+  // Only show full loading spinner on initial load (when no cached data exists)
+  const isInitialLoading = (statsLoading || votingStatsLoading || fecStatsLoading || syncLoading) && !candidateStatsCache;
   const anyBatchRunning = isBatchRunning || isFECBatchRunning || isSyncAllRunning;
+  // Show subtle indicator when candidate list is refetching (filter changes)
+  const isTableRefetching = candidatesFetching && !candidatesLoading;
 
-  if (isLoading_) {
+  if (isInitialLoading) {
     return (
       <Card className="mb-8">
         <CardContent className="flex items-center justify-center py-8">
@@ -1657,12 +1660,17 @@ export function AnswerCoveragePanel() {
         </div>
 
         {/* Candidates Table */}
-        {candidatesLoading ? (
+        {candidatesLoading && !candidates ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : filteredCandidates.length > 0 ? (
-          <div className="rounded-md border overflow-x-auto">
+          <div className="rounded-md border overflow-x-auto relative">
+            {isTableRefetching && (
+              <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
             <Table className="text-xs">
               <TableHeader>
                 <TableRow>
