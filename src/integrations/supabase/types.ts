@@ -1975,6 +1975,13 @@ export type Database = {
           },
         ]
       }
+      vote_action_counts: {
+        Row: {
+          action_type: string | null
+          count: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       backfill_candidate_scores: {
@@ -2059,6 +2066,7 @@ export type Database = {
         }[]
       }
       refresh_donor_display_names: { Args: never; Returns: undefined }
+      refresh_vote_action_counts: { Args: never; Returns: undefined }
       resolve_donor_display_name: {
         Args: { p_donor_name: string; p_donor_type: string }
         Returns: string
