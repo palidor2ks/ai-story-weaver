@@ -115,13 +115,67 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
 
       if (candidatesError) throw candidatesError;
 
-      // Get answer counts per candidate using aggregated view (single query instead of 86 paginated requests)
-      const { data: answerCoverageData, error: answerCoverageError } = await supabase
-        .from('candidate_answer_coverage_stats')
-        .select('candidate_id, answer_count, sourced_count');
+      // Get candidate IDs for filtering supporting queries (for faster progressive loading)
+      const candidateIds = (candidates || []).map(c => c.id);
+      
+      // If no candidates, return early
+      if (candidateIds.length === 0) {
+        return [];
+      }
 
-      if (answerCoverageError) throw answerCoverageError;
+      const FINANCE_CYCLE = '2024';
 
+      // Run ALL supporting queries in parallel for maximum performance
+      const [
+        answerCoverageResult,
+        votingCoverageResult,
+        donorCountsResult,
+        reconciliationResult,
+        partialSyncResult,
+        voteSyncResult
+      ] = await Promise.all([
+        // Answer counts - filter by candidate IDs
+        supabase
+          .from('candidate_answer_coverage_stats')
+          .select('candidate_id, answer_count, sourced_count')
+          .in('candidate_id', candidateIds),
+        // Vote counts - filter by candidate IDs
+        supabase
+          .from('candidate_voting_coverage')
+          .select('candidate_id, total_votes_stored, legislative_actions_count, floor_votes_count')
+          .in('candidate_id', candidateIds),
+        // Donor counts - filter by candidate IDs
+        supabase
+          .from('candidate_donor_counts')
+          .select('candidate_id, donor_count')
+          .in('candidate_id', candidateIds),
+        // Finance reconciliation - filter by candidate IDs
+        supabase
+          .from('finance_reconciliation')
+          .select('*')
+          .eq('cycle', FINANCE_CYCLE)
+          .in('candidate_id', candidateIds),
+        // Committee sync status - filter by candidate IDs
+        supabase
+          .from('candidate_committees')
+          .select('candidate_id, has_more, last_sync_date, last_sync_completed_at, designation')
+          .in('candidate_id', candidateIds),
+        // Vote sync status - filter by candidate IDs
+        supabase
+          .from('vote_sync_status')
+          .select('candidate_id, expected_total, persisted_count, expected_floor_votes, persisted_floor_votes, last_sync_completed_at, sync_error, floor_vote_sync_error')
+          .in('candidate_id', candidateIds),
+      ]);
+
+      // Extract data from results (errors are non-fatal for supporting data)
+      const answerCoverageData = answerCoverageResult.data;
+      const votingCoverageData = votingCoverageResult.data;
+      const donorCountsData = donorCountsResult.data;
+      const reconciliationData = reconciliationResult.data;
+      const partialSyncData = partialSyncResult.data;
+      const voteSyncData = voteSyncResult.data;
+
+      // Build lookup maps for answer counts
       const answerCountMap: Record<string, number> = {};
       const sourcedCountMap: Record<string, number> = {};
       (answerCoverageData || []).forEach(row => {
@@ -131,14 +185,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         }
       });
 
-      // Get vote counts per candidate (split by action type)
-      // Use aggregated view to avoid the 1,000 row default limit on direct table selects
-      const { data: votingCoverageData, error: votingCoverageError } = await supabase
-        .from('candidate_voting_coverage')
-        .select('candidate_id, total_votes_stored, legislative_actions_count, floor_votes_count');
-
-      if (votingCoverageError) throw votingCoverageError;
-
+      // Build lookup map for vote counts
       const voteCountMap: Record<string, { total: number; legislative: number; floor: number }> = {};
       (votingCoverageData || []).forEach(row => {
         if (!row.candidate_id) return;
@@ -149,11 +196,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         };
       });
 
-      // Get donor counts per candidate using aggregated view (single query instead of 404k rows)
-      const { data: donorCountsData } = await supabase
-        .from('candidate_donor_counts')
-        .select('candidate_id, donor_count');
-      
+      // Build lookup map for donor counts
       const donorCountMap: Record<string, number> = {};
       (donorCountsData || []).forEach(row => {
         if (row.candidate_id) {
@@ -161,14 +204,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         }
       });
 
-      // Get finance data from finance_reconciliation (single source of truth)
-      const FINANCE_CYCLE = '2024';
-      
-      const { data: reconciliationData } = await supabase
-        .from('finance_reconciliation')
-        .select('*')
-        .eq('cycle', FINANCE_CYCLE);
-
+      // Build lookup map for reconciliation data
       interface ReconciliationRecord {
         candidate_id: string;
         local_itemized: number | null;
@@ -206,12 +242,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         reconciliationMap[row.candidate_id] = row;
       });
 
-      // Get partial sync status from candidate_committees (has_more = true means incomplete sync)
-      // Include designation to filter: only P/A (campaign) committees count for sync status
-      const { data: partialSyncData } = await supabase
-        .from('candidate_committees')
-        .select('candidate_id, has_more, last_sync_date, last_sync_completed_at, designation');
-
+      // Build lookup maps for sync status
       const partialSyncMap: Record<string, boolean> = {};
       const lastSyncMap: Record<string, string | null> = {};
       const completeSyncMap: Record<string, boolean> = {};
@@ -222,28 +253,21 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         committeeCountMap[row.candidate_id] = (committeeCountMap[row.candidate_id] || 0) + 1;
         
         // Only consider P/A (campaign) committees for sync status
-        // External committees (J/U/B/D) are ignored for sync status calculation
         const isCampaignCommittee = ['P', 'A'].includes(row.designation || '');
         if (!isCampaignCommittee) return;
         
-        // has_more = true means incomplete sync (only for P/A committees)
         if (row.has_more === true) {
           partialSyncMap[row.candidate_id] = true;
         }
         if (row.last_sync_date) {
           lastSyncMap[row.candidate_id] = row.last_sync_date;
         }
-        // If any P/A committee has completed sync, mark it
         if (row.last_sync_completed_at) {
           completeSyncMap[row.candidate_id] = true;
         }
       });
 
-      // Get vote sync status from vote_sync_status table
-      const { data: voteSyncData } = await supabase
-        .from('vote_sync_status')
-        .select('candidate_id, expected_total, persisted_count, expected_floor_votes, persisted_floor_votes, last_sync_completed_at, sync_error, floor_vote_sync_error');
-
+      // Build lookup map for vote sync status
       interface VoteSyncRecord {
         candidate_id: string;
         expected_total: number | null;
