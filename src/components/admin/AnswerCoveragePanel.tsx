@@ -1702,15 +1702,61 @@ export function AnswerCoveragePanel() {
           )}
         </div>
 
+        {/* Primary Filters - Always Visible */}
+        <div className="flex flex-wrap gap-3 items-center border-b pb-3 mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Party:</span>
+            <Select value={partyFilter} onValueChange={setPartyFilter}>
+              <SelectTrigger className="w-[120px] h-8 bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="Democrat">Democrat</SelectItem>
+                <SelectItem value="Republican">Republican</SelectItem>
+                <SelectItem value="Independent">Independent</SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">State:</span>
+            <Select value={stateFilter} onValueChange={setStateFilter}>
+              <SelectTrigger className="w-[100px] h-8 bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All States</SelectItem>
+                {states?.map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Coverage:</span>
+            <Select value={coverageFilter} onValueChange={(v) => setCoverageFilter(v as typeof coverageFilter)}>
+              <SelectTrigger className="w-[120px] h-8 bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="none">None (0%)</SelectItem>
+                <SelectItem value="low">Low (&lt;50%)</SelectItem>
+                <SelectItem value="full">Full (100%)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         {/* Candidates Table */}
         {!hasSelectedFilters ? (
           <div className="text-center py-12 border rounded-md">
             <Search className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
             <p className="text-lg font-medium text-muted-foreground">
-              Select a filter to view candidates
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Use the Party, State, or other filters above to load the candidate list.
+              Select Party, State, or Coverage above to load candidates
             </p>
           </div>
         ) : candidatesLoading && !candidates ? (
