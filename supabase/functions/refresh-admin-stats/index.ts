@@ -26,67 +26,67 @@ Deno.serve(async (req) => {
     if (statKey === "voting_records_stats" || statKey === "all") {
       console.log("[refresh-admin-stats] Fetching voting records stats...");
       
-      // Get vote counts by action type
-      const { data: votes, error: votesError } = await supabase
+      // Count legislative actions (sponsored + cosponsored) with error logging
+      console.log("[refresh-admin-stats] Counting legislative actions...");
+      const legStart = Date.now();
+      const { count: legislativeCount, error: legError } = await supabase
         .from("votes")
-        .select("action_type", { count: "exact" });
+        .select("id", { count: "exact", head: true })
+        .in("action_type", ["sponsored", "cosponsored"]);
+      console.log(`[refresh-admin-stats] Legislative count: ${legislativeCount}, error: ${legError?.message || 'none'}, took ${Date.now() - legStart}ms`);
+
+      // Count floor votes with error logging
+      console.log("[refresh-admin-stats] Counting floor votes...");
+      const floorStart = Date.now();
+      const { count: floorCount, error: floorError } = await supabase
+        .from("votes")
+        .select("id", { count: "exact", head: true })
+        .eq("action_type", "floor_vote");
+      console.log(`[refresh-admin-stats] Floor count: ${floorCount}, error: ${floorError?.message || 'none'}, took ${Date.now() - floorStart}ms`);
+
+      // Count total records with error logging
+      console.log("[refresh-admin-stats] Counting total records...");
+      const totalStart = Date.now();
+      const { count: totalRecords, error: totalError } = await supabase
+        .from("votes")
+        .select("id", { count: "exact", head: true });
+      console.log(`[refresh-admin-stats] Total count: ${totalRecords}, error: ${totalError?.message || 'none'}, took ${Date.now() - totalStart}ms`);
+
+      // Use vote_sync_status for accurate member counts (no sampling)
+      console.log("[refresh-admin-stats] Fetching vote_sync_status for member counts...");
+      const { data: syncStatus, error: syncError } = await supabase
+        .from("vote_sync_status")
+        .select("candidate_id, persisted_count, persisted_floor_votes");
       
-      if (votesError) {
-        console.error("[refresh-admin-stats] Votes query error:", votesError);
+      if (syncError) {
+        console.error("[refresh-admin-stats] vote_sync_status error:", syncError);
       }
 
-      // Count by action type using separate queries
-      const { count: legislativeCount } = await supabase
-        .from("votes")
-        .select("*", { count: "exact", head: true })
-        .in("action_type", ["sponsored", "cosponsored"]);
+      const membersSynced = syncStatus?.filter(s => (s.persisted_count || 0) > 0 || (s.persisted_floor_votes || 0) > 0).length || 0;
+      const membersWithFloorVotes = syncStatus?.filter(s => (s.persisted_floor_votes || 0) > 0).length || 0;
 
-      const { count: floorCount } = await supabase
-        .from("votes")
-        .select("*", { count: "exact", head: true })
-        .eq("action_type", "floor_vote");
-
-      const { count: totalRecords } = await supabase
-        .from("votes")
-        .select("*", { count: "exact", head: true });
-
-      // Get members with votes
-      const { data: membersData } = await supabase
-        .from("votes")
-        .select("candidate_id")
-        .limit(10000);
-
-      const uniqueMembers = new Set(membersData?.map(v => v.candidate_id) || []);
-
-      // Get members with floor votes specifically
-      const { data: membersWithFloorVotesData } = await supabase
-        .from("votes")
-        .select("candidate_id")
-        .eq("action_type", "floor_vote")
-        .limit(10000);
-
-      const membersWithFloorVotes = new Set(membersWithFloorVotesData?.map(v => v.candidate_id) || []).size;
+      console.log(`[refresh-admin-stats] Members synced: ${membersSynced}, with floor votes: ${membersWithFloorVotes}`);
 
       // Get total federal candidates for coverage
       const { count: totalFederalCandidates } = await supabase
         .from("candidates")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .or("office.ilike.%Senator%,office.ilike.%Representative%");
 
       const coveragePercentage = totalFederalCandidates 
-        ? Math.round((uniqueMembers.size / totalFederalCandidates) * 100)
+        ? Math.round((membersSynced / totalFederalCandidates) * 100)
         : 0;
 
       const votingStats = {
         legislativeActions: legislativeCount || 0,
         floorVotes: floorCount || 0,
         totalRecords: totalRecords || 0,
-        membersSynced: uniqueMembers.size,
+        membersSynced,
         membersWithFloorVotes,
         coveragePercentage,
       };
 
-      console.log("[refresh-admin-stats] Voting stats:", votingStats);
+      console.log("[refresh-admin-stats] Final voting stats:", JSON.stringify(votingStats));
 
       const { error: upsertError } = await supabase
         .from("admin_stats_cache")
