@@ -77,9 +77,10 @@ interface Filters {
   coverageFilter?: 'all' | 'none' | 'low' | 'full';
 }
 
-export function useCandidatesAnswerCoverage(filters: Filters = {}) {
+export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['candidates-answer-coverage', filters],
+    enabled: options?.enabled !== false, // Default to true, but allow disabling
     placeholderData: (previousData) => previousData, // Keep previous data during filter transitions
     queryFn: async (): Promise<CandidateAnswerCoverage[]> => {
       // Get total questions count

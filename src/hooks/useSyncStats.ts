@@ -191,7 +191,7 @@ export function useSyncStats() {
         },
       };
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes (increased from 1)
-    refetchInterval: 1000 * 60 * 10, // Auto-refresh every 10 minutes (increased from 5)
+    staleTime: 1000 * 60 * 30, // 30 minutes (prevent frequent refetches)
+    refetchInterval: false, // Disable auto-refresh - use manual refresh only
   });
 }
