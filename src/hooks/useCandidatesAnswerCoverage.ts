@@ -106,39 +106,21 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
 
       if (candidatesError) throw candidatesError;
 
-      // Get answer counts per candidate with source info (paginated to handle >1000 rows)
-      const PAGE_SIZE = 1000;
-      let from = 0;
-      const allAnswers: Array<{ candidate_id: string; source_description: string | null }> = [];
+      // Get answer counts per candidate using aggregated view (single query instead of 86 paginated requests)
+      const { data: answerCoverageData, error: answerCoverageError } = await supabase
+        .from('candidate_answer_coverage_stats')
+        .select('candidate_id, answer_count, sourced_count');
 
-      while (true) {
-        const { data, error } = await supabase
-          .from('candidate_answers')
-          .select('id, candidate_id, source_description')
-          .order('id', { ascending: true })
-          .range(from, from + PAGE_SIZE - 1);
+      if (answerCoverageError) throw answerCoverageError;
 
-        if (error) throw error;
-
-        (data || []).forEach(row => allAnswers.push({ 
-          candidate_id: row.candidate_id,
-          source_description: row.source_description
-        }));
-
-        if (!data || data.length < PAGE_SIZE) break;
-        from += PAGE_SIZE;
-        if (from > 500000) break;
-      }
-
-      // Helper to check if answer has a valid (non-party-inferred) source
-      const hasValidSource = (desc: string | null) => {
-        if (!desc) return false;
-        const lowerDesc = desc.toLowerCase();
-        // Exclude party platform inferences
-        if (lowerDesc.includes('platform') || lowerDesc.includes('inferred from')) return false;
-        // Must have actual evidence
-        return desc.length > 10;
-      };
+      const answerCountMap: Record<string, number> = {};
+      const sourcedCountMap: Record<string, number> = {};
+      (answerCoverageData || []).forEach(row => {
+        if (row.candidate_id) {
+          answerCountMap[row.candidate_id] = Number(row.answer_count) || 0;
+          sourcedCountMap[row.candidate_id] = Number(row.sourced_count) || 0;
+        }
+      });
 
       // Get vote counts per candidate (split by action type)
       // Use aggregated view to avoid the 1,000 row default limit on direct table selects
@@ -158,14 +140,16 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
         };
       });
 
-      // Get donor counts per candidate
-      const { data: donorsData } = await supabase
-        .from('donors')
-        .select('candidate_id');
+      // Get donor counts per candidate using aggregated view (single query instead of 404k rows)
+      const { data: donorCountsData } = await supabase
+        .from('candidate_donor_counts')
+        .select('candidate_id, donor_count');
       
       const donorCountMap: Record<string, number> = {};
-      (donorsData || []).forEach(row => {
-        donorCountMap[row.candidate_id] = (donorCountMap[row.candidate_id] || 0) + 1;
+      (donorCountsData || []).forEach(row => {
+        if (row.candidate_id) {
+          donorCountMap[row.candidate_id] = Number(row.donor_count) || 0;
+        }
       });
 
       // Get finance data from finance_reconciliation (single source of truth)
@@ -265,16 +249,6 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}) {
       const voteSyncMap: Record<string, VoteSyncRecord> = {};
       (voteSyncData || []).forEach(row => {
         voteSyncMap[row.candidate_id] = row;
-      });
-
-      // Count answers and sourced answers per candidate
-      const answerCountMap: Record<string, number> = {};
-      const sourcedCountMap: Record<string, number> = {};
-      allAnswers.forEach(row => {
-        answerCountMap[row.candidate_id] = (answerCountMap[row.candidate_id] || 0) + 1;
-        if (hasValidSource(row.source_description)) {
-          sourcedCountMap[row.candidate_id] = (sourcedCountMap[row.candidate_id] || 0) + 1;
-        }
       });
 
       // Helper to validate FEC ID prefix against office

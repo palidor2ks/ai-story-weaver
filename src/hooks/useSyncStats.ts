@@ -50,7 +50,7 @@ export function useSyncStats() {
         topicsResult,
         answersCountResult,
         lastSyncResult,
-        answersByTopicResult,
+        topicAnswerCountsResult,
         // FEC stats queries
         fecCandidatesResult,
         committeesResult
@@ -78,10 +78,10 @@ export function useSyncStats() {
           .not('last_answers_sync', 'is', null)
           .order('last_answers_sync', { ascending: false })
           .limit(1),
-        // Get answer counts grouped by topic (via question_id join)
+        // Get answer counts grouped by topic using aggregated view (single query instead of 85k rows)
         supabase
-          .from('candidate_answers')
-          .select('question_id'),
+          .from('topic_answer_counts')
+          .select('topic_id, answer_count'),
         // FEC: Get candidates with FEC IDs and donor sync info
         supabase
           .from('candidates')
@@ -111,16 +111,11 @@ export function useSyncStats() {
       // Get last sync time
       const lastSyncTime = lastSyncResult.data?.[0]?.last_answers_sync || null;
 
-      // Build question -> topic mapping
-      const questionToTopic = new Map<string, string>();
-      questions.forEach(q => questionToTopic.set(q.id, q.topic_id));
-
-      // Count answers per topic from the answers we fetched
+      // Build topic answer counts map from aggregated view
       const topicAnswerCounts = new Map<string, number>();
-      (answersByTopicResult.data || []).forEach(a => {
-        const topicId = questionToTopic.get(a.question_id);
-        if (topicId) {
-          topicAnswerCounts.set(topicId, (topicAnswerCounts.get(topicId) || 0) + 1);
+      (topicAnswerCountsResult.data || []).forEach(row => {
+        if (row.topic_id) {
+          topicAnswerCounts.set(row.topic_id, Number(row.answer_count) || 0);
         }
       });
 
