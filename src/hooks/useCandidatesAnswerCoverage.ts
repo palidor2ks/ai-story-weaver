@@ -80,6 +80,7 @@ interface Filters {
 export function useCandidatesAnswerCoverage(filters: Filters = {}) {
   return useQuery({
     queryKey: ['candidates-answer-coverage', filters],
+    placeholderData: (previousData) => previousData, // Keep previous data during filter transitions
     queryFn: async (): Promise<CandidateAnswerCoverage[]> => {
       // Get total questions count
       const { count: totalQuestions, error: questionsError } = await supabase
