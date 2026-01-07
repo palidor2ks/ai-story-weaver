@@ -1702,12 +1702,13 @@ export function AnswerCoveragePanel() {
           )}
         </div>
 
-        {/* Primary Filters - Always Visible */}
-        <div className="flex flex-wrap gap-3 items-center border-b pb-3 mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Party:</span>
+        {/* All Filters - Always Visible */}
+        <div className="flex flex-wrap gap-x-4 gap-y-2 items-center border-b pb-3 mb-3">
+          {/* Row 1: Primary Filters */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Party:</span>
             <Select value={partyFilter} onValueChange={setPartyFilter}>
-              <SelectTrigger className="w-[120px] h-8 bg-background">
+              <SelectTrigger className="w-[100px] h-7 text-xs bg-background">
                 <SelectValue placeholder="All" />
               </SelectTrigger>
               <SelectContent className="bg-popover">
@@ -1720,14 +1721,14 @@ export function AnswerCoveragePanel() {
             </Select>
           </div>
           
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">State:</span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">State:</span>
             <Select value={stateFilter} onValueChange={setStateFilter}>
-              <SelectTrigger className="w-[100px] h-8 bg-background">
+              <SelectTrigger className="w-[80px] h-7 text-xs bg-background">
                 <SelectValue placeholder="All" />
               </SelectTrigger>
               <SelectContent className="bg-popover">
-                <SelectItem value="all">All States</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 {states?.map(s => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
@@ -1735,10 +1736,10 @@ export function AnswerCoveragePanel() {
             </Select>
           </div>
           
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Coverage:</span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Coverage:</span>
             <Select value={coverageFilter} onValueChange={(v) => setCoverageFilter(v as typeof coverageFilter)}>
-              <SelectTrigger className="w-[120px] h-8 bg-background">
+              <SelectTrigger className="w-[100px] h-7 text-xs bg-background">
                 <SelectValue placeholder="All" />
               </SelectTrigger>
               <SelectContent className="bg-popover">
@@ -1749,6 +1750,97 @@ export function AnswerCoveragePanel() {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Score:</span>
+            <Select value={scoreFilter} onValueChange={(v) => setScoreFilter(v as typeof scoreFilter)}>
+              <SelectTrigger className="w-[95px] h-7 text-xs bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="left">Left (&lt;-3)</SelectItem>
+                <SelectItem value="center">Center</SelectItem>
+                <SelectItem value="right">Right (&gt;3)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Tier:</span>
+            <Select value={tierFilter} onValueChange={(v) => setTierFilter(v as typeof tierFilter)}>
+              <SelectTrigger className="w-[80px] h-7 text-xs bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="T1">Tier 1</SelectItem>
+                <SelectItem value="T2">Tier 2</SelectItem>
+                <SelectItem value="T3">Tier 3</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Sync:</span>
+            <Select value={syncFilter} onValueChange={(v) => setSyncFilter(v as typeof syncFilter)}>
+              <SelectTrigger className="w-[110px] h-7 text-xs bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="no_committee">No Committee</SelectItem>
+                <SelectItem value="needs_sync">Needs Sync</SelectItem>
+                <SelectItem value="partial">Partial</SelectItem>
+                <SelectItem value="complete">Complete</SelectItem>
+                <SelectItem value="fec_mismatch">FEC Mismatch</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Finance:</span>
+            <Select value={financeFilter} onValueChange={(v) => setFinanceFilter(v as typeof financeFilter)}>
+              <SelectTrigger className="w-[100px] h-7 text-xs bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="mismatch">FEC Mismatch</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Delta:</span>
+            <Select value={deltaFilter} onValueChange={(v) => setDeltaFilter(v as typeof deltaFilter)}>
+              <SelectTrigger className="w-[100px] h-7 text-xs bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="within">Within ±2%</SelectItem>
+                <SelectItem value="minor">Minor (2-5%)</SelectItem>
+                <SelectItem value="major">Major (&gt;5%)</SelectItem>
+                <SelectItem value="no_data">No Data</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">FEC ID:</span>
+            <Select value={fecIdFilter} onValueChange={(v) => setFecIdFilter(v as typeof fecIdFilter)}>
+              <SelectTrigger className="w-[90px] h-7 text-xs bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="has_id">Has ID</SelectItem>
+                <SelectItem value="missing">Missing</SelectItem>
+                <SelectItem value="mismatch">Mismatch</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Candidates Table */}
@@ -1756,7 +1848,7 @@ export function AnswerCoveragePanel() {
           <div className="text-center py-12 border rounded-md">
             <Search className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
             <p className="text-lg font-medium text-muted-foreground">
-              Select Party, State, or Coverage above to load candidates
+              Use the filters above to load candidates
             </p>
           </div>
         ) : candidatesLoading && !candidates ? (
@@ -1774,70 +1866,11 @@ export function AnswerCoveragePanel() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="px-2 py-2 max-w-[140px]">Name</TableHead>
-                  <TableHead className="w-[50px] px-2 py-2">
-                    <ColumnHeaderFilter
-                      label="Party"
-                      value={partyFilter}
-                      onChange={setPartyFilter}
-                      options={[
-                        { value: 'all', label: 'All' },
-                        { value: 'Democrat', label: 'D' },
-                        { value: 'Republican', label: 'R' },
-                        { value: 'Independent', label: 'I' },
-                        { value: 'Other', label: 'O' },
-                      ]}
-                    />
-                  </TableHead>
-                  <TableHead className="w-[55px] px-2 py-2">
-                    <ColumnHeaderFilter
-                      label="State"
-                      value={stateFilter}
-                      onChange={setStateFilter}
-                      options={[
-                        { value: 'all', label: 'All States' },
-                        ...(states?.map(s => ({ value: s, label: s })) || [])
-                      ]}
-                    />
-                  </TableHead>
-                  <TableHead className="text-center w-[70px] px-2 py-2">
-                    <ColumnHeaderFilter
-                      label="Answers"
-                      value={coverageFilter}
-                      onChange={(v) => setCoverageFilter(v as typeof coverageFilter)}
-                      options={[
-                        { value: 'all', label: 'All' },
-                        { value: 'none', label: 'None (0%)' },
-                        { value: 'low', label: 'Low (<50%)' },
-                        { value: 'full', label: 'Full (100%)' },
-                      ]}
-                    />
-                  </TableHead>
-                  <TableHead className="w-[55px] px-2 py-2">
-                    <ColumnHeaderFilter
-                      label="Score"
-                      value={scoreFilter}
-                      onChange={(v) => setScoreFilter(v as typeof scoreFilter)}
-                      options={[
-                        { value: 'all', label: 'All' },
-                        { value: 'left', label: 'Left (<-3)' },
-                        { value: 'center', label: 'Center' },
-                        { value: 'right', label: 'Right (>3)' },
-                      ]}
-                    />
-                  </TableHead>
-                  <TableHead className="w-[52px] px-2 py-2">
-                    <ColumnHeaderFilter
-                      label="Tier"
-                      value={tierFilter}
-                      onChange={(v) => setTierFilter(v as typeof tierFilter)}
-                      options={[
-                        { value: 'all', label: 'All' },
-                        { value: 'T1', label: 'Tier 1' },
-                        { value: 'T2', label: 'Tier 2' },
-                        { value: 'T3', label: 'Tier 3' },
-                      ]}
-                    />
-                  </TableHead>
+                  <TableHead className="w-[50px] px-2 py-2">Party</TableHead>
+                  <TableHead className="w-[55px] px-2 py-2">State</TableHead>
+                  <TableHead className="text-center w-[70px] px-2 py-2">Answers</TableHead>
+                  <TableHead className="w-[55px] px-2 py-2">Score</TableHead>
+                  <TableHead className="w-[52px] px-2 py-2">Tier</TableHead>
                   <TableHead className="w-[44px] px-2 py-2">
                     <TooltipProvider>
                       <Tooltip>
@@ -1878,33 +1911,9 @@ export function AnswerCoveragePanel() {
                       </Tooltip>
                     </TooltipProvider>
                   </TableHead>
-                  <TableHead className="w-[65px] px-2 py-2">
-                    <ColumnHeaderFilter
-                      label="Sync"
-                      value={syncFilter}
-                      onChange={(v) => setSyncFilter(v as typeof syncFilter)}
-                      options={[
-                        { value: 'all', label: 'All' },
-                        { value: 'no_committee', label: 'No Committee', count: noCommitteeCandidates.length },
-                        { value: 'needs_sync', label: 'Needs Sync', count: needsSyncCandidates.length },
-                        { value: 'partial', label: 'Partial', count: partialSyncCandidates.length },
-                        { value: 'complete', label: 'Complete', count: completeSyncCandidates.length },
-                        ...(fecIdMismatchCandidates.length > 0 ? [
-                          { value: 'fec_mismatch', label: '⚠️ FEC Mismatch', count: fecIdMismatchCandidates.length, className: 'text-amber-600' }
-                        ] : [])
-                      ]}
-                    />
-                  </TableHead>
+                  <TableHead className="w-[65px] px-2 py-2">Sync</TableHead>
                   <TableHead className="w-[55px] px-2 py-2">
-                    <ColumnHeaderFilter
-                      label={<DollarSign className="h-3.5 w-3.5" />}
-                      value={financeFilter}
-                      onChange={(v) => setFinanceFilter(v as typeof financeFilter)}
-                      options={[
-                        { value: 'all', label: 'All Finance' },
-                        { value: 'mismatch', label: 'FEC Mismatch' },
-                      ]}
-                    />
+                    <DollarSign className="h-3.5 w-3.5" />
                   </TableHead>
                   <TableHead className="w-[72px] px-2 py-2 text-right">FEC</TableHead>
                   <TableHead className="w-[72px] px-2 py-2 text-right">
@@ -1925,33 +1934,8 @@ export function AnswerCoveragePanel() {
                       </Tooltip>
                     </TooltipProvider>
                   </TableHead>
-                  <TableHead className="w-[65px] px-2 py-2">
-                    <ColumnHeaderFilter
-                      label="Delta"
-                      value={deltaFilter}
-                      onChange={(v) => setDeltaFilter(v as typeof deltaFilter)}
-                      options={[
-                        { value: 'all', label: 'All' },
-                        { value: 'within', label: 'Within ±2%' },
-                        { value: 'minor', label: 'Minor (2-5%)' },
-                        { value: 'major', label: 'Major (>5%)' },
-                        { value: 'no_data', label: 'No Data' },
-                      ]}
-                    />
-                  </TableHead>
-                  <TableHead className="w-[75px] px-2 py-2">
-                    <ColumnHeaderFilter
-                      label="FEC ID"
-                      value={fecIdFilter}
-                      onChange={(v) => setFecIdFilter(v as typeof fecIdFilter)}
-                      options={[
-                        { value: 'all', label: 'All' },
-                        { value: 'has_id', label: 'Has ID', count: candidatesWithFecId.length },
-                        { value: 'missing', label: 'Missing', count: candidatesWithoutFecId.length },
-                        { value: 'mismatch', label: 'Mismatch', count: fecIdMismatchCandidates.length },
-                      ]}
-                    />
-                  </TableHead>
+                  <TableHead className="w-[65px] px-2 py-2">Delta</TableHead>
+                  <TableHead className="w-[75px] px-2 py-2">FEC ID</TableHead>
                   <TableHead className="text-right w-[40px] px-2 py-2"></TableHead>
                 </TableRow>
               </TableHeader>
