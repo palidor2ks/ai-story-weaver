@@ -2029,6 +2029,13 @@ export type Database = {
           transfers_total: number
         }[]
       }
+      get_vote_action_counts: {
+        Args: never
+        Returns: {
+          action_type: string
+          count: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
