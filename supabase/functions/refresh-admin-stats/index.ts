@@ -26,37 +26,10 @@ Deno.serve(async (req) => {
     if (statKey === "voting_records_stats" || statKey === "all") {
       console.log("[refresh-admin-stats] Fetching voting records stats...");
       
-      // Count legislative actions (sponsored + cosponsored) - using limit(1) instead of head:true
-      console.log("[refresh-admin-stats] Counting legislative actions...");
-      const legStart = Date.now();
-      const { count: legislativeCount, data: legData, error: legError } = await supabase
-        .from("votes")
-        .select("id", { count: "exact" })
-        .in("action_type", ["sponsored", "cosponsored"])
-        .limit(1);
-      console.log(`[refresh-admin-stats] Legislative count: ${legislativeCount}, rows: ${legData?.length}, error: ${legError?.message || 'none'}, took ${Date.now() - legStart}ms`);
-
-      // Count floor votes - using limit(1) instead of head:true
-      console.log("[refresh-admin-stats] Counting floor votes...");
-      const floorStart = Date.now();
-      const { count: floorCount, data: floorData, error: floorError } = await supabase
-        .from("votes")
-        .select("id", { count: "exact" })
-        .eq("action_type", "floor_vote")
-        .limit(1);
-      console.log(`[refresh-admin-stats] Floor count: ${floorCount}, rows: ${floorData?.length}, error: ${floorError?.message || 'none'}, took ${Date.now() - floorStart}ms`);
-
-      // Count total records - using limit(1) instead of head:true
-      console.log("[refresh-admin-stats] Counting total records...");
-      const totalStart = Date.now();
-      const { count: totalRecords, data: totalData, error: totalError } = await supabase
-        .from("votes")
-        .select("id", { count: "exact" })
-        .limit(1);
-      console.log(`[refresh-admin-stats] Total count: ${totalRecords}, rows: ${totalData?.length}, error: ${totalError?.message || 'none'}, took ${Date.now() - totalStart}ms`);
-
-      // Use vote_sync_status for accurate member counts (no sampling)
-      console.log("[refresh-admin-stats] Fetching vote_sync_status for member counts...");
+      // Compute all totals from vote_sync_status (fast, no timeouts)
+      // This avoids expensive count queries on the large votes table
+      console.log("[refresh-admin-stats] Fetching vote_sync_status for all counts...");
+      const syncStart = Date.now();
       const { data: syncStatus, error: syncError } = await supabase
         .from("vote_sync_status")
         .select("candidate_id, persisted_count, persisted_floor_votes");
@@ -64,10 +37,28 @@ Deno.serve(async (req) => {
       if (syncError) {
         console.error("[refresh-admin-stats] vote_sync_status error:", syncError);
       }
+      console.log(`[refresh-admin-stats] vote_sync_status fetched ${syncStatus?.length || 0} rows in ${Date.now() - syncStart}ms`);
 
-      const membersSynced = syncStatus?.filter(s => (s.persisted_count || 0) > 0 || (s.persisted_floor_votes || 0) > 0).length || 0;
-      const membersWithFloorVotes = syncStatus?.filter(s => (s.persisted_floor_votes || 0) > 0).length || 0;
+      // Sum up totals from sync status
+      let legislativeActions = 0;
+      let floorVotes = 0;
+      let membersSynced = 0;
+      let membersWithFloorVotes = 0;
 
+      syncStatus?.forEach(s => {
+        const persisted = s.persisted_count || 0;
+        const floor = s.persisted_floor_votes || 0;
+        
+        legislativeActions += persisted;
+        floorVotes += floor;
+        
+        if (persisted > 0 || floor > 0) membersSynced++;
+        if (floor > 0) membersWithFloorVotes++;
+      });
+
+      const totalRecords = legislativeActions + floorVotes;
+
+      console.log(`[refresh-admin-stats] Computed from sync_status: legislative=${legislativeActions}, floor=${floorVotes}, total=${totalRecords}`);
       console.log(`[refresh-admin-stats] Members synced: ${membersSynced}, with floor votes: ${membersWithFloorVotes}`);
 
       // Get total federal candidates for coverage - using limit(1) instead of head:true
@@ -82,9 +73,9 @@ Deno.serve(async (req) => {
         : 0;
 
       const votingStats = {
-        legislativeActions: legislativeCount || 0,
-        floorVotes: floorCount || 0,
-        totalRecords: totalRecords || 0,
+        legislativeActions,
+        floorVotes,
+        totalRecords,
         membersSynced,
         membersWithFloorVotes,
         coveragePercentage,
