@@ -1861,6 +1861,36 @@ export type Database = {
           },
         ]
       }
+      candidate_answer_coverage_stats: {
+        Row: {
+          answer_count: number | null
+          candidate_id: string | null
+          sourced_count: number | null
+        }
+        Relationships: []
+      }
+      candidate_donor_counts: {
+        Row: {
+          candidate_id: string | null
+          donor_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donors_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_voting_coverage"
+            referencedColumns: ["candidate_id"]
+          },
+          {
+            foreignKeyName: "donors_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_voting_coverage: {
         Row: {
           candidate_id: string | null
@@ -1911,6 +1941,21 @@ export type Database = {
           types: Database["public"]["Enums"]["donor_type"][] | null
         }
         Relationships: []
+      }
+      topic_answer_counts: {
+        Row: {
+          answer_count: number | null
+          topic_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
