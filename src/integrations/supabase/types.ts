@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_stats_cache: {
+        Row: {
+          stat_key: string
+          stat_value: Json
+          updated_at: string | null
+        }
+        Insert: {
+          stat_key: string
+          stat_value: Json
+          updated_at?: string | null
+        }
+        Update: {
+          stat_key?: string
+          stat_value?: Json
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       candidate_answers: {
         Row: {
           answer_value: number

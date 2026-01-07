@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSyncStats } from "@/hooks/useSyncStats";
-import { useCandidatesAnswerCoverage, useCandidateAnswerStats, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
+import { useCandidatesAnswerCoverage, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
 import { useEnrichCandidateSources } from "@/hooks/useCandidateAnswers";
 import { useFECIntegration } from "@/hooks/useFECIntegration";
 import { useAdminErrors } from "@/hooks/useAdminErrors";
 import { useCandidateOverrides } from "@/hooks/useCandidateOverrides";
-import { useVotingRecordsStats, useVotingRecordsSync } from "@/hooks/useVotingRecordsSync";
+import { useVotingRecordsSync } from "@/hooks/useVotingRecordsSync";
+import { 
+  useVotingRecordsStatsCache, 
+  useCandidateAnswerStatsCache, 
+  useFecStatsCache,
+  useRefreshAdminStats,
+  type VotingRecordsStats,
+  type CandidateAnswerStats,
+  type FecStats
+} from "@/hooks/useAdminStatsCache";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +28,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit, Zap, MoreHorizontal } from "lucide-react";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit, Zap, MoreHorizontal, Check } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { CommitteeBreakdown } from "@/components/admin/CommitteeBreakdown";
@@ -81,8 +90,16 @@ function getCycleDateRange(cycle: string): string {
 
 export function AnswerCoveragePanel() {
   const { data: syncStats, isLoading: syncLoading, refetch: refetchSyncStats, isRefetching } = useSyncStats();
-  const { data: candidateStats, isLoading: statsLoading } = useCandidateAnswerStats();
   const { data: states } = useUniqueStates();
+  
+  // Use cached stats instead of direct queries
+  const { data: candidateStatsCache, isLoading: statsLoading } = useCandidateAnswerStatsCache();
+  const { data: votingStatsCache, isLoading: votingStatsLoading } = useVotingRecordsStatsCache();
+  const { data: fecStatsCache, isLoading: fecStatsLoading } = useFecStatsCache();
+  const { mutate: refreshStats, isPending: isRefreshingStats } = useRefreshAdminStats();
+  
+  // Track which refresh just completed for checkmark animation
+  const [justRefreshed, setJustRefreshed] = useState<string | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -126,7 +143,6 @@ export function AnswerCoveragePanel() {
   const { populateCandidate, populateBatch, pauseBatch, resumeBatch, cancelBatch, isLoading, isBatchRunning, batchProgress } = usePopulateCandidateAnswers();
   const { recalculateAll, isRecalculatingAll } = useRecalculateCoverageTiers();
   const { mutate: enrichSources, isPending: isEnrichingSource } = useEnrichCandidateSources();
-  const { data: votingStats, isLoading: votingStatsLoading } = useVotingRecordsStats();
   const { 
     syncAllVotes, 
     syncAllFloorVotes,
@@ -222,8 +238,7 @@ export function AnswerCoveragePanel() {
     return `$${Math.round(value).toLocaleString()}`;
   };
 
-  // FEC stats from useSyncStats hook (not filtered)
-  const fecStats = syncStats?.fecStats ?? { withFecId: 0, neverSynced: 0, partial: 0, complete: 0 };
+  // FEC stats from cache (moved to line 516)
 
   // Source coverage stats from candidates
   const sourceStats = useMemo(() => {
@@ -494,10 +509,15 @@ export function AnswerCoveragePanel() {
     }
   };
 
+  // Use cached stats
+  const candidateStats = candidateStatsCache?.data;
+  const votingStats = votingStatsCache?.data;
+  const fecStats = fecStatsCache?.data ?? { withFecId: 0, neverSynced: 0, partialSync: 0, complete: 0 };
+
   const noAnswersCount = candidateStats?.noAnswers || 0;
   const lowCoverageCount = candidateStats?.lowCoverage || 0;
 
-  const isLoading_ = syncLoading || statsLoading || candidatesLoading || votingStatsLoading;
+  const isLoading_ = syncLoading || statsLoading || candidatesLoading || votingStatsLoading || fecStatsLoading;
   const anyBatchRunning = isBatchRunning || isFECBatchRunning || isSyncAllRunning;
 
   if (isLoading_) {
@@ -848,38 +868,79 @@ export function AnswerCoveragePanel() {
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* Overall Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Users className="h-4 w-4" />
-              Total Reps
+        {/* Overall Stats Grid - Candidate Answer Stats */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-muted-foreground">Candidate Answers</span>
+            <div className="flex items-center gap-2">
+              {candidateStatsCache?.updatedAt && (
+                <span className="text-xs text-muted-foreground">
+                  {formatDistanceToNow(new Date(candidateStatsCache.updatedAt), { addSuffix: true })}
+                </span>
+              )}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => {
+                        refreshStats("candidate_answer_stats", {
+                          onSuccess: () => {
+                            setJustRefreshed("candidate_answer_stats");
+                            setTimeout(() => setJustRefreshed(null), 2000);
+                          }
+                        });
+                      }}
+                      disabled={isRefreshingStats}
+                    >
+                      {justRefreshed === "candidate_answer_stats" ? (
+                        <Check className="h-3.5 w-3.5 text-green-500" />
+                      ) : isRefreshingStats ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Refresh candidate answer stats</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
-            <div className="text-2xl font-bold">{syncStats?.totalCandidates.toLocaleString() || 0}</div>
           </div>
-
-          <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <HelpCircle className="h-4 w-4" />
-              Total Questions
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <Users className="h-4 w-4" />
+                Total Reps
+              </div>
+              <div className="text-2xl font-bold">{candidateStats?.totalCandidates?.toLocaleString() || 0}</div>
             </div>
-            <div className="text-2xl font-bold">{syncStats?.totalQuestions.toLocaleString() || 0}</div>
-          </div>
 
-          <div className="bg-amber-500/10 rounded-lg p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <FileText className="h-4 w-4 text-amber-600" />
-              No Answers
+            <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <HelpCircle className="h-4 w-4" />
+                Total Questions
+              </div>
+              <div className="text-2xl font-bold">{candidateStats?.totalQuestions?.toLocaleString() || 0}</div>
             </div>
-            <div className="text-2xl font-bold text-amber-600">{candidateStats?.noAnswers || 0}</div>
-          </div>
 
-          <div className="bg-green-500/10 rounded-lg p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              Full Coverage
+            <div className="bg-amber-500/10 rounded-lg p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <FileText className="h-4 w-4 text-amber-600" />
+                No Answers
+              </div>
+              <div className="text-2xl font-bold text-amber-600">{candidateStats?.noAnswers || 0}</div>
             </div>
-            <div className="text-2xl font-bold text-green-600">{candidateStats?.fullCoverage || 0}</div>
+
+            <div className="bg-green-500/10 rounded-lg p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                Full Coverage
+              </div>
+              <div className="text-2xl font-bold text-green-600">{candidateStats?.fullCoverage || 0}</div>
+            </div>
           </div>
         </div>
 
@@ -916,7 +977,47 @@ export function AnswerCoveragePanel() {
         </div>
 
         {/* FEC Sync Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-muted-foreground">FEC Data</span>
+            <div className="flex items-center gap-2">
+              {fecStatsCache?.updatedAt && (
+                <span className="text-xs text-muted-foreground">
+                  {formatDistanceToNow(new Date(fecStatsCache.updatedAt), { addSuffix: true })}
+                </span>
+              )}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => {
+                        refreshStats("fec_stats", {
+                          onSuccess: () => {
+                            setJustRefreshed("fec_stats");
+                            setTimeout(() => setJustRefreshed(null), 2000);
+                          }
+                        });
+                      }}
+                      disabled={isRefreshingStats}
+                    >
+                      {justRefreshed === "fec_stats" ? (
+                        <Check className="h-3.5 w-3.5 text-green-500" />
+                      ) : isRefreshingStats ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Refresh FEC stats</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-muted/50 rounded-lg p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
               <Link2 className="h-4 w-4" />
@@ -938,7 +1039,7 @@ export function AnswerCoveragePanel() {
               <RotateCcw className="h-4 w-4 text-amber-600" />
               Partial Sync
             </div>
-            <div className="text-2xl font-bold text-amber-600">{fecStats.partial}</div>
+            <div className="text-2xl font-bold text-amber-600">{fecStats.partialSync}</div>
           </div>
 
           <div className="bg-green-500/10 rounded-lg p-4 space-y-1">
@@ -948,6 +1049,7 @@ export function AnswerCoveragePanel() {
             </div>
             <div className="text-2xl font-bold text-green-600">{fecStats.complete}</div>
           </div>
+        </div>
         </div>
         {/* Voting Records Stats */}
         <div className="space-y-3">
@@ -1060,7 +1162,7 @@ export function AnswerCoveragePanel() {
                 <Badge variant="outline" className="text-xs">Sponsored / Cosponsored</Badge>
               </div>
               <div className="text-3xl font-bold text-blue-600">
-                {votingStats?.totalLegislativeActions?.toLocaleString() || 0}
+                {votingStats?.legislativeActions?.toLocaleString() || 0}
               </div>
               <div className="text-xs text-muted-foreground">
                 Bills and resolutions (co)sponsored by members
@@ -1077,7 +1179,7 @@ export function AnswerCoveragePanel() {
                 <Badge variant="outline" className="text-xs">Yea / Nay / Present</Badge>
               </div>
               <div className="text-3xl font-bold text-green-600">
-                {votingStats?.totalFloorVotes?.toLocaleString() || 0}
+                {votingStats?.floorVotes?.toLocaleString() || 0}
               </div>
               <div className="text-xs text-muted-foreground">
                 Actual roll call votes cast on the floor
@@ -1092,7 +1194,7 @@ export function AnswerCoveragePanel() {
                 <FileText className="h-4 w-4" />
                 Total Records
               </div>
-              <div className="text-2xl font-bold">{votingStats?.totalVotes?.toLocaleString() || 0}</div>
+              <div className="text-2xl font-bold">{votingStats?.totalRecords?.toLocaleString() || 0}</div>
             </div>
 
             <div className="bg-muted/30 rounded-lg p-4 space-y-1">
@@ -1101,8 +1203,8 @@ export function AnswerCoveragePanel() {
                 Members Synced
               </div>
               <div className="text-2xl font-bold">
-                {votingStats?.membersWithVotes || 0}
-                <span className="text-sm text-muted-foreground font-normal"> / {votingStats?.totalFederalLegislators || 540}</span>
+                {votingStats?.membersSynced || 0}
+                <span className="text-sm text-muted-foreground font-normal"> / 540</span>
               </div>
             </div>
 
@@ -1122,9 +1224,7 @@ export function AnswerCoveragePanel() {
                 Coverage
               </div>
               <div className="text-2xl font-bold text-green-600">
-                {votingStats?.totalFederalLegislators 
-                  ? Math.round((votingStats.membersWithVotes / votingStats.totalFederalLegislators) * 100) 
-                  : 0}%
+                {votingStats?.coveragePercentage || 0}%
               </div>
             </div>
           </div>
