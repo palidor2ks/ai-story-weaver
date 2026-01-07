@@ -67,11 +67,14 @@ export function useVotingRecordsStats() {
         return max;
       }, null as string | null) || null;
 
-      // Count total federal legislators (bioguide pattern)
-      const { count: totalFederalLegislators } = await supabase
+      // Count total federal legislators using PostgREST-compatible range filter
+      // Bioguide IDs match pattern [A-Z][0-9]{6}, e.g., "A000001"
+      const FEDERAL_LEGISLATOR_FALLBACK = 540;
+      const { count: federalLegislatorsCount } = await supabase
         .from('candidates')
         .select('*', { count: 'exact', head: true })
-        .filter('id', '~', '^[A-Z][0-9]{6}$');
+        .gte('id', 'A000000')
+        .lte('id', 'Z999999');
 
       return {
         totalVotes,
@@ -79,7 +82,7 @@ export function useVotingRecordsStats() {
         totalFloorVotes,
         membersWithVotes,
         membersWithFloorVotes,
-        totalFederalLegislators: totalFederalLegislators || 0,
+        totalFederalLegislators: federalLegislatorsCount ?? FEDERAL_LEGISLATOR_FALLBACK,
         topicCounts: {},
         lastVoteDate,
         lastFloorVoteDate,
@@ -96,11 +99,12 @@ export function useVotingRecordsSync() {
 
   const syncAllVotes = useMutation({
     mutationFn: async () => {
-      // Get all federal legislators (bioguide IDs)
+      // Get all federal legislators (bioguide IDs) using PostgREST-compatible range filter
       const { data: legislators, error: legError } = await supabase
         .from('candidates')
         .select('id, name')
-        .filter('id', '~', '^[A-Z][0-9]{6}$')
+        .gte('id', 'A000000')
+        .lte('id', 'Z999999')
         .order('name');
 
       if (legError) throw legError;
@@ -163,11 +167,12 @@ export function useVotingRecordsSync() {
 
   const syncAllFloorVotes = useMutation({
     mutationFn: async () => {
-      // Get all federal legislators (bioguide IDs) with their office to determine chamber
+      // Get all federal legislators (bioguide IDs) using PostgREST-compatible range filter
       const { data: legislators, error: legError } = await supabase
         .from('candidates')
         .select('id, name, office')
-        .filter('id', '~', '^[A-Z][0-9]{6}$')
+        .gte('id', 'A000000')
+        .lte('id', 'Z999999')
         .order('name');
 
       if (legError) throw legError;
