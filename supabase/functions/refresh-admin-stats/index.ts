@@ -26,15 +26,33 @@ Deno.serve(async (req) => {
     if (statKey === "voting_records_stats" || statKey === "all") {
       console.log("[refresh-admin-stats] Fetching voting records stats...");
       
-      // Use RPC to get accurate counts from votes table (fast grouped query)
-      console.log("[refresh-admin-stats] Calling get_vote_action_counts RPC...");
+      // Use materialized view for instant counts (no timeout issues)
+      console.log("[refresh-admin-stats] Fetching from vote_action_counts materialized view...");
       const rpcStart = Date.now();
-      const { data: actionCounts, error: rpcError } = await supabase.rpc("get_vote_action_counts");
+      let { data: actionCounts, error: viewError } = await supabase
+        .from("vote_action_counts")
+        .select("action_type, count");
       
-      if (rpcError) {
-        console.error("[refresh-admin-stats] RPC error:", rpcError);
+      if (viewError) {
+        console.error("[refresh-admin-stats] Materialized view error:", viewError);
       }
-      console.log(`[refresh-admin-stats] RPC returned ${actionCounts?.length || 0} action types in ${Date.now() - rpcStart}ms`);
+      
+      // If view is empty or stale, refresh it and retry
+      if (!actionCounts || actionCounts.length === 0) {
+        console.log("[refresh-admin-stats] View empty, refreshing materialized view...");
+        const { error: refreshError } = await supabase.rpc("refresh_vote_action_counts");
+        if (refreshError) {
+          console.error("[refresh-admin-stats] Refresh error:", refreshError);
+        } else {
+          // Retry after refresh
+          const { data: retryData } = await supabase
+            .from("vote_action_counts")
+            .select("action_type, count");
+          actionCounts = retryData;
+        }
+      }
+      
+      console.log(`[refresh-admin-stats] Got ${actionCounts?.length || 0} action types in ${Date.now() - rpcStart}ms`);
       console.log("[refresh-admin-stats] Action counts:", JSON.stringify(actionCounts));
 
       // Parse action counts (normalize to lowercase for resilient matching)
