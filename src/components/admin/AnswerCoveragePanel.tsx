@@ -540,15 +540,16 @@ export function AnswerCoveragePanel() {
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()} disabled={noAnswersCount === 0}>
                       <Plus className="h-4 w-4 mr-2" />
-                      Fill Missing ({Math.min(noAnswersCount, 50)})
+                      Generate for Empty Profiles ({Math.min(noAnswersCount, 50)})
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Generate AI Answers?</AlertDialogTitle>
+                      <AlertDialogTitle>Generate AI Position Answers?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will generate AI answers for up to 50 candidates with no answers.
-                        This may take several minutes.
+                        Generates AI-inferred position answers for up to 50 candidates who have no answers yet.
+                        Uses voting records, public statements, and party platform as sources.
+                        Takes 2-5 minutes.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -562,15 +563,15 @@ export function AnswerCoveragePanel() {
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()} disabled={lowCoverageCount === 0}>
                       <RefreshCw className="h-4 w-4 mr-2" />
-                      Regen Low Coverage ({Math.min(lowCoverageCount, 50)})
+                      Refresh Incomplete Profiles ({Math.min(lowCoverageCount, 50)})
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Regenerate Low Coverage Answers?</AlertDialogTitle>
+                      <AlertDialogTitle>Refresh Incomplete Profile Answers?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will regenerate AI answers for up to 50 candidates with less than 50% coverage.
-                        Existing answers will be replaced.
+                        Re-generates AI answers for up to 50 candidates with less than 50% question coverage.
+                        Replaces existing answers with fresh analysis from voting records and statements.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -586,7 +587,7 @@ export function AnswerCoveragePanel() {
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                       <Calculator className="h-4 w-4 mr-2" />
-                      Recalculate Tiers
+                      Recalculate Coverage Tiers
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
@@ -631,20 +632,20 @@ export function AnswerCoveragePanel() {
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                       <Link2 className="h-4 w-4 mr-2" />
-                      Link FEC IDs ({candidatesWithoutFecId.length})
+                      Find FEC Candidate IDs ({candidatesWithoutFecId.length})
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Bulk Lookup FEC Candidate IDs?</AlertDialogTitle>
+                      <AlertDialogTitle>Search FEC for Candidate IDs?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will search the FEC database for candidates without FEC IDs and link them automatically.
-                        Up to 50 candidates will be processed.
+                        Searches the FEC database to find and link FEC candidate IDs for {candidatesWithoutFecId.length} candidates
+                        who don't have one yet. Required before importing donor data. Processes up to 50 at a time.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleBatchLinkFECIds}>Link FEC IDs</AlertDialogAction>
+                      <AlertDialogAction onClick={handleBatchLinkFECIds}>Find & Link IDs</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -653,20 +654,20 @@ export function AnswerCoveragePanel() {
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                       <Building2 className="h-4 w-4 mr-2" />
-                      Link Committees ({noCommitteeCandidates.length})
+                      Fetch Campaign Committees ({noCommitteeCandidates.length})
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Bulk Link FEC Committees?</AlertDialogTitle>
+                      <AlertDialogTitle>Fetch Campaign Committees from FEC?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will fetch and link FEC committees for {noCommitteeCandidates.length} candidate(s) with FEC IDs but no committees yet.
-                        Up to 50 candidates will be processed.
+                        Fetches all FEC-registered campaign committees for {noCommitteeCandidates.length} candidates 
+                        who have FEC IDs but no linked committees. Required before importing donor contributions.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleBatchLinkCommittees}>Link Committees</AlertDialogAction>
+                      <AlertDialogAction onClick={handleBatchLinkCommittees}>Fetch Committees</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -675,20 +676,20 @@ export function AnswerCoveragePanel() {
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                       <DollarSign className="h-4 w-4 mr-2" />
-                      Fetch Donors ({candidatesWithFecId.length})
+                      Import Donor Contributions ({candidatesWithFecId.length})
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Bulk Fetch FEC Donor Data?</AlertDialogTitle>
+                      <AlertDialogTitle>Import Itemized Contributions from FEC?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will fetch donor contributions from the FEC API for all candidates with FEC IDs.
-                        Up to 50 candidates will be processed. This may take several minutes.
+                        Downloads all itemized ($200+) contributions from FEC for candidates with linked committees.
+                        Imports donor names, amounts, employers, and dates. Processes up to 50 candidates. Takes 5-15 minutes.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleBatchFetchDonors}>Fetch Donors</AlertDialogAction>
+                      <AlertDialogAction onClick={handleBatchFetchDonors}>Import Contributions</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -703,20 +704,20 @@ export function AnswerCoveragePanel() {
                           className="text-amber-600"
                         >
                           <RotateCcw className="h-4 w-4 mr-2" />
-                          Resume All Partial ({partialSyncCandidates.length})
+                          Complete Interrupted Syncs ({partialSyncCandidates.length})
                         </DropdownMenuItem>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Resume All Partial Syncs?</AlertDialogTitle>
+                          <AlertDialogTitle>Complete Interrupted Donor Syncs?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            {partialSyncCandidates.length} candidate(s) have incomplete donor syncs. 
-                            This will continue fetching from where each sync stopped until complete.
+                            {partialSyncCandidates.length} candidates have incomplete donor imports (sync was interrupted).
+                            This continues downloading from where each sync stopped until all data is imported.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleResumeAllPartialSyncs}>Resume All</AlertDialogAction>
+                          <AlertDialogAction onClick={handleResumeAllPartialSyncs}>Complete All</AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
@@ -731,22 +732,22 @@ export function AnswerCoveragePanel() {
                       className="text-green-600 font-medium"
                     >
                       <Play className="h-4 w-4 mr-2" />
-                      Sync All Until Complete
+                      Full Donor Sync (All Candidates)
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Sync All Candidates Until Complete?</AlertDialogTitle>
+                      <AlertDialogTitle>Run Full Donor Sync for All Candidates?</AlertDialogTitle>
                       <AlertDialogDescription className="space-y-2">
                         <p>
-                          This will continuously sync ALL candidates with FEC IDs until their donor data is fully imported.
-                          The process will run in your browser until complete.
+                          Imports ALL itemized contributions for every candidate with an FEC ID.
+                          Runs continuously in your browser until complete.
                         </p>
                         <ul className="list-disc pl-4 text-sm space-y-1">
-                          <li>Candidates without any sync will be synced from scratch</li>
-                          <li>Candidates with partial syncs will resume from where they stopped</li>
-                          <li>You can cancel at any time with the Stop button</li>
-                          <li>This may take a long time depending on the number of candidates</li>
+                          <li>New candidates: Full import from scratch</li>
+                          <li>Partial syncs: Continues from where they stopped</li>
+                          <li>⏱️ Takes 1-4 hours depending on data volume</li>
+                          <li>You can stop anytime with the Stop button</li>
                         </ul>
                       </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -755,9 +756,7 @@ export function AnswerCoveragePanel() {
                       <AlertDialogAction 
                         onClick={() => syncAllCandidatesComplete('2024')}
                         className="bg-green-600 hover:bg-green-700"
-                      >
-                        Start Sync All
-                      </AlertDialogAction>
+                      >Start Full Sync</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -772,22 +771,19 @@ export function AnswerCoveragePanel() {
                       disabled={isTotalsRefreshing}
                     >
                       <RefreshCw className="h-4 w-4 mr-2" />
-                      Refresh FEC Totals ({candidatesWithFecId.length})
+                      Update FEC Summary Totals ({candidatesWithFecId.length})
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Refresh FEC Summary Totals?</AlertDialogTitle>
+                      <AlertDialogTitle>Update FEC Summary Totals?</AlertDialogTitle>
                       <AlertDialogDescription className="space-y-2">
                         <p>
-                          This will fetch updated FEC summary totals for all candidates with FEC IDs.
+                          Fetches the latest FEC summary totals (total raised, itemized, unitemized) for all candidates.
                         </p>
                         <p className="text-sm font-medium text-muted-foreground">
-                          This does NOT re-sync contribution data — it only updates the FEC totals 
-                          displayed in the dashboard. Much faster than a full sync.
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Use this to fix $0 FEC totals caused by rate limiting during bulk syncs.
+                          ⚡ Fast operation — only updates totals, doesn't re-import contributions.
+                          Use this to fix $0 totals caused by rate limiting during bulk imports.
                         </p>
                       </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -796,9 +792,7 @@ export function AnswerCoveragePanel() {
                       <AlertDialogAction 
                         onClick={handleBatchRefreshFECTotals}
                         className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        Refresh Totals
-                      </AlertDialogAction>
+                      >Update Totals</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
