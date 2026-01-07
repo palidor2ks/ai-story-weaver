@@ -94,6 +94,26 @@ const BLOCKED_DOMAINS = [
   'tiktok.com',
 ];
 
+// Smart truncation that ends at sentence/word boundaries
+function smartTruncate(text: string, maxLength: number): string {
+  if (!text || text.length <= maxLength) return text || '';
+  
+  // Try to end at a sentence boundary first
+  const sentenceEnd = text.slice(0, maxLength).lastIndexOf('. ');
+  if (sentenceEnd > maxLength * 0.6) {
+    return text.slice(0, sentenceEnd + 1);
+  }
+  
+  // Fall back to word boundary
+  const lastSpace = text.slice(0, maxLength).lastIndexOf(' ');
+  if (lastSpace > maxLength * 0.7) {
+    return text.slice(0, lastSpace) + '...';
+  }
+  
+  // Last resort: hard cut with ellipsis
+  return text.slice(0, maxLength - 3) + '...';
+}
+
 function isBlockedDomain(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
@@ -673,7 +693,7 @@ function extractAnswersFromText(content: string): any[] {
     const confidence = confMatch ? confMatch[1] : 'medium';
     
     const srcMatch = segment.match(/"source_description"\s*:\s*"([^"]*)"/);
-    const source_description = srcMatch ? srcMatch[1].slice(0, 500) : 'No documented position';
+    const source_description = srcMatch ? smartTruncate(srcMatch[1], 1000) : 'No documented position';
     
     recovered.push({ question_id, answer_value, confidence, source_description });
   }
@@ -874,7 +894,7 @@ Return ONLY JSON array: [{question_id, answer_value, confidence, source_descript
       const questionId = String(item.question_id || '').replace(/[\[\]]/g, '');
       if (!validQuestionIds.includes(questionId)) return null;
 
-      const sourceDesc = (item.source_description || 'No relevant voting record found').slice(0, 500);
+      const sourceDesc = smartTruncate(item.source_description || 'No relevant voting record found', 1000);
       const answerValue = snapToValidValue(item.answer_value);
       const confidence = item.confidence === 'high' ? 'high' : 'low';
 
@@ -1129,9 +1149,9 @@ If NO direct statement can be found from the candidate on this specific topic, r
       score = parsed.strength === 'strong' ? 10 : 5;
     }
     
-    // Build description
+    // Build description - use smart truncation for quotes
     const description = parsed.quote 
-      ? `${candidateName} stated: "${parsed.quote.slice(0, 300)}"` 
+      ? `${candidateName} stated: "${smartTruncate(parsed.quote, 800)}"` 
       : `${candidateName} has expressed a position on this issue.`;
     
     // Extract source URLs from grounding
@@ -1159,7 +1179,7 @@ If NO direct statement can be found from the candidate on this specific topic, r
     return {
       found: true,
       score: snapToValidValue(score),
-      description: description.slice(0, 500),
+      description: smartTruncate(description, 1000),
       sourceUrls,
       sourceTitles,
       evidenceType,
@@ -1209,7 +1229,7 @@ async function inferWithResearch(
           confidence: 'medium' as const, // Upgrade from 'low' since we found a source
           evidence_type: statementSearch.evidenceType || 'public_statement',
           voting_record_summary: undefined,
-          public_statement_summary: statementSearch.description.slice(0, 200),
+          public_statement_summary: smartTruncate(statementSearch.description, 300),
           has_discrepancy: false,
           discrepancy_note: undefined,
         };
@@ -1230,7 +1250,7 @@ async function inferWithResearch(
         answer = {
           question_id: q.id,
           answer_value: inference.score,
-          source_description: inference.reasoning.slice(0, 500),
+          source_description: smartTruncate(inference.reasoning, 1000),
           source_url: null,
           source_urls: [],
           source_titles: [],
@@ -1444,7 +1464,7 @@ ONLY JSON array. No markdown.`;
   return parsed.map((item: any) => {
     const questionId = String(item.question_id || '').replace(/[\[\]]/g, '');
     const research = researchResults.get(questionId);
-    const sourceDesc = (item.source_description || 'No documented position').slice(0, 500);
+    const sourceDesc = smartTruncate(item.source_description || 'No documented position', 1000);
     const lowerDesc = sourceDesc.toLowerCase();
     
     // PART B: Enforce score-description contract
@@ -1591,7 +1611,7 @@ function validateAnswerQuality(
         ...a, 
         evidence_type: 'inferred' as const, 
         confidence: 'low' as const, 
-        source_description: `Position inferred from ${candidateParty} party alignment. ${a.source_description.slice(0, 300)}`,
+        source_description: smartTruncate(`Position inferred from ${candidateParty} party alignment. ${a.source_description}`, 1000),
         source_urls: [],
         source_titles: [],
       };
