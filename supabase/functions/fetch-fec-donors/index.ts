@@ -32,10 +32,12 @@ function getCycleDateRange(cycle: string): { minDate: string; maxDate: string } 
   };
 }
 
-// Batch sizes for streaming saves - keep small to avoid DB timeouts
-const CONTRIBUTION_BATCH_SIZE = 250;
-const DONOR_BATCH_SIZE = 100; // Reduced from 500 to avoid statement timeouts
-const DONOR_FLUSH_PAGES = 5; // Flush more often with smaller batches
+// Batch sizes for streaming saves - keep VERY small to avoid DB statement timeouts
+const CONTRIBUTION_BATCH_SIZE = 100; // Reduced from 250
+const CONTRIBUTION_UPSERT_CHUNK = 25; // Chunk size for actual upserts
+const DONOR_BATCH_SIZE = 50; // Reduced from 100
+const DONOR_UPSERT_CHUNK = 15; // Chunk size for actual upserts
+const DONOR_FLUSH_PAGES = 3; // Flush more often with smaller batches
 
 // Request tracking for rate limiting
 let requestCount = 0;
@@ -912,18 +914,31 @@ serve(async (req) => {
 
     console.log('[FEC-DONORS] Starting fetch for committee:', committeeId);
 
-    // Helper to save contribution batch
+    // Helper to save contribution batch with chunked upserts and retry on timeout
     const saveContributionBatch = async () => {
       if (contributionBatch.length === 0) return;
       
-      const { error } = await supabase
-        .from('contributions')
-        .upsert(contributionBatch, { onConflict: 'identity_hash,cycle', ignoreDuplicates: false });
-      
-      if (error) {
-        console.error('[FEC-DONORS] Contribution batch save error:', error.message);
-      } else {
-        committeeContributionsSaved += contributionBatch.length;
+      // Save in small chunks to avoid statement timeouts
+      for (let i = 0; i < contributionBatch.length; i += CONTRIBUTION_UPSERT_CHUNK) {
+        const chunk = contributionBatch.slice(i, i + CONTRIBUTION_UPSERT_CHUNK);
+        
+        // Retry logic for timeout errors
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { error } = await supabase
+            .from('contributions')
+            .upsert(chunk, { onConflict: 'identity_hash,cycle', ignoreDuplicates: false });
+          
+          if (!error) {
+            committeeContributionsSaved += chunk.length;
+            break;
+          } else if (error.message?.includes('timeout') && attempt < 2) {
+            console.log(`[FEC-DONORS] Contribution chunk timeout, retry ${attempt + 1}/3...`);
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          } else {
+            console.error('[FEC-DONORS] Contribution chunk save error:', error.message);
+            break;
+          }
+        }
       }
       
       contributionBatch = []; // Clear memory
@@ -972,15 +987,24 @@ serve(async (req) => {
         return;
       }
 
-      // Save in batches
-      for (let i = 0; i < donorsToSave.length; i += DONOR_BATCH_SIZE) {
-        const batch = donorsToSave.slice(i, i + DONOR_BATCH_SIZE);
-        const { error } = await supabase
-          .from('donors')
-          .upsert(batch, { onConflict: 'id' });
+      // Save in small chunks with retry on timeout
+      for (let i = 0; i < donorsToSave.length; i += DONOR_UPSERT_CHUNK) {
+        const batch = donorsToSave.slice(i, i + DONOR_UPSERT_CHUNK);
         
-        if (error) {
-          console.error('[FEC-DONORS] Donor batch save error:', error.message);
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { error } = await supabase
+            .from('donors')
+            .upsert(batch, { onConflict: 'id' });
+          
+          if (!error) {
+            break;
+          } else if (error.message?.includes('timeout') && attempt < 2) {
+            console.log(`[FEC-DONORS] Donor chunk timeout, retry ${attempt + 1}/3...`);
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          } else {
+            console.error('[FEC-DONORS] Donor batch save error:', error.message);
+            break;
+          }
         }
       }
       
