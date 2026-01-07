@@ -429,65 +429,42 @@ export function useCandidateAnswerStats() {
   return useQuery({
     queryKey: ['candidate-answer-stats'],
     queryFn: async () => {
-      // Get total questions count
-      const { count: totalQuestions, error: questionsError } = await supabase
-        .from('questions')
-        .select('*', { count: 'exact', head: true });
+      // Parallel fetch: questions count, candidates count, and answer coverage stats
+      const [questionsResult, candidatesResult, coverageResult] = await Promise.all([
+        supabase.from('questions').select('*', { count: 'exact', head: true }),
+        supabase.from('candidates').select('*', { count: 'exact', head: true }),
+        supabase.from('candidate_answer_coverage_stats').select('candidate_id, answer_count'),
+      ]);
 
-      if (questionsError) throw questionsError;
+      if (questionsResult.error) throw questionsResult.error;
+      if (candidatesResult.error) throw candidatesResult.error;
+      if (coverageResult.error) throw coverageResult.error;
 
-      // Get all candidates count
-      const { count: totalCandidates, error: candidatesError } = await supabase
-        .from('candidates')
-        .select('*', { count: 'exact', head: true });
+      const totalQuestions = questionsResult.count || 0;
+      const totalCandidates = candidatesResult.count || 0;
+      const coverageData = coverageResult.data || [];
 
-      if (candidatesError) throw candidatesError;
-
-      // Get all answers (paginated)
-      const PAGE_SIZE = 1000;
-      let from = 0;
-      const allAnswers: Array<{ candidate_id: string }> = [];
-
-      while (true) {
-        const { data, error } = await supabase
-          .from('candidate_answers')
-          .select('id, candidate_id')
-          .order('id', { ascending: true })
-          .range(from, from + PAGE_SIZE - 1);
-
-        if (error) throw error;
-
-        (data || []).forEach(row => allAnswers.push({ candidate_id: row.candidate_id }));
-
-        if (!data || data.length < PAGE_SIZE) break;
-        from += PAGE_SIZE;
-        if (from > 500000) break;
-      }
-
-      // Count per candidate
-      const answerCountMap: Record<string, number> = {};
-      allAnswers.forEach(row => {
-        answerCountMap[row.candidate_id] = (answerCountMap[row.candidate_id] || 0) + 1;
-      });
-
-      const candidatesWithAnswers = Object.keys(answerCountMap);
-      const noAnswers = (totalCandidates || 0) - candidatesWithAnswers.length;
-      const lowCoverage = candidatesWithAnswers.filter(id => {
-        const count = answerCountMap[id];
+      // Calculate stats from aggregated view data
+      const candidatesWithAnswers = coverageData.filter(r => (r.answer_count || 0) > 0);
+      const noAnswers = totalCandidates - candidatesWithAnswers.length;
+      
+      const lowCoverage = candidatesWithAnswers.filter(r => {
+        const count = r.answer_count || 0;
         const pct = totalQuestions ? (count / totalQuestions) * 100 : 0;
         return pct > 0 && pct < 50;
       }).length;
-      const fullCoverage = candidatesWithAnswers.filter(id => {
-        const count = answerCountMap[id];
-        return totalQuestions && count >= totalQuestions;
+      
+      const fullCoverage = candidatesWithAnswers.filter(r => {
+        const count = r.answer_count || 0;
+        return totalQuestions > 0 && count >= totalQuestions;
       }).length;
 
       return {
-        totalCandidates: totalCandidates || 0,
+        totalCandidates,
         noAnswers,
         lowCoverage,
         fullCoverage,
-        totalQuestions: totalQuestions || 0,
+        totalQuestions,
       };
     },
     staleTime: 30000,
