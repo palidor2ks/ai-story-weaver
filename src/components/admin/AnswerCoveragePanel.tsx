@@ -222,15 +222,8 @@ export function AnswerCoveragePanel() {
     return `$${Math.round(value).toLocaleString()}`;
   };
 
-  // Sync stats from ALL candidates (not filtered)
-  const syncStats_ = useMemo(() => {
-    if (!candidates) return { withFecId: 0, neverSynced: 0, partial: 0, complete: 0 };
-    const withFecId = candidates.filter(c => !!c.fecCandidateId).length;
-    const neverSynced = candidates.filter(c => c.syncStatus === 'never' && c.fecCandidateId).length;
-    const partial = candidates.filter(c => c.syncStatus === 'partial').length;
-    const complete = candidates.filter(c => c.syncStatus === 'complete').length;
-    return { withFecId, neverSynced, partial, complete };
-  }, [candidates]);
+  // FEC stats from useSyncStats hook (not filtered)
+  const fecStats = syncStats?.fecStats ?? { withFecId: 0, neverSynced: 0, partial: 0, complete: 0 };
 
   // Source coverage stats from candidates
   const sourceStats = useMemo(() => {
@@ -504,7 +497,7 @@ export function AnswerCoveragePanel() {
   const noAnswersCount = candidateStats?.noAnswers || 0;
   const lowCoverageCount = candidateStats?.lowCoverage || 0;
 
-  const isLoading_ = syncLoading || statsLoading;
+  const isLoading_ = syncLoading || statsLoading || candidatesLoading || votingStatsLoading;
   const anyBatchRunning = isBatchRunning || isFECBatchRunning || isSyncAllRunning;
 
   if (isLoading_) {
@@ -929,7 +922,7 @@ export function AnswerCoveragePanel() {
               <Link2 className="h-4 w-4" />
               With FEC ID
             </div>
-            <div className="text-2xl font-bold">{syncStats_.withFecId}</div>
+            <div className="text-2xl font-bold">{fecStats.withFecId}</div>
           </div>
 
           <div className="bg-muted/30 rounded-lg p-4 space-y-1">
@@ -937,7 +930,7 @@ export function AnswerCoveragePanel() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
               Never Synced
             </div>
-            <div className="text-2xl font-bold text-muted-foreground">{syncStats_.neverSynced}</div>
+            <div className="text-2xl font-bold text-muted-foreground">{fecStats.neverSynced}</div>
           </div>
 
           <div className="bg-amber-500/10 rounded-lg p-4 space-y-1">
@@ -945,7 +938,7 @@ export function AnswerCoveragePanel() {
               <RotateCcw className="h-4 w-4 text-amber-600" />
               Partial Sync
             </div>
-            <div className="text-2xl font-bold text-amber-600">{syncStats_.partial}</div>
+            <div className="text-2xl font-bold text-amber-600">{fecStats.partial}</div>
           </div>
 
           <div className="bg-green-500/10 rounded-lg p-4 space-y-1">
@@ -953,7 +946,7 @@ export function AnswerCoveragePanel() {
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               Complete
             </div>
-            <div className="text-2xl font-bold text-green-600">{syncStats_.complete}</div>
+            <div className="text-2xl font-bold text-green-600">{fecStats.complete}</div>
           </div>
         </div>
         {/* Voting Records Stats */}

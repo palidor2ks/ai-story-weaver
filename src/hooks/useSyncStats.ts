@@ -30,6 +30,13 @@ interface SyncStats {
   lastSyncTime: string | null;
   candidateCoverage: CandidateCoverage[];
   topicCoverage: TopicCoverage[];
+  // FEC summary stats
+  fecStats: {
+    withFecId: number;
+    neverSynced: number;
+    partial: number;
+    complete: number;
+  };
 }
 
 export function useSyncStats() {
@@ -43,7 +50,10 @@ export function useSyncStats() {
         topicsResult,
         answersCountResult,
         lastSyncResult,
-        answersByTopicResult
+        answersByTopicResult,
+        // FEC stats queries
+        fecCandidatesResult,
+        committeesResult
       ] = await Promise.all([
         // Get candidate count and basic info
         supabase
@@ -71,7 +81,15 @@ export function useSyncStats() {
         // Get answer counts grouped by topic (via question_id join)
         supabase
           .from('candidate_answers')
-          .select('question_id')
+          .select('question_id'),
+        // FEC: Get candidates with FEC IDs and donor sync info
+        supabase
+          .from('candidates')
+          .select('id, fec_candidate_id, last_donor_sync'),
+        // FEC: Get committees with sync status
+        supabase
+          .from('candidate_committees')
+          .select('candidate_id, has_more')
       ]);
 
       if (candidatesResult.error) throw candidatesResult.error;
@@ -130,6 +148,37 @@ export function useSyncStats() {
       // The AnswerCoveragePanel already fetches this data separately with useCandidatesAnswerCoverage
       const candidateCoverage: CandidateCoverage[] = [];
 
+      // Calculate FEC sync stats
+      const fecCandidates = fecCandidatesResult.data || [];
+      const committees = committeesResult.data || [];
+      
+      // Build a map of candidate_id to their committee statuses
+      const candidateCommitteeStatus = new Map<string, { hasMore: boolean }>();
+      committees.forEach(c => {
+        if (c.candidate_id) {
+          const existing = candidateCommitteeStatus.get(c.candidate_id);
+          // If any committee has_more = true, the candidate is "partial"
+          if (!existing || c.has_more) {
+            candidateCommitteeStatus.set(c.candidate_id, { hasMore: c.has_more || false });
+          }
+        }
+      });
+
+      const withFecId = fecCandidates.filter(c => !!c.fec_candidate_id).length;
+      const neverSynced = fecCandidates.filter(c => 
+        c.fec_candidate_id && !c.last_donor_sync
+      ).length;
+      const partial = fecCandidates.filter(c => {
+        if (!c.fec_candidate_id) return false;
+        const status = candidateCommitteeStatus.get(c.id);
+        return status?.hasMore === true;
+      }).length;
+      const complete = fecCandidates.filter(c => {
+        if (!c.fec_candidate_id || !c.last_donor_sync) return false;
+        const status = candidateCommitteeStatus.get(c.id);
+        return status && status.hasMore === false;
+      }).length;
+
       return {
         totalCandidates,
         totalQuestions,
@@ -139,6 +188,12 @@ export function useSyncStats() {
         lastSyncTime,
         candidateCoverage,
         topicCoverage,
+        fecStats: {
+          withFecId,
+          neverSynced,
+          partial,
+          complete,
+        },
       };
     },
     staleTime: 1000 * 60 * 2, // 2 minutes (increased from 1)
