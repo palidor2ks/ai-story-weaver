@@ -35,16 +35,16 @@ Deno.serve(async (req) => {
         console.error("[refresh-admin-stats] Votes query error:", votesError);
       }
 
-      // Count by action type using a separate query
+      // Count by action type using separate queries
       const { count: legislativeCount } = await supabase
         .from("votes")
         .select("*", { count: "exact", head: true })
-        .in("action_type", ["Sponsored", "Cosponsored"]);
+        .in("action_type", ["sponsored", "cosponsored"]);
 
       const { count: floorCount } = await supabase
         .from("votes")
         .select("*", { count: "exact", head: true })
-        .in("action_type", ["Yea", "Nay", "Present", "Not Voting"]);
+        .eq("action_type", "floor_vote");
 
       const { count: totalRecords } = await supabase
         .from("votes")
@@ -57,6 +57,15 @@ Deno.serve(async (req) => {
         .limit(10000);
 
       const uniqueMembers = new Set(membersData?.map(v => v.candidate_id) || []);
+
+      // Get members with floor votes specifically
+      const { data: membersWithFloorVotesData } = await supabase
+        .from("votes")
+        .select("candidate_id")
+        .eq("action_type", "floor_vote")
+        .limit(10000);
+
+      const membersWithFloorVotes = new Set(membersWithFloorVotesData?.map(v => v.candidate_id) || []).size;
 
       // Get total federal candidates for coverage
       const { count: totalFederalCandidates } = await supabase
@@ -73,6 +82,7 @@ Deno.serve(async (req) => {
         floorVotes: floorCount || 0,
         totalRecords: totalRecords || 0,
         membersSynced: uniqueMembers.size,
+        membersWithFloorVotes,
         coveragePercentage,
       };
 
