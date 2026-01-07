@@ -26,31 +26,34 @@ Deno.serve(async (req) => {
     if (statKey === "voting_records_stats" || statKey === "all") {
       console.log("[refresh-admin-stats] Fetching voting records stats...");
       
-      // Count legislative actions (sponsored + cosponsored) with error logging
+      // Count legislative actions (sponsored + cosponsored) - using limit(1) instead of head:true
       console.log("[refresh-admin-stats] Counting legislative actions...");
       const legStart = Date.now();
-      const { count: legislativeCount, error: legError } = await supabase
+      const { count: legislativeCount, data: legData, error: legError } = await supabase
         .from("votes")
-        .select("id", { count: "exact", head: true })
-        .in("action_type", ["sponsored", "cosponsored"]);
-      console.log(`[refresh-admin-stats] Legislative count: ${legislativeCount}, error: ${legError?.message || 'none'}, took ${Date.now() - legStart}ms`);
+        .select("id", { count: "exact" })
+        .in("action_type", ["sponsored", "cosponsored"])
+        .limit(1);
+      console.log(`[refresh-admin-stats] Legislative count: ${legislativeCount}, rows: ${legData?.length}, error: ${legError?.message || 'none'}, took ${Date.now() - legStart}ms`);
 
-      // Count floor votes with error logging
+      // Count floor votes - using limit(1) instead of head:true
       console.log("[refresh-admin-stats] Counting floor votes...");
       const floorStart = Date.now();
-      const { count: floorCount, error: floorError } = await supabase
+      const { count: floorCount, data: floorData, error: floorError } = await supabase
         .from("votes")
-        .select("id", { count: "exact", head: true })
-        .eq("action_type", "floor_vote");
-      console.log(`[refresh-admin-stats] Floor count: ${floorCount}, error: ${floorError?.message || 'none'}, took ${Date.now() - floorStart}ms`);
+        .select("id", { count: "exact" })
+        .eq("action_type", "floor_vote")
+        .limit(1);
+      console.log(`[refresh-admin-stats] Floor count: ${floorCount}, rows: ${floorData?.length}, error: ${floorError?.message || 'none'}, took ${Date.now() - floorStart}ms`);
 
-      // Count total records with error logging
+      // Count total records - using limit(1) instead of head:true
       console.log("[refresh-admin-stats] Counting total records...");
       const totalStart = Date.now();
-      const { count: totalRecords, error: totalError } = await supabase
+      const { count: totalRecords, data: totalData, error: totalError } = await supabase
         .from("votes")
-        .select("id", { count: "exact", head: true });
-      console.log(`[refresh-admin-stats] Total count: ${totalRecords}, error: ${totalError?.message || 'none'}, took ${Date.now() - totalStart}ms`);
+        .select("id", { count: "exact" })
+        .limit(1);
+      console.log(`[refresh-admin-stats] Total count: ${totalRecords}, rows: ${totalData?.length}, error: ${totalError?.message || 'none'}, took ${Date.now() - totalStart}ms`);
 
       // Use vote_sync_status for accurate member counts (no sampling)
       console.log("[refresh-admin-stats] Fetching vote_sync_status for member counts...");
@@ -67,11 +70,12 @@ Deno.serve(async (req) => {
 
       console.log(`[refresh-admin-stats] Members synced: ${membersSynced}, with floor votes: ${membersWithFloorVotes}`);
 
-      // Get total federal candidates for coverage
+      // Get total federal candidates for coverage - using limit(1) instead of head:true
       const { count: totalFederalCandidates } = await supabase
         .from("candidates")
-        .select("id", { count: "exact", head: true })
-        .or("office.ilike.%Senator%,office.ilike.%Representative%");
+        .select("id", { count: "exact" })
+        .or("office.ilike.%Senator%,office.ilike.%Representative%")
+        .limit(1);
 
       const coveragePercentage = totalFederalCandidates 
         ? Math.round((membersSynced / totalFederalCandidates) * 100)
