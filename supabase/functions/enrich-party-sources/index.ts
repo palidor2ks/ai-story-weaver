@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 // Declare EdgeRuntime for background tasks
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
@@ -86,6 +86,28 @@ function extractDomainName(url: string): string {
   } catch {
     return 'Source';
   }
+}
+
+/**
+ * Smart truncation that preserves sentence/word boundaries
+ */
+function smartTruncate(text: string, maxLength: number): string {
+  if (!text || text.length <= maxLength) return text || '';
+  
+  // Try to end at a sentence boundary first
+  const sentenceEnd = text.slice(0, maxLength).lastIndexOf('. ');
+  if (sentenceEnd > maxLength * 0.6) {
+    return text.slice(0, sentenceEnd + 1);
+  }
+  
+  // Fall back to word boundary
+  const lastSpace = text.slice(0, maxLength).lastIndexOf(' ');
+  if (lastSpace > maxLength * 0.7) {
+    return text.slice(0, lastSpace) + '...';
+  }
+  
+  // Last resort: hard cut with ellipsis
+  return text.slice(0, maxLength - 3) + '...';
 }
 
 /**
@@ -266,7 +288,7 @@ KEY_QUOTE: ""`
     const descriptionMatch = researchText.match(/DESCRIPTION:\s*(.+?)(?=KEY_QUOTE:|$)/s);
     const keyQuoteMatch = researchText.match(/KEY_QUOTE:\s*"([^"]+)"/);
     
-    const sourceDescription = descriptionMatch?.[1]?.trim() || researchText.slice(0, 500);
+    const sourceDescription = descriptionMatch?.[1]?.trim() || smartTruncate(researchText, 1000);
     const keyQuote = keyQuoteMatch?.[1]?.trim() || '';
     
     // Extract source URLs and titles from grounding metadata
