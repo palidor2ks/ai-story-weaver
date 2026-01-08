@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info } from 'lucide-react';
+import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info, Share2 } from 'lucide-react';
 import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { AvatarUpload } from '@/components/AvatarUpload';
@@ -463,6 +463,12 @@ export const UserProfile = () => {
 
         {/* Quiz Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-3 mb-8">
+          <Link to="/results" className="flex-1">
+            <Button variant="secondary" className="w-full gap-2">
+              <Share2 className="w-4 h-4" />
+              View & Share Results
+            </Button>
+          </Link>
           <Link to="/quiz?mode=random" className="flex-1">
             <Button variant="default" className="w-full gap-2">
               <HelpCircle className="w-4 h-4" />
