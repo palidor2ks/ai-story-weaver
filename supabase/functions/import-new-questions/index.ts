@@ -202,21 +202,62 @@ serve(async (req) => {
       let insertedQuestions = 0;
       let insertedOptions = 0;
       
-      // Track question numbers per topic
-      const topicCounts: Record<string, number> = {};
+      // Get existing question counts per topic to avoid ID conflicts
+      const { data: existingQuestions } = await supabase
+        .from('questions')
+        .select('id, topic_id');
       
-      for (const q of questions as QuestionData[]) {
-        if (!topicCounts[q.topicId]) {
-          topicCounts[q.topicId] = 0;
+      const topicCounts: Record<string, number> = {};
+      if (existingQuestions) {
+        for (const eq of existingQuestions) {
+          if (!topicCounts[eq.topic_id]) topicCounts[eq.topic_id] = 0;
+          topicCounts[eq.topic_id]++;
         }
-        topicCounts[q.topicId]++;
+      }
+      
+      for (const q of questions) {
+        // Support both 'topic' (name) and 'topicId' (id) fields
+        let topicId = q.topicId;
+        if (!topicId && q.topic) {
+          // Look up topic ID from name
+          const topicName = q.topic.toLowerCase();
+          topicId = TOPIC_NAME_MAP[topicName];
+          if (!topicId) {
+            // Try to find by partial match
+            const matchedTopic = TOPICS.find(t => 
+              t.name.toLowerCase() === topicName ||
+              t.name.toLowerCase().startsWith(topicName) ||
+              topicName.includes(t.name.toLowerCase().split(',')[0])
+            );
+            topicId = matchedTopic?.id;
+          }
+        }
         
-        const questionId = generateQuestionId(q.topicId, topicCounts[q.topicId]);
+        if (!topicId) {
+          console.error(`Could not find topic ID for: ${q.topic || q.topicId}`);
+          continue;
+        }
+        
+        if (!topicCounts[topicId]) {
+          topicCounts[topicId] = 0;
+        }
+        topicCounts[topicId]++;
+        
+        const questionId = generateQuestionId(topicId, topicCounts[topicId]);
+        
+        // Parse options - support both string array and object array
+        const parsedOptions = (q.options || []).map((opt: string | { text: string; value?: number }, idx: number) => {
+          const text = typeof opt === 'string' ? opt : opt.text;
+          const value = typeof opt === 'object' && opt.value !== undefined 
+            ? opt.value 
+            : parseOptionValue(text, idx);
+          return { text: cleanOptionText(text), value };
+        });
         
         // Insert question
         const { error: qError } = await supabase.from('questions').insert({
           id: questionId,
-          topic_id: q.topicId,
+          topic_id: topicId,
           text: q.text,
           is_onboarding_canonical: q.isOnboarding || false,
           onboarding_slot: q.onboardingSlot || null,
@@ -230,10 +271,10 @@ serve(async (req) => {
         insertedQuestions++;
         
         // Insert options
-        const options = q.options.map((opt, idx) => ({
+        const options = parsedOptions.map((opt: { text: string; value: number }, idx: number) => ({
           id: `${questionId}-${String.fromCharCode(97 + idx)}`, // a, b, c, d, e
           question_id: questionId,
-          text: cleanOptionText(opt.text),
+          text: opt.text,
           value: opt.value,
           display_order: idx,
           is_skip_option: false,
