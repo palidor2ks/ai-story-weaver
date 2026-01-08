@@ -1,0 +1,83 @@
+-- Insert Environmental Protection questions (mapped to 'environment')
+INSERT INTO questions (id, topic_id, text) VALUES
+('envp01', 'environment', 'How should the federal government regulate carbon emissions from industrial facilities?'),
+('envp02', 'environment', 'What approach should the EPA take toward environmental enforcement?'),
+('envp03', 'environment', 'How should the government address pollution in low-income communities?'),
+('envp04', 'environment', 'What role should cost-benefit analysis play in environmental regulations?'),
+('envp05', 'environment', 'How should the government regulate disposal of hazardous waste?'),
+('envp06', 'environment', 'What approach should be taken to protect endangered species?'),
+('envp07', 'environment', 'How should the government address air quality standards?'),
+('envp08', 'environment', 'What role should states have in setting environmental standards?'),
+('envp09', 'environment', 'How should environmental impact reviews be conducted for major projects?'),
+('envp10', 'environment', 'What approach should be taken to regulate single-use plastics?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('envp01_a', 'envp01', 'Implement strict emissions caps with penalties for non-compliance', -10, 1),
+('envp01_b', 'envp01', 'Set moderate reduction targets with industry input', -5, 2),
+('envp01_c', 'envp01', 'Encourage voluntary emissions reduction programs', 5, 3),
+('envp01_d', 'envp01', 'Eliminate federal emissions regulations entirely', 10, 4),
+('envp01_e', 'envp01', 'Use market-based cap-and-trade systems', 0, 5),
+('envp01_f', 'envp01', 'This issue is not important to me', 0, 6),
+
+('envp02_a', 'envp02', 'Maximize enforcement with significant penalties', -10, 1),
+('envp02_b', 'envp02', 'Balance enforcement with compliance assistance', -5, 2),
+('envp02_c', 'envp02', 'Prioritize voluntary compliance over penalties', 5, 3),
+('envp02_d', 'envp02', 'Minimize federal enforcement entirely', 10, 4),
+('envp02_e', 'envp02', 'Focus on the largest violators only', 0, 5),
+('envp02_f', 'envp02', 'This issue is not important to me', 0, 6),
+
+('envp03_a', 'envp03', 'Mandate cleanup and prevention with federal funding', -10, 1),
+('envp03_b', 'envp03', 'Provide grants and incentives for pollution reduction', -5, 2),
+('envp03_c', 'envp03', 'Let local governments address these issues', 5, 3),
+('envp03_d', 'envp03', 'Leave it to market forces and private action', 10, 4),
+('envp03_e', 'envp03', 'Create environmental justice task forces', 0, 5),
+('envp03_f', 'envp03', 'This issue is not important to me', 0, 6),
+
+('envp04_a', 'envp04', 'Prioritize environmental protection over economic costs', -10, 1),
+('envp04_b', 'envp04', 'Balance environmental and economic considerations', -5, 2),
+('envp04_c', 'envp04', 'Require regulations to show clear economic benefits', 5, 3),
+('envp04_d', 'envp04', 'Eliminate regulations that impose economic costs', 10, 4),
+('envp04_e', 'envp04', 'Consider long-term benefits including health savings', 0, 5),
+('envp04_f', 'envp04', 'This issue is not important to me', 0, 6),
+
+('envp05_a', 'envp05', 'Implement strict federal oversight and cleanup requirements', -10, 1),
+('envp05_b', 'envp05', 'Maintain current regulations with periodic updates', -5, 2),
+('envp05_c', 'envp05', 'Streamline regulations to reduce business burden', 5, 3),
+('envp05_d', 'envp05', 'Leave hazardous waste regulation to states', 10, 4),
+('envp05_e', 'envp05', 'Focus on preventing waste generation', 0, 5),
+('envp05_f', 'envp05', 'This issue is not important to me', 0, 6),
+
+('envp06_a', 'envp06', 'Expand protections and habitat preservation', -10, 1),
+('envp06_b', 'envp06', 'Maintain current Endangered Species Act protections', -5, 2),
+('envp06_c', 'envp06', 'Reform ESA to better balance development needs', 5, 3),
+('envp06_d', 'envp06', 'Significantly reduce federal species protections', 10, 4),
+('envp06_e', 'envp06', 'Focus on species with greatest recovery potential', 0, 5),
+('envp06_f', 'envp06', 'This issue is not important to me', 0, 6),
+
+('envp07_a', 'envp07', 'Strengthen air quality standards significantly', -10, 1),
+('envp07_b', 'envp07', 'Maintain current Clean Air Act standards', -5, 2),
+('envp07_c', 'envp07', 'Relax standards to reduce compliance costs', 5, 3),
+('envp07_d', 'envp07', 'Let states set their own air quality standards', 10, 4),
+('envp07_e', 'envp07', 'Focus on areas with worst air quality first', 0, 5),
+('envp07_f', 'envp07', 'This issue is not important to me', 0, 6),
+
+('envp08_a', 'envp08', 'Set strong federal minimum standards', -10, 1),
+('envp08_b', 'envp08', 'Allow states to exceed federal minimums', -5, 2),
+('envp08_c', 'envp08', 'Give states primary authority with federal oversight', 5, 3),
+('envp08_d', 'envp08', 'Transfer all environmental authority to states', 10, 4),
+('envp08_e', 'envp08', 'Create regional standards based on conditions', 0, 5),
+('envp08_f', 'envp08', 'This issue is not important to me', 0, 6),
+
+('envp09_a', 'envp09', 'Require comprehensive reviews for all major projects', -10, 1),
+('envp09_b', 'envp09', 'Maintain NEPA requirements with reasonable timelines', -5, 2),
+('envp09_c', 'envp09', 'Streamline reviews to speed up project approvals', 5, 3),
+('envp09_d', 'envp09', 'Eliminate most federal environmental review requirements', 10, 4),
+('envp09_e', 'envp09', 'Use categorical exclusions for routine projects', 0, 5),
+('envp09_f', 'envp09', 'This issue is not important to me', 0, 6),
+
+('envp10_a', 'envp10', 'Ban single-use plastics with federal legislation', -10, 1),
+('envp10_b', 'envp10', 'Phase out problematic plastics over time', -5, 2),
+('envp10_c', 'envp10', 'Encourage voluntary industry reduction', 5, 3),
+('envp10_d', 'envp10', 'Leave plastic regulation to consumer choice', 10, 4),
+('envp10_e', 'envp10', 'Focus on improving recycling infrastructure', 0, 5),
+('envp10_f', 'envp10', 'This issue is not important to me', 0, 6);

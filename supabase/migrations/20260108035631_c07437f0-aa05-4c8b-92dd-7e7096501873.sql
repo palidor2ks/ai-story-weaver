@@ -1,0 +1,83 @@
+-- Insert Housing and Community Development questions (mapped to 'social-programs')
+INSERT INTO questions (id, topic_id, text) VALUES
+('hous01', 'social-programs', 'What role should the federal government play in affordable housing?'),
+('hous02', 'social-programs', 'How should homelessness be addressed?'),
+('hous03', 'social-programs', 'What approach should be taken to rental assistance?'),
+('hous04', 'social-programs', 'How should the government support homeownership?'),
+('hous05', 'social-programs', 'What role should fair housing enforcement play?'),
+('hous06', 'social-programs', 'How should public housing be reformed?'),
+('hous07', 'social-programs', 'What approach should be taken to community development?'),
+('hous08', 'social-programs', 'How should the government address housing discrimination?'),
+('hous09', 'social-programs', 'What role should zoning reform play in housing policy?'),
+('hous10', 'social-programs', 'How should the government address housing supply?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('hous01_a', 'hous01', 'Guarantee housing as a right with major federal investment', -10, 1),
+('hous01_b', 'hous01', 'Significantly expand affordable housing programs', -5, 2),
+('hous01_c', 'hous01', 'Reduce regulations to increase housing supply', 5, 3),
+('hous01_d', 'hous01', 'Leave housing entirely to private markets', 10, 4),
+('hous01_e', 'hous01', 'Focus on public-private partnerships', 0, 5),
+('hous01_f', 'hous01', 'This issue is not important to me', 0, 6),
+
+('hous02_a', 'hous02', 'Implement Housing First with wraparound services', -10, 1),
+('hous02_b', 'hous02', 'Expand federal homeless assistance programs', -5, 2),
+('hous02_c', 'hous02', 'Provide grants to local governments', 5, 3),
+('hous02_d', 'hous02', 'Leave homelessness to local communities', 10, 4),
+('hous02_e', 'hous02', 'Focus on mental health and addiction services', 0, 5),
+('hous02_f', 'hous02', 'This issue is not important to me', 0, 6),
+
+('hous03_a', 'hous03', 'Provide universal rental assistance for those in need', -10, 1),
+('hous03_b', 'hous03', 'Expand Section 8 and voucher programs', -5, 2),
+('hous03_c', 'hous03', 'Target assistance to most vulnerable', 5, 3),
+('hous03_d', 'hous03', 'Phase out federal rental assistance', 10, 4),
+('hous03_e', 'hous03', 'Focus on temporary assistance with work requirements', 0, 5),
+('hous03_f', 'hous03', 'This issue is not important to me', 0, 6),
+
+('hous04_a', 'hous04', 'Expand down payment assistance and subsidies', -10, 1),
+('hous04_b', 'hous04', 'Maintain current FHA and mortgage programs', -5, 2),
+('hous04_c', 'hous04', 'Reduce government role in mortgage markets', 5, 3),
+('hous04_d', 'hous04', 'Privatize Fannie Mae and Freddie Mac', 10, 4),
+('hous04_e', 'hous04', 'Focus on first-time homebuyer programs', 0, 5),
+('hous04_f', 'hous04', 'This issue is not important to me', 0, 6),
+
+('hous05_a', 'hous05', 'Aggressively enforce and expand fair housing laws', -10, 1),
+('hous05_b', 'hous05', 'Strengthen enforcement of existing fair housing laws', -5, 2),
+('hous05_c', 'hous05', 'Maintain current fair housing enforcement', 5, 3),
+('hous05_d', 'hous05', 'Reduce federal fair housing regulations', 10, 4),
+('hous05_e', 'hous05', 'Focus on education and voluntary compliance', 0, 5),
+('hous05_f', 'hous05', 'This issue is not important to me', 0, 6),
+
+('hous06_a', 'hous06', 'Invest in renovating and expanding public housing', -10, 1),
+('hous06_b', 'hous06', 'Maintain public housing with targeted improvements', -5, 2),
+('hous06_c', 'hous06', 'Convert public housing to voucher programs', 5, 3),
+('hous06_d', 'hous06', 'Phase out federal public housing programs', 10, 4),
+('hous06_e', 'hous06', 'Allow mixed-income redevelopment', 0, 5),
+('hous06_f', 'hous06', 'This issue is not important to me', 0, 6),
+
+('hous07_a', 'hous07', 'Major federal investment in community development', -10, 1),
+('hous07_b', 'hous07', 'Expand CDBG and community development programs', -5, 2),
+('hous07_c', 'hous07', 'Provide flexible block grants to communities', 5, 3),
+('hous07_d', 'hous07', 'Leave community development to local government', 10, 4),
+('hous07_e', 'hous07', 'Focus on opportunity zones and tax incentives', 0, 5),
+('hous07_f', 'hous07', 'This issue is not important to me', 0, 6),
+
+('hous08_a', 'hous08', 'Proactive testing and enforcement against discrimination', -10, 1),
+('hous08_b', 'hous08', 'Strengthen enforcement and penalties', -5, 2),
+('hous08_c', 'hous08', 'Maintain complaint-based enforcement', 5, 3),
+('hous08_d', 'hous08', 'Reduce federal anti-discrimination requirements', 10, 4),
+('hous08_e', 'hous08', 'Focus on education and awareness', 0, 5),
+('hous08_f', 'hous08', 'This issue is not important to me', 0, 6),
+
+('hous09_a', 'hous09', 'Condition federal funds on zoning reform', -10, 1),
+('hous09_b', 'hous09', 'Incentivize local zoning reform', -5, 2),
+('hous09_c', 'hous09', 'Support local control over zoning', 5, 3),
+('hous09_d', 'hous09', 'No federal role in local zoning decisions', 10, 4),
+('hous09_e', 'hous09', 'Focus on transit-oriented development incentives', 0, 5),
+('hous09_f', 'hous09', 'This issue is not important to me', 0, 6),
+
+('hous10_a', 'hous10', 'Federal programs to directly increase housing construction', -10, 1),
+('hous10_b', 'hous10', 'Incentivize increased housing production', -5, 2),
+('hous10_c', 'hous10', 'Remove federal barriers to construction', 5, 3),
+('hous10_d', 'hous10', 'Leave housing supply to private markets', 10, 4),
+('hous10_e', 'hous10', 'Focus on workforce and affordable housing', 0, 5),
+('hous10_f', 'hous10', 'This issue is not important to me', 0, 6);

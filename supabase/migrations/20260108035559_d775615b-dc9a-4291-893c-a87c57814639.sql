@@ -1,0 +1,83 @@
+-- Insert Health questions (mapped to 'healthcare')
+INSERT INTO questions (id, topic_id, text) VALUES
+('hlth01', 'healthcare', 'What should be the role of government in providing health insurance?'),
+('hlth02', 'healthcare', 'How should prescription drug prices be addressed?'),
+('hlth03', 'healthcare', 'What approach should be taken to Medicare?'),
+('hlth04', 'healthcare', 'How should Medicaid be structured?'),
+('hlth05', 'healthcare', 'What role should the government play in mental health services?'),
+('hlth06', 'healthcare', 'How should the government address the opioid crisis?'),
+('hlth07', 'healthcare', 'What approach should be taken to public health preparedness?'),
+('hlth08', 'healthcare', 'How should the government regulate healthcare costs?'),
+('hlth09', 'healthcare', 'What role should the government play in medical research funding?'),
+('hlth10', 'healthcare', 'How should telehealth be regulated?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('hlth01_a', 'hlth01', 'Implement single-payer Medicare for All', -10, 1),
+('hlth01_b', 'hlth01', 'Expand public option alongside private insurance', -5, 2),
+('hlth01_c', 'hlth01', 'Maintain ACA with market-based reforms', 5, 3),
+('hlth01_d', 'hlth01', 'Return to fully market-based healthcare', 10, 4),
+('hlth01_e', 'hlth01', 'Expand coverage through multiple pathways', 0, 5),
+('hlth01_f', 'hlth01', 'This issue is not important to me', 0, 6),
+
+('hlth02_a', 'hlth02', 'Allow Medicare to negotiate all drug prices', -10, 1),
+('hlth02_b', 'hlth02', 'Cap drug prices and increase transparency', -5, 2),
+('hlth02_c', 'hlth02', 'Promote competition through faster generic approvals', 5, 3),
+('hlth02_d', 'hlth02', 'Let market forces determine drug prices', 10, 4),
+('hlth02_e', 'hlth02', 'Focus on increasing price transparency', 0, 5),
+('hlth02_f', 'hlth02', 'This issue is not important to me', 0, 6),
+
+('hlth03_a', 'hlth03', 'Expand Medicare to cover all Americans', -10, 1),
+('hlth03_b', 'hlth03', 'Lower Medicare eligibility age gradually', -5, 2),
+('hlth03_c', 'hlth03', 'Modernize Medicare with market-based reforms', 5, 3),
+('hlth03_d', 'hlth03', 'Convert Medicare to premium support vouchers', 10, 4),
+('hlth03_e', 'hlth03', 'Strengthen Medicare Advantage options', 0, 5),
+('hlth03_f', 'hlth03', 'This issue is not important to me', 0, 6),
+
+('hlth04_a', 'hlth04', 'Expand Medicaid eligibility in all states', -10, 1),
+('hlth04_b', 'hlth04', 'Maintain federal standards with state flexibility', -5, 2),
+('hlth04_c', 'hlth04', 'Convert to block grants with state control', 5, 3),
+('hlth04_d', 'hlth04', 'Phase out Medicaid in favor of private alternatives', 10, 4),
+('hlth04_e', 'hlth04', 'Add work requirements with support services', 0, 5),
+('hlth04_f', 'hlth04', 'This issue is not important to me', 0, 6),
+
+('hlth05_a', 'hlth05', 'Create universal mental health coverage', -10, 1),
+('hlth05_b', 'hlth05', 'Significantly expand mental health funding', -5, 2),
+('hlth05_c', 'hlth05', 'Support community mental health through grants', 5, 3),
+('hlth05_d', 'hlth05', 'Leave mental health to private sector and families', 10, 4),
+('hlth05_e', 'hlth05', 'Integrate mental health into primary care', 0, 5),
+('hlth05_f', 'hlth05', 'This issue is not important to me', 0, 6),
+
+('hlth06_a', 'hlth06', 'Treat addiction primarily as health issue with treatment focus', -10, 1),
+('hlth06_b', 'hlth06', 'Balance treatment expansion with enforcement', -5, 2),
+('hlth06_c', 'hlth06', 'Focus on supply reduction and law enforcement', 5, 3),
+('hlth06_d', 'hlth06', 'Prioritize criminal penalties for drug offenses', 10, 4),
+('hlth06_e', 'hlth06', 'Focus on prevention and early intervention', 0, 5),
+('hlth06_f', 'hlth06', 'This issue is not important to me', 0, 6),
+
+('hlth07_a', 'hlth07', 'Significantly expand CDC and public health infrastructure', -10, 1),
+('hlth07_b', 'hlth07', 'Strengthen federal-state public health coordination', -5, 2),
+('hlth07_c', 'hlth07', 'Maintain current preparedness with targeted improvements', 5, 3),
+('hlth07_d', 'hlth07', 'Reduce federal public health role to emergencies only', 10, 4),
+('hlth07_e', 'hlth07', 'Focus on pandemic preparedness specifically', 0, 5),
+('hlth07_f', 'hlth07', 'This issue is not important to me', 0, 6),
+
+('hlth08_a', 'hlth08', 'Implement price controls on healthcare services', -10, 1),
+('hlth08_b', 'hlth08', 'Regulate prices and increase transparency', -5, 2),
+('hlth08_c', 'hlth08', 'Promote competition to reduce costs', 5, 3),
+('hlth08_d', 'hlth08', 'Let market forces determine healthcare prices', 10, 4),
+('hlth08_e', 'hlth08', 'Focus on value-based payment models', 0, 5),
+('hlth08_f', 'hlth08', 'This issue is not important to me', 0, 6),
+
+('hlth09_a', 'hlth09', 'Significantly increase NIH and research funding', -10, 1),
+('hlth09_b', 'hlth09', 'Maintain strong federal research investment', -5, 2),
+('hlth09_c', 'hlth09', 'Shift research funding to private sector', 5, 3),
+('hlth09_d', 'hlth09', 'Reduce federal role in medical research', 10, 4),
+('hlth09_e', 'hlth09', 'Focus public funding on basic research', 0, 5),
+('hlth09_f', 'hlth09', 'This issue is not important to me', 0, 6),
+
+('hlth10_a', 'hlth10', 'Fully integrate telehealth with comprehensive coverage', -10, 1),
+('hlth10_b', 'hlth10', 'Expand telehealth access while ensuring quality', -5, 2),
+('hlth10_c', 'hlth10', 'Allow telehealth with appropriate state oversight', 5, 3),
+('hlth10_d', 'hlth10', 'Minimize regulation and let market develop', 10, 4),
+('hlth10_e', 'hlth10', 'Focus on rural and underserved access', 0, 5),
+('hlth10_f', 'hlth10', 'This issue is not important to me', 0, 6);

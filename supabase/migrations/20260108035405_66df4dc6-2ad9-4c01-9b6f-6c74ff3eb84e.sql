@@ -1,0 +1,83 @@
+-- Insert Families questions (mapped to 'social-programs')
+INSERT INTO questions (id, topic_id, text) VALUES
+('fam01', 'social-programs', 'What role should the federal government play in supporting working families with childcare?'),
+('fam02', 'social-programs', 'How should the government approach paid family leave?'),
+('fam03', 'social-programs', 'What approach should be taken to child welfare services?'),
+('fam04', 'social-programs', 'How should the government support family caregivers?'),
+('fam05', 'social-programs', 'What role should the government play in marriage and family promotion?'),
+('fam06', 'social-programs', 'How should child support enforcement be handled?'),
+('fam07', 'social-programs', 'What approach should be taken to foster care reform?'),
+('fam08', 'social-programs', 'How should the government address domestic violence?'),
+('fam09', 'social-programs', 'What role should the government play in adoption services?'),
+('fam10', 'social-programs', 'How should the government support multigenerational families?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('fam01_a', 'fam01', 'Provide universal childcare through federal programs', -10, 1),
+('fam01_b', 'fam01', 'Offer significant subsidies for working families', -5, 2),
+('fam01_c', 'fam01', 'Provide tax credits for childcare expenses', 5, 3),
+('fam01_d', 'fam01', 'Leave childcare entirely to private markets', 10, 4),
+('fam01_e', 'fam01', 'Expand employer-provided childcare benefits', 0, 5),
+('fam01_f', 'fam01', 'This issue is not important to me', 0, 6),
+
+('fam02_a', 'fam02', 'Mandate paid family leave for all workers', -10, 1),
+('fam02_b', 'fam02', 'Create a federal paid leave insurance program', -5, 2),
+('fam02_c', 'fam02', 'Encourage voluntary employer-provided leave', 5, 3),
+('fam02_d', 'fam02', 'Leave family leave entirely to employers', 10, 4),
+('fam02_e', 'fam02', 'Provide tax incentives for employers offering leave', 0, 5),
+('fam02_f', 'fam02', 'This issue is not important to me', 0, 6),
+
+('fam03_a', 'fam03', 'Significantly expand federal child welfare funding', -10, 1),
+('fam03_b', 'fam03', 'Increase support for family preservation services', -5, 2),
+('fam03_c', 'fam03', 'Maintain current federal-state partnership', 5, 3),
+('fam03_d', 'fam03', 'Shift child welfare entirely to states', 10, 4),
+('fam03_e', 'fam03', 'Focus on prevention and early intervention', 0, 5),
+('fam03_f', 'fam03', 'This issue is not important to me', 0, 6),
+
+('fam04_a', 'fam04', 'Create comprehensive federal caregiver support programs', -10, 1),
+('fam04_b', 'fam04', 'Expand respite care and caregiver tax credits', -5, 2),
+('fam04_c', 'fam04', 'Provide information and voluntary support resources', 5, 3),
+('fam04_d', 'fam04', 'Leave caregiver support to families and communities', 10, 4),
+('fam04_e', 'fam04', 'Focus on employer flexibility policies', 0, 5),
+('fam04_f', 'fam04', 'This issue is not important to me', 0, 6),
+
+('fam05_a', 'fam05', 'No government involvement in family structure', -10, 1),
+('fam05_b', 'fam05', 'Support all family structures equally', -5, 2),
+('fam05_c', 'fam05', 'Encourage marriage through tax policy', 5, 3),
+('fam05_d', 'fam05', 'Actively promote traditional marriage', 10, 4),
+('fam05_e', 'fam05', 'Focus on supporting children regardless of family structure', 0, 5),
+('fam05_f', 'fam05', 'This issue is not important to me', 0, 6),
+
+('fam06_a', 'fam06', 'Strengthen federal enforcement significantly', -10, 1),
+('fam06_b', 'fam06', 'Maintain current interstate enforcement cooperation', -5, 2),
+('fam06_c', 'fam06', 'Give states more flexibility in enforcement', 5, 3),
+('fam06_d', 'fam06', 'Leave enforcement entirely to states', 10, 4),
+('fam06_e', 'fam06', 'Focus on employment support for non-custodial parents', 0, 5),
+('fam06_f', 'fam06', 'This issue is not important to me', 0, 6),
+
+('fam07_a', 'fam07', 'Prioritize family reunification with significant federal support', -10, 1),
+('fam07_b', 'fam07', 'Balance reunification with child safety', -5, 2),
+('fam07_c', 'fam07', 'Expedite adoption when reunification unlikely', 5, 3),
+('fam07_d', 'fam07', 'Give states full authority over foster care', 10, 4),
+('fam07_e', 'fam07', 'Increase support for kinship care', 0, 5),
+('fam07_f', 'fam07', 'This issue is not important to me', 0, 6),
+
+('fam08_a', 'fam08', 'Significantly expand federal domestic violence programs', -10, 1),
+('fam08_b', 'fam08', 'Maintain and strengthen Violence Against Women Act', -5, 2),
+('fam08_c', 'fam08', 'Provide grants to state and local programs', 5, 3),
+('fam08_d', 'fam08', 'Leave domestic violence response to states', 10, 4),
+('fam08_e', 'fam08', 'Focus on prevention education and intervention', 0, 5),
+('fam08_f', 'fam08', 'This issue is not important to me', 0, 6),
+
+('fam09_a', 'fam09', 'Expand federal support for all types of adoption', -10, 1),
+('fam09_b', 'fam09', 'Streamline adoption processes while maintaining protections', -5, 2),
+('fam09_c', 'fam09', 'Provide tax credits for adoptive families', 5, 3),
+('fam09_d', 'fam09', 'Leave adoption regulation to states', 10, 4),
+('fam09_e', 'fam09', 'Focus on reducing barriers to adoption', 0, 5),
+('fam09_f', 'fam09', 'This issue is not important to me', 0, 6),
+
+('fam10_a', 'fam10', 'Create federal programs for multigenerational housing and care', -10, 1),
+('fam10_b', 'fam10', 'Provide tax incentives for multigenerational households', -5, 2),
+('fam10_c', 'fam10', 'Encourage community-based support', 5, 3),
+('fam10_d', 'fam10', 'Leave multigenerational support to families', 10, 4),
+('fam10_e', 'fam10', 'Focus on flexible work policies', 0, 5),
+('fam10_f', 'fam10', 'This issue is not important to me', 0, 6);

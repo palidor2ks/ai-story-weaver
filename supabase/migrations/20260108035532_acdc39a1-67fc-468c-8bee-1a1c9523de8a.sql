@@ -1,0 +1,83 @@
+-- Insert Government Operations and Politics questions (mapped to 'government')
+INSERT INTO questions (id, topic_id, text) VALUES
+('gov01', 'government', 'What approach should be taken to the size of the federal government?'),
+('gov02', 'government', 'How should federal agencies be reformed?'),
+('gov03', 'government', 'What role should the federal government play in elections?'),
+('gov04', 'government', 'How should government transparency be addressed?'),
+('gov05', 'government', 'What approach should be taken to lobbying reform?'),
+('gov06', 'government', 'How should term limits for Congress be addressed?'),
+('gov07', 'government', 'What role should the government play in campaign finance?'),
+('gov08', 'government', 'How should the federal workforce be managed?'),
+('gov09', 'government', 'What approach should be taken to government contracting?'),
+('gov10', 'government', 'How should the relationship between federal and state governments be structured?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('gov01_a', 'gov01', 'Expand government to address more social needs', -10, 1),
+('gov01_b', 'gov01', 'Maintain current size with targeted improvements', -5, 2),
+('gov01_c', 'gov01', 'Reduce government size through efficiency measures', 5, 3),
+('gov01_d', 'gov01', 'Dramatically shrink federal government', 10, 4),
+('gov01_e', 'gov01', 'Focus on effectiveness rather than size', 0, 5),
+('gov01_f', 'gov01', 'This issue is not important to me', 0, 6),
+
+('gov02_a', 'gov02', 'Strengthen agencies with more funding and authority', -10, 1),
+('gov02_b', 'gov02', 'Modernize agencies while maintaining missions', -5, 2),
+('gov02_c', 'gov02', 'Consolidate and streamline agencies', 5, 3),
+('gov02_d', 'gov02', 'Eliminate or privatize many federal agencies', 10, 4),
+('gov02_e', 'gov02', 'Focus on performance-based management', 0, 5),
+('gov02_f', 'gov02', 'This issue is not important to me', 0, 6),
+
+('gov03_a', 'gov03', 'Establish comprehensive federal election standards', -10, 1),
+('gov03_b', 'gov03', 'Set minimum federal standards with state flexibility', -5, 2),
+('gov03_c', 'gov03', 'Limit federal role to constitutional requirements', 5, 3),
+('gov03_d', 'gov03', 'Leave elections entirely to states', 10, 4),
+('gov03_e', 'gov03', 'Focus on election security partnerships', 0, 5),
+('gov03_f', 'gov03', 'This issue is not important to me', 0, 6),
+
+('gov04_a', 'gov04', 'Maximize government transparency with few exceptions', -10, 1),
+('gov04_b', 'gov04', 'Strengthen FOIA and disclosure requirements', -5, 2),
+('gov04_c', 'gov04', 'Balance transparency with operational needs', 5, 3),
+('gov04_d', 'gov04', 'Allow agencies more discretion on disclosures', 10, 4),
+('gov04_e', 'gov04', 'Focus on proactive disclosure over requests', 0, 5),
+('gov04_f', 'gov04', 'This issue is not important to me', 0, 6),
+
+('gov05_a', 'gov05', 'Strictly limit lobbying and revolving door', -10, 1),
+('gov05_b', 'gov05', 'Strengthen disclosure and cooling-off periods', -5, 2),
+('gov05_c', 'gov05', 'Maintain current lobbying regulations', 5, 3),
+('gov05_d', 'gov05', 'Reduce restrictions on lobbying as free speech', 10, 4),
+('gov05_e', 'gov05', 'Focus on transparency over restrictions', 0, 5),
+('gov05_f', 'gov05', 'This issue is not important to me', 0, 6),
+
+('gov06_a', 'gov06', 'Oppose term limits as limiting voter choice', -10, 1),
+('gov06_b', 'gov06', 'Consider moderate term limits if broadly supported', -5, 2),
+('gov06_c', 'gov06', 'Support reasonable term limits for Congress', 5, 3),
+('gov06_d', 'gov06', 'Implement strict term limits for all federal offices', 10, 4),
+('gov06_e', 'gov06', 'Focus on other reforms over term limits', 0, 5),
+('gov06_f', 'gov06', 'This issue is not important to me', 0, 6),
+
+('gov07_a', 'gov07', 'Public financing of campaigns with strict limits', -10, 1),
+('gov07_b', 'gov07', 'Strengthen campaign finance disclosure and limits', -5, 2),
+('gov07_c', 'gov07', 'Maintain current campaign finance system', 5, 3),
+('gov07_d', 'gov07', 'Remove campaign contribution limits as free speech', 10, 4),
+('gov07_e', 'gov07', 'Focus on disclosure over contribution limits', 0, 5),
+('gov07_f', 'gov07', 'This issue is not important to me', 0, 6),
+
+('gov08_a', 'gov08', 'Strengthen civil service protections and benefits', -10, 1),
+('gov08_b', 'gov08', 'Modernize workforce while protecting merit system', -5, 2),
+('gov08_c', 'gov08', 'Increase flexibility in hiring and firing', 5, 3),
+('gov08_d', 'gov08', 'Make federal workers at-will employees', 10, 4),
+('gov08_e', 'gov08', 'Focus on performance-based management', 0, 5),
+('gov08_f', 'gov08', 'This issue is not important to me', 0, 6),
+
+('gov09_a', 'gov09', 'Prioritize social and environmental goals in contracting', -10, 1),
+('gov09_b', 'gov09', 'Maintain current contracting with stronger oversight', -5, 2),
+('gov09_c', 'gov09', 'Streamline contracting to reduce costs', 5, 3),
+('gov09_d', 'gov09', 'Maximize privatization and competitive contracting', 10, 4),
+('gov09_e', 'gov09', 'Focus on small business opportunities', 0, 5),
+('gov09_f', 'gov09', 'This issue is not important to me', 0, 6),
+
+('gov10_a', 'gov10', 'Strong federal role with states implementing federal policy', -10, 1),
+('gov10_b', 'gov10', 'Cooperative federalism with shared responsibilities', -5, 2),
+('gov10_c', 'gov10', 'Devolve more authority to states', 5, 3),
+('gov10_d', 'gov10', 'Maximum state sovereignty with minimal federal role', 10, 4),
+('gov10_e', 'gov10', 'Flexibility based on policy area', 0, 5),
+('gov10_f', 'gov10', 'This issue is not important to me', 0, 6);
