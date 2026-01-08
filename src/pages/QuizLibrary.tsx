@@ -227,7 +227,7 @@ export const QuizLibrary = () => {
           {/* Info */}
           <div className="mt-8 p-4 rounded-lg bg-secondary/50 border border-border text-center">
             <p className="text-sm text-muted-foreground">
-              Retaking a quiz will update your score for that topic. Your overall score is calculated from your top 5 priority topics.
+              Retaking a quiz will update your score for that topic. Your overall score is calculated from your top 3 priority topics.
             </p>
           </div>
         </div>

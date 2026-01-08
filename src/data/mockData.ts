@@ -1,82 +1,79 @@
 import { Topic, Question, Candidate, Donor, Vote } from '@/types';
 
-// New 32 Congress.gov Policy Area Topics
+// Consolidated 10 Topics (from original 32 Congress.gov Policy Areas)
 export const topics: Topic[] = [
-  { id: 'agriculture-and-food', name: 'Agriculture and Food', icon: '🌾', weight: 1 },
-  { id: 'animals', name: 'Animals', icon: '🐾', weight: 1 },
-  { id: 'armed-forces-national-security', name: 'Armed Forces and National Security', displayName: 'Defense & Security', icon: '🎖️', weight: 1 },
-  { id: 'arts-culture-religion', name: 'Arts, Culture, Religion', displayName: 'Arts & Culture', icon: '🎭', weight: 1 },
-  { id: 'civil-rights-liberties', name: 'Civil Rights and Liberties, Minority Issues', displayName: 'Civil Rights', icon: '⚖️', weight: 1 },
-  { id: 'commerce', name: 'Commerce', icon: '🏪', weight: 1 },
-  { id: 'congress', name: 'Congress', icon: '🏛️', weight: 1 },
-  { id: 'crime-law-enforcement', name: 'Crime and Law Enforcement', displayName: 'Crime & Law', icon: '🚔', weight: 1 },
-  { id: 'economics-public-finance', name: 'Economics and Public Finance', displayName: 'Economics', icon: '📊', weight: 1 },
-  { id: 'education', name: 'Education', icon: '📚', weight: 1 },
-  { id: 'emergency-management', name: 'Emergency Management', displayName: 'Emergencies', icon: '🚨', weight: 1 },
-  { id: 'energy', name: 'Energy', icon: '⚡', weight: 1 },
-  { id: 'environmental-protection', name: 'Environmental Protection', displayName: 'Environment', icon: '🌍', weight: 1 },
-  { id: 'families', name: 'Families', icon: '👨‍👩‍👧', weight: 1 },
-  { id: 'finance-financial-sector', name: 'Finance and Financial Sector', displayName: 'Finance', icon: '🏦', weight: 1 },
-  { id: 'foreign-trade-international-finance', name: 'Foreign Trade and International Finance', displayName: 'Foreign Trade', icon: '🚢', weight: 1 },
-  { id: 'government-operations-politics', name: 'Government Operations and Politics', displayName: "Gov't & Politics", icon: '🗳️', weight: 1 },
-  { id: 'health', name: 'Health', icon: '🏥', weight: 1 },
-  { id: 'housing-community-development', name: 'Housing and Community Development', displayName: 'Housing', icon: '🏘️', weight: 1 },
+  { id: 'economy', name: 'Economy & Jobs', icon: '💼', weight: 1 },
+  { id: 'healthcare', name: 'Healthcare', icon: '🏥', weight: 1 },
+  { id: 'environment', name: 'Environment & Energy', icon: '🌍', weight: 1 },
   { id: 'immigration', name: 'Immigration', icon: '🛂', weight: 1 },
-  { id: 'international-affairs', name: 'International Affairs', displayName: "Int'l Affairs", icon: '🌐', weight: 1 },
-  { id: 'labor-employment', name: 'Labor and Employment', displayName: 'Labor', icon: '👷', weight: 1 },
-  { id: 'law', name: 'Law', icon: '📜', weight: 1 },
-  { id: 'native-americans', name: 'Native Americans', icon: '🪶', weight: 1 },
-  { id: 'public-lands-natural-resources', name: 'Public Lands and Natural Resources', displayName: 'Public Lands', icon: '🏞️', weight: 1 },
-  { id: 'science-technology-communications', name: 'Science, Technology, Communications', displayName: 'Science & Tech', icon: '🔬', weight: 1 },
-  { id: 'social-sciences-history', name: 'Social Sciences and History', displayName: 'Social Sciences', icon: '📖', weight: 1 },
-  { id: 'social-welfare', name: 'Social Welfare', icon: '🤝', weight: 1 },
-  { id: 'sports-recreation', name: 'Sports and Recreation', displayName: 'Sports & Rec', icon: '⚽', weight: 1 },
-  { id: 'taxation', name: 'Taxation', icon: '💵', weight: 1 },
-  { id: 'transportation-public-works', name: 'Transportation and Public Works', displayName: 'Transportation', icon: '🚇', weight: 1 },
-  { id: 'water-resources-development', name: 'Water Resources Development', displayName: 'Water Resources', icon: '💧', weight: 1 },
+  { id: 'defense', name: 'Defense & Foreign Policy', icon: '🌐', weight: 1 },
+  { id: 'civil-rights', name: 'Civil Rights & Justice', icon: '⚖️', weight: 1 },
+  { id: 'education', name: 'Education', icon: '📚', weight: 1 },
+  { id: 'social-programs', name: 'Social Programs', icon: '🤝', weight: 1 },
+  { id: 'government', name: 'Government & Democracy', icon: '🏛️', weight: 1 },
+  { id: 'technology', name: 'Technology & Science', icon: '🔬', weight: 1 },
 ];
 
-// Map from Congress.gov policy area names to topic IDs (for vote syncing)
+// Map from Congress.gov policy area names to consolidated topic IDs (for vote syncing)
 export const policyAreaToTopicId: Record<string, string> = {
-  'Agriculture and Food': 'agriculture-and-food',
-  'Animals': 'animals',
-  'Armed Forces and National Security': 'armed-forces-national-security',
-  'Arts, Culture, Religion': 'arts-culture-religion',
-  'Civil Rights and Liberties, Minority Issues': 'civil-rights-liberties',
-  'Commerce': 'commerce',
-  'Congress': 'congress',
-  'Crime and Law Enforcement': 'crime-law-enforcement',
-  'Economics and Public Finance': 'economics-public-finance',
-  'Education': 'education',
-  'Emergency Management': 'emergency-management',
-  'Energy': 'energy',
-  'Environmental Protection': 'environmental-protection',
-  'Families': 'families',
-  'Finance and Financial Sector': 'finance-financial-sector',
-  'Foreign Trade and International Finance': 'foreign-trade-international-finance',
-  'Government Operations and Politics': 'government-operations-politics',
-  'Health': 'health',
-  'Housing and Community Development': 'housing-community-development',
+  // Economy & Jobs
+  'Economics and Public Finance': 'economy',
+  'Labor and Employment': 'economy',
+  'Taxation': 'economy',
+  'Commerce': 'economy',
+  'Finance and Financial Sector': 'economy',
+  'Transportation and Public Works': 'economy',
+  
+  // Healthcare
+  'Health': 'healthcare',
+  'Families': 'healthcare',
+  
+  // Environment & Energy
+  'Energy': 'environment',
+  'Environmental Protection': 'environment',
+  'Water Resources Development': 'environment',
+  'Public Lands and Natural Resources': 'environment',
+  'Animals': 'environment',
+  'Agriculture and Food': 'environment',
+  
+  // Immigration
   'Immigration': 'immigration',
-  'International Affairs': 'international-affairs',
-  'Labor and Employment': 'labor-employment',
-  'Law': 'law',
-  'Native Americans': 'native-americans',
-  'Public Lands and Natural Resources': 'public-lands-natural-resources',
-  'Science, Technology, Communications': 'science-technology-communications',
-  'Social Sciences and History': 'social-sciences-history',
-  'Social Welfare': 'social-welfare',
-  'Sports and Recreation': 'sports-recreation',
-  'Taxation': 'taxation',
-  'Transportation and Public Works': 'transportation-public-works',
-  'Water Resources Development': 'water-resources-development',
+  
+  // Defense & Foreign Policy
+  'Armed Forces and National Security': 'defense',
+  'International Affairs': 'defense',
+  'Foreign Trade and International Finance': 'defense',
+  
+  // Civil Rights & Justice (includes arts-culture-religion, sports-recreation)
+  'Civil Rights and Liberties, Minority Issues': 'civil-rights',
+  'Crime and Law Enforcement': 'civil-rights',
+  'Law': 'civil-rights',
+  'Native Americans': 'civil-rights',
+  'Arts, Culture, Religion': 'civil-rights',
+  'Sports and Recreation': 'civil-rights',
+  
+  // Education (includes social-sciences-history)
+  'Education': 'education',
+  'Social Sciences and History': 'education',
+  
+  // Social Programs
+  'Social Welfare': 'social-programs',
+  'Housing and Community Development': 'social-programs',
+  
+  // Government & Democracy
+  'Congress': 'government',
+  'Government Operations and Politics': 'government',
+  'Emergency Management': 'government',
+  
+  // Technology & Science
+  'Science, Technology, Communications': 'technology',
 };
 
 // Sample questions (will be loaded from database)
 export const questions: Question[] = [
   {
     id: 'h01',
-    topicId: 'health',
+    topicId: 'healthcare',
     text: 'Should the federal government expand access to public health insurance?',
     options: [
       { id: 'h01-a', text: 'Yes — because universal coverage should be the goal', value: -10 },

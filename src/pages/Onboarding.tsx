@@ -13,28 +13,6 @@ import { calculateQuizScore } from '@/lib/score';
 import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
-const TOPIC_ABBREVIATIONS: Record<string, string> = {
-  'Armed Forces and National Security': 'Defense & Security',
-  'Arts, Culture, Religion': 'Arts & Culture',
-  'Civil Rights and Liberties, Minority Issues': 'Civil Rights',
-  'Crime and Law Enforcement': 'Crime & Law',
-  'Economics and Public Finance': 'Economics',
-  'Emergency Management': 'Emergencies',
-  'Environmental Protection': 'Environment',
-  'Finance and Financial Sector': 'Finance',
-  'Foreign Trade and International Finance': 'Foreign Trade',
-  'Government Operations and Politics': "Gov't & Politics",
-  'Housing and Community Development': 'Housing',
-  'International Affairs': "Int'l Affairs",
-  'Labor and Employment': 'Labor',
-  'Public Lands and Natural Resources': 'Public Lands',
-  'Science, Technology, Communications': 'Science & Tech',
-  'Social Sciences and History': 'Social Sciences',
-  'Sports and Recreation': 'Sports & Rec',
-  'Transportation and Public Works': 'Transportation',
-  'Water Resources Development': 'Water Resources',
-};
-
 // Minimum required answers is now dynamically calculated based on available questions
 
 type ExtendedOnboardingStep = OnboardingStep | 'demographics';
@@ -59,14 +37,13 @@ export const Onboarding = () => {
   // Get selected topic IDs in order (for canonical question fetching)
   const selectedTopicIds = useMemo(() => selectedTopics.map(t => t.id), [selectedTopics]);
   
-  // Fetch canonical questions for selected topics (2 per topic = 10 total for 5 topics)
+  // Fetch canonical questions for selected topics (2 per topic = 6 total for 3 topics)
   const { data: canonicalQuestions = [], isLoading: questionsLoading } = useCanonicalQuestions(selectedTopicIds);
 
   // Transform database topics to app format
   const topics: Topic[] = dbTopics.map(t => ({
     id: t.id,
     name: t.name,
-    displayName: TOPIC_ABBREVIATIONS[t.name] || undefined,
     icon: t.icon,
     weight: t.weight || 1,
   }));
@@ -108,16 +85,16 @@ export const Onboarding = () => {
       
       if (exists) {
         newTopics = prev.filter(t => t.id !== topic.id);
-      } else if (prev.length < 5) {
+      } else if (prev.length < 3) {
         newTopics = [...prev, topic];
       } else {
         return prev;
       }
       
-      // Re-normalize weights based on new order (5 = highest priority, 1 = lowest)
+      // Re-normalize weights based on new order (3 = highest priority, 1 = lowest)
       return newTopics.map((t, index) => ({
         ...t,
-        weight: 5 - index
+        weight: 3 - index
       }));
     });
   };
@@ -296,7 +273,7 @@ export const Onboarding = () => {
                   <Target className="w-6 h-6 text-agree" />
                 </div>
                 <div className="text-left">
-                  <h3 className="font-semibold text-foreground">Select Your Top 5 Topics</h3>
+                  <h3 className="font-semibold text-foreground">Select Your Top 3 Topics</h3>
                   <p className="text-sm text-muted-foreground">Choose the issues that matter most to you</p>
                 </div>
               </div>
@@ -306,7 +283,7 @@ export const Onboarding = () => {
                   <Sparkles className="w-6 h-6 text-accent" />
                 </div>
                 <div className="text-left">
-                  <h3 className="font-semibold text-foreground">Answer 10 Questions</h3>
+                  <h3 className="font-semibold text-foreground">Answer 6 Questions</h3>
                   <p className="text-sm text-muted-foreground">2 questions for each of your top topics</p>
                 </div>
               </div>
@@ -356,11 +333,11 @@ export const Onboarding = () => {
           <div className="max-w-3xl mx-auto animate-fade-in">
             <div className="text-center mb-8">
               <h2 className="font-display text-3xl font-bold text-foreground mb-3">
-                Select Your Top 5 Topics
+                Select Your Top 3 Topics
               </h2>
               <p className="text-muted-foreground">
-                Choose the 5 issues that matter most to you. Order matters - select most important first!
-                <span className="text-foreground font-medium"> ({selectedTopics.length}/5 selected)</span>
+                Choose the 3 issues that matter most to you. Order matters - select most important first!
+                <span className="text-foreground font-medium"> ({selectedTopics.length}/3 selected)</span>
               </p>
             </div>
 
@@ -368,6 +345,7 @@ export const Onboarding = () => {
               topics={topics}
               selectedTopics={selectedTopics}
               onToggle={handleTopicToggle}
+              maxSelections={3}
             />
 
             {selectedTopics.length > 0 && (
@@ -376,7 +354,7 @@ export const Onboarding = () => {
                 <div className="flex flex-wrap gap-2">
                   {selectedTopics.map((topic, index) => (
                     <span key={topic.id} className="text-sm px-3 py-1 rounded-full bg-primary/10 text-primary">
-                      {index + 1}. {topic.displayName || topic.name}
+                      {index + 1}. {topic.name}
                     </span>
                   ))}
                 </div>
@@ -396,9 +374,9 @@ export const Onboarding = () => {
                   setQuizAnswers([]);
                   setStep('quiz');
                 }}
-                disabled={selectedTopics.length !== 5}
+                disabled={selectedTopics.length !== 3}
               >
-                Continue to Quiz ({selectedTopics.length === 5 ? '10 questions' : `${selectedTopics.length * 2} questions`})
+                Continue to Quiz ({selectedTopics.length === 3 ? '6 questions' : `${selectedTopics.length * 2} questions`})
                 <ArrowRight className="w-5 h-5" />
               </Button>
             </div>

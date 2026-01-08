@@ -1515,6 +1515,21 @@ export type Database = {
         }
         Relationships: []
       }
+      topic_legacy_mapping: {
+        Row: {
+          legacy_topic_id: string
+          new_topic_id: string
+        }
+        Insert: {
+          legacy_topic_id: string
+          new_topic_id: string
+        }
+        Update: {
+          legacy_topic_id?: string
+          new_topic_id?: string
+        }
+        Relationships: []
+      }
       topics: {
         Row: {
           icon: string
