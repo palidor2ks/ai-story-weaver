@@ -17,37 +17,40 @@ const DEFAULT_CONGRESS_LIST = [119, 118, 117, 116, 115, 114, 113];
 const RATE_LIMIT_DELAY = 50; // ms between API calls
 const SUMMARY_FETCH_DELAY = 100; // ms between summary API calls
 
-// Map policy areas to our topics
+// Map policy areas to topics - now 1:1 mapping with Congress.gov policy areas
 const topicMapping: Record<string, string> = {
-  'Health': 'Healthcare',
-  'Economics and Public Finance': 'Economy',
-  'Taxation': 'Economy',
+  'Agriculture and Food': 'Agriculture and Food',
+  'Animals': 'Animals',
+  'Armed Forces and National Security': 'Armed Forces and National Security',
+  'Arts, Culture, Religion': 'Arts, Culture, Religion',
+  'Civil Rights and Liberties, Minority Issues': 'Civil Rights and Liberties, Minority Issues',
+  'Commerce': 'Commerce',
+  'Congress': 'Congress',
+  'Crime and Law Enforcement': 'Crime and Law Enforcement',
+  'Economics and Public Finance': 'Economics and Public Finance',
   'Education': 'Education',
-  'Environmental Protection': 'Environment',
-  'Energy': 'Environment',
+  'Emergency Management': 'Emergency Management',
+  'Energy': 'Energy',
+  'Environmental Protection': 'Environmental Protection',
+  'Families': 'Families',
+  'Finance and Financial Sector': 'Finance and Financial Sector',
+  'Foreign Trade and International Finance': 'Foreign Trade and International Finance',
+  'Government Operations and Politics': 'Government Operations and Politics',
+  'Health': 'Health',
+  'Housing and Community Development': 'Housing and Community Development',
   'Immigration': 'Immigration',
-  'Crime and Law Enforcement': 'Criminal Justice',
-  'Civil Rights and Liberties, Minority Issues': 'Civil Rights',
-  'Armed Forces and National Security': 'Foreign Policy',
-  'International Affairs': 'Foreign Policy',
-  'Government Operations and Politics': 'Government Reform',
-  'Congress': 'Government Reform',
-  'Social Welfare': 'Social Issues',
-  'Families': 'Social Issues',
-  'Labor and Employment': 'Economy',
-  'Science, Technology, Communications': 'Technology',
-  'Finance and Financial Sector': 'Economy',
-  'Commerce': 'Economy',
-  'Agriculture and Food': 'Domestic Policy',
-  'Transportation and Public Works': 'Domestic Policy',
-  'Housing and Community Development': 'Domestic Policy',
-  'Public Lands and Natural Resources': 'Environment',
-  'Water Resources Development': 'Environment',
-  'Native Americans': 'Civil Rights',
-  'Sports and Recreation': 'Domestic Policy',
-  'Arts, Culture, Religion': 'Social Issues',
-  'Law': 'Criminal Justice',
-  'Emergency Management': 'Domestic Policy',
+  'International Affairs': 'International Affairs',
+  'Labor and Employment': 'Labor and Employment',
+  'Law': 'Law',
+  'Native Americans': 'Native Americans',
+  'Public Lands and Natural Resources': 'Public Lands and Natural Resources',
+  'Science, Technology, Communications': 'Science, Technology, Communications',
+  'Social Sciences and History': 'Social Sciences and History',
+  'Social Welfare': 'Social Welfare',
+  'Sports and Recreation': 'Sports and Recreation',
+  'Taxation': 'Taxation',
+  'Transportation and Public Works': 'Transportation and Public Works',
+  'Water Resources Development': 'Water Resources Development',
 };
 
 interface FloorVote {
@@ -166,22 +169,42 @@ function mapVotePosition(vote: string): 'Yea' | 'Nay' | 'Present' | 'Not Voting'
   }
 }
 
-// Infer topic from vote description
+// Infer topic from vote description using new 32 Congress.gov policy areas
 function inferTopic(question: string, description: string): string {
   const text = `${question} ${description}`.toLowerCase();
   
   const topicKeywords: Record<string, string[]> = {
-    'Healthcare': ['health', 'medicare', 'medicaid', 'hospital', 'medical', 'drug', 'prescription', 'insurance'],
-    'Economy': ['tax', 'budget', 'fiscal', 'spending', 'appropriation', 'debt', 'economic', 'trade', 'tariff'],
-    'Environment': ['environment', 'climate', 'energy', 'carbon', 'pollution', 'conservation', 'wildlife'],
-    'Immigration': ['immigration', 'border', 'visa', 'asylum', 'migrant', 'citizenship'],
-    'Criminal Justice': ['crime', 'criminal', 'police', 'law enforcement', 'prison', 'justice'],
-    'Civil Rights': ['civil rights', 'discrimination', 'voting rights', 'equality'],
-    'Foreign Policy': ['defense', 'military', 'veteran', 'foreign', 'international', 'security', 'armed forces'],
-    'Education': ['education', 'school', 'student', 'college', 'university'],
-    'Social Issues': ['abortion', 'family', 'marriage', 'lgbtq', 'religious'],
-    'Gun Policy': ['gun', 'firearm', 'weapon', 'second amendment', 'ammunition'],
-    'Technology': ['technology', 'cyber', 'internet', 'data', 'privacy'],
+    'Health': ['health', 'medicare', 'medicaid', 'hospital', 'medical', 'drug', 'prescription', 'healthcare', 'mental health', 'opioid', 'fentanyl'],
+    'Armed Forces and National Security': ['defense', 'military', 'veteran', 'armed forces', 'pentagon', 'national security', 'army', 'navy', 'marines', 'air force'],
+    'International Affairs': ['foreign', 'international', 'diplomacy', 'embassy', 'ambassador', 'treaty', 'nato', 'united nations'],
+    'Immigration': ['immigration', 'border', 'visa', 'asylum', 'migrant', 'citizenship', 'daca', 'refugee', 'deportation'],
+    'Crime and Law Enforcement': ['crime', 'criminal', 'police', 'law enforcement', 'prison', 'gun', 'firearm', 'weapon', 'fbi', 'atf'],
+    'Civil Rights and Liberties, Minority Issues': ['civil rights', 'discrimination', 'voting rights', 'equality', 'lgbtq', 'affirmative action', 'minority'],
+    'Education': ['education', 'school', 'student', 'college', 'university', 'pell grant', 'teacher'],
+    'Energy': ['energy', 'renewable', 'solar', 'wind', 'oil', 'gas', 'nuclear', 'fossil fuel', 'electricity'],
+    'Environmental Protection': ['environment', 'climate', 'carbon', 'pollution', 'conservation', 'wildlife', 'epa', 'clean air', 'clean water'],
+    'Economics and Public Finance': ['budget', 'fiscal', 'debt', 'deficit', 'appropriation', 'spending', 'economic'],
+    'Taxation': ['tax', 'taxes', 'taxation', 'irs', 'revenue'],
+    'Labor and Employment': ['labor', 'employment', 'worker', 'wage', 'union', 'overtime', 'osha', 'workplace'],
+    'Commerce': ['commerce', 'business', 'trade', 'tariff', 'antitrust', 'consumer protection'],
+    'Finance and Financial Sector': ['bank', 'banking', 'financial', 'wall street', 'securities', 'cryptocurrency', 'fed', 'interest rate'],
+    'Families': ['family', 'child', 'children', 'childcare', 'parental', 'marriage', 'adoption'],
+    'Social Welfare': ['welfare', 'snap', 'food stamp', 'poverty', 'homeless', 'social services', 'benefits'],
+    'Science, Technology, Communications': ['technology', 'cyber', 'internet', 'data', 'privacy', 'broadband', 'ai', 'artificial intelligence'],
+    'Transportation and Public Works': ['transportation', 'highway', 'road', 'bridge', 'rail', 'transit', 'airport', 'infrastructure'],
+    'Housing and Community Development': ['housing', 'rent', 'mortgage', 'hud', 'homelessness', 'affordable housing'],
+    'Agriculture and Food': ['agriculture', 'farm', 'food', 'crop', 'usda', 'nutrition', 'rural'],
+    'Public Lands and Natural Resources': ['public land', 'national park', 'forest', 'wilderness', 'mining', 'drilling'],
+    'Water Resources Development': ['water', 'dam', 'flood', 'drought', 'irrigation', 'wastewater'],
+    'Native Americans': ['native american', 'tribal', 'tribe', 'indian', 'reservation'],
+    'Emergency Management': ['emergency', 'disaster', 'fema', 'hurricane', 'wildfire', 'earthquake'],
+    'Congress': ['filibuster', 'congressional', 'house rules', 'senate rules', 'term limit'],
+    'Government Operations and Politics': ['federal agency', 'government', 'oversight', 'transparency', 'whistleblower'],
+    'Law': ['court', 'judicial', 'judge', 'legal', 'lawsuit', 'litigation', 'sentencing'],
+    'Arts, Culture, Religion': ['arts', 'culture', 'museum', 'library', 'religion', 'religious'],
+    'Animals': ['animal', 'wildlife', 'endangered species', 'pet', 'cruelty'],
+    'Social Sciences and History': ['history', 'historical', 'census', 'research'],
+    'Sports and Recreation': ['sports', 'recreation', 'athletics', 'olympic'],
   };
   
   for (const [topic, keywords] of Object.entries(topicKeywords)) {
@@ -190,7 +213,7 @@ function inferTopic(question: string, description: string): string {
     }
   }
   
-  return 'Domestic Policy';
+  return 'Government Operations and Politics';
 }
 
 // Fetch and parse a House roll call vote from clerk.house.gov
