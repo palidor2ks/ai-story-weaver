@@ -2,6 +2,7 @@ import { Topic } from '@/types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
+import { TopicIcon } from '@/components/TopicIcon';
 
 interface TopicSelectorProps {
   topics: Topic[];
@@ -39,7 +40,7 @@ export const TopicSelector = ({
             )}
             style={{ animationDelay: `${index * 50}ms` }}
           >
-            <span className="text-2xl">{topic.icon}</span>
+            <TopicIcon name={topic.icon} className="w-8 h-8" />
             <span className="text-xs font-medium text-center leading-tight break-words whitespace-normal w-full px-1">
               {topic.displayName || topic.name}
             </span>

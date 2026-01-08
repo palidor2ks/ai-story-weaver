@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { TopicSelector } from '@/components/TopicSelector';
+import { TopicIcon } from '@/components/TopicIcon';
 import { QuizQuestion } from '@/components/QuizQuestion';
 import { ScoreText } from '@/components/ScoreText';
 import { DemographicsForm, DemographicsData } from '@/components/DemographicsForm';
@@ -428,7 +429,7 @@ export const Onboarding = () => {
             {/* Topic indicator */}
             {currentQuestionTopic && (
               <div className="flex items-center justify-center gap-2 mb-4">
-                <span className="text-2xl">{currentQuestionTopic.icon}</span>
+                <TopicIcon name={currentQuestionTopic.icon} className="w-6 h-6" />
                 <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                   {currentQuestionTopic.name}
                 </span>
