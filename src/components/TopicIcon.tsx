@@ -1,6 +1,6 @@
 const emojiMap: Record<string, string> = {
   Scale: '⚖️',
-  Globe: '🌍',
+  Shield: '🛡️',
   Briefcase: '💼',
   GraduationCap: '🎓',
   Leaf: '🌿',
