@@ -1,0 +1,83 @@
+-- Insert Social Sciences and History questions (mapped to 'education')
+INSERT INTO questions (id, topic_id, text) VALUES
+('soc01', 'education', 'How should history be taught in public schools?'),
+('soc02', 'education', 'What role should civics education play in schools?'),
+('soc03', 'education', 'How should controversial historical topics be addressed in education?'),
+('soc04', 'education', 'What approach should be taken to social studies standards?'),
+('soc05', 'education', 'How should the government fund historical preservation?'),
+('soc06', 'education', 'What role should museums and cultural institutions play?'),
+('soc07', 'education', 'How should the census and demographic data collection be conducted?'),
+('soc08', 'education', 'What approach should be taken to national monuments and memorials?'),
+('soc09', 'education', 'How should the government support the humanities?'),
+('soc10', 'education', 'What role should archives and historical records play?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('soc01_a', 'soc01', 'Include comprehensive perspectives including marginalized voices', -10, 1),
+('soc01_b', 'soc01', 'Teach multiple perspectives on historical events', -5, 2),
+('soc01_c', 'soc01', 'Focus on traditional American history narrative', 5, 3),
+('soc01_d', 'soc01', 'Emphasize patriotic and founding values', 10, 4),
+('soc01_e', 'soc01', 'Let local communities decide curriculum', 0, 5),
+('soc01_f', 'soc01', 'This issue is not important to me', 0, 6),
+
+('soc02_a', 'soc02', 'Mandate comprehensive civics including activism', -10, 1),
+('soc02_b', 'soc02', 'Strengthen civics education requirements', -5, 2),
+('soc02_c', 'soc02', 'Maintain basic civics requirements', 5, 3),
+('soc02_d', 'soc02', 'Leave civics entirely to local control', 10, 4),
+('soc02_e', 'soc02', 'Focus on practical civic participation', 0, 5),
+('soc02_f', 'soc02', 'This issue is not important to me', 0, 6),
+
+('soc03_a', 'soc03', 'Teach difficult history honestly and completely', -10, 1),
+('soc03_b', 'soc03', 'Address controversies with multiple perspectives', -5, 2),
+('soc03_c', 'soc03', 'Focus on facts while avoiding divisive topics', 5, 3),
+('soc03_d', 'soc03', 'Let parents control exposure to controversial topics', 10, 4),
+('soc03_e', 'soc03', 'Age-appropriate discussion of all topics', 0, 5),
+('soc03_f', 'soc03', 'This issue is not important to me', 0, 6),
+
+('soc04_a', 'soc04', 'National standards with diversity requirements', -10, 1),
+('soc04_b', 'soc04', 'Strong state standards with federal guidelines', -5, 2),
+('soc04_c', 'soc04', 'State control over social studies standards', 5, 3),
+('soc04_d', 'soc04', 'Full local control over curriculum', 10, 4),
+('soc04_e', 'soc04', 'Focus on critical thinking skills', 0, 5),
+('soc04_f', 'soc04', 'This issue is not important to me', 0, 6),
+
+('soc05_a', 'soc05', 'Major investment in historical preservation', -10, 1),
+('soc05_b', 'soc05', 'Maintain strong federal preservation programs', -5, 2),
+('soc05_c', 'soc05', 'Reduce federal role in preservation', 5, 3),
+('soc05_d', 'soc05', 'Leave preservation to private sector', 10, 4),
+('soc05_e', 'soc05', 'Focus on endangered sites', 0, 5),
+('soc05_f', 'soc05', 'This issue is not important to me', 0, 6),
+
+('soc06_a', 'soc06', 'Expand federal museum and cultural funding', -10, 1),
+('soc06_b', 'soc06', 'Maintain Smithsonian and federal institutions', -5, 2),
+('soc06_c', 'soc06', 'Reduce federal cultural institution funding', 5, 3),
+('soc06_d', 'soc06', 'Privatize cultural institutions', 10, 4),
+('soc06_e', 'soc06', 'Focus on digital access and education', 0, 5),
+('soc06_f', 'soc06', 'This issue is not important to me', 0, 6),
+
+('soc07_a', 'soc07', 'Comprehensive data collection for equity analysis', -10, 1),
+('soc07_b', 'soc07', 'Maintain census with detailed demographics', -5, 2),
+('soc07_c', 'soc07', 'Simplify census and reduce data collection', 5, 3),
+('soc07_d', 'soc07', 'Minimal federal data collection', 10, 4),
+('soc07_e', 'soc07', 'Focus on accuracy and response rates', 0, 5),
+('soc07_f', 'soc07', 'This issue is not important to me', 0, 6),
+
+('soc08_a', 'soc08', 'Review and contextualize controversial monuments', -10, 1),
+('soc08_b', 'soc08', 'Add context while preserving history', -5, 2),
+('soc08_c', 'soc08', 'Preserve existing monuments as-is', 5, 3),
+('soc08_d', 'soc08', 'Protect all historical monuments from removal', 10, 4),
+('soc08_e', 'soc08', 'Let local communities decide', 0, 5),
+('soc08_f', 'soc08', 'This issue is not important to me', 0, 6),
+
+('soc09_a', 'soc09', 'Significantly increase NEH and humanities funding', -10, 1),
+('soc09_b', 'soc09', 'Maintain federal humanities programs', -5, 2),
+('soc09_c', 'soc09', 'Reduce humanities funding', 5, 3),
+('soc09_d', 'soc09', 'Eliminate federal humanities agencies', 10, 4),
+('soc09_e', 'soc09', 'Focus on education partnerships', 0, 5),
+('soc09_f', 'soc09', 'This issue is not important to me', 0, 6),
+
+('soc10_a', 'soc10', 'Expand National Archives and digitization', -10, 1),
+('soc10_b', 'soc10', 'Maintain strong archives and records management', -5, 2),
+('soc10_c', 'soc10', 'Reduce federal archives scope', 5, 3),
+('soc10_d', 'soc10', 'Minimize government record-keeping', 10, 4),
+('soc10_e', 'soc10', 'Focus on transparency and public access', 0, 5),
+('soc10_f', 'soc10', 'This issue is not important to me', 0, 6);

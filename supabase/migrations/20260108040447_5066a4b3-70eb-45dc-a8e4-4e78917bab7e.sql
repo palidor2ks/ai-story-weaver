@@ -1,0 +1,83 @@
+-- Insert Water Resources and Environment questions (mapped to 'environment')
+INSERT INTO questions (id, topic_id, text) VALUES
+('water01', 'environment', 'How should the federal government address water infrastructure?'),
+('water02', 'environment', 'What approach should be taken to clean water regulation?'),
+('water03', 'environment', 'How should water rights in the West be managed?'),
+('water04', 'environment', 'What role should the federal government play in flood control?'),
+('water05', 'environment', 'How should agricultural water use be regulated?'),
+('water06', 'environment', 'What approach should be taken to drinking water safety?'),
+('water07', 'environment', 'How should dams and waterway infrastructure be managed?'),
+('water08', 'environment', 'What role should wetlands protection play?'),
+('water09', 'environment', 'How should ocean and coastal resources be protected?'),
+('water10', 'environment', 'What approach should be taken to water affordability?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('water01_a', 'water01', 'Major federal investment in water infrastructure', -10, 1),
+('water01_b', 'water01', 'Significant federal funding for water systems', -5, 2),
+('water01_c', 'water01', 'Local responsibility with targeted federal aid', 5, 3),
+('water01_d', 'water01', 'Privatize water infrastructure', 10, 4),
+('water01_e', 'water01', 'Focus on replacing lead pipes', 0, 5),
+('water01_f', 'water01', 'This issue is not important to me', 0, 6),
+
+('water02_a', 'water02', 'Significantly strengthen Clean Water Act', -10, 1),
+('water02_b', 'water02', 'Maintain and enforce current water protections', -5, 2),
+('water02_c', 'water02', 'Reduce water regulations to ease development', 5, 3),
+('water02_d', 'water02', 'Leave water regulation to states', 10, 4),
+('water02_e', 'water02', 'Focus on point-source pollution', 0, 5),
+('water02_f', 'water02', 'This issue is not important to me', 0, 6),
+
+('water03_a', 'water03', 'Federal role in reallocating water for equity', -10, 1),
+('water03_b', 'water03', 'Balance agricultural, urban, and environmental needs', -5, 2),
+('water03_c', 'water03', 'Maintain prior appropriation system', 5, 3),
+('water03_d', 'water03', 'Full state control over water rights', 10, 4),
+('water03_e', 'water03', 'Focus on conservation and efficiency', 0, 5),
+('water03_f', 'water03', 'This issue is not important to me', 0, 6),
+
+('water04_a', 'water04', 'Major federal investment in flood protection', -10, 1),
+('water04_b', 'water04', 'Continue Army Corps flood control programs', -5, 2),
+('water04_c', 'water04', 'Shift flood risk to local governments', 5, 3),
+('water04_d', 'water04', 'Reduce federal flood control role', 10, 4),
+('water04_e', 'water04', 'Focus on natural flood mitigation', 0, 5),
+('water04_f', 'water04', 'This issue is not important to me', 0, 6),
+
+('water05_a', 'water05', 'Strict regulation of agricultural water use', -10, 1),
+('water05_b', 'water05', 'Incentivize water-efficient agriculture', -5, 2),
+('water05_c', 'water05', 'Maintain current agricultural water policies', 5, 3),
+('water05_d', 'water05', 'Reduce regulation of farm water use', 10, 4),
+('water05_e', 'water05', 'Focus on technology adoption', 0, 5),
+('water05_f', 'water05', 'This issue is not important to me', 0, 6),
+
+('water06_a', 'water06', 'Significantly strengthen drinking water standards', -10, 1),
+('water06_b', 'water06', 'Increase EPA enforcement of drinking water', -5, 2),
+('water06_c', 'water06', 'Maintain current Safe Drinking Water Act', 5, 3),
+('water06_d', 'water06', 'Reduce federal drinking water role', 10, 4),
+('water06_e', 'water06', 'Focus on PFAS and emerging contaminants', 0, 5),
+('water06_f', 'water06', 'This issue is not important to me', 0, 6),
+
+('water07_a', 'water07', 'Remove dams to restore rivers', -10, 1),
+('water07_b', 'water07', 'Balance dam operations with environmental needs', -5, 2),
+('water07_c', 'water07', 'Maintain dams for water and power', 5, 3),
+('water07_d', 'water07', 'Expand hydropower infrastructure', 10, 4),
+('water07_e', 'water07', 'Focus on dam safety and modernization', 0, 5),
+('water07_f', 'water07', 'This issue is not important to me', 0, 6),
+
+('water08_a', 'water08', 'Expand federal wetlands protections', -10, 1),
+('water08_b', 'water08', 'Restore pre-2020 wetlands jurisdiction', -5, 2),
+('water08_c', 'water08', 'Narrow federal wetlands authority', 5, 3),
+('water08_d', 'water08', 'Leave wetlands to state regulation', 10, 4),
+('water08_e', 'water08', 'Focus on wetland restoration incentives', 0, 5),
+('water08_f', 'water08', 'This issue is not important to me', 0, 6),
+
+('water09_a', 'water09', 'Expand marine protected areas', -10, 1),
+('water09_b', 'water09', 'Strengthen coastal zone management', -5, 2),
+('water09_c', 'water09', 'Balance protection with coastal development', 5, 3),
+('water09_d', 'water09', 'Reduce coastal regulations', 10, 4),
+('water09_e', 'water09', 'Focus on climate adaptation', 0, 5),
+('water09_f', 'water09', 'This issue is not important to me', 0, 6),
+
+('water10_a', 'water10', 'Federal water affordability programs', -10, 1),
+('water10_b', 'water10', 'Assistance for low-income water customers', -5, 2),
+('water10_c', 'water10', 'Leave affordability to local utilities', 5, 3),
+('water10_d', 'water10', 'Market-based water pricing', 10, 4),
+('water10_e', 'water10', 'Focus on efficiency to reduce costs', 0, 5),
+('water10_f', 'water10', 'This issue is not important to me', 0, 6);
