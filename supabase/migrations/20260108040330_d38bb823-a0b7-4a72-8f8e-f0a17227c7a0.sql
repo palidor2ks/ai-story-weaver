@@ -1,0 +1,83 @@
+-- Insert Sports and Recreation questions (mapped to 'civil-rights')
+INSERT INTO questions (id, topic_id, text) VALUES
+('sport01', 'civil-rights', 'How should the government regulate professional sports?'),
+('sport02', 'civil-rights', 'What approach should be taken to youth sports safety?'),
+('sport03', 'civil-rights', 'How should transgender athlete participation be addressed?'),
+('sport04', 'civil-rights', 'What role should the government play in sports facility funding?'),
+('sport05', 'civil-rights', 'How should college athlete compensation be handled?'),
+('sport06', 'civil-rights', 'What approach should be taken to sports betting regulation?'),
+('sport07', 'civil-rights', 'How should Title IX be applied to athletics?'),
+('sport08', 'civil-rights', 'What role should the government play in Olympic sports?'),
+('sport09', 'civil-rights', 'How should recreational access to public lands be managed?'),
+('sport10', 'civil-rights', 'What approach should be taken to esports and gaming?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('sport01_a', 'sport01', 'Strong federal oversight of professional sports', -10, 1),
+('sport01_b', 'sport01', 'Targeted regulation for worker safety and fairness', -5, 2),
+('sport01_c', 'sport01', 'Minimal federal involvement in sports', 5, 3),
+('sport01_d', 'sport01', 'No government role in professional sports', 10, 4),
+('sport01_e', 'sport01', 'Focus on antitrust and labor issues', 0, 5),
+('sport01_f', 'sport01', 'This issue is not important to me', 0, 6),
+
+('sport02_a', 'sport02', 'Comprehensive federal youth sports safety standards', -10, 1),
+('sport02_b', 'sport02', 'Federal guidelines with state implementation', -5, 2),
+('sport02_c', 'sport02', 'Leave youth sports safety to states and leagues', 5, 3),
+('sport02_d', 'sport02', 'No government role in youth sports', 10, 4),
+('sport02_e', 'sport02', 'Focus on concussion and injury prevention', 0, 5),
+('sport02_f', 'sport02', 'This issue is not important to me', 0, 6),
+
+('sport03_a', 'sport03', 'Allow athletes to compete based on gender identity', -10, 1),
+('sport03_b', 'sport03', 'Case-by-case policies with medical guidance', -5, 2),
+('sport03_c', 'sport03', 'Restrict participation based on biological sex', 5, 3),
+('sport03_d', 'sport03', 'Strict biological sex requirements in all sports', 10, 4),
+('sport03_e', 'sport03', 'Leave decisions to sports governing bodies', 0, 5),
+('sport03_f', 'sport03', 'This issue is not important to me', 0, 6),
+
+('sport04_a', 'sport04', 'Federal funding for community sports facilities', -10, 1),
+('sport04_b', 'sport04', 'Grants for underserved communities', -5, 2),
+('sport04_c', 'sport04', 'Leave facility funding to local government', 5, 3),
+('sport04_d', 'sport04', 'No public funding for sports facilities', 10, 4),
+('sport04_e', 'sport04', 'Focus on school athletic facilities', 0, 5),
+('sport04_f', 'sport04', 'This issue is not important to me', 0, 6),
+
+('sport05_a', 'sport05', 'Full employment rights for college athletes', -10, 1),
+('sport05_b', 'sport05', 'Allow NIL and fair compensation', -5, 2),
+('sport05_c', 'sport05', 'Limit compensation to protect amateurism', 5, 3),
+('sport05_d', 'sport05', 'Maintain traditional amateur model', 10, 4),
+('sport05_e', 'sport05', 'Create federal NIL standards', 0, 5),
+('sport05_f', 'sport05', 'This issue is not important to me', 0, 6),
+
+('sport06_a', 'sport06', 'Strict federal regulation of sports betting', -10, 1),
+('sport06_b', 'sport06', 'Federal standards with state implementation', -5, 2),
+('sport06_c', 'sport06', 'Leave betting regulation to states', 5, 3),
+('sport06_d', 'sport06', 'Minimal government regulation of betting', 10, 4),
+('sport06_e', 'sport06', 'Focus on addiction prevention', 0, 5),
+('sport06_f', 'sport06', 'This issue is not important to me', 0, 6),
+
+('sport07_a', 'sport07', 'Strengthen Title IX requirements', -10, 1),
+('sport07_b', 'sport07', 'Maintain current Title IX protections', -5, 2),
+('sport07_c', 'sport07', 'Provide more flexibility in Title IX', 5, 3),
+('sport07_d', 'sport07', 'Significantly reduce Title IX requirements', 10, 4),
+('sport07_e', 'sport07', 'Focus on participation over proportionality', 0, 5),
+('sport07_f', 'sport07', 'This issue is not important to me', 0, 6),
+
+('sport08_a', 'sport08', 'Increase federal Olympic program funding', -10, 1),
+('sport08_b', 'sport08', 'Maintain current USOC support', -5, 2),
+('sport08_c', 'sport08', 'Reduce federal Olympic funding', 5, 3),
+('sport08_d', 'sport08', 'Privatize Olympic sports funding', 10, 4),
+('sport08_e', 'sport08', 'Focus on athlete safety and welfare', 0, 5),
+('sport08_f', 'sport08', 'This issue is not important to me', 0, 6),
+
+('sport09_a', 'sport09', 'Expand recreational access on public lands', -10, 1),
+('sport09_b', 'sport09', 'Balance recreation with conservation', -5, 2),
+('sport09_c', 'sport09', 'Prioritize traditional uses like hunting', 5, 3),
+('sport09_d', 'sport09', 'Maximize commercial recreational access', 10, 4),
+('sport09_e', 'sport09', 'Focus on sustainable outdoor recreation', 0, 5),
+('sport09_f', 'sport09', 'This issue is not important to me', 0, 6),
+
+('sport10_a', 'sport10', 'Regulate esports like traditional sports', -10, 1),
+('sport10_b', 'sport10', 'Develop appropriate esports regulations', -5, 2),
+('sport10_c', 'sport10', 'Minimal regulation of esports', 5, 3),
+('sport10_d', 'sport10', 'No government involvement in esports', 10, 4),
+('sport10_e', 'sport10', 'Focus on youth gaming protections', 0, 5),
+('sport10_f', 'sport10', 'This issue is not important to me', 0, 6);

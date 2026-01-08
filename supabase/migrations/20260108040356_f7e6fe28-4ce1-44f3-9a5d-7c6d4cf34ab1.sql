@@ -1,0 +1,83 @@
+-- Insert Taxation questions (mapped to 'economy')
+INSERT INTO questions (id, topic_id, text) VALUES
+('tax01', 'economy', 'How should income taxes be structured?'),
+('tax02', 'economy', 'What approach should be taken to corporate taxes?'),
+('tax03', 'economy', 'How should capital gains be taxed?'),
+('tax04', 'economy', 'What role should estate taxes play?'),
+('tax05', 'economy', 'How should state and local tax deductions be handled?'),
+('tax06', 'economy', 'What approach should be taken to tax enforcement?'),
+('tax07', 'economy', 'How should the tax code address inequality?'),
+('tax08', 'economy', 'What role should tax incentives play in economic policy?'),
+('tax09', 'economy', 'How should cryptocurrency be taxed?'),
+('tax10', 'economy', 'What approach should be taken to the national debt?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('tax01_a', 'tax01', 'Significantly increase taxes on high earners', -10, 1),
+('tax01_b', 'tax01', 'Raise top rates while cutting for middle class', -5, 2),
+('tax01_c', 'tax01', 'Maintain current tax brackets', 5, 3),
+('tax01_d', 'tax01', 'Flatten tax rates or implement flat tax', 10, 4),
+('tax01_e', 'tax01', 'Simplify tax code with fewer brackets', 0, 5),
+('tax01_f', 'tax01', 'This issue is not important to me', 0, 6),
+
+('tax02_a', 'tax02', 'Significantly increase corporate taxes', -10, 1),
+('tax02_b', 'tax02', 'Raise rates while closing loopholes', -5, 2),
+('tax02_c', 'tax02', 'Maintain current corporate rates', 5, 3),
+('tax02_d', 'tax02', 'Lower corporate taxes to boost competitiveness', 10, 4),
+('tax02_e', 'tax02', 'Focus on minimum tax for profitable companies', 0, 5),
+('tax02_f', 'tax02', 'This issue is not important to me', 0, 6),
+
+('tax03_a', 'tax03', 'Tax capital gains as ordinary income', -10, 1),
+('tax03_b', 'tax03', 'Increase capital gains rates for high earners', -5, 2),
+('tax03_c', 'tax03', 'Maintain current capital gains rates', 5, 3),
+('tax03_d', 'tax03', 'Reduce or eliminate capital gains taxes', 10, 4),
+('tax03_e', 'tax03', 'Adjust rates based on holding period', 0, 5),
+('tax03_f', 'tax03', 'This issue is not important to me', 0, 6),
+
+('tax04_a', 'tax04', 'Expand estate tax to more estates', -10, 1),
+('tax04_b', 'tax04', 'Maintain or increase current estate tax', -5, 2),
+('tax04_c', 'tax04', 'Reduce estate tax exemption and rates', 5, 3),
+('tax04_d', 'tax04', 'Eliminate estate tax entirely', 10, 4),
+('tax04_e', 'tax04', 'Focus on family business exemptions', 0, 5),
+('tax04_f', 'tax04', 'This issue is not important to me', 0, 6),
+
+('tax05_a', 'tax05', 'Full restoration of SALT deduction', -10, 1),
+('tax05_b', 'tax05', 'Increase SALT deduction cap', -5, 2),
+('tax05_c', 'tax05', 'Maintain current SALT cap', 5, 3),
+('tax05_d', 'tax05', 'Eliminate SALT deduction entirely', 10, 4),
+('tax05_e', 'tax05', 'Target SALT benefits to middle class', 0, 5),
+('tax05_f', 'tax05', 'This issue is not important to me', 0, 6),
+
+('tax06_a', 'tax06', 'Significantly expand IRS funding and enforcement', -10, 1),
+('tax06_b', 'tax06', 'Increase enforcement on high-income tax avoidance', -5, 2),
+('tax06_c', 'tax06', 'Maintain current enforcement levels', 5, 3),
+('tax06_d', 'tax06', 'Reduce IRS size and enforcement', 10, 4),
+('tax06_e', 'tax06', 'Focus on taxpayer service improvements', 0, 5),
+('tax06_f', 'tax06', 'This issue is not important to me', 0, 6),
+
+('tax07_a', 'tax07', 'Use tax code aggressively to reduce inequality', -10, 1),
+('tax07_b', 'tax07', 'Progressive taxes to address inequality', -5, 2),
+('tax07_c', 'tax07', 'Tax code should not address inequality', 5, 3),
+('tax07_d', 'tax07', 'Lower taxes benefit everyone equally', 10, 4),
+('tax07_e', 'tax07', 'Focus on opportunity over redistribution', 0, 5),
+('tax07_f', 'tax07', 'This issue is not important to me', 0, 6),
+
+('tax08_a', 'tax08', 'Reduce tax incentives and subsidies', -10, 1),
+('tax08_b', 'tax08', 'Target incentives to social priorities', -5, 2),
+('tax08_c', 'tax08', 'Use incentives for economic growth', 5, 3),
+('tax08_d', 'tax08', 'Expand tax incentives for business', 10, 4),
+('tax08_e', 'tax08', 'Focus on clean energy incentives', 0, 5),
+('tax08_f', 'tax08', 'This issue is not important to me', 0, 6),
+
+('tax09_a', 'tax09', 'Comprehensive crypto taxation and reporting', -10, 1),
+('tax09_b', 'tax09', 'Clear crypto tax rules with enforcement', -5, 2),
+('tax09_c', 'tax09', 'Light-touch crypto taxation', 5, 3),
+('tax09_d', 'tax09', 'Minimal taxation of cryptocurrency', 10, 4),
+('tax09_e', 'tax09', 'Focus on major transactions only', 0, 5),
+('tax09_f', 'tax09', 'This issue is not important to me', 0, 6),
+
+('tax10_a', 'tax10', 'Address debt through higher taxes on wealthy', -10, 1),
+('tax10_b', 'tax10', 'Balance spending cuts and tax increases', -5, 2),
+('tax10_c', 'tax10', 'Address debt primarily through spending cuts', 5, 3),
+('tax10_d', 'tax10', 'Prioritize growth over deficit reduction', 10, 4),
+('tax10_e', 'tax10', 'Focus on long-term entitlement reform', 0, 5),
+('tax10_f', 'tax10', 'This issue is not important to me', 0, 6);

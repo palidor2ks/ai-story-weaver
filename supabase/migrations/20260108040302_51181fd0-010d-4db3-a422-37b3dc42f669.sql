@@ -1,0 +1,83 @@
+-- Insert Social Welfare questions (mapped to 'social-programs')
+INSERT INTO questions (id, topic_id, text) VALUES
+('wel01', 'social-programs', 'What approach should be taken to poverty reduction?'),
+('wel02', 'social-programs', 'How should food assistance programs be structured?'),
+('wel03', 'social-programs', 'What role should work requirements play in welfare?'),
+('wel04', 'social-programs', 'How should Social Security be reformed?'),
+('wel05', 'social-programs', 'What approach should be taken to disability benefits?'),
+('wel06', 'social-programs', 'How should the Earned Income Tax Credit be structured?'),
+('wel07', 'social-programs', 'What role should universal basic income play?'),
+('wel08', 'social-programs', 'How should veterans benefits be structured?'),
+('wel09', 'social-programs', 'What approach should be taken to elder care?'),
+('wel10', 'social-programs', 'How should wealth inequality be addressed?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('wel01_a', 'wel01', 'Major expansion of anti-poverty programs', -10, 1),
+('wel01_b', 'wel01', 'Strengthen safety net with targeted investments', -5, 2),
+('wel01_c', 'wel01', 'Focus on economic growth over direct assistance', 5, 3),
+('wel01_d', 'wel01', 'Reduce welfare programs significantly', 10, 4),
+('wel01_e', 'wel01', 'Focus on opportunity and mobility', 0, 5),
+('wel01_f', 'wel01', 'This issue is not important to me', 0, 6),
+
+('wel02_a', 'wel02', 'Expand SNAP eligibility and benefits', -10, 1),
+('wel02_b', 'wel02', 'Maintain SNAP with targeted improvements', -5, 2),
+('wel02_c', 'wel02', 'Add work requirements and time limits', 5, 3),
+('wel02_d', 'wel02', 'Convert to block grants or reduce', 10, 4),
+('wel02_e', 'wel02', 'Focus on nutrition education', 0, 5),
+('wel02_f', 'wel02', 'This issue is not important to me', 0, 6),
+
+('wel03_a', 'wel03', 'No work requirements for safety net', -10, 1),
+('wel03_b', 'wel03', 'Flexible requirements with support services', -5, 2),
+('wel03_c', 'wel03', 'Work requirements for able-bodied adults', 5, 3),
+('wel03_d', 'wel03', 'Strict work requirements for all programs', 10, 4),
+('wel03_e', 'wel03', 'Focus on job training over requirements', 0, 5),
+('wel03_f', 'wel03', 'This issue is not important to me', 0, 6),
+
+('wel04_a', 'wel04', 'Expand benefits and remove earnings cap', -10, 1),
+('wel04_b', 'wel04', 'Shore up funding while protecting benefits', -5, 2),
+('wel04_c', 'wel04', 'Gradually raise retirement age', 5, 3),
+('wel04_d', 'wel04', 'Privatize or significantly reduce', 10, 4),
+('wel04_e', 'wel04', 'Focus on long-term solvency', 0, 5),
+('wel04_f', 'wel04', 'This issue is not important to me', 0, 6),
+
+('wel05_a', 'wel05', 'Expand disability eligibility and benefits', -10, 1),
+('wel05_b', 'wel05', 'Improve disability programs and access', -5, 2),
+('wel05_c', 'wel05', 'Tighten eligibility and fraud prevention', 5, 3),
+('wel05_d', 'wel05', 'Significantly reduce disability programs', 10, 4),
+('wel05_e', 'wel05', 'Focus on return-to-work support', 0, 5),
+('wel05_f', 'wel05', 'This issue is not important to me', 0, 6),
+
+('wel06_a', 'wel06', 'Significantly expand EITC', -10, 1),
+('wel06_b', 'wel06', 'Increase EITC for childless workers', -5, 2),
+('wel06_c', 'wel06', 'Maintain current EITC structure', 5, 3),
+('wel06_d', 'wel06', 'Reduce or eliminate EITC', 10, 4),
+('wel06_e', 'wel06', 'Simplify claiming process', 0, 5),
+('wel06_f', 'wel06', 'This issue is not important to me', 0, 6),
+
+('wel07_a', 'wel07', 'Implement universal basic income', -10, 1),
+('wel07_b', 'wel07', 'Pilot UBI programs', -5, 2),
+('wel07_c', 'wel07', 'Focus on targeted assistance over UBI', 5, 3),
+('wel07_d', 'wel07', 'Oppose any form of UBI', 10, 4),
+('wel07_e', 'wel07', 'Study impacts before implementation', 0, 5),
+('wel07_f', 'wel07', 'This issue is not important to me', 0, 6),
+
+('wel08_a', 'wel08', 'Significantly expand veterans benefits', -10, 1),
+('wel08_b', 'wel08', 'Improve VA with increased funding', -5, 2),
+('wel08_c', 'wel08', 'Expand private care options for veterans', 5, 3),
+('wel08_d', 'wel08', 'Privatize veterans healthcare', 10, 4),
+('wel08_e', 'wel08', 'Focus on mental health and transition support', 0, 5),
+('wel08_f', 'wel08', 'This issue is not important to me', 0, 6),
+
+('wel09_a', 'wel09', 'Create universal long-term care program', -10, 1),
+('wel09_b', 'wel09', 'Expand Medicaid for long-term care', -5, 2),
+('wel09_c', 'wel09', 'Encourage private long-term care insurance', 5, 3),
+('wel09_d', 'wel09', 'Leave elder care to families', 10, 4),
+('wel09_e', 'wel09', 'Focus on home and community-based care', 0, 5),
+('wel09_f', 'wel09', 'This issue is not important to me', 0, 6),
+
+('wel10_a', 'wel10', 'Major redistribution through taxes and programs', -10, 1),
+('wel10_b', 'wel10', 'Address inequality through opportunity policies', -5, 2),
+('wel10_c', 'wel10', 'Focus on growth rather than redistribution', 5, 3),
+('wel10_d', 'wel10', 'No government role in addressing inequality', 10, 4),
+('wel10_e', 'wel10', 'Focus on wealth building for low-income', 0, 5),
+('wel10_f', 'wel10', 'This issue is not important to me', 0, 6);

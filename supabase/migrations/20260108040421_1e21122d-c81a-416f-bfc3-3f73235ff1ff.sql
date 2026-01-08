@@ -1,0 +1,83 @@
+-- Insert Transportation and Public Works questions (mapped to 'economy')
+INSERT INTO questions (id, topic_id, text) VALUES
+('trans01', 'economy', 'How should infrastructure investment be funded?'),
+('trans02', 'economy', 'What approach should be taken to public transit?'),
+('trans03', 'economy', 'How should highway funding be structured?'),
+('trans04', 'economy', 'What role should electric vehicle incentives play?'),
+('trans05', 'economy', 'How should airline regulation be approached?'),
+('trans06', 'economy', 'What approach should be taken to freight rail?'),
+('trans07', 'economy', 'How should autonomous vehicles be regulated?'),
+('trans08', 'economy', 'What role should the federal government play in airports?'),
+('trans09', 'economy', 'How should transportation address climate change?'),
+('trans10', 'economy', 'What approach should be taken to road safety?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('trans01_a', 'trans01', 'Major federal investment in all infrastructure', -10, 1),
+('trans01_b', 'trans01', 'Significant federal infrastructure spending', -5, 2),
+('trans01_c', 'trans01', 'Public-private partnerships for infrastructure', 5, 3),
+('trans01_d', 'trans01', 'Reduce federal role in infrastructure', 10, 4),
+('trans01_e', 'trans01', 'Focus on maintaining existing infrastructure', 0, 5),
+('trans01_f', 'trans01', 'This issue is not important to me', 0, 6),
+
+('trans02_a', 'trans02', 'Major expansion of public transit nationally', -10, 1),
+('trans02_b', 'trans02', 'Increase federal transit funding', -5, 2),
+('trans02_c', 'trans02', 'Leave transit to local governments', 5, 3),
+('trans02_d', 'trans02', 'Reduce federal transit subsidies', 10, 4),
+('trans02_e', 'trans02', 'Focus on urban core transit', 0, 5),
+('trans02_f', 'trans02', 'This issue is not important to me', 0, 6),
+
+('trans03_a', 'trans03', 'Shift highway funding to transit and rail', -10, 1),
+('trans03_b', 'trans03', 'Balance highway and transit funding', -5, 2),
+('trans03_c', 'trans03', 'Maintain highway-focused funding', 5, 3),
+('trans03_d', 'trans03', 'Reduce federal highway role', 10, 4),
+('trans03_e', 'trans03', 'Focus on bridge and road repair', 0, 5),
+('trans03_f', 'trans03', 'This issue is not important to me', 0, 6),
+
+('trans04_a', 'trans04', 'Aggressive EV mandates and incentives', -10, 1),
+('trans04_b', 'trans04', 'Strong EV incentives and charging infrastructure', -5, 2),
+('trans04_c', 'trans04', 'Reduce EV subsidies and mandates', 5, 3),
+('trans04_d', 'trans04', 'Eliminate EV incentives entirely', 10, 4),
+('trans04_e', 'trans04', 'Technology-neutral clean vehicle incentives', 0, 5),
+('trans04_f', 'trans04', 'This issue is not important to me', 0, 6),
+
+('trans05_a', 'trans05', 'Strengthen airline consumer protections', -10, 1),
+('trans05_b', 'trans05', 'Maintain current airline regulations', -5, 2),
+('trans05_c', 'trans05', 'Reduce airline regulations', 5, 3),
+('trans05_d', 'trans05', 'Maximum airline deregulation', 10, 4),
+('trans05_e', 'trans05', 'Focus on safety over consumer rules', 0, 5),
+('trans05_f', 'trans05', 'This issue is not important to me', 0, 6),
+
+('trans06_a', 'trans06', 'Invest in passenger rail expansion', -10, 1),
+('trans06_b', 'trans06', 'Balance freight and passenger rail', -5, 2),
+('trans06_c', 'trans06', 'Leave rail to private sector', 5, 3),
+('trans06_d', 'trans06', 'Reduce rail regulation and subsidies', 10, 4),
+('trans06_e', 'trans06', 'Focus on high-speed rail corridors', 0, 5),
+('trans06_f', 'trans06', 'This issue is not important to me', 0, 6),
+
+('trans07_a', 'trans07', 'Strict federal regulation before deployment', -10, 1),
+('trans07_b', 'trans07', 'Proactive safety standards for AVs', -5, 2),
+('trans07_c', 'trans07', 'Light-touch regulation to encourage innovation', 5, 3),
+('trans07_d', 'trans07', 'No federal AV regulation needed', 10, 4),
+('trans07_e', 'trans07', 'Focus on testing and data collection', 0, 5),
+('trans07_f', 'trans07', 'This issue is not important to me', 0, 6),
+
+('trans08_a', 'trans08', 'Major federal airport infrastructure investment', -10, 1),
+('trans08_b', 'trans08', 'Maintain FAA and airport programs', -5, 2),
+('trans08_c', 'trans08', 'Privatize more airport operations', 5, 3),
+('trans08_d', 'trans08', 'Reduce federal airport role', 10, 4),
+('trans08_e', 'trans08', 'Focus on air traffic control modernization', 0, 5),
+('trans08_f', 'trans08', 'This issue is not important to me', 0, 6),
+
+('trans09_a', 'trans09', 'Transform transportation to zero emissions', -10, 1),
+('trans09_b', 'trans09', 'Strong emissions standards and incentives', -5, 2),
+('trans09_c', 'trans09', 'Balance emissions with economic needs', 5, 3),
+('trans09_d', 'trans09', 'No climate requirements for transportation', 10, 4),
+('trans09_e', 'trans09', 'Technology-neutral emissions reduction', 0, 5),
+('trans09_f', 'trans09', 'This issue is not important to me', 0, 6),
+
+('trans10_a', 'trans10', 'Comprehensive federal road safety mandates', -10, 1),
+('trans10_b', 'trans10', 'Strengthen safety standards and enforcement', -5, 2),
+('trans10_c', 'trans10', 'Maintain current safety regulations', 5, 3),
+('trans10_d', 'trans10', 'Reduce safety mandates on manufacturers', 10, 4),
+('trans10_e', 'trans10', 'Focus on impaired driving prevention', 0, 5),
+('trans10_f', 'trans10', 'This issue is not important to me', 0, 6);
