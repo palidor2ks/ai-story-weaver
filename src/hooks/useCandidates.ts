@@ -522,35 +522,47 @@ export const useCanonicalQuestions = (selectedTopicIds: string[]) => {
     queryFn: async () => {
       if (selectedTopicIds.length === 0) return [];
       
-      // Single relational query instead of two separate queries
       const { data: questions, error } = await supabase
         .from('questions')
         .select('*, question_options(*)')
-        .eq('is_onboarding_canonical', true)
         .in('topic_id', selectedTopicIds)
+        .eq('is_onboarding_canonical', true)
+        .order('topic_id')
         .order('onboarding_slot');
       
       if (error) throw error;
-
-      // Sort by topic order (matching selectedTopicIds order) then by slot
-      const topicOrderMap = new Map(selectedTopicIds.map((id, idx) => [id, idx]));
-      questions.sort((a, b) => {
-        const topicOrderA = topicOrderMap.get(a.topic_id) ?? 999;
-        const topicOrderB = topicOrderMap.get(b.topic_id) ?? 999;
-        if (topicOrderA !== topicOrderB) return topicOrderA - topicOrderB;
-        return (a.onboarding_slot || 0) - (b.onboarding_slot || 0);
-      });
-
-      // Rename question_options to options and sort them
-      return questions.map(q => ({
+      
+      return (questions || []).map(q => ({
         ...q,
         options: (q.question_options || []).sort((a: any, b: any) => 
           (a.display_order || 0) - (b.display_order || 0)
         ),
-        question_options: undefined,
-      })) as Question[];
+      }));
     },
     enabled: selectedTopicIds.length > 0,
+  });
+};
+
+// Fetch ALL canonical onboarding questions (all 20, regardless of topic selection)
+export const useAllCanonicalQuestions = () => {
+  return useQuery({
+    queryKey: ['all_canonical_questions'],
+    queryFn: async () => {
+      const { data: questions, error } = await supabase
+        .from('questions')
+        .select('*, question_options(*)')
+        .eq('is_onboarding_canonical', true)
+        .order('onboarding_slot');
+      
+      if (error) throw error;
+      
+      return (questions || []).map(q => ({
+        ...q,
+        options: (q.question_options || []).sort((a: any, b: any) => 
+          (a.display_order || 0) - (b.display_order || 0)
+        ),
+      }));
+    },
   });
 };
 
