@@ -1,0 +1,83 @@
+-- Insert Science, Technology and Communications questions (mapped to 'technology')
+INSERT INTO questions (id, topic_id, text) VALUES
+('tech01', 'technology', 'How should the government regulate big tech companies?'),
+('tech02', 'technology', 'What approach should be taken to online privacy?'),
+('tech03', 'technology', 'How should artificial intelligence be regulated?'),
+('tech04', 'technology', 'What role should the government play in broadband access?'),
+('tech05', 'technology', 'How should social media content moderation be addressed?'),
+('tech06', 'technology', 'What approach should be taken to cybersecurity?'),
+('tech07', 'technology', 'How should the government fund scientific research?'),
+('tech08', 'technology', 'What role should government play in space exploration?'),
+('tech09', 'technology', 'How should data collection by companies be regulated?'),
+('tech10', 'technology', 'What approach should be taken to net neutrality?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('tech01_a', 'tech01', 'Break up large tech companies', -10, 1),
+('tech01_b', 'tech01', 'Strong antitrust enforcement and regulation', -5, 2),
+('tech01_c', 'tech01', 'Targeted regulation for specific issues', 5, 3),
+('tech01_d', 'tech01', 'Minimal regulation of tech industry', 10, 4),
+('tech01_e', 'tech01', 'Focus on competition rather than breakups', 0, 5),
+('tech01_f', 'tech01', 'This issue is not important to me', 0, 6),
+
+('tech02_a', 'tech02', 'Comprehensive federal privacy law with strict limits', -10, 1),
+('tech02_b', 'tech02', 'Strong privacy protections with enforcement', -5, 2),
+('tech02_c', 'tech02', 'Industry self-regulation with guidelines', 5, 3),
+('tech02_d', 'tech02', 'Leave privacy to market forces', 10, 4),
+('tech02_e', 'tech02', 'Opt-in consent requirements', 0, 5),
+('tech02_f', 'tech02', 'This issue is not important to me', 0, 6),
+
+('tech03_a', 'tech03', 'Strict federal regulation of AI development', -10, 1),
+('tech03_b', 'tech03', 'Proactive regulation for high-risk AI', -5, 2),
+('tech03_c', 'tech03', 'Light-touch regulation to encourage innovation', 5, 3),
+('tech03_d', 'tech03', 'No AI regulation at this time', 10, 4),
+('tech03_e', 'tech03', 'Focus on transparency and bias requirements', 0, 5),
+('tech03_f', 'tech03', 'This issue is not important to me', 0, 6),
+
+('tech04_a', 'tech04', 'Treat broadband as public utility', -10, 1),
+('tech04_b', 'tech04', 'Major public investment in broadband infrastructure', -5, 2),
+('tech04_c', 'tech04', 'Subsidies and incentives for private buildout', 5, 3),
+('tech04_d', 'tech04', 'Leave broadband to private market', 10, 4),
+('tech04_e', 'tech04', 'Focus on rural and underserved areas', 0, 5),
+('tech04_f', 'tech04', 'This issue is not important to me', 0, 6),
+
+('tech05_a', 'tech05', 'Require platforms to moderate harmful content', -10, 1),
+('tech05_b', 'tech05', 'Increase transparency in moderation decisions', -5, 2),
+('tech05_c', 'tech05', 'Reduce platform liability for content', 5, 3),
+('tech05_d', 'tech05', 'Prohibit content moderation (free speech)', 10, 4),
+('tech05_e', 'tech05', 'Focus on user control over their experience', 0, 5),
+('tech05_f', 'tech05', 'This issue is not important to me', 0, 6),
+
+('tech06_a', 'tech06', 'Major federal investment in cyber defense', -10, 1),
+('tech06_b', 'tech06', 'Strengthen public-private cybersecurity partnerships', -5, 2),
+('tech06_c', 'tech06', 'Focus on critical infrastructure only', 5, 3),
+('tech06_d', 'tech06', 'Leave cybersecurity to private sector', 10, 4),
+('tech06_e', 'tech06', 'Mandate security standards for key sectors', 0, 5),
+('tech06_f', 'tech06', 'This issue is not important to me', 0, 6),
+
+('tech07_a', 'tech07', 'Significantly increase federal R&D funding', -10, 1),
+('tech07_b', 'tech07', 'Maintain strong federal science investment', -5, 2),
+('tech07_c', 'tech07', 'Shift research funding to private sector', 5, 3),
+('tech07_d', 'tech07', 'Reduce federal research spending', 10, 4),
+('tech07_e', 'tech07', 'Focus on applied research with economic benefits', 0, 5),
+('tech07_f', 'tech07', 'This issue is not important to me', 0, 6),
+
+('tech08_a', 'tech08', 'Lead ambitious public space program', -10, 1),
+('tech08_b', 'tech08', 'Strong NASA with commercial partnerships', -5, 2),
+('tech08_c', 'tech08', 'Shift space exploration to private sector', 5, 3),
+('tech08_d', 'tech08', 'Reduce government role in space', 10, 4),
+('tech08_e', 'tech08', 'Focus on Earth observation and research', 0, 5),
+('tech08_f', 'tech08', 'This issue is not important to me', 0, 6),
+
+('tech09_a', 'tech09', 'Strict limits on corporate data collection', -10, 1),
+('tech09_b', 'tech09', 'Require consent and data minimization', -5, 2),
+('tech09_c', 'tech09', 'Transparency requirements only', 5, 3),
+('tech09_d', 'tech09', 'No regulation of data collection', 10, 4),
+('tech09_e', 'tech09', 'Focus on sensitive data categories', 0, 5),
+('tech09_f', 'tech09', 'This issue is not important to me', 0, 6),
+
+('tech10_a', 'tech10', 'Strong net neutrality rules required', -10, 1),
+('tech10_b', 'tech10', 'Restore net neutrality protections', -5, 2),
+('tech10_c', 'tech10', 'Light-touch approach to net neutrality', 5, 3),
+('tech10_d', 'tech10', 'No net neutrality regulation needed', 10, 4),
+('tech10_e', 'tech10', 'Focus on transparency over rules', 0, 5),
+('tech10_f', 'tech10', 'This issue is not important to me', 0, 6);

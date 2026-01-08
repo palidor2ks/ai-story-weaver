@@ -1,0 +1,83 @@
+-- Insert Native Americans questions (mapped to 'civil-rights')
+INSERT INTO questions (id, topic_id, text) VALUES
+('native01', 'civil-rights', 'How should the federal government approach tribal sovereignty?'),
+('native02', 'civil-rights', 'What role should the government play in tribal healthcare?'),
+('native03', 'civil-rights', 'How should treaty obligations be addressed?'),
+('native04', 'civil-rights', 'What approach should be taken to Native American education?'),
+('native05', 'civil-rights', 'How should sacred sites and cultural preservation be protected?'),
+('native06', 'civil-rights', 'What role should tribes play in natural resource decisions?'),
+('native07', 'civil-rights', 'How should tribal law enforcement be supported?'),
+('native08', 'civil-rights', 'What approach should be taken to economic development on reservations?'),
+('native09', 'civil-rights', 'How should the government address Missing and Murdered Indigenous People?'),
+('native10', 'civil-rights', 'What role should tribal governments have in child welfare?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('native01_a', 'native01', 'Strengthen and expand tribal sovereignty', -10, 1),
+('native01_b', 'native01', 'Maintain and honor existing sovereignty', -5, 2),
+('native01_c', 'native01', 'Balance sovereignty with federal oversight', 5, 3),
+('native01_d', 'native01', 'Reduce special tribal status', 10, 4),
+('native01_e', 'native01', 'Focus on government-to-government relations', 0, 5),
+('native01_f', 'native01', 'This issue is not important to me', 0, 6),
+
+('native02_a', 'native02', 'Fully fund Indian Health Service', -10, 1),
+('native02_b', 'native02', 'Significantly increase tribal healthcare funding', -5, 2),
+('native02_c', 'native02', 'Maintain current IHS with improvements', 5, 3),
+('native02_d', 'native02', 'Transition to mainstream healthcare systems', 10, 4),
+('native02_e', 'native02', 'Expand tribal healthcare self-governance', 0, 5),
+('native02_f', 'native02', 'This issue is not important to me', 0, 6),
+
+('native03_a', 'native03', 'Fully honor all treaty obligations with reparations', -10, 1),
+('native03_b', 'native03', 'Strengthen enforcement of treaty rights', -5, 2),
+('native03_c', 'native03', 'Interpret treaties in modern context', 5, 3),
+('native03_d', 'native03', 'Renegotiate outdated treaties', 10, 4),
+('native03_e', 'native03', 'Case-by-case treaty review', 0, 5),
+('native03_f', 'native03', 'This issue is not important to me', 0, 6),
+
+('native04_a', 'native04', 'Major investment in tribal schools and colleges', -10, 1),
+('native04_b', 'native04', 'Increase funding for Native education programs', -5, 2),
+('native04_c', 'native04', 'Integrate Native students into public systems', 5, 3),
+('native04_d', 'native04', 'Reduce separate Native education programs', 10, 4),
+('native04_e', 'native04', 'Focus on language and culture preservation', 0, 5),
+('native04_f', 'native04', 'This issue is not important to me', 0, 6),
+
+('native05_a', 'native05', 'Strong federal protection of sacred sites', -10, 1),
+('native05_b', 'native05', 'Expand protections with tribal consultation', -5, 2),
+('native05_c', 'native05', 'Balance protection with development needs', 5, 3),
+('native05_d', 'native05', 'Limit special protections for sites', 10, 4),
+('native05_e', 'native05', 'Transfer site management to tribes', 0, 5),
+('native05_f', 'native05', 'This issue is not important to me', 0, 6),
+
+('native06_a', 'native06', 'Require tribal consent for all projects', -10, 1),
+('native06_b', 'native06', 'Meaningful tribal consultation and co-management', -5, 2),
+('native06_c', 'native06', 'Consider tribal input among other factors', 5, 3),
+('native06_d', 'native06', 'Federal authority over natural resources', 10, 4),
+('native06_e', 'native06', 'Expand tribal resource management rights', 0, 5),
+('native06_f', 'native06', 'This issue is not important to me', 0, 6),
+
+('native07_a', 'native07', 'Major investment in tribal law enforcement', -10, 1),
+('native07_b', 'native07', 'Expand tribal police authority and funding', -5, 2),
+('native07_c', 'native07', 'Maintain current federal-tribal cooperation', 5, 3),
+('native07_d', 'native07', 'Reduce separate tribal law enforcement', 10, 4),
+('native07_e', 'native07', 'Focus on intergovernmental coordination', 0, 5),
+('native07_f', 'native07', 'This issue is not important to me', 0, 6),
+
+('native08_a', 'native08', 'Major federal investment in reservation economies', -10, 1),
+('native08_b', 'native08', 'Expand tribal economic opportunities', -5, 2),
+('native08_c', 'native08', 'Support private sector development on reservations', 5, 3),
+('native08_d', 'native08', 'Reduce special economic status', 10, 4),
+('native08_e', 'native08', 'Focus on infrastructure and broadband', 0, 5),
+('native08_f', 'native08', 'This issue is not important to me', 0, 6),
+
+('native09_a', 'native09', 'Create dedicated federal task force and funding', -10, 1),
+('native09_b', 'native09', 'Significantly increase resources for MMIP', -5, 2),
+('native09_c', 'native09', 'Coordinate existing law enforcement efforts', 5, 3),
+('native09_d', 'native09', 'Handle through general law enforcement', 10, 4),
+('native09_e', 'native09', 'Empower tribal law enforcement for cases', 0, 5),
+('native09_f', 'native09', 'This issue is not important to me', 0, 6),
+
+('native10_a', 'native10', 'Strengthen ICWA and tribal authority', -10, 1),
+('native10_b', 'native10', 'Maintain ICWA with improved implementation', -5, 2),
+('native10_c', 'native10', 'Reform ICWA to balance interests', 5, 3),
+('native10_d', 'native10', 'Reduce special tribal role in child welfare', 10, 4),
+('native10_e', 'native10', 'Focus on preventing family separations', 0, 5),
+('native10_f', 'native10', 'This issue is not important to me', 0, 6);

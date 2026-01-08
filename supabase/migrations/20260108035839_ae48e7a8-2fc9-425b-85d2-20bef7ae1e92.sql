@@ -1,0 +1,83 @@
+-- Insert International Affairs questions (mapped to 'defense')
+INSERT INTO questions (id, topic_id, text) VALUES
+('intl01', 'defense', 'What role should the US play in international organizations?'),
+('intl02', 'defense', 'How should the US approach foreign aid?'),
+('intl03', 'defense', 'What should US policy be toward NATO allies?'),
+('intl04', 'defense', 'How should the US engage with authoritarian regimes?'),
+('intl05', 'defense', 'What approach should be taken to human rights in foreign policy?'),
+('intl06', 'defense', 'How should the US respond to international conflicts?'),
+('intl07', 'defense', 'What role should diplomacy play vs military force?'),
+('intl08', 'defense', 'How should the US approach international treaties?'),
+('intl09', 'defense', 'What should US policy be toward Israel and the Middle East?'),
+('intl10', 'defense', 'How should the US address climate change internationally?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('intl01_a', 'intl01', 'Lead and strengthen international institutions', -10, 1),
+('intl01_b', 'intl01', 'Actively participate while reforming institutions', -5, 2),
+('intl01_c', 'intl01', 'Selective engagement based on US interests', 5, 3),
+('intl01_d', 'intl01', 'Minimize involvement in international bodies', 10, 4),
+('intl01_e', 'intl01', 'Reform institutions to better serve US interests', 0, 5),
+('intl01_f', 'intl01', 'This issue is not important to me', 0, 6),
+
+('intl02_a', 'intl02', 'Significantly increase foreign aid', -10, 1),
+('intl02_b', 'intl02', 'Maintain current aid with effectiveness reforms', -5, 2),
+('intl02_c', 'intl02', 'Reduce aid and focus on strategic priorities', 5, 3),
+('intl02_d', 'intl02', 'Dramatically reduce or eliminate foreign aid', 10, 4),
+('intl02_e', 'intl02', 'Focus on humanitarian aid over development', 0, 5),
+('intl02_f', 'intl02', 'This issue is not important to me', 0, 6),
+
+('intl03_a', 'intl03', 'Strengthen NATO and expand alliance', -10, 1),
+('intl03_b', 'intl03', 'Maintain NATO commitments', -5, 2),
+('intl03_c', 'intl03', 'Reduce US role while allies increase burden', 5, 3),
+('intl03_d', 'intl03', 'Significantly reduce or withdraw from NATO', 10, 4),
+('intl03_e', 'intl03', 'Modernize NATO for current threats', 0, 5),
+('intl03_f', 'intl03', 'This issue is not important to me', 0, 6),
+
+('intl04_a', 'intl04', 'Prioritize human rights over engagement', -10, 1),
+('intl04_b', 'intl04', 'Engage while pressing for reforms', -5, 2),
+('intl04_c', 'intl04', 'Focus on US interests regardless of governance', 5, 3),
+('intl04_d', 'intl04', 'Prioritize stability and US interests only', 10, 4),
+('intl04_e', 'intl04', 'Use economic leverage for reform', 0, 5),
+('intl04_f', 'intl04', 'This issue is not important to me', 0, 6),
+
+('intl05_a', 'intl05', 'Make human rights central to foreign policy', -10, 1),
+('intl05_b', 'intl05', 'Balance human rights with strategic interests', -5, 2),
+('intl05_c', 'intl05', 'Prioritize security over human rights concerns', 5, 3),
+('intl05_d', 'intl05', 'Focus only on domestic issues, not foreign', 10, 4),
+('intl05_e', 'intl05', 'Lead by example rather than intervention', 0, 5),
+('intl05_f', 'intl05', 'This issue is not important to me', 0, 6),
+
+('intl06_a', 'intl06', 'Lead international responses through multilateral action', -10, 1),
+('intl06_b', 'intl06', 'Engage diplomatically with coalition building', -5, 2),
+('intl06_c', 'intl06', 'Respond only when US interests directly threatened', 5, 3),
+('intl06_d', 'intl06', 'Avoid involvement in foreign conflicts', 10, 4),
+('intl06_e', 'intl06', 'Support regional solutions', 0, 5),
+('intl06_f', 'intl06', 'This issue is not important to me', 0, 6),
+
+('intl07_a', 'intl07', 'Diplomacy first, military as last resort', -10, 1),
+('intl07_b', 'intl07', 'Strong diplomacy backed by military capability', -5, 2),
+('intl07_c', 'intl07', 'Peace through strength approach', 5, 3),
+('intl07_d', 'intl07', 'Military readiness as primary deterrent', 10, 4),
+('intl07_e', 'intl07', 'Situation-dependent approach', 0, 5),
+('intl07_f', 'intl07', 'This issue is not important to me', 0, 6),
+
+('intl08_a', 'intl08', 'Actively negotiate and join international treaties', -10, 1),
+('intl08_b', 'intl08', 'Support treaties that serve US and global interests', -5, 2),
+('intl08_c', 'intl08', 'Limit treaty commitments to core interests', 5, 3),
+('intl08_d', 'intl08', 'Avoid binding international treaties', 10, 4),
+('intl08_e', 'intl08', 'Modernize existing treaty commitments', 0, 5),
+('intl08_f', 'intl08', 'This issue is not important to me', 0, 6),
+
+('intl09_a', 'intl09', 'Balance support for Israel with Palestinian rights', -10, 1),
+('intl09_b', 'intl09', 'Support two-state solution actively', -5, 2),
+('intl09_c', 'intl09', 'Strong support for Israel as key ally', 5, 3),
+('intl09_d', 'intl09', 'Unconditional support for Israel', 10, 4),
+('intl09_e', 'intl09', 'Focus on regional stability and peace', 0, 5),
+('intl09_f', 'intl09', 'This issue is not important to me', 0, 6),
+
+('intl10_a', 'intl10', 'Lead ambitious international climate agreements', -10, 1),
+('intl10_b', 'intl10', 'Participate in international climate efforts', -5, 2),
+('intl10_c', 'intl10', 'Focus on domestic action over international', 5, 3),
+('intl10_d', 'intl10', 'Reject binding international climate commitments', 10, 4),
+('intl10_e', 'intl10', 'Focus on technology transfer and adaptation', 0, 5),
+('intl10_f', 'intl10', 'This issue is not important to me', 0, 6);

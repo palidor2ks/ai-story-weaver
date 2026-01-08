@@ -1,0 +1,83 @@
+-- Insert Immigration questions (mapped to 'immigration')
+INSERT INTO questions (id, topic_id, text) VALUES
+('imm01', 'immigration', 'What should be the overall approach to immigration levels?'),
+('imm02', 'immigration', 'How should the US address undocumented immigrants currently in the country?'),
+('imm03', 'immigration', 'What approach should be taken to border security?'),
+('imm04', 'immigration', 'How should the asylum system be reformed?'),
+('imm05', 'immigration', 'What role should employment-based immigration play?'),
+('imm06', 'immigration', 'How should family-based immigration be structured?'),
+('imm07', 'immigration', 'What approach should be taken to DACA recipients?'),
+('imm08', 'immigration', 'How should immigration enforcement be conducted?'),
+('imm09', 'immigration', 'What role should sanctuary policies play?'),
+('imm10', 'immigration', 'How should refugee admissions be handled?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('imm01_a', 'imm01', 'Significantly increase legal immigration levels', -10, 1),
+('imm01_b', 'imm01', 'Moderately increase immigration with reforms', -5, 2),
+('imm01_c', 'imm01', 'Maintain current immigration levels', 5, 3),
+('imm01_d', 'imm01', 'Significantly reduce immigration levels', 10, 4),
+('imm01_e', 'imm01', 'Focus on skills-based immigration reform', 0, 5),
+('imm01_f', 'imm01', 'This issue is not important to me', 0, 6),
+
+('imm02_a', 'imm02', 'Provide pathway to citizenship for all undocumented', -10, 1),
+('imm02_b', 'imm02', 'Offer legal status with pathway for long-term residents', -5, 2),
+('imm02_c', 'imm02', 'Allow legal status but no citizenship path', 5, 3),
+('imm02_d', 'imm02', 'Prioritize deportation and enforcement', 10, 4),
+('imm02_e', 'imm02', 'Focus on case-by-case evaluation', 0, 5),
+('imm02_f', 'imm02', 'This issue is not important to me', 0, 6),
+
+('imm03_a', 'imm03', 'Focus on humanitarian processing over barriers', -10, 1),
+('imm03_b', 'imm03', 'Balance security with efficient processing', -5, 2),
+('imm03_c', 'imm03', 'Significantly increase border security measures', 5, 3),
+('imm03_d', 'imm03', 'Maximum physical barriers and enforcement', 10, 4),
+('imm03_e', 'imm03', 'Focus on technology and personnel over walls', 0, 5),
+('imm03_f', 'imm03', 'This issue is not important to me', 0, 6),
+
+('imm04_a', 'imm04', 'Expand asylum eligibility and processing', -10, 1),
+('imm04_b', 'imm04', 'Maintain asylum with faster processing', -5, 2),
+('imm04_c', 'imm04', 'Restrict asylum to narrow categories', 5, 3),
+('imm04_d', 'imm04', 'Significantly limit or end asylum at border', 10, 4),
+('imm04_e', 'imm04', 'Process claims in home countries', 0, 5),
+('imm04_f', 'imm04', 'This issue is not important to me', 0, 6),
+
+('imm05_a', 'imm05', 'Expand work visas across skill levels', -10, 1),
+('imm05_b', 'imm05', 'Increase high-skilled immigration', -5, 2),
+('imm05_c', 'imm05', 'Prioritize American workers with limited visas', 5, 3),
+('imm05_d', 'imm05', 'Significantly reduce employment-based immigration', 10, 4),
+('imm05_e', 'imm05', 'Focus on shortage occupations only', 0, 5),
+('imm05_f', 'imm05', 'This issue is not important to me', 0, 6),
+
+('imm06_a', 'imm06', 'Expand family reunification categories', -10, 1),
+('imm06_b', 'imm06', 'Maintain current family-based system', -5, 2),
+('imm06_c', 'imm06', 'Limit to immediate family only', 5, 3),
+('imm06_d', 'imm06', 'End extended family immigration', 10, 4),
+('imm06_e', 'imm06', 'Balance family and employment priorities', 0, 5),
+('imm06_f', 'imm06', 'This issue is not important to me', 0, 6),
+
+('imm07_a', 'imm07', 'Provide permanent legal status and citizenship path', -10, 1),
+('imm07_b', 'imm07', 'Make DACA permanent with work authorization', -5, 2),
+('imm07_c', 'imm07', 'Continue temporary status without expansion', 5, 3),
+('imm07_d', 'imm07', 'End DACA program', 10, 4),
+('imm07_e', 'imm07', 'Link to comprehensive immigration reform', 0, 5),
+('imm07_f', 'imm07', 'This issue is not important to me', 0, 6),
+
+('imm08_a', 'imm08', 'Focus on serious criminals only', -10, 1),
+('imm08_b', 'imm08', 'Prioritized enforcement with prosecutorial discretion', -5, 2),
+('imm08_c', 'imm08', 'Enforce immigration laws broadly', 5, 3),
+('imm08_d', 'imm08', 'Maximum interior enforcement', 10, 4),
+('imm08_e', 'imm08', 'Focus resources on border rather than interior', 0, 5),
+('imm08_f', 'imm08', 'This issue is not important to me', 0, 6),
+
+('imm09_a', 'imm09', 'Support sanctuary policies as community protection', -10, 1),
+('imm09_b', 'imm09', 'Allow local discretion on cooperation', -5, 2),
+('imm09_c', 'imm09', 'Require cooperation with federal enforcement', 5, 3),
+('imm09_d', 'imm09', 'Punish sanctuary jurisdictions', 10, 4),
+('imm09_e', 'imm09', 'Focus on serious crime cooperation only', 0, 5),
+('imm09_f', 'imm09', 'This issue is not important to me', 0, 6),
+
+('imm10_a', 'imm10', 'Significantly increase refugee admissions', -10, 1),
+('imm10_b', 'imm10', 'Maintain robust refugee program', -5, 2),
+('imm10_c', 'imm10', 'Reduce refugee admissions with strict vetting', 5, 3),
+('imm10_d', 'imm10', 'Minimize or pause refugee admissions', 10, 4),
+('imm10_e', 'imm10', 'Focus on regional resettlement support', 0, 5),
+('imm10_f', 'imm10', 'This issue is not important to me', 0, 6);
