@@ -6,7 +6,7 @@ import { QuizQuestion } from '@/components/QuizQuestion';
 import { ScoreText } from '@/components/ScoreText';
 import { DemographicsForm, DemographicsData } from '@/components/DemographicsForm';
 import { useAuth } from '@/context/AuthContext';
-import { useTopics, useCanonicalQuestions } from '@/hooks/useCandidates';
+import { useTopics, useAllCanonicalQuestions } from '@/hooks/useCandidates';
 import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { OnboardingStep, Topic, QuestionOption, QuizAnswer, TopicScore } from '@/types';
 import { calculateQuizScore } from '@/lib/score';
@@ -34,11 +34,11 @@ export const Onboarding = () => {
   const [calculatedScores, setCalculatedScores] = useState<{ overall: number; byTopic: TopicScore[] } | null>(null);
   const [skippedQuestionIds, setSkippedQuestionIds] = useState<Set<string>>(new Set());
 
-  // Get selected topic IDs in order (for canonical question fetching)
+  // Get selected topic IDs in order (for saving user topics)
   const selectedTopicIds = useMemo(() => selectedTopics.map(t => t.id), [selectedTopics]);
   
-  // Fetch canonical questions for selected topics (2 per topic = 6 total for 3 topics)
-  const { data: canonicalQuestions = [], isLoading: questionsLoading } = useCanonicalQuestions(selectedTopicIds);
+  // Fetch ALL canonical onboarding questions (20 total - 2 per each of 10 topics)
+  const { data: canonicalQuestions = [], isLoading: questionsLoading } = useAllCanonicalQuestions();
 
   // Transform database topics to app format
   const topics: Topic[] = dbTopics.map(t => ({
@@ -171,10 +171,19 @@ export const Onboarding = () => {
   };
 
   const calculateUserScore = () => {
+    // Build weights: priority topics get 3/2/1, all other topics get weight of 1
+    const allTopicsWithWeights = topics.map(t => {
+      const priorityIndex = selectedTopics.findIndex(st => st.id === t.id);
+      return {
+        id: t.id,
+        weight: priorityIndex >= 0 ? (3 - priorityIndex) : 1
+      };
+    });
+
     return calculateQuizScore(
       quizAnswers,
       questions.map(q => ({ id: q.id, topicId: q.topicId })),
-      selectedTopics.map(t => ({ id: t.id, weight: t.weight || 1 })),
+      allTopicsWithWeights,
       topics.map(t => ({ id: t.id, name: t.name }))
     );
   };
@@ -283,8 +292,8 @@ export const Onboarding = () => {
                   <Sparkles className="w-6 h-6 text-accent" />
                 </div>
                 <div className="text-left">
-                  <h3 className="font-semibold text-foreground">Answer 6 Questions</h3>
-                  <p className="text-sm text-muted-foreground">2 questions for each of your top topics</p>
+                  <h3 className="font-semibold text-foreground">Answer 20 Questions</h3>
+                  <p className="text-sm text-muted-foreground">2 questions for each of the 10 policy topics</p>
                 </div>
               </div>
               
@@ -376,7 +385,7 @@ export const Onboarding = () => {
                 }}
                 disabled={selectedTopics.length !== 3}
               >
-                Continue to Quiz ({selectedTopics.length === 3 ? '6 questions' : `${selectedTopics.length * 2} questions`})
+                Continue to Quiz (20 questions)
                 <ArrowRight className="w-5 h-5" />
               </Button>
             </div>
