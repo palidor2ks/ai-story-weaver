@@ -13,6 +13,28 @@ import { calculateQuizScore } from '@/lib/score';
 import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
+const TOPIC_ABBREVIATIONS: Record<string, string> = {
+  'Armed Forces and National Security': 'Defense & Security',
+  'Arts, Culture, Religion': 'Arts & Culture',
+  'Civil Rights and Liberties, Minority Issues': 'Civil Rights',
+  'Crime and Law Enforcement': 'Crime & Law',
+  'Economics and Public Finance': 'Economics',
+  'Emergency Management': 'Emergencies',
+  'Environmental Protection': 'Environment',
+  'Finance and Financial Sector': 'Finance',
+  'Foreign Trade and International Finance': 'Foreign Trade',
+  'Government Operations and Politics': "Gov't & Politics",
+  'Housing and Community Development': 'Housing',
+  'International Affairs': "Int'l Affairs",
+  'Labor and Employment': 'Labor',
+  'Public Lands and Natural Resources': 'Public Lands',
+  'Science, Technology, Communications': 'Science & Tech',
+  'Social Sciences and History': 'Social Sciences',
+  'Sports and Recreation': 'Sports & Rec',
+  'Transportation and Public Works': 'Transportation',
+  'Water Resources Development': 'Water Resources',
+};
+
 // Minimum required answers is now dynamically calculated based on available questions
 
 type ExtendedOnboardingStep = OnboardingStep | 'demographics';
@@ -44,6 +66,7 @@ export const Onboarding = () => {
   const topics: Topic[] = dbTopics.map(t => ({
     id: t.id,
     name: t.name,
+    displayName: TOPIC_ABBREVIATIONS[t.name] || undefined,
     icon: t.icon,
     weight: t.weight || 1,
   }));
@@ -353,7 +376,7 @@ export const Onboarding = () => {
                 <div className="flex flex-wrap gap-2">
                   {selectedTopics.map((topic, index) => (
                     <span key={topic.id} className="text-sm px-3 py-1 rounded-full bg-primary/10 text-primary">
-                      {index + 1}. {topic.name}
+                      {index + 1}. {topic.displayName || topic.name}
                     </span>
                   ))}
                 </div>

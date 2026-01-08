@@ -40,7 +40,7 @@ export const TopicSelector = ({
             style={{ animationDelay: `${index * 50}ms` }}
           >
             <span className="text-2xl">{topic.icon}</span>
-            <span className="text-xs font-medium text-center leading-tight break-words w-full">
+            <span className="text-xs font-medium text-center leading-tight break-words whitespace-normal w-full px-1">
               {topic.displayName || topic.name}
             </span>
             {selected && (
