@@ -34,13 +34,15 @@ export const TopicSelector = ({
             onClick={() => onToggle(topic)}
             disabled={disabled}
             className={cn(
-              "h-auto py-4 px-4 flex flex-col items-center gap-2 animate-scale-in",
+              "h-auto min-h-[100px] py-3 px-2 flex flex-col items-center justify-center gap-2 animate-scale-in relative",
               disabled && "opacity-50 cursor-not-allowed"
             )}
             style={{ animationDelay: `${index * 50}ms` }}
           >
             <span className="text-2xl">{topic.icon}</span>
-            <span className="text-sm font-medium">{topic.name}</span>
+            <span className="text-xs font-medium text-center leading-tight break-words w-full">
+              {topic.displayName || topic.name}
+            </span>
             {selected && (
               <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
                 <Check className="w-3 h-3 text-primary-foreground" />

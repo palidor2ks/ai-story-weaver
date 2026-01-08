@@ -15,6 +15,7 @@ export interface User {
 export interface Topic {
   id: string;
   name: string;
+  displayName?: string;
   icon: string;
   weight: number;
 }
