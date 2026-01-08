@@ -1,0 +1,83 @@
+-- Insert Law questions (mapped to 'civil-rights')
+INSERT INTO questions (id, topic_id, text) VALUES
+('law01', 'civil-rights', 'What approach should be taken to Supreme Court reform?'),
+('law02', 'civil-rights', 'How should the federal judiciary be structured?'),
+('law03', 'civil-rights', 'What role should the Justice Department play in civil rights enforcement?'),
+('law04', 'civil-rights', 'How should access to the legal system be improved?'),
+('law05', 'civil-rights', 'What approach should be taken to tort reform?'),
+('law06', 'civil-rights', 'How should patent and intellectual property law be reformed?'),
+('law07', 'civil-rights', 'What role should class action lawsuits play?'),
+('law08', 'civil-rights', 'How should arbitration agreements be regulated?'),
+('law09', 'civil-rights', 'What approach should be taken to qualified immunity?'),
+('law10', 'civil-rights', 'How should antitrust law be enforced?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('law01_a', 'law01', 'Expand the Supreme Court', -10, 1),
+('law01_b', 'law01', 'Implement term limits for justices', -5, 2),
+('law01_c', 'law01', 'Maintain current court structure', 5, 3),
+('law01_d', 'law01', 'Strengthen protections against court changes', 10, 4),
+('law01_e', 'law01', 'Focus on ethics reform only', 0, 5),
+('law01_f', 'law01', 'This issue is not important to me', 0, 6),
+
+('law02_a', 'law02', 'Add more federal judges to reduce backlogs', -10, 1),
+('law02_b', 'law02', 'Expand courts with diversity focus', -5, 2),
+('law02_c', 'law02', 'Maintain current judiciary structure', 5, 3),
+('law02_d', 'law02', 'Limit federal court jurisdiction', 10, 4),
+('law02_e', 'law02', 'Focus on efficiency improvements', 0, 5),
+('law02_f', 'law02', 'This issue is not important to me', 0, 6),
+
+('law03_a', 'law03', 'Significantly expand DOJ civil rights enforcement', -10, 1),
+('law03_b', 'law03', 'Strengthen civil rights division resources', -5, 2),
+('law03_c', 'law03', 'Maintain current enforcement levels', 5, 3),
+('law03_d', 'law03', 'Reduce federal civil rights enforcement', 10, 4),
+('law03_e', 'law03', 'Focus on pattern-or-practice investigations', 0, 5),
+('law03_f', 'law03', 'This issue is not important to me', 0, 6),
+
+('law04_a', 'law04', 'Guarantee right to counsel in civil cases', -10, 1),
+('law04_b', 'law04', 'Expand legal aid funding significantly', -5, 2),
+('law04_c', 'law04', 'Maintain current legal aid programs', 5, 3),
+('law04_d', 'law04', 'Reduce federal legal aid funding', 10, 4),
+('law04_e', 'law04', 'Focus on technology to improve access', 0, 5),
+('law04_f', 'law04', 'This issue is not important to me', 0, 6),
+
+('law05_a', 'law05', 'Maintain strong access to courts for injury claims', -10, 1),
+('law05_b', 'law05', 'Targeted reforms while preserving access', -5, 2),
+('law05_c', 'law05', 'Implement caps on damages and limit lawsuits', 5, 3),
+('law05_d', 'law05', 'Comprehensive tort reform with strict limits', 10, 4),
+('law05_e', 'law05', 'Focus on frivolous lawsuit reduction', 0, 5),
+('law05_f', 'law05', 'This issue is not important to me', 0, 6),
+
+('law06_a', 'law06', 'Shorten patent terms and limit patents', -10, 1),
+('law06_b', 'law06', 'Reform patent system to reduce abuse', -5, 2),
+('law06_c', 'law06', 'Maintain current IP protections', 5, 3),
+('law06_d', 'law06', 'Strengthen IP protections and enforcement', 10, 4),
+('law06_e', 'law06', 'Focus on tech sector IP issues', 0, 5),
+('law06_f', 'law06', 'This issue is not important to me', 0, 6),
+
+('law07_a', 'law07', 'Expand class action access for consumers', -10, 1),
+('law07_b', 'law07', 'Maintain current class action rules', -5, 2),
+('law07_c', 'law07', 'Reform class actions to reduce abuse', 5, 3),
+('law07_d', 'law07', 'Significantly restrict class action lawsuits', 10, 4),
+('law07_e', 'law07', 'Focus on improving settlement oversight', 0, 5),
+('law07_f', 'law07', 'This issue is not important to me', 0, 6),
+
+('law08_a', 'law08', 'Ban forced arbitration clauses', -10, 1),
+('law08_b', 'law08', 'Restrict mandatory arbitration significantly', -5, 2),
+('law08_c', 'law08', 'Allow arbitration with disclosure requirements', 5, 3),
+('law08_d', 'law08', 'Support arbitration as efficient alternative', 10, 4),
+('law08_e', 'law08', 'Ban for employment and consumer contracts only', 0, 5),
+('law08_f', 'law08', 'This issue is not important to me', 0, 6),
+
+('law09_a', 'law09', 'Eliminate qualified immunity entirely', -10, 1),
+('law09_b', 'law09', 'Significantly limit qualified immunity', -5, 2),
+('law09_c', 'law09', 'Reform while maintaining some protections', 5, 3),
+('law09_d', 'law09', 'Maintain current qualified immunity', 10, 4),
+('law09_e', 'law09', 'Create alternative accountability mechanisms', 0, 5),
+('law09_f', 'law09', 'This issue is not important to me', 0, 6),
+
+('law10_a', 'law10', 'Aggressively break up large corporations', -10, 1),
+('law10_b', 'law10', 'Strengthen antitrust enforcement significantly', -5, 2),
+('law10_c', 'law10', 'Maintain current antitrust approach', 5, 3),
+('law10_d', 'law10', 'Reduce antitrust enforcement', 10, 4),
+('law10_e', 'law10', 'Focus on tech sector concentration', 0, 5),
+('law10_f', 'law10', 'This issue is not important to me', 0, 6);

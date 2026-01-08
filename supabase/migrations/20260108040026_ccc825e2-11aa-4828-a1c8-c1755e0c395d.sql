@@ -1,0 +1,83 @@
+-- Insert Public Lands and Natural Resources questions (mapped to 'environment')
+INSERT INTO questions (id, topic_id, text) VALUES
+('lands01', 'environment', 'How should federal public lands be managed?'),
+('lands02', 'environment', 'What approach should be taken to oil and gas leasing on federal lands?'),
+('lands03', 'environment', 'How should national parks be funded and managed?'),
+('lands04', 'environment', 'What role should conservation play in land management?'),
+('lands05', 'environment', 'How should mining on public lands be regulated?'),
+('lands06', 'environment', 'What approach should be taken to logging on federal lands?'),
+('lands07', 'environment', 'How should grazing on public lands be managed?'),
+('lands08', 'environment', 'What role should wilderness designations play?'),
+('lands09', 'environment', 'How should the government address wildfire management?'),
+('lands10', 'environment', 'What approach should be taken to offshore drilling?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('lands01_a', 'lands01', 'Expand federal lands and protections', -10, 1),
+('lands01_b', 'lands01', 'Maintain federal management with conservation focus', -5, 2),
+('lands01_c', 'lands01', 'Increase state role in federal land management', 5, 3),
+('lands01_d', 'lands01', 'Transfer federal lands to states or sell', 10, 4),
+('lands01_e', 'lands01', 'Balance multiple use and conservation', 0, 5),
+('lands01_f', 'lands01', 'This issue is not important to me', 0, 6),
+
+('lands02_a', 'lands02', 'Ban new oil and gas leasing on federal lands', -10, 1),
+('lands02_b', 'lands02', 'Significantly restrict new leasing', -5, 2),
+('lands02_c', 'lands02', 'Continue leasing with environmental review', 5, 3),
+('lands02_d', 'lands02', 'Maximize energy production on federal lands', 10, 4),
+('lands02_e', 'lands02', 'Focus on existing lease development', 0, 5),
+('lands02_f', 'lands02', 'This issue is not important to me', 0, 6),
+
+('lands03_a', 'lands03', 'Significantly increase national park funding', -10, 1),
+('lands03_b', 'lands03', 'Address maintenance backlog with increased funding', -5, 2),
+('lands03_c', 'lands03', 'Increase private partnerships and fees', 5, 3),
+('lands03_d', 'lands03', 'Reduce federal park system', 10, 4),
+('lands03_e', 'lands03', 'Focus on visitor experience improvements', 0, 5),
+('lands03_f', 'lands03', 'This issue is not important to me', 0, 6),
+
+('lands04_a', 'lands04', 'Prioritize conservation over economic uses', -10, 1),
+('lands04_b', 'lands04', 'Strong conservation with sustainable use', -5, 2),
+('lands04_c', 'lands04', 'Balance conservation with economic development', 5, 3),
+('lands04_d', 'lands04', 'Prioritize economic use over conservation', 10, 4),
+('lands04_e', 'lands04', 'Focus on restoration and resilience', 0, 5),
+('lands04_f', 'lands04', 'This issue is not important to me', 0, 6),
+
+('lands05_a', 'lands05', 'Significantly restrict mining on public lands', -10, 1),
+('lands05_b', 'lands05', 'Reform mining law with environmental standards', -5, 2),
+('lands05_c', 'lands05', 'Maintain current mining regulations', 5, 3),
+('lands05_d', 'lands05', 'Expand mining access and reduce regulations', 10, 4),
+('lands05_e', 'lands05', 'Focus on critical mineral development', 0, 5),
+('lands05_f', 'lands05', 'This issue is not important to me', 0, 6),
+
+('lands06_a', 'lands06', 'End commercial logging on federal lands', -10, 1),
+('lands06_b', 'lands06', 'Restrict logging to sustainable levels', -5, 2),
+('lands06_c', 'lands06', 'Allow logging with forest management goals', 5, 3),
+('lands06_d', 'lands06', 'Expand timber harvest on federal lands', 10, 4),
+('lands06_e', 'lands06', 'Focus on fire risk reduction logging', 0, 5),
+('lands06_f', 'lands06', 'This issue is not important to me', 0, 6),
+
+('lands07_a', 'lands07', 'Significantly reduce grazing on public lands', -10, 1),
+('lands07_b', 'lands07', 'Reform grazing with conservation focus', -5, 2),
+('lands07_c', 'lands07', 'Maintain current grazing programs', 5, 3),
+('lands07_d', 'lands07', 'Expand grazing access and reduce fees', 10, 4),
+('lands07_e', 'lands07', 'Focus on sustainable ranching practices', 0, 5),
+('lands07_f', 'lands07', 'This issue is not important to me', 0, 6),
+
+('lands08_a', 'lands08', 'Significantly expand wilderness areas', -10, 1),
+('lands08_b', 'lands08', 'Add new wilderness protections strategically', -5, 2),
+('lands08_c', 'lands08', 'Maintain current wilderness system', 5, 3),
+('lands08_d', 'lands08', 'Reduce wilderness restrictions', 10, 4),
+('lands08_e', 'lands08', 'Focus on connecting wilderness areas', 0, 5),
+('lands08_f', 'lands08', 'This issue is not important to me', 0, 6),
+
+('lands09_a', 'lands09', 'Major investment in prevention and resilience', -10, 1),
+('lands09_b', 'lands09', 'Increase funding for fire prevention and response', -5, 2),
+('lands09_c', 'lands09', 'Focus on forest management to reduce fires', 5, 3),
+('lands09_d', 'lands09', 'Expand logging and vegetation management', 10, 4),
+('lands09_e', 'lands09', 'Community fire adaptation programs', 0, 5),
+('lands09_f', 'lands09', 'This issue is not important to me', 0, 6),
+
+('lands10_a', 'lands10', 'Ban all new offshore drilling', -10, 1),
+('lands10_b', 'lands10', 'Restrict offshore drilling significantly', -5, 2),
+('lands10_c', 'lands10', 'Allow drilling with strong environmental review', 5, 3),
+('lands10_d', 'lands10', 'Expand offshore drilling access', 10, 4),
+('lands10_e', 'lands10', 'Focus on existing leases only', 0, 5),
+('lands10_f', 'lands10', 'This issue is not important to me', 0, 6);

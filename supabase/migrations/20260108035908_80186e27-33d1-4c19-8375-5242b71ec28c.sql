@@ -1,0 +1,83 @@
+-- Insert Labor and Employment questions (mapped to 'economy')
+INSERT INTO questions (id, topic_id, text) VALUES
+('labor01', 'economy', 'What role should unions play in the American economy?'),
+('labor02', 'economy', 'How should the federal minimum wage be addressed?'),
+('labor03', 'economy', 'What approach should be taken to worker protections?'),
+('labor04', 'economy', 'How should the gig economy be regulated?'),
+('labor05', 'economy', 'What role should the government play in job training?'),
+('labor06', 'economy', 'How should workplace safety be regulated?'),
+('labor07', 'economy', 'What approach should be taken to unemployment insurance?'),
+('labor08', 'economy', 'How should the government address automation and job displacement?'),
+('labor09', 'economy', 'What role should overtime rules play?'),
+('labor10', 'economy', 'How should non-compete agreements be regulated?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('labor01_a', 'labor01', 'Strengthen union rights and expand organizing', -10, 1),
+('labor01_b', 'labor01', 'Protect existing union rights', -5, 2),
+('labor01_c', 'labor01', 'Maintain current balance of union regulations', 5, 3),
+('labor01_d', 'labor01', 'Reduce union power and right-to-work expansion', 10, 4),
+('labor01_e', 'labor01', 'Modernize labor law for current economy', 0, 5),
+('labor01_f', 'labor01', 'This issue is not important to me', 0, 6),
+
+('labor02_a', 'labor02', 'Raise to $15+ and index to inflation', -10, 1),
+('labor02_b', 'labor02', 'Gradually increase federal minimum wage', -5, 2),
+('labor02_c', 'labor02', 'Leave minimum wage to states', 5, 3),
+('labor02_d', 'labor02', 'Eliminate federal minimum wage', 10, 4),
+('labor02_e', 'labor02', 'Regional minimum wage based on cost of living', 0, 5),
+('labor02_f', 'labor02', 'This issue is not important to me', 0, 6),
+
+('labor03_a', 'labor03', 'Significantly expand worker protections', -10, 1),
+('labor03_b', 'labor03', 'Strengthen enforcement of existing protections', -5, 2),
+('labor03_c', 'labor03', 'Reduce regulatory burden on employers', 5, 3),
+('labor03_d', 'labor03', 'Minimize federal worker protections', 10, 4),
+('labor03_e', 'labor03', 'Focus on portable benefits', 0, 5),
+('labor03_f', 'labor03', 'This issue is not important to me', 0, 6),
+
+('labor04_a', 'labor04', 'Classify gig workers as employees', -10, 1),
+('labor04_b', 'labor04', 'Provide benefits while maintaining flexibility', -5, 2),
+('labor04_c', 'labor04', 'Maintain independent contractor classification', 5, 3),
+('labor04_d', 'labor04', 'No regulation of gig economy', 10, 4),
+('labor04_e', 'labor04', 'Create new worker category with some protections', 0, 5),
+('labor04_f', 'labor04', 'This issue is not important to me', 0, 6),
+
+('labor05_a', 'labor05', 'Major federal investment in job training', -10, 1),
+('labor05_b', 'labor05', 'Expand public-private training partnerships', -5, 2),
+('labor05_c', 'labor05', 'Leave job training to private sector', 5, 3),
+('labor05_d', 'labor05', 'Eliminate federal job training programs', 10, 4),
+('labor05_e', 'labor05', 'Focus on apprenticeship programs', 0, 5),
+('labor05_f', 'labor05', 'This issue is not important to me', 0, 6),
+
+('labor06_a', 'labor06', 'Significantly strengthen OSHA regulations', -10, 1),
+('labor06_b', 'labor06', 'Maintain and enforce current safety standards', -5, 2),
+('labor06_c', 'labor06', 'Reduce regulatory burden while maintaining safety', 5, 3),
+('labor06_d', 'labor06', 'Minimize federal workplace safety regulation', 10, 4),
+('labor06_e', 'labor06', 'Focus on high-risk industries', 0, 5),
+('labor06_f', 'labor06', 'This issue is not important to me', 0, 6),
+
+('labor07_a', 'labor07', 'Expand unemployment benefits significantly', -10, 1),
+('labor07_b', 'labor07', 'Modernize UI with better coverage', -5, 2),
+('labor07_c', 'labor07', 'Maintain current unemployment system', 5, 3),
+('labor07_d', 'labor07', 'Reduce unemployment benefits', 10, 4),
+('labor07_e', 'labor07', 'Focus on reemployment services', 0, 5),
+('labor07_f', 'labor07', 'This issue is not important to me', 0, 6),
+
+('labor08_a', 'labor08', 'Major government programs to support displaced workers', -10, 1),
+('labor08_b', 'labor08', 'Invest in transition assistance and retraining', -5, 2),
+('labor08_c', 'labor08', 'Let market adjust with minimal intervention', 5, 3),
+('labor08_d', 'labor08', 'No government role in addressing automation', 10, 4),
+('labor08_e', 'labor08', 'Focus on education system adaptation', 0, 5),
+('labor08_f', 'labor08', 'This issue is not important to me', 0, 6),
+
+('labor09_a', 'labor09', 'Expand overtime eligibility significantly', -10, 1),
+('labor09_b', 'labor09', 'Update overtime thresholds regularly', -5, 2),
+('labor09_c', 'labor09', 'Provide flexibility in overtime arrangements', 5, 3),
+('labor09_d', 'labor09', 'Reduce overtime requirements', 10, 4),
+('labor09_e', 'labor09', 'Allow comp time as alternative', 0, 5),
+('labor09_f', 'labor09', 'This issue is not important to me', 0, 6),
+
+('labor10_a', 'labor10', 'Ban non-compete agreements', -10, 1),
+('labor10_b', 'labor10', 'Significantly restrict non-competes', -5, 2),
+('labor10_c', 'labor10', 'Allow non-competes with reasonable limits', 5, 3),
+('labor10_d', 'labor10', 'Let employers and workers negotiate freely', 10, 4),
+('labor10_e', 'labor10', 'Ban for low-wage workers only', 0, 5),
+('labor10_f', 'labor10', 'This issue is not important to me', 0, 6);
