@@ -1,0 +1,83 @@
+-- Insert Foreign Trade and International Finance questions (mapped to 'economy')
+INSERT INTO questions (id, topic_id, text) VALUES
+('trade01', 'economy', 'What approach should the US take to international trade agreements?'),
+('trade02', 'economy', 'How should the US address trade deficits with other countries?'),
+('trade03', 'economy', 'What role should tariffs play in US trade policy?'),
+('trade04', 'economy', 'How should the US respond to currency manipulation by trading partners?'),
+('trade05', 'economy', 'What approach should be taken to trade with China?'),
+('trade06', 'economy', 'How should the US handle intellectual property theft by foreign entities?'),
+('trade07', 'economy', 'What role should environmental and labor standards play in trade deals?'),
+('trade08', 'economy', 'How should the US approach manufacturing reshoring?'),
+('trade09', 'economy', 'What should US policy be toward the World Trade Organization?'),
+('trade10', 'economy', 'How should the US address foreign investment in critical industries?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('trade01_a', 'trade01', 'Pursue comprehensive multilateral trade agreements', -10, 1),
+('trade01_b', 'trade01', 'Negotiate bilateral agreements with strong protections', -5, 2),
+('trade01_c', 'trade01', 'Focus on trade deals that prioritize US interests', 5, 3),
+('trade01_d', 'trade01', 'Minimize new trade agreements and protect domestic industry', 10, 4),
+('trade01_e', 'trade01', 'Modernize existing agreements before new ones', 0, 5),
+('trade01_f', 'trade01', 'This issue is not important to me', 0, 6),
+
+('trade02_a', 'trade02', 'Accept deficits as normal in global trade', -10, 1),
+('trade02_b', 'trade02', 'Address through negotiation and investment in competitiveness', -5, 2),
+('trade02_c', 'trade02', 'Use targeted measures to reduce specific deficits', 5, 3),
+('trade02_d', 'trade02', 'Impose tariffs and restrictions to eliminate deficits', 10, 4),
+('trade02_e', 'trade02', 'Focus on high-value exports rather than overall balance', 0, 5),
+('trade02_f', 'trade02', 'This issue is not important to me', 0, 6),
+
+('trade03_a', 'trade03', 'Minimize tariffs to promote free trade', -10, 1),
+('trade03_b', 'trade03', 'Use tariffs only as negotiating leverage', -5, 2),
+('trade03_c', 'trade03', 'Apply tariffs to protect strategic industries', 5, 3),
+('trade03_d', 'trade03', 'Use broad tariffs to protect American workers', 10, 4),
+('trade03_e', 'trade03', 'Apply tariffs based on reciprocity', 0, 5),
+('trade03_f', 'trade03', 'This issue is not important to me', 0, 6),
+
+('trade04_a', 'trade04', 'Address through multilateral cooperation', -10, 1),
+('trade04_b', 'trade04', 'Use diplomatic pressure and negotiation', -5, 2),
+('trade04_c', 'trade04', 'Impose countervailing duties', 5, 3),
+('trade04_d', 'trade04', 'Aggressively counter with tariffs and sanctions', 10, 4),
+('trade04_e', 'trade04', 'Strengthen IMF oversight of currency practices', 0, 5),
+('trade04_f', 'trade04', 'This issue is not important to me', 0, 6),
+
+('trade05_a', 'trade05', 'Pursue comprehensive engagement and cooperation', -10, 1),
+('trade05_b', 'trade05', 'Maintain trade while addressing specific concerns', -5, 2),
+('trade05_c', 'trade05', 'Significantly reduce economic dependence on China', 5, 3),
+('trade05_d', 'trade05', 'Pursue economic decoupling from China', 10, 4),
+('trade05_e', 'trade05', 'Focus on protecting critical supply chains', 0, 5),
+('trade05_f', 'trade05', 'This issue is not important to me', 0, 6),
+
+('trade06_a', 'trade06', 'Address through international cooperation and WTO', -10, 1),
+('trade06_b', 'trade06', 'Use diplomatic pressure and targeted sanctions', -5, 2),
+('trade06_c', 'trade06', 'Impose strong trade penalties on violating countries', 5, 3),
+('trade06_d', 'trade06', 'Restrict trade with countries that tolerate IP theft', 10, 4),
+('trade06_e', 'trade06', 'Strengthen domestic IP enforcement', 0, 5),
+('trade06_f', 'trade06', 'This issue is not important to me', 0, 6),
+
+('trade07_a', 'trade07', 'Require strong enforceable standards in all trade deals', -10, 1),
+('trade07_b', 'trade07', 'Include standards with meaningful enforcement', -5, 2),
+('trade07_c', 'trade07', 'Include standards but prioritize market access', 5, 3),
+('trade07_d', 'trade07', 'Keep trade deals focused on commerce only', 10, 4),
+('trade07_e', 'trade07', 'Use incentives rather than requirements', 0, 5),
+('trade07_f', 'trade07', 'This issue is not important to me', 0, 6),
+
+('trade08_a', 'trade08', 'Let market forces determine manufacturing location', -10, 1),
+('trade08_b', 'trade08', 'Provide incentives for strategic reshoring', -5, 2),
+('trade08_c', 'trade08', 'Actively promote reshoring through policy', 5, 3),
+('trade08_d', 'trade08', 'Use tariffs and mandates to force reshoring', 10, 4),
+('trade08_e', 'trade08', 'Focus on critical supply chain reshoring', 0, 5),
+('trade08_f', 'trade08', 'This issue is not important to me', 0, 6),
+
+('trade09_a', 'trade09', 'Strengthen US engagement and WTO reform', -10, 1),
+('trade09_b', 'trade09', 'Work within WTO while pursuing bilateral deals', -5, 2),
+('trade09_c', 'trade09', 'Reduce WTO role in favor of bilateral agreements', 5, 3),
+('trade09_d', 'trade09', 'Withdraw from or significantly limit WTO engagement', 10, 4),
+('trade09_e', 'trade09', 'Reform WTO dispute resolution', 0, 5),
+('trade09_f', 'trade09', 'This issue is not important to me', 0, 6),
+
+('trade10_a', 'trade10', 'Welcome foreign investment with minimal restrictions', -10, 1),
+('trade10_b', 'trade10', 'Screen investments in sensitive sectors', -5, 2),
+('trade10_c', 'trade10', 'Broadly restrict foreign investment in key industries', 5, 3),
+('trade10_d', 'trade10', 'Block most foreign investment in critical sectors', 10, 4),
+('trade10_e', 'trade10', 'Focus restrictions on adversary nations only', 0, 5),
+('trade10_f', 'trade10', 'This issue is not important to me', 0, 6);

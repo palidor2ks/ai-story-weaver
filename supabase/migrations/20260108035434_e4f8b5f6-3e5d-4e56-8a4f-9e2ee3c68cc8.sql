@@ -1,0 +1,83 @@
+-- Insert Finance and Financial Sector questions (mapped to 'economy')
+INSERT INTO questions (id, topic_id, text) VALUES
+('fin01', 'economy', 'How should the government regulate large financial institutions?'),
+('fin02', 'economy', 'What approach should be taken to consumer financial protection?'),
+('fin03', 'economy', 'How should cryptocurrency and digital assets be regulated?'),
+('fin04', 'economy', 'What role should the Federal Reserve play in the economy?'),
+('fin05', 'economy', 'How should the government address predatory lending?'),
+('fin06', 'economy', 'What approach should be taken to financial institution bailouts?'),
+('fin07', 'economy', 'How should credit rating agencies be regulated?'),
+('fin08', 'economy', 'What approach should be taken to bank consolidation?'),
+('fin09', 'economy', 'How should the government regulate derivatives markets?'),
+('fin10', 'economy', 'What role should the government play in financial literacy?');
+
+INSERT INTO question_options (id, question_id, text, value, display_order) VALUES
+('fin01_a', 'fin01', 'Break up large banks and strictly regulate remaining institutions', -10, 1),
+('fin01_b', 'fin01', 'Maintain strong Dodd-Frank regulations', -5, 2),
+('fin01_c', 'fin01', 'Reduce regulatory burden while maintaining basic oversight', 5, 3),
+('fin01_d', 'fin01', 'Significantly deregulate financial institutions', 10, 4),
+('fin01_e', 'fin01', 'Focus regulation on systemic risk rather than size', 0, 5),
+('fin01_f', 'fin01', 'This issue is not important to me', 0, 6),
+
+('fin02_a', 'fin02', 'Expand CFPB authority and enforcement', -10, 1),
+('fin02_b', 'fin02', 'Maintain current consumer protection regulations', -5, 2),
+('fin02_c', 'fin02', 'Reduce CFPB scope and authority', 5, 3),
+('fin02_d', 'fin02', 'Eliminate federal consumer financial protection', 10, 4),
+('fin02_e', 'fin02', 'Focus on disclosure requirements over restrictions', 0, 5),
+('fin02_f', 'fin02', 'This issue is not important to me', 0, 6),
+
+('fin03_a', 'fin03', 'Create comprehensive federal crypto regulations', -10, 1),
+('fin03_b', 'fin03', 'Apply existing securities laws to digital assets', -5, 2),
+('fin03_c', 'fin03', 'Develop light-touch regulatory framework', 5, 3),
+('fin03_d', 'fin03', 'Leave cryptocurrency largely unregulated', 10, 4),
+('fin03_e', 'fin03', 'Focus on consumer protection while encouraging innovation', 0, 5),
+('fin03_f', 'fin03', 'This issue is not important to me', 0, 6),
+
+('fin04_a', 'fin04', 'Give Fed broader mandate including employment and inequality', -10, 1),
+('fin04_b', 'fin04', 'Maintain current dual mandate (price stability and employment)', -5, 2),
+('fin04_c', 'fin04', 'Focus Fed solely on price stability', 5, 3),
+('fin04_d', 'fin04', 'Significantly reduce or eliminate Fed independence', 10, 4),
+('fin04_e', 'fin04', 'Add financial stability to Fed mandate', 0, 5),
+('fin04_f', 'fin04', 'This issue is not important to me', 0, 6),
+
+('fin05_a', 'fin05', 'Ban high-interest lending and cap all interest rates', -10, 1),
+('fin05_b', 'fin05', 'Strengthen regulations on payday and high-cost loans', -5, 2),
+('fin05_c', 'fin05', 'Rely on disclosure requirements and consumer choice', 5, 3),
+('fin05_d', 'fin05', 'Let market forces determine lending terms', 10, 4),
+('fin05_e', 'fin05', 'Encourage credit unions and community alternatives', 0, 5),
+('fin05_f', 'fin05', 'This issue is not important to me', 0, 6),
+
+('fin06_a', 'fin06', 'Never bail out financial institutions', -10, 1),
+('fin06_b', 'fin06', 'Allow bailouts only with strict conditions and accountability', -5, 2),
+('fin06_c', 'fin06', 'Provide bailouts to prevent systemic collapse', 5, 3),
+('fin06_d', 'fin06', 'Let failing institutions fail regardless of consequences', 10, 4),
+('fin06_e', 'fin06', 'Use resolution authority rather than bailouts', 0, 5),
+('fin06_f', 'fin06', 'This issue is not important to me', 0, 6),
+
+('fin07_a', 'fin07', 'Create public credit rating agency', -10, 1),
+('fin07_b', 'fin07', 'Strengthen oversight and conflict of interest rules', -5, 2),
+('fin07_c', 'fin07', 'Maintain current regulatory framework', 5, 3),
+('fin07_d', 'fin07', 'Reduce regulation of rating agencies', 10, 4),
+('fin07_e', 'fin07', 'Reform issuer-pays model', 0, 5),
+('fin07_f', 'fin07', 'This issue is not important to me', 0, 6),
+
+('fin08_a', 'fin08', 'Block mergers that increase concentration', -10, 1),
+('fin08_b', 'fin08', 'Apply strict antitrust review to bank mergers', -5, 2),
+('fin08_c', 'fin08', 'Allow consolidation with basic oversight', 5, 3),
+('fin08_d', 'fin08', 'Let market determine banking structure', 10, 4),
+('fin08_e', 'fin08', 'Focus on community bank preservation', 0, 5),
+('fin08_f', 'fin08', 'This issue is not important to me', 0, 6),
+
+('fin09_a', 'fin09', 'Strictly regulate or ban complex derivatives', -10, 1),
+('fin09_b', 'fin09', 'Require clearing and transparency for all derivatives', -5, 2),
+('fin09_c', 'fin09', 'Maintain current derivatives regulation', 5, 3),
+('fin09_d', 'fin09', 'Deregulate derivatives markets', 10, 4),
+('fin09_e', 'fin09', 'Focus regulation on systemic risk', 0, 5),
+('fin09_f', 'fin09', 'This issue is not important to me', 0, 6),
+
+('fin10_a', 'fin10', 'Mandate financial education in all schools', -10, 1),
+('fin10_b', 'fin10', 'Fund national financial literacy programs', -5, 2),
+('fin10_c', 'fin10', 'Encourage private sector financial education', 5, 3),
+('fin10_d', 'fin10', 'Leave financial education to individuals', 10, 4),
+('fin10_e', 'fin10', 'Focus on just-in-time education at point of decision', 0, 5),
+('fin10_f', 'fin10', 'This issue is not important to me', 0, 6);
