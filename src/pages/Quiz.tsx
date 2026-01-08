@@ -71,25 +71,25 @@ export const Quiz = () => {
       // Filter by specific topic
       filtered = allQuestions.filter(q => q.topicId === topicFilter);
     } else if (mode === 'random') {
-      // Get 5 random unanswered questions from user's top 5 topics
-      const topTopicIds = userTopics.slice(0, 5).map(ut => ut.topic_id);
+      // Get 6 random unanswered questions from user's top 3 topics
+      const topTopicIds = userTopics.slice(0, 3).map(ut => ut.topic_id);
       
       // Filter to questions from top topics that haven't been answered
       const unansweredFromTopTopics = allQuestions.filter(
         q => topTopicIds.includes(q.topicId) && !existingAnswers.includes(q.id)
       );
       
-      // Fisher-Yates shuffle and take 5
+      // Fisher-Yates shuffle and take 6
       const shuffled = shuffleArray(unansweredFromTopTopics);
-      filtered = shuffled.slice(0, 5);
+      filtered = shuffled.slice(0, 6);
       
       // If not enough unanswered, add some already answered ones
-      if (filtered.length < 5) {
+      if (filtered.length < 6) {
         const answeredFromTopTopics = allQuestions.filter(
           q => topTopicIds.includes(q.topicId) && existingAnswers.includes(q.id)
         );
         const shuffledAnswered = shuffleArray(answeredFromTopTopics);
-        filtered = [...filtered, ...shuffledAnswered.slice(0, 5 - filtered.length)];
+        filtered = [...filtered, ...shuffledAnswered.slice(0, 6 - filtered.length)];
       }
     }
     

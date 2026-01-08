@@ -14,7 +14,7 @@ export const TopicSelector = ({
   topics, 
   selectedTopics, 
   onToggle,
-  maxSelections = 5 
+  maxSelections = 3 
 }: TopicSelectorProps) => {
   const isSelected = (topic: Topic) => 
     selectedTopics.some(t => t.id === topic.id);
