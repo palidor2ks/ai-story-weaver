@@ -217,12 +217,12 @@ export function BillSummaryDashboard() {
     }
     
     let totalProcessed = 0;
-    let remaining = 1; // Start with non-zero to enter loop
+    let hasMore = true; // Start true to enter loop
     let isFirstRun = true;
-    let startingRemaining = 0;
+    let estimatedRemaining = 0;
     
     try {
-      while (remaining > 0 && (autoContinue ? !stopAutoBackfillRef.current : isFirstRun)) {
+      while (hasMore && (autoContinue ? !stopAutoBackfillRef.current : isFirstRun)) {
         const { data, error } = await supabase.functions.invoke('backfill-vote-chambers', {
           body: { batchSize: 50000 }
         });
@@ -230,17 +230,19 @@ export function BillSummaryDashboard() {
         if (error) throw error;
         
         const batchUpdated = data?.updated || 0;
-        remaining = data?.remaining || 0;
+        hasMore = data?.hasMore ?? false;
         
-        if (isFirstRun && autoContinue) {
-          startingRemaining = remaining + batchUpdated;
+        // Track estimated remaining for progress display
+        if (isFirstRun && autoContinue && batchUpdated > 0) {
+          // Estimate based on first batch - assume similar batches ahead
+          estimatedRemaining = hasMore ? batchUpdated * 10 : batchUpdated; // rough estimate
         }
         
         totalProcessed += batchUpdated;
         
         setChamberBackfillStats({
           updated: batchUpdated,
-          remaining,
+          remaining: hasMore ? -1 : 0,
           house: data?.house || 0,
           senate: data?.senate || 0,
         });
@@ -248,13 +250,13 @@ export function BillSummaryDashboard() {
         if (autoContinue && !stopAutoBackfillRef.current) {
           setAutoBackfillProgress({
             totalProcessed,
-            startingRemaining: isFirstRun ? startingRemaining : (autoBackfillProgress?.startingRemaining || startingRemaining),
-            currentRemaining: remaining,
+            startingRemaining: estimatedRemaining,
+            currentRemaining: hasMore ? Math.max(0, estimatedRemaining - totalProcessed) : 0,
           });
           
           // Show progress toast every batch
           toast.info(`Batch complete: ${batchUpdated.toLocaleString()} updated`, {
-            description: `${remaining.toLocaleString()} remaining...`,
+            description: hasMore ? 'More records to process...' : 'All done!',
             duration: 2000,
           });
         }
@@ -262,22 +264,22 @@ export function BillSummaryDashboard() {
         isFirstRun = false;
         
         // Small delay between batches to avoid rate limiting
-        if (remaining > 0 && autoContinue && !stopAutoBackfillRef.current) {
+        if (hasMore && autoContinue && !stopAutoBackfillRef.current) {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
       
-      if (remaining === 0) {
+      if (!hasMore) {
         toast.success('Chamber backfill complete!', {
           description: `All sponsored/cosponsored votes now have chamber values. Total processed: ${totalProcessed.toLocaleString()}`
         });
       } else if (stopAutoBackfillRef.current) {
         toast.success(`Auto-backfill stopped`, {
-          description: `Processed ${totalProcessed.toLocaleString()} votes. ${remaining.toLocaleString()} remaining.`
+          description: `Processed ${totalProcessed.toLocaleString()} votes. More records remain.`
         });
       } else if (!autoContinue) {
         toast.success(`Backfilled ${totalProcessed.toLocaleString()} votes`, {
-          description: `${remaining.toLocaleString()} remaining. Click again or use "Auto".`
+          description: hasMore ? 'More records remain. Click again or use "Auto".' : 'All done!'
         });
       }
       

@@ -41,27 +41,7 @@ serve(async (req) => {
 
     console.log(`Starting chamber backfill with batch size: ${batchSize}`);
 
-    // Get total count of records needing update
-    const { count: totalMissing } = await supabase
-      .from('votes')
-      .select('*', { count: 'exact', head: true })
-      .is('chamber', null)
-      .in('action_type', ['sponsored', 'cosponsored']);
-
-    console.log(`Total records needing chamber update: ${totalMissing}`);
-
-    if (!totalMissing || totalMissing === 0) {
-      return new Response(JSON.stringify({
-        status: 'complete',
-        message: 'All sponsored/cosponsored votes already have chamber values',
-        updated: 0,
-        remaining: 0,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Fetch batch of votes with NULL chamber
+    // Skip COUNT query to avoid timeout - just fetch the batch directly
     const { data: votes, error: fetchError } = await supabase
       .from('votes')
       .select('id, bill_id')
@@ -76,9 +56,10 @@ serve(async (req) => {
     if (!votes || votes.length === 0) {
       return new Response(JSON.stringify({
         status: 'complete',
-        message: 'No more records to update',
+        message: 'All sponsored/cosponsored votes now have chamber values',
         updated: 0,
         remaining: 0,
+        hasMore: false,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -140,19 +121,20 @@ serve(async (req) => {
     }
 
     const totalUpdated = houseUpdated + senateUpdated;
-    const remaining = (totalMissing || 0) - totalUpdated;
+    // Determine if more records exist based on whether we got a full batch
+    const hasMore = votes.length === batchSize;
 
-    console.log(`Updated ${totalUpdated} records. Remaining: ${remaining}`);
+    console.log(`Updated ${totalUpdated} records. Has more: ${hasMore}`);
 
     return new Response(JSON.stringify({
-      status: remaining > 0 ? 'in_progress' : 'complete',
-      message: `Updated ${totalUpdated} votes, ${remaining} remaining`,
+      status: hasMore ? 'in_progress' : 'complete',
+      message: `Updated ${totalUpdated} votes`,
       updated: totalUpdated,
       house: houseUpdated,
       senate: senateUpdated,
       unknown: unknownCount,
-      remaining: Math.max(0, remaining),
-      totalMissing,
+      remaining: hasMore ? -1 : 0, // -1 indicates unknown but more exist
+      hasMore,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
