@@ -68,44 +68,53 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Generate AI summary using Lovable AI
-        const aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        // Generate AI summary using Lovable AI Gateway
+        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+        if (!LOVABLE_API_KEY) {
+          throw new Error('LOVABLE_API_KEY is not configured');
+        }
+
+        const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
           method: 'POST',
           headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
             'Content-Type': 'application/json',
-            'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') || '',
-            'anthropic-version': '2023-06-01',
           },
           body: JSON.stringify({
-            model: 'claude-3-haiku-20240307',
+            model: 'google/gemini-3-flash-preview',
             max_tokens: 300,
-            messages: [{
-              role: 'user',
-              content: `You are a legislative research assistant. Generate a brief, factual summary of this bill.
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a legislative research assistant. Generate brief, factual bill summaries. Use neutral language and focus on what bills propose to do.'
+              },
+              {
+                role: 'user',
+                content: `Generate a 2-3 sentence summary of this bill:
 
 Bill ID: ${bill.bill_id}
 Bill Title: ${bill.bill_name}
 Congress: ${bill.congress ? `${bill.congress}th` : 'Unknown'}
 
-Requirements:
-- 2-3 sentences maximum
-- Focus on what the bill proposes to DO
-- Identify the primary policy area
-- Use neutral, factual language
-- Do not speculate on outcomes or opinions
-
-If you cannot determine what the bill does from the title alone, respond with a general description based on the available information.`
-            }]
+Focus on what the bill proposes to DO and identify the primary policy area. If you cannot determine what the bill does from the title alone, provide a general description.`
+              }
+            ]
           })
         });
 
         if (!aiResponse.ok) {
+          if (aiResponse.status === 429) {
+            throw new Error('Rate limit exceeded - try again later');
+          }
+          if (aiResponse.status === 402) {
+            throw new Error('Payment required - add credits to Lovable AI');
+          }
           const errorText = await aiResponse.text();
-          throw new Error(`AI API error: ${errorText}`);
+          throw new Error(`AI Gateway error (${aiResponse.status}): ${errorText}`);
         }
 
         const aiData = await aiResponse.json();
-        const generatedSummary = aiData.content?.[0]?.text?.trim();
+        const generatedSummary = aiData.choices?.[0]?.message?.content?.trim();
 
         if (!generatedSummary) {
           throw new Error('No summary generated');
