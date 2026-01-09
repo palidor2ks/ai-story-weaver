@@ -66,10 +66,14 @@ Deno.serve(async (req) => {
     // Start background refresh
     const doRefresh = async () => {
       try {
-        await adminClient.rpc("refresh_bill_summary_stats");
-        console.log("Bill summary stats refresh completed");
+        const { error } = await adminClient.rpc("refresh_bill_summary_stats");
+        if (error) {
+          console.error("Refresh RPC error:", JSON.stringify(error));
+        } else {
+          console.log("Bill summary stats refresh completed successfully");
+        }
       } catch (err) {
-        console.error("Refresh error:", err);
+        console.error("Refresh exception:", err);
       }
     };
 
