@@ -9,6 +9,7 @@ import { AnswerCoveragePanel } from "@/components/admin/AnswerCoveragePanel";
 import { ClaimReviewPanel } from "@/components/admin/ClaimReviewPanel";
 import { DonorAliasesPanel } from "@/components/admin/DonorAliasesPanel";
 import { ScoreFixesTab } from "@/pages/admin/tabs/ScoreFixesTab";
+import { BillSummaryDashboard } from "@/components/admin/BillSummaryDashboard";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText } from "lucide-react";
 import { QuestionManagementPanel } from "@/components/admin/QuestionManagementPanel";
 import { PartyAnswersPanel } from "@/components/admin/PartyAnswersPanel";
 import { EvidenceReviewPanel } from "@/components/admin/EvidenceReviewPanel";
@@ -450,6 +451,10 @@ export default function Admin() {
               <AlertTriangle className="h-4 w-4" />
               Evidence Review
             </TabsTrigger>
+            <TabsTrigger value="voting-records" className="gap-2">
+              <FileText className="h-4 w-4" />
+              Voting Records
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="officials">
@@ -665,6 +670,10 @@ export default function Admin() {
 
           <TabsContent value="evidence">
             <EvidenceReviewPanel />
+          </TabsContent>
+
+          <TabsContent value="voting-records">
+            <BillSummaryDashboard />
           </TabsContent>
 
         </Tabs>
