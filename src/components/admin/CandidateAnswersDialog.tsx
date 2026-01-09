@@ -38,17 +38,17 @@ interface QuestionAnswer {
   sourceTitles: string[] | null;
   evidenceType: string | null;
   hasSource: boolean;
+  options: Array<{ value: number; text: string }>;
 }
 
-function getScoreLabel(value: number | null): string {
-  if (value === null) return 'No answer';
-  if (value <= -7) return 'Strong Progressive';
-  if (value <= -4) return 'Progressive';
-  if (value < 0) return 'Lean Progressive';
-  if (value === 0) return 'Neutral/Center';
-  if (value <= 3) return 'Lean Conservative';
-  if (value <= 6) return 'Conservative';
-  return 'Strong Conservative';
+// Get the actual option text for a given score value
+function getOptionTextForScore(
+  options: Array<{ value: number; text: string }> | undefined,
+  value: number | null
+): string | null {
+  if (value === null || !options) return null;
+  const match = options.find(o => o.value === value);
+  return match?.text || null;
 }
 
 function getScoreBadge(value: number | null) {
@@ -101,9 +101,10 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
         .order('name');
       if (topicsError) throw topicsError;
 
+      // Fetch questions with their options using relational query
       const { data: questions, error: questionsError } = await supabase
         .from('questions')
-        .select('id, text, topic_id');
+        .select('id, text, topic_id, question_options(value, text)');
       if (questionsError) throw questionsError;
 
       const { data: answers, error: answersError } = await supabase
@@ -149,6 +150,7 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
               sourceTitles,
               evidenceType: displayEvidenceType,
               hasSource,
+              options: ((q as any).question_options || []).map((o: any) => ({ value: o.value, text: o.text })),
             };
           });
 
@@ -246,14 +248,21 @@ function QuestionRow({
         <CollapsibleContent>
           <div className="px-4 pb-4 pt-1 ml-7 space-y-3 bg-muted/30 rounded-b-md">
             {/* Score and Confidence */}
-            <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-4 text-sm flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">Score:</span>
                 <Badge variant="outline" className={cn('text-xs', scoreBadge.className)}>
                   {scoreBadge.text}
                 </Badge>
-                <span className="text-muted-foreground">({getScoreLabel(question.answerValue)})</span>
               </div>
+              {getOptionTextForScore(question.options, question.answerValue) && (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Position:</span>
+                  <span className="text-foreground font-medium">
+                    {getOptionTextForScore(question.options, question.answerValue)}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">Confidence:</span>
                 <span className={cn('font-medium', confidenceBadge.className)}>
