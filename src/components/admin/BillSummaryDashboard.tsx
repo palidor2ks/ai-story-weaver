@@ -35,17 +35,52 @@ export function BillSummaryDashboard() {
 
   const handleRefreshStats = async () => {
     setIsRefreshing(true);
+    const startTime = Date.now();
+    const initialLastRefreshed = stats?.lastRefreshed;
+    
     try {
-      const { error } = await supabase.rpc('refresh_bill_summary_stats');
+      // Call edge function for background refresh
+      const { error } = await supabase.functions.invoke('refresh-bill-summary-stats');
       if (error) throw error;
       
-      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
-      toast.success('Statistics refreshed');
+      toast.success('Refresh started', { description: 'Stats will update shortly...' });
+      
+      // Poll for completion (check every 5s, max 90s)
+      const pollInterval = setInterval(async () => {
+        await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+        
+        // Check if lastRefreshed has changed
+        const currentStats = queryClient.getQueryData<{ lastRefreshed: string | null }>(['bill-summary-stats']);
+        const elapsed = Date.now() - startTime;
+        
+        if (currentStats?.lastRefreshed !== initialLastRefreshed || elapsed > 90000) {
+          clearInterval(pollInterval);
+          setIsRefreshing(false);
+          if (currentStats?.lastRefreshed !== initialLastRefreshed) {
+            toast.success('Statistics refreshed');
+          }
+        }
+      }, 5000);
+      
+      // Safety timeout
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        setIsRefreshing(false);
+      }, 95000);
+      
     } catch (err) {
       console.error('Error refreshing stats:', err);
-      toast.error('Failed to refresh statistics');
-    } finally {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast.error('Failed to refresh statistics', { description: message });
       setIsRefreshing(false);
+    }
+  };
+
+  const triggerBackgroundRefresh = async () => {
+    try {
+      await supabase.functions.invoke('refresh-bill-summary-stats');
+    } catch (err) {
+      console.error('Background refresh trigger failed:', err);
     }
   };
 
@@ -64,8 +99,9 @@ export function BillSummaryDashboard() {
         description: `Updated ${data?.updated || 0} votes, ${data?.noSummary || 0} had no CRS summary`
       });
       
-      // Refresh the materialized view after operation
-      await handleRefreshStats();
+      // Trigger background refresh and invalidate query
+      triggerBackgroundRefresh();
+      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
     } catch (err) {
       toast.error('Failed to fetch CRS summaries', {
         description: err instanceof Error ? err.message : 'Unknown error'
@@ -91,8 +127,9 @@ export function BillSummaryDashboard() {
         description: `Processed ${data?.processed || 0} bills, ${data?.failed || 0} failed`
       });
       
-      // Refresh the materialized view after operation
-      await handleRefreshStats();
+      // Trigger background refresh and invalidate query
+      triggerBackgroundRefresh();
+      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
     } catch (err) {
       toast.error('Failed to generate AI summaries', {
         description: err instanceof Error ? err.message : 'Unknown error'
