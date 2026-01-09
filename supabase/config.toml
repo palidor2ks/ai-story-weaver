@@ -137,3 +137,6 @@ verify_jwt = false
 
 [functions.refresh-bill-summary-stats]
 verify_jwt = false
+
+[functions.backfill-vote-chambers]
+verify_jwt = false
