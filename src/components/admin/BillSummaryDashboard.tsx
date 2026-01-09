@@ -310,8 +310,13 @@ export function BillSummaryDashboard() {
               <Bot className="h-3.5 w-3.5" />
               AI Generated
             </div>
-            <div className="text-2xl font-bold text-purple-600">{stats.withAiSummary.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">AI-created summaries</div>
+            <div className="text-2xl font-bold text-purple-600">
+              {(stats.withAiSummary + stats.withAiProceduralSummary).toLocaleString()}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {stats.withAiProceduralSummary > 0 && `${stats.withAiProceduralSummary.toLocaleString()} procedural`}
+              {stats.withAiProceduralSummary === 0 && 'AI-created summaries'}
+            </div>
           </div>
           
           <div className="bg-muted/30 rounded-lg p-4 text-center border border-muted">
@@ -320,9 +325,9 @@ export function BillSummaryDashboard() {
               Not Applicable
             </div>
             <div className="text-2xl font-bold text-muted-foreground">
-              {(stats.floorVotesNoBill + stats.fullTextTitles + stats.unparseableBillIds).toLocaleString()}
+              {(stats.fullTextTitles + stats.unparseableBillIds).toLocaleString()}
             </div>
-            <div className="text-xs text-muted-foreground">floor votes, etc.</div>
+            <div className="text-xs text-muted-foreground">unparseable IDs</div>
           </div>
         </div>
 
@@ -353,11 +358,11 @@ export function BillSummaryDashboard() {
 
         {/* Not Processable Breakdown */}
         <div className="bg-muted/30 rounded-lg p-4 border border-muted">
-          <div className="text-sm font-medium mb-3">Not Processable (excluded from backfill)</div>
+          <div className="text-sm font-medium mb-3">Processing Details</div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div>
-              <div className="text-lg font-bold text-muted-foreground">{stats.floorVotesNoBill.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">Floor Votes (VOTE-xxx)</div>
+              <div className="text-lg font-bold text-purple-600">{stats.proceduralVotesPending.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">Procedural Votes (pending AI)</div>
             </div>
             <div>
               <div className="text-lg font-bold text-amber-600">{stats.missingCongress.toLocaleString()}</div>

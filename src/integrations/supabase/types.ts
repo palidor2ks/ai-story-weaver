@@ -1903,8 +1903,10 @@ export type Database = {
           missing_congress: number | null
           no_summary_available: number | null
           not_yet_fetched: number | null
+          procedural_votes_pending: number | null
           total_votes: number | null
           unparseable_bill_ids: number | null
+          with_ai_procedural_summary: number | null
           with_ai_summary: number | null
           with_crs_summary: number | null
         }
