@@ -565,28 +565,32 @@ async function researchCandidatePosition(
             parts: [{ 
               text: `Research ${candidateName} (${candidateOffice}, ${candidateState}) position on: "${questionText}"
 
+GOAL: Find CONCRETE EVIDENCE of their position. We need:
+1. SPECIFIC legislation they sponsored, cosponsored, or voted on related to this topic
+2. DIRECT QUOTES or statements from the candidate
+3. VOTING RECORD on related bills (include bill numbers like H.R.XXX or S.XXX)
+
+CRITICAL: If you find ANY of the above evidence, DO NOT say "no clear position" or "no documented position".
+Even co-sponsoring a related bill IS evidence of a position.
+Even a related floor vote IS evidence of a position.
+
 SEARCH BROADLY for related evidence:
 - Criminal justice reform positions (if question relates to due process, forfeiture, rights)
-- Bipartisan legislation sponsorship or co-sponsorship
+- Bipartisan legislation sponsorship or co-sponsorship (2016-2025)
 - Committee work and floor statements
-- Facebook, Twitter/X posts, press releases (2016-2025)
-- News coverage of their stance on this issue or related reforms
-
-RECENCY: Start with recent (2023-2025) but include older evidence (2016+) if it shows clear position.
+- Facebook, Twitter/X posts, press releases
+- News coverage of their stance
 
 RELATED TERMS TO SEARCH:
 - If about "civil asset forfeiture": also search "due process", "property rights", "justice reform", "Fifth Amendment"
 - If about criminal justice: search "sentencing reform", "prison reform", "bail reform"
 - Include any bills they sponsored or cosponsored related to this topic
 
-Look for:
-1. Voting records and bill sponsorships (ANY year)
-2. Official statements, interviews, op-eds
-3. Social media posts (Facebook, X/Twitter)
-4. Committee testimony or floor speeches
-5. Campaign website policy positions
+OUTPUT FORMAT:
+If evidence found, start with: "EVIDENCE FOUND: [specific bill numbers, quotes, or votes]"
+Then provide details about their position.
 
-Summarize specific evidence. Include exact bill numbers if found (e.g., "S.1380 - Due Process Protections Act").`
+If truly NO evidence exists after thorough search: "NO EVIDENCE FOUND after searching for legislation, statements, and votes."`
             }] 
           }],
           tools: [{ googleSearch: {} }]
@@ -1351,9 +1355,10 @@ async function generateChunkAnswers(
     let questionStr = `Question ${i + 1}:\n  ID: "${q.id}"\n  Text: ${q.text}`;
     
     if (research?.success && research.researchText) {
-      questionStr += `\n  RESEARCH: ${research.researchText.slice(0, 400)}`;
+      // Show more research context (1500 chars instead of 400) to help AI understand evidence
+      questionStr += `\n  RESEARCH: ${research.researchText.slice(0, 1500)}`;
       if (research.sourceUrls.length > 0) {
-        questionStr += `\n  SOURCES: ${research.sourceUrls.slice(0, 2).join(', ')}`;
+        questionStr += `\n  SOURCES: ${research.sourceUrls.slice(0, 4).join(', ')}`;
       }
     }
     
@@ -1505,18 +1510,28 @@ ONLY JSON array. No markdown.`;
     const sourceDesc = smartTruncate(item.source_description || 'No documented position', 1000);
     const lowerDesc = sourceDesc.toLowerCase();
     
-    // PART B: Enforce score-description contract
-    // If score is non-zero but description says "no documented position", treat as invalid
+    // PART B: Enforce score-description contract with source-aware logic
+    // If score is non-zero but description says "no documented position", check if we have grounding sources
     let answerValue = snapToValidValue(item.answer_value);
     const isContradictory = answerValue !== 0 && lowerDesc.includes('no documented position');
+    const hasGroundingSources = research?.sourceUrls && research.sourceUrls.length > 0;
+    
     if (isContradictory) {
-      console.log(`[Contract] Contradictory output for ${questionId}: score ${answerValue} but "no documented position" -> routing to inference`);
-      answerValue = 0; // Will be picked up by post-validation inference
+      if (hasGroundingSources) {
+        // PRESERVE sources - grounding found evidence even if AI hedged in description
+        // Trust the sources over the hedging language
+        console.log(`[Contract] Keeping score ${answerValue} for ${questionId} - grounding found ${research.sourceUrls.length} sources despite hedging text`);
+        // Don't reset answerValue - keep it and use the sources
+      } else {
+        console.log(`[Contract] Contradictory output for ${questionId}: score ${answerValue} but "no documented position" with no sources -> routing to inference`);
+        answerValue = 0; // Will be picked up by post-validation inference
+      }
     }
     
     // Determine if truly no position found (used for source cleanup)
-    const noPositionFound = lowerDesc.includes('no documented position') ||
-                             (item.confidence === 'low' && (!research?.sourceUrls?.length));
+    // Only mark as "no position" if BOTH description says so AND no grounding sources
+    const noPositionFound = (lowerDesc.includes('no documented position') && !hasGroundingSources) ||
+                             (item.confidence === 'low' && !hasGroundingSources);
     
     // Determine source URL and titles: research > bill > congress profile > null
     let sourceUrl = noPositionFound ? null : congressGovUrl;
