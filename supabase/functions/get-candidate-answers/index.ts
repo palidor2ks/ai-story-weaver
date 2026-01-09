@@ -14,6 +14,96 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const CHUNK_SIZE = 10;
 
+// Question-specific keywords for evidence relevance validation
+// If evidence doesn't contain at least one of these keywords, it's flagged as a mismatch
+const QUESTION_KEYWORDS: Record<string, string[]> = {
+  'civil-rights-q16': ['forfeiture', 'seizure', 'asset forfeiture', 'property seized', 'civil forfeiture', 'civil asset'],
+  'civil-rights-q12': ['lgbtq', 'transgender', 'gender identity', 'sexual orientation', 'same-sex', 'gay rights', 'discrimination'],
+  'civil-rights-q13': ['affirmative action', 'diversity', 'dei', 'race-based', 'racial preference', 'admissions'],
+  'economy-jobs-q5': ['minimum wage', 'wage increase', 'hourly wage', '$15', 'living wage'],
+  'health-welfare-q3': ['marijuana', 'cannabis', 'legalization', 'decriminalization', 'drug policy'],
+};
+
+// Extract core keywords from question text for relevance validation
+function extractCoreKeywords(questionText: string): string[] {
+  const text = questionText.toLowerCase();
+  const commonTerms = [
+    'forfeiture', 'seizure', 'property', 'asset',
+    'abortion', 'reproductive', 'pregnancy',
+    'immigration', 'immigrant', 'border', 'asylum', 'deportation',
+    'gun', 'firearm', 'weapon', 'second amendment',
+    'healthcare', 'medicare', 'medicaid', 'insurance',
+    'climate', 'environment', 'carbon', 'emission',
+    'lgbtq', 'transgender', 'gay', 'same-sex',
+    'marijuana', 'cannabis', 'legalization',
+    'minimum wage', 'wage', 'union', 'labor',
+    'affirmative action', 'diversity', 'discrimination',
+    'voting', 'election', 'ballot',
+    'military', 'defense', 'veteran',
+    'tax', 'tariff', 'taxation',
+    'education', 'student', 'tuition',
+  ];
+  
+  const foundTerms: string[] = [];
+  for (const term of commonTerms) {
+    if (text.includes(term)) {
+      foundTerms.push(term);
+    }
+  }
+  
+  // Also extract simple noun phrases (2-3 word combinations)
+  const words = text.replace(/[^a-z\s]/g, '').split(/\s+/).filter(w => w.length > 3);
+  for (let i = 0; i < words.length - 1; i++) {
+    const phrase = words.slice(i, i + 2).join(' ');
+    if (phrase.length > 8) foundTerms.push(phrase);
+  }
+  
+  return [...new Set(foundTerms)];
+}
+
+// Validate that evidence is relevant to the question
+function validateEvidenceRelevance(
+  questionId: string,
+  questionText: string,
+  sourceDescription: string | null
+): { isRelevant: boolean; flag: string | null } {
+  if (!sourceDescription || sourceDescription.length < 20) {
+    return { isRelevant: true, flag: null }; // No evidence to validate
+  }
+  
+  const desc = sourceDescription.toLowerCase();
+  
+  // Check for "no documented position" - these are fine
+  if (desc.includes('no documented position') || desc.includes('no relevant voting record')) {
+    return { isRelevant: true, flag: null };
+  }
+  
+  // Get keywords for this specific question
+  const specificKeywords = QUESTION_KEYWORDS[questionId];
+  
+  if (specificKeywords && specificKeywords.length > 0) {
+    // Check if any specific keyword is found in the evidence
+    const found = specificKeywords.some(kw => desc.includes(kw.toLowerCase()));
+    if (!found) {
+      console.log(`[RelevanceCheck] ${questionId}: Missing keywords ${specificKeywords.join(', ')} in evidence`);
+      return { isRelevant: false, flag: 'mismatch' };
+    }
+    return { isRelevant: true, flag: null };
+  }
+  
+  // Fall back to extracted keywords from question text
+  const extractedKeywords = extractCoreKeywords(questionText);
+  if (extractedKeywords.length > 0) {
+    const found = extractedKeywords.some(kw => desc.includes(kw));
+    if (!found) {
+      console.log(`[RelevanceCheck] ${questionId}: Missing extracted keywords in evidence`);
+      return { isRelevant: false, flag: 'needs_review' };
+    }
+  }
+  
+  return { isRelevant: true, flag: null };
+}
+
 // Cross-topic matching: some questions span multiple topic areas
 // This allows votes from related topics to be considered as evidence
 const RELATED_TOPICS: Record<string, string[]> = {
@@ -1932,22 +2022,37 @@ async function generateAnswersInChunks(
       // Valid source_type values per database constraint
       const validSourceTypes = ['voting_record', 'public_statement', 'campaign_website', 'interview', 'legislation', 'web_research', 'other'];
       
-      const answersToInsert = deduplicatedAnswers.map(answer => ({
-        candidate_id: candidateId,
-        question_id: answer.question_id,
-        answer_value: answer.answer_value,
-        source_description: answer.source_description,
-        source_url: answer.source_url,
-        source_urls: answer.source_urls,
-        source_titles: answer.source_titles,
-        source_type: validSourceTypes.includes(answer.source_type || '') ? answer.source_type : 'other',
-        confidence: answer.confidence,
-        evidence_type: answer.evidence_type,
-        voting_record_summary: answer.voting_record_summary,
-        public_statement_summary: answer.public_statement_summary,
-        has_discrepancy: answer.has_discrepancy,
-        discrepancy_note: answer.discrepancy_note,
-      }));
+      // Validate evidence relevance and add relevance_flag
+      const answersToInsert = deduplicatedAnswers.map(answer => {
+        // Get question text for validation
+        const question = chunk.find(q => q.id === answer.question_id);
+        const questionText = question?.text || '';
+        
+        // Validate evidence relevance
+        const relevance = validateEvidenceRelevance(
+          answer.question_id,
+          questionText,
+          answer.source_description
+        );
+        
+        return {
+          candidate_id: candidateId,
+          question_id: answer.question_id,
+          answer_value: answer.answer_value,
+          source_description: answer.source_description,
+          source_url: answer.source_url,
+          source_urls: answer.source_urls,
+          source_titles: answer.source_titles,
+          source_type: validSourceTypes.includes(answer.source_type || '') ? answer.source_type : 'other',
+          confidence: answer.confidence,
+          evidence_type: answer.evidence_type,
+          voting_record_summary: answer.voting_record_summary,
+          public_statement_summary: answer.public_statement_summary,
+          has_discrepancy: answer.has_discrepancy,
+          discrepancy_note: answer.discrepancy_note,
+          relevance_flag: relevance.flag,
+        };
+      });
 
       const { error: insertError } = await supabase
         .from('candidate_answers')
