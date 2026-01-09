@@ -1068,7 +1068,7 @@ ${relatedContext}
 
 IMPORTANT: Use the answer_value from the OPTIONS that matches what a typical ${candidateParty} would choose.
 
-Return ONLY a JSON object: {"score": <value from options>, "reasoning": "<2-3 sentence explanation of WHY this ${candidateParty} ${candidateOffice.toLowerCase()} would likely hold this position, referencing core party values, guiding principles, or how representatives from their party typically vote on this issue>"}`;
+Return ONLY a JSON object: {"score": <value from options>, "reasoning": "PARTY ALIGNMENT: [1 sentence on core party principle]. [1 sentence on why this leads to this position]."}`;
 
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -1219,10 +1219,11 @@ If NO direct statement can be found from the candidate on this specific topic, r
       score = parsed.strength === 'strong' ? 10 : 5;
     }
     
-    // Build description - use smart truncation for quotes
+    // Build description - concise, evidence-first format
+    const positionWord = parsed.position_lean === 'progressive' ? 'support for' : 'opposition to';
     const description = parsed.quote 
-      ? `${candidateName} stated: "${smartTruncate(parsed.quote, 800)}"` 
-      : `${candidateName} has expressed a position on this issue.`;
+      ? `PUBLIC STATEMENT: "${smartTruncate(parsed.quote, 200)}". Indicates ${positionWord} this policy.`
+      : `PUBLIC STATEMENT: ${candidateName} has taken a public position on this issue.`;
     
     // Extract source URLs from grounding
     const sourceUrls: string[] = [];
@@ -1449,7 +1450,14 @@ Return JSON array: [{question_id, answer_value, confidence, source_description},
 - question_id: REQUIRED - Must be one of: ${validIdsStr}
 - answer_value: -10, -5, 0, 5, or 10 (Use 0 when no evidence)
 - confidence: "high" (specific evidence), "medium" (inferred), "low" (no evidence - must be 0)
-- source_description: REQUIRED detailed affirmative position statement (100-300 words). Format: "[Name] [supports/opposes] [specific policy]. [Evidence: specific bill references, voting dates, statement quotes, or policy actions]." DO NOT include URLs, domain names, or website addresses - links are displayed separately. Example: "Rep. Smith explicitly supports expanding federal gun background checks. She sponsored H.R. 8 (Universal Background Checks Act) and voted YES on the Bipartisan Background Checks Act in 2021. In floor remarks, Smith stated: 'We must close the loopholes that allow dangerous individuals to obtain firearms.' Her voting record shows consistent support for gun safety measures including the Assault Weapons Ban." Use "No documented position found" only when research shows no evidence.
+- source_description: REQUIRED concise evidence statement (50-80 words MAX). 
+  FORMAT: "[EVIDENCE TYPE]: [Specific evidence]. [Why this shows their position]."
+  EVIDENCE TYPES (pick one): VOTING RECORD | PUBLIC STATEMENT | SOCIAL MEDIA | LEGISLATIVE ACTION
+  EXAMPLES:
+  • "VOTING RECORD: Voted YES on H.R.8 (Universal Background Checks Act, 2021). Indicates support for expanded background checks."
+  • "PUBLIC STATEMENT: In 2023, stated 'We must secure our borders first.' Signals opposition to current immigration policy."
+  • "LEGISLATIVE ACTION: Cosponsored S.1380 limiting civil asset forfeiture. Shows support for property rights reforms."
+  DO NOT include URLs. Be factual and brief. Use "No documented position found" only when research shows no evidence.
 
 ONLY JSON array. No markdown.`;
 
