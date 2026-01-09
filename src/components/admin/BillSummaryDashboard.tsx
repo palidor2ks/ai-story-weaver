@@ -21,7 +21,8 @@ import {
   Loader2,
   RefreshCw,
   Ban,
-  Building2
+  Building2,
+  Square
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -40,6 +41,14 @@ export function BillSummaryDashboard() {
     house: number;
     senate: number;
   } | null>(null);
+  const [isAutoBackfilling, setIsAutoBackfilling] = useState(false);
+  const [autoBackfillProgress, setAutoBackfillProgress] = useState<{
+    totalProcessed: number;
+    startingRemaining: number;
+    currentRemaining: number;
+  } | null>(null);
+  // Use ref to allow stopping the loop from the stop button
+  const stopAutoBackfillRef = { current: false };
 
   const handleRefreshStats = async () => {
     setIsRefreshing(true);
@@ -194,30 +203,81 @@ export function BillSummaryDashboard() {
 
   const isProcessing = isFetchingCrs || isGeneratingAi || isBackfillingChambers;
 
-  const handleBackfillChambers = async () => {
+  const handleStopAutoBackfill = () => {
+    stopAutoBackfillRef.current = true;
+    toast.info('Stopping after current batch completes...');
+  };
+
+  const handleBackfillChambers = async (autoContinue: boolean = false) => {
     setIsBackfillingChambers(true);
+    if (autoContinue) {
+      setIsAutoBackfilling(true);
+      stopAutoBackfillRef.current = false;
+      setAutoBackfillProgress({ totalProcessed: 0, startingRemaining: 0, currentRemaining: 0 });
+    }
+    
+    let totalProcessed = 0;
+    let remaining = 1; // Start with non-zero to enter loop
+    let isFirstRun = true;
+    let startingRemaining = 0;
     
     try {
-      const { data, error } = await supabase.functions.invoke('backfill-vote-chambers', {
-        body: { batchSize: 50000 }
-      });
-      
-      if (error) throw error;
-      
-      setChamberBackfillStats({
-        updated: data?.updated || 0,
-        remaining: data?.remaining,
-        house: data?.house || 0,
-        senate: data?.senate || 0,
-      });
-      
-      if (data?.remaining === 0) {
-        toast.success('Chamber backfill complete!', {
-          description: `All sponsored/cosponsored votes now have chamber values`
+      while (remaining > 0 && (autoContinue ? !stopAutoBackfillRef.current : isFirstRun)) {
+        const { data, error } = await supabase.functions.invoke('backfill-vote-chambers', {
+          body: { batchSize: 50000 }
         });
-      } else {
-        toast.success(`Backfilled ${data?.updated?.toLocaleString()} votes`, {
-          description: `${data?.remaining?.toLocaleString()} remaining. Click again to continue.`
+        
+        if (error) throw error;
+        
+        const batchUpdated = data?.updated || 0;
+        remaining = data?.remaining || 0;
+        
+        if (isFirstRun && autoContinue) {
+          startingRemaining = remaining + batchUpdated;
+        }
+        
+        totalProcessed += batchUpdated;
+        
+        setChamberBackfillStats({
+          updated: batchUpdated,
+          remaining,
+          house: data?.house || 0,
+          senate: data?.senate || 0,
+        });
+        
+        if (autoContinue && !stopAutoBackfillRef.current) {
+          setAutoBackfillProgress({
+            totalProcessed,
+            startingRemaining: isFirstRun ? startingRemaining : (autoBackfillProgress?.startingRemaining || startingRemaining),
+            currentRemaining: remaining,
+          });
+          
+          // Show progress toast every batch
+          toast.info(`Batch complete: ${batchUpdated.toLocaleString()} updated`, {
+            description: `${remaining.toLocaleString()} remaining...`,
+            duration: 2000,
+          });
+        }
+        
+        isFirstRun = false;
+        
+        // Small delay between batches to avoid rate limiting
+        if (remaining > 0 && autoContinue && !stopAutoBackfillRef.current) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      if (remaining === 0) {
+        toast.success('Chamber backfill complete!', {
+          description: `All sponsored/cosponsored votes now have chamber values. Total processed: ${totalProcessed.toLocaleString()}`
+        });
+      } else if (stopAutoBackfillRef.current) {
+        toast.success(`Auto-backfill stopped`, {
+          description: `Processed ${totalProcessed.toLocaleString()} votes. ${remaining.toLocaleString()} remaining.`
+        });
+      } else if (!autoContinue) {
+        toast.success(`Backfilled ${totalProcessed.toLocaleString()} votes`, {
+          description: `${remaining.toLocaleString()} remaining. Click again or use "Auto".`
         });
       }
       
@@ -230,6 +290,8 @@ export function BillSummaryDashboard() {
       });
     } finally {
       setIsBackfillingChambers(false);
+      setIsAutoBackfilling(false);
+      setAutoBackfillProgress(null);
     }
   };
 
@@ -288,24 +350,50 @@ export function BillSummaryDashboard() {
             )}
             Generate AI ({stats.noSummaryAvailable.toLocaleString()})
           </Button>
-          <Button 
-            variant="outline"
-            size="sm"
-            onClick={handleBackfillChambers}
-            disabled={isProcessing}
-          >
-            {isBackfillingChambers ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          
+          {/* Chamber Backfill Button Group */}
+          <div className="flex gap-1">
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={() => handleBackfillChambers(false)}
+              disabled={isProcessing}
+            >
+              {isBackfillingChambers && !isAutoBackfilling ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Building2 className="h-4 w-4 mr-2" />
+              )}
+              Backfill Chambers
+              {chamberBackfillStats?.remaining != null && chamberBackfillStats.remaining > 0 && (
+                <span className="ml-1 text-muted-foreground">
+                  ({chamberBackfillStats.remaining.toLocaleString()})
+                </span>
+              )}
+            </Button>
+            
+            {isAutoBackfilling ? (
+              <Button 
+                variant="destructive"
+                size="sm"
+                onClick={handleStopAutoBackfill}
+              >
+                <Square className="h-4 w-4 mr-2" />
+                Stop
+              </Button>
             ) : (
-              <Building2 className="h-4 w-4 mr-2" />
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => handleBackfillChambers(true)}
+                disabled={isProcessing}
+                title="Run continuously until all records are processed"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Auto
+              </Button>
             )}
-            Backfill Chambers
-            {chamberBackfillStats?.remaining != null && chamberBackfillStats.remaining > 0 && (
-              <span className="ml-1 text-muted-foreground">
-                ({chamberBackfillStats.remaining.toLocaleString()})
-              </span>
-            )}
-          </Button>
+          </div>
         </div>
         </div>
       </CardHeader>
@@ -320,6 +408,25 @@ export function BillSummaryDashboard() {
               Run the "Backfill Congress #s" operation first — summaries cannot be fetched without congress numbers.
             </AlertDescription>
           </Alert>
+        )}
+
+        {/* Auto-Backfill Progress Bar */}
+        {autoBackfillProgress && autoBackfillProgress.startingRemaining > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Auto-backfilling chambers...
+              </span>
+              <span className="font-medium">
+                {autoBackfillProgress.totalProcessed.toLocaleString()} processed, {autoBackfillProgress.currentRemaining.toLocaleString()} remaining
+              </span>
+            </div>
+            <Progress 
+              value={((autoBackfillProgress.startingRemaining - autoBackfillProgress.currentRemaining) / autoBackfillProgress.startingRemaining) * 100} 
+              className="h-2" 
+            />
+          </div>
         )}
 
         {/* Progress Bar */}
