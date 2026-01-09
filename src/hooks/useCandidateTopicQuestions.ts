@@ -50,11 +50,15 @@ export function useCandidateTopicQuestions(
       return questions.map(q => {
         const answer = answerMap.get(q.id);
         const sourceDesc = answer?.source_description || '';
-        const hasSource = sourceDesc.length > 0 && 
-          !sourceDesc.toLowerCase().includes('no documented');
         // Combine source_urls array with legacy source_url field
         const sourceUrls = answer?.source_urls || (answer?.source_url ? [answer.source_url] : null);
         const sourceTitles = answer?.source_titles || null;
+        
+        // hasSource is TRUE if we have actual source URLs OR a meaningful description
+        const hasSourceUrls = sourceUrls && sourceUrls.length > 0;
+        const hasMeaningfulDesc = sourceDesc.length > 0 && 
+          !sourceDesc.toLowerCase().includes('no documented');
+        const hasSource = hasSourceUrls || hasMeaningfulDesc;
         
         return {
           questionId: q.id,

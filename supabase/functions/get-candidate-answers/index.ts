@@ -1507,8 +1507,8 @@ ONLY JSON array. No markdown.`;
   return parsed.map((item: any) => {
     const questionId = String(item.question_id || '').replace(/[\[\]]/g, '');
     const research = researchResults.get(questionId);
-    const sourceDesc = smartTruncate(item.source_description || 'No documented position', 1000);
-    const lowerDesc = sourceDesc.toLowerCase();
+    let sourceDesc = smartTruncate(item.source_description || 'No documented position', 1000);
+    let lowerDesc = sourceDesc.toLowerCase();
     
     // PART B: Enforce score-description contract with source-aware logic
     // If score is non-zero but description says "no documented position", check if we have grounding sources
@@ -1517,11 +1517,30 @@ ONLY JSON array. No markdown.`;
     const hasGroundingSources = research?.sourceUrls && research.sourceUrls.length > 0;
     
     if (isContradictory) {
-      if (hasGroundingSources) {
-        // PRESERVE sources - grounding found evidence even if AI hedged in description
-        // Trust the sources over the hedging language
-        console.log(`[Contract] Keeping score ${answerValue} for ${questionId} - grounding found ${research.sourceUrls.length} sources despite hedging text`);
+      if (hasGroundingSources && research?.researchText) {
+        // REPAIR: Replace "no documented position" with actual evidence from grounding research
+        console.log(`[Contract] Repairing description for ${questionId} - grounding found ${research.sourceUrls.length} sources`);
+        
+        // Clean up the research text to use as description
+        let repairedDesc = research.researchText;
+        // Remove "EVIDENCE FOUND:" prefix if present
+        repairedDesc = repairedDesc.replace(/^EVIDENCE FOUND:\s*/i, '');
+        // Remove raw URLs (UI shows them separately)
+        repairedDesc = repairedDesc.replace(/https?:\/\/\S+/g, '');
+        // Clean up extra whitespace
+        repairedDesc = repairedDesc.replace(/\s+/g, ' ').trim();
+        // Truncate to reasonable length
+        repairedDesc = smartTruncate(repairedDesc, 1000);
+        
+        if (repairedDesc.length > 50) {
+          sourceDesc = repairedDesc;
+          lowerDesc = sourceDesc.toLowerCase();
+          console.log(`[Contract] Repaired description: "${sourceDesc.slice(0, 100)}..."`);
+        }
         // Don't reset answerValue - keep it and use the sources
+      } else if (hasGroundingSources) {
+        // Have sources but no research text - keep the sources anyway
+        console.log(`[Contract] Keeping score ${answerValue} for ${questionId} - grounding found ${research!.sourceUrls.length} sources`);
       } else {
         console.log(`[Contract] Contradictory output for ${questionId}: score ${answerValue} but "no documented position" with no sources -> routing to inference`);
         answerValue = 0; // Will be picked up by post-validation inference
