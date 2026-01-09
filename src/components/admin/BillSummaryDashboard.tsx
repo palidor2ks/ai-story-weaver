@@ -20,7 +20,8 @@ import {
   Bot,
   Loader2,
   RefreshCw,
-  Ban
+  Ban,
+  Building2
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -31,7 +32,14 @@ export function BillSummaryDashboard() {
   const [isFetchingCrs, setIsFetchingCrs] = useState(false);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isBackfillingChambers, setIsBackfillingChambers] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const [chamberBackfillStats, setChamberBackfillStats] = useState<{
+    updated: number;
+    remaining: number | null;
+    house: number;
+    senate: number;
+  } | null>(null);
 
   const handleRefreshStats = async () => {
     setIsRefreshing(true);
@@ -184,7 +192,46 @@ export function BillSummaryDashboard() {
 
   if (!stats) return null;
 
-  const isProcessing = isFetchingCrs || isGeneratingAi;
+  const isProcessing = isFetchingCrs || isGeneratingAi || isBackfillingChambers;
+
+  const handleBackfillChambers = async () => {
+    setIsBackfillingChambers(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('backfill-vote-chambers', {
+        body: { batchSize: 50000 }
+      });
+      
+      if (error) throw error;
+      
+      setChamberBackfillStats({
+        updated: data?.updated || 0,
+        remaining: data?.remaining,
+        house: data?.house || 0,
+        senate: data?.senate || 0,
+      });
+      
+      if (data?.remaining === 0) {
+        toast.success('Chamber backfill complete!', {
+          description: `All sponsored/cosponsored votes now have chamber values`
+        });
+      } else {
+        toast.success(`Backfilled ${data?.updated?.toLocaleString()} votes`, {
+          description: `${data?.remaining?.toLocaleString()} remaining. Click again to continue.`
+        });
+      }
+      
+      // Refresh stats after backfill
+      triggerBackgroundRefresh();
+      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+    } catch (err) {
+      toast.error('Failed to backfill chambers', {
+        description: err instanceof Error ? err.message : 'Unknown error'
+      });
+    } finally {
+      setIsBackfillingChambers(false);
+    }
+  };
 
   return (
     <Card className="mb-6">
@@ -237,11 +284,29 @@ export function BillSummaryDashboard() {
               {isGeneratingAi ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-                <Sparkles className="h-4 w-4 mr-2" />
-              )}
-              Generate AI ({stats.noSummaryAvailable.toLocaleString()})
-            </Button>
-          </div>
+              <Sparkles className="h-4 w-4 mr-2" />
+            )}
+            Generate AI ({stats.noSummaryAvailable.toLocaleString()})
+          </Button>
+          <Button 
+            variant="outline"
+            size="sm"
+            onClick={handleBackfillChambers}
+            disabled={isProcessing}
+          >
+            {isBackfillingChambers ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Building2 className="h-4 w-4 mr-2" />
+            )}
+            Backfill Chambers
+            {chamberBackfillStats?.remaining != null && chamberBackfillStats.remaining > 0 && (
+              <span className="ml-1 text-muted-foreground">
+                ({chamberBackfillStats.remaining.toLocaleString()})
+              </span>
+            )}
+          </Button>
+        </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
