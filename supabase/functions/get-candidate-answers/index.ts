@@ -129,6 +129,28 @@ function smartTruncate(text: string, maxLength: number): string {
   return text.slice(0, maxLength - 3) + '...';
 }
 
+// Detect AI preamble/acknowledgment text that isn't actual research
+function isPreambleText(text: string): boolean {
+  if (!text || text.length < 10) return true;
+  const lowerText = text.toLowerCase().trim();
+  
+  // Common AI acknowledgment patterns
+  const preamblePatterns = [
+    /^okay,?\s+(i will|i'll|let me)/,
+    /^i will (research|search|look|find)/,
+    /^i'll (research|search|look|find)/,
+    /^let me (research|search|look|find)/,
+    /^searching for/,
+    /^looking for (specific )?evidence/,
+    /^i('ll)? need to (research|search|find)/,
+    /as outlined in your instructions/,
+    /^based on the (provided )?instructions/,
+    /^i('ll)? (now )?analyze/,
+  ];
+  
+  return preamblePatterns.some(pattern => pattern.test(lowerText));
+}
+
 function isBlockedDomain(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
@@ -614,7 +636,13 @@ If truly NO evidence exists after thorough search: "NO EVIDENCE FOUND after sear
     }
 
     const data = await response.json();
-    const researchText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    let researchText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    // Check if research text is just AI preamble (not actual findings)
+    if (isPreambleText(researchText)) {
+      console.log(`Grounding returned preamble text only for ${candidateName}, marking as unsuccessful`);
+      return { researchText: '', sourceUrls: [], sourceTitles: [], success: false };
+    }
     
     // Extract source URLs and titles from grounding metadata (Gemini 2.0 format)
     const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
@@ -1518,26 +1546,32 @@ ONLY JSON array. No markdown.`;
     
     if (isContradictory) {
       if (hasGroundingSources && research?.researchText) {
-        // REPAIR: Replace "no documented position" with actual evidence from grounding research
-        console.log(`[Contract] Repairing description for ${questionId} - grounding found ${research.sourceUrls.length} sources`);
-        
-        // Clean up the research text to use as description
-        let repairedDesc = research.researchText;
-        // Remove "EVIDENCE FOUND:" prefix if present
-        repairedDesc = repairedDesc.replace(/^EVIDENCE FOUND:\s*/i, '');
-        // Remove raw URLs (UI shows them separately)
-        repairedDesc = repairedDesc.replace(/https?:\/\/\S+/g, '');
-        // Clean up extra whitespace
-        repairedDesc = repairedDesc.replace(/\s+/g, ' ').trim();
-        // Truncate to reasonable length
-        repairedDesc = smartTruncate(repairedDesc, 1000);
-        
-        if (repairedDesc.length > 50) {
-          sourceDesc = repairedDesc;
-          lowerDesc = sourceDesc.toLowerCase();
-          console.log(`[Contract] Repaired description: "${sourceDesc.slice(0, 100)}..."`);
+        // Check if research text is just AI preamble (not actual findings)
+        if (isPreambleText(research.researchText)) {
+          console.log(`[Contract] Research text is preamble for ${questionId}, routing to inference`);
+          answerValue = 0; // Route to inference phase for proper explanation
+        } else {
+          // REPAIR: Replace "no documented position" with actual evidence from grounding research
+          console.log(`[Contract] Repairing description for ${questionId} - grounding found ${research.sourceUrls.length} sources`);
+          
+          // Clean up the research text to use as description
+          let repairedDesc = research.researchText;
+          // Remove "EVIDENCE FOUND:" prefix if present
+          repairedDesc = repairedDesc.replace(/^EVIDENCE FOUND:\s*/i, '');
+          // Remove raw URLs (UI shows them separately)
+          repairedDesc = repairedDesc.replace(/https?:\/\/\S+/g, '');
+          // Clean up extra whitespace
+          repairedDesc = repairedDesc.replace(/\s+/g, ' ').trim();
+          // Truncate to reasonable length
+          repairedDesc = smartTruncate(repairedDesc, 1000);
+          
+          if (repairedDesc.length > 50) {
+            sourceDesc = repairedDesc;
+            lowerDesc = sourceDesc.toLowerCase();
+            console.log(`[Contract] Repaired description: "${sourceDesc.slice(0, 100)}..."`);
+          }
+          // Don't reset answerValue - keep it and use the sources
         }
-        // Don't reset answerValue - keep it and use the sources
       } else if (hasGroundingSources) {
         // Have sources but no research text - keep the sources anyway
         console.log(`[Contract] Keeping score ${answerValue} for ${questionId} - grounding found ${research!.sourceUrls.length} sources`);
