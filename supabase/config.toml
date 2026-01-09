@@ -134,3 +134,6 @@ verify_jwt = false
 
 [functions.generate-ai-bill-summaries]
 verify_jwt = false
+
+[functions.refresh-bill-summary-stats]
+verify_jwt = false
