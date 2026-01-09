@@ -1,10 +1,15 @@
+import { useState } from "react";
 import { useBillSummaryStats } from "@/hooks/useBillSummaryStats";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { 
   FileText, 
   AlertTriangle, 
@@ -12,11 +17,72 @@ import {
   Clock, 
   XCircle,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  Download,
+  Sparkles,
+  Bot,
+  Loader2
 } from "lucide-react";
 
 export function BillSummaryDashboard() {
   const { data: stats, isLoading } = useBillSummaryStats();
+  const queryClient = useQueryClient();
+  
+  const [isFetchingCrs, setIsFetchingCrs] = useState(false);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+
+  const handleFetchCrsSummaries = async () => {
+    setIsFetchingCrs(true);
+    setProgress({ current: 0, total: stats?.notYetFetched || 0 });
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('backfill-bill-summaries', {
+        body: { batchSize: 50 }
+      });
+      
+      if (error) throw error;
+      
+      toast.success(`Fetched CRS summaries`, {
+        description: `Updated ${data?.updated || 0} votes, ${data?.noSummary || 0} had no CRS summary`
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+    } catch (error) {
+      toast.error('Failed to fetch CRS summaries', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } finally {
+      setIsFetchingCrs(false);
+      setProgress(null);
+    }
+  };
+
+  const handleGenerateAiSummaries = async () => {
+    setIsGeneratingAi(true);
+    setProgress({ current: 0, total: stats?.noSummaryAvailable || 0 });
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-ai-bill-summaries', {
+        body: { batchSize: 10 }
+      });
+      
+      if (error) throw error;
+      
+      toast.success(`Generated AI summaries`, {
+        description: `Processed ${data?.processed || 0} bills, ${data?.failed || 0} failed`
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+    } catch (error) {
+      toast.error('Failed to generate AI summaries', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } finally {
+      setIsGeneratingAi(false);
+      setProgress(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -69,44 +135,119 @@ export function BillSummaryDashboard() {
           </Alert>
         )}
 
-        {/* Summary Statistics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        {/* Action Buttons */}
+        <div className="flex gap-4 flex-wrap">
+          <Button 
+            onClick={handleFetchCrsSummaries}
+            disabled={stats.notYetFetched === 0 || isFetchingCrs || isGeneratingAi}
+            className="gap-2"
+          >
+            {isFetchingCrs ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Fetch CRS Summaries ({stats.notYetFetched.toLocaleString()} pending)
+          </Button>
+          
+          <Button 
+            variant="secondary"
+            onClick={handleGenerateAiSummaries}
+            disabled={stats.noSummaryAvailable === 0 || isFetchingCrs || isGeneratingAi}
+            className="gap-2"
+          >
+            {isGeneratingAi ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Generate AI Summaries ({stats.noSummaryAvailable.toLocaleString()} bills)
+          </Button>
+        </div>
+
+        {/* Progress Bar */}
+        {progress && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                {isFetchingCrs ? 'Fetching CRS summaries...' : 'Generating AI summaries...'}
+              </span>
+              <span className="font-medium">{progress.current} / {progress.total}</span>
+            </div>
+            <Progress value={(progress.current / progress.total) * 100} className="h-2" />
+          </div>
+        )}
+
+        {/* Summary Statistics - Updated Layout */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-muted/50 rounded-lg p-4 text-center">
             <div className="text-sm text-muted-foreground mb-1">Total Votes</div>
             <div className="text-2xl font-bold">{stats.totalVotes.toLocaleString()}</div>
           </div>
           
-          <div className="bg-primary/10 rounded-lg p-4 text-center border border-primary/20">
-            <div className="text-sm text-primary mb-1">Processable</div>
-            <div className="text-2xl font-bold text-primary">{stats.processableVotes.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">can fetch summaries</div>
+          <div className="bg-blue-500/10 rounded-lg p-4 text-center border border-blue-500/20">
+            <div className="flex items-center justify-center gap-1 text-sm text-blue-600 mb-1">
+              <Clock className="h-3.5 w-3.5" />
+              Not Yet Fetched
+            </div>
+            <div className="text-2xl font-bold text-blue-600">{stats.notYetFetched.toLocaleString()}</div>
+            <div className="text-xs text-muted-foreground">needs CRS fetch</div>
           </div>
           
           <div className="bg-green-500/10 rounded-lg p-4 text-center border border-green-500/20">
             <div className="flex items-center justify-center gap-1 text-sm text-green-600 mb-1">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              With Summary
+              CRS Summary
             </div>
-            <div className="text-2xl font-bold text-green-600">{stats.withSummary.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">{stats.coveragePct}% coverage</div>
+            <div className="text-2xl font-bold text-green-600">{stats.withCrsSummary.toLocaleString()}</div>
+            <div className="text-xs text-muted-foreground">official summaries</div>
           </div>
           
           <div className="bg-amber-500/10 rounded-lg p-4 text-center border border-amber-500/20">
             <div className="flex items-center justify-center gap-1 text-sm text-amber-600 mb-1">
               <XCircle className="h-3.5 w-3.5" />
-              No Summary
+              No CRS Summary
             </div>
             <div className="text-2xl font-bold text-amber-600">{stats.noSummaryAvailable.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">bill has no CRS summary</div>
+            <div className="text-xs text-muted-foreground">needs AI generation</div>
+          </div>
+
+          <div className="bg-purple-500/10 rounded-lg p-4 text-center border border-purple-500/20">
+            <div className="flex items-center justify-center gap-1 text-sm text-purple-600 mb-1">
+              <Bot className="h-3.5 w-3.5" />
+              AI Generated
+            </div>
+            <div className="text-2xl font-bold text-purple-600">{stats.withAiSummary.toLocaleString()}</div>
+            <div className="text-xs text-muted-foreground">AI-created summaries</div>
           </div>
           
-          <div className="bg-blue-500/10 rounded-lg p-4 text-center border border-blue-500/20">
-            <div className="flex items-center justify-center gap-1 text-sm text-blue-600 mb-1">
-              <Clock className="h-3.5 w-3.5" />
-              Pending
+          <div className="bg-muted/30 rounded-lg p-4 text-center border border-muted">
+            <div className="text-sm text-muted-foreground mb-1">Not Applicable</div>
+            <div className="text-2xl font-bold text-muted-foreground">
+              {(stats.floorVotesNoBill + stats.fullTextTitles + stats.unparseableBillIds).toLocaleString()}
             </div>
-            <div className="text-2xl font-bold text-blue-600">{stats.pending.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">ready to fetch</div>
+            <div className="text-xs text-muted-foreground">floor votes, etc.</div>
+          </div>
+        </div>
+
+        {/* Total Coverage */}
+        <div className="bg-primary/5 rounded-lg p-4 border border-primary/20">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-medium">Total Summary Coverage</span>
+            <Badge variant="outline" className="text-primary">
+              {stats.withSummary.toLocaleString()} / {stats.processableVotes.toLocaleString()} ({stats.coveragePct}%)
+            </Badge>
+          </div>
+          <Progress value={stats.coveragePct} className="h-3" />
+          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              CRS: {stats.withCrsSummary.toLocaleString()}
+            </span>
+            <span className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-purple-500" />
+              AI: {stats.withAiSummary.toLocaleString()}
+            </span>
           </div>
         </div>
 
@@ -145,15 +286,6 @@ export function BillSummaryDashboard() {
             </p>
           </div>
         )}
-
-        {/* Overall Progress */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Coverage of Processable Votes</span>
-            <span className="font-medium">{stats.coveragePct}%</span>
-          </div>
-          <Progress value={stats.coveragePct} className="h-3" />
-        </div>
 
         {/* Coverage by Congress */}
         <div className="space-y-3">
