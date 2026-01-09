@@ -43,8 +43,18 @@ const topicMapping: Record<string, string> = {
   'Sports and Recreation': 'Sports and Recreation',
   'Taxation': 'Taxation',
   'Transportation and Public Works': 'Transportation and Public Works',
-  'Water Resources Development': 'Water Resources Development',
+'Water Resources Development': 'Water Resources Development',
 };
+
+// Derive chamber from bill type prefix
+function getChamberFromBillType(billType: string): 'house' | 'senate' | null {
+  const type = (billType || '').toUpperCase();
+  // House bills: HR, HRES, HJRES, HCONRES
+  if (type.startsWith('H')) return 'house';
+  // Senate bills: S, SRES, SJRES, SCONRES
+  if (type.startsWith('S')) return 'senate';
+  return null;
+}
 
 interface VoteRecord {
   id: string;
@@ -61,6 +71,7 @@ interface VoteRecord {
   bill_number?: number;
   bill_summary?: string | null;
   summary_fetched_at?: string | null;
+  chamber?: 'house' | 'senate' | null;
 }
 
 // Fetch CRS bill summary from Congress.gov API - NO character limit
@@ -141,6 +152,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
             policy_area: policyArea,
             bill_type: bill.type,
             bill_number: bill.number,
+            chamber: getChamberFromBillType(bill.type || ''),
           });
         }
         
@@ -192,6 +204,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
             policy_area: policyArea,
             bill_type: bill.type,
             bill_number: bill.number,
+            chamber: getChamberFromBillType(bill.type || ''),
           });
         }
         
@@ -256,6 +269,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
         congress: v.congress,
         bill_summary: v.bill_summary || null,
         summary_fetched_at: v.summary_fetched_at || null,
+        chamber: getChamberFromBillType(v.bill_type || ''),
       }));
 
       // Deduplicate by ID
