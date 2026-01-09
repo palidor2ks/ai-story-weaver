@@ -10,9 +10,9 @@ const CONGRESS_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// Configuration for parallel processing
-const CONCURRENT_LIMIT = 5; // 5 parallel API calls
-const DELAY_BETWEEN_BATCHES = 200; // 200ms between parallel batches
+// Configuration for parallel processing - INCREASED for better throughput
+const CONCURRENT_LIMIT = 8; // Up from 5
+const DELAY_BETWEEN_BATCHES = 150; // Slightly reduced from 200ms
 const MAX_RETRIES = 3;
 const RATE_LIMIT_DELAY = 5000; // 5s on rate limit
 
@@ -85,15 +85,15 @@ async function fetchBillSummary(
   }
 }
 
-// Check if bill_id is a floor vote ID (not a real bill)
-function isFloorVoteId(billId: string): boolean {
+// Check if bill_id is a procedural floor vote ID (not a real bill)
+function isProceduralVoteId(billId: string): boolean {
   return billId.startsWith('VOTE-') || billId.startsWith('vote-');
 }
 
 // Parse bill_id to extract type and number
 function parseBillId(billId: string): { type: string; number: number } | null {
-  // Skip floor vote IDs
-  if (isFloorVoteId(billId)) {
+  // Skip procedural vote IDs - they need AI summaries, not CRS
+  if (isProceduralVoteId(billId)) {
     return null;
   }
   
@@ -118,11 +118,12 @@ function parseBillId(billId: string): { type: string; number: number } | null {
 
 // Process a single vote and return result
 async function processVote(vote: VoteRecord): Promise<SummaryResult> {
-  // Skip floor vote IDs - mark them so we don't process again
-  if (isFloorVoteId(vote.bill_id)) {
+  // Procedural floor votes (VOTE-xxx) need AI summaries, not CRS
+  // Mark them as [NO_SUMMARY] so they get routed to AI generation
+  if (isProceduralVoteId(vote.bill_id)) {
     return { 
       voteId: vote.id, 
-      summary: '[FLOOR_VOTE]', 
+      summary: '[NO_SUMMARY]', // Changed from [FLOOR_VOTE] - routes to AI generation
       success: true 
     };
   }
@@ -177,10 +178,11 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { batchSize = 50, candidateId, speed = 'normal' } = body;
+    // INCREASED default batch size from 50 to 100
+    const { batchSize = 100, candidateId, speed = 'normal' } = body;
 
     // Adjust concurrency based on speed setting
-    const concurrentLimit = speed === 'fast' ? 8 : speed === 'conservative' ? 3 : CONCURRENT_LIMIT;
+    const concurrentLimit = speed === 'fast' ? 10 : speed === 'conservative' ? 4 : CONCURRENT_LIMIT;
 
     if (!CONGRESS_API_KEY) {
       throw new Error('Congress.gov API key not configured');
@@ -188,16 +190,16 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Query uses partial index: votes_pending_summaries_idx
-    // WHERE bill_summary IS NULL AND congress IS NOT NULL
-    // This should be fast now with the index
-    const effectiveBatchSize = Math.min(batchSize, 50);
+    // Query only non-VOTE- records for CRS fetch
+    // VOTE-xxx records are handled separately by AI generation
+    const effectiveBatchSize = Math.min(batchSize, 100);
     
     let query = supabase
       .from('votes')
       .select('id, bill_id, congress, action_type')
       .is('bill_summary', null)
       .not('congress', 'is', null)
+      .not('bill_id', 'ilike', 'VOTE-%') // Skip procedural votes - they go to AI
       .order('id', { ascending: true })
       .limit(effectiveBatchSize);
     
@@ -206,45 +208,16 @@ serve(async (req) => {
     }
 
     const startTime = Date.now();
-    const { data: rawVotes, error } = await query;
+    const { data: votes, error } = await query;
 
     if (error) {
       throw new Error(`Failed to fetch votes: ${error.message}`);
     }
 
-    // Filter out VOTE- IDs in JS (mark them instead of skipping entirely)
-    const votes = rawVotes || [];
-    const processableVotes = votes.filter(v => !v.bill_id.toUpperCase().startsWith('VOTE-'));
-
-    // If all fetched votes are VOTE- prefixed, mark them and continue
-    if (votes.length > 0 && processableVotes.length === 0) {
-      console.log(`[Backfill] All ${votes.length} votes are floor votes, marking them...`);
-      
-      for (const vote of votes) {
-        await supabase
-          .from('votes')
-          .update({ 
-            bill_summary: '[FLOOR_VOTE]',
-            summary_fetched_at: new Date().toISOString()
-          })
-          .eq('id', vote.id);
-      }
-      
-      return new Response(JSON.stringify({
-        status: 'in_progress',
-        message: `Marked ${votes.length} floor votes`,
-        updated: votes.length,
-        failed: 0,
-        remaining: null, // Unknown - keep looping
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     if (!votes || votes.length === 0) {
       return new Response(JSON.stringify({
         status: 'complete',
-        message: 'No votes remaining without summaries',
+        message: 'No votes remaining without summaries (excluding procedural votes)',
         updated: 0,
         remaining: 0,
       }), {
@@ -252,13 +225,13 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[Backfill] Processing ${processableVotes.length} votes (${votes.length - processableVotes.length} floor votes) with ${concurrentLimit} concurrent calls...`);
+    console.log(`[Backfill] Processing ${votes.length} votes with ${concurrentLimit} concurrent calls...`);
 
     let updated = 0;
     let failed = 0;
 
     // Process in parallel chunks
-    const chunks = chunk(processableVotes as VoteRecord[], concurrentLimit);
+    const chunks = chunk(votes as VoteRecord[], concurrentLimit);
     
     for (const batch of chunks) {
       // Process batch in parallel
@@ -307,7 +280,7 @@ serve(async (req) => {
     // Return in_progress if we processed anything - let UI decide when to stop
     return new Response(JSON.stringify({
       status: updated > 0 ? 'in_progress' : 'complete',
-      message: `Processed ${processableVotes.length} votes at ${rate.toFixed(1)}/sec`,
+      message: `Processed ${votes.length} votes at ${rate.toFixed(1)}/sec`,
       updated,
       failed,
       remaining: null, // Don't run expensive count - UI tracks progress
