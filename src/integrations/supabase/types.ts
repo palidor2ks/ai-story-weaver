@@ -44,6 +44,7 @@ export type Database = {
           id: string
           public_statement_summary: string | null
           question_id: string
+          relevance_flag: string | null
           source_description: string | null
           source_titles: string[] | null
           source_type: string | null
@@ -63,6 +64,7 @@ export type Database = {
           id?: string
           public_statement_summary?: string | null
           question_id: string
+          relevance_flag?: string | null
           source_description?: string | null
           source_titles?: string[] | null
           source_type?: string | null
@@ -82,6 +84,7 @@ export type Database = {
           id?: string
           public_statement_summary?: string | null
           question_id?: string
+          relevance_flag?: string | null
           source_description?: string | null
           source_titles?: string[] | null
           source_type?: string | null

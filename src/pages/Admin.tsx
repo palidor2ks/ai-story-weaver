@@ -21,9 +21,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle } from "lucide-react";
 import { QuestionManagementPanel } from "@/components/admin/QuestionManagementPanel";
 import { PartyAnswersPanel } from "@/components/admin/PartyAnswersPanel";
+import { EvidenceReviewPanel } from "@/components/admin/EvidenceReviewPanel";
 
 
 // Only levels that require manual entry (no API available)
@@ -445,6 +446,10 @@ export default function Admin() {
               <HelpCircle className="h-4 w-4" />
               Questions
             </TabsTrigger>
+            <TabsTrigger value="evidence" className="gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Evidence Review
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="officials">
@@ -656,6 +661,10 @@ export default function Admin() {
 
           <TabsContent value="questions">
             <QuestionManagementPanel />
+          </TabsContent>
+
+          <TabsContent value="evidence">
+            <EvidenceReviewPanel />
           </TabsContent>
 
         </Tabs>
