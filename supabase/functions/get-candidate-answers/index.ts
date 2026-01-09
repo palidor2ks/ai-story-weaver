@@ -14,6 +14,21 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const CHUNK_SIZE = 10;
 
+// Cross-topic matching: some questions span multiple topic areas
+// This allows votes from related topics to be considered as evidence
+const RELATED_TOPICS: Record<string, string[]> = {
+  'civil-rights': ['criminal-justice', 'government-politics', 'immigration-society'],
+  'criminal-justice': ['civil-rights', 'government-politics'],
+  'government-politics': ['civil-rights', 'criminal-justice', 'economy-jobs'],
+  'economy-jobs': ['government-politics', 'labor', 'trade'],
+  'health-welfare': ['science-tech'],
+  'science-tech': ['health-welfare', 'environment-energy'],
+  'environment-energy': ['science-tech', 'economy-jobs'],
+  'immigration-society': ['civil-rights', 'defense-foreign'],
+  'defense-foreign': ['immigration-society', 'government-politics'],
+  'education': ['economy-jobs', 'civil-rights'],
+};
+
 interface QuestionOption {
   value: number;
   text: string;
@@ -320,6 +335,16 @@ function extractQuestionKeywords(questionText: string): string[] {
       'minority', 'underrepresented', 'disparate impact', 'equal opportunity',
       'racial justice', 'systemic racism', 'reparations', 'voting rights act'
     ],
+    // Criminal justice & due process keywords for cross-topic matching
+    criminaljustice: [
+      'civil asset forfeiture', 'asset forfeiture', 'forfeiture', 'seizure',
+      'due process', 'property rights', 'property seizure', 'eminent domain',
+      'criminal justice', 'justice reform', 'sentencing', 'sentencing reform',
+      'prison reform', 'incarceration', 'bail reform', 'bail', 'pretrial',
+      'police reform', 'law enforcement', 'miranda', 'miranda rights',
+      'fifth amendment', 'fourth amendment', 'search and seizure', 'warrant',
+      'qualified immunity', 'civil liberties', 'habeas corpus', 'wrongful conviction'
+    ],
   };
   
   const matches: string[] = [];
@@ -538,28 +563,30 @@ async function researchCandidatePosition(
         body: JSON.stringify({
           contents: [{ 
             parts: [{ 
-              text: `Research ${candidateName} (${candidateOffice}, ${candidateState}) CURRENT position on this SPECIFIC question: "${questionText}"
+              text: `Research ${candidateName} (${candidateOffice}, ${candidateState}) position on: "${questionText}"
 
-CRITICAL: Only cite sources that DIRECTLY address this specific question.
-Do NOT include sources that are about the general topic but don't discuss the specific issue.
+SEARCH BROADLY for related evidence:
+- Criminal justice reform positions (if question relates to due process, forfeiture, rights)
+- Bipartisan legislation sponsorship or co-sponsorship
+- Committee work and floor statements
+- Facebook, Twitter/X posts, press releases (2016-2025)
+- News coverage of their stance on this issue or related reforms
 
-RECENCY REQUIREMENTS:
-- Prioritize RECENT statements and actions (2023-2025) first
-- Work backwards chronologically only if recent evidence is unavailable
-- For party platform references, use ONLY the latest official platform (2024)
+RECENCY: Start with recent (2023-2025) but include older evidence (2016+) if it shows clear position.
 
-SOURCE RELEVANCE REQUIREMENTS:
-- The source MUST explicitly discuss the specific issue in the question
-- General biography pages or topic overviews that don't mention this issue are NOT valid
-- If no sources directly address this question, say "No relevant sources found"
+RELATED TERMS TO SEARCH:
+- If about "civil asset forfeiture": also search "due process", "property rights", "justice reform", "Fifth Amendment"
+- If about criminal justice: search "sentencing reform", "prison reform", "bail reform"
+- Include any bills they sponsored or cosponsored related to this topic
 
-Look for (in order of priority):
-1. Recent voting records and bill sponsorships on THIS specific issue
-2. Recent official statements specifically about THIS question (2023-2025)
-3. Campaign website sections addressing THIS specific policy
-4. Recent news coverage of their stance on THIS exact issue (last 2 years)
+Look for:
+1. Voting records and bill sponsorships (ANY year)
+2. Official statements, interviews, op-eds
+3. Social media posts (Facebook, X/Twitter)
+4. Committee testimony or floor speeches
+5. Campaign website policy positions
 
-Summarize specific evidence that DIRECTLY addresses this question. If no sources discuss this specific issue, clearly state that.`
+Summarize specific evidence. Include exact bill numbers if found (e.g., "S.1380 - Due Process Protections Act").`
             }] 
           }],
           tools: [{ googleSearch: {} }]
@@ -755,22 +782,33 @@ async function generateVotingRecordAnswers(
   const chunkTopicIds = [...new Set(questions.map(q => q.topic_id))];
   const normalizedChunkTopicIds = chunkTopicIds.map(normalizeTopicName);
   
+  // Expand topic IDs to include related topics for cross-topic matching
+  const expandedTopicIds = new Set(normalizedChunkTopicIds);
+  for (const topicId of chunkTopicIds) {
+    const relatedTopics = RELATED_TOPICS[topicId] || [];
+    relatedTopics.forEach(rt => expandedTopicIds.add(normalizeTopicName(rt)));
+  }
+  
   // Extract keywords from all questions for cross-topic matching
   const allQuestionKeywords = questions.flatMap(q => extractQuestionKeywords(q.text));
   const uniqueKeywords = [...new Set(allQuestionKeywords)];
   
-  // Filter stored votes: match by normalized topic OR by keyword in bill name
+  // Filter stored votes: match by normalized topic (including related), by keyword in bill name, OR by keyword in bill summary
   const relevantStoredVotes = storedVotes.filter(v => {
     const normalizedVoteTopic = normalizeTopicName(v.topic);
-    const matchesTopic = normalizedChunkTopicIds.includes(normalizedVoteTopic);
+    const matchesTopic = expandedTopicIds.has(normalizedVoteTopic);
     
     // Also check if bill name contains any question keywords (cross-topic matching)
     const billNameLower = v.bill_name.toLowerCase();
     const matchesKeyword = uniqueKeywords.some(kw => billNameLower.includes(kw));
     
-    return matchesTopic || matchesKeyword;
+    // Also check bill summary for keyword matches
+    const billSummaryLower = (v.bill_summary || '').toLowerCase();
+    const matchesSummaryKeyword = uniqueKeywords.some(kw => billSummaryLower.includes(kw));
+    
+    return matchesTopic || matchesKeyword || matchesSummaryKeyword;
   });
-  console.log(`[VotingRecord] Using ${relevantStoredVotes.length} relevant floor votes (topic + keyword match from ${storedVotes.length} total) + ${votingRecord.length} sponsored bills`);
+  console.log(`[VotingRecord] Using ${relevantStoredVotes.length} relevant floor votes (topic + related + keyword match from ${storedVotes.length} total) + ${votingRecord.length} sponsored bills`);
 
   const questionsText = questions.map((q, i) => {
     let questionStr = `Question ${i + 1}:\n  ID: "${q.id}"\n  Text: ${q.text}`;
