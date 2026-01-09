@@ -1898,6 +1898,7 @@ export type Database = {
         Row: {
           floor_votes_no_bill: number | null
           full_text_titles: number | null
+          id: number | null
           last_refreshed: string | null
           missing_congress: number | null
           no_summary_available: number | null
