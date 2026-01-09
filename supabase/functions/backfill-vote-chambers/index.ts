@@ -104,8 +104,8 @@ serve(async (req) => {
 
     console.log(`Grouped: ${houseIds.length} house, ${senateIds.length} senate, ${unknownCount} unknown`);
 
-    // Bulk update in chunks of 5000 to avoid query size limits
-    const chunkSize = 5000;
+    // Bulk update in chunks of 500 to avoid URL length limits (vote IDs are long)
+    const chunkSize = 500;
     let houseUpdated = 0;
     let senateUpdated = 0;
 
