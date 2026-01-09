@@ -460,9 +460,13 @@ function extractQuestionKeywords(questionText: string): string[] {
   };
   
   const matches: string[] = [];
+  // Only return keywords that ACTUALLY appear in the question text
+  // This prevents "civil asset forfeiture" from matching "due process" just because they're in the same group
   for (const keywords of Object.values(keywordGroups)) {
-    if (keywords.some(kw => text.includes(kw))) {
-      matches.push(...keywords);
+    for (const kw of keywords) {
+      if (text.includes(kw)) {
+        matches.push(kw);
+      }
     }
   }
   return [...new Set(matches)];
@@ -686,17 +690,13 @@ CRITICAL: If you find ANY of the above evidence, DO NOT say "no clear position" 
 Even co-sponsoring a related bill IS evidence of a position.
 Even a related floor vote IS evidence of a position.
 
-SEARCH BROADLY for related evidence:
-- Criminal justice reform positions (if question relates to due process, forfeiture, rights)
-- Bipartisan legislation sponsorship or co-sponsorship (2016-2025)
-- Committee work and floor statements
-- Facebook, Twitter/X posts, press releases
-- News coverage of their stance
-
-RELATED TERMS TO SEARCH:
-- If about "civil asset forfeiture": also search "due process", "property rights", "justice reform", "Fifth Amendment"
-- If about criminal justice: search "sentencing reform", "prison reform", "bail reform"
-- Include any bills they sponsored or cosponsored related to this topic
+SEARCH STRATEGY:
+- Focus on the EXACT TOPIC mentioned in the question - do NOT broaden to generic related terms
+- For "civil asset forfeiture": search ONLY "asset forfeiture", "civil forfeiture", "forfeiture seizure" - NOT "due process" which matches unrelated bills
+- For specific policy topics: use the exact terminology from the question
+- Search for: legislation, statements, votes, social media posts (2016-2025)
+- If you find a bill, verify its summary DIRECTLY addresses the question topic before citing it
+- A bill about "due process protections" does NOT count as evidence for "civil asset forfeiture" unless it explicitly mentions forfeiture
 
 OUTPUT FORMAT:
 If evidence found, start with: "EVIDENCE FOUND: [specific bill numbers, quotes, or votes]"
@@ -1923,7 +1923,23 @@ async function generateAnswersInChunks(
           candidateName, candidateParty, candidateOffice, candidateState,
           candidateId, questionsNeedingResearch, votingRecord, researchResults
         );
+        
+        // Early validation: reject irrelevant evidence BEFORE adding to answersById
         researchAnswers.forEach(a => {
+          const question = questionsNeedingResearch.find(q => q.id === a.question_id);
+          const questionText = question?.text || '';
+          const relevance = validateEvidenceRelevance(a.question_id, questionText, a.source_description);
+          
+          if (!relevance.isRelevant && a.source_urls && a.source_urls.length > 0) {
+            console.log(`[EvidenceRejection] Clearing ${a.source_urls.length} irrelevant sources for ${a.question_id}: ${relevance.flag}`);
+            // Clear irrelevant sources so Phase 3 will pick it up for inference
+            a.source_urls = [];
+            a.source_titles = [];
+            a.answer_value = 0;
+            a.source_description = 'Routed to inference - evidence did not match question topic';
+            a.evidence_type = 'inferred';
+          }
+          
           if (!answersById.has(a.question_id)) {
             answersById.set(a.question_id, a);
           }
