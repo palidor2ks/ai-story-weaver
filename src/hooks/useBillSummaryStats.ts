@@ -30,7 +30,10 @@ interface CandidateStats {
 interface SummaryStats {
   totalVotes: number;
   withSummary: number;
-  noSummaryAvailable: number;
+  withCrsSummary: number;         // Has real CRS summary
+  withAiSummary: number;          // Has AI-generated summary [AI] prefix
+  noSummaryAvailable: number;     // Marked as [NO_SUMMARY] - needs AI
+  notYetFetched: number;          // bill_summary IS NULL - needs CRS fetch
   pending: number;
   missingCongress: number;
   floorVotesNoBill: number;       // Floor votes with VOTE-xxx IDs
@@ -51,7 +54,9 @@ export function useBillSummaryStats() {
       const [
         totalResult,
         withSummaryResult,
+        withAiSummaryResult,
         noSummaryResult,
+        notYetFetchedResult,
         floorVoteResult,
         fullTextTitleResult,
         unparseableResult,
@@ -63,7 +68,7 @@ export function useBillSummaryStats() {
         // Total votes
         supabase.from('votes').select('*', { count: 'exact', head: true }),
         
-        // With actual summary (not special markers)
+        // With actual summary (not special markers, includes AI)
         supabase.from('votes')
           .select('*', { count: 'exact', head: true })
           .not('bill_summary', 'is', null)
@@ -71,6 +76,18 @@ export function useBillSummaryStats() {
           .neq('bill_summary', '[FLOOR_VOTE]')
           .neq('bill_summary', '[TITLE_NOT_ID]')
           .neq('bill_summary', '[UNPARSEABLE]'),
+        
+        // With AI-generated summary (starts with [AI])
+        supabase.from('votes')
+          .select('*', { count: 'exact', head: true })
+          .ilike('bill_summary', '[AI]%'),
+        
+        // Not yet fetched (NULL bill_summary, but has valid bill_id and congress)
+        supabase.from('votes')
+          .select('*', { count: 'exact', head: true })
+          .is('bill_summary', null)
+          .not('bill_id', 'ilike', 'VOTE-%')
+          .not('congress', 'is', null),
         
         // Marked as no summary available
         supabase.from('votes')
@@ -120,7 +137,10 @@ export function useBillSummaryStats() {
 
       const totalVotes = totalResult.count || 0;
       const withSummary = withSummaryResult.count || 0;
+      const withAiSummary = withAiSummaryResult.count || 0;
+      const withCrsSummary = withSummary - withAiSummary; // CRS = total with summary minus AI
       const noSummaryAvailable = noSummaryResult.count || 0;
+      const notYetFetched = notYetFetchedResult.count || 0;
       const floorVotesNoBill = floorVoteResult.count || 0;
       const fullTextTitles = fullTextTitleResult.count || 0;
       const unparseableBillIds = unparseableResult.count || 0;
@@ -215,7 +235,10 @@ export function useBillSummaryStats() {
       return {
         totalVotes,
         withSummary,
+        withCrsSummary,
+        withAiSummary,
         noSummaryAvailable,
+        notYetFetched,
         pending,
         missingCongress,
         floorVotesNoBill,

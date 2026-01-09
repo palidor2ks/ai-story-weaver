@@ -131,3 +131,6 @@ verify_jwt = false
 
 [functions.refresh-admin-stats]
 verify_jwt = false
+
+[functions.generate-ai-bill-summaries]
+verify_jwt = false
