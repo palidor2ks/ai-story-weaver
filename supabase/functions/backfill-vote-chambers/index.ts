@@ -29,11 +29,12 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     // Parse request body for optional batch size
-    let batchSize = 50000;
+    // Use smaller default to avoid query timeouts on large table scans
+    let batchSize = 5000;
     try {
       const body = await req.json();
       if (body.batchSize && typeof body.batchSize === 'number') {
-        batchSize = Math.min(body.batchSize, 100000); // Cap at 100k
+        batchSize = Math.min(body.batchSize, 10000); // Cap at 10k to prevent timeouts
       }
     } catch {
       // Use default batch size if no body
