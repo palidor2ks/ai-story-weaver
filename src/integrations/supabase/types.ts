@@ -1894,6 +1894,21 @@ export type Database = {
       }
     }
     Views: {
+      bill_summary_stats: {
+        Row: {
+          floor_votes_no_bill: number | null
+          full_text_titles: number | null
+          last_refreshed: string | null
+          missing_congress: number | null
+          no_summary_available: number | null
+          not_yet_fetched: number | null
+          total_votes: number | null
+          unparseable_bill_ids: number | null
+          with_ai_summary: number | null
+          with_crs_summary: number | null
+        }
+        Relationships: []
+      }
       calculated_candidate_topic_scores: {
         Row: {
           answer_count: number | null
@@ -2126,6 +2141,7 @@ export type Database = {
           updated: boolean
         }[]
       }
+      refresh_bill_summary_stats: { Args: never; Returns: undefined }
       refresh_donor_display_names: { Args: never; Returns: undefined }
       refresh_vote_action_counts: { Args: never; Returns: undefined }
       resolve_donor_display_name: {
