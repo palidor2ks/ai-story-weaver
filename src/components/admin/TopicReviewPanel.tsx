@@ -499,9 +499,8 @@ export default function TopicReviewPanel() {
                   {getOmnibusTypeBadge(selectedBill.omnibus_type)}
                 </div>
                 {selectedBill.summary && (
-                  <div className="text-sm mt-3 max-h-32 overflow-y-auto border-t pt-2">
-                    {stripHtml(selectedBill.summary).substring(0, 500)}
-                    {selectedBill.summary.length > 500 && '...'}
+                  <div className="text-sm mt-3 max-h-48 overflow-y-auto border-t pt-2">
+                    {stripHtml(selectedBill.summary)}
                   </div>
                 )}
               </div>
