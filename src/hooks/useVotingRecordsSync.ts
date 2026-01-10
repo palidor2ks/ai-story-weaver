@@ -25,18 +25,21 @@ export function useVotingRecordsStats() {
   return useQuery({
     queryKey: ['voting-records-stats'],
     queryFn: async (): Promise<VotingRecordStats> => {
-      // Get counts by action_type
-      const [legislativeResult, floorVoteResult, totalResult] = await Promise.all([
+      // Get counts from candidate_votes table by action_type
+      const [legislativeResult, floorVoteResult, totalResult, billsResult] = await Promise.all([
         supabase
-          .from('votes')
+          .from('candidate_votes')
           .select('*', { count: 'exact', head: true })
-          .in('action_type', ['sponsored', 'cosponsored']),
+          .in('action_type', ['sponsor', 'cosponsor']),
         supabase
-          .from('votes')
+          .from('candidate_votes')
           .select('*', { count: 'exact', head: true })
           .eq('action_type', 'floor_vote'),
         supabase
-          .from('votes')
+          .from('candidate_votes')
+          .select('*', { count: 'exact', head: true }),
+        supabase
+          .from('bills')
           .select('*', { count: 'exact', head: true })
       ]);
 

@@ -21,17 +21,15 @@ const ALL_TOPICS = [
 
 interface FlaggedBill {
   id: string;
-  bill_id: string;
-  bill_name: string;
+  name: string;
   topic: string;
   additional_topics: string[] | null;
   topic_flag: string;
   ai_detected_topics: string[] | null;
   omnibus_type: string | null;
-  bill_summary: string | null;
-  date: string;
+  summary: string | null;
+  last_action_date: string | null;
   reviewed_at: string | null;
-  vote_count?: number; // Number of vote records for this bill_id
 }
 
 export default function TopicReviewPanel() {
@@ -44,17 +42,17 @@ export default function TopicReviewPanel() {
   const [scanningBillId, setScanningBillId] = useState<string | null>(null);
   const [approvingBillId, setApprovingBillId] = useState<string | null>(null);
 
-  // Fetch flagged bills - deduplicated by bill_id
+  // Fetch flagged bills from bills table (already deduplicated)
   const { data: flaggedBills, isLoading, refetch } = useQuery({
     queryKey: ['flagged-bills', filterType],
     queryFn: async () => {
       let query = supabase
-        .from('votes')
-        .select('id, bill_id, bill_name, topic, additional_topics, topic_flag, ai_detected_topics, omnibus_type, bill_summary, date, reviewed_at')
+        .from('bills')
+        .select('id, name, topic, additional_topics, topic_flag, ai_detected_topics, omnibus_type, summary, last_action_date, reviewed_at')
         .not('topic_flag', 'is', null)
         .is('reviewed_at', null)
-        .order('date', { ascending: false })
-        .limit(500); // Fetch more to ensure good coverage after dedup
+        .order('last_action_date', { ascending: false })
+        .limit(200);
       
       if (filterType !== 'all') {
         query = query.eq('topic_flag', filterType);
@@ -63,17 +61,7 @@ export default function TopicReviewPanel() {
       const { data, error } = await query;
       if (error) throw error;
       
-      // Deduplicate by bill_id - keep first (most recent) and track count
-      const billMap = new Map<string, FlaggedBill & { vote_count: number }>();
-      for (const row of (data || [])) {
-        if (!billMap.has(row.bill_id)) {
-          billMap.set(row.bill_id, { ...row, vote_count: 1 });
-        } else {
-          billMap.get(row.bill_id)!.vote_count++;
-        }
-      }
-      
-      return Array.from(billMap.values()).slice(0, 200);
+      return (data || []) as FlaggedBill[];
     }
   });
 
@@ -82,7 +70,7 @@ export default function TopicReviewPanel() {
     queryKey: ['topic-review-stats'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('votes')
+        .from('bills')
         .select('topic_flag')
         .not('topic_flag', 'is', null)
         .is('reviewed_at', null);
@@ -100,7 +88,7 @@ export default function TopicReviewPanel() {
     }
   });
 
-  // Update bill mutation - updates ALL vote records for a bill_id
+  // Update bill mutation - updates the bill record directly
   const updateBill = useMutation({
     mutationFn: async ({ 
       billId, 
@@ -108,7 +96,7 @@ export default function TopicReviewPanel() {
       additionalTopics, 
       action 
     }: { 
-      billId: string; // This is now bill_id, not row id
+      billId: string;
       topic?: string; 
       additionalTopics?: string[]; 
       action: 'save' | 'approve' | 'dismiss' 
@@ -121,25 +109,20 @@ export default function TopicReviewPanel() {
       if (topic) updates.topic = topic;
       if (additionalTopics !== undefined) updates.additional_topics = additionalTopics;
       
-      // Update ALL vote records for this bill_id
-      const { data, error } = await supabase
-        .from('votes')
+      // Update the bill record directly
+      const { error } = await supabase
+        .from('bills')
         .update(updates)
-        .eq('bill_id', billId)
-        .is('reviewed_at', null)
-        .select('id');
+        .eq('id', billId);
         
       if (error) throw error;
-      if (!data || data.length === 0) {
-        throw new Error('No unreviewed records found for this bill');
-      }
-      return { billId, updatedCount: data.length };
+      return { billId };
     },
     onMutate: async ({ billId }) => {
       await queryClient.cancelQueries({ queryKey: ['flagged-bills', filterType] });
       const previousBills = queryClient.getQueryData<FlaggedBill[]>(['flagged-bills', filterType]);
       queryClient.setQueryData<FlaggedBill[]>(['flagged-bills', filterType], (old) => 
-        old?.filter(b => b.bill_id !== billId) || []
+        old?.filter(b => b.id !== billId) || []
       );
       return { previousBills };
     },
@@ -149,10 +132,10 @@ export default function TopicReviewPanel() {
       }
       toast.error(`Update failed: ${error.message}`);
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['topic-review-stats'] });
       setSelectedBill(null);
-      toast.success(`Updated ${data.updatedCount} vote record${data.updatedCount !== 1 ? 's' : ''}`);
+      toast.success('Bill topics updated');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['flagged-bills'] });
@@ -179,7 +162,7 @@ export default function TopicReviewPanel() {
     }
   };
 
-  // Rescan single bill with AI - uses bill_id to update all related vote records
+  // Rescan single bill with AI
   const rescanBill = useMutation({
     mutationFn: async (billId: string) => {
       const response = await supabase.functions.invoke('scan-bill-topics', {
@@ -192,8 +175,7 @@ export default function TopicReviewPanel() {
       queryClient.invalidateQueries({ queryKey: ['flagged-bills'] });
       queryClient.invalidateQueries({ queryKey: ['topic-review-stats'] });
       const topicCount = data.bill?.ai_detected_topics?.length || 0;
-      const updateCount = data.updated_count || 1;
-      toast.success(`AI detected ${topicCount} topic${topicCount !== 1 ? 's' : ''}, updated ${updateCount} record${updateCount !== 1 ? 's' : ''}`);
+      toast.success(`AI detected ${topicCount} topic${topicCount !== 1 ? 's' : ''}`);
     },
     onError: (error) => {
       toast.error(`Rescan failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -203,7 +185,7 @@ export default function TopicReviewPanel() {
     }
   });
 
-  // Quick approve - apply AI detected topics and mark as reviewed for ALL vote records
+  // Quick approve - apply AI detected topics and mark as reviewed
   const quickApprove = useMutation({
     mutationFn: async (bill: FlaggedBill) => {
       if (!bill.ai_detected_topics || bill.ai_detected_topics.length === 0) {
@@ -212,30 +194,25 @@ export default function TopicReviewPanel() {
       
       const [primaryTopic, ...additionalTopics] = bill.ai_detected_topics;
       
-      // Update ALL vote records for this bill_id
-      const { data, error } = await supabase
-        .from('votes')
+      // Update the bill record directly
+      const { error } = await supabase
+        .from('bills')
         .update({
           topic: primaryTopic,
           additional_topics: additionalTopics,
           topic_flag: 'admin_reviewed',
           reviewed_at: new Date().toISOString(),
         })
-        .eq('bill_id', bill.bill_id)
-        .is('reviewed_at', null)
-        .select('id');
+        .eq('id', bill.id);
         
       if (error) throw error;
-      if (!data || data.length === 0) {
-        throw new Error('No unreviewed records found for this bill');
-      }
-      return { billId: bill.bill_id, updatedCount: data.length };
+      return { billId: bill.id };
     },
     onMutate: async (bill) => {
       await queryClient.cancelQueries({ queryKey: ['flagged-bills', filterType] });
       const previousBills = queryClient.getQueryData<FlaggedBill[]>(['flagged-bills', filterType]);
       queryClient.setQueryData<FlaggedBill[]>(['flagged-bills', filterType], (old) => 
-        old?.filter(b => b.bill_id !== bill.bill_id) || []
+        old?.filter(b => b.id !== bill.id) || []
       );
       return { previousBills };
     },
@@ -245,9 +222,9 @@ export default function TopicReviewPanel() {
       }
       toast.error(`Approve failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['topic-review-stats'] });
-      toast.success(`AI topics applied to ${data.updatedCount} vote record${data.updatedCount !== 1 ? 's' : ''}`);
+      toast.success('AI topics applied');
     },
     onSettled: () => {
       setApprovingBillId(null);
@@ -278,22 +255,22 @@ export default function TopicReviewPanel() {
     setEditedAdditionalTopics(prev => prev.filter(t => t !== topic));
   };
 
-  // Save changes - uses bill_id to update all vote records
+  // Save changes
   const handleSave = () => {
     if (!selectedBill) return;
     updateBill.mutate({
-      billId: selectedBill.bill_id,
+      billId: selectedBill.id,
       topic: editedPrimaryTopic,
       additionalTopics: editedAdditionalTopics,
       action: 'save'
     });
   };
 
-  // Dismiss without changes - uses bill_id to update all vote records
+  // Dismiss without changes
   const handleDismiss = () => {
     if (!selectedBill) return;
     updateBill.mutate({
-      billId: selectedBill.bill_id,
+      billId: selectedBill.id,
       action: 'dismiss'
     });
   };
@@ -405,18 +382,13 @@ export default function TopicReviewPanel() {
                 </TableHeader>
                 <TableBody>
                   {flaggedBills?.map(bill => (
-                    <TableRow key={bill.bill_id}>
+                    <TableRow key={bill.id}>
                       <TableCell>
                         <div className="max-w-xs">
-                          <div className="font-medium truncate">{bill.bill_name}</div>
+                          <div className="font-medium truncate">{bill.name}</div>
                           <div className="text-xs text-muted-foreground flex items-center gap-2">
-                            {bill.bill_id}
+                            {bill.id}
                             {getOmnibusTypeBadge(bill.omnibus_type)}
-                            {(bill.vote_count ?? 0) > 1 && (
-                              <Badge variant="outline" className="text-xs">
-                                {bill.vote_count} votes
-                              </Badge>
-                            )}
                           </div>
                         </div>
                       </TableCell>
@@ -446,7 +418,7 @@ export default function TopicReviewPanel() {
                       </TableCell>
                       <TableCell>{getFlagBadge(bill.topic_flag)}</TableCell>
                       <TableCell className="text-sm">
-                        {bill.date ? format(new Date(bill.date), 'MMM d, yyyy') : '-'}
+                        {bill.last_action_date ? format(new Date(bill.last_action_date), 'MMM d, yyyy') : '-'}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -454,14 +426,14 @@ export default function TopicReviewPanel() {
                           <Button 
                             size="sm" 
                             variant="ghost"
-                            disabled={scanningBillId === bill.bill_id}
+                            disabled={scanningBillId === bill.id}
                             onClick={() => {
-                              setScanningBillId(bill.bill_id);
-                              rescanBill.mutate(bill.bill_id);
+                              setScanningBillId(bill.id);
+                              rescanBill.mutate(bill.id);
                             }}
                             title="AI Rescan"
                           >
-                            {scanningBillId === bill.bill_id ? (
+                            {scanningBillId === bill.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               <Sparkles className="h-4 w-4" />
@@ -473,15 +445,15 @@ export default function TopicReviewPanel() {
                             <Button 
                               size="sm" 
                               variant="ghost"
-                              disabled={approvingBillId === bill.bill_id}
+                              disabled={approvingBillId === bill.id}
                               onClick={() => {
-                                setApprovingBillId(bill.bill_id);
+                                setApprovingBillId(bill.id);
                                 quickApprove.mutate(bill);
                               }}
                               title="Approve AI Topics"
                               className="text-green-600 hover:text-green-700 hover:bg-green-50"
                             >
-                              {approvingBillId === bill.bill_id ? (
+                              {approvingBillId === bill.id ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
                                 <CheckCircle className="h-4 w-4" />
@@ -520,15 +492,15 @@ export default function TopicReviewPanel() {
             <div className="space-y-6">
               {/* Bill info */}
               <div className="bg-muted p-4 rounded-lg">
-                <div className="font-medium">{selectedBill.bill_name}</div>
+                <div className="font-medium">{selectedBill.name}</div>
                 <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-                  {selectedBill.bill_id}
+                  {selectedBill.id}
                   {getOmnibusTypeBadge(selectedBill.omnibus_type)}
                 </div>
-                {selectedBill.bill_summary && (
+                {selectedBill.summary && (
                   <div className="text-sm mt-3 max-h-32 overflow-y-auto border-t pt-2">
-                    {selectedBill.bill_summary.substring(0, 500)}
-                    {selectedBill.bill_summary.length > 500 && '...'}
+                    {selectedBill.summary.substring(0, 500)}
+                    {selectedBill.summary.length > 500 && '...'}
                   </div>
                 )}
               </div>

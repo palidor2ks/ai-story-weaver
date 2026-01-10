@@ -292,89 +292,131 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
     
     console.log(`[BG] Fetched ${summariesFetched} bill summaries for ${bioguideId}`);
 
-    // Persist votes to database if requested
+    // Persist to bills and candidate_votes tables
     let persisted = 0;
     if (persistVotes && votes.length > 0) {
-      console.log(`[BG] Persisting ${votes.length} votes to database for ${bioguideId}...`);
+      console.log(`[BG] Persisting ${votes.length} votes to new normalized tables for ${bioguideId}...`);
       
-      // Map to votes table schema
-      const votesToInsert = votes.map(v => ({
-        id: v.id,
-        bill_id: v.bill_id,
-        bill_name: v.bill_name.slice(0, 500),
-        candidate_id: v.candidate_id,
-        position: v.position,
-        action_type: v.position === 'Sponsored' ? 'sponsored' : 'cosponsored',
-        topic: v.topic,
-        description: v.description?.slice(0, 1000) || null,
-        date: v.date,
-        congress: v.congress,
-        bill_summary: v.bill_summary || null,
-        summary_fetched_at: v.summary_fetched_at || null,
-        chamber: getChamberFromBillType(v.bill_type || ''),
-      }));
-
-      // Deduplicate by ID
-      const uniqueVotes = Array.from(
-        new Map(votesToInsert.map(v => [v.id, v])).values()
-      );
-
-      if (uniqueVotes.length > 0) {
-        // Use smaller chunk size to avoid statement timeouts
-        const CHUNK_SIZE = 50;
-        const MAX_RETRIES = 3;
-        const RETRY_DELAY_MS = 10000; // 10s for timeout errors
-
-        for (let i = 0; i < uniqueVotes.length; i += CHUNK_SIZE) {
-          const chunk = uniqueVotes.slice(i, i + CHUNK_SIZE);
-          let retries = 0;
-          let success = false;
-
-          while (!success && retries < MAX_RETRIES) {
-            try {
-              const { error: upsertError } = await supabase
-                .from('votes')
-                .upsert(chunk, { 
-                  onConflict: 'id',
-                  ignoreDuplicates: false
-                });
-
-              if (upsertError) {
-                // Check for timeout/worker limit errors
-                const isRetryable = 
-                  upsertError.message?.includes('statement timeout') ||
-                  upsertError.message?.includes('WORKER_LIMIT') ||
-                  (upsertError as { code?: string }).code === '546';
-                
-                if (isRetryable && retries < MAX_RETRIES - 1) {
-                  retries++;
-                  console.log(`[BG] Retryable error for ${bioguideId}, attempt ${retries}/${MAX_RETRIES}: ${upsertError.message}`);
-                  await new Promise(r => setTimeout(r, RETRY_DELAY_MS * retries));
-                  continue;
-                }
-                
-                throw new Error(upsertError.message || 'Failed to persist votes');
-              }
-
-              success = true;
-              persisted += chunk.length;
-              
-              if (persisted % 500 === 0 || persisted === uniqueVotes.length) {
-                console.log(`[BG] Persisted ${persisted}/${uniqueVotes.length} votes for ${bioguideId}`);
-              }
-            } catch (chunkError: unknown) {
-              const errMsg = chunkError instanceof Error ? chunkError.message : 'Unknown error';
-              
-              // Check if retryable
-              if (errMsg.includes('statement timeout') && retries < MAX_RETRIES - 1) {
+      // Extract unique bills and candidate votes
+      const billsMap = new Map<string, any>();
+      const candidateVotes: any[] = [];
+      
+      for (const v of votes) {
+        // Upsert bill data (deduplicated by bill_id)
+        if (!billsMap.has(v.bill_id)) {
+          billsMap.set(v.bill_id, {
+            id: v.bill_id,
+            name: v.bill_name.slice(0, 500),
+            topic: v.topic,
+            description: v.description?.slice(0, 1000) || null,
+            congress: v.congress,
+            bill_type: v.bill_type,
+            bill_number: v.bill_number,
+            chamber: v.chamber,
+            summary: v.bill_summary || null,
+            summary_fetched_at: v.summary_fetched_at || null,
+            introduced_date: v.date,
+            last_action_date: v.date,
+          });
+        }
+        
+        // Create candidate_vote record
+        candidateVotes.push({
+          bill_id: v.bill_id,
+          candidate_id: v.candidate_id,
+          action_type: v.position === 'Sponsored' ? 'sponsor' : 'cosponsor',
+          position: v.position,
+          action_date: v.date,
+        });
+      }
+      
+      const bills = Array.from(billsMap.values());
+      
+      // Upsert bills first (in chunks)
+      const CHUNK_SIZE = 50;
+      const MAX_RETRIES = 3;
+      const RETRY_DELAY_MS = 10000;
+      
+      console.log(`[BG] Upserting ${bills.length} unique bills...`);
+      for (let i = 0; i < bills.length; i += CHUNK_SIZE) {
+        const chunk = bills.slice(i, i + CHUNK_SIZE);
+        let retries = 0;
+        let success = false;
+        
+        while (!success && retries < MAX_RETRIES) {
+          try {
+            const { error } = await supabase
+              .from('bills')
+              .upsert(chunk, { onConflict: 'id', ignoreDuplicates: false });
+            
+            if (error) {
+              if (error.message?.includes('statement timeout') && retries < MAX_RETRIES - 1) {
                 retries++;
-                console.log(`[BG] Timeout for ${bioguideId}, attempt ${retries}/${MAX_RETRIES}`);
                 await new Promise(r => setTimeout(r, RETRY_DELAY_MS * retries));
                 continue;
               }
-              
-              throw chunkError;
+              throw new Error(error.message);
             }
+            success = true;
+          } catch (e) {
+            if (retries < MAX_RETRIES - 1) {
+              retries++;
+              await new Promise(r => setTimeout(r, RETRY_DELAY_MS * retries));
+              continue;
+            }
+            throw e;
+          }
+        }
+      }
+      console.log(`[BG] Bills upserted successfully`);
+      
+      // Insert candidate_votes (in chunks, using upsert with composite key)
+      console.log(`[BG] Inserting ${candidateVotes.length} candidate votes...`);
+      for (let i = 0; i < candidateVotes.length; i += CHUNK_SIZE) {
+        const chunk = candidateVotes.slice(i, i + CHUNK_SIZE);
+        let retries = 0;
+        let success = false;
+        
+        while (!success && retries < MAX_RETRIES) {
+          try {
+            // Use insert with onConflict to ignore duplicates
+            const { error } = await supabase
+              .from('candidate_votes')
+              .upsert(chunk, { 
+                onConflict: 'bill_id,candidate_id,action_type',
+                ignoreDuplicates: true 
+              });
+            
+            if (error) {
+              // If conflict constraint doesn't exist, just insert and ignore errors
+              if (error.code === '42P10' || error.message?.includes('there is no unique')) {
+                // Fallback: insert one by one, ignoring duplicates
+                for (const cv of chunk) {
+                  await supabase.from('candidate_votes').insert(cv).select().maybeSingle();
+                }
+                success = true;
+                break;
+              }
+              if (error.message?.includes('statement timeout') && retries < MAX_RETRIES - 1) {
+                retries++;
+                await new Promise(r => setTimeout(r, RETRY_DELAY_MS * retries));
+                continue;
+              }
+              throw new Error(error.message);
+            }
+            success = true;
+            persisted += chunk.length;
+            
+            if (persisted % 500 === 0 || i + CHUNK_SIZE >= candidateVotes.length) {
+              console.log(`[BG] Persisted ${persisted}/${candidateVotes.length} candidate votes`);
+            }
+          } catch (e) {
+            if (retries < MAX_RETRIES - 1) {
+              retries++;
+              await new Promise(r => setTimeout(r, RETRY_DELAY_MS * retries));
+              continue;
+            }
+            throw e;
           }
         }
       }

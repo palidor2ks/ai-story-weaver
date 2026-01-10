@@ -503,7 +503,7 @@ async function fetchSenateVote(
   }
 }
 
-// Persist a batch of votes to DB and fetch summaries for new votes
+// Persist a batch of votes to bills + candidate_votes tables
 async function persistVotesBatch(
   supabase: any,
   votes: FloorVote[],
@@ -538,18 +538,80 @@ async function persistVotesBatch(
     console.log(`[BG] Fetched ${summariesFetched} bill summaries for batch`);
   }
   
-  const { error } = await supabase
-    .from('votes')
-    .upsert(uniqueVotes as any, { onConflict: 'id', ignoreDuplicates: false });
+  // Extract unique bills and candidate votes
+  const billsMap = new Map<string, any>();
+  const candidateVotesData: any[] = [];
   
-  if (error) {
-    console.error(`[BG] Error persisting batch:`, error);
-    throw new Error(error.message);
+  for (const v of uniqueVotes) {
+    // Upsert bill data (deduplicated by bill_id)
+    if (!billsMap.has(v.bill_id)) {
+      billsMap.set(v.bill_id, {
+        id: v.bill_id,
+        name: v.bill_name.slice(0, 500),
+        topic: v.topic,
+        additional_topics: v.additional_topics || [],
+        topic_flag: v.topic_flag || null,
+        omnibus_type: v.omnibus_type || null,
+        description: v.description?.slice(0, 1000) || null,
+        congress: v.congress,
+        session: v.session,
+        chamber: v.chamber,
+        summary: v.bill_summary || null,
+        summary_fetched_at: v.summary_fetched_at || null,
+        last_action_date: v.date,
+      });
+    }
+    
+    // Create candidate_vote record
+    candidateVotesData.push({
+      bill_id: v.bill_id,
+      candidate_id: v.candidate_id,
+      action_type: 'floor_vote',
+      position: v.position,
+      action_date: v.date,
+      vote_number: v.vote_number,
+    });
+  }
+  
+  const bills = Array.from(billsMap.values());
+  
+  // Upsert bills first
+  if (bills.length > 0) {
+    const { error: billsError } = await supabase
+      .from('bills')
+      .upsert(bills, { onConflict: 'id', ignoreDuplicates: false });
+    
+    if (billsError) {
+      console.error(`[BG] Error upserting bills:`, billsError);
+      throw new Error(billsError.message);
+    }
+  }
+  
+  // Insert candidate_votes
+  if (candidateVotesData.length > 0) {
+    const { error: votesError } = await supabase
+      .from('candidate_votes')
+      .upsert(candidateVotesData, { 
+        onConflict: 'bill_id,candidate_id,action_type',
+        ignoreDuplicates: true 
+      });
+    
+    if (votesError) {
+      // Fallback: insert one by one if composite key doesn't exist
+      if (votesError.code === '42P10' || votesError.message?.includes('there is no unique')) {
+        for (const cv of candidateVotesData) {
+          await supabase.from('candidate_votes').insert(cv).select().maybeSingle();
+        }
+      } else {
+        console.error(`[BG] Error inserting candidate_votes:`, votesError);
+        throw new Error(votesError.message);
+      }
+    }
   }
   
   const newTotal = currentPersisted + uniqueVotes.length;
   
-  // Update progress in vote_sync_status (set expected = persisted since we discover votes incrementally)
+  // Update progress in vote_sync_status
   await supabase
     .from('vote_sync_status')
     .upsert({
@@ -559,7 +621,7 @@ async function persistVotesBatch(
       updated_at: new Date().toISOString(),
     } as any, { onConflict: 'candidate_id' });
   
-  console.log(`[BG] Persisted batch of ${uniqueVotes.length} votes, total: ${newTotal}`);
+  console.log(`[BG] Persisted batch of ${uniqueVotes.length} floor votes, total: ${newTotal}`);
   return newTotal;
 }
 
