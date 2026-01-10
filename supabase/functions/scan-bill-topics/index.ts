@@ -60,47 +60,18 @@ function validateTopic(topic: string): string {
   return TOPIC_NORMALIZATION[topic] || 'Government';
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+// deno-lint-ignore no-explicit-any
+async function processSingleBill(
+  supabase: any,
+  bill: { id: string; bill_id: string; bill_name: string; topic: string; bill_summary: string | null },
+  apiKey: string,
+  corsHeaders: Record<string, string>,
+  validateTopicFn: typeof validateTopic,
+  canonicalTopics: string[]
+): Promise<Response> {
+  const prompt = `Analyze this bill and identify its policy topics.
 
-  try {
-    const { batchSize = 50, topic = null, forceRescan = false, billId = null } = await req.json();
-    
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
-
-    // Single bill scan mode
-    if (billId) {
-      const { data: bill, error } = await supabase
-        .from('votes')
-        .select('id, bill_id, bill_name, topic, bill_summary')
-        .eq('id', billId)
-        .single();
-      
-      if (error || !bill) {
-        return new Response(JSON.stringify({ error: 'Bill not found' }), { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        });
-      }
-
-      if (!bill.bill_summary || bill.bill_summary === '[NO_SUMMARY]') {
-        return new Response(JSON.stringify({ error: 'Bill has no summary to analyze' }), { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        });
-      }
-
-      // Analyze single bill
-      const prompt = `Analyze this bill and identify its policy topics.
-
-Available topics (ONLY use these): ${CANONICAL_TOPICS.join(', ')}
+Available topics (ONLY use these): ${canonicalTopics.join(', ')}
 
 Bill:
 - Bill Number: ${bill.bill_id}
@@ -127,85 +98,156 @@ Return JSON:
 
 Return ONLY valid JSON.`;
 
-      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            { role: 'system', content: 'You are a legislative analyst. Return valid JSON only.' },
-            { role: 'user', content: prompt }
-          ],
-          max_tokens: 1000,
-        }),
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: 'You are a legislative analyst. Return valid JSON only.' },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 1000,
+    }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      return new Response(JSON.stringify({ error: 'Rate limited, try again shortly' }), { 
+        status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
+    }
+    if (response.status === 402) {
+      return new Response(JSON.stringify({ error: 'AI credits exhausted' }), { 
+        status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    throw new Error(`AI API error: ${response.status}`);
+  }
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          return new Response(JSON.stringify({ error: 'Rate limited, try again shortly' }), { 
-            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || '';
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  
+  if (!jsonMatch) {
+    return new Response(JSON.stringify({ error: 'Could not parse AI response' }), { 
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+
+  const result = JSON.parse(jsonMatch[0]);
+  const topicCount = result.topic_count || (1 + (result.secondary_topics?.length || 0));
+  
+  let flag: string | null = null;
+  if (result.is_mismatch) {
+    flag = 'possible_mismatch';
+  } else if (topicCount >= 5 || result.is_omnibus) {
+    flag = 'omnibus_major';
+  } else if (topicCount >= 3) {
+    flag = 'omnibus_detected';
+  } else if (topicCount === 2) {
+    flag = 'multi_topic_detected';
+  }
+
+  // Validate and normalize AI-detected topics
+  const normalizedPrimary = validateTopicFn(result.primary_topic);
+  const normalizedSecondary = (result.secondary_topics || []).map(validateTopicFn);
+  // Remove duplicates and filter out primary from secondary
+  const uniqueSecondary = [...new Set(normalizedSecondary as string[])].filter((t) => t !== normalizedPrimary);
+
+  const updates: Record<string, unknown> = {
+    ai_detected_topics: [normalizedPrimary, ...uniqueSecondary],
+    topic_flag: flag,
+    omnibus_type: result.omnibus_type || null,
+  };
+
+  // Update ALL vote records for this bill_id (not just one row)
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('votes')
+    .update(updates)
+    .eq('bill_id', bill.bill_id)
+    .is('reviewed_at', null)
+    .select('id');
+    
+  if (updateError) throw updateError;
+
+  return new Response(JSON.stringify({ 
+    status: 'complete',
+    updated_count: updatedRows?.length || 0,
+    bill: { 
+      id: bill.id,
+      bill_id: bill.bill_id,
+      ...updates,
+      primary_topic: result.primary_topic,
+      secondary_topics: result.secondary_topics || [],
+      confidence: result.confidence 
+    }
+  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    // Support both bill_id (new) and billId (legacy) parameters
+    const { batchSize = 50, topic = null, forceRescan = false, billId = null, bill_id = null } = await req.json();
+    const targetBillId = bill_id || billId; // Prefer bill_id, fall back to billId for backward compat
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
+
+    // Single bill scan mode - now operates on bill_id (not row id)
+    if (targetBillId) {
+      // Fetch a representative vote record for this bill_id (most recent with a summary)
+      const { data: bills, error } = await supabase
+        .from('votes')
+        .select('id, bill_id, bill_name, topic, bill_summary')
+        .eq('bill_id', targetBillId)
+        .not('bill_summary', 'is', null)
+        .neq('bill_summary', '')
+        .neq('bill_summary', '[NO_SUMMARY]')
+        .order('date', { ascending: false })
+        .limit(1);
+      
+      if (error || !bills || bills.length === 0) {
+        // Fallback: try by row id for backward compatibility
+        const { data: billById, error: idError } = await supabase
+          .from('votes')
+          .select('id, bill_id, bill_name, topic, bill_summary')
+          .eq('id', targetBillId)
+          .single();
+        
+        if (idError || !billById) {
+          return new Response(JSON.stringify({ error: 'Bill not found' }), { 
+            status: 404, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           });
         }
-        if (response.status === 402) {
-          return new Response(JSON.stringify({ error: 'AI credits exhausted' }), { 
-            status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        
+        // Use bill_id from the found record
+        const bill = billById;
+        if (!bill.bill_summary || bill.bill_summary === '[NO_SUMMARY]') {
+          return new Response(JSON.stringify({ error: 'Bill has no summary to analyze' }), { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           });
         }
-        throw new Error(`AI API error: ${response.status}`);
+        
+        // Process this bill and update all records with matching bill_id
+        return await processSingleBill(supabase, bill, LOVABLE_API_KEY, corsHeaders, validateTopic, CANONICAL_TOPICS);
       }
 
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content || '';
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      
-      if (!jsonMatch) {
-        return new Response(JSON.stringify({ error: 'Could not parse AI response' }), { 
-          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        });
-      }
-
-      const result = JSON.parse(jsonMatch[0]);
-      const topicCount = result.topic_count || (1 + (result.secondary_topics?.length || 0));
-      
-      let flag: string | null = null;
-      if (result.is_mismatch) {
-        flag = 'possible_mismatch';
-      } else if (topicCount >= 5 || result.is_omnibus) {
-        flag = 'omnibus_major';
-      } else if (topicCount >= 3) {
-        flag = 'omnibus_detected';
-      } else if (topicCount === 2) {
-        flag = 'multi_topic_detected';
-      }
-
-      // Validate and normalize AI-detected topics
-      const normalizedPrimary = validateTopic(result.primary_topic);
-      const normalizedSecondary = (result.secondary_topics || []).map(validateTopic);
-      // Remove duplicates and filter out primary from secondary
-      const uniqueSecondary = [...new Set(normalizedSecondary)].filter(t => t !== normalizedPrimary);
-
-      const updates: Record<string, unknown> = {
-        ai_detected_topics: [normalizedPrimary, ...uniqueSecondary],
-        topic_flag: flag,
-        omnibus_type: result.omnibus_type || null,
-      };
-
-      const { error: updateError } = await supabase.from('votes').update(updates).eq('id', billId);
-      if (updateError) throw updateError;
-
-      return new Response(JSON.stringify({ 
-        status: 'complete',
-        bill: { 
-          id: bill.id,
-          ...updates,
-          primary_topic: result.primary_topic,
-          secondary_topics: result.secondary_topics || [],
-          confidence: result.confidence 
-        }
-      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const bill = bills[0];
+      return await processSingleBill(supabase, bill, LOVABLE_API_KEY, corsHeaders, validateTopic, CANONICAL_TOPICS);
     }
 
     // Batch scan mode - query bills that need scanning
