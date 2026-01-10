@@ -1,0 +1,1 @@
+UPDATE topics SET name = 'Foreign Affairs' WHERE id = 'defense';

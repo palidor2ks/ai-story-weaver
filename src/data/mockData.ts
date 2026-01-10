@@ -6,7 +6,7 @@ export const topics: Topic[] = [
   { id: 'healthcare', name: 'Healthcare', icon: '🏥', weight: 1 },
   { id: 'environment', name: 'Environment & Energy', icon: '🌍', weight: 1 },
   { id: 'immigration', name: 'Immigration', icon: '🛂', weight: 1 },
-  { id: 'defense', name: 'Defense & Foreign Policy', icon: '🌐', weight: 1 },
+  { id: 'defense', name: 'Foreign Affairs', icon: '🌐', weight: 1 },
   { id: 'civil-rights', name: 'Civil Rights & Justice', icon: '⚖️', weight: 1 },
   { id: 'education', name: 'Education', icon: '📚', weight: 1 },
   { id: 'social-programs', name: 'Social Programs', icon: '🤝', weight: 1 },

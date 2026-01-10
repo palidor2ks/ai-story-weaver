@@ -70,7 +70,7 @@ export function useBillSummaryStats() {
         { name: 'Health & Welfare', count: Number(rawData.topic_health) || 0, color: '#ef4444' },
         { name: 'Environment & Energy', count: Number(rawData.topic_environment) || 0, color: '#10b981' },
         { name: 'Education', count: Number(rawData.topic_education) || 0, color: '#f59e0b' },
-        { name: 'Defense & Foreign Policy', count: Number(rawData.topic_defense) || 0, color: '#6366f1' },
+        { name: 'Foreign Affairs', count: Number(rawData.topic_defense) || 0, color: '#6366f1' },
         { name: 'Civil Rights & Liberties', count: Number(rawData.topic_civil_rights) || 0, color: '#ec4899' },
         { name: 'Immigration & Society', count: Number(rawData.topic_immigration) || 0, color: '#14b8a6' },
         { name: 'Government & Politics', count: Number(rawData.topic_government) || 0, color: '#8b5cf6' },
