@@ -1938,6 +1938,7 @@ export type Database = {
           flagged_count: number | null
           government_count: number | null
           healthcare_count: number | null
+          id: number | null
           immigration_count: number | null
           last_refreshed: string | null
           mismatch_count: number | null
