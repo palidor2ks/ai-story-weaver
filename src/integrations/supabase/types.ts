@@ -32,6 +32,89 @@ export type Database = {
         }
         Relationships: []
       }
+      bill_sponsors: {
+        Row: {
+          bill_id: string
+          bioguide_id: string
+          created_at: string | null
+          id: string
+          is_sponsor: boolean | null
+          name: string
+          party: string | null
+          sponsorship_date: string | null
+          state: string | null
+        }
+        Insert: {
+          bill_id: string
+          bioguide_id: string
+          created_at?: string | null
+          id?: string
+          is_sponsor?: boolean | null
+          name: string
+          party?: string | null
+          sponsorship_date?: string | null
+          state?: string | null
+        }
+        Update: {
+          bill_id?: string
+          bioguide_id?: string
+          created_at?: string | null
+          id?: string
+          is_sponsor?: boolean | null
+          name?: string
+          party?: string | null
+          sponsorship_date?: string | null
+          state?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_sponsors_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bill_sync_status: {
+        Row: {
+          bills_checked: number | null
+          bills_updated: number | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          last_sync_completed_at: string | null
+          last_sync_started_at: string | null
+          new_bills_added: number | null
+          sync_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          bills_checked?: number | null
+          bills_updated?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_sync_completed_at?: string | null
+          last_sync_started_at?: string | null
+          new_bills_added?: number | null
+          sync_type?: string
+          updated_at?: string | null
+        }
+        Update: {
+          bills_checked?: number | null
+          bills_updated?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_sync_completed_at?: string | null
+          last_sync_started_at?: string | null
+          new_bills_added?: number | null
+          sync_type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       bills: {
         Row: {
           additional_topics: string[] | null
@@ -40,16 +123,25 @@ export type Database = {
           bill_type: string | null
           chamber: string | null
           congress: number | null
+          cosponsor_count: number | null
           created_at: string | null
           description: string | null
           id: string
           introduced_date: string | null
           last_action_date: string | null
+          latest_action_date: string | null
+          latest_action_text: string | null
           name: string
           omnibus_type: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           session: number | null
+          sponsor_bioguide_id: string | null
+          sponsor_name: string | null
+          sponsor_party: string | null
+          sponsor_state: string | null
+          status: string | null
+          status_updated_at: string | null
           summary: string | null
           summary_fetched_at: string | null
           topic: string
@@ -63,16 +155,25 @@ export type Database = {
           bill_type?: string | null
           chamber?: string | null
           congress?: number | null
+          cosponsor_count?: number | null
           created_at?: string | null
           description?: string | null
           id: string
           introduced_date?: string | null
           last_action_date?: string | null
+          latest_action_date?: string | null
+          latest_action_text?: string | null
           name: string
           omnibus_type?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           session?: number | null
+          sponsor_bioguide_id?: string | null
+          sponsor_name?: string | null
+          sponsor_party?: string | null
+          sponsor_state?: string | null
+          status?: string | null
+          status_updated_at?: string | null
           summary?: string | null
           summary_fetched_at?: string | null
           topic?: string
@@ -86,16 +187,25 @@ export type Database = {
           bill_type?: string | null
           chamber?: string | null
           congress?: number | null
+          cosponsor_count?: number | null
           created_at?: string | null
           description?: string | null
           id?: string
           introduced_date?: string | null
           last_action_date?: string | null
+          latest_action_date?: string | null
+          latest_action_text?: string | null
           name?: string
           omnibus_type?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           session?: number | null
+          sponsor_bioguide_id?: string | null
+          sponsor_name?: string | null
+          sponsor_party?: string | null
+          sponsor_state?: string | null
+          status?: string | null
+          status_updated_at?: string | null
           summary?: string | null
           summary_fetched_at?: string | null
           topic?: string

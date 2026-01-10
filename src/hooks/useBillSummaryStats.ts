@@ -7,6 +7,15 @@ export interface TopicBreakdown {
   color: string;
 }
 
+export interface StatusBreakdown {
+  introduced: number;
+  passedOneChamber: number;
+  passedBothChambers: number;
+  toPresident: number;
+  vetoActions: number;
+  becameLaw: number;
+}
+
 export interface SummaryStats {
   totalBills: number;
   withSummary: number;
@@ -24,6 +33,9 @@ export interface SummaryStats {
   congress118Count: number;
   congress119Count: number;
   topicBreakdown: TopicBreakdown[];
+  statusBreakdown: StatusBreakdown;
+  billsMissingSponsor: number;
+  lastBillSync: string | null;
   lastRefreshed: string | null;
 }
 
@@ -31,6 +43,7 @@ export function useBillSummaryStats() {
   return useQuery<SummaryStats>({
     queryKey: ['bill-summary-stats'],
     queryFn: async () => {
+      // Fetch bill summary stats
       const { data, error } = await supabase
         .from('bill_summary_stats')
         .select('*')
@@ -42,13 +55,56 @@ export function useBillSummaryStats() {
         throw error;
       }
 
+      // Fetch status breakdown directly from bills table
+      const { data: statusData } = await supabase
+        .from('bills')
+        .select('status')
+        .not('status', 'is', null);
+      
+      const statusCounts = {
+        introduced: 0,
+        passedOneChamber: 0,
+        passedBothChambers: 0,
+        toPresident: 0,
+        vetoActions: 0,
+        becameLaw: 0,
+      };
+      
+      if (statusData) {
+        for (const bill of statusData) {
+          const status = bill.status as string;
+          if (status === 'introduced') statusCounts.introduced++;
+          else if (status === 'passed_one_chamber') statusCounts.passedOneChamber++;
+          else if (status === 'passed_both_chambers') statusCounts.passedBothChambers++;
+          else if (status === 'to_president') statusCounts.toPresident++;
+          else if (status === 'veto_actions') statusCounts.vetoActions++;
+          else if (status === 'became_law') statusCounts.becameLaw++;
+        }
+      }
+
+      // Fetch bills missing sponsor
+      const { count: missingSponsor } = await supabase
+        .from('bills')
+        .select('*', { count: 'exact', head: true })
+        .is('sponsor_bioguide_id', null);
+
+      // Fetch last sync status
+      const { data: syncStatus } = await supabase
+        .from('bill_sync_status')
+        .select('last_sync_completed_at')
+        .eq('sync_type', 'nightly')
+        .single();
+
       if (!data) {
         return {
           totalBills: 0, withSummary: 0, withCrsSummary: 0, withAiSummary: 0,
           withAiProceduralSummary: 0, noSummaryAvailable: 0, needsAiGeneration: 0,
           pendingFetch: 0, coveragePct: 0, flaggedCount: 0, mismatchCount: 0,
           multiTopicCount: 0, omnibusCount: 0, congress118Count: 0, congress119Count: 0,
-          topicBreakdown: [], lastRefreshed: null,
+          topicBreakdown: [], statusBreakdown: statusCounts, 
+          billsMissingSponsor: missingSponsor || 0,
+          lastBillSync: syncStatus?.last_sync_completed_at || null,
+          lastRefreshed: null,
         };
       }
 
@@ -96,6 +152,9 @@ export function useBillSummaryStats() {
         congress118Count: Number(rawData.congress_118_count) || 0,
         congress119Count: Number(rawData.congress_119_count) || 0,
         topicBreakdown,
+        statusBreakdown: statusCounts,
+        billsMissingSponsor: missingSponsor || 0,
+        lastBillSync: syncStatus?.last_sync_completed_at || null,
         lastRefreshed: rawData.last_refreshed ? String(rawData.last_refreshed) : null,
       };
     },
