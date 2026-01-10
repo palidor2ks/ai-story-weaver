@@ -22,7 +22,14 @@ import {
   RefreshCw,
   Ban,
   Database,
-  Wand2
+  Wand2,
+  Users,
+  CalendarSync,
+  Gavel,
+  Scale,
+  Send,
+  XOctagon,
+  Landmark
 } from "lucide-react";
 import {
   Select,
@@ -42,6 +49,8 @@ export function BillSummaryDashboard() {
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isEnrichingSponsors, setIsEnrichingSponsors] = useState(false);
   const [selectedCongress, setSelectedCongress] = useState<string>("119");
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
@@ -214,6 +223,75 @@ export function BillSummaryDashboard() {
     }
   };
 
+  const handleNightlySync = async () => {
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('nightly-bill-sync', {
+        body: { congress: parseInt(selectedCongress) }
+      });
+      
+      if (error) throw error;
+      
+      toast.success('Bill sync completed', {
+        description: `Checked: ${data?.billsChecked || 0}, Updated: ${data?.billsUpdated || 0}, New: ${data?.newBillsAdded || 0}`
+      });
+      
+      triggerBackgroundRefresh();
+      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+    } catch (err) {
+      console.error('Error syncing bills:', err);
+      toast.error('Failed to sync bills', {
+        description: err instanceof Error ? err.message : 'Unknown error'
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleEnrichSponsors = async () => {
+    setIsEnrichingSponsors(true);
+    setProgress({ current: 0, total: stats?.billsMissingSponsor || 0 });
+    
+    try {
+      let totalProcessed = 0;
+      let remaining = stats?.billsMissingSponsor || 0;
+      
+      // Process in batches until done or limit reached
+      while (remaining > 0 && totalProcessed < 500) {
+        const { data, error } = await supabase.functions.invoke('fetch-bill-sponsors', {
+          body: { batchSize: 50, congress: parseInt(selectedCongress) }
+        });
+        
+        if (error) throw error;
+        
+        totalProcessed += data?.processed || 0;
+        remaining = data?.remaining || 0;
+        
+        setProgress({ current: totalProcessed, total: stats?.billsMissingSponsor || 0 });
+        
+        if ((data?.processed || 0) === 0) break;
+        
+        // Rate limit between batches
+        await new Promise(r => setTimeout(r, 500));
+      }
+      
+      toast.success('Sponsor enrichment completed', {
+        description: `Enriched ${totalProcessed.toLocaleString()} bills`
+      });
+      
+      triggerBackgroundRefresh();
+      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+    } catch (err) {
+      console.error('Error enriching sponsors:', err);
+      toast.error('Failed to enrich sponsors', {
+        description: err instanceof Error ? err.message : 'Unknown error'
+      });
+    } finally {
+      setIsEnrichingSponsors(false);
+      setProgress(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -258,7 +336,7 @@ export function BillSummaryDashboard() {
 
   if (!stats) return null;
 
-  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting;
+  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors;
 
   return (
     <Card className="mb-6">
@@ -344,6 +422,34 @@ export function BillSummaryDashboard() {
               )}
               Ingest Bills
             </Button>
+
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={handleNightlySync}
+              disabled={isProcessing}
+            >
+              {isSyncing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CalendarSync className="h-4 w-4 mr-2" />
+              )}
+              Sync Status
+            </Button>
+
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={handleEnrichSponsors}
+              disabled={isProcessing || stats.billsMissingSponsor === 0}
+            >
+              {isEnrichingSponsors ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Users className="h-4 w-4 mr-2" />
+              )}
+              Sponsors ({stats.billsMissingSponsor.toLocaleString()})
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -355,9 +461,11 @@ export function BillSummaryDashboard() {
               <span className="text-muted-foreground">
                 {isIngesting 
                   ? `Ingesting bills from ${selectedCongress}th Congress...` 
-                  : isFetchingCrs 
-                    ? 'Fetching CRS summaries...' 
-                    : 'Generating AI summaries...'}
+                  : isEnrichingSponsors
+                    ? 'Enriching sponsor data...'
+                    : isFetchingCrs 
+                      ? 'Fetching CRS summaries...' 
+                      : 'Generating AI summaries...'}
               </span>
               <span className="font-medium">
                 {progress.current.toLocaleString()} / {progress.total.toLocaleString()}
@@ -424,6 +532,55 @@ export function BillSummaryDashboard() {
               {stats.flaggedCount.toLocaleString()}
             </div>
             <div className="text-xs text-muted-foreground">needs review</div>
+          </div>
+        </div>
+
+        {/* Bill Status Breakdown */}
+        <div className="bg-muted/30 rounded-lg p-4 border border-muted">
+          <div className="text-sm font-medium mb-3">Bills by Status</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="text-center p-2 rounded bg-slate-500/10">
+              <div className="flex items-center justify-center gap-1 text-xs text-slate-600 mb-1">
+                <FileText className="h-3 w-3" />
+                Introduced
+              </div>
+              <div className="text-lg font-bold">{stats.statusBreakdown.introduced.toLocaleString()}</div>
+            </div>
+            <div className="text-center p-2 rounded bg-blue-500/10">
+              <div className="flex items-center justify-center gap-1 text-xs text-blue-600 mb-1">
+                <Gavel className="h-3 w-3" />
+                Passed One
+              </div>
+              <div className="text-lg font-bold text-blue-600">{stats.statusBreakdown.passedOneChamber.toLocaleString()}</div>
+            </div>
+            <div className="text-center p-2 rounded bg-indigo-500/10">
+              <div className="flex items-center justify-center gap-1 text-xs text-indigo-600 mb-1">
+                <Scale className="h-3 w-3" />
+                Passed Both
+              </div>
+              <div className="text-lg font-bold text-indigo-600">{stats.statusBreakdown.passedBothChambers.toLocaleString()}</div>
+            </div>
+            <div className="text-center p-2 rounded bg-amber-500/10">
+              <div className="flex items-center justify-center gap-1 text-xs text-amber-600 mb-1">
+                <Send className="h-3 w-3" />
+                To President
+              </div>
+              <div className="text-lg font-bold text-amber-600">{stats.statusBreakdown.toPresident.toLocaleString()}</div>
+            </div>
+            <div className="text-center p-2 rounded bg-red-500/10">
+              <div className="flex items-center justify-center gap-1 text-xs text-red-600 mb-1">
+                <XOctagon className="h-3 w-3" />
+                Veto Actions
+              </div>
+              <div className="text-lg font-bold text-red-600">{stats.statusBreakdown.vetoActions.toLocaleString()}</div>
+            </div>
+            <div className="text-center p-2 rounded bg-green-500/10">
+              <div className="flex items-center justify-center gap-1 text-xs text-green-600 mb-1">
+                <Landmark className="h-3 w-3" />
+                Became Law
+              </div>
+              <div className="text-lg font-bold text-green-600">{stats.statusBreakdown.becameLaw.toLocaleString()}</div>
+            </div>
           </div>
         </div>
 

@@ -55,6 +55,59 @@ function getChamberFromBillType(billType: string): string {
   return 'house';
 }
 
+// Status values from Congress.gov bill lifecycle
+const STATUS_VALUES = [
+  'introduced',
+  'passed_one_chamber', 
+  'passed_both_chambers',
+  'resolving_differences',
+  'to_president',
+  'veto_actions',
+  'became_law'
+] as const;
+
+type BillStatus = typeof STATUS_VALUES[number];
+
+// Derive bill status from latest action text
+function deriveStatus(latestActionText: string | null): BillStatus {
+  if (!latestActionText) return 'introduced';
+  const text = latestActionText.toLowerCase();
+  
+  // Check for law status first (most definitive)
+  if (text.includes('became public law') || text.includes('became law') || text.includes('signed by president')) {
+    return 'became_law';
+  }
+  
+  // Check for veto actions
+  if (text.includes('vetoed') || text.includes('veto')) {
+    return 'veto_actions';
+  }
+  
+  // Check if presented to president
+  if (text.includes('presented to president') || text.includes('to president') || text.includes('sent to president')) {
+    return 'to_president';
+  }
+  
+  // Check for conference/resolving differences
+  if (text.includes('conference') || text.includes('resolving differences')) {
+    return 'resolving_differences';
+  }
+  
+  // Check for passed both chambers
+  if ((text.includes('passed house') && text.includes('passed senate')) ||
+      text.includes('passed both') || text.includes('agreed to in senate') && text.includes('agreed to in house')) {
+    return 'passed_both_chambers';
+  }
+  
+  // Check for passed one chamber
+  if (text.includes('passed house') || text.includes('passed senate') || 
+      text.includes('agreed to in senate') || text.includes('agreed to in house')) {
+    return 'passed_one_chamber';
+  }
+  
+  return 'introduced';
+}
+
 interface BillData {
   id: string;
   name: string;
@@ -65,6 +118,10 @@ interface BillData {
   chamber: string;
   introduced_date: string | null;
   summary: string | null;
+  status: BillStatus;
+  latest_action_text: string | null;
+  latest_action_date: string | null;
+  status_updated_at: string;
 }
 
 async function fetchBillSummary(congress: number, billType: string, billNumber: number): Promise<string | null> {
@@ -127,11 +184,14 @@ serve(async (req) => {
 
     // Transform bills to our schema
     const billsToInsert: BillData[] = [];
+    const now = new Date().toISOString();
     
     for (const bill of bills) {
       const type = (bill.type || 'HR').toUpperCase();
       const number = bill.number || 0;
       const id = `${type}.${number}`;
+      const latestActionText = bill.latestAction?.text || null;
+      const latestActionDate = bill.latestAction?.actionDate || null;
       
       billsToInsert.push({
         id,
@@ -143,6 +203,10 @@ serve(async (req) => {
         chamber: getChamberFromBillType(type),
         introduced_date: bill.introducedDate || null,
         summary: null, // Summaries fetched separately if requested
+        status: deriveStatus(latestActionText),
+        latest_action_text: latestActionText,
+        latest_action_date: latestActionDate,
+        status_updated_at: now,
       });
     }
 
