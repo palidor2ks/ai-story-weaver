@@ -50,6 +50,7 @@ export type Database = {
           source_type: string | null
           source_url: string | null
           source_urls: string[] | null
+          topic_flag: string | null
           updated_at: string
           voting_record_summary: string | null
         }
@@ -70,6 +71,7 @@ export type Database = {
           source_type?: string | null
           source_url?: string | null
           source_urls?: string[] | null
+          topic_flag?: string | null
           updated_at?: string
           voting_record_summary?: string | null
         }
@@ -90,6 +92,7 @@ export type Database = {
           source_type?: string | null
           source_url?: string | null
           source_urls?: string[] | null
+          topic_flag?: string | null
           updated_at?: string
           voting_record_summary?: string | null
         }
@@ -1826,6 +1829,8 @@ export type Database = {
       votes: {
         Row: {
           action_type: string | null
+          additional_topics: string[] | null
+          ai_detected_topics: string[] | null
           bill_id: string
           bill_name: string
           bill_summary: string | null
@@ -1835,14 +1840,20 @@ export type Database = {
           date: string
           description: string | null
           id: string
+          omnibus_type: string | null
           position: Database["public"]["Enums"]["vote_position"]
+          reviewed_at: string | null
+          reviewed_by: string | null
           session: number | null
           summary_fetched_at: string | null
           topic: string
+          topic_flag: string | null
           vote_number: number | null
         }
         Insert: {
           action_type?: string | null
+          additional_topics?: string[] | null
+          ai_detected_topics?: string[] | null
           bill_id: string
           bill_name: string
           bill_summary?: string | null
@@ -1852,14 +1863,20 @@ export type Database = {
           date: string
           description?: string | null
           id: string
+          omnibus_type?: string | null
           position: Database["public"]["Enums"]["vote_position"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           session?: number | null
           summary_fetched_at?: string | null
           topic: string
+          topic_flag?: string | null
           vote_number?: number | null
         }
         Update: {
           action_type?: string | null
+          additional_topics?: string[] | null
+          ai_detected_topics?: string[] | null
           bill_id?: string
           bill_name?: string
           bill_summary?: string | null
@@ -1869,10 +1886,14 @@ export type Database = {
           date?: string
           description?: string | null
           id?: string
+          omnibus_type?: string | null
           position?: Database["public"]["Enums"]["vote_position"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           session?: number | null
           summary_fetched_at?: string | null
           topic?: string
+          topic_flag?: string | null
           vote_number?: number | null
         }
         Relationships: [

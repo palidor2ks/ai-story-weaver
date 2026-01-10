@@ -22,10 +22,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags } from "lucide-react";
 import { QuestionManagementPanel } from "@/components/admin/QuestionManagementPanel";
 import { PartyAnswersPanel } from "@/components/admin/PartyAnswersPanel";
 import { EvidenceReviewPanel } from "@/components/admin/EvidenceReviewPanel";
+import TopicReviewPanel from "@/components/admin/TopicReviewPanel";
 
 
 // Only levels that require manual entry (no API available)
@@ -455,6 +456,10 @@ export default function Admin() {
               <FileText className="h-4 w-4" />
               Voting Records
             </TabsTrigger>
+            <TabsTrigger value="topic-review" className="gap-2">
+              <Tags className="h-4 w-4" />
+              Topic Review
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="officials">
@@ -674,6 +679,10 @@ export default function Admin() {
 
           <TabsContent value="voting-records">
             <BillSummaryDashboard />
+          </TabsContent>
+
+          <TabsContent value="topic-review">
+            <TopicReviewPanel />
           </TabsContent>
 
         </Tabs>
