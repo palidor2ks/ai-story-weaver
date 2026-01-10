@@ -6,16 +6,59 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ALL_TOPICS = [
+// Only use the 10 canonical topics for consistency with the quiz system
+const CANONICAL_TOPICS = [
   'Economy', 'Healthcare', 'Immigration', 'Environment', 'Defense',
-  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology',
-  'Agriculture and Food', 'Armed Forces and National Security', 'Commerce',
-  'Crime and Law Enforcement', 'Energy', 'Finance and Financial Sector',
-  'Foreign Trade and International Finance', 'Housing and Community Development',
-  'International Affairs', 'Labor and Employment', 'Law', 'Native Americans',
-  'Public Lands and Natural Resources', 'Science, Technology, Communications',
-  'Taxation', 'Transportation and Public Works'
+  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology'
 ];
+
+// Validate and normalize AI-detected topics to canonical topics
+const TOPIC_NORMALIZATION: Record<string, string> = {
+  // Map any legacy Congress.gov policy areas AI might return
+  'Agriculture and Food': 'Economy',
+  'Commerce': 'Economy',
+  'Economics and Public Finance': 'Economy',
+  'Finance and Financial Sector': 'Economy',
+  'Foreign Trade and International Finance': 'Economy',
+  'Labor and Employment': 'Economy',
+  'Taxation': 'Economy',
+  'Transportation and Public Works': 'Economy',
+  'Health': 'Healthcare',
+  'Families': 'Healthcare',
+  'Energy': 'Environment',
+  'Environmental Protection': 'Environment',
+  'Public Lands and Natural Resources': 'Environment',
+  'Water Resources Development': 'Environment',
+  'Animals': 'Environment',
+  'Armed Forces and National Security': 'Defense',
+  'International Affairs': 'Defense',
+  'Emergency Management': 'Defense',
+  'Civil Rights and Liberties, Minority Issues': 'Civil Rights',
+  'Crime and Law Enforcement': 'Civil Rights',
+  'Law': 'Civil Rights',
+  'Native Americans': 'Civil Rights',
+  'Arts, Culture, Religion': 'Civil Rights',
+  'Sports and Recreation': 'Civil Rights',
+  'Social Sciences and History': 'Education',
+  'Social Welfare': 'Social Programs',
+  'Housing and Community Development': 'Social Programs',
+  'Congress': 'Government',
+  'Government Operations and Politics': 'Government',
+  'Science, Technology, Communications': 'Technology',
+  // Legacy names
+  'Criminal Justice': 'Civil Rights',
+  'Foreign Policy': 'Defense',
+  'Domestic Policy': 'Government',
+  'Government Reform': 'Government',
+  'Gun Policy': 'Civil Rights',
+  'Social Issues': 'Social Programs',
+  'General': 'Government',
+};
+
+function validateTopic(topic: string): string {
+  if (CANONICAL_TOPICS.includes(topic)) return topic;
+  return TOPIC_NORMALIZATION[topic] || 'Government';
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -57,7 +100,7 @@ serve(async (req) => {
       // Analyze single bill
       const prompt = `Analyze this bill and identify its policy topics.
 
-Available topics: ${ALL_TOPICS.join(', ')}
+Available topics (ONLY use these): ${CANONICAL_TOPICS.join(', ')}
 
 Bill:
 - Bill Number: ${bill.bill_id}
@@ -66,8 +109,8 @@ Bill:
 - Summary: ${bill.bill_summary?.substring(0, 800) || 'No summary'}
 
 Determine:
-1. The PRIMARY topic based on the summary content
-2. ALL SECONDARY topics it addresses (can be 0, 1, 2, or many)
+1. The PRIMARY topic based on the summary content (MUST be from the available topics list)
+2. ALL SECONDARY topics it addresses (MUST be from the available topics list, can be 0, 1, 2, or more)
 3. Whether the current assigned topic is incorrect (mismatch)
 4. Whether this is an omnibus bill (appropriations, NDAA, infrastructure, reconciliation)
 
@@ -138,8 +181,14 @@ Return ONLY valid JSON.`;
         flag = 'multi_topic_detected';
       }
 
+      // Validate and normalize AI-detected topics
+      const normalizedPrimary = validateTopic(result.primary_topic);
+      const normalizedSecondary = (result.secondary_topics || []).map(validateTopic);
+      // Remove duplicates and filter out primary from secondary
+      const uniqueSecondary = [...new Set(normalizedSecondary)].filter(t => t !== normalizedPrimary);
+
       const updates: Record<string, unknown> = {
-        ai_detected_topics: [result.primary_topic, ...(result.secondary_topics || [])],
+        ai_detected_topics: [normalizedPrimary, ...uniqueSecondary],
         topic_flag: flag,
         omnibus_type: result.omnibus_type || null,
       };
@@ -199,7 +248,7 @@ Return ONLY valid JSON.`;
       
       const prompt = `Analyze these bills and identify their policy topics.
 
-Available topics: ${ALL_TOPICS.join(', ')}
+Available topics (ONLY use these): ${CANONICAL_TOPICS.join(', ')}
 
 ${chunk.map((b, idx) => `
 Bill ${idx + 1}:
@@ -211,8 +260,8 @@ Bill ${idx + 1}:
 `).join('\n---\n')}
 
 For each bill, determine:
-1. The PRIMARY topic based on the summary content
-2. ALL SECONDARY topics it addresses (can be 0, 1, 2, or many)
+1. The PRIMARY topic based on the summary content (MUST be from the available topics list)
+2. ALL SECONDARY topics it addresses (MUST be from the available topics list, can be 0, 1, 2, or more)
 3. Whether the current assigned topic is incorrect (mismatch)
 4. Whether this is an omnibus bill (appropriations, NDAA, infrastructure package, reconciliation, etc.)
 
@@ -301,8 +350,13 @@ Return ONLY valid JSON, no other text.`;
             flag = 'multi_topic_detected';
           }
           
+          // Validate and normalize AI-detected topics
+          const normalizedPrimary = validateTopic(result.primary_topic);
+          const normalizedSecondary: string[] = (result.secondary_topics || []).map((t: string) => validateTopic(t));
+          const uniqueSecondary = [...new Set(normalizedSecondary)].filter(t => t !== normalizedPrimary);
+          
           const updates: Record<string, unknown> = {
-            ai_detected_topics: [result.primary_topic, ...(result.secondary_topics || [])],
+            ai_detected_topics: [normalizedPrimary, ...uniqueSecondary],
           };
           
           if (flag) {
