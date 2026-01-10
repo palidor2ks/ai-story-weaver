@@ -21,7 +21,8 @@ import {
   Loader2,
   RefreshCw,
   Ban,
-  Database
+  Database,
+  Wand2
 } from "lucide-react";
 import {
   Select,
@@ -31,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { format } from "date-fns";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 export function BillSummaryDashboard() {
   const { data: stats, isLoading, error } = useBillSummaryStats();
@@ -130,8 +132,7 @@ export function BillSummaryDashboard() {
   };
 
   const handleGenerateAiSummaries = async () => {
-    setIsGeneratingAi(true);
-    setProgress({ current: 0, total: stats?.noSummaryAvailable || 0 });
+    setProgress({ current: 0, total: stats?.needsAiGeneration || 0 });
     
     try {
       const { data, error } = await supabase.functions.invoke('generate-ai-bill-summaries', {
@@ -273,14 +274,14 @@ export function BillSummaryDashboard() {
             <Button 
               size="sm"
               onClick={handleGenerateAiSummaries}
-              disabled={stats.noSummaryAvailable === 0 || isProcessing}
+              disabled={stats.needsAiGeneration === 0 || isProcessing}
             >
               {isGeneratingAi ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Sparkles className="h-4 w-4 mr-2" />
               )}
-              Generate AI ({stats.noSummaryAvailable.toLocaleString()})
+              Generate AI ({stats.needsAiGeneration.toLocaleString()})
             </Button>
             
             <div className="h-6 w-px bg-border" />
@@ -355,11 +356,11 @@ export function BillSummaryDashboard() {
           
           <div className="bg-amber-500/10 rounded-lg p-4 text-center border border-amber-500/20">
             <div className="flex items-center justify-center gap-1 text-sm text-amber-600 mb-1">
-              <XCircle className="h-3.5 w-3.5" />
-              No CRS Summary
+              <Wand2 className="h-3.5 w-3.5" />
+              Needs AI
             </div>
-            <div className="text-2xl font-bold text-amber-600">{stats.noSummaryAvailable.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">needs AI generation</div>
+            <div className="text-2xl font-bold text-amber-600">{stats.needsAiGeneration.toLocaleString()}</div>
+            <div className="text-xs text-muted-foreground">CRS unavailable</div>
           </div>
 
           <div className="bg-purple-500/10 rounded-lg p-4 text-center border border-purple-500/20">
@@ -408,10 +409,51 @@ export function BillSummaryDashboard() {
             </span>
             <span className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-amber-500" />
-              Pending: {(stats.pendingFetch + stats.noSummaryAvailable).toLocaleString()}
+              Needs AI: {stats.needsAiGeneration.toLocaleString()}
+            </span>
+            <span className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-blue-500" />
+              Pending Fetch: {stats.pendingFetch.toLocaleString()}
             </span>
           </div>
         </div>
+
+        {/* Topic Distribution Chart */}
+        {stats.topicBreakdown.length > 0 && (
+          <div className="bg-muted/30 rounded-lg p-4 border border-muted">
+            <div className="text-sm font-medium mb-3">Bills by Topic</div>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart 
+                  data={stats.topicBreakdown} 
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
+                >
+                  <XAxis type="number" />
+                  <YAxis 
+                    type="category" 
+                    dataKey="name" 
+                    width={95}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <Tooltip 
+                    formatter={(value: number) => [value.toLocaleString(), 'Bills']}
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--background))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '6px'
+                    }}
+                  />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                    {stats.topicBreakdown.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
         {/* Congress Breakdown */}
         <div className="bg-muted/30 rounded-lg p-4 border border-muted">
