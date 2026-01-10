@@ -195,6 +195,32 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // Get or create ingestion status for tracking resumable progress
+    const { data: existingStatus } = await supabase
+      .from('bill_ingestion_status')
+      .select('*')
+      .eq('congress', congress)
+      .single();
+
+    // Initialize or update ingestion status at start
+    if (offset === 0) {
+      await supabase
+        .from('bill_ingestion_status')
+        .upsert({
+          congress,
+          last_offset: 0,
+          total_fetched: 0,
+          total_inserted: 0,
+          total_filtered: 0,
+          total_available: null,
+          status: 'in_progress',
+          started_at: new Date().toISOString(),
+          completed_at: null,
+          error_message: null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'congress' });
+    }
+
     // Build API URL
     let url = `https://api.congress.gov/v3/bill/${congress}?api_key=${CONGRESS_API_KEY}&limit=${limit}&offset=${offset}`;
     if (billType) {
@@ -284,23 +310,71 @@ serve(async (req) => {
 
     const hasMore = pagination.next !== null && pagination.next !== undefined;
     const nextOffset = offset + bills.length;
+    const totalAvailable = pagination.count || null;
 
-    console.log(`[FetchAllBills] Inserted ${billsToInsert.length} bills. Has more: ${hasMore}`);
+    // Calculate running totals from existing status
+    const runningFetched = (existingStatus?.total_fetched || 0) + bills.length;
+    const runningInserted = (existingStatus?.total_inserted || 0) + billsToInsert.length;
+    const runningFiltered = (existingStatus?.total_filtered || 0) + skippedCount;
+
+    // Update ingestion status with progress
+    await supabase
+      .from('bill_ingestion_status')
+      .upsert({
+        congress,
+        last_offset: nextOffset,
+        total_fetched: runningFetched,
+        total_inserted: runningInserted,
+        total_filtered: runningFiltered,
+        total_available: totalAvailable,
+        status: hasMore ? 'in_progress' : 'complete',
+        completed_at: hasMore ? null : new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'congress' });
+
+    console.log(`[FetchAllBills] Inserted ${billsToInsert.length} bills. Has more: ${hasMore}. Running total: ${runningInserted}`);
 
     return new Response(JSON.stringify({
       success: true,
       congress,
       inserted: billsToInsert.length,
+      filtered: skippedCount,
       offset,
       nextOffset: hasMore ? nextOffset : null,
       hasMore,
-      totalCount: pagination.count || null,
+      totalCount: totalAvailable,
+      // Resumable info
+      runningTotals: {
+        fetched: runningFetched,
+        inserted: runningInserted,
+        filtered: runningFiltered,
+      },
+      isResumable: true,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
     console.error('[FetchAllBills] Error:', error);
+    
+    // Try to update ingestion status with error
+    try {
+      const { congress } = await req.clone().json().catch(() => ({}));
+      if (congress) {
+        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        await supabase
+          .from('bill_ingestion_status')
+          .update({
+            status: 'failed',
+            error_message: error instanceof Error ? error.message : 'Unknown error',
+            updated_at: new Date().toISOString()
+          })
+          .eq('congress', congress);
+      }
+    } catch {
+      // Ignore errors during error handling
+    }
+
     return new Response(JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',

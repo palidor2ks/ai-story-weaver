@@ -32,6 +32,54 @@ export type Database = {
         }
         Relationships: []
       }
+      bill_ingestion_status: {
+        Row: {
+          completed_at: string | null
+          congress: number
+          created_at: string | null
+          error_message: string | null
+          id: string
+          last_offset: number | null
+          started_at: string | null
+          status: string | null
+          total_available: number | null
+          total_fetched: number | null
+          total_filtered: number | null
+          total_inserted: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          congress: number
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_offset?: number | null
+          started_at?: string | null
+          status?: string | null
+          total_available?: number | null
+          total_fetched?: number | null
+          total_filtered?: number | null
+          total_inserted?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          congress?: number
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_offset?: number | null
+          started_at?: string | null
+          status?: string | null
+          total_available?: number | null
+          total_fetched?: number | null
+          total_filtered?: number | null
+          total_inserted?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       bill_sponsors: {
         Row: {
           bill_id: string

@@ -16,6 +16,19 @@ export interface StatusBreakdown {
   becameLaw: number;
 }
 
+export interface IngestionStatus {
+  congress: number;
+  lastOffset: number;
+  totalFetched: number;
+  totalInserted: number;
+  totalFiltered: number;
+  totalAvailable: number | null;
+  status: 'pending' | 'in_progress' | 'complete' | 'failed';
+  startedAt: string | null;
+  completedAt: string | null;
+  errorMessage: string | null;
+}
+
 export interface SummaryStats {
   totalBills: number;
   withSummary: number;
@@ -38,6 +51,7 @@ export interface SummaryStats {
   billsNeedingStatusEnrich: number;
   lastBillSync: string | null;
   lastRefreshed: string | null;
+  ingestionStatuses: IngestionStatus[];
 }
 
 export function useBillSummaryStats() {
@@ -102,6 +116,25 @@ export function useBillSummaryStats() {
         .eq('sync_type', 'nightly')
         .single();
 
+      // Fetch ingestion status for all congresses
+      const { data: ingestionData } = await supabase
+        .from('bill_ingestion_status')
+        .select('*')
+        .order('congress', { ascending: false });
+
+      const ingestionStatuses: IngestionStatus[] = (ingestionData || []).map((row: Record<string, unknown>) => ({
+        congress: row.congress as number,
+        lastOffset: row.last_offset as number,
+        totalFetched: row.total_fetched as number,
+        totalInserted: row.total_inserted as number,
+        totalFiltered: row.total_filtered as number,
+        totalAvailable: row.total_available as number | null,
+        status: row.status as 'pending' | 'in_progress' | 'complete' | 'failed',
+        startedAt: row.started_at as string | null,
+        completedAt: row.completed_at as string | null,
+        errorMessage: row.error_message as string | null,
+      }));
+
       if (!data) {
         return {
           totalBills: 0, withSummary: 0, withCrsSummary: 0, withAiSummary: 0,
@@ -113,6 +146,7 @@ export function useBillSummaryStats() {
           billsNeedingStatusEnrich: needingStatusEnrich || 0,
           lastBillSync: syncStatus?.last_sync_completed_at || null,
           lastRefreshed: null,
+          ingestionStatuses,
         };
       }
 
@@ -165,6 +199,7 @@ export function useBillSummaryStats() {
         billsNeedingStatusEnrich: needingStatusEnrich || 0,
         lastBillSync: syncStatus?.last_sync_completed_at || null,
         lastRefreshed: rawData.last_refreshed ? String(rawData.last_refreshed) : null,
+        ingestionStatuses,
       };
     },
     staleTime: 60000,
