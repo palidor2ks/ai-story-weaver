@@ -121,15 +121,29 @@ export default function TopicReviewPanel() {
         .eq('id', billId);
         
       if (error) throw error;
+      return billId;
+    },
+    onMutate: async ({ billId }) => {
+      await queryClient.cancelQueries({ queryKey: ['flagged-bills', filterType] });
+      const previousBills = queryClient.getQueryData<FlaggedBill[]>(['flagged-bills', filterType]);
+      queryClient.setQueryData<FlaggedBill[]>(['flagged-bills', filterType], (old) => 
+        old?.filter(b => b.id !== billId) || []
+      );
+      return { previousBills };
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previousBills) {
+        queryClient.setQueryData(['flagged-bills', filterType], context.previousBills);
+      }
+      toast.error(`Update failed: ${error.message}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flagged-bills'] });
       queryClient.invalidateQueries({ queryKey: ['topic-review-stats'] });
       setSelectedBill(null);
       toast.success('Bill topics updated');
     },
-    onError: (error) => {
-      toast.error(`Update failed: ${error.message}`);
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['flagged-bills'] });
     }
   });
 
@@ -196,17 +210,29 @@ export default function TopicReviewPanel() {
         .eq('id', bill.id);
         
       if (error) throw error;
+      return bill.id;
+    },
+    onMutate: async (bill) => {
+      await queryClient.cancelQueries({ queryKey: ['flagged-bills', filterType] });
+      const previousBills = queryClient.getQueryData<FlaggedBill[]>(['flagged-bills', filterType]);
+      queryClient.setQueryData<FlaggedBill[]>(['flagged-bills', filterType], (old) => 
+        old?.filter(b => b.id !== bill.id) || []
+      );
+      return { previousBills };
+    },
+    onError: (error, _bill, context) => {
+      if (context?.previousBills) {
+        queryClient.setQueryData(['flagged-bills', filterType], context.previousBills);
+      }
+      toast.error(`Approve failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flagged-bills'] });
       queryClient.invalidateQueries({ queryKey: ['topic-review-stats'] });
       toast.success('AI topics approved and applied');
     },
-    onError: (error) => {
-      toast.error(`Approve failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    },
     onSettled: () => {
       setApprovingBillId(null);
+      queryClient.invalidateQueries({ queryKey: ['flagged-bills'] });
     }
   });
 
