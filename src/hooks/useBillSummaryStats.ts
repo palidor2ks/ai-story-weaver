@@ -99,11 +99,13 @@ export function useBillSummaryStats() {
           
           if (maxCode) {
             // Action code based status (most accurate)
+            // Priority order: became_law > veto > to_president > resolving > passed_both > passed_one
             if (maxCode >= 36000) {
               derivedStatus = 'became_law';
-            } else if (maxCode >= 31000) {
+            } else if (maxCode >= 30000 && maxCode < 36000) {
+              // Veto range is 30000-35999
               derivedStatus = 'veto_actions';
-            } else if (maxCode >= 28000) {
+            } else if (maxCode >= 28000 && maxCode < 30000) {
               derivedStatus = 'to_president';
             } else if (maxCode >= 19000 && maxCode < 25000) {
               derivedStatus = 'resolving_differences';
@@ -112,10 +114,11 @@ export function useBillSummaryStats() {
             } else if (passedHouse || passedSenate) {
               derivedStatus = 'passed_one_chamber';
             } else {
+              // Has action code but no clear status from it
               derivedStatus = bill.status as string;
             }
           } else if (passedHouse !== null || passedSenate !== null) {
-            // Use passage flags when available
+            // Use passage flags when available (no action code)
             if (passedHouse && passedSenate) {
               derivedStatus = 'passed_both_chambers';
             } else if (passedHouse || passedSenate) {
