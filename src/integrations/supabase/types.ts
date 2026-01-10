@@ -1939,109 +1939,30 @@ export type Database = {
         }
         Relationships: []
       }
-      votes: {
-        Row: {
-          action_type: string | null
-          additional_topics: string[] | null
-          ai_detected_topics: string[] | null
-          bill_id: string
-          bill_name: string
-          bill_summary: string | null
-          candidate_id: string
-          chamber: string | null
-          congress: number | null
-          date: string
-          description: string | null
-          id: string
-          omnibus_type: string | null
-          position: Database["public"]["Enums"]["vote_position"]
-          reviewed_at: string | null
-          reviewed_by: string | null
-          session: number | null
-          summary_fetched_at: string | null
-          topic: string
-          topic_flag: string | null
-          vote_number: number | null
-        }
-        Insert: {
-          action_type?: string | null
-          additional_topics?: string[] | null
-          ai_detected_topics?: string[] | null
-          bill_id: string
-          bill_name: string
-          bill_summary?: string | null
-          candidate_id: string
-          chamber?: string | null
-          congress?: number | null
-          date: string
-          description?: string | null
-          id: string
-          omnibus_type?: string | null
-          position: Database["public"]["Enums"]["vote_position"]
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          session?: number | null
-          summary_fetched_at?: string | null
-          topic: string
-          topic_flag?: string | null
-          vote_number?: number | null
-        }
-        Update: {
-          action_type?: string | null
-          additional_topics?: string[] | null
-          ai_detected_topics?: string[] | null
-          bill_id?: string
-          bill_name?: string
-          bill_summary?: string | null
-          candidate_id?: string
-          chamber?: string | null
-          congress?: number | null
-          date?: string
-          description?: string | null
-          id?: string
-          omnibus_type?: string | null
-          position?: Database["public"]["Enums"]["vote_position"]
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          session?: number | null
-          summary_fetched_at?: string | null
-          topic?: string
-          topic_flag?: string | null
-          vote_number?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "votes_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "candidate_voting_coverage"
-            referencedColumns: ["candidate_id"]
-          },
-          {
-            foreignKeyName: "votes_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "candidates"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       bill_summary_stats: {
         Row: {
-          floor_votes_no_bill: number | null
-          full_text_titles: number | null
-          id: number | null
+          civil_rights_count: number | null
+          congress_118_count: number | null
+          congress_119_count: number | null
+          defense_count: number | null
+          economy_count: number | null
+          education_count: number | null
+          environment_count: number | null
+          flagged_count: number | null
+          government_count: number | null
+          healthcare_count: number | null
+          immigration_count: number | null
           last_refreshed: string | null
-          missing_congress: number | null
+          mismatch_count: number | null
+          multi_topic_count: number | null
+          native_affairs_count: number | null
           no_summary_available: number | null
-          not_yet_fetched: number | null
-          procedural_votes_pending: number | null
-          total_votes: number | null
-          unparseable_bill_ids: number | null
-          with_ai_procedural_summary: number | null
-          with_ai_summary: number | null
+          omnibus_count: number | null
+          pending_fetch: number | null
+          science_count: number | null
+          total_bills: number | null
           with_crs_summary: number | null
         }
         Relationships: []
@@ -2187,13 +2108,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      vote_action_counts: {
-        Row: {
-          action_type: string | null
-          count: number | null
-        }
-        Relationships: []
       }
     }
     Functions: {

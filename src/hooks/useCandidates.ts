@@ -425,18 +425,37 @@ export const useCandidateVotes = (candidateId: string | undefined) => {
     queryFn: async () => {
       if (!candidateId) return [];
       
-      // First try to fetch from database
+      // Fetch from candidate_votes joined with bills
       const { data, error } = await supabase
-        .from('votes')
-        .select('*')
+        .from('candidate_votes')
+        .select(`
+          id,
+          bill_id,
+          action_date,
+          position,
+          action_type,
+          bills!inner (
+            name,
+            topic,
+            description
+          )
+        `)
         .eq('candidate_id', candidateId)
-        .order('date', { ascending: false });
+        .order('action_date', { ascending: false });
       
       if (error) throw error;
       
-      // If we have votes in the DB, return them
+      // If we have votes in the DB, transform and return them
       if (data && data.length > 0) {
-        return data as Vote[];
+        return data.map(v => ({
+          id: v.id,
+          bill_id: v.bill_id,
+          bill_name: (v.bills as any)?.name || v.bill_id,
+          date: v.action_date,
+          position: v.position as Vote['position'],
+          topic: (v.bills as any)?.topic || 'Government',
+          description: (v.bills as any)?.description || null,
+        })) as Vote[];
       }
 
       // Not in database - try Congress.gov API (candidateId might be a bioguide ID)
