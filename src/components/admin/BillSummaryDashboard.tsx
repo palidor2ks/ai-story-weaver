@@ -159,15 +159,46 @@ export function BillSummaryDashboard() {
 
   const handleIngestBills = async () => {
     setIsIngesting(true);
+    let offset = 0;
+    let totalIngested = 0;
+    let hasMore = true;
+    let estimatedTotal = 0;
+    
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-all-bills', {
-        body: { congress: parseInt(selectedCongress), limit: 250 }
-      });
+      while (hasMore) {
+        const { data, error } = await supabase.functions.invoke('fetch-all-bills', {
+          body: { 
+            congress: parseInt(selectedCongress), 
+            limit: 250,
+            offset 
+          }
+        });
+        
+        if (error) throw error;
+        
+        totalIngested += data?.inserted || 0;
+        hasMore = data?.hasMore || false;
+        offset = data?.nextOffset || offset + 250;
+        
+        // Get estimated total from first response
+        if (estimatedTotal === 0 && data?.totalCount) {
+          estimatedTotal = data.totalCount;
+        }
+        
+        // Update progress UI
+        setProgress({ 
+          current: totalIngested, 
+          total: estimatedTotal || totalIngested 
+        });
+        
+        // Rate limiting delay between batches
+        if (hasMore) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
       
-      if (error) throw error;
-      
-      toast.success(`Ingested bills from ${selectedCongress}th Congress`, {
-        description: `Inserted/updated ${data?.inserted || 0} bills`
+      toast.success(`Ingested all bills from ${selectedCongress}th Congress`, {
+        description: `Total: ${totalIngested.toLocaleString()} bills`
       });
       
       triggerBackgroundRefresh();
@@ -179,6 +210,7 @@ export function BillSummaryDashboard() {
       });
     } finally {
       setIsIngesting(false);
+      setProgress(null);
     }
   };
 
@@ -321,11 +353,17 @@ export function BillSummaryDashboard() {
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
-                {isFetchingCrs ? 'Fetching CRS summaries...' : 'Generating AI summaries...'}
+                {isIngesting 
+                  ? `Ingesting bills from ${selectedCongress}th Congress...` 
+                  : isFetchingCrs 
+                    ? 'Fetching CRS summaries...' 
+                    : 'Generating AI summaries...'}
               </span>
-              <span className="font-medium">{progress.current} / {progress.total}</span>
+              <span className="font-medium">
+                {progress.current.toLocaleString()} / {progress.total.toLocaleString()}
+              </span>
             </div>
-            <Progress value={(progress.current / progress.total) * 100} className="h-2" />
+            <Progress value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0} className="h-2" />
           </div>
         )}
 
