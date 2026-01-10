@@ -61,6 +61,9 @@ interface FloorVote {
   position: 'Yea' | 'Nay' | 'Present' | 'Not Voting';
   action_type: 'floor_vote';
   topic: string;
+  additional_topics?: string[];
+  topic_flag?: string | null;
+  omnibus_type?: string | null;
   description: string | null;
   date: string;
   vote_number: number;
@@ -169,9 +172,24 @@ function mapVotePosition(vote: string): 'Yea' | 'Nay' | 'Present' | 'Not Voting'
   }
 }
 
-// Infer topic from vote description using new 32 Congress.gov policy areas
-function inferTopic(question: string, description: string): string {
+// Omnibus bill detection patterns
+const OMNIBUS_PATTERNS: Record<string, RegExp[]> = {
+  'appropriations': [/appropriation/i, /omnibus/i, /minibus/i, /continuing resolution/i, /consolidated appropriations/i],
+  'ndaa': [/national defense authorization/i, /ndaa/i],
+  'infrastructure': [/infrastructure/i, /invest in america/i, /jobs act/i],
+  'reconciliation': [/reconciliation/i, /inflation reduction/i, /build back/i],
+};
+
+// Enhanced topic inference that returns multiple topics
+function inferTopics(question: string, description: string): { 
+  primary: string; 
+  additional: string[]; 
+  topicCount: number;
+  flag: string | null;
+  omnibusType: string | null;
+} {
   const text = `${question} ${description}`.toLowerCase();
+  const matchedTopics: Array<{ topic: string; count: number }> = [];
   
   const topicKeywords: Record<string, string[]> = {
     'Health': ['health', 'medicare', 'medicaid', 'hospital', 'medical', 'drug', 'prescription', 'healthcare', 'mental health', 'opioid', 'fentanyl'],
@@ -207,13 +225,50 @@ function inferTopic(question: string, description: string): string {
     'Sports and Recreation': ['sports', 'recreation', 'athletics', 'olympic'],
   };
   
+  // Count keyword matches per topic
   for (const [topic, keywords] of Object.entries(topicKeywords)) {
-    if (keywords.some(kw => text.includes(kw))) {
-      return topic;
+    const matchCount = keywords.filter(kw => text.includes(kw)).length;
+    if (matchCount > 0) {
+      matchedTopics.push({ topic, count: matchCount });
     }
   }
   
-  return 'Government Operations and Politics';
+  // Sort by match count (most relevant first)
+  matchedTopics.sort((a, b) => b.count - a.count);
+  
+  const topics = matchedTopics.map(m => m.topic);
+  const primary = topics[0] || 'Government Operations and Politics';
+  const additional = topics.slice(1);
+  const topicCount = topics.length;
+  
+  // Detect omnibus type
+  let omnibusType: string | null = null;
+  for (const [type, patterns] of Object.entries(OMNIBUS_PATTERNS)) {
+    if (patterns.some(p => p.test(text))) {
+      omnibusType = type;
+      break;
+    }
+  }
+  if (!omnibusType && topicCount >= 5) {
+    omnibusType = 'other';
+  }
+  
+  // Determine flag based on topic count
+  let flag: string | null = null;
+  if (topicCount >= 5 || omnibusType) {
+    flag = 'omnibus_major';
+  } else if (topicCount >= 3) {
+    flag = 'omnibus_detected';
+  } else if (topicCount === 2) {
+    flag = 'multi_topic_detected';
+  }
+  
+  return { primary, additional, topicCount, flag, omnibusType };
+}
+
+// Legacy single-topic function for backwards compatibility
+function inferTopic(question: string, description: string): string {
+  return inferTopics(question, description).primary;
 }
 
 // Fetch and parse a House roll call vote from clerk.house.gov
@@ -287,6 +342,7 @@ async function fetchHouseVote(
     }
     
     const position = mapVotePosition(voteMatch[1]);
+    const topicResult = inferTopics(voteQuestion, voteDesc);
     
     return {
       vote: {
@@ -296,7 +352,10 @@ async function fetchHouseVote(
         candidate_id: bioguideId,
         position,
         action_type: 'floor_vote',
-        topic: inferTopic(voteQuestion, voteDesc),
+        topic: topicResult.primary,
+        additional_topics: topicResult.additional,
+        topic_flag: topicResult.flag,
+        omnibus_type: topicResult.omnibusType,
         description: `${voteQuestion}. ${voteDesc}`.slice(0, 1000),
         date: voteDate || `${year}-01-01`,
         vote_number: rollNumber,

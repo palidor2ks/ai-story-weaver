@@ -140,3 +140,6 @@ verify_jwt = false
 
 [functions.backfill-vote-chambers]
 verify_jwt = false
+
+[functions.scan-bill-topics]
+verify_jwt = false
