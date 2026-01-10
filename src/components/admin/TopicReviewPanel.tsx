@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, CheckCircle, RefreshCw, Edit, X, Loader2, Tags, FileStack, FileWarning } from 'lucide-react';
+import { AlertTriangle, CheckCircle, RefreshCw, Edit, X, Loader2, Tags, FileStack, FileWarning, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -46,6 +46,8 @@ export default function TopicReviewPanel() {
   const [editedAdditionalTopics, setEditedAdditionalTopics] = useState<string[]>([]);
   const [filterType, setFilterType] = useState<string>('all');
   const [isScanning, setIsScanning] = useState(false);
+  const [scanningBillId, setScanningBillId] = useState<string | null>(null);
+  const [approvingBillId, setApprovingBillId] = useState<string | null>(null);
 
   // Fetch flagged bills
   const { data: flaggedBills, isLoading, refetch } = useQuery({
@@ -150,6 +152,63 @@ export default function TopicReviewPanel() {
       setIsScanning(false);
     }
   };
+
+  // Rescan single bill with AI
+  const rescanBill = useMutation({
+    mutationFn: async (billId: string) => {
+      const response = await supabase.functions.invoke('scan-bill-topics', {
+        body: { billId, forceRescan: true }
+      });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['flagged-bills'] });
+      queryClient.invalidateQueries({ queryKey: ['topic-review-stats'] });
+      const topicCount = data.bill?.ai_detected_topics?.length || 0;
+      toast.success(`AI detected ${topicCount} topic${topicCount !== 1 ? 's' : ''}`);
+    },
+    onError: (error) => {
+      toast.error(`Rescan failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    },
+    onSettled: () => {
+      setScanningBillId(null);
+    }
+  });
+
+  // Quick approve - apply AI detected topics and mark as reviewed
+  const quickApprove = useMutation({
+    mutationFn: async (bill: FlaggedBill) => {
+      if (!bill.ai_detected_topics || bill.ai_detected_topics.length === 0) {
+        throw new Error('No AI-detected topics to approve');
+      }
+      
+      const [primaryTopic, ...additionalTopics] = bill.ai_detected_topics;
+      
+      const { error } = await supabase
+        .from('votes')
+        .update({
+          topic: primaryTopic,
+          additional_topics: additionalTopics,
+          topic_flag: 'admin_reviewed',
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', bill.id);
+        
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['flagged-bills'] });
+      queryClient.invalidateQueries({ queryKey: ['topic-review-stats'] });
+      toast.success('AI topics approved and applied');
+    },
+    onError: (error) => {
+      toast.error(`Approve failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    },
+    onSettled: () => {
+      setApprovingBillId(null);
+    }
+  });
 
   // Open edit dialog
   const handleEditBill = (bill: FlaggedBill) => {
@@ -340,13 +399,56 @@ export default function TopicReviewPanel() {
                         {bill.date ? format(new Date(bill.date), 'MMM d, yyyy') : '-'}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => handleEditBill(bill)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          {/* AI Rescan button */}
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            disabled={scanningBillId === bill.id}
+                            onClick={() => {
+                              setScanningBillId(bill.id);
+                              rescanBill.mutate(bill.id);
+                            }}
+                            title="AI Rescan"
+                          >
+                            {scanningBillId === bill.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-4 w-4" />
+                            )}
+                          </Button>
+                          
+                          {/* Quick Approve button (only if AI topics exist) */}
+                          {bill.ai_detected_topics && bill.ai_detected_topics.length > 0 && (
+                            <Button 
+                              size="sm" 
+                              variant="ghost"
+                              disabled={approvingBillId === bill.id}
+                              onClick={() => {
+                                setApprovingBillId(bill.id);
+                                quickApprove.mutate(bill);
+                              }}
+                              title="Approve AI Topics"
+                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                            >
+                              {approvingBillId === bill.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <CheckCircle className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+                          
+                          {/* Manual Edit button */}
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleEditBill(bill)}
+                            title="Edit Manually"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

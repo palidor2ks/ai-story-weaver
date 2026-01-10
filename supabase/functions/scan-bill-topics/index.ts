@@ -23,7 +23,7 @@ serve(async (req) => {
   }
 
   try {
-    const { batchSize = 50, topic = null, forceRescan = false } = await req.json();
+    const { batchSize = 50, topic = null, forceRescan = false, billId = null } = await req.json();
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -32,7 +32,134 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
 
-    // Query bills that need scanning
+    // Single bill scan mode
+    if (billId) {
+      const { data: bill, error } = await supabase
+        .from('votes')
+        .select('id, bill_id, bill_name, topic, bill_summary')
+        .eq('id', billId)
+        .single();
+      
+      if (error || !bill) {
+        return new Response(JSON.stringify({ error: 'Bill not found' }), { 
+          status: 404, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+
+      if (!bill.bill_summary || bill.bill_summary === '[NO_SUMMARY]') {
+        return new Response(JSON.stringify({ error: 'Bill has no summary to analyze' }), { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+
+      // Analyze single bill
+      const prompt = `Analyze this bill and identify its policy topics.
+
+Available topics: ${ALL_TOPICS.join(', ')}
+
+Bill:
+- Bill Number: ${bill.bill_id}
+- Name: ${bill.bill_name}
+- Current Topic: ${bill.topic}
+- Summary: ${bill.bill_summary?.substring(0, 800) || 'No summary'}
+
+Determine:
+1. The PRIMARY topic based on the summary content
+2. ALL SECONDARY topics it addresses (can be 0, 1, 2, or many)
+3. Whether the current assigned topic is incorrect (mismatch)
+4. Whether this is an omnibus bill (appropriations, NDAA, infrastructure, reconciliation)
+
+Return JSON:
+{
+  "primary_topic": "...",
+  "secondary_topics": ["...", "...", "..."],
+  "topic_count": <total number>,
+  "is_mismatch": boolean,
+  "is_omnibus": boolean,
+  "omnibus_type": "appropriations" | "ndaa" | "infrastructure" | "reconciliation" | "other" | null,
+  "confidence": "high" | "medium" | "low"
+}
+
+Return ONLY valid JSON.`;
+
+      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { role: 'system', content: 'You are a legislative analyst. Return valid JSON only.' },
+            { role: 'user', content: prompt }
+          ],
+          max_tokens: 1000,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          return new Response(JSON.stringify({ error: 'Rate limited, try again shortly' }), { 
+            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          });
+        }
+        if (response.status === 402) {
+          return new Response(JSON.stringify({ error: 'AI credits exhausted' }), { 
+            status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          });
+        }
+        throw new Error(`AI API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      
+      if (!jsonMatch) {
+        return new Response(JSON.stringify({ error: 'Could not parse AI response' }), { 
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+
+      const result = JSON.parse(jsonMatch[0]);
+      const topicCount = result.topic_count || (1 + (result.secondary_topics?.length || 0));
+      
+      let flag: string | null = null;
+      if (result.is_mismatch) {
+        flag = 'possible_mismatch';
+      } else if (topicCount >= 5 || result.is_omnibus) {
+        flag = 'omnibus_major';
+      } else if (topicCount >= 3) {
+        flag = 'omnibus_detected';
+      } else if (topicCount === 2) {
+        flag = 'multi_topic_detected';
+      }
+
+      const updates: Record<string, unknown> = {
+        ai_detected_topics: [result.primary_topic, ...(result.secondary_topics || [])],
+        topic_flag: flag,
+        omnibus_type: result.omnibus_type || null,
+      };
+
+      const { error: updateError } = await supabase.from('votes').update(updates).eq('id', billId);
+      if (updateError) throw updateError;
+
+      return new Response(JSON.stringify({ 
+        status: 'complete',
+        bill: { 
+          id: bill.id,
+          ...updates,
+          primary_topic: result.primary_topic,
+          secondary_topics: result.secondary_topics || [],
+          confidence: result.confidence 
+        }
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Batch scan mode - query bills that need scanning
     let query = supabase
       .from('votes')
       .select('id, bill_id, bill_name, topic, bill_summary, additional_topics, ai_detected_topics')
@@ -43,7 +170,6 @@ serve(async (req) => {
       .limit(batchSize);
     
     if (!forceRescan) {
-      // Only scan bills without AI analysis
       query = query.or('ai_detected_topics.is.null,ai_detected_topics.eq.{}');
     }
     
