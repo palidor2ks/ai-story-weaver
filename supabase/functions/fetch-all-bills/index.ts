@@ -74,34 +74,49 @@ function deriveStatus(latestActionText: string | null): BillStatus {
   const text = latestActionText.toLowerCase();
   
   // Check for law status first (most definitive)
-  if (text.includes('became public law') || text.includes('became law') || text.includes('signed by president')) {
+  if (text.includes('became public law') || 
+      text.includes('became law') || 
+      text.includes('signed by president') ||
+      text.includes('public law')) {
     return 'became_law';
   }
   
   // Check for veto actions
-  if (text.includes('vetoed') || text.includes('veto')) {
+  if (text.includes('vetoed') || text.includes('pocket veto')) {
     return 'veto_actions';
   }
   
   // Check if presented to president
-  if (text.includes('presented to president') || text.includes('to president') || text.includes('sent to president')) {
+  if (text.includes('presented to president') || 
+      text.includes('sent to president') ||
+      text.includes('to the president')) {
     return 'to_president';
   }
   
   // Check for conference/resolving differences
-  if (text.includes('conference') || text.includes('resolving differences')) {
+  if (text.includes('conference') || 
+      text.includes('resolving differences') ||
+      text.includes('conferees')) {
     return 'resolving_differences';
   }
   
-  // Check for passed both chambers
-  if ((text.includes('passed house') && text.includes('passed senate')) ||
-      text.includes('passed both') || text.includes('agreed to in senate') && text.includes('agreed to in house')) {
+  // Check for passed both chambers - look for specific phrases
+  const passedHouse = text.includes('passed house') || 
+                      text.includes('agreed to in house') ||
+                      text.includes('house agreed');
+  const passedSenate = text.includes('passed senate') || 
+                       text.includes('agreed to in senate') ||
+                       text.includes('senate agreed');
+  
+  if (passedHouse && passedSenate) {
     return 'passed_both_chambers';
   }
   
-  // Check for passed one chamber
-  if (text.includes('passed house') || text.includes('passed senate') || 
-      text.includes('agreed to in senate') || text.includes('agreed to in house')) {
+  // Check for passed one chamber - motion to reconsider indicates passage
+  if (passedHouse || passedSenate || 
+      text.includes('motion to reconsider laid on the table') ||
+      text.includes('received in the senate') ||
+      text.includes('received in the house')) {
     return 'passed_one_chamber';
   }
   
@@ -151,7 +166,7 @@ serve(async (req) => {
   }
 
   try {
-    const { congress, billType, offset = 0, limit = 250, fetchSummaries = false } = await req.json();
+    const { congress, billType, offset = 0, limit = 250, fetchSummaries = false, excludeIntroduced = false } = await req.json();
     
     if (!congress || congress < 111 || congress > 119) {
       throw new Error('Congress must be between 111 and 119');
@@ -185,6 +200,7 @@ serve(async (req) => {
     // Transform bills to our schema
     const billsToInsert: BillData[] = [];
     const now = new Date().toISOString();
+    let skippedCount = 0;
     
     for (const bill of bills) {
       const type = (bill.type || 'HR').toUpperCase();
@@ -192,6 +208,13 @@ serve(async (req) => {
       const id = `${type}.${number}`;
       const latestActionText = bill.latestAction?.text || null;
       const latestActionDate = bill.latestAction?.actionDate || null;
+      const derivedStatus = deriveStatus(latestActionText);
+      
+      // Filter out bills that haven't passed at least one chamber
+      if (excludeIntroduced && derivedStatus === 'introduced') {
+        skippedCount++;
+        continue;
+      }
       
       billsToInsert.push({
         id,
@@ -203,12 +226,14 @@ serve(async (req) => {
         chamber: getChamberFromBillType(type),
         introduced_date: bill.introducedDate || null,
         summary: null, // Summaries fetched separately if requested
-        status: deriveStatus(latestActionText),
+        status: derivedStatus,
         latest_action_text: latestActionText,
         latest_action_date: latestActionDate,
         status_updated_at: now,
       });
     }
+    
+    console.log(`[FetchAllBills] Filtered: ${billsToInsert.length} bills to insert, ${skippedCount} skipped (introduced only)`);
 
     // Optionally fetch summaries (slower but complete)
     if (fetchSummaries && billsToInsert.length > 0) {
