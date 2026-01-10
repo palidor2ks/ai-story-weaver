@@ -16,7 +16,7 @@ import { format } from 'date-fns';
 
 // Only use the 10 canonical topics
 const ALL_TOPICS = [
-  'Economy', 'Healthcare', 'Immigration', 'Environment', 'Defense',
+  'Economy', 'Healthcare', 'Immigration', 'Environment', 'Foreign Affairs',
   'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology'
 ];
 
