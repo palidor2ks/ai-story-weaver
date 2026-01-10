@@ -60,6 +60,11 @@ serve(async (req) => {
       throw new Error('CONGRESS_GOV_API_KEY not configured');
     }
 
+    // Format date for Congress.gov API (requires format like 2025-01-01T00:00:00Z - no milliseconds)
+    const formatDateForApi = (date: Date): string => {
+      return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+    };
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
     // Get or create sync status
@@ -84,7 +89,9 @@ serve(async (req) => {
       }, { onConflict: 'id' });
 
     // Calculate fromDateTime if not provided (default: last 24 hours)
-    const syncFromDate = fromDateTime || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Format properly for Congress.gov API
+    const defaultDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const syncFromDate = fromDateTime || formatDateForApi(defaultDate);
     
     console.log(`[NightlyBillSync] Syncing bills updated since ${syncFromDate}. skipIntroduced: ${skipIntroduced}`);
 
