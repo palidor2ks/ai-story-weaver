@@ -20,9 +20,7 @@ import {
   Bot,
   Loader2,
   RefreshCw,
-  Ban,
-  Building2,
-  Square
+  Ban
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -33,22 +31,7 @@ export function BillSummaryDashboard() {
   const [isFetchingCrs, setIsFetchingCrs] = useState(false);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isBackfillingChambers, setIsBackfillingChambers] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
-  const [chamberBackfillStats, setChamberBackfillStats] = useState<{
-    updated: number;
-    remaining: number | null;
-    house: number;
-    senate: number;
-  } | null>(null);
-  const [isAutoBackfilling, setIsAutoBackfilling] = useState(false);
-  const [autoBackfillProgress, setAutoBackfillProgress] = useState<{
-    totalProcessed: number;
-    startingRemaining: number;
-    currentRemaining: number;
-  } | null>(null);
-  // Use ref to allow stopping the loop from the stop button
-  const stopAutoBackfillRef = { current: false };
 
   const handleRefreshStats = async () => {
     setIsRefreshing(true);
@@ -56,17 +39,14 @@ export function BillSummaryDashboard() {
     const initialLastRefreshed = stats?.lastRefreshed;
     
     try {
-      // Call edge function for background refresh
       const { error } = await supabase.functions.invoke('refresh-bill-summary-stats');
       if (error) throw error;
       
       toast.success('Refresh started', { description: 'Stats will update shortly...' });
       
-      // Poll for completion (check every 5s, max 90s)
       const pollInterval = setInterval(async () => {
         await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
         
-        // Check if lastRefreshed has changed
         const currentStats = queryClient.getQueryData<{ lastRefreshed: string | null }>(['bill-summary-stats']);
         const elapsed = Date.now() - startTime;
         
@@ -79,7 +59,6 @@ export function BillSummaryDashboard() {
         }
       }, 5000);
       
-      // Safety timeout
       setTimeout(() => {
         clearInterval(pollInterval);
         setIsRefreshing(false);
@@ -103,7 +82,7 @@ export function BillSummaryDashboard() {
 
   const handleFetchCrsSummaries = async () => {
     setIsFetchingCrs(true);
-    setProgress({ current: 0, total: stats?.notYetFetched || 0 });
+    setProgress({ current: 0, total: stats?.pendingFetch || 0 });
     
     try {
       const { data, error } = await supabase.functions.invoke('backfill-bill-summaries', {
@@ -113,10 +92,9 @@ export function BillSummaryDashboard() {
       if (error) throw error;
       
       toast.success(`Fetched CRS summaries`, {
-        description: `Updated ${data?.updated || 0} votes, ${data?.noSummary || 0} had no CRS summary`
+        description: `Updated ${data?.updated || 0} bills`
       });
       
-      // Trigger background refresh and invalidate query
       triggerBackgroundRefresh();
       await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
     } catch (err) {
@@ -144,7 +122,6 @@ export function BillSummaryDashboard() {
         description: `Processed ${data?.processed || 0} bills, ${data?.failed || 0} failed`
       });
       
-      // Trigger background refresh and invalidate query
       triggerBackgroundRefresh();
       await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
     } catch (err) {
@@ -201,101 +178,7 @@ export function BillSummaryDashboard() {
 
   if (!stats) return null;
 
-  const isProcessing = isFetchingCrs || isGeneratingAi || isBackfillingChambers;
-
-  const handleStopAutoBackfill = () => {
-    stopAutoBackfillRef.current = true;
-    toast.info('Stopping after current batch completes...');
-  };
-
-  const handleBackfillChambers = async (autoContinue: boolean = false) => {
-    setIsBackfillingChambers(true);
-    if (autoContinue) {
-      setIsAutoBackfilling(true);
-      stopAutoBackfillRef.current = false;
-      setAutoBackfillProgress({ totalProcessed: 0, startingRemaining: 0, currentRemaining: 0 });
-    }
-    
-    let totalProcessed = 0;
-    let hasMore = true; // Start true to enter loop
-    let isFirstRun = true;
-    let estimatedRemaining = 0;
-    
-    try {
-      while (hasMore && (autoContinue ? !stopAutoBackfillRef.current : isFirstRun)) {
-        const { data, error } = await supabase.functions.invoke('backfill-vote-chambers', {
-          body: { batchSize: 50000 }
-        });
-        
-        if (error) throw error;
-        
-        const batchUpdated = data?.updated || 0;
-        hasMore = data?.hasMore ?? false;
-        
-        // Track estimated remaining for progress display
-        if (isFirstRun && autoContinue && batchUpdated > 0) {
-          // Estimate based on first batch - assume similar batches ahead
-          estimatedRemaining = hasMore ? batchUpdated * 10 : batchUpdated; // rough estimate
-        }
-        
-        totalProcessed += batchUpdated;
-        
-        setChamberBackfillStats({
-          updated: batchUpdated,
-          remaining: hasMore ? -1 : 0,
-          house: data?.house || 0,
-          senate: data?.senate || 0,
-        });
-        
-        if (autoContinue && !stopAutoBackfillRef.current) {
-          setAutoBackfillProgress({
-            totalProcessed,
-            startingRemaining: estimatedRemaining,
-            currentRemaining: hasMore ? Math.max(0, estimatedRemaining - totalProcessed) : 0,
-          });
-          
-          // Show progress toast every batch
-          toast.info(`Batch complete: ${batchUpdated.toLocaleString()} updated`, {
-            description: hasMore ? 'More records to process...' : 'All done!',
-            duration: 2000,
-          });
-        }
-        
-        isFirstRun = false;
-        
-        // Small delay between batches to avoid rate limiting
-        if (hasMore && autoContinue && !stopAutoBackfillRef.current) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-      
-      if (!hasMore) {
-        toast.success('Chamber backfill complete!', {
-          description: `All sponsored/cosponsored votes now have chamber values. Total processed: ${totalProcessed.toLocaleString()}`
-        });
-      } else if (stopAutoBackfillRef.current) {
-        toast.success(`Auto-backfill stopped`, {
-          description: `Processed ${totalProcessed.toLocaleString()} votes. More records remain.`
-        });
-      } else if (!autoContinue) {
-        toast.success(`Backfilled ${totalProcessed.toLocaleString()} votes`, {
-          description: hasMore ? 'More records remain. Click again or use "Auto".' : 'All done!'
-        });
-      }
-      
-      // Refresh stats after backfill
-      triggerBackgroundRefresh();
-      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
-    } catch (err) {
-      toast.error('Failed to backfill chambers', {
-        description: err instanceof Error ? err.message : 'Unknown error'
-      });
-    } finally {
-      setIsBackfillingChambers(false);
-      setIsAutoBackfilling(false);
-      setAutoBackfillProgress(null);
-    }
-  };
+  const isProcessing = isFetchingCrs || isGeneratingAi;
 
   return (
     <Card className="mb-6">
@@ -307,7 +190,7 @@ export function BillSummaryDashboard() {
               Bill Summary Status Dashboard
             </CardTitle>
             <CardDescription>
-              Detailed metrics on CRS bill summary coverage across voting records
+              Metrics on CRS bill summary coverage across the bills table
               {stats.lastRefreshed && (
                 <span className="ml-2 text-xs">
                   • Last updated: {format(new Date(stats.lastRefreshed), 'MMM d, h:mm a')}
@@ -331,14 +214,14 @@ export function BillSummaryDashboard() {
               variant="outline"
               size="sm"
               onClick={handleFetchCrsSummaries}
-              disabled={stats.notYetFetched === 0 || isProcessing}
+              disabled={stats.pendingFetch === 0 || isProcessing}
             >
               {isFetchingCrs ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Download className="h-4 w-4 mr-2" />
               )}
-              Fetch CRS ({stats.notYetFetched.toLocaleString()})
+              Fetch CRS ({stats.pendingFetch.toLocaleString()})
             </Button>
             <Button 
               size="sm"
@@ -348,89 +231,14 @@ export function BillSummaryDashboard() {
               {isGeneratingAi ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-              <Sparkles className="h-4 w-4 mr-2" />
-            )}
-            Generate AI ({stats.noSummaryAvailable.toLocaleString()})
-          </Button>
-          
-          {/* Chamber Backfill Button Group */}
-          <div className="flex gap-1">
-            <Button 
-              variant="outline"
-              size="sm"
-              onClick={() => handleBackfillChambers(false)}
-              disabled={isProcessing}
-            >
-              {isBackfillingChambers && !isAutoBackfilling ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Building2 className="h-4 w-4 mr-2" />
+                <Sparkles className="h-4 w-4 mr-2" />
               )}
-              Backfill Chambers
-              {chamberBackfillStats?.remaining != null && chamberBackfillStats.remaining > 0 && (
-                <span className="ml-1 text-muted-foreground">
-                  ({chamberBackfillStats.remaining.toLocaleString()})
-                </span>
-              )}
+              Generate AI ({stats.noSummaryAvailable.toLocaleString()})
             </Button>
-            
-            {isAutoBackfilling ? (
-              <Button 
-                variant="destructive"
-                size="sm"
-                onClick={handleStopAutoBackfill}
-              >
-                <Square className="h-4 w-4 mr-2" />
-                Stop
-              </Button>
-            ) : (
-              <Button 
-                variant="outline"
-                size="sm"
-                onClick={() => handleBackfillChambers(true)}
-                disabled={isProcessing}
-                title="Run continuously until all records are processed"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Auto
-              </Button>
-            )}
           </div>
-        </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Data Quality Warning */}
-        {stats.missingCongress > 0 && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Congress Number Required</AlertTitle>
-            <AlertDescription>
-              {stats.missingCongress.toLocaleString()} votes are missing congress numbers. 
-              Run the "Backfill Congress #s" operation first — summaries cannot be fetched without congress numbers.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Auto-Backfill Progress Bar */}
-        {autoBackfillProgress && autoBackfillProgress.startingRemaining > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Auto-backfilling chambers...
-              </span>
-              <span className="font-medium">
-                {autoBackfillProgress.totalProcessed.toLocaleString()} processed, {autoBackfillProgress.currentRemaining.toLocaleString()} remaining
-              </span>
-            </div>
-            <Progress 
-              value={((autoBackfillProgress.startingRemaining - autoBackfillProgress.currentRemaining) / autoBackfillProgress.startingRemaining) * 100} 
-              className="h-2" 
-            />
-          </div>
-        )}
-
         {/* Progress Bar */}
         {progress && (
           <div className="space-y-2">
@@ -447,17 +255,16 @@ export function BillSummaryDashboard() {
         {/* Summary Statistics - 6-column Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-muted/50 rounded-lg p-4 text-center">
-            <div className="text-sm text-muted-foreground mb-1">Total Votes</div>
-            <div className="text-2xl font-bold">{stats.totalVotes.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">{stats.processableVotes.toLocaleString()} processable</div>
+            <div className="text-sm text-muted-foreground mb-1">Total Bills</div>
+            <div className="text-2xl font-bold">{stats.totalBills.toLocaleString()}</div>
           </div>
           
           <div className="bg-blue-500/10 rounded-lg p-4 text-center border border-blue-500/20">
             <div className="flex items-center justify-center gap-1 text-sm text-blue-600 mb-1">
               <Clock className="h-3.5 w-3.5" />
-              Not Yet Fetched
+              Pending Fetch
             </div>
-            <div className="text-2xl font-bold text-blue-600">{stats.notYetFetched.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-blue-600">{stats.pendingFetch.toLocaleString()}</div>
             <div className="text-xs text-muted-foreground">needs CRS fetch</div>
           </div>
           
@@ -496,12 +303,12 @@ export function BillSummaryDashboard() {
           <div className="bg-muted/30 rounded-lg p-4 text-center border border-muted">
             <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground mb-1">
               <Ban className="h-3.5 w-3.5" />
-              Not Applicable
+              Flagged
             </div>
             <div className="text-2xl font-bold text-muted-foreground">
-              {(stats.fullTextTitles + stats.unparseableBillIds).toLocaleString()}
+              {stats.flaggedCount.toLocaleString()}
             </div>
-            <div className="text-xs text-muted-foreground">unparseable IDs</div>
+            <div className="text-xs text-muted-foreground">needs review</div>
           </div>
         </div>
 
@@ -510,7 +317,7 @@ export function BillSummaryDashboard() {
           <div className="flex items-center justify-between mb-2">
             <span className="font-medium">Total Summary Coverage</span>
             <Badge variant="outline" className="text-primary">
-              {stats.withSummary.toLocaleString()} / {stats.processableVotes.toLocaleString()} ({stats.coveragePct}%)
+              {stats.withSummary.toLocaleString()} / {stats.totalBills.toLocaleString()} ({stats.coveragePct}%)
             </Badge>
           </div>
           <Progress value={stats.coveragePct} className="h-3" />
@@ -525,30 +332,30 @@ export function BillSummaryDashboard() {
             </span>
             <span className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-amber-500" />
-              Pending: {(stats.notYetFetched + stats.noSummaryAvailable).toLocaleString()}
+              Pending: {(stats.pendingFetch + stats.noSummaryAvailable).toLocaleString()}
             </span>
           </div>
         </div>
 
-        {/* Not Processable Breakdown */}
+        {/* Congress Breakdown */}
         <div className="bg-muted/30 rounded-lg p-4 border border-muted">
-          <div className="text-sm font-medium mb-3">Processing Details</div>
+          <div className="text-sm font-medium mb-3">Congress Breakdown</div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div>
-              <div className="text-lg font-bold text-purple-600">{stats.proceduralVotesPending.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">Procedural Votes (pending AI)</div>
+              <div className="text-lg font-bold text-primary">{stats.congress118Count.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">118th Congress</div>
             </div>
             <div>
-              <div className="text-lg font-bold text-amber-600">{stats.missingCongress.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">Missing Congress #</div>
+              <div className="text-lg font-bold text-primary">{stats.congress119Count.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">119th Congress</div>
             </div>
             <div>
-              <div className="text-lg font-bold text-muted-foreground">{stats.fullTextTitles.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">Full-Text Titles</div>
+              <div className="text-lg font-bold text-amber-600">{stats.mismatchCount.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">Topic Mismatches</div>
             </div>
             <div>
-              <div className="text-lg font-bold text-muted-foreground">{stats.unparseableBillIds.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">Unparseable IDs</div>
+              <div className="text-lg font-bold text-muted-foreground">{stats.omnibusCount.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">Omnibus Bills</div>
             </div>
           </div>
         </div>

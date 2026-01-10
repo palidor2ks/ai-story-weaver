@@ -2,20 +2,20 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface SummaryStats {
-  totalVotes: number;
+  totalBills: number;
   withSummary: number;
   withCrsSummary: number;
   withAiSummary: number;
   withAiProceduralSummary: number;
   noSummaryAvailable: number;
-  notYetFetched: number;
-  pending: number;
-  missingCongress: number;
-  proceduralVotesPending: number;
-  fullTextTitles: number;
-  unparseableBillIds: number;
-  processableVotes: number;
+  pendingFetch: number;
   coveragePct: number;
+  flaggedCount: number;
+  mismatchCount: number;
+  multiTopicCount: number;
+  omnibusCount: number;
+  congress118Count: number;
+  congress119Count: number;
   lastRefreshed: string | null;
 }
 
@@ -36,10 +36,10 @@ export function useBillSummaryStats() {
 
       if (!data) {
         return {
-          totalVotes: 0, withSummary: 0, withCrsSummary: 0, withAiSummary: 0,
-          withAiProceduralSummary: 0, noSummaryAvailable: 0, notYetFetched: 0,
-          pending: 0, coveragePct: 0, proceduralVotesPending: 0, fullTextTitles: 0,
-          unparseableBillIds: 0, missingCongress: 0, processableVotes: 0, lastRefreshed: null,
+          totalBills: 0, withSummary: 0, withCrsSummary: 0, withAiSummary: 0,
+          withAiProceduralSummary: 0, noSummaryAvailable: 0, pendingFetch: 0,
+          coveragePct: 0, flaggedCount: 0, mismatchCount: 0, multiTopicCount: 0,
+          omnibusCount: 0, congress118Count: 0, congress119Count: 0, lastRefreshed: null,
         };
       }
 
@@ -48,23 +48,27 @@ export function useBillSummaryStats() {
       const withAiSummary = Number(rawData.with_ai_summary) || 0;
       const withAiProceduralSummary = Number(rawData.with_ai_procedural_summary) || 0;
       const withSummary = withCrsSummary + withAiSummary + withAiProceduralSummary;
-      const totalVotes = Number(rawData.total_votes) || 0;
+      const totalBills = Number(rawData.total_bills) || 0;
       const noSummaryAvailable = Number(rawData.no_summary_available) || 0;
-      const notYetFetched = Number(rawData.not_yet_fetched) || 0;
-      const proceduralVotesPending = Number(rawData.procedural_votes_pending) || Number(rawData.floor_votes_no_bill) || 0;
-      const fullTextTitles = Number(rawData.full_text_titles) || 0;
-      const unparseableBillIds = Number(rawData.unparseable_bill_ids) || 0;
-      const missingCongress = Number(rawData.missing_congress) || 0;
+      const pendingFetch = Number(rawData.pending_fetch) || 0;
       
-      const notProcessable = fullTextTitles + unparseableBillIds + missingCongress;
-      const processableVotes = Math.max(0, totalVotes - notProcessable);
-      const pending = Math.max(0, processableVotes - withSummary - noSummaryAvailable);
-      const coveragePct = processableVotes > 0 ? Math.round((withSummary / processableVotes) * 100) : 0;
+      const coveragePct = totalBills > 0 ? Math.round((withSummary / totalBills) * 100) : 0;
 
       return {
-        totalVotes, withSummary, withCrsSummary, withAiSummary, withAiProceduralSummary,
-        noSummaryAvailable, notYetFetched, pending, coveragePct, proceduralVotesPending,
-        fullTextTitles, unparseableBillIds, missingCongress, processableVotes,
+        totalBills,
+        withSummary,
+        withCrsSummary,
+        withAiSummary,
+        withAiProceduralSummary,
+        noSummaryAvailable,
+        pendingFetch,
+        coveragePct,
+        flaggedCount: Number(rawData.flagged_count) || 0,
+        mismatchCount: Number(rawData.mismatch_count) || 0,
+        multiTopicCount: Number(rawData.multi_topic_count) || 0,
+        omnibusCount: Number(rawData.omnibus_count) || 0,
+        congress118Count: Number(rawData.congress_118_count) || 0,
+        congress119Count: Number(rawData.congress_119_count) || 0,
         lastRefreshed: rawData.last_refreshed ? String(rawData.last_refreshed) : null,
       };
     },

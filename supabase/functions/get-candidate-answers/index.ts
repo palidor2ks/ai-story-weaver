@@ -473,17 +473,32 @@ function extractQuestionKeywords(questionText: string): string[] {
 }
 
 // Fetch stored votes from the database - returns BOTH floor votes and legislative actions
-// Now includes bill_summary from cached CRS summaries
+// Now joins candidate_votes with bills table for summaries
 async function fetchStoredVotes(
   supabase: any,
   candidateId: string
 ): Promise<{ floorVotes: StoredVote[]; legislativeActions: StoredVote[] }> {
   try {
+    // Query candidate_votes and join with bills table
     const { data, error } = await supabase
-      .from('votes')
-      .select('bill_id, bill_name, position, topic, date, action_type, vote_number, congress, chamber, bill_summary, summary_fetched_at')
+      .from('candidate_votes')
+      .select(`
+        bill_id,
+        position,
+        action_date,
+        action_type,
+        vote_number,
+        bills!inner (
+          name,
+          topic,
+          congress,
+          chamber,
+          summary,
+          summary_fetched_at
+        )
+      `)
       .eq('candidate_id', candidateId)
-      .order('date', { ascending: false })
+      .order('action_date', { ascending: false })
       .limit(1000);
     
     if (error) {
@@ -491,7 +506,20 @@ async function fetchStoredVotes(
       return { floorVotes: [], legislativeActions: [] };
     }
     
-    const allVotes = data || [];
+    // Transform to StoredVote format
+    const allVotes: StoredVote[] = (data || []).map((v: any) => ({
+      bill_id: v.bill_id,
+      bill_name: v.bills?.name || '',
+      position: v.position,
+      topic: v.bills?.topic || 'General',
+      date: v.action_date,
+      action_type: v.action_type,
+      vote_number: v.vote_number,
+      congress: v.bills?.congress,
+      chamber: v.bills?.chamber,
+      bill_summary: v.bills?.summary,
+      summary_fetched_at: v.bills?.summary_fetched_at,
+    }));
     
     // Separate floor votes from legislative actions
     const floorVotes = allVotes.filter((v: StoredVote) => v.action_type === 'floor_vote');

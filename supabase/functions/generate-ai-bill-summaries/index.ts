@@ -6,15 +6,14 @@ const corsHeaders = {
 };
 
 interface BillToSummarize {
-  bill_id: string;
-  bill_name: string;
+  id: string;
+  name: string;
   congress: number | null;
-  action_type: string | null;
 }
 
 // Configuration for parallel processing
 const CONCURRENT_AI_CALLS = 3;
-const DELAY_BETWEEN_CALLS = 100; // 100ms between parallel batches
+const DELAY_BETWEEN_CALLS = 100;
 
 // Detect floor vote type and return specialized prompt
 function getFloorVotePrompt(billId: string, billName: string): string | null {
@@ -30,72 +29,64 @@ function getFloorVotePrompt(billId: string, billName: string): string | null {
     return `This is a Senate confirmation vote. Generate a 2-3 sentence summary that:
 1. Identifies WHO is being confirmed (extract the nominee's name from the title)
 2. Identifies WHAT position they are being confirmed to
-3. Briefly notes the political significance of this confirmation (e.g., judicial ideology, cabinet role)
+3. Briefly notes the political significance of this confirmation
 
 Vote: ${billName}
 
-Focus on factual information. If the nominee or position is unclear from the title, describe what you can determine.`;
+Focus on factual information.`;
   }
   
   // Cloture votes
   if (nameLower.includes('cloture') || nameLower.includes('motion to invoke')) {
     return `This is a cloture vote in Congress. Generate a 2-3 sentence summary that:
-1. Explains that cloture is a procedural vote to end debate and proceed to a final vote
-2. Identifies what legislation or nomination this cloture vote relates to (if apparent from the title)
-3. Notes why cloture votes matter (they require 60 votes in the Senate to overcome a filibuster)
+1. Explains that cloture is a procedural vote to end debate
+2. Identifies what legislation or nomination this relates to
+3. Notes that cloture requires 60 votes to overcome a filibuster
 
-Vote: ${billName}
-
-Use neutral, educational language.`;
+Vote: ${billName}`;
   }
   
   // Motion to proceed
   if (nameLower.includes('motion to proceed') || nameLower.includes('motion to table')) {
     return `This is a procedural motion vote. Generate a 2-3 sentence summary that:
-1. Explains what this procedural motion does (e.g., motion to proceed brings a bill to the floor for debate)
-2. Identifies what legislation this motion relates to (if apparent from the title)
+1. Explains what this procedural motion does
+2. Identifies what legislation this motion relates to
 3. Notes the procedural significance
 
-Vote: ${billName}
-
-Use neutral, educational language.`;
+Vote: ${billName}`;
   }
   
-  // Passage/Amendment votes on the floor
+  // Passage/Amendment votes
   if (nameLower.includes('on passage') || nameLower.includes('on agreeing') || nameLower.includes('on the amendment')) {
     return `This is a floor vote on legislation or an amendment. Generate a 2-3 sentence summary that:
 1. Identifies whether this is a passage vote or amendment vote
-2. Describes what the legislation/amendment appears to address based on the title
-3. Notes any relevant context if apparent
+2. Describes what the legislation/amendment appears to address
+3. Notes any relevant context
 
-Vote: ${billName}
-
-Focus on what the vote is about, using neutral language.`;
+Vote: ${billName}`;
   }
   
   // Generic procedural vote
   return `This is a procedural floor vote in Congress. Generate a 2-3 sentence summary that:
 1. Describes what type of procedural action this vote represents
 2. Identifies the subject matter if apparent from the title
-3. Explains the procedural significance in plain language
+3. Explains the procedural significance
 
-Vote: ${billName}
-
-Use neutral, educational language that helps citizens understand congressional procedure.`;
+Vote: ${billName}`;
 }
 
 // Get prompt for regular bills (non-procedural)
 function getBillPrompt(bill: BillToSummarize): string {
   return `Generate a 2-3 sentence summary of this bill:
 
-Bill ID: ${bill.bill_id}
-Bill Title: ${bill.bill_name}
+Bill ID: ${bill.id}
+Bill Title: ${bill.name}
 Congress: ${bill.congress ? `${bill.congress}th` : 'Unknown'}
 
-Focus on what the bill proposes to DO and identify the primary policy area. If you cannot determine what the bill does from the title alone, provide a general description based on the available information.`;
+Focus on what the bill proposes to DO and identify the primary policy area.`;
 }
 
-// Chunk array into smaller arrays for parallel processing
+// Chunk array into smaller arrays
 function chunk<T>(array: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < array.length; i += size) {
@@ -104,19 +95,18 @@ function chunk<T>(array: T[], size: number): T[][] {
   return chunks;
 }
 
-// Process a single bill/vote summary generation
+// Process a single bill summary generation
 async function generateSummary(
   bill: BillToSummarize, 
   lovableApiKey: string
 ): Promise<{ bill_id: string; success: boolean; summary?: string; error?: string }> {
   try {
-    // Determine if this is a procedural vote and get appropriate prompt
-    const floorVotePrompt = getFloorVotePrompt(bill.bill_id, bill.bill_name);
+    const floorVotePrompt = getFloorVotePrompt(bill.id, bill.name);
     const prompt = floorVotePrompt || getBillPrompt(bill);
     
     const systemPrompt = floorVotePrompt 
-      ? 'You are a legislative research assistant explaining congressional procedures. Generate clear, factual summaries that help citizens understand how Congress works.'
-      : 'You are a legislative research assistant. Generate brief, factual bill summaries. Use neutral language and focus on what bills propose to do.';
+      ? 'You are a legislative research assistant explaining congressional procedures.'
+      : 'You are a legislative research assistant. Generate brief, factual bill summaries.';
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -136,32 +126,31 @@ async function generateSummary(
 
     if (!aiResponse.ok) {
       if (aiResponse.status === 429) {
-        return { bill_id: bill.bill_id, success: false, error: 'Rate limit exceeded - try again later' };
+        return { bill_id: bill.id, success: false, error: 'Rate limit exceeded' };
       }
       if (aiResponse.status === 402) {
-        return { bill_id: bill.bill_id, success: false, error: 'Payment required - add credits to Lovable AI' };
+        return { bill_id: bill.id, success: false, error: 'Payment required' };
       }
       const errorText = await aiResponse.text();
-      return { bill_id: bill.bill_id, success: false, error: `AI Gateway error (${aiResponse.status}): ${errorText}` };
+      return { bill_id: bill.id, success: false, error: `AI Gateway error (${aiResponse.status}): ${errorText}` };
     }
 
     const aiData = await aiResponse.json();
     const generatedSummary = aiData.choices?.[0]?.message?.content?.trim();
 
     if (!generatedSummary) {
-      return { bill_id: bill.bill_id, success: false, error: 'No summary generated' };
+      return { bill_id: bill.id, success: false, error: 'No summary generated' };
     }
 
-    // Prefix with [AI] marker for regular bills, [AI-PROC] for procedural votes
     const prefix = floorVotePrompt ? '[AI-PROC]' : '[AI]';
     return { 
-      bill_id: bill.bill_id, 
+      bill_id: bill.id, 
       success: true, 
       summary: `${prefix} ${generatedSummary}` 
     };
   } catch (error) {
     return { 
-      bill_id: bill.bill_id, 
+      bill_id: bill.id, 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 
     };
@@ -179,23 +168,15 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // INCREASED default batch size from 10 to 25
-    const { batchSize = 25, dryRun = false, includeProceduralVotes = true } = await req.json().catch(() => ({}));
+    const { batchSize = 25, dryRun = false } = await req.json().catch(() => ({}));
 
-    // Build query for bills needing AI summaries
-    // [NO_SUMMARY] = CRS had no summary, needs AI
-    // Also include procedural votes that need summaries
-    let query = supabase
-      .from('votes')
-      .select('bill_id, bill_name, congress, action_type')
-      .eq('bill_summary', '[NO_SUMMARY]')
+    // Query bills that need AI summaries (have [NO_SUMMARY] from CRS fetch)
+    const { data: billsToProcess, error: fetchError } = await supabase
+      .from('bills')
+      .select('id, name, congress')
+      .eq('summary', '[NO_SUMMARY]')
       .not('congress', 'is', null)
       .limit(batchSize);
-    
-    // No longer exclude VOTE-% by default - we now generate AI summaries for procedural votes
-    // The old filter was: .not('bill_id', 'ilike', 'VOTE-%')
-
-    const { data: billsToProcess, error: fetchError } = await query;
 
     if (fetchError) {
       throw new Error(`Failed to fetch bills: ${fetchError.message}`);
@@ -212,15 +193,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Deduplicate by bill_id + congress
-    const uniqueBills = new Map<string, BillToSummarize>();
-    for (const bill of billsToProcess) {
-      const key = `${bill.bill_id}-${bill.congress}`;
-      if (!uniqueBills.has(key)) {
-        uniqueBills.set(key, bill);
-      }
-    }
-
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY is not configured');
@@ -230,28 +202,20 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          message: `[DRY RUN] Would process ${uniqueBills.size} unique bills`,
-          processed: uniqueBills.size,
+          message: `[DRY RUN] Would process ${billsToProcess.length} bills`,
+          processed: billsToProcess.length,
           failed: 0,
-          results: Array.from(uniqueBills.values()).map(b => ({ 
-            bill_id: b.bill_id, 
-            success: true, 
-            summary: '[DRY RUN]',
-            isProceduralVote: b.bill_id.startsWith('VOTE-')
-          }))
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const results: Array<{ bill_id: string; success: boolean; summary?: string; error?: string; isProceduralVote?: boolean }> = [];
-    const billsArray = Array.from(uniqueBills.values());
     
     // Process in parallel chunks
-    const chunks = chunk(billsArray, CONCURRENT_AI_CALLS);
+    const chunks = chunk(billsToProcess, CONCURRENT_AI_CALLS);
     
     for (const batch of chunks) {
-      // Process batch in parallel
       const batchResults = await Promise.all(
         batch.map(bill => generateSummary(bill, LOVABLE_API_KEY))
       );
@@ -263,14 +227,12 @@ Deno.serve(async (req) => {
         
         if (result.success && result.summary) {
           const { error: updateError } = await supabase
-            .from('votes')
+            .from('bills')
             .update({ 
-              bill_summary: result.summary,
+              summary: result.summary,
               summary_fetched_at: new Date().toISOString()
             })
-            .eq('bill_id', bill.bill_id)
-            .eq('congress', bill.congress)
-            .eq('bill_summary', '[NO_SUMMARY]');
+            .eq('id', bill.id);
 
           if (updateError) {
             result.success = false;
@@ -280,12 +242,11 @@ Deno.serve(async (req) => {
         
         results.push({
           ...result,
-          isProceduralVote: bill.bill_id.startsWith('VOTE-'),
+          isProceduralVote: bill.id.startsWith('VOTE-'),
           summary: result.summary ? result.summary.substring(0, 100) + '...' : undefined
         });
       }
 
-      // Rate limiting - wait between parallel batches
       await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_CALLS));
     }
 
@@ -296,7 +257,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Processed ${uniqueBills.size} unique bills (${proceduralCount} procedural votes)`,
+        message: `Processed ${billsToProcess.length} bills (${proceduralCount} procedural votes)`,
         processed: successCount,
         failed: failCount,
         proceduralVotesProcessed: proceduralCount,

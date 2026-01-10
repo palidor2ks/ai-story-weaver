@@ -47,7 +47,6 @@ serve(async (req) => {
     }
 
     // Get all federal legislators (bioguide IDs match pattern ^[A-Z][0-9]{6}$)
-    // PostgREST doesn't support regex, so we fetch and filter in JS
     const { data: allCandidates, error: legError } = await supabase
       .from('candidates')
       .select('id, name')
@@ -64,11 +63,11 @@ serve(async (req) => {
 
     console.log(`[sync-voting-records] Found ${legislators?.length || 0} federal legislators to sync`);
 
-    // For incremental mode, check which already have votes
+    // For incremental mode, check which already have votes in candidate_votes
     let membersToSync = legislators || [];
     if (mode === 'incremental') {
       const { data: existingVotes } = await supabase
-        .from('votes')
+        .from('candidate_votes')
         .select('candidate_id');
 
       const candidatesWithVotes = new Set(existingVotes?.map(v => v.candidate_id) || []);
@@ -79,7 +78,6 @@ serve(async (req) => {
     // Return immediately and process in background
     const totalMembers = membersToSync.length;
     
-    // Use EdgeRuntime.waitUntil for background processing
     const backgroundProcess = async () => {
       let synced = 0;
       let errors = 0;
@@ -125,7 +123,6 @@ serve(async (req) => {
 
         console.log(`[sync-voting-records] Progress: ${synced + errors}/${totalMembers} (${errors} errors)`);
 
-        // Delay between batches to avoid rate limiting
         if (i + BATCH_SIZE < membersToSync.length) {
           await new Promise(resolve => setTimeout(resolve, DELAY_MS));
         }
@@ -139,7 +136,6 @@ serve(async (req) => {
       // @ts-ignore
       EdgeRuntime.waitUntil(backgroundProcess());
     } else {
-      // Fallback for non-Edge environments (shouldn't happen in production)
       backgroundProcess();
     }
 

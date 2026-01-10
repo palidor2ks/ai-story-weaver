@@ -1648,21 +1648,6 @@ export type Database = {
         }
         Relationships: []
       }
-      topic_legacy_mapping: {
-        Row: {
-          legacy_topic_id: string
-          new_topic_id: string
-        }
-        Insert: {
-          legacy_topic_id: string
-          new_topic_id: string
-        }
-        Update: {
-          legacy_topic_id?: string
-          new_topic_id?: string
-        }
-        Relationships: []
-      }
       topics: {
         Row: {
           icon: string
@@ -1963,6 +1948,8 @@ export type Database = {
           pending_fetch: number | null
           science_count: number | null
           total_bills: number | null
+          with_ai_procedural_summary: number | null
+          with_ai_summary: number | null
           with_crs_summary: number | null
         }
         Relationships: []
@@ -2163,13 +2150,6 @@ export type Database = {
           transfers_total: number
         }[]
       }
-      get_vote_action_counts: {
-        Args: never
-        Returns: {
-          action_type: string
-          count: number
-        }[]
-      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2194,7 +2174,6 @@ export type Database = {
       }
       refresh_bill_summary_stats: { Args: never; Returns: undefined }
       refresh_donor_display_names: { Args: never; Returns: undefined }
-      refresh_vote_action_counts: { Args: never; Returns: undefined }
       resolve_donor_display_name: {
         Args: { p_donor_name: string; p_donor_type: string }
         Returns: string

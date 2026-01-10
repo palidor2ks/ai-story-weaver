@@ -14,7 +14,6 @@ const CANONICAL_TOPICS = [
 
 // Validate and normalize AI-detected topics to canonical topics
 const TOPIC_NORMALIZATION: Record<string, string> = {
-  // Map any legacy Congress.gov policy areas AI might return
   'Agriculture and Food': 'Economy',
   'Commerce': 'Economy',
   'Economics and Public Finance': 'Economy',
@@ -45,7 +44,6 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'Congress': 'Government',
   'Government Operations and Politics': 'Government',
   'Science, Technology, Communications': 'Technology',
-  // Legacy names
   'Criminal Justice': 'Civil Rights',
   'Foreign Policy': 'Defense',
   'Domestic Policy': 'Government',
@@ -63,7 +61,7 @@ function validateTopic(topic: string): string {
 // deno-lint-ignore no-explicit-any
 async function processSingleBill(
   supabase: any,
-  bill: { id: string; bill_id: string; bill_name: string; topic: string; bill_summary: string | null },
+  bill: { id: string; name: string; topic: string; summary: string | null },
   apiKey: string,
   corsHeaders: Record<string, string>,
   validateTopicFn: typeof validateTopic,
@@ -74,21 +72,21 @@ async function processSingleBill(
 Available topics (ONLY use these): ${canonicalTopics.join(', ')}
 
 Bill:
-- Bill Number: ${bill.bill_id}
-- Name: ${bill.bill_name}
+- Bill ID: ${bill.id}
+- Name: ${bill.name}
 - Current Topic: ${bill.topic}
-- Summary: ${bill.bill_summary?.substring(0, 800) || 'No summary'}
+- Summary: ${bill.summary?.substring(0, 800) || 'No summary'}
 
 Determine:
 1. The PRIMARY topic based on the summary content (MUST be from the available topics list)
-2. ALL SECONDARY topics it addresses (MUST be from the available topics list, can be 0, 1, 2, or more)
+2. ALL SECONDARY topics it addresses (MUST be from the available topics list)
 3. Whether the current assigned topic is incorrect (mismatch)
 4. Whether this is an omnibus bill (appropriations, NDAA, infrastructure, reconciliation)
 
 Return JSON:
 {
   "primary_topic": "...",
-  "secondary_topics": ["...", "...", "..."],
+  "secondary_topics": ["...", "..."],
   "topic_count": <total number>,
   "is_mismatch": boolean,
   "is_omnibus": boolean,
@@ -155,7 +153,6 @@ Return ONLY valid JSON.`;
   // Validate and normalize AI-detected topics
   const normalizedPrimary = validateTopicFn(result.primary_topic);
   const normalizedSecondary = (result.secondary_topics || []).map(validateTopicFn);
-  // Remove duplicates and filter out primary from secondary
   const uniqueSecondary = [...new Set(normalizedSecondary as string[])].filter((t) => t !== normalizedPrimary);
 
   const updates: Record<string, unknown> = {
@@ -164,22 +161,20 @@ Return ONLY valid JSON.`;
     omnibus_type: result.omnibus_type || null,
   };
 
-  // Update ALL vote records for this bill_id (not just one row)
-  const { data: updatedRows, error: updateError } = await supabase
-    .from('votes')
+  // Update the bill record
+  const { error: updateError } = await supabase
+    .from('bills')
     .update(updates)
-    .eq('bill_id', bill.bill_id)
-    .is('reviewed_at', null)
-    .select('id');
+    .eq('id', bill.id)
+    .is('reviewed_at', null);
     
   if (updateError) throw updateError;
 
   return new Response(JSON.stringify({ 
     status: 'complete',
-    updated_count: updatedRows?.length || 0,
+    updated_count: 1,
     bill: { 
       id: bill.id,
-      bill_id: bill.bill_id,
       ...updates,
       primary_topic: result.primary_topic,
       secondary_topics: result.secondary_topics || [],
@@ -194,9 +189,8 @@ serve(async (req) => {
   }
 
   try {
-    // Support both bill_id (new) and billId (legacy) parameters
-    const { batchSize = 50, topic = null, forceRescan = false, billId = null, bill_id = null } = await req.json();
-    const targetBillId = bill_id || billId; // Prefer bill_id, fall back to billId for backward compat
+    const { batchSize = 50, topic = null, forceRescan = false, bill_id = null, billId = null } = await req.json();
+    const targetBillId = bill_id || billId;
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -205,58 +199,38 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
 
-    // Single bill scan mode - now operates on bill_id (not row id)
+    // Single bill scan mode
     if (targetBillId) {
-      // Fetch a representative vote record for this bill_id (most recent with a summary)
-      const { data: bills, error } = await supabase
-        .from('votes')
-        .select('id, bill_id, bill_name, topic, bill_summary')
-        .eq('bill_id', targetBillId)
-        .not('bill_summary', 'is', null)
-        .neq('bill_summary', '')
-        .neq('bill_summary', '[NO_SUMMARY]')
-        .order('date', { ascending: false })
-        .limit(1);
+      const { data: bill, error } = await supabase
+        .from('bills')
+        .select('id, name, topic, summary')
+        .eq('id', targetBillId)
+        .single();
       
-      if (error || !bills || bills.length === 0) {
-        // Fallback: try by row id for backward compatibility
-        const { data: billById, error: idError } = await supabase
-          .from('votes')
-          .select('id, bill_id, bill_name, topic, bill_summary')
-          .eq('id', targetBillId)
-          .single();
-        
-        if (idError || !billById) {
-          return new Response(JSON.stringify({ error: 'Bill not found' }), { 
-            status: 404, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          });
-        }
-        
-        // Use bill_id from the found record
-        const bill = billById;
-        if (!bill.bill_summary || bill.bill_summary === '[NO_SUMMARY]') {
-          return new Response(JSON.stringify({ error: 'Bill has no summary to analyze' }), { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          });
-        }
-        
-        // Process this bill and update all records with matching bill_id
-        return await processSingleBill(supabase, bill, LOVABLE_API_KEY, corsHeaders, validateTopic, CANONICAL_TOPICS);
+      if (error || !bill) {
+        return new Response(JSON.stringify({ error: 'Bill not found' }), { 
+          status: 404, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
       }
-
-      const bill = bills[0];
+      
+      if (!bill.summary || bill.summary === '[NO_SUMMARY]') {
+        return new Response(JSON.stringify({ error: 'Bill has no summary to analyze' }), { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+      
       return await processSingleBill(supabase, bill, LOVABLE_API_KEY, corsHeaders, validateTopic, CANONICAL_TOPICS);
     }
 
     // Batch scan mode - query bills that need scanning
     let query = supabase
-      .from('votes')
-      .select('id, bill_id, bill_name, topic, bill_summary, additional_topics, ai_detected_topics')
-      .not('bill_summary', 'is', null)
-      .neq('bill_summary', '')
-      .neq('bill_summary', '[NO_SUMMARY]')
+      .from('bills')
+      .select('id, name, topic, summary, additional_topics, ai_detected_topics')
+      .not('summary', 'is', null)
+      .neq('summary', '')
+      .neq('summary', '[NO_SUMMARY]')
       .is('reviewed_at', null)
       .limit(batchSize);
     
@@ -281,7 +255,6 @@ serve(async (req) => {
 
     console.log(`[ScanBillTopics] Found ${bills.length} bills to analyze`);
 
-    // Batch bills for AI analysis (5 at a time to manage token limits)
     const results = { scanned: 0, flagged: 0, errors: 0 };
     const CHUNK_SIZE = 5;
     
@@ -295,25 +268,24 @@ Available topics (ONLY use these): ${CANONICAL_TOPICS.join(', ')}
 ${chunk.map((b, idx) => `
 Bill ${idx + 1}:
 - ID: ${b.id}
-- Bill Number: ${b.bill_id}
-- Name: ${b.bill_name}
+- Name: ${b.name}
 - Current Topic: ${b.topic}
-- Summary: ${b.bill_summary?.substring(0, 600) || 'No summary'}
+- Summary: ${b.summary?.substring(0, 600) || 'No summary'}
 `).join('\n---\n')}
 
 For each bill, determine:
-1. The PRIMARY topic based on the summary content (MUST be from the available topics list)
-2. ALL SECONDARY topics it addresses (MUST be from the available topics list, can be 0, 1, 2, or more)
+1. The PRIMARY topic based on the summary content
+2. ALL SECONDARY topics it addresses
 3. Whether the current assigned topic is incorrect (mismatch)
-4. Whether this is an omnibus bill (appropriations, NDAA, infrastructure package, reconciliation, etc.)
+4. Whether this is an omnibus bill
 
 Return a JSON array with one object per bill:
 [
   {
     "bill_index": 1,
     "primary_topic": "...",
-    "secondary_topics": ["...", "...", "..."],
-    "topic_count": <total number of topics>,
+    "secondary_topics": ["...", "..."],
+    "topic_count": <total number>,
     "is_mismatch": boolean,
     "is_omnibus": boolean,
     "omnibus_type": "appropriations" | "ndaa" | "infrastructure" | "reconciliation" | "other" | null,
@@ -333,7 +305,7 @@ Return ONLY valid JSON, no other text.`;
           body: JSON.stringify({
             model: 'google/gemini-2.5-flash',
             messages: [
-              { role: 'system', content: 'You are a legislative analyst. Analyze bills and categorize them by policy topic. Return valid JSON only.' },
+              { role: 'system', content: 'You are a legislative analyst. Return valid JSON only.' },
               { role: 'user', content: prompt }
             ],
             max_tokens: 2000,
@@ -344,13 +316,12 @@ Return ONLY valid JSON, no other text.`;
           if (response.status === 429) {
             console.log('[ScanBillTopics] Rate limited, pausing...');
             await new Promise(r => setTimeout(r, 5000));
-            i -= CHUNK_SIZE; // Retry this chunk
+            i -= CHUNK_SIZE;
             continue;
           }
           if (response.status === 402) {
-            console.error('[ScanBillTopics] Payment required - out of credits');
             return new Response(JSON.stringify({ 
-              error: 'AI credits exhausted. Please add credits to continue.',
+              error: 'AI credits exhausted',
               ...results
             }), { 
               status: 402, 
@@ -363,24 +334,21 @@ Return ONLY valid JSON, no other text.`;
         const data = await response.json();
         const content = data.choices?.[0]?.message?.content || '';
         
-        // Parse JSON from response
         const jsonMatch = content.match(/\[[\s\S]*\]/);
         if (!jsonMatch) {
-          console.error('[ScanBillTopics] Could not parse AI response:', content.substring(0, 200));
+          console.error('[ScanBillTopics] Could not parse AI response');
           results.errors += chunk.length;
           continue;
         }
         
         const analysis = JSON.parse(jsonMatch[0]);
         
-        // Update each bill
         for (const result of analysis) {
           const bill = chunk[result.bill_index - 1];
           if (!bill) continue;
           
           const topicCount = result.topic_count || (1 + (result.secondary_topics?.length || 0));
           
-          // Determine flag based on conditions
           let flag: string | null = null;
           if (result.is_mismatch) {
             flag = 'possible_mismatch';
@@ -392,7 +360,6 @@ Return ONLY valid JSON, no other text.`;
             flag = 'multi_topic_detected';
           }
           
-          // Validate and normalize AI-detected topics
           const normalizedPrimary = validateTopic(result.primary_topic);
           const normalizedSecondary: string[] = (result.secondary_topics || []).map((t: string) => validateTopic(t));
           const uniqueSecondary = [...new Set(normalizedSecondary)].filter(t => t !== normalizedPrimary);
@@ -409,7 +376,7 @@ Return ONLY valid JSON, no other text.`;
             updates.omnibus_type = result.omnibus_type;
           }
           
-          const { error: updateError } = await supabase.from('votes').update(updates).eq('id', bill.id);
+          const { error: updateError } = await supabase.from('bills').update(updates).eq('id', bill.id);
           
           if (updateError) {
             console.error(`[ScanBillTopics] Update error for ${bill.id}:`, updateError);
@@ -420,9 +387,8 @@ Return ONLY valid JSON, no other text.`;
           }
         }
         
-        console.log(`[ScanBillTopics] Processed chunk ${Math.floor(i / CHUNK_SIZE) + 1}: ${results.scanned} scanned, ${results.flagged} flagged`);
+        console.log(`[ScanBillTopics] Processed chunk ${Math.floor(i / CHUNK_SIZE) + 1}`);
         
-        // Rate limit delay between chunks
         await new Promise(r => setTimeout(r, 500));
         
       } catch (chunkError) {
@@ -432,7 +398,7 @@ Return ONLY valid JSON, no other text.`;
     }
 
     const status = results.scanned >= bills.length ? 'complete' : 'partial';
-    console.log(`[ScanBillTopics] ${status}: scanned ${results.scanned}, flagged ${results.flagged}, errors ${results.errors}`);
+    console.log(`[ScanBillTopics] ${status}: scanned ${results.scanned}, flagged ${results.flagged}`);
 
     return new Response(JSON.stringify({
       status,
