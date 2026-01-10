@@ -131,8 +131,11 @@ export type Database = {
           last_action_date: string | null
           latest_action_date: string | null
           latest_action_text: string | null
+          max_action_code: number | null
           name: string
           omnibus_type: string | null
+          passed_house: boolean | null
+          passed_senate: boolean | null
           reviewed_at: string | null
           reviewed_by: string | null
           session: number | null
@@ -163,8 +166,11 @@ export type Database = {
           last_action_date?: string | null
           latest_action_date?: string | null
           latest_action_text?: string | null
+          max_action_code?: number | null
           name: string
           omnibus_type?: string | null
+          passed_house?: boolean | null
+          passed_senate?: boolean | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           session?: number | null
@@ -195,8 +201,11 @@ export type Database = {
           last_action_date?: string | null
           latest_action_date?: string | null
           latest_action_text?: string | null
+          max_action_code?: number | null
           name?: string
           omnibus_type?: string | null
+          passed_house?: boolean | null
+          passed_senate?: boolean | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           session?: number | null

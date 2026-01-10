@@ -77,46 +77,63 @@ function deriveStatus(latestActionText: string | null): BillStatus {
   if (text.includes('became public law') || 
       text.includes('became law') || 
       text.includes('signed by president') ||
-      text.includes('public law')) {
+      text.includes('public law no.')) {
     return 'became_law';
   }
   
   // Check for veto actions
-  if (text.includes('vetoed') || text.includes('pocket veto')) {
+  if (text.includes('vetoed') || text.includes('pocket veto') || text.includes('veto message')) {
     return 'veto_actions';
   }
   
   // Check if presented to president
   if (text.includes('presented to president') || 
       text.includes('sent to president') ||
-      text.includes('to the president')) {
+      text.includes('to the president') ||
+      text.includes('cleared for white house')) {
     return 'to_president';
   }
   
   // Check for conference/resolving differences
   if (text.includes('conference') || 
       text.includes('resolving differences') ||
-      text.includes('conferees')) {
+      text.includes('conferees') ||
+      text.includes('house amendment to senate amendment') ||
+      text.includes('senate amendment to house amendment')) {
     return 'resolving_differences';
   }
   
   // Check for passed both chambers - look for specific phrases
   const passedHouse = text.includes('passed house') || 
                       text.includes('agreed to in house') ||
-                      text.includes('house agreed');
+                      text.includes('house agreed to');
   const passedSenate = text.includes('passed senate') || 
                        text.includes('agreed to in senate') ||
-                       text.includes('senate agreed');
+                       text.includes('senate agreed to');
   
   if (passedHouse && passedSenate) {
     return 'passed_both_chambers';
   }
   
-  // Check for passed one chamber - motion to reconsider indicates passage
+  // Check for passed one chamber - multiple indicators
   if (passedHouse || passedSenate || 
       text.includes('motion to reconsider laid on the table') ||
       text.includes('received in the senate') ||
-      text.includes('received in the house')) {
+      text.includes('received in the house') ||
+      text.includes('message on senate action') ||
+      text.includes('message on house action') ||
+      text.includes('placed on senate legislative calendar') ||
+      text.includes('placed on the union calendar') ||
+      text.includes('placed on the calendar') ||
+      text.includes('held at the desk') ||
+      text.includes('resolution agreed to') ||
+      text.includes('agreed to without objection') ||
+      text.includes('passed without objection') ||
+      text.includes('on agreeing to the resolution agreed to') ||
+      text.includes('on passage passed') ||
+      text.includes('cloture on the motion to proceed') ||
+      text.includes('cloture invoked') ||
+      text.includes('read the second time')) {
     return 'passed_one_chamber';
   }
   
