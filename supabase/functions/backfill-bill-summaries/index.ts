@@ -10,21 +10,21 @@ const CONGRESS_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// Configuration for parallel processing - INCREASED for better throughput
-const CONCURRENT_LIMIT = 8; // Up from 5
-const DELAY_BETWEEN_BATCHES = 150; // Slightly reduced from 200ms
+// Configuration for parallel processing
+const CONCURRENT_LIMIT = 8;
+const DELAY_BETWEEN_BATCHES = 150;
 const MAX_RETRIES = 3;
-const RATE_LIMIT_DELAY = 5000; // 5s on rate limit
+const RATE_LIMIT_DELAY = 5000;
 
-interface VoteRecord {
+interface BillRecord {
   id: string;
-  bill_id: string;
-  congress: number;
-  action_type: string | null;
+  bill_type: string | null;
+  bill_number: number | null;
+  congress: number | null;
 }
 
 interface SummaryResult {
-  voteId: string;
+  billId: string;
   summary: string | null;
   success: boolean;
 }
@@ -72,7 +72,7 @@ async function fetchBillSummary(
 
     if (summaries.length === 0) return '[NO_SUMMARY]';
 
-    // Get the most recent/detailed summary - FULL text
+    // Get the most recent/detailed summary
     const latestSummary = summaries[summaries.length - 1];
     return latestSummary.text || '[NO_SUMMARY]';
   } catch (e) {
@@ -85,78 +85,17 @@ async function fetchBillSummary(
   }
 }
 
-// Check if bill_id is a procedural floor vote ID (not a real bill)
-function isProceduralVoteId(billId: string): boolean {
-  return billId.startsWith('VOTE-') || billId.startsWith('vote-');
-}
-
-// Parse bill_id to extract type and number
-function parseBillId(billId: string): { type: string; number: number } | null {
-  // Skip procedural vote IDs - they need AI summaries, not CRS
-  if (isProceduralVoteId(billId)) {
-    return null;
-  }
-  
-  // Remove all spaces, periods, and normalize
-  const cleaned = billId.replace(/\s+/g, '').replace(/\./g, '').toUpperCase();
-  
-  // Match patterns like HR4535, HJRES105, SCONRES50
-  const match = cleaned.match(/^(HR|S|HRES|SRES|HJRES|SJRES|HCONRES|SCONRES)(\d+)$/);
-  if (match) {
-    return { type: match[1], number: parseInt(match[2], 10) };
-  }
-  
-  // Try looser match for edge cases
-  const looseMatch = cleaned.match(/^([A-Z]+)(\d+)$/);
-  if (looseMatch) {
-    console.log(`[BillSummary] Using loose match for bill_id: ${billId} -> ${looseMatch[1]}${looseMatch[2]}`);
-    return { type: looseMatch[1], number: parseInt(looseMatch[2], 10) };
-  }
-  
-  return null;
-}
-
-// Process a single vote and return result
-async function processVote(vote: VoteRecord): Promise<SummaryResult> {
-  // Procedural floor votes (VOTE-xxx) need AI summaries, not CRS
-  // Mark them as [NO_SUMMARY] so they get routed to AI generation
-  if (isProceduralVoteId(vote.bill_id)) {
-    return { 
-      voteId: vote.id, 
-      summary: '[NO_SUMMARY]', // Changed from [FLOOR_VOTE] - routes to AI generation
-      success: true 
-    };
+// Process a single bill and return result
+async function processBill(bill: BillRecord): Promise<SummaryResult> {
+  if (!bill.bill_type || !bill.bill_number || !bill.congress) {
+    console.log(`[BillSummary] Missing required fields for bill ${bill.id}`);
+    return { billId: bill.id, summary: null, success: false };
   }
 
-  // Skip full-text bill titles (not parseable IDs) - typically > 50 chars
-  if (vote.bill_id.length > 50) {
-    console.log(`[BillSummary] Skipping full-text title: ${vote.bill_id.substring(0, 40)}...`);
-    return { 
-      voteId: vote.id, 
-      summary: '[TITLE_NOT_ID]', 
-      success: true 
-    };
-  }
-
-  const parsed = parseBillId(vote.bill_id);
-  if (!parsed) {
-    console.log(`[BillSummary] Could not parse bill_id: ${vote.bill_id}`);
-    return { 
-      voteId: vote.id, 
-      summary: '[UNPARSEABLE]', 
-      success: true 
-    };
-  }
-  
-  if (!vote.congress) {
-    console.log(`[BillSummary] Missing congress for vote ${vote.id}`);
-    return { voteId: vote.id, summary: null, success: false };
-  }
-
-  console.log(`[BillSummary] Fetching summary for ${parsed.type}${parsed.number} (Congress ${vote.congress})`);
-  const summary = await fetchBillSummary(vote.congress, parsed.type, parsed.number);
+  console.log(`[BillSummary] Fetching summary for ${bill.bill_type}${bill.bill_number} (Congress ${bill.congress})`);
+  const summary = await fetchBillSummary(bill.congress, bill.bill_type, bill.bill_number);
   return { 
-    voteId: vote.id, 
+    billId: bill.id, 
     summary: summary || '[NO_SUMMARY]', 
     success: true 
   };
@@ -178,10 +117,8 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    // INCREASED default batch size from 50 to 100
-    const { batchSize = 100, candidateId, speed = 'normal' } = body;
+    const { batchSize = 100, speed = 'normal' } = body;
 
-    // Adjust concurrency based on speed setting
     const concurrentLimit = speed === 'fast' ? 10 : speed === 'conservative' ? 4 : CONCURRENT_LIMIT;
 
     if (!CONGRESS_API_KEY) {
@@ -190,34 +127,27 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Query only non-VOTE- records for CRS fetch
-    // VOTE-xxx records are handled separately by AI generation
+    // Query bills that need summaries (have bill_type/number/congress but no summary)
     const effectiveBatchSize = Math.min(batchSize, 100);
     
-    let query = supabase
-      .from('votes')
-      .select('id, bill_id, congress, action_type')
-      .is('bill_summary', null)
+    const { data: bills, error } = await supabase
+      .from('bills')
+      .select('id, bill_type, bill_number, congress')
+      .is('summary', null)
+      .not('bill_type', 'is', null)
+      .not('bill_number', 'is', null)
       .not('congress', 'is', null)
-      .not('bill_id', 'ilike', 'VOTE-%') // Skip procedural votes - they go to AI
       .order('id', { ascending: true })
       .limit(effectiveBatchSize);
-    
-    if (candidateId) {
-      query = query.eq('candidate_id', candidateId);
-    }
-
-    const startTime = Date.now();
-    const { data: votes, error } = await query;
 
     if (error) {
-      throw new Error(`Failed to fetch votes: ${error.message}`);
+      throw new Error(`Failed to fetch bills: ${error.message}`);
     }
 
-    if (!votes || votes.length === 0) {
+    if (!bills || bills.length === 0) {
       return new Response(JSON.stringify({
         status: 'complete',
-        message: 'No votes remaining without summaries (excluding procedural votes)',
+        message: 'No bills remaining without summaries',
         updated: 0,
         remaining: 0,
       }), {
@@ -225,28 +155,29 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[Backfill] Processing ${votes.length} votes with ${concurrentLimit} concurrent calls...`);
+    console.log(`[Backfill] Processing ${bills.length} bills with ${concurrentLimit} concurrent calls...`);
 
+    const startTime = Date.now();
     let updated = 0;
     let failed = 0;
 
     // Process in parallel chunks
-    const chunks = chunk(votes as VoteRecord[], concurrentLimit);
+    const chunks = chunk(bills as BillRecord[], concurrentLimit);
     
     for (const batch of chunks) {
       // Process batch in parallel
       const results = await Promise.allSettled(
-        batch.map(vote => processVote(vote))
+        batch.map(bill => processBill(bill))
       );
 
       // Collect successful updates
-      const updates: { id: string; bill_summary: string; summary_fetched_at: string }[] = [];
+      const updates: { id: string; summary: string; summary_fetched_at: string }[] = [];
       
       for (const result of results) {
         if (result.status === 'fulfilled' && result.value.success && result.value.summary) {
           updates.push({
-            id: result.value.voteId,
-            bill_summary: result.value.summary,
+            id: result.value.billId,
+            summary: result.value.summary,
             summary_fetched_at: new Date().toISOString()
           });
           updated++;
@@ -259,9 +190,9 @@ serve(async (req) => {
       if (updates.length > 0) {
         for (const update of updates) {
           await supabase
-            .from('votes')
+            .from('bills')
             .update({ 
-              bill_summary: update.bill_summary,
+              summary: update.summary,
               summary_fetched_at: update.summary_fetched_at
             })
             .eq('id', update.id);
@@ -277,13 +208,12 @@ serve(async (req) => {
 
     console.log(`[Backfill] Completed: ${updated} updated, ${failed} failed (${rate.toFixed(1)}/sec)`);
 
-    // Return in_progress if we processed anything - let UI decide when to stop
     return new Response(JSON.stringify({
       status: updated > 0 ? 'in_progress' : 'complete',
-      message: `Processed ${votes.length} votes at ${rate.toFixed(1)}/sec`,
+      message: `Processed ${bills.length} bills at ${rate.toFixed(1)}/sec`,
       updated,
       failed,
-      remaining: null, // Don't run expensive count - UI tracks progress
+      remaining: null,
       processingRate: rate,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
