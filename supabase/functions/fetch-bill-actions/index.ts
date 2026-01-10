@@ -151,7 +151,7 @@ serve(async (req) => {
   }
 
   try {
-    const { congress, batchSize = 50 } = await req.json();
+    const { congress, batchSize = 50, force = false } = await req.json();
     
     if (!CONGRESS_API_KEY) {
       throw new Error('CONGRESS_GOV_API_KEY not configured');
@@ -159,12 +159,17 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Find bills that need status enrichment (missing max_action_code or status = introduced)
+    // Find bills that need status enrichment
+    // If force=true, re-enrich ALL bills (not just those missing max_action_code)
     let query = supabase
       .from('bills')
-      .select('id, bill_type, bill_number, congress, status')
-      .is('max_action_code', null)
+      .select('id, bill_type, bill_number, congress, status, max_action_code, passed_house, passed_senate')
       .limit(batchSize);
+    
+    if (!force) {
+      // Only bills missing action code data
+      query = query.is('max_action_code', null);
+    }
     
     if (congress) {
       query = query.eq('congress', congress);
@@ -236,11 +241,14 @@ serve(async (req) => {
       }
     }
     
-    // Get remaining count
+    // Get remaining count based on force mode
     let remainingQuery = supabase
       .from('bills')
-      .select('*', { count: 'exact', head: true })
-      .is('max_action_code', null);
+      .select('*', { count: 'exact', head: true });
+    
+    if (!force) {
+      remainingQuery = remainingQuery.is('max_action_code', null);
+    }
     
     if (congress) {
       remainingQuery = remainingQuery.eq('congress', congress);
