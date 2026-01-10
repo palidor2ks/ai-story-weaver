@@ -10,41 +10,83 @@ const CONGRESS_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// Map policy areas to topics - now 1:1 mapping with Congress.gov policy areas
-const topicMapping: Record<string, string> = {
-  'Agriculture and Food': 'Agriculture and Food',
-  'Animals': 'Animals',
-  'Armed Forces and National Security': 'Armed Forces and National Security',
-  'Arts, Culture, Religion': 'Arts, Culture, Religion',
-  'Civil Rights and Liberties, Minority Issues': 'Civil Rights and Liberties, Minority Issues',
-  'Commerce': 'Commerce',
-  'Congress': 'Congress',
-  'Crime and Law Enforcement': 'Crime and Law Enforcement',
-  'Economics and Public Finance': 'Economics and Public Finance',
-  'Education': 'Education',
-  'Emergency Management': 'Emergency Management',
-  'Energy': 'Energy',
-  'Environmental Protection': 'Environmental Protection',
-  'Families': 'Families',
-  'Finance and Financial Sector': 'Finance and Financial Sector',
-  'Foreign Trade and International Finance': 'Foreign Trade and International Finance',
-  'Government Operations and Politics': 'Government Operations and Politics',
-  'Health': 'Health',
-  'Housing and Community Development': 'Housing and Community Development',
+// 10 canonical topics for the quiz system
+const CANONICAL_TOPICS = [
+  'Economy', 'Healthcare', 'Immigration', 'Environment', 'Defense',
+  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology'
+] as const;
+
+// Normalize Congress.gov policy areas to our 10 canonical topics
+const TOPIC_NORMALIZATION: Record<string, string> = {
+  // Economy
+  'Agriculture and Food': 'Economy',
+  'Commerce': 'Economy',
+  'Economics and Public Finance': 'Economy',
+  'Finance and Financial Sector': 'Economy',
+  'Foreign Trade and International Finance': 'Economy',
+  'Labor and Employment': 'Economy',
+  'Taxation': 'Economy',
+  'Transportation and Public Works': 'Economy',
+  
+  // Healthcare
+  'Health': 'Healthcare',
+  'Families': 'Healthcare',
+  
+  // Environment
+  'Energy': 'Environment',
+  'Environmental Protection': 'Environment',
+  'Public Lands and Natural Resources': 'Environment',
+  'Water Resources Development': 'Environment',
+  'Animals': 'Environment',
+  
+  // Immigration
   'Immigration': 'Immigration',
-  'International Affairs': 'International Affairs',
-  'Labor and Employment': 'Labor and Employment',
-  'Law': 'Law',
-  'Native Americans': 'Native Americans',
-  'Public Lands and Natural Resources': 'Public Lands and Natural Resources',
-  'Science, Technology, Communications': 'Science, Technology, Communications',
-  'Social Sciences and History': 'Social Sciences and History',
-  'Social Welfare': 'Social Welfare',
-  'Sports and Recreation': 'Sports and Recreation',
-  'Taxation': 'Taxation',
-  'Transportation and Public Works': 'Transportation and Public Works',
-'Water Resources Development': 'Water Resources Development',
+  
+  // Defense
+  'Armed Forces and National Security': 'Defense',
+  'International Affairs': 'Defense',
+  'Emergency Management': 'Defense',
+  
+  // Civil Rights
+  'Civil Rights and Liberties, Minority Issues': 'Civil Rights',
+  'Crime and Law Enforcement': 'Civil Rights',
+  'Law': 'Civil Rights',
+  'Native Americans': 'Civil Rights',
+  'Arts, Culture, Religion': 'Civil Rights',
+  'Sports and Recreation': 'Civil Rights',
+  
+  // Education
+  'Education': 'Education',
+  'Social Sciences and History': 'Education',
+  
+  // Social Programs
+  'Social Welfare': 'Social Programs',
+  'Housing and Community Development': 'Social Programs',
+  
+  // Government
+  'Congress': 'Government',
+  'Government Operations and Politics': 'Government',
+  
+  // Technology
+  'Science, Technology, Communications': 'Technology',
 };
+
+// Handle legacy/non-standard topic names that may already be in the database
+const LEGACY_NORMALIZATION: Record<string, string> = {
+  'Criminal Justice': 'Civil Rights',
+  'Foreign Policy': 'Defense',
+  'Domestic Policy': 'Government',
+  'Government Reform': 'Government',
+  'Gun Policy': 'Civil Rights',
+  'Social Issues': 'Social Programs',
+  'General': 'Government',
+};
+
+function normalizeTopic(topic: string): string {
+  return TOPIC_NORMALIZATION[topic] 
+    || LEGACY_NORMALIZATION[topic] 
+    || 'Government'; // Default fallback
+}
 
 // Derive chamber from bill type prefix
 function getChamberFromBillType(billType: string): 'house' | 'senate' | null {
@@ -137,7 +179,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
         
         for (const bill of sponsoredBills) {
           const policyArea = bill.policyArea?.name || 'General';
-          const mappedTopic = topicMapping[policyArea] || 'Domestic Policy';
+          const mappedTopic = normalizeTopic(policyArea);
           
           votes.push({
             id: `${bioguideId}-${bill.congress || 0}-sponsored-${bill.type}${bill.number}`,
@@ -189,7 +231,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
         
         for (const bill of cosponsoredBills) {
           const policyArea = bill.policyArea?.name || 'General';
-          const mappedTopic = topicMapping[policyArea] || 'Domestic Policy';
+          const mappedTopic = normalizeTopic(policyArea);
           
           votes.push({
             id: `${bioguideId}-${bill.congress || 0}-cosponsored-${bill.type}${bill.number}`,
