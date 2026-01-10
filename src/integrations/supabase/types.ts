@@ -1928,26 +1928,16 @@ export type Database = {
     Views: {
       bill_summary_stats: {
         Row: {
-          civil_rights_count: number | null
           congress_118_count: number | null
           congress_119_count: number | null
-          defense_count: number | null
-          economy_count: number | null
-          education_count: number | null
-          environment_count: number | null
           flagged_count: number | null
-          government_count: number | null
-          healthcare_count: number | null
           id: number | null
-          immigration_count: number | null
           last_refreshed: string | null
           mismatch_count: number | null
           multi_topic_count: number | null
-          native_affairs_count: number | null
           no_summary_available: number | null
           omnibus_count: number | null
           pending_fetch: number | null
-          science_count: number | null
           total_bills: number | null
           with_ai_procedural_summary: number | null
           with_ai_summary: number | null
