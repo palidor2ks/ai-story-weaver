@@ -1935,9 +1935,21 @@ export type Database = {
           last_refreshed: string | null
           mismatch_count: number | null
           multi_topic_count: number | null
+          needs_ai_generation: number | null
           no_summary_available: number | null
           omnibus_count: number | null
           pending_fetch: number | null
+          topic_civil_rights: number | null
+          topic_defense: number | null
+          topic_economy: number | null
+          topic_education: number | null
+          topic_environment: number | null
+          topic_government: number | null
+          topic_health: number | null
+          topic_immigration: number | null
+          topic_native: number | null
+          topic_science: number | null
+          topic_uncategorized: number | null
           total_bills: number | null
           with_ai_procedural_summary: number | null
           with_ai_summary: number | null
