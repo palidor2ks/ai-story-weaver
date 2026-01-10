@@ -20,8 +20,16 @@ import {
   Bot,
   Loader2,
   RefreshCw,
-  Ban
+  Ban,
+  Database
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { format } from "date-fns";
 
 export function BillSummaryDashboard() {
@@ -31,7 +39,21 @@ export function BillSummaryDashboard() {
   const [isFetchingCrs, setIsFetchingCrs] = useState(false);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isIngesting, setIsIngesting] = useState(false);
+  const [selectedCongress, setSelectedCongress] = useState<string>("119");
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+
+  const CONGRESS_OPTIONS = [
+    { value: "119", label: "119th (2025-2026)" },
+    { value: "118", label: "118th (2023-2024)" },
+    { value: "117", label: "117th (2021-2022)" },
+    { value: "116", label: "116th (2019-2020)" },
+    { value: "115", label: "115th (2017-2018)" },
+    { value: "114", label: "114th (2015-2016)" },
+    { value: "113", label: "113th (2013-2014)" },
+    { value: "112", label: "112th (2011-2012)" },
+    { value: "111", label: "111th (2009-2010)" },
+  ];
 
   const handleRefreshStats = async () => {
     setIsRefreshing(true);
@@ -134,6 +156,31 @@ export function BillSummaryDashboard() {
     }
   };
 
+  const handleIngestBills = async () => {
+    setIsIngesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-all-bills', {
+        body: { congress: parseInt(selectedCongress), limit: 250 }
+      });
+      
+      if (error) throw error;
+      
+      toast.success(`Ingested bills from ${selectedCongress}th Congress`, {
+        description: `Inserted/updated ${data?.inserted || 0} bills`
+      });
+      
+      triggerBackgroundRefresh();
+      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+    } catch (err) {
+      console.error('Error ingesting bills:', err);
+      toast.error('Failed to ingest bills', {
+        description: err instanceof Error ? err.message : 'Unknown error'
+      });
+    } finally {
+      setIsIngesting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -178,7 +225,7 @@ export function BillSummaryDashboard() {
 
   if (!stats) return null;
 
-  const isProcessing = isFetchingCrs || isGeneratingAi;
+  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting;
 
   return (
     <Card className="mb-6">
@@ -234,6 +281,35 @@ export function BillSummaryDashboard() {
                 <Sparkles className="h-4 w-4 mr-2" />
               )}
               Generate AI ({stats.noSummaryAvailable.toLocaleString()})
+            </Button>
+            
+            <div className="h-6 w-px bg-border" />
+            
+            <Select value={selectedCongress} onValueChange={setSelectedCongress}>
+              <SelectTrigger className="w-[160px] h-8">
+                <SelectValue placeholder="Select Congress" />
+              </SelectTrigger>
+              <SelectContent>
+                {CONGRESS_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Button 
+              variant="secondary"
+              size="sm"
+              onClick={handleIngestBills}
+              disabled={isProcessing}
+            >
+              {isIngesting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Database className="h-4 w-4 mr-2" />
+              )}
+              Ingest Bills
             </Button>
           </div>
         </div>
