@@ -34,7 +34,14 @@ function deriveStatus(latestActionText: string | null): BillStatus {
     return 'passed_both_chambers';
   }
   if (text.includes('passed house') || text.includes('passed senate') || 
-      text.includes('agreed to in senate') || text.includes('agreed to in house')) {
+      text.includes('agreed to in senate') || text.includes('agreed to in house') ||
+      text.includes('motion to reconsider laid on the table') ||
+      text.includes('received in the senate') || text.includes('received in the house') ||
+      text.includes('placed on senate legislative calendar') ||
+      text.includes('placed on the union calendar') ||
+      text.includes('resolution agreed to') ||
+      text.includes('on passage passed') ||
+      text.includes('cloture invoked')) {
     return 'passed_one_chamber';
   }
   
@@ -47,7 +54,7 @@ serve(async (req) => {
   }
 
   try {
-    const { congress = 119, fromDateTime, limit = 250 } = await req.json().catch(() => ({}));
+    const { congress = 119, fromDateTime, limit = 250, skipIntroduced = true } = await req.json().catch(() => ({}));
     
     if (!CONGRESS_API_KEY) {
       throw new Error('CONGRESS_GOV_API_KEY not configured');
@@ -79,11 +86,12 @@ serve(async (req) => {
     // Calculate fromDateTime if not provided (default: last 24 hours)
     const syncFromDate = fromDateTime || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     
-    console.log(`[NightlyBillSync] Syncing bills updated since ${syncFromDate}`);
+    console.log(`[NightlyBillSync] Syncing bills updated since ${syncFromDate}. skipIntroduced: ${skipIntroduced}`);
 
     let totalChecked = 0;
     let totalUpdated = 0;
     let totalNew = 0;
+    let totalSkipped = 0;
     let offset = 0;
     let hasMore = true;
 
@@ -136,7 +144,14 @@ serve(async (req) => {
             if (!error) totalUpdated++;
           }
         } else {
-          // Insert new bill
+          // For NEW bills: Skip if still just "introduced" and skipIntroduced is enabled
+          // This prevents adding thousands of introduced bills that haven't progressed
+          if (skipIntroduced && newStatus === 'introduced') {
+            totalSkipped++;
+            continue;
+          }
+
+          // Insert new bill (it has progressed past introduction)
           const { error } = await supabase
             .from('bills')
             .insert({
@@ -183,7 +198,7 @@ serve(async (req) => {
       })
       .eq('sync_type', 'nightly');
 
-    console.log(`[NightlyBillSync] Complete. Checked: ${totalChecked}, Updated: ${totalUpdated}, New: ${totalNew}`);
+    console.log(`[NightlyBillSync] Complete. Checked: ${totalChecked}, Updated: ${totalUpdated}, New: ${totalNew}, Skipped (introduced): ${totalSkipped}`);
 
     return new Response(JSON.stringify({
       success: true,
@@ -192,6 +207,7 @@ serve(async (req) => {
       billsChecked: totalChecked,
       billsUpdated: totalUpdated,
       newBillsAdded: totalNew,
+      skippedIntroduced: totalSkipped,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

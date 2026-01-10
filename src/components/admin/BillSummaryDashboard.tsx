@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useBillSummaryStats } from "@/hooks/useBillSummaryStats";
+import { useState, useMemo } from "react";
+import { useBillSummaryStats, IngestionStatus } from "@/hooks/useBillSummaryStats";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -30,7 +30,10 @@ import {
   Send,
   XOctagon,
   Landmark,
-  Activity
+  Activity,
+  PlayCircle,
+  RotateCcw,
+  AlertCircle
 } from "lucide-react";
 import {
   Select,
@@ -54,8 +57,9 @@ export function BillSummaryDashboard() {
   const [isEnrichingSponsors, setIsEnrichingSponsors] = useState(false);
   const [isEnrichingStatus, setIsEnrichingStatus] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [selectedCongress, setSelectedCongress] = useState<string>("119");
-  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const [progress, setProgress] = useState<{ current: number; total: number; filtered?: number } | null>(null);
 
   const CONGRESS_OPTIONS = [
     { value: "119", label: "119th (2025-2026)" },
@@ -68,6 +72,15 @@ export function BillSummaryDashboard() {
     { value: "112", label: "112th (2011-2012)" },
     { value: "111", label: "111th (2009-2010)" },
   ];
+
+  // Get ingestion status for selected congress
+  const selectedIngestionStatus = useMemo(() => {
+    if (!stats?.ingestionStatuses) return null;
+    return stats.ingestionStatuses.find(s => s.congress === parseInt(selectedCongress)) || null;
+  }, [stats?.ingestionStatuses, selectedCongress]);
+
+  const isIncomplete = selectedIngestionStatus?.status === 'in_progress';
+  const isFailed = selectedIngestionStatus?.status === 'failed';
 
   const handleRefreshStats = async () => {
     setIsRefreshing(true);
@@ -171,10 +184,22 @@ export function BillSummaryDashboard() {
 
   const handleIngestBills = async () => {
     setIsIngesting(true);
-    let offset = 0;
-    let totalIngested = 0;
+    
+    // Check for existing incomplete ingestion
+    const existingStatus = selectedIngestionStatus;
+    const isResuming = existingStatus?.status === 'in_progress';
+    
+    let offset = isResuming ? existingStatus.lastOffset : 0;
+    let totalInserted = isResuming ? existingStatus.totalInserted : 0;
+    let totalFiltered = isResuming ? existingStatus.totalFiltered : 0;
     let hasMore = true;
-    let estimatedTotal = 0;
+    let estimatedTotal = existingStatus?.totalAvailable || 0;
+    
+    if (isResuming) {
+      toast.info('Resuming ingestion...', {
+        description: `Continuing from offset ${offset.toLocaleString()} (${totalInserted.toLocaleString()} already inserted)`
+      });
+    }
     
     try {
       while (hasMore) {
@@ -189,7 +214,8 @@ export function BillSummaryDashboard() {
         
         if (error) throw error;
         
-        totalIngested += data?.inserted || 0;
+        totalInserted = data?.runningTotals?.inserted || totalInserted + (data?.inserted || 0);
+        totalFiltered = data?.runningTotals?.filtered || totalFiltered + (data?.filtered || 0);
         hasMore = data?.hasMore || false;
         offset = data?.nextOffset || offset + 250;
         
@@ -200,8 +226,9 @@ export function BillSummaryDashboard() {
         
         // Update progress UI
         setProgress({ 
-          current: totalIngested, 
-          total: estimatedTotal || totalIngested 
+          current: totalInserted, 
+          total: estimatedTotal || totalInserted,
+          filtered: totalFiltered
         });
         
         // Rate limiting delay between batches
@@ -211,19 +238,47 @@ export function BillSummaryDashboard() {
       }
       
       toast.success(`Ingested all bills from ${selectedCongress}th Congress`, {
-        description: `Total: ${totalIngested.toLocaleString()} bills`
+        description: `Total: ${totalInserted.toLocaleString()} bills (${totalFiltered.toLocaleString()} filtered)`
       });
       
       triggerBackgroundRefresh();
       await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
     } catch (err) {
       console.error('Error ingesting bills:', err);
-      toast.error('Failed to ingest bills', {
-        description: err instanceof Error ? err.message : 'Unknown error'
+      toast.error('Ingestion interrupted', {
+        description: `${err instanceof Error ? err.message : 'Unknown error'}. Click "Ingest Bills" to resume.`
       });
     } finally {
       setIsIngesting(false);
       setProgress(null);
+      // Refresh to get latest ingestion status
+      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+    }
+  };
+
+  const handleResetIngestion = async () => {
+    if (!confirm(`Reset ingestion progress for the ${selectedCongress}th Congress? This will start fresh on next ingest.`)) {
+      return;
+    }
+    
+    setIsResetting(true);
+    try {
+      const { error } = await supabase
+        .from('bill_ingestion_status')
+        .delete()
+        .eq('congress', parseInt(selectedCongress));
+      
+      if (error) throw error;
+      
+      toast.success(`Reset ingestion for ${selectedCongress}th Congress`);
+      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+    } catch (err) {
+      console.error('Error resetting ingestion:', err);
+      toast.error('Failed to reset ingestion', {
+        description: err instanceof Error ? err.message : 'Unknown error'
+      });
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -237,7 +292,7 @@ export function BillSummaryDashboard() {
       if (error) throw error;
       
       toast.success('Bill sync completed', {
-        description: `Checked: ${data?.billsChecked || 0}, Updated: ${data?.billsUpdated || 0}, New: ${data?.newBillsAdded || 0}`
+        description: `Checked: ${data?.billsChecked || 0}, Updated: ${data?.billsUpdated || 0}, New: ${data?.newBillsAdded || 0}${data?.skippedIntroduced ? `, Skipped: ${data.skippedIntroduced}` : ''}`
       });
       
       triggerBackgroundRefresh();
@@ -308,6 +363,12 @@ export function BillSummaryDashboard() {
       });
       
       if (error) throw error;
+      
+      // Also clear ingestion status
+      await supabase
+        .from('bill_ingestion_status')
+        .delete()
+        .eq('congress', parseInt(selectedCongress));
       
       toast.success(`Cleared ${selectedCongress}th Congress bills`, {
         description: `Deleted ${data?.deleted?.toLocaleString() || 0} bills`
@@ -414,7 +475,7 @@ export function BillSummaryDashboard() {
 
   if (!stats) return null;
 
-  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isEnrichingStatus || isClearing;
+  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isEnrichingStatus || isClearing || isResetting;
 
   return (
     <Card className="mb-6">
@@ -488,18 +549,36 @@ export function BillSummaryDashboard() {
             </Select>
             
             <Button 
-              variant="secondary"
+              variant={isIncomplete ? "default" : "secondary"}
               size="sm"
               onClick={handleIngestBills}
               disabled={isProcessing}
             >
               {isIngesting ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : isIncomplete ? (
+                <PlayCircle className="h-4 w-4 mr-2" />
               ) : (
                 <Database className="h-4 w-4 mr-2" />
               )}
-              Ingest Bills
+              {isIncomplete ? 'Resume' : 'Ingest Bills'}
             </Button>
+
+            {(isIncomplete || isFailed) && (
+              <Button 
+                variant="ghost"
+                size="sm"
+                onClick={handleResetIngestion}
+                disabled={isProcessing}
+                title="Reset ingestion progress"
+              >
+                {isResetting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-4 w-4" />
+                )}
+              </Button>
+            )}
 
             <Button 
               variant="outline"
@@ -560,6 +639,33 @@ export function BillSummaryDashboard() {
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Incomplete Ingestion Banner */}
+        {selectedIngestionStatus && (isIncomplete || isFailed) && !isIngesting && (
+          <Alert variant={isFailed ? "destructive" : "default"} className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>
+              {isFailed ? 'Ingestion Failed' : 'Incomplete Ingestion'}
+            </AlertTitle>
+            <AlertDescription className="flex items-center justify-between">
+              <span>
+                {selectedIngestionStatus.congress}th Congress: {selectedIngestionStatus.totalInserted.toLocaleString()} inserted, {selectedIngestionStatus.totalFiltered.toLocaleString()} filtered
+                {selectedIngestionStatus.totalAvailable && ` of ~${selectedIngestionStatus.totalAvailable.toLocaleString()} total`}
+                {isFailed && selectedIngestionStatus.errorMessage && ` — Error: ${selectedIngestionStatus.errorMessage}`}
+              </span>
+              <div className="flex gap-2">
+                <Button size="sm" variant={isFailed ? "destructive" : "default"} onClick={handleIngestBills} disabled={isProcessing}>
+                  <PlayCircle className="h-4 w-4 mr-1" />
+                  Resume
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleResetIngestion} disabled={isProcessing}>
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  Reset
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Progress Bar */}
         {progress && (
           <div className="space-y-2">
@@ -577,6 +683,11 @@ export function BillSummaryDashboard() {
               </span>
               <span className="font-medium">
                 {progress.current.toLocaleString()} / {progress.total.toLocaleString()}
+                {progress.filtered !== undefined && progress.filtered > 0 && (
+                  <span className="text-muted-foreground ml-1">
+                    ({progress.filtered.toLocaleString()} filtered)
+                  </span>
+                )}
               </span>
             </div>
             <Progress value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0} className="h-2" />
