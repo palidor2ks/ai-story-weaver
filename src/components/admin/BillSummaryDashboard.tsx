@@ -51,6 +51,7 @@ export function BillSummaryDashboard() {
   const [isIngesting, setIsIngesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isEnrichingSponsors, setIsEnrichingSponsors] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [selectedCongress, setSelectedCongress] = useState<string>("119");
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
@@ -179,7 +180,8 @@ export function BillSummaryDashboard() {
           body: { 
             congress: parseInt(selectedCongress), 
             limit: 250,
-            offset 
+            offset,
+            excludeIntroduced: true  // Only import bills that passed at least one chamber
           }
         });
         
@@ -292,6 +294,36 @@ export function BillSummaryDashboard() {
     }
   };
 
+  const handleClearBills = async () => {
+    if (!confirm(`Are you sure you want to delete all bills from the ${selectedCongress}th Congress? This cannot be undone.`)) {
+      return;
+    }
+    
+    setIsClearing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('clear-congress-bills', {
+        body: { congress: parseInt(selectedCongress) }
+      });
+      
+      if (error) throw error;
+      
+      toast.success(`Cleared ${selectedCongress}th Congress bills`, {
+        description: `Deleted ${data?.deleted?.toLocaleString() || 0} bills`
+      });
+      
+      triggerBackgroundRefresh();
+      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+    } catch (err) {
+      console.error('Error clearing bills:', err);
+      toast.error('Failed to clear bills', {
+        description: err instanceof Error ? err.message : 'Unknown error'
+      });
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+
   if (isLoading) {
     return (
       <Card>
@@ -336,7 +368,7 @@ export function BillSummaryDashboard() {
 
   if (!stats) return null;
 
-  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors;
+  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isClearing;
 
   return (
     <Card className="mb-6">
@@ -449,6 +481,20 @@ export function BillSummaryDashboard() {
                 <Users className="h-4 w-4 mr-2" />
               )}
               Sponsors ({stats.billsMissingSponsor.toLocaleString()})
+            </Button>
+
+            <Button 
+              variant="destructive"
+              size="sm"
+              onClick={handleClearBills}
+              disabled={isProcessing}
+            >
+              {isClearing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <XCircle className="h-4 w-4 mr-2" />
+              )}
+              Clear Bills
             </Button>
           </div>
         </div>
