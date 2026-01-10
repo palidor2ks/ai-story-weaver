@@ -56,6 +56,7 @@ export function BillSummaryDashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isEnrichingSponsors, setIsEnrichingSponsors] = useState(false);
   const [isEnrichingStatus, setIsEnrichingStatus] = useState(false);
+  const [isForceEnriching, setIsForceEnriching] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [selectedCongress, setSelectedCongress] = useState<string>("119");
@@ -386,26 +387,38 @@ export function BillSummaryDashboard() {
     }
   };
 
-  const handleEnrichStatus = async () => {
-    setIsEnrichingStatus(true);
-    setProgress({ current: 0, total: stats?.billsNeedingStatusEnrich || 0 });
+  const handleEnrichStatus = async (forceAll = false) => {
+    if (forceAll) {
+      setIsForceEnriching(true);
+    } else {
+      setIsEnrichingStatus(true);
+    }
+    
+    // For force mode, we process all bills; otherwise just those missing data
+    const totalToProcess = forceAll ? stats?.totalBills || 0 : stats?.billsNeedingStatusEnrich || 0;
+    setProgress({ current: 0, total: totalToProcess });
     
     try {
       let totalProcessed = 0;
-      let remaining = stats?.billsNeedingStatusEnrich || 0;
+      let hasMore = true;
       
       // Process in batches until done or limit reached
-      while (remaining > 0 && totalProcessed < 500) {
+      while (hasMore && totalProcessed < (forceAll ? 2000 : 500)) {
         const { data, error } = await supabase.functions.invoke('fetch-bill-actions', {
-          body: { batchSize: 50, congress: parseInt(selectedCongress) }
+          body: { 
+            batchSize: 50, 
+            congress: parseInt(selectedCongress),
+            force: forceAll
+          }
         });
         
         if (error) throw error;
         
         totalProcessed += data?.processed || 0;
-        remaining = data?.remaining || 0;
+        const remaining = data?.remaining || 0;
+        hasMore = remaining > 0 && (data?.processed || 0) > 0;
         
-        setProgress({ current: totalProcessed, total: stats?.billsNeedingStatusEnrich || 0 });
+        setProgress({ current: totalProcessed, total: totalToProcess });
         
         if ((data?.processed || 0) === 0) break;
         
@@ -413,8 +426,8 @@ export function BillSummaryDashboard() {
         await new Promise(r => setTimeout(r, 500));
       }
       
-      toast.success('Status enrichment completed', {
-        description: `Enriched ${totalProcessed.toLocaleString()} bills, updated statuses where changed`
+      toast.success(forceAll ? 'Full re-enrichment completed' : 'Status enrichment completed', {
+        description: `Processed ${totalProcessed.toLocaleString()} bills with action code data`
       });
       
       triggerBackgroundRefresh();
@@ -426,6 +439,7 @@ export function BillSummaryDashboard() {
       });
     } finally {
       setIsEnrichingStatus(false);
+      setIsForceEnriching(false);
       setProgress(null);
     }
   };
@@ -475,7 +489,7 @@ export function BillSummaryDashboard() {
 
   if (!stats) return null;
 
-  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isEnrichingStatus || isClearing || isResetting;
+  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isEnrichingStatus || isForceEnriching || isClearing || isResetting;
 
   return (
     <Card className="mb-6">
@@ -611,7 +625,7 @@ export function BillSummaryDashboard() {
             <Button 
               variant="outline"
               size="sm"
-              onClick={handleEnrichStatus}
+              onClick={() => handleEnrichStatus(false)}
               disabled={isProcessing || stats.billsNeedingStatusEnrich === 0}
             >
               {isEnrichingStatus ? (
@@ -620,6 +634,21 @@ export function BillSummaryDashboard() {
                 <Activity className="h-4 w-4 mr-2" />
               )}
               Status ({stats.billsNeedingStatusEnrich.toLocaleString()})
+            </Button>
+
+            <Button 
+              variant="secondary"
+              size="sm"
+              onClick={() => handleEnrichStatus(true)}
+              disabled={isProcessing || stats.totalBills === 0}
+              title="Re-fetch action history for ALL bills to fix status accuracy"
+            >
+              {isForceEnriching ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Re-enrich All
             </Button>
 
             <Button 
@@ -675,8 +704,8 @@ export function BillSummaryDashboard() {
                   ? `Ingesting bills from ${selectedCongress}th Congress...` 
                   : isEnrichingSponsors
                     ? 'Enriching sponsor data...'
-                    : isEnrichingStatus
-                      ? 'Enriching bill status from action history...'
+                    : isEnrichingStatus || isForceEnriching
+                      ? `${isForceEnriching ? 'Re-enriching ALL bills' : 'Enriching bill status'} from action history...`
                       : isFetchingCrs 
                         ? 'Fetching CRS summaries...' 
                         : 'Generating AI summaries...'}
@@ -757,7 +786,7 @@ export function BillSummaryDashboard() {
         {/* Bill Status Breakdown */}
         <div className="bg-muted/30 rounded-lg p-4 border border-muted">
           <div className="text-sm font-medium mb-3">Bills by Status</div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             <div className="text-center p-2 rounded bg-slate-500/10">
               <div className="flex items-center justify-center gap-1 text-xs text-slate-600 mb-1">
                 <FileText className="h-3 w-3" />
@@ -778,6 +807,13 @@ export function BillSummaryDashboard() {
                 Passed Both
               </div>
               <div className="text-lg font-bold text-indigo-600">{stats.statusBreakdown.passedBothChambers.toLocaleString()}</div>
+            </div>
+            <div className="text-center p-2 rounded bg-cyan-500/10">
+              <div className="flex items-center justify-center gap-1 text-xs text-cyan-600 mb-1">
+                <RefreshCw className="h-3 w-3" />
+                Resolving
+              </div>
+              <div className="text-lg font-bold text-cyan-600">{stats.statusBreakdown.resolvingDifferences.toLocaleString()}</div>
             </div>
             <div className="text-center p-2 rounded bg-amber-500/10">
               <div className="flex items-center justify-center gap-1 text-xs text-amber-600 mb-1">

@@ -11,6 +11,7 @@ export interface StatusBreakdown {
   introduced: number;
   passedOneChamber: number;
   passedBothChambers: number;
+  resolvingDifferences: number;
   toPresident: number;
   vetoActions: number;
   becameLaw: number;
@@ -70,10 +71,11 @@ export function useBillSummaryStats() {
         throw error;
       }
 
-      // Fetch status breakdown directly from bills table
+      // Fetch status breakdown using action-code-derived status for accuracy
+      // We fetch max_action_code, passed_house, passed_senate to derive accurate status
       const { data: statusData } = await supabase
         .from('bills')
-        .select('status')
+        .select('status, max_action_code, passed_house, passed_senate')
         .not('status', 'is', null);
       
       const statusCounts = {
@@ -83,17 +85,56 @@ export function useBillSummaryStats() {
         toPresident: 0,
         vetoActions: 0,
         becameLaw: 0,
+        resolvingDifferences: 0,
       };
       
       if (statusData) {
         for (const bill of statusData) {
-          const status = bill.status as string;
-          if (status === 'introduced') statusCounts.introduced++;
-          else if (status === 'passed_one_chamber') statusCounts.passedOneChamber++;
-          else if (status === 'passed_both_chambers') statusCounts.passedBothChambers++;
-          else if (status === 'to_president') statusCounts.toPresident++;
-          else if (status === 'veto_actions') statusCounts.vetoActions++;
-          else if (status === 'became_law') statusCounts.becameLaw++;
+          // Use action code for accurate status when available
+          const maxCode = bill.max_action_code as number | null;
+          const passedHouse = bill.passed_house as boolean | null;
+          const passedSenate = bill.passed_senate as boolean | null;
+          
+          let derivedStatus: string;
+          
+          if (maxCode) {
+            // Action code based status (most accurate)
+            if (maxCode >= 36000) {
+              derivedStatus = 'became_law';
+            } else if (maxCode >= 31000) {
+              derivedStatus = 'veto_actions';
+            } else if (maxCode >= 28000) {
+              derivedStatus = 'to_president';
+            } else if (maxCode >= 19000 && maxCode < 25000) {
+              derivedStatus = 'resolving_differences';
+            } else if (passedHouse && passedSenate) {
+              derivedStatus = 'passed_both_chambers';
+            } else if (passedHouse || passedSenate) {
+              derivedStatus = 'passed_one_chamber';
+            } else {
+              derivedStatus = bill.status as string;
+            }
+          } else if (passedHouse !== null || passedSenate !== null) {
+            // Use passage flags when available
+            if (passedHouse && passedSenate) {
+              derivedStatus = 'passed_both_chambers';
+            } else if (passedHouse || passedSenate) {
+              derivedStatus = 'passed_one_chamber';
+            } else {
+              derivedStatus = bill.status as string;
+            }
+          } else {
+            // Fall back to stored status
+            derivedStatus = bill.status as string;
+          }
+          
+          if (derivedStatus === 'introduced') statusCounts.introduced++;
+          else if (derivedStatus === 'passed_one_chamber') statusCounts.passedOneChamber++;
+          else if (derivedStatus === 'passed_both_chambers') statusCounts.passedBothChambers++;
+          else if (derivedStatus === 'to_president') statusCounts.toPresident++;
+          else if (derivedStatus === 'veto_actions') statusCounts.vetoActions++;
+          else if (derivedStatus === 'became_law') statusCounts.becameLaw++;
+          else if (derivedStatus === 'resolving_differences') statusCounts.resolvingDifferences++;
         }
       }
 
