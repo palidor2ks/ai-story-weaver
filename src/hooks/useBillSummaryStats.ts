@@ -35,6 +35,7 @@ export interface SummaryStats {
   topicBreakdown: TopicBreakdown[];
   statusBreakdown: StatusBreakdown;
   billsMissingSponsor: number;
+  billsNeedingStatusEnrich: number;
   lastBillSync: string | null;
   lastRefreshed: string | null;
 }
@@ -88,6 +89,12 @@ export function useBillSummaryStats() {
         .select('*', { count: 'exact', head: true })
         .is('sponsor_bioguide_id', null);
 
+      // Fetch bills needing status enrichment (missing max_action_code)
+      const { count: needingStatusEnrich } = await supabase
+        .from('bills')
+        .select('*', { count: 'exact', head: true })
+        .is('max_action_code', null);
+
       // Fetch last sync status
       const { data: syncStatus } = await supabase
         .from('bill_sync_status')
@@ -103,6 +110,7 @@ export function useBillSummaryStats() {
           multiTopicCount: 0, omnibusCount: 0, congress118Count: 0, congress119Count: 0,
           topicBreakdown: [], statusBreakdown: statusCounts, 
           billsMissingSponsor: missingSponsor || 0,
+          billsNeedingStatusEnrich: needingStatusEnrich || 0,
           lastBillSync: syncStatus?.last_sync_completed_at || null,
           lastRefreshed: null,
         };
@@ -154,6 +162,7 @@ export function useBillSummaryStats() {
         topicBreakdown,
         statusBreakdown: statusCounts,
         billsMissingSponsor: missingSponsor || 0,
+        billsNeedingStatusEnrich: needingStatusEnrich || 0,
         lastBillSync: syncStatus?.last_sync_completed_at || null,
         lastRefreshed: rawData.last_refreshed ? String(rawData.last_refreshed) : null,
       };

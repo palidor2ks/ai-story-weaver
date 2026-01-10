@@ -29,7 +29,8 @@ import {
   Scale,
   Send,
   XOctagon,
-  Landmark
+  Landmark,
+  Activity
 } from "lucide-react";
 import {
   Select,
@@ -51,6 +52,7 @@ export function BillSummaryDashboard() {
   const [isIngesting, setIsIngesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isEnrichingSponsors, setIsEnrichingSponsors] = useState(false);
+  const [isEnrichingStatus, setIsEnrichingStatus] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [selectedCongress, setSelectedCongress] = useState<string>("119");
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
@@ -323,6 +325,50 @@ export function BillSummaryDashboard() {
     }
   };
 
+  const handleEnrichStatus = async () => {
+    setIsEnrichingStatus(true);
+    setProgress({ current: 0, total: stats?.billsNeedingStatusEnrich || 0 });
+    
+    try {
+      let totalProcessed = 0;
+      let remaining = stats?.billsNeedingStatusEnrich || 0;
+      
+      // Process in batches until done or limit reached
+      while (remaining > 0 && totalProcessed < 500) {
+        const { data, error } = await supabase.functions.invoke('fetch-bill-actions', {
+          body: { batchSize: 50, congress: parseInt(selectedCongress) }
+        });
+        
+        if (error) throw error;
+        
+        totalProcessed += data?.processed || 0;
+        remaining = data?.remaining || 0;
+        
+        setProgress({ current: totalProcessed, total: stats?.billsNeedingStatusEnrich || 0 });
+        
+        if ((data?.processed || 0) === 0) break;
+        
+        // Rate limit between batches
+        await new Promise(r => setTimeout(r, 500));
+      }
+      
+      toast.success('Status enrichment completed', {
+        description: `Enriched ${totalProcessed.toLocaleString()} bills, updated statuses where changed`
+      });
+      
+      triggerBackgroundRefresh();
+      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+    } catch (err) {
+      console.error('Error enriching status:', err);
+      toast.error('Failed to enrich status', {
+        description: err instanceof Error ? err.message : 'Unknown error'
+      });
+    } finally {
+      setIsEnrichingStatus(false);
+      setProgress(null);
+    }
+  };
+
 
   if (isLoading) {
     return (
@@ -368,7 +414,7 @@ export function BillSummaryDashboard() {
 
   if (!stats) return null;
 
-  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isClearing;
+  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isEnrichingStatus || isClearing;
 
   return (
     <Card className="mb-6">
@@ -484,6 +530,20 @@ export function BillSummaryDashboard() {
             </Button>
 
             <Button 
+              variant="outline"
+              size="sm"
+              onClick={handleEnrichStatus}
+              disabled={isProcessing || stats.billsNeedingStatusEnrich === 0}
+            >
+              {isEnrichingStatus ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Activity className="h-4 w-4 mr-2" />
+              )}
+              Status ({stats.billsNeedingStatusEnrich.toLocaleString()})
+            </Button>
+
+            <Button 
               variant="destructive"
               size="sm"
               onClick={handleClearBills}
@@ -509,9 +569,11 @@ export function BillSummaryDashboard() {
                   ? `Ingesting bills from ${selectedCongress}th Congress...` 
                   : isEnrichingSponsors
                     ? 'Enriching sponsor data...'
-                    : isFetchingCrs 
-                      ? 'Fetching CRS summaries...' 
-                      : 'Generating AI summaries...'}
+                    : isEnrichingStatus
+                      ? 'Enriching bill status from action history...'
+                      : isFetchingCrs 
+                        ? 'Fetching CRS summaries...' 
+                        : 'Generating AI summaries...'}
               </span>
               <span className="font-medium">
                 {progress.current.toLocaleString()} / {progress.total.toLocaleString()}
