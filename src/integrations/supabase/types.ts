@@ -32,6 +32,78 @@ export type Database = {
         }
         Relationships: []
       }
+      bills: {
+        Row: {
+          additional_topics: string[] | null
+          ai_detected_topics: string[] | null
+          bill_number: number | null
+          bill_type: string | null
+          chamber: string | null
+          congress: number | null
+          created_at: string | null
+          description: string | null
+          id: string
+          introduced_date: string | null
+          last_action_date: string | null
+          name: string
+          omnibus_type: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          session: number | null
+          summary: string | null
+          summary_fetched_at: string | null
+          topic: string
+          topic_flag: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          additional_topics?: string[] | null
+          ai_detected_topics?: string[] | null
+          bill_number?: number | null
+          bill_type?: string | null
+          chamber?: string | null
+          congress?: number | null
+          created_at?: string | null
+          description?: string | null
+          id: string
+          introduced_date?: string | null
+          last_action_date?: string | null
+          name: string
+          omnibus_type?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          session?: number | null
+          summary?: string | null
+          summary_fetched_at?: string | null
+          topic?: string
+          topic_flag?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          additional_topics?: string[] | null
+          ai_detected_topics?: string[] | null
+          bill_number?: number | null
+          bill_type?: string | null
+          chamber?: string | null
+          congress?: number | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          introduced_date?: string | null
+          last_action_date?: string | null
+          name?: string
+          omnibus_type?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          session?: number | null
+          summary?: string | null
+          summary_fetched_at?: string | null
+          topic?: string
+          topic_flag?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       candidate_answers: {
         Row: {
           answer_value: number
@@ -351,6 +423,47 @@ export type Database = {
             columns: ["topic_id"]
             isOneToOne: false
             referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      candidate_votes: {
+        Row: {
+          action_date: string
+          action_type: string
+          bill_id: string
+          candidate_id: string
+          created_at: string | null
+          id: string
+          position: string
+          vote_number: number | null
+        }
+        Insert: {
+          action_date: string
+          action_type: string
+          bill_id: string
+          candidate_id: string
+          created_at?: string | null
+          id?: string
+          position: string
+          vote_number?: number | null
+        }
+        Update: {
+          action_date?: string
+          action_type?: string
+          bill_id?: string
+          candidate_id?: string
+          created_at?: string | null
+          id?: string
+          position?: string
+          vote_number?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_votes_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
             referencedColumns: ["id"]
           },
         ]
