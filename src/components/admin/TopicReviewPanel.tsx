@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { stripHtml } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -499,7 +500,7 @@ export default function TopicReviewPanel() {
                 </div>
                 {selectedBill.summary && (
                   <div className="text-sm mt-3 max-h-32 overflow-y-auto border-t pt-2">
-                    {selectedBill.summary.substring(0, 500)}
+                    {stripHtml(selectedBill.summary).substring(0, 500)}
                     {selectedBill.summary.length > 500 && '...'}
                   </div>
                 )}
