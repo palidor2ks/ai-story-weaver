@@ -186,7 +186,20 @@ Return ONLY this JSON structure:
     });
   }
 
-  const result = JSON.parse(jsonMatch[0]);
+  let result;
+  try {
+    result = JSON.parse(jsonMatch[0]);
+  } catch (parseError) {
+    console.error('[ScanBillTopics] JSON parse error for single bill:', parseError);
+    console.error('[ScanBillTopics] Raw AI response:', content.substring(0, 500));
+    return new Response(JSON.stringify({ 
+      error: 'AI returned invalid JSON',
+      raw_response: content.substring(0, 200)
+    }), { 
+      status: 500, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
   const topicCount = result.topic_count || (1 + (result.secondary_topics?.length || 0));
   
   let flag: string | null = null;
@@ -413,7 +426,15 @@ Return ONLY valid JSON.`;
           continue;
         }
         
-        const analysis = JSON.parse(jsonMatch[0]);
+        let analysis;
+        try {
+          analysis = JSON.parse(jsonMatch[0]);
+        } catch (parseError) {
+          console.error('[ScanBillTopics] JSON parse error in chunk:', parseError);
+          console.error('[ScanBillTopics] Raw AI response:', content.substring(0, 500));
+          results.errors += chunk.length;
+          continue;
+        }
         
         for (const result of analysis) {
           const bill = chunk[result.bill_index - 1];
