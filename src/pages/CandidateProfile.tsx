@@ -13,10 +13,11 @@ import { useAuth } from '@/context/AuthContext';
 import { useFECIntegration } from '@/hooks/useFECIntegration';
 import { useFECTotals } from '@/hooks/useFECTotals';
 import { useFinanceReconciliation, useCommitteeRollups } from '@/hooks/useFinanceReconciliation';
+import { useBillSponsors } from '@/hooks/useBillSponsors';
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp, ScrollText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScoreText } from '@/components/ScoreText';
@@ -55,9 +56,13 @@ export const CandidateProfile = () => {
   const { data: financeReconciliation } = useFinanceReconciliation(id);
   const { data: committeeRollups = [] } = useCommitteeRollups(id);
   
-const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  // Fetch bills sponsored/cosponsored by this legislator
+  const { data: sponsoredBills = [], isLoading: billsLoading } = useBillSponsors(id);
+  
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isFecBreakdownOpen, setIsFecBreakdownOpen] = useState(false);
   const [visibleDonorCount, setVisibleDonorCount] = useState(20);
+  const [visibleBillCount, setVisibleBillCount] = useState(20);
   const [donorSearch, setDonorSearch] = useState('');
   
   const isAdmin = adminData?.isAdmin ?? false;
@@ -368,6 +373,10 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
             <TabsTrigger value="votes" className="gap-2">
               <Vote className="w-4 h-4" />
               Voting Record
+            </TabsTrigger>
+            <TabsTrigger value="legislation" className="gap-2">
+              <ScrollText className="w-4 h-4" />
+              Legislation {sponsoredBills.length > 0 && `(${sponsoredBills.length})`}
             </TabsTrigger>
           </TabsList>
 
@@ -936,6 +945,85 @@ const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
               userTopicScores={userTopicScores}
               representativeParty={candidate.party}
             />
+          </TabsContent>
+
+          <TabsContent value="legislation">
+            <Card className="shadow-elevated">
+              <CardHeader>
+                <CardTitle className="font-display">Sponsored & Cosponsored Legislation</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {billsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                  </div>
+                ) : sponsoredBills.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Summary badges */}
+                    <div className="flex gap-2 mb-4">
+                      <Badge className="bg-primary/10 text-primary border-primary/30">
+                        Sponsored: {sponsoredBills.filter(b => b.is_sponsor).length}
+                      </Badge>
+                      <Badge variant="outline">
+                        Cosponsored: {sponsoredBills.filter(b => !b.is_sponsor).length}
+                      </Badge>
+                    </div>
+                    
+                    {/* Bill list */}
+                    <div className="divide-y divide-border">
+                      {sponsoredBills.slice(0, visibleBillCount).map(bill => (
+                        <div key={bill.bill_id} className="py-3 flex items-start gap-3">
+                          <Badge 
+                            variant={bill.is_sponsor ? "default" : "outline"} 
+                            className={cn(
+                              "shrink-0 text-xs",
+                              bill.is_sponsor && "bg-primary text-primary-foreground"
+                            )}
+                          >
+                            {bill.is_sponsor ? "Sponsor" : "Cosponsor"}
+                          </Badge>
+                          <div className="flex-1 min-w-0">
+                            <a 
+                              href={bill.url || `https://congress.gov/bill/${bill.congress}th-congress/${(bill.bill_type || 'hr').toLowerCase()}/${bill.bill_number}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium hover:text-primary transition-colors line-clamp-2"
+                            >
+                              {bill.bill_type} {bill.bill_number}: {bill.bill_name}
+                            </a>
+                            <div className="flex flex-wrap gap-2 mt-1 text-sm text-muted-foreground">
+                              {bill.topic && (
+                                <Badge variant="secondary" className="text-xs">{bill.topic}</Badge>
+                              )}
+                              {bill.status && <span>{bill.status}</span>}
+                              {bill.sponsorship_date && (
+                                <span className="text-xs">({new Date(bill.sponsorship_date).toLocaleDateString()})</span>
+                              )}
+                            </div>
+                          </div>
+                          <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Load more */}
+                    {sponsoredBills.length > visibleBillCount && (
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={() => setVisibleBillCount(prev => prev + 20)}
+                      >
+                        Show More ({sponsoredBills.length - visibleBillCount} remaining)
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-8">
+                    No sponsored or cosponsored legislation found for this legislator.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
 
