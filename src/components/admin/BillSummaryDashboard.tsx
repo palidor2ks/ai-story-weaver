@@ -34,7 +34,8 @@ import {
   PlayCircle,
   RotateCcw,
   AlertCircle,
-  Upload
+  Upload,
+  Tags
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import {
@@ -67,6 +68,7 @@ export function BillSummaryDashboard() {
   const [isClearing, setIsClearing] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isDerivingTopics, setIsDerivingTopics] = useState(false);
   // selectedCongress is now declared at the top before useBillSummaryStats
   const [progress, setProgress] = useState<{ 
     current: number; 
@@ -563,6 +565,57 @@ export function BillSummaryDashboard() {
     }
   };
 
+  const handleDeriveTopics = async () => {
+    setIsDerivingTopics(true);
+    setProgress({ current: 0, total: 100 });
+    
+    try {
+      let totalProcessed = 0;
+      let totalEnriched = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data, error } = await supabase.functions.invoke('backfill-bill-topics', {
+          body: { 
+            congress: parseInt(selectedCongress),
+            batchSize: 500
+          }
+        });
+        
+        if (error) throw error;
+        
+        totalProcessed += data?.processed || 0;
+        totalEnriched += data?.enriched || 0;
+        hasMore = (data?.remaining || 0) > 0 && (data?.processed || 0) > 0;
+        
+        setProgress({ 
+          current: totalEnriched, 
+          total: totalEnriched + (data?.remaining || 0) 
+        });
+        
+        // Rate limit between batches
+        if (hasMore) {
+          await new Promise(r => setTimeout(r, 300));
+        }
+      }
+      
+      toast.success('Topic derivation completed', {
+        description: `Enriched ${totalEnriched.toLocaleString()} bills with additional topics`
+      });
+      
+      triggerBackgroundRefresh();
+      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
+    } catch (err) {
+      console.error('Error deriving topics:', err);
+      toast.error('Failed to derive topics', {
+        description: err instanceof Error ? err.message : 'Unknown error'
+      });
+    } finally {
+      setIsDerivingTopics(false);
+      setProgress(null);
+    }
+  };
+
 
   if (isLoading) {
     return (
@@ -608,7 +661,7 @@ export function BillSummaryDashboard() {
 
   if (!stats) return null;
 
-  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isEnrichingStatus || isForceEnriching || isClearing || isResetting || isImporting;
+  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isEnrichingStatus || isForceEnriching || isClearing || isResetting || isImporting || isDerivingTopics;
 
   return (
     <Card className="mb-6">
@@ -795,6 +848,21 @@ export function BillSummaryDashboard() {
                 </span>
               </Button>
             </label>
+
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={handleDeriveTopics}
+              disabled={isProcessing}
+              title="Derive additional topics from subject terms"
+            >
+              {isDerivingTopics ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Tags className="h-4 w-4 mr-2" />
+              )}
+              Derive Topics
+            </Button>
 
             <Button 
               variant="destructive"
