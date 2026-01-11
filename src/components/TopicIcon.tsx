@@ -9,6 +9,7 @@ const emojiMap: Record<string, string> = {
   Users: '👥',
   HandHeart: '🤝',
   Cpu: '💻',
+  Gavel: '⚖️',
 };
 
 interface TopicIconProps {

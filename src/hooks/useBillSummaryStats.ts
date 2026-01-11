@@ -254,6 +254,7 @@ export function useBillSummaryStats(selectedCongress?: number, includeResolution
         { name: 'Science & Technology', count: Number(rawData.topic_science) || 0, color: '#0ea5e9' },
         { name: 'Native & Tribal Affairs', count: Number(rawData.topic_native) || 0, color: '#d97706' },
         { name: 'Social Programs', count: Number(rawData.topic_social) || 0, color: '#a855f7' },
+        { name: 'Judicial & Courts', count: Number(rawData.topic_judicial) || 0, color: '#7c3aed' },
         { name: 'Uncategorized', count: Number(rawData.topic_uncategorized) || 0, color: '#6b7280' },
       ].filter(t => t.count > 0).sort((a, b) => b.count - a.count);
 

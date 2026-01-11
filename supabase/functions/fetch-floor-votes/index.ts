@@ -17,10 +17,10 @@ const DEFAULT_CONGRESS_LIST = [119, 118, 117, 116, 115, 114, 113];
 const RATE_LIMIT_DELAY = 50; // ms between API calls
 const SUMMARY_FETCH_DELAY = 100; // ms between summary API calls
 
-// 10 canonical topics for the quiz system
+// 11 canonical topics for the quiz system
 const CANONICAL_TOPICS = [
   'Economy', 'Healthcare', 'Immigration', 'Environment', 'Defense',
-  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology'
+  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology', 'Judicial'
 ] as const;
 
 // Normalize Congress.gov policy areas to our 10 canonical topics
@@ -57,10 +57,12 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   // Civil Rights
   'Civil Rights and Liberties, Minority Issues': 'Civil Rights',
   'Crime and Law Enforcement': 'Civil Rights',
-  'Law': 'Civil Rights',
   'Native Americans': 'Civil Rights',
   'Arts, Culture, Religion': 'Civil Rights',
   'Sports and Recreation': 'Civil Rights',
+  
+  // Judicial
+  'Law': 'Judicial',
   
   // Education
   'Education': 'Education',
@@ -238,7 +240,8 @@ function inferTopics(question: string, description: string): {
     'Healthcare': ['health', 'medicare', 'medicaid', 'hospital', 'medical', 'drug', 'prescription', 'healthcare', 'mental health', 'opioid', 'fentanyl', 'family', 'child', 'children', 'childcare'],
     'Defense': ['defense', 'military', 'veteran', 'armed forces', 'pentagon', 'national security', 'army', 'navy', 'marines', 'air force', 'foreign', 'international', 'diplomacy', 'embassy', 'ambassador', 'treaty', 'nato', 'united nations', 'emergency', 'disaster', 'fema'],
     'Immigration': ['immigration', 'border', 'visa', 'asylum', 'migrant', 'citizenship', 'daca', 'refugee', 'deportation'],
-    'Civil Rights': ['civil rights', 'discrimination', 'voting rights', 'equality', 'lgbtq', 'affirmative action', 'minority', 'crime', 'criminal', 'police', 'law enforcement', 'prison', 'gun', 'firearm', 'weapon', 'fbi', 'atf', 'court', 'judicial', 'judge', 'legal', 'lawsuit', 'litigation', 'sentencing', 'native american', 'tribal', 'tribe', 'indian', 'reservation', 'arts', 'culture', 'museum', 'library', 'religion', 'religious', 'sports', 'recreation', 'athletics', 'olympic'],
+    'Civil Rights': ['civil rights', 'discrimination', 'voting rights', 'equality', 'lgbtq', 'affirmative action', 'minority', 'crime', 'criminal', 'police', 'law enforcement', 'prison', 'gun', 'firearm', 'weapon', 'fbi', 'atf', 'native american', 'tribal', 'tribe', 'indian', 'reservation', 'arts', 'culture', 'museum', 'library', 'religion', 'religious', 'sports', 'recreation', 'athletics', 'olympic'],
+    'Judicial': ['court', 'judicial', 'judge', 'legal', 'lawsuit', 'litigation', 'sentencing', 'supreme court', 'appellate', 'jurisdiction', 'trial', 'verdict', 'precedent', 'constitutional'],
     'Education': ['education', 'school', 'student', 'college', 'university', 'pell grant', 'teacher', 'history', 'historical', 'census', 'research'],
     'Environment': ['energy', 'renewable', 'solar', 'wind', 'oil', 'gas', 'nuclear', 'fossil fuel', 'electricity', 'environment', 'climate', 'carbon', 'pollution', 'conservation', 'wildlife', 'epa', 'clean air', 'clean water', 'public land', 'national park', 'forest', 'wilderness', 'mining', 'drilling', 'water', 'dam', 'flood', 'drought', 'irrigation', 'wastewater', 'animal', 'endangered species'],
     'Economy': ['budget', 'fiscal', 'debt', 'deficit', 'appropriation', 'spending', 'economic', 'tax', 'taxes', 'taxation', 'irs', 'revenue', 'labor', 'employment', 'worker', 'wage', 'union', 'overtime', 'osha', 'workplace', 'commerce', 'business', 'trade', 'tariff', 'antitrust', 'consumer protection', 'bank', 'banking', 'financial', 'wall street', 'securities', 'cryptocurrency', 'fed', 'interest rate', 'transportation', 'highway', 'road', 'bridge', 'rail', 'transit', 'airport', 'infrastructure', 'agriculture', 'farm', 'food', 'crop', 'usda', 'nutrition', 'rural'],
