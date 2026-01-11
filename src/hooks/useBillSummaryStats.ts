@@ -104,51 +104,49 @@ export function useBillSummaryStats(selectedCongress?: number, includeResolution
       };
       
       if (statusData) {
+        // Terminal statuses that should be trusted from stored status field
+        const terminalStatuses = ['became_law', 'veto_actions', 'to_president', 'resolving_differences'];
+        
         for (const bill of statusData) {
-          // Use action code for accurate status when available
           const maxCode = bill.max_action_code as number | null;
           const passedHouse = bill.passed_house as boolean | null;
           const passedSenate = bill.passed_senate as boolean | null;
+          const storedStatus = bill.status as string | null;
           
           let derivedStatus: string;
           
-          // Priority order based on action codes (highest milestone wins)
-          // This matches Congress.gov's legislative lifecycle
-          if (maxCode) {
+          // Priority 1: Trust stored terminal statuses (from Excel import or API)
+          // These represent final legislative milestones and should not be overridden
+          if (storedStatus && terminalStatuses.includes(storedStatus)) {
+            derivedStatus = storedStatus;
+          }
+          // Priority 2: Use action codes for precise status when available
+          else if (maxCode) {
             if (maxCode >= 36000) {
-              // Became Law (Public Law, Private Law)
               derivedStatus = 'became_law';
             } else if (maxCode >= 30000 && maxCode < 36000) {
-              // Veto actions (30000-35999)
               derivedStatus = 'veto_actions';
             } else if (maxCode >= 28000 && maxCode < 30000) {
-              // To President / Presented to President (28000-29999)
               derivedStatus = 'to_president';
             } else if (maxCode >= 19000 && maxCode < 25000) {
-              // Resolving differences (conference, amendments between chambers)
               derivedStatus = 'resolving_differences';
             } else if (passedHouse && passedSenate) {
-              // Passed both chambers but hasn't reached higher milestone
               derivedStatus = 'passed_both_chambers';
             } else if (passedHouse || passedSenate) {
-              // Only count as passed if passage flag is true (set by fetch-bill-actions)
               derivedStatus = 'passed_one_chamber';
             } else {
-              // All other bills (including committee/calendar stage) are introduced
               derivedStatus = 'introduced';
             }
-          } else if (passedHouse !== null || passedSenate !== null) {
-            // Use passage flags when no action code available
-            if (passedHouse && passedSenate) {
-              derivedStatus = 'passed_both_chambers';
-            } else if (passedHouse || passedSenate) {
-              derivedStatus = 'passed_one_chamber';
-            } else {
-              derivedStatus = bill.status as string || 'introduced';
-            }
-          } else {
-            // Fall back to stored status
-            derivedStatus = bill.status as string || 'introduced';
+          }
+          // Priority 3: Use passage flags for non-terminal status
+          else if (passedHouse && passedSenate) {
+            derivedStatus = 'passed_both_chambers';
+          } else if (passedHouse || passedSenate) {
+            derivedStatus = 'passed_one_chamber';
+          }
+          // Priority 4: Fall back to stored status
+          else {
+            derivedStatus = storedStatus || 'introduced';
           }
           
           // Count by derived status
