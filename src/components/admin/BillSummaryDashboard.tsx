@@ -461,7 +461,8 @@ export function BillSummaryDashboard() {
     }
   };
 
-  // Handler for importing bills from Excel file
+  // Handler for importing bills from Excel file with client-side batching
+  // to avoid WORKER_LIMIT errors on large files
   const handleImportExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -485,39 +486,71 @@ export function BillSummaryDashboard() {
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: null });
       
       console.log(`[ImportExcel] Parsed ${jsonData.length} rows from sheet "${sheetName}"`);
-      setProgress({ current: 10, total: 100 });
       
       if (jsonData.length === 0) {
         throw new Error('No data found in Excel file');
       }
       
-      toast.info(`Parsed ${jsonData.length} rows. Sending to server...`);
-      setProgress({ current: 20, total: 100 });
+      // Batch processing - 500 rows per batch to avoid memory limits
+      const BATCH_SIZE = 500;
+      const totalBatches = Math.ceil(jsonData.length / BATCH_SIZE);
+      let totalInserted = 0;
+      let totalErrors = 0;
+      const allErrors: string[] = [];
       
-      // Send to edge function
-      const { data, error } = await supabase.functions.invoke('import-bills-excel', {
-        body: { 
-          rows: jsonData, 
-          congress: parseInt(selectedCongress) 
+      toast.info(`Processing ${jsonData.length} rows in ${totalBatches} batches...`);
+      setProgress({ current: 5, total: 100 });
+      
+      for (let i = 0; i < jsonData.length; i += BATCH_SIZE) {
+        const batch = jsonData.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        
+        // Update progress (5% for parsing, 90% for batches, 5% for finalization)
+        const progressPercent = 5 + Math.round((i / jsonData.length) * 90);
+        setProgress({ current: progressPercent, total: 100 });
+        
+        console.log(`[ImportExcel] Sending batch ${batchNum}/${totalBatches} (${batch.length} rows)`);
+        
+        const { data, error } = await supabase.functions.invoke('import-bills-excel', {
+          body: { 
+            rows: batch, 
+            congress: parseInt(selectedCongress) 
+          }
+        });
+        
+        if (error) {
+          console.error(`[ImportExcel] Batch ${batchNum} error:`, error);
+          allErrors.push(`Batch ${batchNum}: ${error.message}`);
+          continue; // Continue with next batch
         }
-      });
-      
-      if (error) throw error;
+        
+        if (data.success) {
+          totalInserted += data.inserted || 0;
+          totalErrors += data.errorCount || 0;
+          if (data.errors) {
+            allErrors.push(...data.errors.slice(0, 5)); // Limit errors per batch
+          }
+        } else {
+          allErrors.push(`Batch ${batchNum}: ${data.error || 'Unknown error'}`);
+        }
+        
+        // Small delay between batches to prevent rate limiting
+        if (i + BATCH_SIZE < jsonData.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
       
       setProgress({ current: 100, total: 100 });
       
-      if (data.success) {
-        toast.success(`Imported ${data.inserted} bills from ${data.totalRows} rows`);
-        if (data.errorCount > 0) {
-          toast.warning(`${data.errorCount} rows had errors`);
-          console.warn('[ImportExcel] Errors:', data.errors);
-        }
-        
-        // Refresh stats
-        await queryClient.invalidateQueries({ queryKey: ['billSummaryStats'] });
-      } else {
-        throw new Error(data.error || 'Import failed');
+      // Show results
+      toast.success(`Imported ${totalInserted} bills from ${jsonData.length} rows`);
+      if (totalErrors > 0) {
+        toast.warning(`${totalErrors} rows had errors`);
+        console.warn('[ImportExcel] Errors:', allErrors.slice(0, 20));
       }
+      
+      // Refresh stats
+      await queryClient.invalidateQueries({ queryKey: ['billSummaryStats'] });
       
     } catch (err) {
       console.error('[ImportExcel] Error:', err);
