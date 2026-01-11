@@ -128,11 +128,11 @@ export function useBillSummaryStats(selectedCongress?: number) {
             } else if (passedHouse && passedSenate) {
               // Passed both chambers but hasn't reached higher milestone
               derivedStatus = 'passed_both_chambers';
-            } else if (maxCode >= 8000 || passedHouse || passedSenate) {
-              // Passed one chamber (8000 = Passed House, 17000 = Passed Senate)
+            } else if (passedHouse || passedSenate) {
+              // Only count as passed if passage flag is true (set by fetch-bill-actions)
               derivedStatus = 'passed_one_chamber';
             } else {
-              // Has action code but no clear status - likely introduced
+              // All other bills (including committee/calendar stage) are introduced
               derivedStatus = 'introduced';
             }
           } else if (passedHouse !== null || passedSenate !== null) {
