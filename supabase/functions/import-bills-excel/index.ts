@@ -206,19 +206,41 @@ function getChamberFromBillType(billType: string): string {
   return 'house';
 }
 
+// Collect values from duplicate columns like "billSubjectTerm", "billSubjectTerm_1", etc.
+// xlsx.utils.sheet_to_json auto-renames duplicate columns with _1, _2 suffixes
+function collectArrayValues(row: ExcelRow, prefix: string): string[] {
+  const values: string[] = [];
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^${escapedPrefix}(_\\d+)?$`);
+  
+  for (const key of Object.keys(row)) {
+    if (pattern.test(key)) {
+      const val = row[key];
+      if (val && typeof val === 'string' && val.trim()) {
+        values.push(val.trim());
+      }
+    }
+  }
+  return [...new Set(values)]; // Deduplicate
+}
+
 interface ExcelRow {
   'Legislation Number'?: string;
+  'URL'?: string;
   'Congress'?: string;
   'Title'?: string;
   'Sponsor'?: string;
   'Party of Sponsor'?: string;
   'Date of Introduction'?: string | number;
+  'Committees'?: string;
   'Latest Action'?: string;
   'Latest Action Date'?: string | number;
   'Latest Tracker Stage'?: string;
   'billPolicyArea'?: string;
   'Latest Summary'?: string;
   'Number of Cosponsors'?: string | number;
+  'Number of Related Bills'?: string | number;
+  'Amends Bill'?: string;
   [key: string]: unknown;
 }
 
@@ -259,6 +281,12 @@ serve(async (req) => {
       sponsor_state: string | null;
       cosponsor_count: number | null;
       status_updated_at: string;
+      url: string | null;
+      committees: string | null;
+      subject_terms: string[];
+      related_bill_count: number;
+      related_bills: string[];
+      amends_bill: string | null;
     }> = [];
     
     const now = new Date().toISOString();
@@ -282,6 +310,14 @@ serve(async (req) => {
       const statusInfo = deriveStatusFromTrackerStage(row['Latest Tracker Stage']);
       const summary = stripHtml(row['Latest Summary']);
       
+      // Collect subject terms from repeated columns (billSubjectTerm, billSubjectTerm_1, etc.)
+      const subjectTerms = collectArrayValues(row, 'billSubjectTerm');
+      
+      // Collect related bills from repeated columns (Related Bill, Related Bill_1, etc.)
+      // Filter out URLs, keep only bill IDs like "S.2354", "H.R.4754"
+      const relatedBills = collectArrayValues(row, 'Related Bill')
+        .filter(v => !v.startsWith('http') && !v.includes('/'));
+      
       billsToInsert.push({
         id: billId,
         name: row['Title'] || `${parsed.type} ${parsed.number}`,
@@ -304,6 +340,14 @@ serve(async (req) => {
         cosponsor_count: row['Number of Cosponsors'] ? 
           parseInt(String(row['Number of Cosponsors']), 10) || null : null,
         status_updated_at: now,
+        url: row['URL'] || null,
+        committees: row['Committees'] || null,
+        subject_terms: subjectTerms,
+        related_bill_count: row['Number of Related Bills'] 
+          ? parseInt(String(row['Number of Related Bills']), 10) || 0 
+          : 0,
+        related_bills: relatedBills,
+        amends_bill: row['Amends Bill'] || null,
       });
     }
     
