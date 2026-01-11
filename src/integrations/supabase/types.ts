@@ -167,9 +167,11 @@ export type Database = {
         Row: {
           additional_topics: string[] | null
           ai_detected_topics: string[] | null
+          amends_bill: string | null
           bill_number: number | null
           bill_type: string | null
           chamber: string | null
+          committees: string | null
           congress: number | null
           cosponsor_count: number | null
           created_at: string | null
@@ -184,6 +186,8 @@ export type Database = {
           omnibus_type: string | null
           passed_house: boolean | null
           passed_senate: boolean | null
+          related_bill_count: number | null
+          related_bills: string[] | null
           reviewed_at: string | null
           reviewed_by: string | null
           session: number | null
@@ -193,18 +197,22 @@ export type Database = {
           sponsor_state: string | null
           status: string | null
           status_updated_at: string | null
+          subject_terms: string[] | null
           summary: string | null
           summary_fetched_at: string | null
           topic: string
           topic_flag: string | null
           updated_at: string | null
+          url: string | null
         }
         Insert: {
           additional_topics?: string[] | null
           ai_detected_topics?: string[] | null
+          amends_bill?: string | null
           bill_number?: number | null
           bill_type?: string | null
           chamber?: string | null
+          committees?: string | null
           congress?: number | null
           cosponsor_count?: number | null
           created_at?: string | null
@@ -219,6 +227,8 @@ export type Database = {
           omnibus_type?: string | null
           passed_house?: boolean | null
           passed_senate?: boolean | null
+          related_bill_count?: number | null
+          related_bills?: string[] | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           session?: number | null
@@ -228,18 +238,22 @@ export type Database = {
           sponsor_state?: string | null
           status?: string | null
           status_updated_at?: string | null
+          subject_terms?: string[] | null
           summary?: string | null
           summary_fetched_at?: string | null
           topic?: string
           topic_flag?: string | null
           updated_at?: string | null
+          url?: string | null
         }
         Update: {
           additional_topics?: string[] | null
           ai_detected_topics?: string[] | null
+          amends_bill?: string | null
           bill_number?: number | null
           bill_type?: string | null
           chamber?: string | null
+          committees?: string | null
           congress?: number | null
           cosponsor_count?: number | null
           created_at?: string | null
@@ -254,6 +268,8 @@ export type Database = {
           omnibus_type?: string | null
           passed_house?: boolean | null
           passed_senate?: boolean | null
+          related_bill_count?: number | null
+          related_bills?: string[] | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           session?: number | null
@@ -263,11 +279,13 @@ export type Database = {
           sponsor_state?: string | null
           status?: string | null
           status_updated_at?: string | null
+          subject_terms?: string[] | null
           summary?: string | null
           summary_fetched_at?: string | null
           topic?: string
           topic_flag?: string | null
           updated_at?: string | null
+          url?: string | null
         }
         Relationships: []
       }
