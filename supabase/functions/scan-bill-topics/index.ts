@@ -372,15 +372,9 @@ Return ONLY valid JSON, no other text.`;
           
           const updates: Record<string, unknown> = {
             ai_detected_topics: [normalizedPrimary, ...uniqueSecondary],
+            topic_flag: flag,  // Always set - clears flag when no issues detected
+            omnibus_type: result.omnibus_type || null,  // Always set - clears when not omnibus
           };
-          
-          if (flag) {
-            updates.topic_flag = flag;
-          }
-          
-          if (result.omnibus_type) {
-            updates.omnibus_type = result.omnibus_type;
-          }
           
           const { error: updateError } = await supabase.from('bills').update(updates).eq('id', bill.id);
           
