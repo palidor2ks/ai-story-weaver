@@ -203,12 +203,10 @@ serve(async (req) => {
             if (!error) totalUpdated++;
           }
         } else {
-          // For NEW bills: Skip if still just "introduced" and skipIntroduced is enabled
-          // This prevents adding thousands of introduced bills that haven't progressed
-          if (skipIntroduced && textDerivedStatus === 'introduced') {
-            totalSkipped++;
-            continue;
-          }
+          // NEW bills: Add all bills regardless of derived status
+          // The text-based deriveStatus() can incorrectly return 'introduced' for bills
+          // that have progressed (e.g., passed chamber but now in committee)
+          // The fetch-bill-actions enrichment will determine accurate status
 
           // Insert new bill (it has progressed past introduction)
           const { error } = await supabase
