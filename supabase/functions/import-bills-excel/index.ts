@@ -114,16 +114,19 @@ function parseSponsor(sponsorStr: string | null | undefined): { name: string; pa
   return { name: cleaned, party: null, state: null };
 }
 
-// Derive status from "Latest Tracker Stage"
-function deriveStatusFromTrackerStage(stage: string | null | undefined): { 
+// Derive status from "Latest Tracker Stage" and optionally "Latest Action"
+function deriveStatusFromTrackerStage(
+  stage: string | null | undefined,
+  latestAction: string | null | undefined = null
+): { 
   status: string; 
   passed_house: boolean; 
   passed_senate: boolean 
 } {
-  if (!stage) return { status: 'introduced', passed_house: false, passed_senate: false };
+  const stageLower = (stage || '').toLowerCase().trim();
+  const actionLower = (latestAction || '').toLowerCase().trim();
   
-  const stageLower = stage.toLowerCase().trim();
-  
+  // Check tracker stage first
   if (stageLower.includes('became law')) {
     return { status: 'became_law', passed_house: true, passed_senate: true };
   }
@@ -136,11 +139,51 @@ function deriveStatusFromTrackerStage(stage: string | null | undefined): {
   if (stageLower.includes('failed to pass over veto') || stageLower.includes('veto')) {
     return { status: 'veto_actions', passed_house: true, passed_senate: true };
   }
+  
+  // Handle failed votes - bill progressed but didn't complete
+  if (stageLower.includes('failed')) {
+    if (stageLower.includes('senate')) {
+      // Failed in Senate means it passed House first
+      return { status: 'passed_one_chamber', passed_house: true, passed_senate: false };
+    }
+    if (stageLower.includes('house')) {
+      // Failed in House after Senate passed it
+      return { status: 'passed_one_chamber', passed_house: false, passed_senate: true };
+    }
+  }
+  
   if (stageLower.includes('passed house') || stageLower.includes('agreed to in house')) {
     return { status: 'passed_one_chamber', passed_house: true, passed_senate: false };
   }
   if (stageLower.includes('passed senate') || stageLower.includes('agreed to in senate')) {
     return { status: 'passed_one_chamber', passed_house: false, passed_senate: true };
+  }
+  
+  // Fallback: check latest action text for progression clues
+  if (!stage && actionLower) {
+    // Check for failed votes in action text
+    if (actionLower.includes('failed of passage') || actionLower.includes('failed to pass')) {
+      if (actionLower.includes('senate')) {
+        return { status: 'passed_one_chamber', passed_house: true, passed_senate: false };
+      }
+      if (actionLower.includes('house')) {
+        return { status: 'passed_one_chamber', passed_house: false, passed_senate: true };
+      }
+    }
+    
+    // Check for Senate actions indicating House passage
+    if (actionLower.includes('message on senate action') || 
+        actionLower.includes('received in the senate') ||
+        actionLower.includes('passed senate')) {
+      return { status: 'passed_one_chamber', passed_house: true, passed_senate: false };
+    }
+    
+    // Check for House actions indicating Senate passage  
+    if (actionLower.includes('message on house action') ||
+        actionLower.includes('received in the house') ||
+        actionLower.includes('passed house')) {
+      return { status: 'passed_one_chamber', passed_house: false, passed_senate: true };
+    }
   }
   
   return { status: 'introduced', passed_house: false, passed_senate: false };
@@ -307,7 +350,7 @@ serve(async (req) => {
       
       const billId = `${congress}-${parsed.type}.${parsed.number}`;
       const sponsor = parseSponsor(row['Sponsor']);
-      const statusInfo = deriveStatusFromTrackerStage(row['Latest Tracker Stage']);
+      const statusInfo = deriveStatusFromTrackerStage(row['Latest Tracker Stage'], row['Latest Action']);
       const summary = stripHtml(row['Latest Summary']);
       
       // Collect subject terms from repeated columns (billSubjectTerm, billSubjectTerm_1, etc.)
