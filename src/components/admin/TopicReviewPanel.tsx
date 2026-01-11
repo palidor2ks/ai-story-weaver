@@ -45,7 +45,7 @@ export default function TopicReviewPanel() {
   
   // Auto-scanning state
   const [autoScanning, setAutoScanning] = useState(false);
-  const [scanProgress, setScanProgress] = useState({ scanned: 0, total: 0, isForce: false });
+  const [scanProgress, setScanProgress] = useState({ scanned: 0, total: 0, mode: '' as 'new' | 'force' | 'flagged' | '' });
   const stopScanRef = useRef(false);
 
   // Fetch flagged bills from bills table (already deduplicated)
@@ -109,8 +109,6 @@ export default function TopicReviewPanel() {
         .or('ai_detected_topics.is.null,ai_detected_topics.eq.{}');
       
       // Bills that can be force-rescanned (already scanned but not reviewed)
-      // Get bills with non-null, non-empty ai_detected_topics
-      // We check that the first element exists (meaning array has at least 1 item)
       const { count: canRescan } = await supabase
         .from('bills')
         .select('id', { count: 'exact', head: true })
@@ -121,7 +119,14 @@ export default function TopicReviewPanel() {
         .not('ai_detected_topics', 'is', null)
         .filter('ai_detected_topics', 'neq', '{}');
       
-      return { needsScan: needsScan || 0, canRescan: canRescan || 0 };
+      // Flagged bills count (for targeted rescan)
+      const { count: flaggedCount } = await supabase
+        .from('bills')
+        .select('id', { count: 'exact', head: true })
+        .not('topic_flag', 'is', null)
+        .is('reviewed_at', null);
+      
+      return { needsScan: needsScan || 0, canRescan: canRescan || 0, flaggedCount: flaggedCount || 0 };
     }
   });
 
@@ -180,8 +185,18 @@ export default function TopicReviewPanel() {
   });
 
   // Continuous auto-scan until complete
-  const handleAutoScan = async (forceRescan = false) => {
-    const totalCount = forceRescan ? (scanStats?.canRescan || 0) : (scanStats?.needsScan || 0);
+  // mode: 'new' | 'force' | 'flagged'
+  const handleAutoScan = async (mode: 'new' | 'force' | 'flagged') => {
+    let totalCount = 0;
+    
+    if (mode === 'new') {
+      totalCount = scanStats?.needsScan || 0;
+    } else if (mode === 'force') {
+      totalCount = scanStats?.canRescan || 0;
+    } else if (mode === 'flagged') {
+      totalCount = scanStats?.flaggedCount || 0;
+    }
+    
     if (totalCount === 0) {
       toast.info('No bills to scan');
       return;
@@ -189,7 +204,7 @@ export default function TopicReviewPanel() {
     
     stopScanRef.current = false;
     setAutoScanning(true);
-    setScanProgress({ scanned: 0, total: totalCount, isForce: forceRescan });
+    setScanProgress({ scanned: 0, total: totalCount, mode });
     
     let totalScanned = 0;
     let totalFlagged = 0;
@@ -199,7 +214,11 @@ export default function TopicReviewPanel() {
     while (hasMore && !stopScanRef.current) {
       try {
         const response = await supabase.functions.invoke('scan-bill-topics', {
-          body: { batchSize: BATCH_SIZE, forceRescan }
+          body: { 
+            batchSize: BATCH_SIZE, 
+            forceRescan: mode === 'force' || mode === 'flagged',
+            flaggedOnly: mode === 'flagged'
+          }
         });
         
         if (response.error) throw response.error;
@@ -224,7 +243,7 @@ export default function TopicReviewPanel() {
     }
     
     setAutoScanning(false);
-    setScanProgress({ scanned: 0, total: 0, isForce: false });
+    setScanProgress({ scanned: 0, total: 0, mode: '' });
     
     if (stopScanRef.current) {
       toast.info(`Stopped: scanned ${totalScanned} bills, flagged ${totalFlagged}`);
@@ -416,7 +435,8 @@ export default function TopicReviewPanel() {
               </div>
               <span className="text-sm text-muted-foreground whitespace-nowrap">
                 {scanProgress.scanned.toLocaleString()} / {scanProgress.total.toLocaleString()}
-                {scanProgress.isForce && ' (rescan)'}
+                {scanProgress.mode === 'force' && ' (rescan)'}
+                {scanProgress.mode === 'flagged' && ' (flagged)'}
               </span>
               <Button 
                 variant="destructive" 
@@ -432,7 +452,7 @@ export default function TopicReviewPanel() {
             <>
               {/* Scan New Bills button with count badge */}
               <Button 
-                onClick={() => handleAutoScan(false)} 
+                onClick={() => handleAutoScan('new')} 
                 variant="outline"
                 disabled={(scanStats?.needsScan ?? 0) === 0}
               >
@@ -448,13 +468,27 @@ export default function TopicReviewPanel() {
               {/* Force Rescan All button */}
               {(scanStats?.canRescan ?? 0) > 0 && (
                 <Button 
-                  onClick={() => handleAutoScan(true)} 
+                  onClick={() => handleAutoScan('force')} 
                   variant="ghost"
                   size="sm"
                   title={`Re-scan ${scanStats!.canRescan.toLocaleString()} previously scanned bills`}
                 >
                   <Sparkles className="h-4 w-4 mr-2" />
                   Force Rescan ({scanStats!.canRescan.toLocaleString()})
+                </Button>
+              )}
+              
+              {/* Rescan Flagged Bills button */}
+              {(scanStats?.flaggedCount ?? 0) > 0 && (
+                <Button 
+                  onClick={() => handleAutoScan('flagged')} 
+                  variant="outline"
+                  size="sm"
+                  className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                  title={`Re-scan ${scanStats!.flaggedCount.toLocaleString()} flagged bills (mismatch, multi-topic, omnibus)`}
+                >
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Rescan Flagged ({scanStats!.flaggedCount.toLocaleString()})
                 </Button>
               )}
             </>
