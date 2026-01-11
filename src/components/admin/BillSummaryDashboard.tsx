@@ -33,8 +33,10 @@ import {
   Activity,
   PlayCircle,
   RotateCcw,
-  AlertCircle
+  AlertCircle,
+  Upload
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import {
   Select,
   SelectContent,
@@ -62,6 +64,7 @@ export function BillSummaryDashboard() {
   const [isForceEnriching, setIsForceEnriching] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   // selectedCongress is now declared at the top before useBillSummaryStats
   const [progress, setProgress] = useState<{ 
     current: number; 
@@ -456,6 +459,75 @@ export function BillSummaryDashboard() {
     }
   };
 
+  // Handler for importing bills from Excel file
+  const handleImportExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setIsImporting(true);
+    setProgress({ current: 0, total: 100 });
+    
+    try {
+      toast.info("Reading Excel file...");
+      
+      // Read the file
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      
+      // Get the second sheet (index 1) which contains the data
+      // The first sheet is a summary/pivot table
+      const sheetName = workbook.SheetNames[1] || workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      
+      // Convert to JSON
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+      
+      console.log(`[ImportExcel] Parsed ${jsonData.length} rows from sheet "${sheetName}"`);
+      setProgress({ current: 10, total: 100 });
+      
+      if (jsonData.length === 0) {
+        throw new Error('No data found in Excel file');
+      }
+      
+      toast.info(`Parsed ${jsonData.length} rows. Sending to server...`);
+      setProgress({ current: 20, total: 100 });
+      
+      // Send to edge function
+      const { data, error } = await supabase.functions.invoke('import-bills-excel', {
+        body: { 
+          rows: jsonData, 
+          congress: parseInt(selectedCongress) 
+        }
+      });
+      
+      if (error) throw error;
+      
+      setProgress({ current: 100, total: 100 });
+      
+      if (data.success) {
+        toast.success(`Imported ${data.inserted} bills from ${data.totalRows} rows`);
+        if (data.errorCount > 0) {
+          toast.warning(`${data.errorCount} rows had errors`);
+          console.warn('[ImportExcel] Errors:', data.errors);
+        }
+        
+        // Refresh stats
+        await queryClient.invalidateQueries({ queryKey: ['billSummaryStats'] });
+      } else {
+        throw new Error(data.error || 'Import failed');
+      }
+      
+    } catch (err) {
+      console.error('[ImportExcel] Error:', err);
+      toast.error(`Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsImporting(false);
+      setProgress(null);
+      // Reset the file input so the same file can be selected again
+      event.target.value = '';
+    }
+  };
+
 
   if (isLoading) {
     return (
@@ -501,7 +573,7 @@ export function BillSummaryDashboard() {
 
   if (!stats) return null;
 
-  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isEnrichingStatus || isForceEnriching || isClearing || isResetting;
+  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isEnrichingStatus || isForceEnriching || isClearing || isResetting || isImporting;
 
   return (
     <Card className="mb-6">
@@ -662,6 +734,32 @@ export function BillSummaryDashboard() {
               )}
               Re-enrich All
             </Button>
+
+            {/* Excel Import - hidden input with styled label */}
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleImportExcel}
+                disabled={isProcessing}
+                className="hidden"
+              />
+              <Button 
+                variant="outline"
+                size="sm"
+                asChild
+                disabled={isProcessing}
+              >
+                <span>
+                  {isImporting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4 mr-2" />
+                  )}
+                  Import Excel
+                </span>
+              </Button>
+            </label>
 
             <Button 
               variant="destructive"
