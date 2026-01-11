@@ -2134,6 +2134,7 @@ export type Database = {
           topic_immigration: number | null
           topic_native: number | null
           topic_science: number | null
+          topic_social: number | null
           topic_uncategorized: number | null
           total_bills: number | null
           with_ai_procedural_summary: number | null
