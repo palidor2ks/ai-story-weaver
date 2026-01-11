@@ -189,7 +189,7 @@ serve(async (req) => {
   }
 
   try {
-    const { batchSize = 50, topic = null, forceRescan = false, bill_id = null, billId = null } = await req.json();
+    const { batchSize = 50, topic = null, forceRescan = false, flaggedOnly = false, bill_id = null, billId = null } = await req.json();
     const targetBillId = bill_id || billId;
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -234,9 +234,15 @@ serve(async (req) => {
       .is('reviewed_at', null)
       .limit(batchSize);
     
-    if (!forceRescan) {
+    // Apply filtering based on scan mode
+    if (flaggedOnly) {
+      // Flagged-only mode: rescan only bills with topic_flag set
+      query = query.not('topic_flag', 'is', null);
+    } else if (!forceRescan) {
+      // New scan mode: only get bills without AI topics
       query = query.or('ai_detected_topics.is.null,ai_detected_topics.eq.{}');
     }
+    // forceRescan without flaggedOnly: rescan all unreviewed bills
     
     if (topic) {
       query = query.eq('topic', topic);
