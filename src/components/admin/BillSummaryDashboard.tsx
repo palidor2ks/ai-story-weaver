@@ -46,7 +46,10 @@ import { format } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 export function BillSummaryDashboard() {
-  const { data: stats, isLoading, error } = useBillSummaryStats();
+  const [selectedCongress, setSelectedCongress] = useState<string>("119");
+  
+  // Pass selected congress to hook for filtered status breakdown
+  const { data: stats, isLoading, error } = useBillSummaryStats(parseInt(selectedCongress));
   const queryClient = useQueryClient();
   
   const [isFetchingCrs, setIsFetchingCrs] = useState(false);
@@ -59,7 +62,7 @@ export function BillSummaryDashboard() {
   const [isForceEnriching, setIsForceEnriching] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [selectedCongress, setSelectedCongress] = useState<string>("119");
+  // selectedCongress is now declared at the top before useBillSummaryStats
   const [progress, setProgress] = useState<{ current: number; total: number; filtered?: number } | null>(null);
 
   const CONGRESS_OPTIONS = [
@@ -785,7 +788,12 @@ export function BillSummaryDashboard() {
 
         {/* Bill Status Breakdown */}
         <div className="bg-muted/30 rounded-lg p-4 border border-muted">
-          <div className="text-sm font-medium mb-3">Bills by Status</div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-medium">Bills by Status</div>
+            <div className="text-xs text-muted-foreground">
+              {selectedCongress}th Congress • {stats.selectedCongressTotal.toLocaleString()} bills (HR, S, HJRES, SJRES only)
+            </div>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             <div className="text-center p-2 rounded bg-slate-500/10">
               <div className="flex items-center justify-center gap-1 text-xs text-slate-600 mb-1">
