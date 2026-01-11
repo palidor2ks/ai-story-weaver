@@ -295,7 +295,7 @@ serve(async (req) => {
       .from('bills')
       .select('id, topic, subject_terms')
       .not('subject_terms', 'is', null)
-      .or('additional_topics.is.null,additional_topics.eq.{}')
+      .is('additional_topics', null)
       .limit(batchSize);
     
     if (congress) {
