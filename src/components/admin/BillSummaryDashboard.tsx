@@ -44,14 +44,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 export function BillSummaryDashboard() {
   const [selectedCongress, setSelectedCongress] = useState<string>("119");
+  const [includeResolutions, setIncludeResolutions] = useState(true);
   
-  // Pass selected congress to hook for filtered status breakdown
-  const { data: stats, isLoading, error } = useBillSummaryStats(parseInt(selectedCongress));
+  // Pass selected congress and resolution filter to hook
+  const { data: stats, isLoading, error } = useBillSummaryStats(parseInt(selectedCongress), includeResolutions);
   const queryClient = useQueryClient();
   
   const [isFetchingCrs, setIsFetchingCrs] = useState(false);
@@ -913,8 +915,21 @@ export function BillSummaryDashboard() {
         <div className="bg-muted/30 rounded-lg p-4 border border-muted">
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm font-medium">Bills by Status</div>
-            <div className="text-xs text-muted-foreground">
-              {selectedCongress}th Congress • {stats.selectedCongressTotal.toLocaleString()} bills (HR, S, HJRES, SJRES only)
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="include-resolutions"
+                  checked={includeResolutions}
+                  onCheckedChange={setIncludeResolutions}
+                />
+                <label htmlFor="include-resolutions" className="text-xs text-muted-foreground cursor-pointer">
+                  Include resolutions
+                </label>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {selectedCongress}th Congress • {stats.selectedCongressTotal.toLocaleString()} bills
+                {!includeResolutions && ' (HR, S, HJRES, SJRES only)'}
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">

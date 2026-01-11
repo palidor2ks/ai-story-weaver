@@ -60,9 +60,9 @@ export interface SummaryStats {
 // Valid bill types for status tracking (excludes simple and concurrent resolutions)
 const COUNTABLE_BILL_TYPES = ['HR', 'S', 'HJRES', 'SJRES'];
 
-export function useBillSummaryStats(selectedCongress?: number) {
+export function useBillSummaryStats(selectedCongress?: number, includeResolutions = true) {
   return useQuery<SummaryStats>({
-    queryKey: ['bill-summary-stats', selectedCongress],
+    queryKey: ['bill-summary-stats', selectedCongress, includeResolutions],
     queryFn: async () => {
       // Fetch bill summary stats (materialized view - all congresses)
       const { data, error } = await supabase
@@ -86,8 +86,10 @@ export function useBillSummaryStats(selectedCongress?: number) {
         statusQuery = statusQuery.eq('congress', selectedCongress);
       }
       
-      // Filter to countable bill types (Bills and Joint Resolutions only)
-      statusQuery = statusQuery.in('bill_type', COUNTABLE_BILL_TYPES);
+      // Filter to countable bill types if not including resolutions
+      if (!includeResolutions) {
+        statusQuery = statusQuery.in('bill_type', COUNTABLE_BILL_TYPES);
+      }
       
       const { data: statusData } = await statusQuery;
       
