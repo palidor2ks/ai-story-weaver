@@ -42,6 +42,254 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'Science, Technology, Communications': 'Technology',
 };
 
+// Map Congress.gov subject terms to canonical topics
+const SUBJECT_TERM_MAPPING: Record<string, string> = {
+  // Government
+  'Congressional oversight': 'Government',
+  'Congressional tributes': 'Government',
+  'House of Representatives': 'Government',
+  'Senate': 'Government',
+  'Members of Congress': 'Government',
+  'Government information and archives': 'Government',
+  'Government buildings, facilities, and property': 'Government',
+  'Government studies and investigations': 'Government',
+  'Legislative rules and procedure': 'Government',
+  'State and local government operations': 'Government',
+  'Intergovernmental relations': 'Government',
+  'Public contracts and procurement': 'Government',
+  'Government employee pay, benefits, personnel management': 'Government',
+  'Administrative law and regulatory procedures': 'Government',
+  'Appropriations': 'Government',
+  'Budget process': 'Government',
+  'Budget deficits and national debt': 'Government',
+  'Executive agency funding and structure': 'Government',
+  'Federal officials': 'Government',
+  'Presidents and presidential powers, Vice Presidents': 'Government',
+  'Political parties and affiliation': 'Government',
+  'Elections, voting, political campaign regulation': 'Government',
+  'Commemorative events and holidays': 'Government',
+  'U.S. territories and protectorates': 'Government',
+  'District of Columbia': 'Government',
+  
+  // Education  
+  'Higher education': 'Education',
+  'Elementary and secondary education': 'Education',
+  'Teaching, teachers, curricula': 'Education',
+  'Education programs funding': 'Education',
+  'Special education': 'Education',
+  'Vocational and technical education': 'Education',
+  'Adult education and literacy': 'Education',
+  'Educational facilities and institutions': 'Education',
+  'Student aid and college costs': 'Education',
+  'Preschool education': 'Education',
+  
+  // Healthcare
+  'Health promotion and preventive care': 'Healthcare',
+  'Drug, alcohol, tobacco use': 'Healthcare',
+  'Mental health': 'Healthcare',
+  'Medical research': 'Healthcare',
+  'Health care coverage and access': 'Healthcare',
+  'Health facilities and institutions': 'Healthcare',
+  'Medicare': 'Healthcare',
+  'Medicaid': 'Healthcare',
+  'Health care costs and insurance': 'Healthcare',
+  'Health personnel': 'Healthcare',
+  'Health programs administration and funding': 'Healthcare',
+  'Health technology, devices, supplies': 'Healthcare',
+  'Medical tests and diagnostic methods': 'Healthcare',
+  'Drug safety, medical device, and laboratory regulation': 'Healthcare',
+  'Prescription drugs': 'Healthcare',
+  'Cancer': 'Healthcare',
+  'Cardiovascular and respiratory health': 'Healthcare',
+  'Infectious and parasitic diseases': 'Healthcare',
+  'Neurological disorders': 'Healthcare',
+  'Digestive and metabolic diseases': 'Healthcare',
+  'Women\'s health': 'Healthcare',
+  'Child health': 'Healthcare',
+  'Aging': 'Healthcare',
+  
+  // Foreign Affairs
+  'China': 'Foreign Affairs',
+  'Middle East': 'Foreign Affairs',
+  'Asia': 'Foreign Affairs',
+  'Diplomacy, foreign officials, Americans abroad': 'Foreign Affairs',
+  'International organizations and cooperation': 'Foreign Affairs',
+  'Sanctions': 'Foreign Affairs',
+  'Foreign aid and international relief': 'Foreign Affairs',
+  'Human rights': 'Foreign Affairs',
+  'Africa': 'Foreign Affairs',
+  'Europe': 'Foreign Affairs',
+  'Latin America': 'Foreign Affairs',
+  'Russia': 'Foreign Affairs',
+  'International law and treaties': 'Foreign Affairs',
+  'United Nations': 'Foreign Affairs',
+  'Iran': 'Foreign Affairs',
+  'Israel': 'Foreign Affairs',
+  'North Korea': 'Foreign Affairs',
+  'Taiwan': 'Foreign Affairs',
+  'Ukraine': 'Foreign Affairs',
+  'Caribbean area': 'Foreign Affairs',
+  
+  // Defense
+  'Military personnel and dependents': 'Defense',
+  'National Guard and Reserves': 'Defense',
+  'Military operations and strategy': 'Defense',
+  'Veterans\' organizations and recognition': 'Defense',
+  'Veterans\' medical care': 'Defense',
+  'Terrorism': 'Defense',
+  'Homeland security': 'Defense',
+  'Military facilities and property': 'Defense',
+  'Military procurement, research, weapons development': 'Defense',
+  'Military readiness': 'Defense',
+  'Department of Defense': 'Defense',
+  'Intelligence activities, surveillance, classified information': 'Defense',
+  'Veterans\' pensions and compensation': 'Defense',
+  'Veterans\' education, employment, rehabilitation': 'Defense',
+  'Veterans\' loans, housing, homeless programs': 'Defense',
+  'Nuclear weapons': 'Defense',
+  'Military education and training': 'Defense',
+  'Military medicine': 'Defense',
+  'Coast guard': 'Defense',
+  'Conflicts and wars': 'Defense',
+  
+  // Civil Rights
+  'Law enforcement officers': 'Civil Rights',
+  'Criminal investigation, prosecution, interrogation': 'Civil Rights',
+  'Crime victims': 'Civil Rights',
+  'Juvenile crime and gang violence': 'Civil Rights',
+  'Civil actions and liability': 'Civil Rights',
+  'Due process and equal protection': 'Civil Rights',
+  'Voting rights': 'Civil Rights',
+  'Racial and ethnic relations': 'Civil Rights',
+  'Sex, gender, sexual orientation discrimination': 'Civil Rights',
+  'First Amendment rights': 'Civil Rights',
+  'Right of privacy': 'Civil Rights',
+  'Disability and paralysis': 'Civil Rights',
+  'Criminal procedure and sentencing': 'Civil Rights',
+  'Correctional facilities and imprisonment': 'Civil Rights',
+  'Drug trafficking and controlled substances': 'Civil Rights',
+  'Fraud offenses and financial crimes': 'Civil Rights',
+  'Human trafficking': 'Civil Rights',
+  'Crimes against children': 'Civil Rights',
+  'Crimes against women': 'Civil Rights',
+  'Domestic violence and child abuse': 'Civil Rights',
+  'Firearms and explosives': 'Civil Rights',
+  'Hate crimes': 'Civil Rights',
+  'Judicial procedure and administration': 'Civil Rights',
+  
+  // Native Americans
+  'Indian lands and resources rights': 'Native Americans',
+  'Indian social and development programs': 'Native Americans',
+  'Federal-Indian relations': 'Native Americans',
+  
+  // Technology
+  'Computers and information technology': 'Technology',
+  'Internet, web applications, social media': 'Technology',
+  'Advanced technology and technological innovations': 'Technology',
+  'Science and engineering education': 'Technology',
+  'Research and development': 'Technology',
+  'Telephone and wireless communication': 'Technology',
+  'Broadcasting, Coverage of Digital Content': 'Technology',
+  'Space flight and exploration': 'Technology',
+  'Spacecraft and satellites': 'Technology',
+  'Research administration and funding': 'Technology',
+  'Computer security and identity theft': 'Technology',
+  'Artificial intelligence': 'Technology',
+  'Genetics': 'Technology',
+  'Biotechnology': 'Technology',
+  'Digital media': 'Technology',
+  
+  // Environment
+  'Climate change and greenhouse gases': 'Environment',
+  'Air quality': 'Environment',
+  'Water quality': 'Environment',
+  'Wildlife conservation and habitat protection': 'Environment',
+  'Alternative and renewable resources': 'Environment',
+  'Parks, recreation areas, trails': 'Environment',
+  'Forests, forestry, trees': 'Environment',
+  'Endangered and threatened species': 'Environment',
+  'Environmental assessment, monitoring, research': 'Environment',
+  'Hazardous wastes and toxic substances': 'Environment',
+  'Oil and gas': 'Environment',
+  'Electric power generation and transmission': 'Environment',
+  'Energy efficiency and conservation': 'Environment',
+  'Marine and coastal resources, fisheries': 'Environment',
+  'Wilderness and natural areas, senic, wild': 'Environment',
+  'Floods and storm protection': 'Environment',
+  'Solid waste and recycling': 'Environment',
+  'Land use and conservation': 'Environment',
+  
+  // Immigration
+  'Immigration status and procedures': 'Immigration',
+  'Refugees, asylum, displaced persons': 'Immigration',
+  'Border security and unlawful immigration': 'Immigration',
+  'Citizenship and naturalization': 'Immigration',
+  'Visas and passports': 'Immigration',
+  'Foreign labor': 'Immigration',
+  
+  // Economy
+  'Taxation': 'Economy',
+  'Small business': 'Economy',
+  'Employment and training programs': 'Economy',
+  'Trade agreements and negotiations': 'Economy',
+  'Financial services and investments': 'Economy',
+  'Tariffs': 'Economy',
+  'Tax administration and collection, taxpayers': 'Economy',
+  'Income tax credits': 'Economy',
+  'Income tax deductions': 'Economy',
+  'Business expenses': 'Economy',
+  'Corporate finance and management': 'Economy',
+  'Consumer credit': 'Economy',
+  'Banking and financial institutions regulation': 'Economy',
+  'Securities': 'Economy',
+  'Inflation and prices': 'Economy',
+  'Wages and earnings': 'Economy',
+  'Unemployment': 'Economy',
+  'Agricultural prices, subsidies, credit': 'Economy',
+  'Agricultural trade': 'Economy',
+  'Worker safety and health': 'Economy',
+  'Labor-management relations': 'Economy',
+  'Employee benefits and pensions': 'Economy',
+  'Roads and highways': 'Economy',
+  'Railroads': 'Economy',
+  'Aviation and airports': 'Economy',
+  'Public transit': 'Economy',
+  'Motor vehicles': 'Economy',
+  'Marine and inland water transportation': 'Economy',
+  
+  // Social Programs
+  'Social security and elderly assistance': 'Social Programs',
+  'Poverty and welfare assistance': 'Social Programs',
+  'Housing supply and affordability': 'Social Programs',
+  'Food assistance and relief': 'Social Programs',
+  'Housing and community development funding': 'Social Programs',
+  'Low- and moderate-income housing': 'Social Programs',
+  'Homelessness and emergency shelter': 'Social Programs',
+  'Child care and development': 'Social Programs',
+  'Disability assistance': 'Social Programs',
+  'Family relationships': 'Social Programs',
+  'Family services': 'Social Programs',
+  'Marriage and family status': 'Social Programs',
+  'Rural conditions and development': 'Social Programs',
+  'Urban and suburban affairs and development': 'Social Programs',
+  'Community life and organization': 'Social Programs',
+  'Economic development': 'Social Programs',
+};
+
+// Derive additional topics from subject terms
+function deriveAdditionalTopics(subjectTerms: string[], primaryTopic: string): string[] {
+  const topics = new Set<string>();
+  
+  for (const term of subjectTerms) {
+    const mappedTopic = SUBJECT_TERM_MAPPING[term];
+    if (mappedTopic && mappedTopic !== primaryTopic) {
+      topics.add(mappedTopic);
+    }
+  }
+  
+  return [...topics];
+}
+
 function normalizeTopic(policyArea: string | null | undefined): string {
   if (!policyArea) return 'Government';
   return TOPIC_NORMALIZATION[policyArea] || 'Government';
@@ -330,6 +578,7 @@ serve(async (req) => {
       related_bill_count: number;
       related_bills: string[];
       amends_bill: string | null;
+      additional_topics: string[] | null;
     }> = [];
     
     const now = new Date().toISOString();
@@ -361,13 +610,17 @@ serve(async (req) => {
       const relatedBills = collectArrayValues(row, 'Related Bill')
         .filter(v => !v.startsWith('http') && !v.includes('/'));
       
+      // Derive primary topic and additional topics from subject terms
+      const primaryTopic = normalizeTopic(row['billPolicyArea']);
+      const additionalTopics = deriveAdditionalTopics(subjectTerms, primaryTopic);
+      
       billsToInsert.push({
         id: billId,
         name: row['Title'] || `${parsed.type} ${parsed.number}`,
         bill_type: parsed.type,
         bill_number: parsed.number,
         congress,
-        topic: normalizeTopic(row['billPolicyArea']),
+        topic: primaryTopic,
         chamber: getChamberFromBillType(parsed.type),
         introduced_date: parseExcelDate(row['Date of Introduction']),
         summary,
@@ -391,6 +644,7 @@ serve(async (req) => {
           : 0,
         related_bills: relatedBills,
         amends_bill: row['Amends Bill'] || null,
+        additional_topics: additionalTopics.length > 0 ? additionalTopics : null,
       });
     }
     
