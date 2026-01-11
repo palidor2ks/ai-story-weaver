@@ -40,6 +40,7 @@ export default function TopicReviewPanel() {
   const [editedAdditionalTopics, setEditedAdditionalTopics] = useState<string[]>([]);
   const [filterType, setFilterType] = useState<string>('all');
   const [isScanning, setIsScanning] = useState(false);
+  const [isForceRescanning, setIsForceRescanning] = useState(false);
   const [scanningBillId, setScanningBillId] = useState<string | null>(null);
   const [approvingBillId, setApprovingBillId] = useState<string | null>(null);
 
@@ -86,6 +87,35 @@ export default function TopicReviewPanel() {
         omnibus_major: data?.filter(d => d.topic_flag === 'omnibus_major').length || 0,
       };
       return counts;
+    }
+  });
+
+  // Fetch count of bills needing AI scan
+  const { data: scanStats } = useQuery({
+    queryKey: ['topic-scan-stats'],
+    queryFn: async () => {
+      // Bills that need initial scanning (have summary but no ai_detected_topics)
+      const { count: needsScan } = await supabase
+        .from('bills')
+        .select('id', { count: 'exact', head: true })
+        .not('summary', 'is', null)
+        .neq('summary', '')
+        .neq('summary', '[NO_SUMMARY]')
+        .is('reviewed_at', null)
+        .or('ai_detected_topics.is.null,ai_detected_topics.eq.{}');
+      
+      // Bills that can be force-rescanned (already scanned but not reviewed)
+      const { count: canRescan } = await supabase
+        .from('bills')
+        .select('id', { count: 'exact', head: true })
+        .not('summary', 'is', null)
+        .neq('summary', '')
+        .neq('summary', '[NO_SUMMARY]')
+        .is('reviewed_at', null)
+        .not('ai_detected_topics', 'is', null)
+        .not('ai_detected_topics', 'eq', [] as string[]);
+      
+      return { needsScan: needsScan || 0, canRescan: canRescan || 0 };
     }
   });
 
@@ -156,10 +186,32 @@ export default function TopicReviewPanel() {
       const result = response.data;
       toast.success(`Scanned ${result.scanned} bills, flagged ${result.flagged}`);
       refetch();
+      queryClient.invalidateQueries({ queryKey: ['topic-scan-stats'] });
     } catch (error) {
       toast.error(`Scan failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsScanning(false);
+    }
+  };
+
+  // Force rescan all unreviewed bills (even those already scanned)
+  const handleForceRescanAll = async () => {
+    setIsForceRescanning(true);
+    try {
+      const response = await supabase.functions.invoke('scan-bill-topics', {
+        body: { batchSize: 100, forceRescan: true }
+      });
+      
+      if (response.error) throw response.error;
+      
+      const result = response.data;
+      toast.success(`Re-scanned ${result.scanned} bills, flagged ${result.flagged}`);
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ['topic-scan-stats'] });
+    } catch (error) {
+      toast.error(`Force rescan failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsForceRescanning(false);
     }
   };
 
@@ -328,17 +380,48 @@ export default function TopicReviewPanel() {
           </Card>
         </div>
         
-        <Button 
-          onClick={handleScanBills} 
-          disabled={isScanning}
-          variant="outline"
-        >
-          {isScanning ? (
-            <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Scanning...</>
-          ) : (
-            <><RefreshCw className="h-4 w-4 mr-2" />Scan Bills for Topics</>
+        <div className="flex items-center gap-2">
+          {/* Scan New Bills button with count badge */}
+          <Button 
+            onClick={handleScanBills} 
+            disabled={isScanning || isForceRescanning}
+            variant="outline"
+          >
+            {isScanning ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Scanning...</>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Scan Bills
+                {(scanStats?.needsScan ?? 0) > 0 && (
+                  <Badge variant="secondary" className="ml-2 h-5 min-w-[1.25rem] px-1.5">
+                    {scanStats!.needsScan.toLocaleString()}
+                  </Badge>
+                )}
+              </>
+            )}
+          </Button>
+          
+          {/* Force Rescan All button */}
+          {(scanStats?.canRescan ?? 0) > 0 && (
+            <Button 
+              onClick={handleForceRescanAll} 
+              disabled={isScanning || isForceRescanning}
+              variant="ghost"
+              size="sm"
+              title={`Re-scan ${scanStats!.canRescan.toLocaleString()} previously scanned bills`}
+            >
+              {isForceRescanning ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Re-scanning...</>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Force Rescan ({scanStats!.canRescan.toLocaleString()})
+                </>
+              )}
+            </Button>
           )}
-        </Button>
+        </div>
       </div>
 
       {/* Filter tabs */}
