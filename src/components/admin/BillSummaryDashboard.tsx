@@ -63,7 +63,13 @@ export function BillSummaryDashboard() {
   const [isClearing, setIsClearing] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   // selectedCongress is now declared at the top before useBillSummaryStats
-  const [progress, setProgress] = useState<{ current: number; total: number; filtered?: number } | null>(null);
+  const [progress, setProgress] = useState<{ 
+    current: number; 
+    total: number; 
+    filtered?: number;
+    inserted?: number;
+    checked?: number;
+  } | null>(null);
 
   const CONGRESS_OPTIONS = [
     { value: "119", label: "119th (2025-2026)" },
@@ -228,11 +234,14 @@ export function BillSummaryDashboard() {
           estimatedTotal = data.totalCount;
         }
         
-        // Update progress UI
+        // Update progress UI - show checked (inserted + filtered) vs total
+        const totalChecked = totalInserted + totalFiltered;
         setProgress({ 
-          current: totalInserted, 
-          total: estimatedTotal || totalInserted,
-          filtered: totalFiltered
+          current: totalInserted,  // Keep for backward compat with other operations
+          total: estimatedTotal || totalChecked,
+          filtered: totalFiltered,
+          inserted: totalInserted,
+          checked: totalChecked
         });
         
         // Rate limiting delay between batches
@@ -714,15 +723,31 @@ export function BillSummaryDashboard() {
                         : 'Generating AI summaries...'}
               </span>
               <span className="font-medium">
-                {progress.current.toLocaleString()} / {progress.total.toLocaleString()}
-                {progress.filtered !== undefined && progress.filtered > 0 && (
-                  <span className="text-muted-foreground ml-1">
-                    ({progress.filtered.toLocaleString()} filtered)
-                  </span>
+                {isIngesting && progress.inserted !== undefined && progress.checked !== undefined ? (
+                  <>
+                    <span className="text-green-600">{progress.inserted.toLocaleString()} inserted</span>
+                    <span className="text-muted-foreground mx-1">•</span>
+                    <span>{progress.checked.toLocaleString()} / {progress.total.toLocaleString()} checked</span>
+                  </>
+                ) : (
+                  <>
+                    {progress.current.toLocaleString()} / {progress.total.toLocaleString()}
+                    {progress.filtered !== undefined && progress.filtered > 0 && (
+                      <span className="text-muted-foreground ml-1">
+                        ({progress.filtered.toLocaleString()} filtered)
+                      </span>
+                    )}
+                  </>
                 )}
               </span>
             </div>
-            <Progress value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0} className="h-2" />
+            <Progress 
+              value={progress.total > 0 
+                ? ((isIngesting && progress.checked !== undefined ? progress.checked : progress.current) / progress.total) * 100 
+                : 0
+              } 
+              className="h-2" 
+            />
           </div>
         )}
 
