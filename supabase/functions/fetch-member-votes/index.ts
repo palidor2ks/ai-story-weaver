@@ -10,10 +10,10 @@ const CONGRESS_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// 10 canonical topics for the quiz system
+// 11 canonical topics for the quiz system
 const CANONICAL_TOPICS = [
   'Economy', 'Healthcare', 'Immigration', 'Environment', 'Defense',
-  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology'
+  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology', 'Judicial'
 ] as const;
 
 // Normalize Congress.gov policy areas to our 10 canonical topics
@@ -50,10 +50,12 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   // Civil Rights
   'Civil Rights and Liberties, Minority Issues': 'Civil Rights',
   'Crime and Law Enforcement': 'Civil Rights',
-  'Law': 'Civil Rights',
   'Native Americans': 'Civil Rights',
   'Arts, Culture, Religion': 'Civil Rights',
   'Sports and Recreation': 'Civil Rights',
+  
+  // Judicial
+  'Law': 'Judicial',
   
   // Education
   'Education': 'Education',

@@ -6,10 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Only use the 10 canonical topics for consistency with the quiz system
+// Use the 11 canonical topics for consistency with the quiz system
 const CANONICAL_TOPICS = [
   'Economy', 'Healthcare', 'Immigration', 'Environment', 'Defense',
-  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology'
+  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology', 'Judicial'
 ];
 
 // Validate and normalize AI-detected topics to canonical topics
@@ -34,10 +34,18 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'Emergency Management': 'Defense',
   'Civil Rights and Liberties, Minority Issues': 'Civil Rights',
   'Crime and Law Enforcement': 'Civil Rights',
-  'Law': 'Civil Rights',
   'Native Americans': 'Civil Rights',
   'Arts, Culture, Religion': 'Civil Rights',
   'Sports and Recreation': 'Civil Rights',
+  // Judicial
+  'Law': 'Judicial',
+  'Courts': 'Judicial',
+  'Judicial Reform': 'Judicial',
+  'Supreme Court': 'Judicial',
+  'Federal Courts': 'Judicial',
+  'Judges': 'Judicial',
+  'Legal System': 'Judicial',
+  'Judicial procedure and administration': 'Judicial',
   'Social Sciences and History': 'Education',
   'Social Welfare': 'Social Programs',
   'Housing and Community Development': 'Social Programs',
@@ -65,6 +73,7 @@ CIVIL RIGHTS: Voting rights, discrimination (race, gender, disability), criminal
 GOVERNMENT: Federal agencies, elections, government reform, congressional operations, federal workforce, transparency, ethics, postal service, census, federal buildings, regulatory reform
 SOCIAL PROGRAMS: Welfare, food assistance (SNAP), housing assistance, unemployment benefits, poverty programs, disability benefits (SSDI/SSI), child welfare, homelessness, community development
 TECHNOLOGY: Cybersecurity, internet regulation, AI policy, telecommunications, data privacy, scientific research, space exploration (NASA), patents, broadband access, digital infrastructure
+JUDICIAL: Federal courts, Supreme Court, judicial appointments, judicial reform, court procedures, sentencing guidelines, legal precedent, federal judges, court administration, case law, constitutional interpretation, judicial ethics, court jurisdiction, appellate process
 `;
 
 function validateTopic(topic: string): string {

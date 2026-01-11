@@ -15,10 +15,10 @@ import { AlertTriangle, CheckCircle, RefreshCw, Edit, X, Loader2, Tags, FileStac
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
-// Only use the 10 canonical topics
+// Use the 11 canonical topics
 const ALL_TOPICS = [
   'Economy', 'Healthcare', 'Immigration', 'Environment', 'Foreign Affairs',
-  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology'
+  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology', 'Judicial'
 ];
 
 interface FlaggedBill {

@@ -12,6 +12,7 @@ export const topics: Topic[] = [
   { id: 'social-programs', name: 'Social Programs', icon: '🤝', weight: 1 },
   { id: 'government', name: 'Government & Democracy', icon: '🏛️', weight: 1 },
   { id: 'technology', name: 'Technology & Science', icon: '🔬', weight: 1 },
+  { id: 'judicial', name: 'Judicial & Courts', icon: '⚖️', weight: 1 },
 ];
 
 // Map from Congress.gov policy area names to consolidated topic IDs (for vote syncing)
@@ -47,10 +48,16 @@ export const policyAreaToTopicId: Record<string, string> = {
   // Civil Rights & Justice (includes arts-culture-religion, sports-recreation)
   'Civil Rights and Liberties, Minority Issues': 'civil-rights',
   'Crime and Law Enforcement': 'civil-rights',
-  'Law': 'civil-rights',
   'Native Americans': 'civil-rights',
   'Arts, Culture, Religion': 'civil-rights',
   'Sports and Recreation': 'civil-rights',
+  
+  // Judicial & Courts
+  'Law': 'judicial',
+  'Courts': 'judicial',
+  'Judicial Reform': 'judicial',
+  'Supreme Court': 'judicial',
+  'Federal Judiciary': 'judicial',
   
   // Education (includes social-sciences-history)
   'Education': 'education',

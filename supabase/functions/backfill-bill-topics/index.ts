@@ -158,13 +158,17 @@ const SUBJECT_TERM_MAPPING: Record<string, string> = {
   'Domestic violence and child abuse': 'Civil Rights',
   'Firearms and explosives': 'Civil Rights',
   'Hate crimes': 'Civil Rights',
-  'Judicial procedure and administration': 'Civil Rights',
-  'Supreme Court': 'Civil Rights',
-  'Federal appellate courts': 'Civil Rights',
-  'Federal district courts': 'Civil Rights',
-  'Judges': 'Civil Rights',
-  'Evidence and witnesses': 'Civil Rights',
-  'Legal fees and court costs': 'Civil Rights',
+  
+  // Judicial (court-specific terms moved from Civil Rights)
+  'Judicial procedure and administration': 'Judicial',
+  'Supreme Court': 'Judicial',
+  'Federal appellate courts': 'Judicial',
+  'Federal district courts': 'Judicial',
+  'Judges': 'Judicial',
+  'Evidence and witnesses': 'Judicial',
+  'Legal fees and court costs': 'Judicial',
+  'Judicial review and appeals': 'Judicial',
+  'Court of Appeals': 'Judicial',
   
   // Native Americans
   'Indian lands and resources rights': 'Native Americans',
