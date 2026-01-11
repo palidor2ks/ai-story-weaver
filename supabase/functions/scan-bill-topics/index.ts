@@ -53,6 +53,20 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'General': 'Government',
 };
 
+// Detailed topic definitions to guide AI analysis
+const TOPIC_DEFINITIONS = `
+ECONOMY: Jobs, wages, trade, taxation, banking, finance, business regulation, labor laws, commerce, agriculture, transportation infrastructure, supply chains, manufacturing, small business, tariffs, economic development
+HEALTHCARE: Medical care, health insurance, public health, mental health, drug policy, Medicare, Medicaid, family health services, hospitals, pharmaceuticals, disease prevention, biomedical research, healthcare workforce
+IMMIGRATION: Border policy, visas, citizenship, refugee policy, asylum, deportation, DACA, immigration enforcement, guest workers, naturalization, border security, immigration courts
+ENVIRONMENT: Climate change, pollution, conservation, energy policy (oil, gas, renewables), public lands, water resources, wildlife protection, EPA regulations, clean air/water, national parks, forestry
+DEFENSE: Military operations, veterans affairs, national security, foreign policy, international relations, NATO, defense spending, intelligence agencies, military personnel, weapons systems, cybersecurity threats
+EDUCATION: K-12 schools, higher education, student loans, vocational training, early childhood education, teacher policy, school funding, special education, STEM programs, charter schools
+CIVIL RIGHTS: Voting rights, discrimination (race, gender, disability), criminal justice reform, gun policy, privacy rights, free speech, LGBTQ+ rights, religious freedom, Native American/tribal affairs, policing reform
+GOVERNMENT: Federal agencies, elections, government reform, congressional operations, federal workforce, transparency, ethics, postal service, census, federal buildings, regulatory reform
+SOCIAL PROGRAMS: Welfare, food assistance (SNAP), housing assistance, unemployment benefits, poverty programs, disability benefits (SSDI/SSI), child welfare, homelessness, community development
+TECHNOLOGY: Cybersecurity, internet regulation, AI policy, telecommunications, data privacy, scientific research, space exploration (NASA), patents, broadband access, digital infrastructure
+`;
+
 function validateTopic(topic: string): string {
   if (CANONICAL_TOPICS.includes(topic)) return topic;
   return TOPIC_NORMALIZATION[topic] || 'Government';
@@ -67,34 +81,61 @@ async function processSingleBill(
   validateTopicFn: typeof validateTopic,
   canonicalTopics: string[]
 ): Promise<Response> {
-  const prompt = `Analyze this bill and identify its policy topics.
+  const prompt = `You are a senior legislative analyst. Perform a THOROUGH, DEEP analysis of this bill to identify ALL policy topics it addresses.
 
-Available topics (ONLY use these): ${canonicalTopics.join(', ')}
+=== TOPIC CATEGORIES (use ONLY these exact names) ===
+${TOPIC_DEFINITIONS}
 
-Bill:
-- Bill ID: ${bill.id}
-- Name: ${bill.name}
-- Current Topic: ${bill.topic}
-- Summary: ${bill.summary?.substring(0, 800) || 'No summary'}
+=== BILL TO ANALYZE ===
+Bill ID: ${bill.id}
+Title: ${bill.name}
+Currently Assigned Topic: ${bill.topic}
+Full Summary: ${bill.summary?.substring(0, 2000) || 'No summary available'}
 
-Determine:
-1. The PRIMARY topic based on the summary content (MUST be from the available topics list)
-2. ALL SECONDARY topics it addresses (MUST be from the available topics list)
-3. Whether the current assigned topic is incorrect (mismatch)
-4. Whether this is an omnibus bill (appropriations, NDAA, infrastructure, reconciliation)
+=== DEEP ANALYSIS INSTRUCTIONS ===
+1. READ THE ENTIRE SUMMARY CAREFULLY - do not skim or make assumptions
+2. Identify EVERY policy area mentioned, even briefly
+3. For each policy mention, map it to one of the 10 topic categories above
+4. Determine which topic is the PRIMARY focus (main purpose of the bill)
+5. List ALL other topics as SECONDARY (even if minor mentions)
+6. Consider: Who is affected? Which agencies? What is regulated or funded?
 
-Return JSON:
+=== CLASSIFICATION EXAMPLES ===
+- Military healthcare bill → Primary: Defense, Secondary: Healthcare
+- Environmental job training → Primary: Environment, Secondary: Economy, Education
+- Tech privacy rights → Primary: Technology, Secondary: Civil Rights
+- Border security funding → Primary: Immigration, Secondary: Defense, Government
+- Student loan reform → Primary: Education, Secondary: Economy
+
+=== MISMATCH DETECTION ===
+Compare your PRIMARY topic to the "Currently Assigned Topic". Mark is_mismatch=true if:
+- The assigned topic is completely wrong
+- A more accurate primary topic exists
+- The bill was miscategorized
+
+=== OMNIBUS DETECTION ===
+Mark is_omnibus=true if the bill:
+- Covers 5+ major distinct policy areas
+- Is an appropriations/spending bill
+- Is NDAA (National Defense Authorization Act)
+- Is infrastructure package or reconciliation bill
+
+=== CONFIDENCE LEVELS ===
+- "high": Summary clearly describes policy area(s), classification is unambiguous
+- "medium": Some ambiguity but classification is reasonable
+- "low": Summary is vague or bill genuinely spans multiple primaries equally
+
+Return ONLY this JSON structure:
 {
-  "primary_topic": "...",
+  "primary_topic": "Economy" | "Healthcare" | "Immigration" | "Environment" | "Defense" | "Education" | "Civil Rights" | "Government" | "Social Programs" | "Technology",
   "secondary_topics": ["...", "..."],
-  "topic_count": <total number>,
+  "topic_count": <total unique topics>,
   "is_mismatch": boolean,
   "is_omnibus": boolean,
   "omnibus_type": "appropriations" | "ndaa" | "infrastructure" | "reconciliation" | "other" | null,
-  "confidence": "high" | "medium" | "low"
-}
-
-Return ONLY valid JSON.`;
+  "confidence": "high" | "medium" | "low",
+  "reasoning": "<1-2 sentences explaining your primary topic choice>"
+}`;
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
@@ -105,10 +146,10 @@ Return ONLY valid JSON.`;
     body: JSON.stringify({
       model: 'google/gemini-2.5-flash',
       messages: [
-        { role: 'system', content: 'You are a legislative analyst. Return valid JSON only.' },
+        { role: 'system', content: 'You are an expert legislative analyst with deep knowledge of US federal policy areas. Analyze bills thoroughly, considering all stakeholders and policy implications. Return valid JSON only.' },
         { role: 'user', content: prompt }
       ],
-      max_tokens: 1000,
+      max_tokens: 1500,
     }),
   });
 
@@ -267,31 +308,47 @@ serve(async (req) => {
     for (let i = 0; i < bills.length; i += CHUNK_SIZE) {
       const chunk = bills.slice(i, i + CHUNK_SIZE);
       
-      const prompt = `Analyze these bills and identify their policy topics.
+      const prompt = `You are a senior legislative analyst. Perform a THOROUGH, DEEP analysis of each bill to identify ALL policy topics.
 
-Available topics (ONLY use these): ${CANONICAL_TOPICS.join(', ')}
+=== TOPIC CATEGORIES (use ONLY these exact names) ===
+${TOPIC_DEFINITIONS}
 
+=== BILLS TO ANALYZE ===
 ${chunk.map((b, idx) => `
-Bill ${idx + 1}:
-- ID: ${b.id}
-- Name: ${b.name}
-- Current Topic: ${b.topic}
-- Summary: ${b.summary?.substring(0, 600) || 'No summary'}
-`).join('\n---\n')}
+=== BILL ${idx + 1} ===
+ID: ${b.id}
+Title: ${b.name}
+Current Topic: ${b.topic}
+Summary: ${b.summary?.substring(0, 1500) || 'No summary'}
+`).join('\n')}
 
-For each bill, determine:
-1. The PRIMARY topic based on the summary content
-2. ALL SECONDARY topics it addresses
-3. Whether the current assigned topic is incorrect (mismatch)
-4. Whether this is an omnibus bill
+=== DEEP ANALYSIS INSTRUCTIONS (apply to EACH bill) ===
+1. READ EACH SUMMARY CAREFULLY - do not skim or make assumptions
+2. Identify EVERY policy area mentioned in each bill
+3. Map each policy mention to one of the 10 topic categories
+4. Determine which topic is the PRIMARY focus (main purpose)
+5. List ALL other topics as SECONDARY (even minor mentions)
+6. Consider: Who is affected? Which agencies? What is regulated/funded?
+
+=== CLASSIFICATION EXAMPLES ===
+- Military healthcare → Primary: Defense, Secondary: Healthcare
+- Environmental job training → Primary: Environment, Secondary: Economy, Education
+- Tech privacy rights → Primary: Technology, Secondary: Civil Rights
+- Border security funding → Primary: Immigration, Secondary: Defense, Government
+
+=== MISMATCH & OMNIBUS DETECTION ===
+- is_mismatch=true if the "Current Topic" is wrong or a better primary exists
+- is_omnibus=true if 5+ major topics, or appropriations/NDAA/infrastructure/reconciliation bill
+
+=== CONFIDENCE: high (clear), medium (some ambiguity), low (vague/equal primaries) ===
 
 Return a JSON array with one object per bill:
 [
   {
     "bill_index": 1,
-    "primary_topic": "...",
+    "primary_topic": "Economy" | "Healthcare" | "Immigration" | "Environment" | "Defense" | "Education" | "Civil Rights" | "Government" | "Social Programs" | "Technology",
     "secondary_topics": ["...", "..."],
-    "topic_count": <total number>,
+    "topic_count": <total unique topics>,
     "is_mismatch": boolean,
     "is_omnibus": boolean,
     "omnibus_type": "appropriations" | "ndaa" | "infrastructure" | "reconciliation" | "other" | null,
@@ -299,7 +356,7 @@ Return a JSON array with one object per bill:
   }
 ]
 
-Return ONLY valid JSON, no other text.`;
+Return ONLY valid JSON.`;
 
       try {
         const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -311,10 +368,10 @@ Return ONLY valid JSON, no other text.`;
           body: JSON.stringify({
             model: 'google/gemini-2.5-flash',
             messages: [
-              { role: 'system', content: 'You are a legislative analyst. Return valid JSON only.' },
+              { role: 'system', content: 'You are an expert legislative analyst with deep knowledge of US federal policy areas. Analyze bills thoroughly, considering all stakeholders and policy implications. Return valid JSON only.' },
               { role: 'user', content: prompt }
             ],
-            max_tokens: 2000,
+            max_tokens: 3000,
           }),
         });
 
