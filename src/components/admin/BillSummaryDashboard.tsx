@@ -30,7 +30,6 @@ import {
   Send,
   XOctagon,
   Landmark,
-  Activity,
   PlayCircle,
   RotateCcw,
   AlertCircle,
@@ -62,9 +61,7 @@ export function BillSummaryDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isEnrichingSponsors, setIsEnrichingSponsors] = useState(false);
-  const [isEnrichingStatus, setIsEnrichingStatus] = useState(false);
-  const [isForceEnriching, setIsForceEnriching] = useState(false);
+  const [isFetchingBioguides, setIsFetchingBioguides] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -327,23 +324,25 @@ export function BillSummaryDashboard() {
     }
   };
 
-  const handleEnrichSponsors = async () => {
-    setIsEnrichingSponsors(true);
+  const handleFetchBioguideIds = async () => {
+    setIsFetchingBioguides(true);
     setProgress({ current: 0, total: stats?.billsMissingSponsor || 0 });
     
     try {
       let totalProcessed = 0;
+      let totalCosponsors = 0;
       let remaining = stats?.billsMissingSponsor || 0;
       
       // Process in batches until done or limit reached
       while (remaining > 0 && totalProcessed < 500) {
-        const { data, error } = await supabase.functions.invoke('fetch-bill-sponsors', {
+        const { data, error } = await supabase.functions.invoke('fetch-bioguide-ids', {
           body: { batchSize: 50, congress: parseInt(selectedCongress) }
         });
         
         if (error) throw error;
         
         totalProcessed += data?.processed || 0;
+        totalCosponsors += data?.cosponsorsAdded || 0;
         remaining = data?.remaining || 0;
         
         setProgress({ current: totalProcessed, total: stats?.billsMissingSponsor || 0 });
@@ -354,19 +353,19 @@ export function BillSummaryDashboard() {
         await new Promise(r => setTimeout(r, 500));
       }
       
-      toast.success('Sponsor enrichment completed', {
-        description: `Enriched ${totalProcessed.toLocaleString()} bills`
+      toast.success('Bioguide ID fetch completed', {
+        description: `Linked ${totalProcessed.toLocaleString()} sponsors, ${totalCosponsors.toLocaleString()} cosponsors`
       });
       
       triggerBackgroundRefresh();
       await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
     } catch (err) {
-      console.error('Error enriching sponsors:', err);
-      toast.error('Failed to enrich sponsors', {
+      console.error('Error fetching bioguide IDs:', err);
+      toast.error('Failed to fetch bioguide IDs', {
         description: err instanceof Error ? err.message : 'Unknown error'
       });
     } finally {
-      setIsEnrichingSponsors(false);
+      setIsFetchingBioguides(false);
       setProgress(null);
     }
   };
@@ -403,63 +402,6 @@ export function BillSummaryDashboard() {
       });
     } finally {
       setIsClearing(false);
-    }
-  };
-
-  const handleEnrichStatus = async (forceAll = false) => {
-    if (forceAll) {
-      setIsForceEnriching(true);
-    } else {
-      setIsEnrichingStatus(true);
-    }
-    
-    // For force mode, we process all bills; otherwise just those missing data
-    const totalToProcess = forceAll ? stats?.totalBills || 0 : stats?.billsNeedingStatusEnrich || 0;
-    setProgress({ current: 0, total: totalToProcess });
-    
-    try {
-      let totalProcessed = 0;
-      let hasMore = true;
-      
-      // Process in batches until done or limit reached
-      while (hasMore && totalProcessed < (forceAll ? 2000 : 500)) {
-        const { data, error } = await supabase.functions.invoke('fetch-bill-actions', {
-          body: { 
-            batchSize: 50, 
-            congress: parseInt(selectedCongress),
-            force: forceAll
-          }
-        });
-        
-        if (error) throw error;
-        
-        totalProcessed += data?.processed || 0;
-        const remaining = data?.remaining || 0;
-        hasMore = remaining > 0 && (data?.processed || 0) > 0;
-        
-        setProgress({ current: totalProcessed, total: totalToProcess });
-        
-        if ((data?.processed || 0) === 0) break;
-        
-        // Rate limit between batches
-        await new Promise(r => setTimeout(r, 500));
-      }
-      
-      toast.success(forceAll ? 'Full re-enrichment completed' : 'Status enrichment completed', {
-        description: `Processed ${totalProcessed.toLocaleString()} bills with action code data`
-      });
-      
-      triggerBackgroundRefresh();
-      await queryClient.invalidateQueries({ queryKey: ['bill-summary-stats'] });
-    } catch (err) {
-      console.error('Error enriching status:', err);
-      toast.error('Failed to enrich status', {
-        description: err instanceof Error ? err.message : 'Unknown error'
-      });
-    } finally {
-      setIsEnrichingStatus(false);
-      setIsForceEnriching(false);
-      setProgress(null);
     }
   };
 
@@ -661,7 +603,7 @@ export function BillSummaryDashboard() {
 
   if (!stats) return null;
 
-  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isEnrichingSponsors || isEnrichingStatus || isForceEnriching || isClearing || isResetting || isImporting || isDerivingTopics;
+  const isProcessing = isFetchingCrs || isGeneratingAi || isIngesting || isSyncing || isFetchingBioguides || isClearing || isResetting || isImporting || isDerivingTopics;
 
   return (
     <Card className="mb-6">
@@ -783,44 +725,16 @@ export function BillSummaryDashboard() {
             <Button 
               variant="outline"
               size="sm"
-              onClick={handleEnrichSponsors}
+              onClick={handleFetchBioguideIds}
               disabled={isProcessing || stats.billsMissingSponsor === 0}
+              title="Fetch bioguide IDs from Congress.gov to link bills to legislator profiles"
             >
-              {isEnrichingSponsors ? (
+              {isFetchingBioguides ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Users className="h-4 w-4 mr-2" />
               )}
-              Sponsors ({stats.billsMissingSponsor.toLocaleString()})
-            </Button>
-
-            <Button 
-              variant="outline"
-              size="sm"
-              onClick={() => handleEnrichStatus(false)}
-              disabled={isProcessing || stats.billsNeedingStatusEnrich === 0}
-            >
-              {isEnrichingStatus ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Activity className="h-4 w-4 mr-2" />
-              )}
-              Status ({stats.billsNeedingStatusEnrich.toLocaleString()})
-            </Button>
-
-            <Button 
-              variant="secondary"
-              size="sm"
-              onClick={() => handleEnrichStatus(true)}
-              disabled={isProcessing || stats.totalBills === 0}
-              title="Re-fetch action history for ALL bills to fix status accuracy"
-            >
-              {isForceEnriching ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Re-enrich All
+              Fetch Bioguide IDs ({stats.billsMissingSponsor.toLocaleString()})
             </Button>
 
             {/* Excel Import - hidden input with styled label */}
@@ -915,13 +829,11 @@ export function BillSummaryDashboard() {
               <span className="text-muted-foreground">
                 {isIngesting 
                   ? `Ingesting bills from ${selectedCongress}th Congress...` 
-                  : isEnrichingSponsors
-                    ? 'Enriching sponsor data...'
-                    : isEnrichingStatus || isForceEnriching
-                      ? `${isForceEnriching ? 'Re-enriching ALL bills' : 'Enriching bill status'} from action history...`
-                      : isFetchingCrs 
-                        ? 'Fetching CRS summaries...' 
-                        : 'Generating AI summaries...'}
+                  : isFetchingBioguides
+                    ? 'Fetching bioguide IDs for sponsors & cosponsors...'
+                    : isFetchingCrs 
+                      ? 'Fetching CRS summaries...' 
+                      : 'Generating AI summaries...'}
               </span>
               <span className="font-medium">
                 {isIngesting && progress.inserted !== undefined && progress.checked !== undefined ? (
