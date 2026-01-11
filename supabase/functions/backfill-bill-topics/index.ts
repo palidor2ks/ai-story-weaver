@@ -37,6 +37,15 @@ const SUBJECT_TERM_MAPPING: Record<string, string> = {
   'Commemorative events and holidays': 'Government',
   'U.S. territories and protectorates': 'Government',
   'District of Columbia': 'Government',
+  'Congressional operations and organization': 'Government',
+  'Congressional committees': 'Government',
+  'U.S. history': 'Government',
+  'Constitution and constitutional amendments': 'Government',
+  'Government ethics and transparency, public corruption': 'Government',
+  'Government liability': 'Government',
+  'Government trust funds': 'Government',
+  'Performance measurement': 'Government',
+  'Census and government statistics': 'Government',
   
   // Education  
   'Higher education': 'Education',
@@ -49,6 +58,9 @@ const SUBJECT_TERM_MAPPING: Record<string, string> = {
   'Educational facilities and institutions': 'Education',
   'Student aid and college costs': 'Education',
   'Preschool education': 'Education',
+  'Educational guidance': 'Education',
+  'Academic performance and assessments': 'Education',
+  'Educational technology and distance education': 'Education',
   
   // Healthcare
   'Health promotion and preventive care': 'Healthcare',
@@ -118,6 +130,10 @@ const SUBJECT_TERM_MAPPING: Record<string, string> = {
   'Military medicine': 'Defense',
   'Coast guard': 'Defense',
   'Conflicts and wars': 'Defense',
+  'Military history': 'Defense',
+  'Military law': 'Defense',
+  'Alliances': 'Defense',
+  'Arms control and nonproliferation': 'Defense',
   
   // Civil Rights
   'Law enforcement officers': 'Civil Rights',
@@ -143,11 +159,18 @@ const SUBJECT_TERM_MAPPING: Record<string, string> = {
   'Firearms and explosives': 'Civil Rights',
   'Hate crimes': 'Civil Rights',
   'Judicial procedure and administration': 'Civil Rights',
+  'Supreme Court': 'Civil Rights',
+  'Federal appellate courts': 'Civil Rights',
+  'Federal district courts': 'Civil Rights',
+  'Judges': 'Civil Rights',
+  'Evidence and witnesses': 'Civil Rights',
+  'Legal fees and court costs': 'Civil Rights',
   
   // Native Americans
   'Indian lands and resources rights': 'Native Americans',
   'Indian social and development programs': 'Native Americans',
   'Federal-Indian relations': 'Native Americans',
+  'Alaska Natives and Hawaiians': 'Native Americans',
   
   // Technology
   'Computers and information technology': 'Technology',
@@ -310,25 +333,21 @@ serve(async (req) => {
         
         return {
           id: bill.id,
-          additional_topics: additionalTopics.length > 0 ? additionalTopics : null
+          additional_topics: additionalTopics // Always set - empty array if no matches
         };
       });
       
-      // Filter to only bills that got additional topics
-      const enrichedUpdates = updates.filter(u => u.additional_topics && u.additional_topics.length > 0);
-      
-      if (enrichedUpdates.length > 0) {
-        for (const update of enrichedUpdates) {
-          const { error: updateError } = await supabase
-            .from('bills')
-            .update({ additional_topics: update.additional_topics })
-            .eq('id', update.id);
-          
-          if (updateError) {
-            console.error(`[BackfillBillTopics] Error updating ${update.id}:`, updateError);
-          } else {
-            enriched++;
-          }
+      // Update ALL bills to prevent infinite loop (empty array marks as processed)
+      for (const update of updates) {
+        const { error: updateError } = await supabase
+          .from('bills')
+          .update({ additional_topics: update.additional_topics })
+          .eq('id', update.id);
+        
+        if (updateError) {
+          console.error(`[BackfillBillTopics] Error updating ${update.id}:`, updateError);
+        } else if (update.additional_topics.length > 0) {
+          enriched++;
         }
       }
       
