@@ -53,13 +53,18 @@ export interface SummaryStats {
   lastBillSync: string | null;
   lastRefreshed: string | null;
   ingestionStatuses: IngestionStatus[];
+  // Congress-specific counts
+  selectedCongressTotal: number;
 }
 
-export function useBillSummaryStats() {
+// Valid bill types for status tracking (excludes simple and concurrent resolutions)
+const COUNTABLE_BILL_TYPES = ['HR', 'S', 'HJRES', 'SJRES'];
+
+export function useBillSummaryStats(selectedCongress?: number) {
   return useQuery<SummaryStats>({
-    queryKey: ['bill-summary-stats'],
+    queryKey: ['bill-summary-stats', selectedCongress],
     queryFn: async () => {
-      // Fetch bill summary stats
+      // Fetch bill summary stats (materialized view - all congresses)
       const { data, error } = await supabase
         .from('bill_summary_stats')
         .select('*')
@@ -71,12 +76,20 @@ export function useBillSummaryStats() {
         throw error;
       }
 
-      // Fetch status breakdown using action-code-derived status for accuracy
-      // We fetch max_action_code, passed_house, passed_senate to derive accurate status
-      const { data: statusData } = await supabase
+      // Build status query with filters for selected congress and bill types
+      let statusQuery = supabase
         .from('bills')
-        .select('status, max_action_code, passed_house, passed_senate')
-        .not('status', 'is', null);
+        .select('status, max_action_code, passed_house, passed_senate, bill_type');
+      
+      // Filter by congress if provided
+      if (selectedCongress) {
+        statusQuery = statusQuery.eq('congress', selectedCongress);
+      }
+      
+      // Filter to countable bill types (Bills and Joint Resolutions only)
+      statusQuery = statusQuery.in('bill_type', COUNTABLE_BILL_TYPES);
+      
+      const { data: statusData } = await statusQuery;
       
       const statusCounts = {
         introduced: 0,
@@ -97,61 +110,82 @@ export function useBillSummaryStats() {
           
           let derivedStatus: string;
           
+          // Priority order based on action codes (highest milestone wins)
+          // This matches Congress.gov's legislative lifecycle
           if (maxCode) {
-            // Action code based status (most accurate)
-            // Priority order: became_law > veto > to_president > resolving > passed_both > passed_one
             if (maxCode >= 36000) {
+              // Became Law (Public Law, Private Law)
               derivedStatus = 'became_law';
             } else if (maxCode >= 30000 && maxCode < 36000) {
-              // Veto range is 30000-35999
+              // Veto actions (30000-35999)
               derivedStatus = 'veto_actions';
             } else if (maxCode >= 28000 && maxCode < 30000) {
+              // To President / Presented to President (28000-29999)
               derivedStatus = 'to_president';
             } else if (maxCode >= 19000 && maxCode < 25000) {
+              // Resolving differences (conference, amendments between chambers)
               derivedStatus = 'resolving_differences';
             } else if (passedHouse && passedSenate) {
+              // Passed both chambers but hasn't reached higher milestone
               derivedStatus = 'passed_both_chambers';
-            } else if (passedHouse || passedSenate) {
+            } else if (maxCode >= 8000 || passedHouse || passedSenate) {
+              // Passed one chamber (8000 = Passed House, 17000 = Passed Senate)
               derivedStatus = 'passed_one_chamber';
             } else {
-              // Has action code but no clear status from it
-              derivedStatus = bill.status as string;
+              // Has action code but no clear status - likely introduced
+              derivedStatus = 'introduced';
             }
           } else if (passedHouse !== null || passedSenate !== null) {
-            // Use passage flags when available (no action code)
+            // Use passage flags when no action code available
             if (passedHouse && passedSenate) {
               derivedStatus = 'passed_both_chambers';
             } else if (passedHouse || passedSenate) {
               derivedStatus = 'passed_one_chamber';
             } else {
-              derivedStatus = bill.status as string;
+              derivedStatus = bill.status as string || 'introduced';
             }
           } else {
             // Fall back to stored status
-            derivedStatus = bill.status as string;
+            derivedStatus = bill.status as string || 'introduced';
           }
           
-          if (derivedStatus === 'introduced') statusCounts.introduced++;
-          else if (derivedStatus === 'passed_one_chamber') statusCounts.passedOneChamber++;
-          else if (derivedStatus === 'passed_both_chambers') statusCounts.passedBothChambers++;
-          else if (derivedStatus === 'to_president') statusCounts.toPresident++;
+          // Count by derived status
+          if (derivedStatus === 'became_law') statusCounts.becameLaw++;
           else if (derivedStatus === 'veto_actions') statusCounts.vetoActions++;
-          else if (derivedStatus === 'became_law') statusCounts.becameLaw++;
+          else if (derivedStatus === 'to_president') statusCounts.toPresident++;
           else if (derivedStatus === 'resolving_differences') statusCounts.resolvingDifferences++;
+          else if (derivedStatus === 'passed_both_chambers') statusCounts.passedBothChambers++;
+          else if (derivedStatus === 'passed_one_chamber') statusCounts.passedOneChamber++;
+          else statusCounts.introduced++;
         }
       }
 
-      // Fetch bills missing sponsor
-      const { count: missingSponsor } = await supabase
+      // Count total for selected congress (filtered by bill type)
+      const selectedCongressTotal = statusData?.length || 0;
+
+      // Fetch bills missing sponsor (for selected congress)
+      let missingSponsorQuery = supabase
         .from('bills')
         .select('*', { count: 'exact', head: true })
         .is('sponsor_bioguide_id', null);
+      
+      if (selectedCongress) {
+        missingSponsorQuery = missingSponsorQuery.eq('congress', selectedCongress);
+      }
+      
+      const { count: missingSponsor } = await missingSponsorQuery;
 
-      // Fetch bills needing status enrichment (missing max_action_code)
-      const { count: needingStatusEnrich } = await supabase
+      // Fetch bills needing status enrichment (for selected congress)
+      let needingEnrichQuery = supabase
         .from('bills')
         .select('*', { count: 'exact', head: true })
         .is('max_action_code', null);
+      
+      if (selectedCongress) {
+        needingEnrichQuery = needingEnrichQuery.eq('congress', selectedCongress);
+      }
+      
+      const { count: needingStatusEnrich } = await needingEnrichQuery;
 
       // Fetch last sync status
       const { data: syncStatus } = await supabase
@@ -191,6 +225,7 @@ export function useBillSummaryStats() {
           lastBillSync: syncStatus?.last_sync_completed_at || null,
           lastRefreshed: null,
           ingestionStatuses,
+          selectedCongressTotal,
         };
       }
 
@@ -244,6 +279,7 @@ export function useBillSummaryStats() {
         lastBillSync: syncStatus?.last_sync_completed_at || null,
         lastRefreshed: rawData.last_refreshed ? String(rawData.last_refreshed) : null,
         ingestionStatuses,
+        selectedCongressTotal,
       };
     },
     staleTime: 60000,
