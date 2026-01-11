@@ -141,7 +141,7 @@ serve(async (req) => {
       for (const bill of bills) {
         const type = (bill.type || 'HR').toUpperCase();
         const number = bill.number || 0;
-        const id = `${type}.${number}`;
+        const id = `${congress}-${type}.${number}`;
         const latestActionText = bill.latestAction?.text || null;
         const latestActionDate = bill.latestAction?.actionDate || null;
         const textDerivedStatus = deriveStatus(latestActionText);
