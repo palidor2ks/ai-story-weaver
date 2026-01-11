@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { stripHtml } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, CheckCircle, RefreshCw, Edit, X, Loader2, Tags, FileStack, FileWarning, Sparkles } from 'lucide-react';
+import { AlertTriangle, CheckCircle, RefreshCw, Edit, X, Loader2, Tags, FileStack, FileWarning, Sparkles, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -39,10 +40,13 @@ export default function TopicReviewPanel() {
   const [editedPrimaryTopic, setEditedPrimaryTopic] = useState('');
   const [editedAdditionalTopics, setEditedAdditionalTopics] = useState<string[]>([]);
   const [filterType, setFilterType] = useState<string>('all');
-  const [isScanning, setIsScanning] = useState(false);
-  const [isForceRescanning, setIsForceRescanning] = useState(false);
   const [scanningBillId, setScanningBillId] = useState<string | null>(null);
   const [approvingBillId, setApprovingBillId] = useState<string | null>(null);
+  
+  // Auto-scanning state
+  const [autoScanning, setAutoScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState({ scanned: 0, total: 0, isForce: false });
+  const stopScanRef = useRef(false);
 
   // Fetch flagged bills from bills table (already deduplicated)
   const { data: flaggedBills, isLoading, refetch } = useQuery({
@@ -91,7 +95,7 @@ export default function TopicReviewPanel() {
   });
 
   // Fetch count of bills needing AI scan
-  const { data: scanStats } = useQuery({
+  const { data: scanStats, refetch: refetchScanStats } = useQuery({
     queryKey: ['topic-scan-stats'],
     queryFn: async () => {
       // Bills that need initial scanning (have summary but no ai_detected_topics)
@@ -105,6 +109,8 @@ export default function TopicReviewPanel() {
         .or('ai_detected_topics.is.null,ai_detected_topics.eq.{}');
       
       // Bills that can be force-rescanned (already scanned but not reviewed)
+      // Get bills with non-null, non-empty ai_detected_topics
+      // We check that the first element exists (meaning array has at least 1 item)
       const { count: canRescan } = await supabase
         .from('bills')
         .select('id', { count: 'exact', head: true })
@@ -113,7 +119,7 @@ export default function TopicReviewPanel() {
         .neq('summary', '[NO_SUMMARY]')
         .is('reviewed_at', null)
         .not('ai_detected_topics', 'is', null)
-        .not('ai_detected_topics', 'eq', [] as string[]);
+        .filter('ai_detected_topics', 'neq', '{}');
       
       return { needsScan: needsScan || 0, canRescan: canRescan || 0 };
     }
@@ -173,46 +179,67 @@ export default function TopicReviewPanel() {
     }
   });
 
-  // Trigger batch scan
-  const handleScanBills = async () => {
-    setIsScanning(true);
-    try {
-      const response = await supabase.functions.invoke('scan-bill-topics', {
-        body: { batchSize: 100 }
-      });
-      
-      if (response.error) throw response.error;
-      
-      const result = response.data;
-      toast.success(`Scanned ${result.scanned} bills, flagged ${result.flagged}`);
-      refetch();
-      queryClient.invalidateQueries({ queryKey: ['topic-scan-stats'] });
-    } catch (error) {
-      toast.error(`Scan failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsScanning(false);
+  // Continuous auto-scan until complete
+  const handleAutoScan = async (forceRescan = false) => {
+    const totalCount = forceRescan ? (scanStats?.canRescan || 0) : (scanStats?.needsScan || 0);
+    if (totalCount === 0) {
+      toast.info('No bills to scan');
+      return;
     }
+    
+    stopScanRef.current = false;
+    setAutoScanning(true);
+    setScanProgress({ scanned: 0, total: totalCount, isForce: forceRescan });
+    
+    let totalScanned = 0;
+    let totalFlagged = 0;
+    let hasMore = true;
+    const BATCH_SIZE = 50;
+    
+    while (hasMore && !stopScanRef.current) {
+      try {
+        const response = await supabase.functions.invoke('scan-bill-topics', {
+          body: { batchSize: BATCH_SIZE, forceRescan }
+        });
+        
+        if (response.error) throw response.error;
+        
+        const result = response.data;
+        totalScanned += result.scanned || 0;
+        totalFlagged += result.flagged || 0;
+        
+        setScanProgress(prev => ({ ...prev, scanned: totalScanned }));
+        
+        // If less than batch size returned, we're done
+        hasMore = (result.scanned || 0) >= BATCH_SIZE;
+        
+        // Small delay between batches to prevent rate limiting
+        if (hasMore && !stopScanRef.current) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+      } catch (error) {
+        toast.error(`Scan error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        break;
+      }
+    }
+    
+    setAutoScanning(false);
+    setScanProgress({ scanned: 0, total: 0, isForce: false });
+    
+    if (stopScanRef.current) {
+      toast.info(`Stopped: scanned ${totalScanned} bills, flagged ${totalFlagged}`);
+    } else {
+      toast.success(`Complete: scanned ${totalScanned} bills, flagged ${totalFlagged}`);
+    }
+    
+    refetch();
+    refetchScanStats();
+    queryClient.invalidateQueries({ queryKey: ['topic-review-stats'] });
   };
 
-  // Force rescan all unreviewed bills (even those already scanned)
-  const handleForceRescanAll = async () => {
-    setIsForceRescanning(true);
-    try {
-      const response = await supabase.functions.invoke('scan-bill-topics', {
-        body: { batchSize: 100, forceRescan: true }
-      });
-      
-      if (response.error) throw response.error;
-      
-      const result = response.data;
-      toast.success(`Re-scanned ${result.scanned} bills, flagged ${result.flagged}`);
-      refetch();
-      queryClient.invalidateQueries({ queryKey: ['topic-scan-stats'] });
-    } catch (error) {
-      toast.error(`Force rescan failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsForceRescanning(false);
-    }
+  // Stop auto-scanning
+  const handleStopScan = () => {
+    stopScanRef.current = true;
   };
 
   // Rescan single bill with AI
@@ -381,45 +408,56 @@ export default function TopicReviewPanel() {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Scan New Bills button with count badge */}
-          <Button 
-            onClick={handleScanBills} 
-            disabled={isScanning || isForceRescanning}
-            variant="outline"
-          >
-            {isScanning ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Scanning...</>
-            ) : (
-              <>
+          {autoScanning ? (
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <div className="w-48">
+                <Progress value={scanProgress.total > 0 ? (scanProgress.scanned / scanProgress.total) * 100 : 0} className="h-2" />
+              </div>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+                {scanProgress.scanned.toLocaleString()} / {scanProgress.total.toLocaleString()}
+                {scanProgress.isForce && ' (rescan)'}
+              </span>
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                onClick={handleStopScan}
+                className="gap-1"
+              >
+                <Square className="h-3 w-3" />
+                Stop
+              </Button>
+            </div>
+          ) : (
+            <>
+              {/* Scan New Bills button with count badge */}
+              <Button 
+                onClick={() => handleAutoScan(false)} 
+                variant="outline"
+                disabled={(scanStats?.needsScan ?? 0) === 0}
+              >
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Scan Bills
+                Scan All Bills
                 {(scanStats?.needsScan ?? 0) > 0 && (
                   <Badge variant="secondary" className="ml-2 h-5 min-w-[1.25rem] px-1.5">
                     {scanStats!.needsScan.toLocaleString()}
                   </Badge>
                 )}
-              </>
-            )}
-          </Button>
-          
-          {/* Force Rescan All button */}
-          {(scanStats?.canRescan ?? 0) > 0 && (
-            <Button 
-              onClick={handleForceRescanAll} 
-              disabled={isScanning || isForceRescanning}
-              variant="ghost"
-              size="sm"
-              title={`Re-scan ${scanStats!.canRescan.toLocaleString()} previously scanned bills`}
-            >
-              {isForceRescanning ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Re-scanning...</>
-              ) : (
-                <>
+              </Button>
+              
+              {/* Force Rescan All button */}
+              {(scanStats?.canRescan ?? 0) > 0 && (
+                <Button 
+                  onClick={() => handleAutoScan(true)} 
+                  variant="ghost"
+                  size="sm"
+                  title={`Re-scan ${scanStats!.canRescan.toLocaleString()} previously scanned bills`}
+                >
                   <Sparkles className="h-4 w-4 mr-2" />
                   Force Rescan ({scanStats!.canRescan.toLocaleString()})
-                </>
+                </Button>
               )}
-            </Button>
+            </>
           )}
         </div>
       </div>
