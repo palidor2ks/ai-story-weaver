@@ -120,19 +120,40 @@ serve(async (req) => {
             }, { onConflict: 'bill_id,bioguide_id' });
         }
 
-        // Fetch cosponsors to populate bill_sponsors table
+        // Fetch ALL cosponsors with pagination (Congress.gov max 250 per page)
         const cosponsorCount = bill.cosponsor_count || billData.cosponsors?.count || 0;
-        if (cosponsorCount > 0 && cosponsorCount <= 50) {
+        if (cosponsorCount > 0) {
           try {
-            const cosponsorsUrl = `https://api.congress.gov/v3/bill/${bill.congress}/${billType}/${bill.bill_number}/cosponsors?api_key=${CONGRESS_API_KEY}`;
-            const cosponsorsResponse = await fetch(cosponsorsUrl);
+            let offset = 0;
+            const pageSize = 250; // Congress.gov maximum
+            let allCosponsors: Cosponsor[] = [];
             
-            if (cosponsorsResponse.ok) {
-              const cosponsorsData = await cosponsorsResponse.json();
-              const cosponsors: Cosponsor[] = cosponsorsData.cosponsors || [];
+            // Paginate through all cosponsors
+            while (offset < cosponsorCount) {
+              const cosponsorsUrl = `https://api.congress.gov/v3/bill/${bill.congress}/${billType}/${bill.bill_number}/cosponsors?limit=${pageSize}&offset=${offset}&api_key=${CONGRESS_API_KEY}`;
+              const cosponsorsResponse = await fetch(cosponsorsUrl);
               
-              // Insert cosponsors in batch
-              const cosponsorRecords = cosponsors.map(cs => ({
+              if (!cosponsorsResponse.ok) {
+                console.warn(`[FetchBioguideIds] Cosponsor page failed for ${bill.id} at offset ${offset}: ${cosponsorsResponse.status}`);
+                break; // Stop pagination on error
+              }
+              
+              const cosponsorsData = await cosponsorsResponse.json();
+              const pageCosponsors: Cosponsor[] = cosponsorsData.cosponsors || [];
+              allCosponsors.push(...pageCosponsors);
+              
+              console.log(`[FetchBioguideIds] Fetched ${pageCosponsors.length} cosponsors for ${bill.id} (offset ${offset}, total so far: ${allCosponsors.length}/${cosponsorCount})`);
+              
+              if (pageCosponsors.length < pageSize) break; // No more pages
+              offset += pageSize;
+              
+              // Rate limiting between pages
+              await new Promise(r => setTimeout(r, 100));
+            }
+            
+            // Insert all cosponsors in batch
+            if (allCosponsors.length > 0) {
+              const cosponsorRecords = allCosponsors.map(cs => ({
                 bill_id: bill.id,
                 bioguide_id: cs.bioguideId,
                 name: cs.fullName,
@@ -142,12 +163,15 @@ serve(async (req) => {
                 sponsorship_date: cs.sponsorshipDate,
               }));
 
-              if (cosponsorRecords.length > 0) {
+              // Batch upsert in chunks of 500 to avoid payload limits
+              const chunkSize = 500;
+              for (let i = 0; i < cosponsorRecords.length; i += chunkSize) {
+                const chunk = cosponsorRecords.slice(i, i + chunkSize);
                 await supabase
                   .from('bill_sponsors')
-                  .upsert(cosponsorRecords, { onConflict: 'bill_id,bioguide_id' });
-                cosponsorsAdded += cosponsorRecords.length;
+                  .upsert(chunk, { onConflict: 'bill_id,bioguide_id' });
               }
+              cosponsorsAdded += cosponsorRecords.length;
             }
           } catch (cosponsorError) {
             console.warn(`[FetchBioguideIds] Failed to fetch cosponsors for ${bill.id}:`, cosponsorError);
