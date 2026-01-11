@@ -163,15 +163,15 @@ function deriveStatusFromActions(actions: Array<{ actionCode?: string; text?: st
   return { status: 'introduced', passedHouse, passedSenate, maxActionCode: maxActionCode || null };
 }
 
-// Fetch bill actions - now fetches LAST page to get recent milestone actions
+// Fetch bill actions - starts from NEWEST and scans backward with early termination
 async function fetchBillActions(congress: number, billType: string, billNumber: number): Promise<Array<{ actionCode?: string; text?: string }>> {
   if (!CONGRESS_API_KEY) return [];
   
+  const baseUrl = `https://api.congress.gov/v3/bill/${congress}/${billType.toLowerCase()}/${billNumber}/actions`;
+  
   try {
-    // Step 1: Get total count of actions with a minimal request
-    const countUrl = `https://api.congress.gov/v3/bill/${congress}/${billType.toLowerCase()}/${billNumber}/actions?api_key=${CONGRESS_API_KEY}&limit=1`;
-    const countResponse = await fetch(countUrl);
-    
+    // Step 1: Get total count with minimal request
+    const countResponse = await fetch(`${baseUrl}?api_key=${CONGRESS_API_KEY}&limit=1`);
     if (!countResponse.ok) return [];
     
     const countData = await countResponse.json();
@@ -181,37 +181,81 @@ async function fetchBillActions(congress: number, billType: string, billNumber: 
     
     // Step 2: If few actions, just fetch all
     if (totalCount <= 250) {
-      const url = `https://api.congress.gov/v3/bill/${congress}/${billType.toLowerCase()}/${billNumber}/actions?api_key=${CONGRESS_API_KEY}&limit=250`;
-      const response = await fetch(url);
+      const response = await fetch(`${baseUrl}?api_key=${CONGRESS_API_KEY}&limit=250`);
       if (!response.ok) return [];
       const data = await response.json();
       return data.actions || [];
     }
     
-    // Step 3: For bills with many actions, fetch the LAST page to get recent actions
-    // Congress.gov API returns actions oldest-first, so we need the last page for newest
-    const lastPageOffset = Math.max(0, totalCount - 250);
-    const lastPageUrl = `https://api.congress.gov/v3/bill/${congress}/${billType.toLowerCase()}/${billNumber}/actions?api_key=${CONGRESS_API_KEY}&limit=250&offset=${lastPageOffset}`;
-    
-    // Also fetch first page to get early passage actions
-    const firstPageUrl = `https://api.congress.gov/v3/bill/${congress}/${billType.toLowerCase()}/${billNumber}/actions?api_key=${CONGRESS_API_KEY}&limit=250&offset=0`;
-    
-    const [lastPageResponse, firstPageResponse] = await Promise.all([
-      fetch(lastPageUrl),
-      fetch(firstPageUrl)
-    ]);
-    
+    // Step 3: Start from NEWEST actions (last page) and scan backward
     const allActions: Array<{ actionCode?: string; text?: string }> = [];
+    let foundHighMilestone = false;
+    let foundBothChambers = false;
+    let pagesScanned = 0;
+    const maxPages = 3; // Safety limit: max 750 actions scanned
     
-    if (firstPageResponse.ok) {
-      const firstData = await firstPageResponse.json();
-      allActions.push(...(firstData.actions || []));
+    let currentOffset = Math.max(0, totalCount - 250);
+    
+    while (currentOffset >= 0 && pagesScanned < maxPages) {
+      const pageUrl = `${baseUrl}?api_key=${CONGRESS_API_KEY}&limit=250&offset=${currentOffset}`;
+      const pageResponse = await fetch(pageUrl);
+      
+      if (!pageResponse.ok) break;
+      
+      const pageData = await pageResponse.json();
+      const pageActions = pageData.actions || [];
+      
+      // Prepend to maintain chronological order (oldest first)
+      allActions.unshift(...pageActions);
+      pagesScanned++;
+      
+      // Check if we found a high milestone (28000+ = To President or higher)
+      // If found, we can stop - no need to look further back
+      for (const action of pageActions) {
+        const code = parseInt(action.actionCode || '0');
+        if (code >= 28000) {
+          foundHighMilestone = true;
+          console.log(`[FetchBillActions] Found milestone code ${code} for ${billType}${billNumber}`);
+          break;
+        }
+      }
+      
+      // Early termination: found high milestone, no need to scan further
+      if (foundHighMilestone) break;
+      
+      // Check for both chambers passed (we need both 8000 and 17000 ranges)
+      let hasHousePassage = false;
+      let hasSenatePassage = false;
+      
+      for (const action of allActions) {
+        const code = parseInt(action.actionCode || '0');
+        if (code >= 8000 && code < 9000) hasHousePassage = true;
+        if (code >= 17000 && code < 18000) hasSenatePassage = true;
+        
+        // Also check text for passage
+        const text = (action.text || '').toLowerCase();
+        if (text.includes('passed house') || text.includes('motion to reconsider laid on the table')) {
+          hasHousePassage = true;
+        }
+        if (text.includes('passed senate') || text.includes('resolution agreed to in senate')) {
+          hasSenatePassage = true;
+        }
+      }
+      
+      foundBothChambers = hasHousePassage && hasSenatePassage;
+      
+      // If we've found passage in both chambers and no higher milestone, we can stop
+      // (further back would just be introduction/committee work)
+      if (foundBothChambers && pagesScanned >= 2) break;
+      
+      // Move backward to previous page
+      currentOffset -= 250;
+      
+      // Small delay between pages
+      await new Promise(r => setTimeout(r, 50));
     }
     
-    if (lastPageResponse.ok && lastPageOffset > 0) {
-      const lastData = await lastPageResponse.json();
-      allActions.push(...(lastData.actions || []));
-    }
+    console.log(`[FetchBillActions] ${billType}${billNumber}: scanned ${pagesScanned} pages, ${allActions.length} actions, highMilestone=${foundHighMilestone}, bothChambers=${foundBothChambers}`);
     
     return allActions;
   } catch (err) {
