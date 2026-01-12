@@ -179,6 +179,7 @@ export type Database = {
           id: string
           introduced_date: string | null
           last_action_date: string | null
+          last_ai_scan_at: string | null
           latest_action_date: string | null
           latest_action_text: string | null
           max_action_code: number | null
@@ -220,6 +221,7 @@ export type Database = {
           id: string
           introduced_date?: string | null
           last_action_date?: string | null
+          last_ai_scan_at?: string | null
           latest_action_date?: string | null
           latest_action_text?: string | null
           max_action_code?: number | null
@@ -261,6 +263,7 @@ export type Database = {
           id?: string
           introduced_date?: string | null
           last_action_date?: string | null
+          last_ai_scan_at?: string | null
           latest_action_date?: string | null
           latest_action_text?: string | null
           max_action_code?: number | null
