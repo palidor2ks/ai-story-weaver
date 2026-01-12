@@ -9,14 +9,13 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// Complete mapping from Congress.gov policy areas to our 11 canonical topics
+// Complete mapping from Congress.gov policy areas to our 12 canonical topics
 const TOPIC_NORMALIZATION: Record<string, string> = {
   // Economy
   'Agriculture and Food': 'Economy',
   'Commerce': 'Economy',
   'Economics and Public Finance': 'Economy',
   'Finance and Financial Sector': 'Economy',
-  'Foreign Trade and International Finance': 'Economy',
   'Labor and Employment': 'Economy',
   'Taxation': 'Economy',
   'Transportation and Public Works': 'Economy',
@@ -32,10 +31,13 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'Water Resources Development': 'Environment',
   'Animals': 'Environment',
   
-  // Foreign Affairs (stored as 'Defense')
+  // Defense (military-focused)
   'Armed Forces and National Security': 'Defense',
-  'International Affairs': 'Defense',
   'Emergency Management': 'Defense',
+  
+  // Foreign Affairs (diplomacy & trade)
+  'International Affairs': 'Foreign Affairs',
+  'Foreign Trade and International Finance': 'Foreign Affairs',
   
   // Immigration
   'Immigration': 'Immigration',

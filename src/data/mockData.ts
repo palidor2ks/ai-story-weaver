@@ -1,12 +1,13 @@
 import { Topic, Question, Candidate, Donor, Vote } from '@/types';
 
-// Consolidated 10 Topics (from original 32 Congress.gov Policy Areas)
+// Consolidated 12 Topics (from original 32 Congress.gov Policy Areas)
 export const topics: Topic[] = [
   { id: 'economy', name: 'Economy & Jobs', icon: '💼', weight: 1 },
   { id: 'healthcare', name: 'Healthcare', icon: '🏥', weight: 1 },
   { id: 'environment', name: 'Environment & Energy', icon: '🌍', weight: 1 },
   { id: 'immigration', name: 'Immigration', icon: '🛂', weight: 1 },
-  { id: 'defense', name: 'Foreign Affairs', icon: '🌐', weight: 1 },
+  { id: 'defense', name: 'Defense & Military', icon: '🛡️', weight: 1 },
+  { id: 'foreign-affairs', name: 'Foreign Affairs', icon: '🌐', weight: 1 },
   { id: 'civil-rights', name: 'Civil Rights & Justice', icon: '⚖️', weight: 1 },
   { id: 'education', name: 'Education', icon: '📚', weight: 1 },
   { id: 'social-programs', name: 'Social Programs', icon: '🤝', weight: 1 },
@@ -24,6 +25,7 @@ export const policyAreaToTopicId: Record<string, string> = {
   'Commerce': 'economy',
   'Finance and Financial Sector': 'economy',
   'Transportation and Public Works': 'economy',
+  'Agriculture and Food': 'economy',
   
   // Healthcare
   'Health': 'healthcare',
@@ -35,15 +37,17 @@ export const policyAreaToTopicId: Record<string, string> = {
   'Water Resources Development': 'environment',
   'Public Lands and Natural Resources': 'environment',
   'Animals': 'environment',
-  'Agriculture and Food': 'environment',
   
   // Immigration
   'Immigration': 'immigration',
   
-  // Defense & Foreign Policy
+  // Defense & Military
   'Armed Forces and National Security': 'defense',
-  'International Affairs': 'defense',
-  'Foreign Trade and International Finance': 'defense',
+  'Emergency Management': 'defense',
+  
+  // Foreign Affairs
+  'International Affairs': 'foreign-affairs',
+  'Foreign Trade and International Finance': 'foreign-affairs',
   
   // Civil Rights & Justice (includes arts-culture-religion, sports-recreation)
   'Civil Rights and Liberties, Minority Issues': 'civil-rights',
@@ -70,7 +74,6 @@ export const policyAreaToTopicId: Record<string, string> = {
   // Government & Democracy
   'Congress': 'government',
   'Government Operations and Politics': 'government',
-  'Emergency Management': 'government',
   
   // Technology & Science
   'Science, Technology, Communications': 'technology',

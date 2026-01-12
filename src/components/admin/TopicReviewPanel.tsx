@@ -15,9 +15,9 @@ import { AlertTriangle, CheckCircle, RefreshCw, Edit, X, Loader2, Tags, FileStac
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
-// Use the 11 canonical topics
+// Use the 12 canonical topics
 const ALL_TOPICS = [
-  'Economy', 'Healthcare', 'Immigration', 'Environment', 'Foreign Affairs',
+  'Economy', 'Healthcare', 'Immigration', 'Environment', 'Defense', 'Foreign Affairs',
   'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology', 'Judicial'
 ];
 
