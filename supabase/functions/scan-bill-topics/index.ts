@@ -222,6 +222,7 @@ Return ONLY this JSON structure:
     ai_detected_topics: [normalizedPrimary, ...uniqueSecondary],
     topic_flag: flag,
     omnibus_type: result.omnibus_type || null,
+    last_ai_scan_at: new Date().toISOString(),
   };
 
   // Update the bill record
@@ -300,7 +301,11 @@ serve(async (req) => {
     // Apply filtering based on scan mode
     if (flaggedOnly) {
       // Flagged-only mode: rescan only bills with topic_flag set
-      query = query.not('topic_flag', 'is', null);
+      // Exclude bills already rescanned in the last 24 hours to prevent infinite loops
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      query = query
+        .not('topic_flag', 'is', null)
+        .or(`last_ai_scan_at.is.null,last_ai_scan_at.lt.${twentyFourHoursAgo}`);
     } else if (!forceRescan) {
       // New scan mode: only get bills without AI topics
       query = query.or('ai_detected_topics.is.null,ai_detected_topics.eq.{}');
@@ -461,6 +466,7 @@ Return ONLY valid JSON.`;
             ai_detected_topics: [normalizedPrimary, ...uniqueSecondary],
             topic_flag: flag,  // Always set - clears flag when no issues detected
             omnibus_type: result.omnibus_type || null,  // Always set - clears when not omnibus
+            last_ai_scan_at: new Date().toISOString(),  // Track when this bill was scanned
           };
           
           const { error: updateError } = await supabase.from('bills').update(updates).eq('id', bill.id);
