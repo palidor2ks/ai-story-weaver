@@ -187,6 +187,7 @@ export type Database = {
           omnibus_type: string | null
           passed_house: boolean | null
           passed_senate: boolean | null
+          raw_cosponsors: string[] | null
           related_bill_count: number | null
           related_bills: string[] | null
           reviewed_at: string | null
@@ -229,6 +230,7 @@ export type Database = {
           omnibus_type?: string | null
           passed_house?: boolean | null
           passed_senate?: boolean | null
+          raw_cosponsors?: string[] | null
           related_bill_count?: number | null
           related_bills?: string[] | null
           reviewed_at?: string | null
@@ -271,6 +273,7 @@ export type Database = {
           omnibus_type?: string | null
           passed_house?: boolean | null
           passed_senate?: boolean | null
+          raw_cosponsors?: string[] | null
           related_bill_count?: number | null
           related_bills?: string[] | null
           reviewed_at?: string | null

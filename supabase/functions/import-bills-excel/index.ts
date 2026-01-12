@@ -31,7 +31,7 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'Emergency Management': 'Defense',
   'Civil Rights and Liberties, Minority Issues': 'Civil Rights',
   'Crime and Law Enforcement': 'Civil Rights',
-  'Law': 'Civil Rights',
+  'Law': 'Judicial',
   'Native Americans': 'Civil Rights',
   'Education': 'Education',
   'Social Sciences and History': 'Education',
@@ -175,7 +175,14 @@ const SUBJECT_TERM_MAPPING: Record<string, string> = {
   'Domestic violence and child abuse': 'Civil Rights',
   'Firearms and explosives': 'Civil Rights',
   'Hate crimes': 'Civil Rights',
-  'Judicial procedure and administration': 'Civil Rights',
+  'Judicial procedure and administration': 'Judicial',
+  'Supreme Court': 'Judicial',
+  'Federal courts and judges': 'Judicial',
+  'Judges': 'Judicial',
+  'Legal fees and court costs': 'Judicial',
+  'Jurisdiction and venue': 'Judicial',
+  'Courts': 'Judicial',
+  'Judicial review and appeals': 'Judicial',
   
   // Native Americans
   'Indian lands and resources rights': 'Native Americans',
@@ -529,6 +536,7 @@ interface ExcelRow {
   'Latest Tracker Stage'?: string;
   'billPolicyArea'?: string;
   'Latest Summary'?: string;
+  'latestSummary'?: string;  // Alternative column name
   'Number of Cosponsors'?: string | number;
   'Number of Related Bills'?: string | number;
   'Amends Bill'?: string;
@@ -579,6 +587,7 @@ serve(async (req) => {
       related_bills: string[];
       amends_bill: string | null;
       additional_topics: string[] | null;
+      raw_cosponsors: string[] | null;
     }> = [];
     
     const now = new Date().toISOString();
@@ -600,10 +609,13 @@ serve(async (req) => {
       const billId = `${congress}-${parsed.type}.${parsed.number}`;
       const sponsor = parseSponsor(row['Sponsor']);
       const statusInfo = deriveStatusFromTrackerStage(row['Latest Tracker Stage'], row['Latest Action']);
-      const summary = stripHtml(row['Latest Summary']);
+      const summary = stripHtml(row['Latest Summary'] || row['latestSummary']);
       
       // Collect subject terms from repeated columns (billSubjectTerm, billSubjectTerm_1, etc.)
       const subjectTerms = collectArrayValues(row, 'billSubjectTerm');
+      
+      // Collect cosponsor names from repeated columns (Cosponsor, Cosponsor_1, etc.)
+      const rawCosponsors = collectArrayValues(row, 'Cosponsor');
       
       // Collect related bills from repeated columns (Related Bill, Related Bill_1, etc.)
       // Filter out URLs, keep only bill IDs like "S.2354", "H.R.4754"
@@ -645,6 +657,7 @@ serve(async (req) => {
         related_bills: relatedBills,
         amends_bill: row['Amends Bill'] || null,
         additional_topics: additionalTopics.length > 0 ? additionalTopics : null,
+        raw_cosponsors: rawCosponsors.length > 0 ? rawCosponsors : null,
       });
     }
     
