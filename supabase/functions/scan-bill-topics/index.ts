@@ -6,9 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Use the 11 canonical topics for consistency with the quiz system
+// Use the 12 canonical topics for consistency with the quiz system
 const CANONICAL_TOPICS = [
-  'Economy', 'Healthcare', 'Immigration', 'Environment', 'Defense',
+  'Economy', 'Healthcare', 'Immigration', 'Environment', 'Defense', 'Foreign Affairs',
   'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology', 'Judicial'
 ];
 
@@ -18,7 +18,6 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'Commerce': 'Economy',
   'Economics and Public Finance': 'Economy',
   'Finance and Financial Sector': 'Economy',
-  'Foreign Trade and International Finance': 'Economy',
   'Labor and Employment': 'Economy',
   'Taxation': 'Economy',
   'Transportation and Public Works': 'Economy',
@@ -29,14 +28,21 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'Public Lands and Natural Resources': 'Environment',
   'Water Resources Development': 'Environment',
   'Animals': 'Environment',
+  // Defense (military-focused)
   'Armed Forces and National Security': 'Defense',
-  'International Affairs': 'Defense',
   'Emergency Management': 'Defense',
+  // Foreign Affairs (diplomacy & trade)
+  'International Affairs': 'Foreign Affairs',
+  'Foreign Trade and International Finance': 'Foreign Affairs',
+  'Foreign Policy': 'Foreign Affairs',
+  // Civil Rights
   'Civil Rights and Liberties, Minority Issues': 'Civil Rights',
   'Crime and Law Enforcement': 'Civil Rights',
   'Native Americans': 'Civil Rights',
   'Arts, Culture, Religion': 'Civil Rights',
   'Sports and Recreation': 'Civil Rights',
+  'Criminal Justice': 'Civil Rights',
+  'Gun Policy': 'Civil Rights',
   // Judicial
   'Law': 'Judicial',
   'Courts': 'Judicial',
@@ -46,28 +52,30 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'Judges': 'Judicial',
   'Legal System': 'Judicial',
   'Judicial procedure and administration': 'Judicial',
+  // Education
   'Social Sciences and History': 'Education',
+  // Social Programs
   'Social Welfare': 'Social Programs',
   'Housing and Community Development': 'Social Programs',
+  'Social Issues': 'Social Programs',
+  // Government
   'Congress': 'Government',
   'Government Operations and Politics': 'Government',
-  'Science, Technology, Communications': 'Technology',
-  'Criminal Justice': 'Civil Rights',
-  'Foreign Policy': 'Defense',
   'Domestic Policy': 'Government',
   'Government Reform': 'Government',
-  'Gun Policy': 'Civil Rights',
-  'Social Issues': 'Social Programs',
   'General': 'Government',
+  // Technology
+  'Science, Technology, Communications': 'Technology',
 };
 
 // Detailed topic definitions to guide AI analysis
 const TOPIC_DEFINITIONS = `
-ECONOMY: Jobs, wages, trade, taxation, banking, finance, business regulation, labor laws, commerce, agriculture, transportation infrastructure, supply chains, manufacturing, small business, tariffs, economic development
+ECONOMY: Jobs, wages, taxation, banking, finance, business regulation, labor laws, commerce, agriculture, transportation infrastructure, supply chains, manufacturing, small business, economic development
 HEALTHCARE: Medical care, health insurance, public health, mental health, drug policy, Medicare, Medicaid, family health services, hospitals, pharmaceuticals, disease prevention, biomedical research, healthcare workforce
 IMMIGRATION: Border policy, visas, citizenship, refugee policy, asylum, deportation, DACA, immigration enforcement, guest workers, naturalization, border security, immigration courts
 ENVIRONMENT: Climate change, pollution, conservation, energy policy (oil, gas, renewables), public lands, water resources, wildlife protection, EPA regulations, clean air/water, national parks, forestry
-DEFENSE: Military operations, veterans affairs, national security, foreign policy, international relations, NATO, defense spending, intelligence agencies, military personnel, weapons systems, cybersecurity threats
+DEFENSE: Military operations, veterans affairs, national security, defense spending, military personnel, weapons systems, homeland security, emergency management, military bases, armed forces
+FOREIGN AFFAIRS: International relations, foreign policy, diplomacy, treaties, NATO, UN, foreign aid, trade agreements, tariffs, embassies, international trade, sanctions, foreign governments
 EDUCATION: K-12 schools, higher education, student loans, vocational training, early childhood education, teacher policy, school funding, special education, STEM programs, charter schools
 CIVIL RIGHTS: Voting rights, discrimination (race, gender, disability), criminal justice reform, gun policy, privacy rights, free speech, LGBTQ+ rights, religious freedom, Native American/tribal affairs, policing reform
 GOVERNMENT: Federal agencies, elections, government reform, congressional operations, federal workforce, transparency, ethics, postal service, census, federal buildings, regulatory reform
@@ -136,7 +144,7 @@ Mark is_omnibus=true if the bill:
 
 Return ONLY this JSON structure:
 {
-  "primary_topic": "Economy" | "Healthcare" | "Immigration" | "Environment" | "Defense" | "Education" | "Civil Rights" | "Government" | "Social Programs" | "Technology",
+  "primary_topic": "Economy" | "Healthcare" | "Immigration" | "Environment" | "Defense" | "Foreign Affairs" | "Education" | "Civil Rights" | "Government" | "Social Programs" | "Technology" | "Judicial",
   "secondary_topics": ["...", "..."],
   "topic_count": <total unique topics>,
   "is_mismatch": boolean,
@@ -373,7 +381,7 @@ Return a JSON array with one object per bill:
 [
   {
     "bill_index": 1,
-    "primary_topic": "Economy" | "Healthcare" | "Immigration" | "Environment" | "Defense" | "Education" | "Civil Rights" | "Government" | "Social Programs" | "Technology",
+    "primary_topic": "Economy" | "Healthcare" | "Immigration" | "Environment" | "Defense" | "Foreign Affairs" | "Education" | "Civil Rights" | "Government" | "Social Programs" | "Technology" | "Judicial",
     "secondary_topics": ["...", "..."],
     "topic_count": <total unique topics>,
     "is_mismatch": boolean,
