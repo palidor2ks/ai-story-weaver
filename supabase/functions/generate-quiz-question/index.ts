@@ -104,12 +104,13 @@ async function generateQuestion(
   topicName: string,
   apiKey: string,
   existingQuestions: string[] = [],
+  questionType: 'generic' | 'current_events' = 'generic',
   retryCount: number = 0
 ): Promise<{ success: true; data: GeneratedQuestion } | { success: false; error: string; status: number }> {
   
-  // Phase 1: Research recent news (only on first attempt)
+  // Phase 1: Research recent news (only for current_events type and on first attempt)
   let newsContext = '';
-  if (retryCount === 0) {
+  if (questionType === 'current_events' && retryCount === 0) {
     const research = await researchTopicNews(topicName);
     if (research.success) {
       newsContext = `
@@ -117,7 +118,7 @@ async function generateQuestion(
 RECENT NEWS & TRENDING TOPICS (use these to make the question timely and relevant):
 ${research.context}
 
-Generate a question that connects to these current events or debates when possible.`;
+Generate a question that connects to these current events or debates.`;
     }
   }
   
@@ -126,6 +127,18 @@ Generate a question that connects to these current events or debates when possib
     ? `\n\nIMPORTANT - DO NOT generate questions similar to these existing ones:\n${existingQuestions.slice(0, 30).map((q, i) => `${i+1}. ${q}`).join('\n')}\n\nYour question must cover a DIFFERENT aspect of ${topicName} that is NOT already covered above.`
     : '';
   
+  // Build type-specific instructions
+  const typeInstruction = questionType === 'generic'
+    ? `Create a TIMELESS, EVERGREEN policy question about ${topicName}.
+- Focus on fundamental policy positions that don't change with news cycles
+- Avoid references to specific bills, dates, current events, or recent controversies
+- Examples: "Should the federal minimum wage be raised?", "Should marijuana be legalized nationwide?", "Should there be universal background checks for gun purchases?"`
+    : `Create a TIMELY question tied to CURRENT political debates about ${topicName}.
+- Reference specific recent legislation, proposals, or controversies when possible
+- Make the question relevant to what's being actively debated RIGHT NOW
+- Examples: "Should Congress pass the proposed infrastructure bill?", "Do you support the recently introduced border security measures?"
+${newsContext}`;
+
   const systemPrompt = `You are an expert political scientist creating quiz questions for a voter information platform.
 
 CRITICAL ANSWER FORMAT RULES:
@@ -135,7 +148,8 @@ CRITICAL ANSWER FORMAT RULES:
 4. May include ONE brief qualifier after a dash or semicolon
 5. NO full policy explanations or multi-sentence responses
 
-IMPORTANT: When current events context is provided, incorporate it to make questions timely and relevant to what's happening NOW.
+QUESTION TYPE INSTRUCTION:
+${typeInstruction}
 
 Respond with valid JSON only, no markdown.`;
 
@@ -144,7 +158,7 @@ Respond with valid JSON only, no markdown.`;
     : '';
 
   const userPrompt = `Generate a quiz question about the topic "${topicName}" (ID: ${topicId}) for a political alignment quiz.
-${newsContext}${existingQuestionsContext}
+${existingQuestionsContext}
 Create 5 answer options (5-12 words each):
 - L10: Far-left position
 - L5: Center-left position  
@@ -263,7 +277,7 @@ Return JSON:
     
     if (retryCount < MAX_RETRIES) {
       console.log(`Retrying generation (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
-      return generateQuestion(topicId, topicName, apiKey, existingQuestions, retryCount + 1);
+      return generateQuestion(topicId, topicName, apiKey, existingQuestions, questionType, retryCount + 1);
     } else {
       console.error(`Max retries exceeded. Using response despite length violations.`);
       // Still return the result, but log the warning
@@ -281,7 +295,7 @@ serve(async (req) => {
   }
 
   try {
-    const { topicId, topicName, existingQuestions = [] } = await req.json();
+    const { topicId, topicName, existingQuestions = [], questionType = 'generic' } = await req.json();
 
     if (!topicId || !topicName) {
       return new Response(
@@ -299,8 +313,8 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Generating question for ${topicName}, avoiding ${existingQuestions.length} existing questions`);
-    const result = await generateQuestion(topicId, topicName, LOVABLE_API_KEY, existingQuestions);
+    console.log(`Generating ${questionType} question for ${topicName}, avoiding ${existingQuestions.length} existing questions`);
+    const result = await generateQuestion(topicId, topicName, LOVABLE_API_KEY, existingQuestions, questionType);
 
     if (!result.success) {
       return new Response(

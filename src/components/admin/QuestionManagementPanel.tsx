@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search, Pencil, Sparkles, XCircle, Users } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Plus, Search, Pencil, Sparkles, XCircle, Users, BookOpen, Newspaper } from "lucide-react";
 import { toast } from "sonner";
 import { useQuestionAnswerCounts } from "@/hooks/useQuestionUpdateNotifications";
 interface QuestionOption {
@@ -75,12 +75,14 @@ const generateQuestionId = (topicId: string, existingIds: string[]): string => {
   return `${prefix}${counter}`;
 };
 
+type QuestionType = 'generic' | 'current_events';
+
 // Bulk Generate Dialog Component
 interface BulkGenerateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   topics: Topic[];
-  onGenerate: (topicIds: string[]) => Promise<void>;
+  onGenerate: (topicIds: string[], questionType: QuestionType) => Promise<void>;
   progress: {
     isRunning: boolean;
     currentTopic: string;
@@ -92,6 +94,7 @@ interface BulkGenerateDialogProps {
 
 function BulkGenerateDialog({ open, onOpenChange, topics, onGenerate, progress }: BulkGenerateDialogProps) {
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
+  const [questionType, setQuestionType] = useState<QuestionType>('generic');
 
   const toggleTopic = (topicId: string) => {
     const newSelected = new Set(selectedTopics);
@@ -112,7 +115,7 @@ function BulkGenerateDialog({ open, onOpenChange, topics, onGenerate, progress }
   };
 
   const handleGenerate = () => {
-    onGenerate(Array.from(selectedTopics));
+    onGenerate(Array.from(selectedTopics), questionType);
   };
 
   return (
@@ -165,6 +168,38 @@ function BulkGenerateDialog({ open, onOpenChange, topics, onGenerate, progress }
         ) : (
           <>
             <div className="space-y-4 py-4">
+              {/* Question Type Selector */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Question Style</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={questionType === 'generic' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setQuestionType('generic')}
+                    className="flex-1"
+                  >
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Generic/Timeless
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={questionType === 'current_events' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setQuestionType('current_events')}
+                    className="flex-1"
+                  >
+                    <Newspaper className="h-4 w-4 mr-2" />
+                    Current Events
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {questionType === 'generic' 
+                    ? "Creates evergreen policy questions that remain relevant over time"
+                    : "Creates questions based on recent news, legislation, and trending topics"}
+                </p>
+              </div>
+
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={selectAll}>
                   Select All
@@ -273,6 +308,7 @@ export function QuestionManagementPanel() {
   const [isBulkGenerateOpen, setIsBulkGenerateOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [questionType, setQuestionType] = useState<QuestionType>('generic');
   const [bulkGenerateProgress, setBulkGenerateProgress] = useState<{
     isRunning: boolean;
     currentTopic: string;
@@ -601,7 +637,12 @@ export function QuestionManagementPanel() {
     setIsGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-quiz-question', {
-        body: { topicId: formData.topic_id, topicName: topic.name, existingQuestions: existingQuestionTexts }
+        body: { 
+          topicId: formData.topic_id, 
+          topicName: topic.name, 
+          existingQuestions: existingQuestionTexts,
+          questionType: questionType
+        }
       });
 
       if (error) throw error;
@@ -640,7 +681,7 @@ export function QuestionManagementPanel() {
     }
   };
 
-  const handleBulkGenerate = async (selectedTopicIds: string[]) => {
+  const handleBulkGenerate = async (selectedTopicIds: string[], bulkQuestionType: QuestionType) => {
     if (selectedTopicIds.length === 0) {
       toast.error("Please select at least one topic");
       return;
@@ -675,7 +716,12 @@ export function QuestionManagementPanel() {
 
         // Generate question with AI
         const { data, error } = await supabase.functions.invoke('generate-quiz-question', {
-          body: { topicId: topic.id, topicName: topic.name, existingQuestions: existingQuestionTexts }
+          body: { 
+            topicId: topic.id, 
+            topicName: topic.name, 
+            existingQuestions: existingQuestionTexts,
+            questionType: bulkQuestionType
+          }
         });
 
         if (error || data.error) {
@@ -953,18 +999,50 @@ export function QuestionManagementPanel() {
         </div>
       </div>
 
-      {/* AI Generate Button - Show for both create and edit */}
-      <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-dashed">
-        <Sparkles className="h-5 w-5 text-primary" />
-        <span className="text-sm text-muted-foreground flex-1">
-          {isEdit ? "Regenerate question and answers with AI" : "Generate question and answers with AI"}
-        </span>
+      {/* AI Generate Section - Show for both create and edit */}
+      <div className="space-y-3 p-3 bg-muted/50 rounded-lg border border-dashed">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <span className="text-sm font-medium">AI Question Generation</span>
+        </div>
+        
+        {/* Question Type Selector */}
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant={questionType === 'generic' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setQuestionType('generic')}
+            className="flex-1"
+          >
+            <BookOpen className="h-4 w-4 mr-2" />
+            Generic/Timeless
+          </Button>
+          <Button
+            type="button"
+            variant={questionType === 'current_events' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setQuestionType('current_events')}
+            className="flex-1"
+          >
+            <Newspaper className="h-4 w-4 mr-2" />
+            Current Events
+          </Button>
+        </div>
+        
+        <p className="text-xs text-muted-foreground">
+          {questionType === 'generic' 
+            ? "Creates evergreen policy questions that remain relevant over time"
+            : "Creates questions based on recent news, legislation, and trending topics"}
+        </p>
+        
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={handleGenerateWithAI}
           disabled={isGenerating || !formData.topic_id}
+          className="w-full"
         >
           {isGenerating ? (
             <>
