@@ -1181,7 +1181,7 @@ export function QuestionManagementPanel() {
             topicFilter === "all" || topic.id === topicFilter
           ).map((topic) => {
             const topicQuestions = questionsByTopic[topic.id] || [];
-            if (topicQuestions.length === 0 && topicFilter === "all") return null;
+            const isEmpty = topicQuestions.length === 0;
             
             const completeCount = topicQuestions.filter(q => 
               q.question_options.filter(o => !o.is_skip_option).length >= 5
@@ -1194,7 +1194,7 @@ export function QuestionManagementPanel() {
                 open={expandedTopics.has(topic.id)}
                 onOpenChange={() => toggleTopic(topic.id)}
               >
-                <div className="border rounded-lg">
+                <div className={`border rounded-lg ${isEmpty ? 'border-destructive/50 bg-destructive/5' : ''}`}>
                   <CollapsibleTrigger className="w-full p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors">
                     {expandedTopics.has(topic.id) ? (
                       <ChevronDown className="h-5 w-5 flex-shrink-0" />
@@ -1206,9 +1206,16 @@ export function QuestionManagementPanel() {
                       <div className="font-semibold">{topic.name}</div>
                       <div className="text-sm text-muted-foreground">
                         {topicQuestions.length} question{topicQuestions.length !== 1 ? 's' : ''}
+                        {isEmpty && ' — needs questions'}
                       </div>
                     </div>
                     <div className="flex gap-2">
+                      {isEmpty && (
+                        <Badge variant="destructive">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          Empty
+                        </Badge>
+                      )}
                       {completeCount > 0 && (
                         <Badge variant="default" className="bg-green-600">
                           <CheckCircle2 className="h-3 w-3 mr-1" />
