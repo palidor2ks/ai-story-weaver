@@ -1067,15 +1067,34 @@ export function BillSummaryDashboard() {
         {/* Congress Breakdown */}
         <div className="bg-muted/30 rounded-lg p-4 border border-muted">
           <div className="text-sm font-medium mb-3">Congress Breakdown</div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div>
-              <div className="text-lg font-bold text-primary">{stats.congress118Count.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">118th Congress</div>
-            </div>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-4 text-center">
             <div>
               <div className="text-lg font-bold text-primary">{stats.congress119Count.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">119th Congress</div>
+              <div className="text-xs text-muted-foreground">119th (2025-26)</div>
             </div>
+            <div>
+              <div className="text-lg font-bold text-primary">{stats.congress118Count.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">118th (2023-24)</div>
+            </div>
+            <div>
+              <div className="text-lg font-bold text-primary">{stats.congress117Count.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">117th (2021-22)</div>
+            </div>
+            <div>
+              <div className="text-lg font-bold text-primary">{stats.congress116Count.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">116th (2019-20)</div>
+            </div>
+            <div>
+              <div className="text-lg font-bold text-primary">{stats.congress115Count.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">115th (2017-18)</div>
+            </div>
+            <div>
+              <div className="text-lg font-bold text-primary">{stats.congress114Count.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">114th (2015-16)</div>
+            </div>
+          </div>
+          {/* Topic Mismatches and Omnibus in separate row */}
+          <div className="grid grid-cols-2 gap-4 text-center mt-4 pt-4 border-t border-muted">
             <div>
               <div className="text-lg font-bold text-amber-600">{stats.mismatchCount.toLocaleString()}</div>
               <div className="text-xs text-muted-foreground">Topic Mismatches</div>
