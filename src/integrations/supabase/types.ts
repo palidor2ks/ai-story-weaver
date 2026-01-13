@@ -2119,6 +2119,10 @@ export type Database = {
     Views: {
       bill_summary_stats: {
         Row: {
+          congress_114_count: number | null
+          congress_115_count: number | null
+          congress_116_count: number | null
+          congress_117_count: number | null
           congress_118_count: number | null
           congress_119_count: number | null
           flagged_count: number | null
@@ -2135,9 +2139,11 @@ export type Database = {
           topic_economy: number | null
           topic_education: number | null
           topic_environment: number | null
+          topic_foreign_affairs: number | null
           topic_government: number | null
           topic_health: number | null
           topic_immigration: number | null
+          topic_judicial: number | null
           topic_native: number | null
           topic_science: number | null
           topic_social: number | null

@@ -44,6 +44,11 @@ export interface SummaryStats {
   mismatchCount: number;
   multiTopicCount: number;
   omnibusCount: number;
+  // Congress counts (114-119)
+  congress114Count: number;
+  congress115Count: number;
+  congress116Count: number;
+  congress117Count: number;
   congress118Count: number;
   congress119Count: number;
   topicBreakdown: TopicBreakdown[];
@@ -218,7 +223,9 @@ export function useBillSummaryStats(selectedCongress?: number, includeResolution
           totalBills: 0, withSummary: 0, withCrsSummary: 0, withAiSummary: 0,
           withAiProceduralSummary: 0, noSummaryAvailable: 0, needsAiGeneration: 0,
           pendingFetch: 0, coveragePct: 0, flaggedCount: 0, mismatchCount: 0,
-          multiTopicCount: 0, omnibusCount: 0, congress118Count: 0, congress119Count: 0,
+          multiTopicCount: 0, omnibusCount: 0, 
+          congress114Count: 0, congress115Count: 0, congress116Count: 0, congress117Count: 0,
+          congress118Count: 0, congress119Count: 0,
           topicBreakdown: [], statusBreakdown: statusCounts, 
           billsMissingSponsor: missingSponsor || 0,
           billsNeedingStatusEnrich: needingStatusEnrich || 0,
@@ -273,6 +280,10 @@ export function useBillSummaryStats(selectedCongress?: number, includeResolution
         mismatchCount: Number(rawData.mismatch_count) || 0,
         multiTopicCount: Number(rawData.multi_topic_count) || 0,
         omnibusCount: Number(rawData.omnibus_count) || 0,
+        congress114Count: Number(rawData.congress_114_count) || 0,
+        congress115Count: Number(rawData.congress_115_count) || 0,
+        congress116Count: Number(rawData.congress_116_count) || 0,
+        congress117Count: Number(rawData.congress_117_count) || 0,
         congress118Count: Number(rawData.congress_118_count) || 0,
         congress119Count: Number(rawData.congress_119_count) || 0,
         topicBreakdown,
