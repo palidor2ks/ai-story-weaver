@@ -86,7 +86,7 @@ interface BulkGenerateDialogProps {
     currentTopic: string;
     completed: number;
     total: number;
-    results: { topicId: string; topicName: string; success: boolean; error?: string }[];
+    results: { topicId: string; topicName: string; success: boolean; error?: string; questionText?: string }[];
   };
 }
 
@@ -278,7 +278,7 @@ export function QuestionManagementPanel() {
     currentTopic: string;
     completed: number;
     total: number;
-    results: { topicId: string; topicName: string; success: boolean; error?: string }[];
+    results: { topicId: string; topicName: string; success: boolean; error?: string; questionText?: string }[];
   }>({ isRunning: false, currentTopic: '', completed: 0, total: 0, results: [] });
   const [formData, setFormData] = useState<QuestionFormData>({
     id: "",
@@ -594,10 +594,14 @@ export function QuestionManagementPanel() {
       return;
     }
 
+    // Get existing questions for this topic to avoid duplicates
+    const topicQuestions = questions?.filter(q => q.topic_id === formData.topic_id) || [];
+    const existingQuestionTexts = topicQuestions.map(q => q.text);
+
     setIsGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-quiz-question', {
-        body: { topicId: formData.topic_id, topicName: topic.name }
+        body: { topicId: formData.topic_id, topicName: topic.name, existingQuestions: existingQuestionTexts }
       });
 
       if (error) throw error;
@@ -662,9 +666,16 @@ export function QuestionManagementPanel() {
       }));
 
       try {
+        // Get existing questions for this topic + questions generated in this session
+        const topicQuestions = questions?.filter(q => q.topic_id === topic.id) || [];
+        const sessionGeneratedQuestions = bulkGenerateProgress.results
+          .filter(r => r.topicId === topic.id && r.success && r.questionText)
+          .map(r => r.questionText as string);
+        const existingQuestionTexts = [...topicQuestions.map(q => q.text), ...sessionGeneratedQuestions];
+
         // Generate question with AI
         const { data, error } = await supabase.functions.invoke('generate-quiz-question', {
-          body: { topicId: topic.id, topicName: topic.name }
+          body: { topicId: topic.id, topicName: topic.name, existingQuestions: existingQuestionTexts }
         });
 
         if (error || data.error) {
@@ -709,7 +720,7 @@ export function QuestionManagementPanel() {
 
         setBulkGenerateProgress(prev => ({
           ...prev,
-          results: [...prev.results, { topicId: topic.id, topicName: topic.name, success: true }],
+          results: [...prev.results, { topicId: topic.id, topicName: topic.name, success: true, questionText: data.questionText }],
         }));
 
         // Add delay between requests to avoid rate limiting
