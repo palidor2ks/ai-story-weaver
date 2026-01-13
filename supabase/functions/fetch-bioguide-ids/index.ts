@@ -32,12 +32,11 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Find bills that have sponsor_name (from Excel) but missing sponsor_bioguide_id
+    // Find bills missing sponsor_bioguide_id (includes API-ingested bills without sponsor_name)
     let query = supabase
       .from('bills')
       .select('id, bill_type, bill_number, congress, sponsor_name, cosponsor_count')
       .is('sponsor_bioguide_id', null)
-      .not('sponsor_name', 'is', null)  // Only bills with Excel-imported sponsor names
       .limit(batchSize);
     
     if (congress) {
@@ -92,13 +91,22 @@ serve(async (req) => {
         const primarySponsor = sponsors[0];
 
         if (primarySponsor?.bioguideId) {
-          // Update bill with ONLY the bioguide ID (keep existing sponsor_name, party, state from Excel)
+          // Build update object - include sponsor details if missing (API-ingested bills)
+          const updateFields: Record<string, unknown> = {
+            sponsor_bioguide_id: primarySponsor.bioguideId,
+            updated_at: new Date().toISOString()
+          };
+          
+          // If sponsor_name was missing (API-ingested bill), populate from Congress.gov
+          if (!bill.sponsor_name && primarySponsor.fullName) {
+            updateFields.sponsor_name = primarySponsor.fullName;
+            updateFields.sponsor_party = primarySponsor.party || null;
+            updateFields.sponsor_state = primarySponsor.state || null;
+          }
+
           const { error: updateError } = await supabase
             .from('bills')
-            .update({
-              sponsor_bioguide_id: primarySponsor.bioguideId,
-              updated_at: new Date().toISOString()
-            })
+            .update(updateFields)
             .eq('id', bill.id);
 
           if (updateError) {
@@ -192,12 +200,11 @@ serve(async (req) => {
 
     console.log(`[FetchBioguideIds] Complete. Processed: ${processed}, Failed: ${failed}, Cosponsors: ${cosponsorsAdded}`);
 
-    // Get count of remaining bills needing bioguide enrichment
+    // Get count of remaining bills needing bioguide enrichment (matches new query logic)
     let remainingQuery = supabase
       .from('bills')
       .select('*', { count: 'exact', head: true })
-      .is('sponsor_bioguide_id', null)
-      .not('sponsor_name', 'is', null);
+      .is('sponsor_bioguide_id', null);
     
     if (congress) {
       remainingQuery = remainingQuery.eq('congress', congress);
