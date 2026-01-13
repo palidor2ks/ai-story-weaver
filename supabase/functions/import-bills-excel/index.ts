@@ -66,9 +66,9 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'Science, Technology, Communications': 'Technology',
 };
 
-function normalizeTopic(policyArea: string | null | undefined): string {
-  if (!policyArea) return 'Government';
-  return TOPIC_NORMALIZATION[policyArea] || 'Government';
+function normalizeTopic(policyArea: string | null | undefined): string | null {
+  if (!policyArea) return null;  // Don't default to Government
+  return TOPIC_NORMALIZATION[policyArea] || null;  // Return null for unknown policy areas
 }
 
 // Parse "H.R. 6938" -> { type: "HR", number: 6938 }
@@ -386,8 +386,8 @@ serve(async (req) => {
       const relatedBills = collectArrayValues(row, 'Related Bill')
         .filter(v => !v.startsWith('http') && !v.includes('/'));
       
-      // Derive topic directly from billPolicyArea
-      const topic = normalizeTopic(row['billPolicyArea']);
+      // Derive topic directly from billPolicyArea - use 'Uncategorized' if null (AI will classify later)
+      const topic = normalizeTopic(row['billPolicyArea']) || 'Uncategorized';
       
       billsToInsert.push({
         id: billId,
