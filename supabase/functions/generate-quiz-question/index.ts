@@ -103,6 +103,7 @@ async function generateQuestion(
   topicId: string,
   topicName: string,
   apiKey: string,
+  existingQuestions: string[] = [],
   retryCount: number = 0
 ): Promise<{ success: true; data: GeneratedQuestion } | { success: false; error: string; status: number }> {
   
@@ -119,6 +120,11 @@ ${research.context}
 Generate a question that connects to these current events or debates when possible.`;
     }
   }
+  
+  // Build existing questions context to prevent duplicates
+  const existingQuestionsContext = existingQuestions.length > 0 
+    ? `\n\nIMPORTANT - DO NOT generate questions similar to these existing ones:\n${existingQuestions.slice(0, 30).map((q, i) => `${i+1}. ${q}`).join('\n')}\n\nYour question must cover a DIFFERENT aspect of ${topicName} that is NOT already covered above.`
+    : '';
   
   const systemPrompt = `You are an expert political scientist creating quiz questions for a voter information platform.
 
@@ -138,7 +144,7 @@ Respond with valid JSON only, no markdown.`;
     : '';
 
   const userPrompt = `Generate a quiz question about the topic "${topicName}" (ID: ${topicId}) for a political alignment quiz.
-${newsContext}
+${newsContext}${existingQuestionsContext}
 Create 5 answer options (5-12 words each):
 - L10: Far-left position
 - L5: Center-left position  
@@ -242,7 +248,7 @@ Return JSON:
     
     if (retryCount < MAX_RETRIES) {
       console.log(`Retrying generation (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
-      return generateQuestion(topicId, topicName, apiKey, retryCount + 1);
+      return generateQuestion(topicId, topicName, apiKey, existingQuestions, retryCount + 1);
     } else {
       console.error(`Max retries exceeded. Using response despite length violations.`);
       // Still return the result, but log the warning
@@ -260,7 +266,7 @@ serve(async (req) => {
   }
 
   try {
-    const { topicId, topicName } = await req.json();
+    const { topicId, topicName, existingQuestions = [] } = await req.json();
 
     if (!topicId || !topicName) {
       return new Response(
@@ -278,7 +284,8 @@ serve(async (req) => {
       );
     }
 
-    const result = await generateQuestion(topicId, topicName, LOVABLE_API_KEY);
+    console.log(`Generating question for ${topicName}, avoiding ${existingQuestions.length} existing questions`);
+    const result = await generateQuestion(topicId, topicName, LOVABLE_API_KEY, existingQuestions);
 
     if (!result.success) {
       return new Response(
