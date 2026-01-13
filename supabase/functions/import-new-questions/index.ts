@@ -9,40 +9,20 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// The 32 Congress.gov Policy Areas with icons
+// The consolidated 12-topic architecture
 const TOPICS = [
-  { id: 'agriculture-and-food', name: 'Agriculture and Food', icon: '🌾' },
-  { id: 'animals', name: 'Animals', icon: '🐾' },
-  { id: 'armed-forces-national-security', name: 'Armed Forces and National Security', icon: '🎖️' },
-  { id: 'arts-culture-religion', name: 'Arts, Culture, Religion', icon: '🎭' },
-  { id: 'civil-rights-liberties', name: 'Civil Rights and Liberties, Minority Issues', icon: '⚖️' },
-  { id: 'commerce', name: 'Commerce', icon: '🏪' },
-  { id: 'congress', name: 'Congress', icon: '🏛️' },
-  { id: 'crime-law-enforcement', name: 'Crime and Law Enforcement', icon: '🚔' },
-  { id: 'economics-public-finance', name: 'Economics and Public Finance', icon: '📊' },
-  { id: 'education', name: 'Education', icon: '📚' },
-  { id: 'emergency-management', name: 'Emergency Management', icon: '🚨' },
-  { id: 'energy', name: 'Energy', icon: '⚡' },
-  { id: 'environmental-protection', name: 'Environmental Protection', icon: '🌍' },
-  { id: 'families', name: 'Families', icon: '👨‍👩‍👧' },
-  { id: 'finance-financial-sector', name: 'Finance and Financial Sector', icon: '🏦' },
-  { id: 'foreign-trade-international-finance', name: 'Foreign Trade and International Finance', icon: '🚢' },
-  { id: 'government-operations-politics', name: 'Government Operations and Politics', icon: '🗳️' },
-  { id: 'health', name: 'Health', icon: '🏥' },
-  { id: 'housing-community-development', name: 'Housing and Community Development', icon: '🏘️' },
+  { id: 'economy', name: 'Economy', icon: '💼' },
+  { id: 'healthcare', name: 'Healthcare', icon: '🏥' },
   { id: 'immigration', name: 'Immigration', icon: '🛂' },
-  { id: 'international-affairs', name: 'International Affairs', icon: '🌐' },
-  { id: 'labor-employment', name: 'Labor and Employment', icon: '👷' },
-  { id: 'law', name: 'Law', icon: '📜' },
-  { id: 'native-americans', name: 'Native Americans', icon: '🪶' },
-  { id: 'public-lands-natural-resources', name: 'Public Lands and Natural Resources', icon: '🏞️' },
-  { id: 'science-technology-communications', name: 'Science, Technology, Communications', icon: '🔬' },
-  { id: 'social-sciences-history', name: 'Social Sciences and History', icon: '📖' },
-  { id: 'social-welfare', name: 'Social Welfare', icon: '🤝' },
-  { id: 'sports-recreation', name: 'Sports and Recreation', icon: '⚽' },
-  { id: 'taxation', name: 'Taxation', icon: '💵' },
-  { id: 'transportation-public-works', name: 'Transportation and Public Works', icon: '🚇' },
-  { id: 'water-resources-development', name: 'Water Resources Development', icon: '💧' },
+  { id: 'environment', name: 'Environment', icon: '🌍' },
+  { id: 'defense', name: 'Defense & Military', icon: '🛡️' },
+  { id: 'foreign-affairs', name: 'Foreign Affairs', icon: '🌐' },
+  { id: 'civil-rights', name: 'Civil Rights', icon: '⚖️' },
+  { id: 'education', name: 'Education', icon: '📚' },
+  { id: 'social-programs', name: 'Social Programs', icon: '🤝' },
+  { id: 'government', name: 'Government', icon: '🏛️' },
+  { id: 'technology', name: 'Technology', icon: '🔬' },
+  { id: 'judicial', name: 'Judicial & Courts', icon: '⚖️' },
 ];
 
 // Map topic names from document to topic IDs
