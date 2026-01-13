@@ -85,9 +85,14 @@ JUDICIAL: Federal courts, Supreme Court, judicial appointments, judicial reform,
 `;
 
 function validateTopic(topic: string): string | null {
-  if (CANONICAL_TOPICS.includes(topic)) return topic;
-  const normalized = TOPIC_NORMALIZATION[topic];
-  if (normalized) return normalized;
+  // Case-insensitive match against canonical topics
+  const canonicalMatch = CANONICAL_TOPICS.find(t => t.toLowerCase() === topic.toLowerCase());
+  if (canonicalMatch) return canonicalMatch;
+  
+  // Try normalization map (case-insensitive key lookup)
+  const normalizedKey = Object.keys(TOPIC_NORMALIZATION).find(k => k.toLowerCase() === topic.toLowerCase());
+  if (normalizedKey) return TOPIC_NORMALIZATION[normalizedKey];
+  
   console.warn(`[ScanBillTopics] Unknown topic from AI: ${topic} - skipping (not defaulting to Government)`);
   return null;  // Don't default to Government - return null to indicate unknown
 }
