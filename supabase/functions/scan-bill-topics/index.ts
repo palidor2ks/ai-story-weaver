@@ -68,7 +68,7 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'Science, Technology, Communications': 'Technology',
 };
 
-// Detailed topic definitions to guide AI analysis
+// Detailed topic definitions to guide AI analysis - GOVERNMENT definition is NARROW to prevent over-classification
 const TOPIC_DEFINITIONS = `
 ECONOMY: Jobs, wages, taxation, banking, finance, business regulation, labor laws, commerce, agriculture, transportation infrastructure, supply chains, manufacturing, small business, economic development
 HEALTHCARE: Medical care, health insurance, public health, mental health, drug policy, Medicare, Medicaid, family health services, hospitals, pharmaceuticals, disease prevention, biomedical research, healthcare workforce
@@ -78,15 +78,18 @@ DEFENSE: Military operations, veterans affairs, national security, defense spend
 FOREIGN AFFAIRS: International relations, foreign policy, diplomacy, treaties, NATO, UN, foreign aid, trade agreements, tariffs, embassies, international trade, sanctions, foreign governments
 EDUCATION: K-12 schools, higher education, student loans, vocational training, early childhood education, teacher policy, school funding, special education, STEM programs, charter schools
 CIVIL RIGHTS: Voting rights, discrimination (race, gender, disability), criminal justice reform, gun policy, privacy rights, free speech, LGBTQ+ rights, religious freedom, Native American/tribal affairs, policing reform
-GOVERNMENT: Federal agencies, elections, government reform, congressional operations, federal workforce, transparency, ethics, postal service, census, federal buildings, regulatory reform
+GOVERNMENT: ONLY for bills about the INTERNAL operations of government itself - congressional procedures and rules, congressional committee operations, federal employee pay and benefits, government ethics/transparency, postal service operations, census administration, federal building management, election administration, campaign finance rules, lobbying regulations, government procurement procedures. Do NOT use for bills that mention federal agencies - use the POLICY AREA being regulated instead.
 SOCIAL PROGRAMS: Welfare, food assistance (SNAP), housing assistance, unemployment benefits, poverty programs, disability benefits (SSDI/SSI), child welfare, homelessness, community development
 TECHNOLOGY: Cybersecurity, internet regulation, AI policy, telecommunications, data privacy, scientific research, space exploration (NASA), patents, broadband access, digital infrastructure
 JUDICIAL: Federal courts, Supreme Court, judicial appointments, judicial reform, court procedures, sentencing guidelines, legal precedent, federal judges, court administration, case law, constitutional interpretation, judicial ethics, court jurisdiction, appellate process
 `;
 
-function validateTopic(topic: string): string {
+function validateTopic(topic: string): string | null {
   if (CANONICAL_TOPICS.includes(topic)) return topic;
-  return TOPIC_NORMALIZATION[topic] || 'Government';
+  const normalized = TOPIC_NORMALIZATION[topic];
+  if (normalized) return normalized;
+  console.warn(`[ScanBillTopics] Unknown topic from AI: ${topic} - skipping (not defaulting to Government)`);
+  return null;  // Don't default to Government - return null to indicate unknown
 }
 
 // deno-lint-ignore no-explicit-any
@@ -103,6 +106,37 @@ async function processSingleBill(
 === TOPIC CATEGORIES (use ONLY these exact names) ===
 ${TOPIC_DEFINITIONS}
 
+=== CRITICAL: AVOID GOVERNMENT OVER-CLASSIFICATION ===
+"Government" should ONLY be the primary topic when the bill is ABOUT the internal operations of government itself (Congress rules, federal employee policies, ethics, elections, postal service, census).
+
+DO NOT classify as Government just because:
+- A bill mentions federal agencies (use the POLICY AREA being regulated)
+- A bill involves regulatory changes (use what's being regulated)
+- A bill requires agency reports (use the topic of the report)
+- A bill affects government programs (use the program's policy area)
+
+INCORRECT Government classifications (use the actual policy area instead):
+- Bills about EPA regulations → Environment (NOT Government)
+- Bills about VA healthcare → Defense or Healthcare (NOT Government)
+- Bills about FDA drug approvals → Healthcare (NOT Government)
+- Bills about DOJ crime enforcement → Civil Rights (NOT Government)
+- Bills about DOD military operations → Defense (NOT Government)
+- Bills about State Department diplomacy → Foreign Affairs (NOT Government)
+- Bills about HHS welfare programs → Social Programs (NOT Government)
+
+CORRECT Government classifications:
+- Congressional term limits → Government ✓
+- Federal employee pay raise → Government ✓
+- Election security procedures → Government ✓
+- Postal service reform → Government ✓
+- Government ethics rules → Government ✓
+
+=== TOPIC PRIORITY HIERARCHY ===
+When multiple topics apply, use this priority:
+1. What is being REGULATED takes priority over WHO regulates it
+2. The affected population takes priority over the implementing agency
+3. Specific policy areas take priority over general "government" classification
+
 === BILL TO ANALYZE ===
 Bill ID: ${bill.id}
 Title: ${bill.name}
@@ -112,7 +146,7 @@ Full Summary: ${bill.summary?.substring(0, 2000) || 'No summary available'}
 === DEEP ANALYSIS INSTRUCTIONS ===
 1. READ THE ENTIRE SUMMARY CAREFULLY - do not skim or make assumptions
 2. Identify EVERY policy area mentioned, even briefly
-3. For each policy mention, map it to one of the 10 topic categories above
+3. For each policy mention, map it to one of the 12 topic categories above
 4. Determine which topic is the PRIMARY focus (main purpose of the bill)
 5. List ALL other topics as SECONDARY (even if minor mentions)
 6. Consider: Who is affected? Which agencies? What is regulated or funded?
@@ -121,8 +155,10 @@ Full Summary: ${bill.summary?.substring(0, 2000) || 'No summary available'}
 - Military healthcare bill → Primary: Defense, Secondary: Healthcare
 - Environmental job training → Primary: Environment, Secondary: Economy, Education
 - Tech privacy rights → Primary: Technology, Secondary: Civil Rights
-- Border security funding → Primary: Immigration, Secondary: Defense, Government
+- Border security funding → Primary: Immigration, Secondary: Defense
 - Student loan reform → Primary: Education, Secondary: Economy
+- EPA emissions standards → Primary: Environment (NOT Government)
+- VA benefits expansion → Primary: Defense (NOT Government)
 
 === MISMATCH DETECTION ===
 Compare your PRIMARY topic to the "Currently Assigned Topic". Mark is_mismatch=true if:
@@ -223,8 +259,23 @@ Return ONLY this JSON structure:
 
   // Validate and normalize AI-detected topics
   const normalizedPrimary = validateTopicFn(result.primary_topic);
-  const normalizedSecondary = (result.secondary_topics || []).map(validateTopicFn);
-  const uniqueSecondary = [...new Set(normalizedSecondary as string[])].filter((t) => t !== normalizedPrimary);
+  
+  // If primary topic couldn't be validated, skip this bill update
+  if (!normalizedPrimary) {
+    console.warn(`[ScanBillTopics] Skipping bill ${bill.id} - could not validate primary topic: ${result.primary_topic}`);
+    return new Response(JSON.stringify({ 
+      error: `Could not validate primary topic: ${result.primary_topic}`,
+      bill_id: bill.id
+    }), { 
+      status: 400, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+  }
+  
+  const normalizedSecondary = (result.secondary_topics || [])
+    .map((t: string) => validateTopicFn(t))
+    .filter((t: string | null): t is string => t !== null && t !== normalizedPrimary);
+  const uniqueSecondary = [...new Set(normalizedSecondary)];
 
   const updates: Record<string, unknown> = {
     ai_detected_topics: [normalizedPrimary, ...uniqueSecondary],
@@ -348,6 +399,35 @@ serve(async (req) => {
 === TOPIC CATEGORIES (use ONLY these exact names) ===
 ${TOPIC_DEFINITIONS}
 
+=== CRITICAL: AVOID GOVERNMENT OVER-CLASSIFICATION ===
+"Government" should ONLY be the primary topic when the bill is ABOUT the internal operations of government itself (Congress rules, federal employee policies, ethics, elections, postal service, census).
+
+DO NOT classify as Government just because:
+- A bill mentions federal agencies (use the POLICY AREA being regulated)
+- A bill involves regulatory changes (use what's being regulated)
+- A bill requires agency reports (use the topic of the report)
+- A bill affects government programs (use the program's policy area)
+
+INCORRECT Government classifications (use the actual policy area instead):
+- EPA regulations → Environment
+- VA healthcare/benefits → Defense
+- FDA drug approvals → Healthcare
+- DOJ crime enforcement → Civil Rights
+- DOD military operations → Defense
+- State Department diplomacy → Foreign Affairs
+- HHS welfare programs → Social Programs
+- DHS immigration enforcement → Immigration
+
+CORRECT Government classifications:
+- Congressional term limits → Government ✓
+- Federal employee pay → Government ✓
+- Postal service reform → Government ✓
+
+=== TOPIC PRIORITY HIERARCHY ===
+1. What is being REGULATED takes priority over WHO regulates it
+2. The affected population takes priority over the implementing agency
+3. Specific policy areas take priority over general "government" classification
+
 === BILLS TO ANALYZE ===
 ${chunk.map((b, idx) => `
 === BILL ${idx + 1} ===
@@ -360,7 +440,7 @@ Summary: ${b.summary?.substring(0, 1500) || 'No summary'}
 === DEEP ANALYSIS INSTRUCTIONS (apply to EACH bill) ===
 1. READ EACH SUMMARY CAREFULLY - do not skim or make assumptions
 2. Identify EVERY policy area mentioned in each bill
-3. Map each policy mention to one of the 10 topic categories
+3. Map each policy mention to one of the 12 topic categories
 4. Determine which topic is the PRIMARY focus (main purpose)
 5. List ALL other topics as SECONDARY (even minor mentions)
 6. Consider: Who is affected? Which agencies? What is regulated/funded?
@@ -369,7 +449,9 @@ Summary: ${b.summary?.substring(0, 1500) || 'No summary'}
 - Military healthcare → Primary: Defense, Secondary: Healthcare
 - Environmental job training → Primary: Environment, Secondary: Economy, Education
 - Tech privacy rights → Primary: Technology, Secondary: Civil Rights
-- Border security funding → Primary: Immigration, Secondary: Defense, Government
+- Border security funding → Primary: Immigration, Secondary: Defense
+- EPA emissions rule → Primary: Environment (NOT Government)
+- VA benefits bill → Primary: Defense (NOT Government)
 
 === MISMATCH & OMNIBUS DETECTION ===
 - is_mismatch=true if the "Current Topic" is wrong or a better primary exists
@@ -467,8 +549,18 @@ Return ONLY valid JSON.`;
           }
           
           const normalizedPrimary = validateTopic(result.primary_topic);
-          const normalizedSecondary: string[] = (result.secondary_topics || []).map((t: string) => validateTopic(t));
-          const uniqueSecondary = [...new Set(normalizedSecondary)].filter(t => t !== normalizedPrimary);
+          
+          // Skip this bill if primary topic couldn't be validated (don't default to Government)
+          if (!normalizedPrimary) {
+            console.warn(`[ScanBillTopics] Skipping bill ${bill.id} - unknown primary topic: ${result.primary_topic}`);
+            results.errors++;
+            continue;
+          }
+          
+          const normalizedSecondary = (result.secondary_topics || [])
+            .map((t: string) => validateTopic(t))
+            .filter((t: string | null): t is string => t !== null && t !== normalizedPrimary);
+          const uniqueSecondary = [...new Set(normalizedSecondary)];
           
           const updates: Record<string, unknown> = {
             ai_detected_topics: [normalizedPrimary, ...uniqueSecondary],

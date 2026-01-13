@@ -165,27 +165,35 @@ const questionKeywordMapping: Record<string, { keywords: string[]; direction: nu
   'housing4': { keywords: ['first-time homebuyer', 'down payment assistance', 'homeownership'], direction: 1 },
 };
 
-// Policy area to topic mapping
+// Policy area to topic mapping - aligned with 12-topic architecture
 const policyAreaToTopic: Record<string, string> = {
   'Health': 'healthcare',
   'Armed Forces and National Security': 'defense',
-  'Crime and Law Enforcement': 'criminal_justice',
+  'Crime and Law Enforcement': 'civil-rights',
   'Economics and Public Finance': 'economy',
   'Education': 'education',
   'Energy': 'environment',
   'Environmental Protection': 'environment',
   'Immigration': 'immigration',
   'Taxation': 'economy',
-  'Social Welfare': 'social_security',
-  'Civil Rights and Liberties, Minority Issues': 'civil_rights',
-  'International Affairs': 'foreign_policy',
+  'Social Welfare': 'social-programs',
+  'Civil Rights and Liberties, Minority Issues': 'civil-rights',
+  'International Affairs': 'foreign-affairs',
   'Labor and Employment': 'economy',
   'Commerce': 'economy',
   'Finance and Financial Sector': 'economy',
-  'Science, Technology, Communications': 'tech',
-  'Housing and Community Development': 'housing',
-  'Government Operations and Politics': 'government_reform',
+  'Science, Technology, Communications': 'technology',
+  'Housing and Community Development': 'social-programs',
+  'Government Operations and Politics': 'government',
   'Public Lands and Natural Resources': 'environment',
+  'Law': 'judicial',
+  'Foreign Trade and International Finance': 'foreign-affairs',
+  'Native Americans': 'civil-rights',
+  'Water Resources Development': 'environment',
+  'Families': 'healthcare',
+  'Animals': 'environment',
+  'Congress': 'government',
+  'Emergency Management': 'defense',
 };
 
 interface LegislationItem {

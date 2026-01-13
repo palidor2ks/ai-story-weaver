@@ -106,17 +106,20 @@ function validateEvidenceRelevance(
 
 // Cross-topic matching: some questions span multiple topic areas
 // This allows votes from related topics to be considered as evidence
+// Updated to use the 12-topic architecture with split defense/foreign-affairs and new judicial
 const RELATED_TOPICS: Record<string, string[]> = {
-  'civil-rights': ['criminal-justice', 'government-politics', 'immigration-society'],
-  'criminal-justice': ['civil-rights', 'government-politics'],
-  'government-politics': ['civil-rights', 'criminal-justice', 'economy-jobs'],
-  'economy-jobs': ['government-politics', 'labor', 'trade'],
-  'health-welfare': ['science-tech'],
-  'science-tech': ['health-welfare', 'environment-energy'],
-  'environment-energy': ['science-tech', 'economy-jobs'],
-  'immigration-society': ['civil-rights', 'defense-foreign'],
-  'defense-foreign': ['immigration-society', 'government-politics'],
-  'education': ['economy-jobs', 'civil-rights'],
+  'civil-rights': ['criminal-justice', 'government', 'immigration', 'judicial'],
+  'government': ['civil-rights', 'economy'],
+  'economy': ['government', 'technology', 'education'],
+  'healthcare': ['technology', 'social-programs'],
+  'technology': ['healthcare', 'environment'],
+  'environment': ['technology', 'economy'],
+  'immigration': ['civil-rights', 'defense', 'foreign-affairs'],
+  'defense': ['foreign-affairs', 'government'],
+  'foreign-affairs': ['defense', 'economy', 'immigration'],
+  'education': ['economy', 'civil-rights'],
+  'social-programs': ['healthcare', 'economy'],
+  'judicial': ['civil-rights', 'government'],
 };
 
 interface QuestionOption {
