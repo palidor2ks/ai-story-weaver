@@ -214,22 +214,37 @@ Return JSON:
     return { success: false, error: 'Invalid AI response', status: 500 };
   }
 
-  // Parse the JSON response - handle potential markdown code blocks
+  // Parse the JSON response - handle potential markdown code blocks or text before JSON
   let parsed: GeneratedQuestion;
   try {
     let jsonStr = content.trim();
-    if (jsonStr.startsWith('```json')) {
-      jsonStr = jsonStr.slice(7);
-    } else if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.slice(3);
+    
+    // Try to extract JSON from markdown code blocks first
+    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim();
+    } else {
+      // Try to find JSON object directly in the response (handles text before JSON)
+      const jsonMatch = jsonStr.match(/\{[\s\S]*"questionText"[\s\S]*"options"[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0];
+      } else {
+        // Fallback: strip markdown markers if present
+        if (jsonStr.startsWith('```json')) {
+          jsonStr = jsonStr.slice(7);
+        } else if (jsonStr.startsWith('```')) {
+          jsonStr = jsonStr.slice(3);
+        }
+        if (jsonStr.endsWith('```')) {
+          jsonStr = jsonStr.slice(0, -3);
+        }
+        jsonStr = jsonStr.trim();
+      }
     }
-    if (jsonStr.endsWith('```')) {
-      jsonStr = jsonStr.slice(0, -3);
-    }
-    jsonStr = jsonStr.trim();
+    
     parsed = JSON.parse(jsonStr);
   } catch (parseError) {
-    console.error('Failed to parse AI response:', content, parseError);
+    console.error('Failed to parse AI response:', content.substring(0, 500), parseError);
     return { success: false, error: 'Failed to parse AI response', status: 500 };
   }
 
