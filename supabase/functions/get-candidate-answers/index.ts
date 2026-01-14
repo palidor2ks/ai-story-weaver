@@ -104,6 +104,107 @@ function validateEvidenceRelevance(
   return { isRelevant: true, flag: null };
 }
 
+// =============================================================================
+// SEMANTIC VALIDATION LAYER (FIX 6)
+// =============================================================================
+
+// Sentiment indicators for semantic validation
+const SUPPORT_INDICATORS = ['supports', 'voted for', 'sponsored', 'cosponsored', 'advocates for', 'favors', 'backed', 'championed', 'endorsed', 'voted yea', 'voted yes'];
+const OPPOSE_INDICATORS = ['opposes', 'voted against', 'criticized', 'rejected', 'blocked', 'fought against', 'denounced', 'voted nay', 'voted no'];
+
+// Patterns indicating no evidence was found (FIX 2)
+const NO_EVIDENCE_PATTERNS = [
+  /no evidence found/i,
+  /no concrete evidence/i,
+  /no direct evidence/i,
+  /unable to find.*evidence/i,
+  /no documented position/i,
+  /no specific position/i,
+  /no publicly stated position/i,
+  /no relevant voting record/i,
+];
+
+function descriptionSaysNoEvidence(description: string | null): boolean {
+  if (!description) return false;
+  return NO_EVIDENCE_PATTERNS.some(p => p.test(description));
+}
+
+function validateAnswerSemantics(
+  answer: GeneratedAnswer,
+  question: Question
+): { isValid: boolean; issue?: string; suggestedScore?: number; sentiment?: 'support' | 'oppose' | 'neutral' } {
+  const desc = (answer.source_description || '').toLowerCase();
+  const qText = (question.text || '').toLowerCase();
+  
+  // Detect sentiment in evidence
+  const hasSupport = SUPPORT_INDICATORS.some(i => desc.includes(i));
+  const hasOppose = OPPOSE_INDICATORS.some(i => desc.includes(i));
+  const sentiment = hasSupport && !hasOppose ? 'support' : 
+                    hasOppose && !hasSupport ? 'oppose' : 'neutral';
+  
+  // Check if question is "Should X be done?" format
+  const isProposalQuestion = /should.*be|should the|should congress/i.test(qText);
+  
+  if (!isProposalQuestion || !question.question_options?.length) {
+    return { isValid: true, sentiment };
+  }
+  
+  // Find support/oppose options
+  const supportOption = question.question_options.find(o => 
+    /yes|support|expand|increase|strongly support/i.test(o.text)
+  );
+  const opposeOption = question.question_options.find(o => 
+    /no|oppose|reduce|limit|strongly oppose/i.test(o.text)
+  );
+  
+  // Validate score matches evidence sentiment
+  if (sentiment === 'support' && opposeOption && answer.answer_value === opposeOption.value) {
+    return {
+      isValid: false,
+      issue: `Evidence says "supports" but score (${answer.answer_value}) matches oppose option`,
+      suggestedScore: supportOption?.value,
+      sentiment
+    };
+  }
+  
+  if (sentiment === 'oppose' && supportOption && answer.answer_value === supportOption.value) {
+    return {
+      isValid: false,
+      issue: `Evidence says "opposes" but score (${answer.answer_value}) matches support option`,
+      suggestedScore: opposeOption?.value,
+      sentiment
+    };
+  }
+  
+  return { isValid: true, sentiment };
+}
+
+// Evidence type validation (FIX 4)
+function validateEvidenceType(
+  evidenceType: string,
+  sourceDescription: string | null,
+  sourceUrls: string[]
+): 'voting_record' | 'public_statement' | 'social_media' | 'inferred' | 'mixed' {
+  const desc = (sourceDescription || '').toLowerCase();
+  
+  if (evidenceType === 'voting_record') {
+    const hasActualVote = /voted (yea|nay|yes|no)|sponsored|cosponsored/i.test(desc);
+    if (!hasActualVote) {
+      console.log(`[EvidenceType] Correcting: claimed voting_record but no votes cited`);
+      return 'inferred';
+    }
+  }
+  
+  if (evidenceType === 'public_statement' && (!sourceUrls || sourceUrls.length === 0)) {
+    if (!/stated|said|announced|declared|wrote|posted/i.test(desc)) {
+      console.log(`[EvidenceType] Correcting: claimed public_statement but no statement found`);
+      return 'inferred';
+    }
+  }
+  
+  return evidenceType as any;
+}
+
 // Cross-topic matching: some questions span multiple topic areas
 // This allows votes from related topics to be considered as evidence
 // Updated to use the 12-topic architecture with split defense/foreign-affairs and new judicial
@@ -1818,48 +1919,94 @@ ONLY JSON array. No markdown.`;
 }
 
 // PART D: Validation converts unsourced non-zero to inferred instead of resetting to 0
+// Enhanced with semantic validation (FIX 6), no-evidence handling (FIX 2), and evidence type correction (FIX 4)
 function validateAnswerQuality(
   answers: GeneratedAnswer[],
-  candidateParty: string
-): { answers: GeneratedAnswer[]; convertedToInferredCount: number } {
+  candidateParty: string,
+  questions: Question[] = []
+): { answers: GeneratedAnswer[]; convertedToInferredCount: number; flaggedForReview: string[] } {
   let convertedToInferredCount = 0;
+  const flaggedForReview: string[] = [];
+  const questionMap = new Map(questions.map(q => [q.id, q]));
   
   const validatedAnswers = answers.map(a => {
-    // EXEMPT already-inferred answers - they are intentionally ideology-based
-    if (a.evidence_type === 'inferred') {
-      return a; // Keep inferred answers as-is
+    let answer = { ...a };
+    
+    // FIX 2: Strict "No Evidence" handling - reset score to 0
+    if (descriptionSaysNoEvidence(a.source_description) && a.answer_value !== 0) {
+      console.log(`[Validation] FIX2: Resetting ${a.question_id}: says no evidence but has score ${a.answer_value}`);
+      answer.answer_value = 0;
+      answer.evidence_type = 'inferred';
+      answer.source_urls = [];
+      answer.source_titles = [];
+      convertedToInferredCount++;
+      flaggedForReview.push(a.question_id);
+      return answer;
     }
     
-    const hasValidSource = a.source_description && 
-      !a.source_description.toLowerCase().includes('party platform') &&
-      !a.source_description.toLowerCase().includes('typical') &&
-      !a.source_description.toLowerCase().includes('no documented') &&
-      a.source_description.length > 5;
+    // FIX 4: Correct evidence type if it doesn't match content
+    const correctedType = validateEvidenceType(
+      a.evidence_type,
+      a.source_description,
+      a.source_urls
+    );
+    if (correctedType !== a.evidence_type) {
+      console.log(`[Validation] FIX4: Correcting evidence type for ${a.question_id}: ${a.evidence_type} -> ${correctedType}`);
+      answer.evidence_type = correctedType;
+      if (correctedType === 'inferred') {
+        convertedToInferredCount++;
+      }
+    }
     
-    const hasStoredUrls = a.source_urls && a.source_urls.length > 0;
+    // FIX 6: Semantic validation - check score-evidence coherence
+    const question = questionMap.get(a.question_id);
+    if (question && a.evidence_type !== 'inferred') {
+      const semanticResult = validateAnswerSemantics(answer, question);
+      if (!semanticResult.isValid && semanticResult.suggestedScore !== undefined) {
+        console.log(`[Validation] FIX6 Semantic: ${a.question_id}: ${semanticResult.issue}`);
+        flaggedForReview.push(a.question_id);
+        // Route to inference rather than auto-correct (safer)
+        answer.evidence_type = 'inferred';
+        answer.answer_value = 0; // Will be re-inferred in Phase 3
+        convertedToInferredCount++;
+      }
+    }
+    
+    // EXEMPT already-inferred answers - they are intentionally ideology-based
+    if (answer.evidence_type === 'inferred') {
+      return answer;
+    }
+    
+    const hasValidSource = answer.source_description && 
+      !answer.source_description.toLowerCase().includes('party platform') &&
+      !answer.source_description.toLowerCase().includes('typical') &&
+      !answer.source_description.toLowerCase().includes('no documented') &&
+      answer.source_description.length > 5;
+    
+    const hasStoredUrls = answer.source_urls && answer.source_urls.length > 0;
     
     // PART D: Instead of resetting to 0, convert to inferred with the existing score
-    if (a.answer_value !== 0 && !hasValidSource && !hasStoredUrls && a.confidence !== 'high') {
-      console.log(`[Validation] Converting unsourced answer for ${a.question_id} to inferred (keeping score ${a.answer_value})`);
+    if (answer.answer_value !== 0 && !hasValidSource && !hasStoredUrls && answer.confidence !== 'high') {
+      console.log(`[Validation] Converting unsourced answer for ${answer.question_id} to inferred (keeping score ${answer.answer_value})`);
       convertedToInferredCount++;
       return { 
-        ...a, 
+        ...answer, 
         evidence_type: 'inferred' as const, 
         confidence: 'low' as const, 
-        source_description: smartTruncate(`Position inferred from ${candidateParty} party alignment. ${a.source_description}`, 1000),
+        source_description: smartTruncate(`Position inferred from ${candidateParty} party alignment. ${answer.source_description}`, 1000),
         source_urls: [],
         source_titles: [],
       };
     }
     
-    return a;
+    return answer;
   });
   
   if (convertedToInferredCount > 0) {
-    console.log(`[Validation] Converted ${convertedToInferredCount} unsourced answers to inferred`);
+    console.log(`[Validation] Converted ${convertedToInferredCount} answers, flagged ${flaggedForReview.length} for review`);
   }
   
-  return { answers: validatedAnswers, convertedToInferredCount };
+  return { answers: validatedAnswers, convertedToInferredCount, flaggedForReview };
 }
 
 async function generateAnswersInChunks(
