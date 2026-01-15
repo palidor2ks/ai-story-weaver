@@ -100,6 +100,51 @@ function getChamberFromBillType(billType: string): 'house' | 'senate' | null {
   return null;
 }
 
+// Fetch with retry for handling rate limits (429) and server errors (500/503)
+async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url);
+      
+      if (response.ok) return response;
+      
+      if (response.status === 429) {
+        // Rate limited - exponential backoff
+        const delay = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
+        console.log(`[BG] Rate limited (429), retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`);
+        await new Promise(r => setTimeout(r, delay));
+        lastError = new Error(`Rate limited (429)`);
+        continue;
+      }
+      
+      if (response.status === 500 || response.status === 503) {
+        // Server error - shorter retry
+        const delay = 1000 * attempt;
+        console.log(`[BG] Server error (${response.status}), retrying in ${delay}ms`);
+        await new Promise(r => setTimeout(r, delay));
+        lastError = new Error(`Server error (${response.status})`);
+        continue;
+      }
+      
+      // Other errors - return immediately for caller to handle
+      return response;
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      if (attempt < maxRetries) {
+        const delay = 1000 * attempt;
+        console.log(`[BG] Fetch error, retrying in ${delay}ms: ${lastError.message}`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+  
+  // Return a failed response after all retries exhausted
+  console.error(`[BG] Failed after ${maxRetries} retries: ${lastError?.message}`);
+  return new Response(null, { status: 429, statusText: 'Rate Limited After Retries' });
+}
+
 interface VoteRecord {
   id: string;
   bill_id: string;
@@ -173,7 +218,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
     while (hasMoreSponsored) {
       const sponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/sponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=250&offset=${sponsoredOffset}`;
       
-      const sponsoredResponse = await fetch(sponsoredUrl);
+      const sponsoredResponse = await fetchWithRetry(sponsoredUrl);
       
       if (sponsoredResponse.ok) {
         const sponsoredData = await sponsoredResponse.json();
@@ -204,7 +249,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
         
         if (sponsoredBills.length === 250) {
           sponsoredOffset += 250;
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 250));
         } else {
           hasMoreSponsored = false;
         }
@@ -225,7 +270,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
     while (hasMoreCosponsored) {
       const cosponsoredUrl = `https://api.congress.gov/v3/member/${bioguideId}/cosponsored-legislation?api_key=${CONGRESS_API_KEY}&limit=250&offset=${cosponsoredOffset}`;
       
-      const cosponsoredResponse = await fetch(cosponsoredUrl);
+      const cosponsoredResponse = await fetchWithRetry(cosponsoredUrl);
       
       if (cosponsoredResponse.ok) {
         const cosponsoredData = await cosponsoredResponse.json();
@@ -256,7 +301,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
         
         if (cosponsoredBills.length === 250) {
           cosponsoredOffset += 250;
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 250));
         } else {
           hasMoreCosponsored = false;
         }
