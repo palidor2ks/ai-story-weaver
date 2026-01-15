@@ -61,6 +61,50 @@ function extractCoreKeywords(questionText: string): string[] {
   return [...new Set(foundTerms)];
 }
 
+// =============================================================================
+// TOPIC-SPECIFIC SEARCH HELPERS
+// =============================================================================
+
+// Extract key policy phrase from a question for more targeted searches
+function extractKeyPhrase(questionText: string): string {
+  // Remove common question starters
+  let phrase = questionText
+    .replace(/^(should (the )?(u\.?s\.?|federal government|congress|government|states?))/i, '')
+    .replace(/^(do you (support|believe|think))/i, '')
+    .replace(/^(what is your (position|view|stance) on)/i, '')
+    .replace(/\?$/, '')
+    .trim();
+  
+  // If still too long, take first meaningful clause
+  if (phrase.length > 80) {
+    const clauses = phrase.split(/,|;|\band\b|\bor\b/i);
+    phrase = clauses[0].trim();
+  }
+  
+  // Further trim if needed
+  if (phrase.length > 60) {
+    const words = phrase.split(' ').slice(0, 8);
+    phrase = words.join(' ');
+  }
+  
+  return phrase.slice(0, 60);
+}
+
+// Build official site search domain based on office type
+function buildOfficialSiteDomain(candidateName: string, candidateOffice: string): string {
+  const lastName = candidateName.split(' ').pop()?.toLowerCase() || '';
+  const officeLower = candidateOffice.toLowerCase();
+  
+  if (officeLower.includes('senator') || officeLower.includes('senate')) {
+    return `${lastName}.senate.gov`;
+  } else if (officeLower.includes('representative') || officeLower.includes('house') || officeLower.includes('congress')) {
+    return `${lastName}.house.gov`;
+  } else if (officeLower.includes('governor')) {
+    return `gov.${lastName}`;
+  }
+  return `congress.gov/member/${lastName}`;
+}
+
 // Validate that evidence is relevant to the question
 function validateEvidenceRelevance(
   questionId: string,
@@ -811,24 +855,33 @@ async function researchCandidatePosition(
         body: JSON.stringify({
           contents: [{ 
             parts: [{ 
-              text: `Research ${candidateName} (${candidateOffice}, ${candidateState}) position on: "${questionText}"
+              text: `Research ${candidateName} (${candidateOffice}, ${candidateState}) position on "${topicName}":
+
+SPECIFIC QUESTION: "${extractKeyPhrase(questionText)}"
+
+SEARCH STRATEGY - Try these searches in order:
+1. site:${buildOfficialSiteDomain(candidateName, candidateOffice)} "${extractKeyPhrase(questionText)}"
+2. "${candidateName}" "${topicName}" "${extractKeyPhrase(questionText)}"
+3. "${candidateName}" statement OR said "${extractKeyPhrase(questionText)}"
+4. "${candidateName}" facebook OR twitter "${extractKeyPhrase(questionText)}"
+
+PRIORITY SOURCES (use in this order):
+1. Official .gov website (${buildOfficialSiteDomain(candidateName, candidateOffice)}) - press releases, floor statements
+2. Social media posts (X/Twitter, Facebook) with direct quotes
+3. Local news interviews with direct quotes
+4. C-SPAN floor speeches
 
 GOAL: Find CONCRETE EVIDENCE of their position. We need:
-1. SPECIFIC legislation they sponsored, cosponsored, or voted on related to this topic
-2. DIRECT QUOTES or statements from the candidate
+1. SPECIFIC legislation they sponsored, cosponsored, or voted on related to "${topicName}"
+2. DIRECT QUOTES or statements from the candidate on "${extractKeyPhrase(questionText)}"
 3. VOTING RECORD on related bills (include bill numbers like H.R.XXX or S.XXX)
 
 CRITICAL: If you find ANY of the above evidence, DO NOT say "no clear position" or "no documented position".
 Even co-sponsoring a related bill IS evidence of a position.
 Even a related floor vote IS evidence of a position.
 
-SEARCH STRATEGY:
-- Focus on the EXACT TOPIC mentioned in the question - do NOT broaden to generic related terms
-- For "civil asset forfeiture": search ONLY "asset forfeiture", "civil forfeiture", "forfeiture seizure" - NOT "due process" which matches unrelated bills
-- For specific policy topics: use the exact terminology from the question
-- Search for: legislation, statements, votes, social media posts (2016-2025)
-- If you find a bill, verify its summary DIRECTLY addresses the question topic before citing it
-- A bill about "due process protections" does NOT count as evidence for "civil asset forfeiture" unless it explicitly mentions forfeiture
+BILL CITATION FORMAT:
+When citing bills, include: [Bill Number] ([Short Name]) which [what bill does in 10 words]. This shows [support/opposition] because [why relevant to question].
 
 OUTPUT FORMAT:
 If evidence found, start with: "EVIDENCE FOUND: [specific bill numbers, quotes, or votes]"
@@ -1362,15 +1415,30 @@ async function searchCandidateStatements(
     optionsContext = `\nQUESTION OPTIONS (use these answer_values):\n${sortedOptions.map(opt => `  (${opt.value}) ${opt.text}`).join('\n')}`;
   }
 
-  const searchPrompt = `Search for DIRECT STATEMENTS by ${candidateName} (${candidateParty} ${candidateOffice} from ${candidateState}) on this specific topic: "${question.text}"
+  // Get topic name from question if available
+  const topicName = question.topic_id?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'policy';
+  const keyPhrase = extractKeyPhrase(question.text);
+  const officialSite = buildOfficialSiteDomain(candidateName, candidateOffice);
+  const lastName = candidateName.split(' ').pop() || candidateName;
+
+  const searchPrompt = `Search for DIRECT STATEMENTS by ${candidateName} (${candidateParty} ${candidateOffice} from ${candidateState}) on "${topicName}":
+
+SPECIFIC TOPIC: "${keyPhrase}"
 ${optionsContext}
 
+SEARCH QUERIES TO TRY (in order):
+1. site:${officialSite} "${keyPhrase}"
+2. "${candidateName}" "${topicName}" statement OR press release
+3. "${candidateName}" facebook OR twitter "${keyPhrase}"
+4. "${lastName}" interview "${keyPhrase}" 2023 OR 2024 OR 2025
+
 PRIORITY SOURCES (in order):
-1. Social media posts (X/Twitter, Facebook, Instagram) where they directly address this
-2. Video interviews or podcasts (local news, town halls) where they state their position
-3. Op-eds or articles WRITTEN BY ${candidateName}
-4. Direct quotes in news articles where they specifically address this issue
-5. Campaign website or official press releases
+1. Official .gov website (${officialSite}) - press releases, floor statements
+2. Social media posts (X/Twitter, Facebook) with direct quotes from ${candidateName}
+3. Video interviews or podcasts (local news, town halls) where they state their position
+4. Op-eds or articles WRITTEN BY ${candidateName}
+5. Direct quotes in news articles where they specifically address this issue
+6. Campaign website or official press releases
 
 REQUIREMENTS:
 - Must be a DIRECT QUOTE or clear statement from the candidate themselves
@@ -1496,7 +1564,7 @@ async function inferWithResearch(
   relatedAnswers: GeneratedAnswer[] = []
 ): Promise<GeneratedAnswer[]> {
   const results: GeneratedAnswer[] = [];
-  const MAX_STATEMENT_SEARCHES = 10;
+  const MAX_STATEMENT_SEARCHES = 25; // Increased from 10 for better coverage
   let statementSearchCount = 0;
   
   for (const q of questions) {
