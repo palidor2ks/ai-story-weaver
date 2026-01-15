@@ -32,11 +32,15 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Find bills missing sponsor_bioguide_id (includes API-ingested bills without sponsor_name)
+    // Find bills missing sponsor_bioguide_id that have valid bill_type/bill_number
+    // Excludes VOTE- records (procedural votes) and badly-formatted bills
     let query = supabase
       .from('bills')
       .select('id, bill_type, bill_number, congress, sponsor_name, cosponsor_count')
       .is('sponsor_bioguide_id', null)
+      .not('bill_type', 'is', null)      // Must have bill_type
+      .not('bill_number', 'is', null)    // Must have bill_number
+      .not('id', 'ilike', 'VOTE-%')      // Exclude procedural votes
       .limit(batchSize);
     
     if (congress) {
@@ -67,6 +71,13 @@ serve(async (req) => {
 
     for (const bill of billsToEnrich) {
       try {
+        // Defensive null check (shouldn't happen with updated query filters)
+        if (!bill.bill_type || !bill.bill_number) {
+          console.warn(`[FetchBioguideIds] Skipping ${bill.id} - missing bill_type or bill_number`);
+          failed++;
+          continue;
+        }
+
         // Fetch bill details from Congress.gov to get bioguide ID
         const billType = bill.bill_type.toLowerCase();
         const url = `https://api.congress.gov/v3/bill/${bill.congress}/${billType}/${bill.bill_number}?api_key=${CONGRESS_API_KEY}`;
@@ -204,7 +215,10 @@ serve(async (req) => {
     let remainingQuery = supabase
       .from('bills')
       .select('*', { count: 'exact', head: true })
-      .is('sponsor_bioguide_id', null);
+      .is('sponsor_bioguide_id', null)
+      .not('bill_type', 'is', null)
+      .not('bill_number', 'is', null)
+      .not('id', 'ilike', 'VOTE-%');
     
     if (congress) {
       remainingQuery = remainingQuery.eq('congress', congress);
