@@ -8,8 +8,13 @@ const corsHeaders = {
 
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
+const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+// Rate limiting for Perplexity
+let perplexityCallCount = 0;
+const PERPLEXITY_BATCH_LIMIT = 30; // Max Perplexity calls per party request
 
 // Party platform reference data - sources only, no assumed positions
 const PARTY_CONTEXT = {
@@ -249,6 +254,156 @@ function smartTruncate(text: string, maxLength: number): string {
   
   // Last resort: hard cut with ellipsis
   return text.slice(0, maxLength - 3) + '...';
+}
+
+// =============================================================================
+// PERPLEXITY DEEP RESEARCH (NEW PRIMARY RESEARCH ENGINE FOR PARTIES)
+// =============================================================================
+
+interface PerplexityResult {
+  found: boolean;
+  researchText: string;
+  citations: string[];
+  citationTitles: string[];
+}
+
+/**
+ * Research party position using Perplexity's sonar-deep-research model
+ * PRIMARY research engine for party platforms
+ */
+async function researchPartyWithPerplexity(
+  partyName: string,
+  questionText: string,
+  topicName: string,
+  partyId: string
+): Promise<PerplexityResult> {
+  if (!PERPLEXITY_API_KEY) {
+    console.log('[Perplexity] API key not configured, skipping');
+    return { found: false, researchText: '', citations: [], citationTitles: [] };
+  }
+
+  // Rate limit check
+  if (perplexityCallCount >= PERPLEXITY_BATCH_LIMIT) {
+    console.log('[Perplexity] Batch limit reached, falling back to Gemini');
+    return { found: false, researchText: '', citations: [], citationTitles: [] };
+  }
+
+  perplexityCallCount++;
+
+  // Get party-specific search domains
+  const partyDomains: Record<string, string[]> = {
+    democrat: ['democrats.org', 'dnc.org'],
+    republican: ['gop.com', 'rnc.org'],
+    green: ['gp.org', 'greenparty.org'],
+    libertarian: ['lp.org'],
+  };
+
+  const searchDomains = [
+    ...(partyDomains[partyId] || []),
+    'congress.gov', 'c-span.org', 'votesmart.org'
+  ];
+
+  try {
+    // 1-second delay between Perplexity calls for rate limiting
+    await new Promise(r => setTimeout(r, 1000));
+
+    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'sonar-deep-research',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a political research analyst finding the ${partyName}'s official position on policy questions.
+
+PRIORITY SOURCES (in order):
+1. Official 2024 party platform document sections
+2. Recent policy statements from party leadership (2023-2025)
+3. Party voting patterns in Congress
+4. Official party website policy pages
+
+LOOK FOR:
+- Direct quotes from party platform documents
+- Statements from party leadership
+- Consistent voting patterns by party members
+- Official position papers
+
+OUTPUT: Provide factual evidence with specific citations. If no concrete evidence exists, clearly state "NO DOCUMENTED POSITION FOUND".`
+          },
+          {
+            role: 'user',
+            content: `Research the ${partyName}'s official position on: "${questionText}"
+
+Topic area: ${topicName}`
+          }
+        ],
+        search_domain_filter: searchDomains,
+        search_recency_filter: 'year'
+      }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        console.warn('[Perplexity] Rate limited, falling back to Gemini');
+        return { found: false, researchText: '', citations: [], citationTitles: [] };
+      }
+      console.error(`[Perplexity] API error: ${response.status}`);
+      return { found: false, researchText: '', citations: [], citationTitles: [] };
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+    const citations = data.citations || [];
+
+    const hasEvidence = !content.toLowerCase().includes('no documented position') &&
+                        !content.toLowerCase().includes('no evidence found') &&
+                        content.length > 100;
+
+    console.log(`[Perplexity] Party research for "${questionText.slice(0, 50)}...": ${hasEvidence ? 'FOUND' : 'NOT FOUND'}, ${citations.length} citations`);
+
+    return {
+      found: hasEvidence,
+      researchText: hasEvidence ? smartTruncate(content, 2000) : '',
+      citations: citations.slice(0, 5),
+      citationTitles: citations.slice(0, 5).map((url: string) => extractDomainName(url)),
+    };
+  } catch (e) {
+    console.error('[Perplexity] Research error:', e);
+    return { found: false, researchText: '', citations: [], citationTitles: [] };
+  }
+}
+
+/**
+ * Hybrid research: Try Perplexity first, fall back to Gemini
+ */
+async function hybridPartyResearch(
+  partyName: string,
+  questionText: string,
+  topicName: string,
+  partyId: string
+): Promise<GroundingResult> {
+  // Step 1: Try Perplexity deep research first
+  const perplexityResult = await researchPartyWithPerplexity(
+    partyName, questionText, topicName, partyId
+  );
+
+  if (perplexityResult.found && perplexityResult.researchText.length > 100) {
+    console.log(`[HybridResearch] Perplexity found party evidence for "${questionText.slice(0, 50)}..."`);
+    return {
+      researchText: perplexityResult.researchText,
+      sourceUrls: perplexityResult.citations,
+      sourceTitles: perplexityResult.citationTitles,
+      success: true,
+    };
+  }
+
+  // Step 2: Fall back to Gemini grounded search
+  console.log(`[HybridResearch] Perplexity found nothing, trying Gemini for party "${questionText.slice(0, 50)}..."`);
+  return researchPartyPosition(partyName, questionText, topicName);
 }
 
 /**
@@ -650,20 +805,24 @@ async function processQuestionsWithHierarchy(
   console.log(`[Phase1] Complete: ${answers.length} from rep consensus, ${questionsNeedingResearch.length} need research`);
 
   // ============================================
-  // PHASE 2: Web research for questions WITHOUT rep consensus
+  // PHASE 2: Hybrid Research for questions WITHOUT rep consensus
+  // Perplexity first, then Gemini fallback
   // ============================================
-  if (questionsNeedingResearch.length > 0 && hasGrounding) {
-    console.log(`[Phase2] Researching ${questionsNeedingResearch.length} questions via web...`);
+  const hasAnyResearch = !!PERPLEXITY_API_KEY || !!GOOGLE_GEMINI_API_KEY;
+  
+  if (questionsNeedingResearch.length > 0 && hasAnyResearch) {
+    console.log(`[Phase2] Hybrid research for ${questionsNeedingResearch.length} questions (Perplexity: ${!!PERPLEXITY_API_KEY}, Gemini: ${!!GOOGLE_GEMINI_API_KEY})`);
     
     const researchResults = new Map<string, GroundingResult>();
     
     for (const q of questionsNeedingResearch) {
-      const research = await researchPartyPosition(partyContext.name, q.text, q.topic_name);
+      // Use hybrid research: Perplexity first, Gemini fallback
+      const research = await hybridPartyResearch(partyContext.name, q.text, q.topic_name, partyId);
       researchResults.set(q.id, research);
       if (research.success) totalResearched++;
       
-      // Rate limiting
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Rate limiting handled inside hybrid functions, small delay between questions
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
     // Score the research results
