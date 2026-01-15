@@ -912,8 +912,14 @@ Full question: ${questionText}`
           }
         ],
         search_domain_filter: [
-          'congress.gov', 'senate.gov', 'house.gov',
-          'c-span.org', 'govtrack.us', 'votesmart.org'
+          officialDomain,         // Rep's specific .gov site (PRIORITY)
+          'congress.gov',         // Voting records, bill text
+          'senate.gov',           // All Senate sites
+          'house.gov',            // All House sites
+          'c-span.org',           // Floor speeches
+          'govtrack.us',          // Vote tracking
+          'votesmart.org',        // Position statements
+          'ballotpedia.org',      // Comprehensive profiles
         ],
         search_recency_filter: 'year'
       }),
