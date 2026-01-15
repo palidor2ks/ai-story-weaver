@@ -584,6 +584,20 @@ export function AnswerCoveragePanel() {
 
   return (
     <Card className="mb-8">
+      {/* Background bulk sync indicator */}
+      {(isVoteSyncing || isFloorVoteSyncing) && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 px-4 py-2 flex items-center gap-2 rounded-t-lg">
+          <Loader2 className="h-4 w-4 animate-spin text-amber-600 dark:text-amber-400" />
+          <span className="text-sm text-amber-800 dark:text-amber-200">
+            Bulk sync in progress: {isVoteSyncing && 'Legislation'}{isVoteSyncing && isFloorVoteSyncing && ' & '}{isFloorVoteSyncing && 'Floor Votes'}
+            {voteSyncProgress && ` (${voteSyncProgress.completed}/${voteSyncProgress.total} legislators)`}
+            {floorVoteProgress && ` (${floorVoteProgress.completed}/${floorVoteProgress.total} legislators)`}
+          </span>
+          <span className="text-xs text-amber-600 dark:text-amber-400 ml-auto">
+            Individual row updates will reflect mixed results until complete
+          </span>
+        </div>
+      )}
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div>
@@ -1146,66 +1160,87 @@ export function AnswerCoveragePanel() {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        syncAllVotes.mutate();
-                        toast.info('Started legislation sync...', { description: 'Fetching sponsored & cosponsored bills from Congress.gov' });
-                      }}
-                      disabled={isVoteSyncing || isFloorVoteSyncing}
-                    >
-                      {isVoteSyncing ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Syncing...
-                        </>
-                      ) : (
-                        <>
-                          <FileText className="h-4 w-4 mr-2" />
-                          Sync Legislation
-                        </>
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Fetch sponsored & cosponsored bills for all federal legislators</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        syncAllFloorVotes.mutate();
-                        toast.info('Started floor votes sync...', { description: 'Fetching roll call votes from Congress.gov' });
-                      }}
-                      disabled={isVoteSyncing || isFloorVoteSyncing}
-                    >
-                      {isFloorVoteSyncing ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Syncing...
-                        </>
-                      ) : (
-                        <>
-                          <Vote className="h-4 w-4 mr-2" />
-                          Sync Floor Votes
-                        </>
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Fetch Yea/Nay floor votes for all federal legislators</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {/* Bulk Legislation Sync with confirmation */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isVoteSyncing || isFloorVoteSyncing}
+                  >
+                    {isVoteSyncing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Syncing ALL...
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="h-4 w-4 mr-2" />
+                        Sync ALL Legislation
+                      </>
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Sync legislation for all legislators?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will fetch sponsored & cosponsored bills for all 540+ federal legislators from Congress.gov.
+                      This operation runs in the background and may take 30+ minutes.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => {
+                      syncAllVotes.mutate();
+                      toast.info('Started bulk legislation sync...', { description: 'Fetching sponsored & cosponsored bills from Congress.gov for all legislators' });
+                    }}>
+                      Start Bulk Sync
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* Bulk Floor Votes Sync with confirmation */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isVoteSyncing || isFloorVoteSyncing}
+                  >
+                    {isFloorVoteSyncing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Syncing ALL...
+                      </>
+                    ) : (
+                      <>
+                        <Vote className="h-4 w-4 mr-2" />
+                        Sync ALL Floor Votes
+                      </>
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Sync floor votes for all legislators?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will fetch Yea/Nay roll call votes for all 540+ federal legislators from Congress.gov.
+                      This operation runs in the background and may take 30+ minutes.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => {
+                      syncAllFloorVotes.mutate();
+                      toast.info('Started bulk floor votes sync...', { description: 'Fetching roll call votes from Congress.gov for all legislators' });
+                    }}>
+                      Start Bulk Sync
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -2605,54 +2640,78 @@ export function AnswerCoveragePanel() {
                                 {/* Voting Records Actions - only for federal legislators */}
                                 {candidate.id.match(/^[A-Z][0-9]{6}$/) && (
                                   <>
-                                    <DropdownMenuItem
-                                      onSelect={(e) => {
-                                        e.preventDefault();
-                                        void (async () => {
-                                          try {
-                                            toast.info(`Syncing legislation for ${candidate.name}...`);
-                                            await syncSingleMember.mutateAsync(candidate.id);
-                                            toast.success(`Synced legislation for ${candidate.name}`);
-                                            refetchCandidates();
-                                          } catch (err) {
-                                            console.error('[Admin] Sync votes failed:', err);
-                                            toast.error('Failed to sync legislation');
-                                          }
-                                        })();
-                                      }}
-                                      disabled={syncSingleMember.isPending || syncSingleMemberFloorVotes.isPending}
-                                    >
-                                      <FileText className="h-4 w-4 mr-2" />
-                                      Sync Legislation
-                                      {candidate.voteCount > 0 && (
-                                        <span className="ml-auto text-xs text-muted-foreground">
-                                          ({candidate.voteCount})
-                                        </span>
-                                      )}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onSelect={(e) => {
-                                        e.preventDefault();
-                                        void (async () => {
-                                          try {
-                                            toast.info(`Syncing floor votes for ${candidate.name}...`);
-                                            await syncSingleMemberFloorVotes.mutateAsync({ 
-                                              bioguideId: candidate.id, 
-                                              office: candidate.office || '' 
-                                            });
-                                            toast.success(`Synced floor votes for ${candidate.name}`);
-                                            refetchCandidates();
-                                          } catch (err) {
-                                            console.error('[Admin] Sync floor votes failed:', err);
-                                            toast.error('Failed to sync floor votes');
-                                          }
-                                        })();
-                                      }}
-                                      disabled={syncSingleMember.isPending || syncSingleMemberFloorVotes.isPending}
-                                    >
-                                      <Vote className="h-4 w-4 mr-2" />
-                                      Sync Floor Votes
-                                    </DropdownMenuItem>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <DropdownMenuItem
+                                            onSelect={(e) => {
+                                              e.preventDefault();
+                                              if (isVoteSyncing || isFloorVoteSyncing) return;
+                                              void (async () => {
+                                                try {
+                                                  toast.info(`Syncing legislation for ${candidate.name}...`);
+                                                  await syncSingleMember.mutateAsync(candidate.id);
+                                                  toast.success(`Synced legislation for ${candidate.name}`);
+                                                  refetchCandidates();
+                                                } catch (err) {
+                                                  console.error('[Admin] Sync votes failed:', err);
+                                                  toast.error('Failed to sync legislation');
+                                                }
+                                              })();
+                                            }}
+                                            disabled={syncSingleMember.isPending || syncSingleMemberFloorVotes.isPending || isVoteSyncing || isFloorVoteSyncing}
+                                          >
+                                            <FileText className="h-4 w-4 mr-2" />
+                                            Sync This Rep's Legislation
+                                            {candidate.voteCount > 0 && (
+                                              <span className="ml-auto text-xs text-muted-foreground">
+                                                ({candidate.voteCount})
+                                              </span>
+                                            )}
+                                          </DropdownMenuItem>
+                                        </TooltipTrigger>
+                                        {(isVoteSyncing || isFloorVoteSyncing) && (
+                                          <TooltipContent>
+                                            <p>Disabled while bulk sync is running</p>
+                                          </TooltipContent>
+                                        )}
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <DropdownMenuItem
+                                            onSelect={(e) => {
+                                              e.preventDefault();
+                                              if (isVoteSyncing || isFloorVoteSyncing) return;
+                                              void (async () => {
+                                                try {
+                                                  toast.info(`Syncing floor votes for ${candidate.name}...`);
+                                                  await syncSingleMemberFloorVotes.mutateAsync({ 
+                                                    bioguideId: candidate.id, 
+                                                    office: candidate.office || '' 
+                                                  });
+                                                  toast.success(`Synced floor votes for ${candidate.name}`);
+                                                  refetchCandidates();
+                                                } catch (err) {
+                                                  console.error('[Admin] Sync floor votes failed:', err);
+                                                  toast.error('Failed to sync floor votes');
+                                                }
+                                              })();
+                                            }}
+                                            disabled={syncSingleMember.isPending || syncSingleMemberFloorVotes.isPending || isVoteSyncing || isFloorVoteSyncing}
+                                          >
+                                            <Vote className="h-4 w-4 mr-2" />
+                                            Sync This Rep's Floor Votes
+                                          </DropdownMenuItem>
+                                        </TooltipTrigger>
+                                        {(isVoteSyncing || isFloorVoteSyncing) && (
+                                          <TooltipContent>
+                                            <p>Disabled while bulk sync is running</p>
+                                          </TooltipContent>
+                                        )}
+                                      </Tooltip>
+                                    </TooltipProvider>
                                   </>
                                 )}
                                 
