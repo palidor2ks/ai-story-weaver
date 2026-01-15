@@ -118,8 +118,8 @@ export function useVotingRecordsSync() {
 
       setProgress({ total, completed: 0, current: null, errors: [] });
 
-      // Process in batches of 5 to avoid rate limiting
-      const BATCH_SIZE = 5;
+      // Process in batches of 2 to avoid rate limiting (reduced from 5)
+      const BATCH_SIZE = 2;
       const batches = [];
       for (let i = 0; i < (legislators?.length || 0); i += BATCH_SIZE) {
         batches.push((legislators || []).slice(i, i + BATCH_SIZE));
@@ -150,9 +150,9 @@ export function useVotingRecordsSync() {
           setProgress({ total, completed, current: null, errors });
         });
 
-        // Small delay between batches to avoid rate limiting
+        // Longer delay between batches to avoid rate limiting (increased from 500ms)
         if (batches.indexOf(batch) < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
 
@@ -186,8 +186,8 @@ export function useVotingRecordsSync() {
 
       setFloorVoteProgress({ total, completed: 0, current: null, errors: [] });
 
-      // Process in batches of 3 (floor votes are heavier)
-      const BATCH_SIZE = 3;
+      // Process in batches of 2 (reduced from 3 for reliability)
+      const BATCH_SIZE = 2;
       const batches = [];
       for (let i = 0; i < (legislators?.length || 0); i += BATCH_SIZE) {
         batches.push((legislators || []).slice(i, i + BATCH_SIZE));
@@ -222,9 +222,9 @@ export function useVotingRecordsSync() {
           setFloorVoteProgress({ total, completed, current: null, errors });
         });
 
-        // Longer delay for floor votes (heavier API calls)
+        // Longer delay for floor votes (increased from 1000ms for reliability)
         if (batches.indexOf(batch) < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 2500));
         }
       }
 
