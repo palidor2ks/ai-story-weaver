@@ -890,7 +890,7 @@ Then provide details about their position.
 If truly NO evidence exists after thorough search: "NO EVIDENCE FOUND after searching for legislation, statements, and votes."`
             }] 
           }],
-          tools: [{ googleSearch: {} }]
+          tools: [{ google_search: {} }]
         })
       }
     );
@@ -1446,18 +1446,29 @@ REQUIREMENTS:
 - Recent statements preferred (2022-2025)
 - Provide the actual quote if possible
 
-If you find a direct statement, respond with JSON:
+If you find ANY of the following evidence, respond with JSON:
+1. A direct quote from the candidate
+2. A bill they sponsored/cosponsored on this topic  
+3. A press release or floor speech on the issue
+4. Official .gov website statement
+5. A clear voting pattern on related legislation
+
 {
   "found": true,
-  "quote": "<the actual quote or clear paraphrase of their statement>",
-  "source_type": "social_media" | "interview" | "op_ed" | "news_quote" | "campaign",
-  "answer_value": <the value from the OPTIONS that best matches their stated position>
+  "quote": "<what you found - the quote, bill name, or press release summary>",
+  "evidence_type": "quote" | "legislation" | "press_release" | "voting_pattern",
+  "source_type": "social_media" | "interview" | "op_ed" | "news_quote" | "campaign" | "official_gov" | "legislation",
+  "answer_value": <the value from the OPTIONS that best matches their position>
 }
 
-CRITICAL: Use the answer_value from the OPTIONS list that matches what the candidate stated.
-For example, if options show "+10 = Strongly support" and they expressed strong support, use 10.
+CRITICAL RULES:
+- Use the answer_value from the OPTIONS list that matches what the evidence shows
+- For example, if options show "+10 = Strongly support" and they expressed strong support, use 10
+- Finding sponsored legislation IS valid evidence - do NOT return {"found": false}!
+- A press release or floor statement IS valid evidence!
+- Only return {"found": false} if you truly cannot find ANY of the above evidence types
 
-If NO direct statement can be found from the candidate on this specific topic, respond with:
+If truly NO evidence can be found from the candidate on this specific topic, respond with:
 {"found": false}`;
 
   try {
@@ -2045,6 +2056,13 @@ function validateAnswerQuality(
       return answer;
     }
     
+    // EXEMPT voting_record answers - they have valid legislative evidence even without URLs
+    // Voting records come from official Congressional data and shouldn't be converted to "party alignment"
+    if (answer.evidence_type === 'voting_record') {
+      console.log(`[Validation] Keeping voting_record evidence for ${answer.question_id} (not converting to inferred)`);
+      return answer;
+    }
+    
     const hasValidSource = answer.source_description && 
       !answer.source_description.toLowerCase().includes('party platform') &&
       !answer.source_description.toLowerCase().includes('typical') &&
@@ -2053,8 +2071,13 @@ function validateAnswerQuality(
     
     const hasStoredUrls = answer.source_urls && answer.source_urls.length > 0;
     
+    // Check if source_description cites legislation (even without URLs)
+    const citesLegislation = answer.source_description && 
+      (/sponsored|cosponsored|voted (yea|nay|yes|no)|h\.?r\.?\s*\d+|s\.?\s*\d+/i.test(answer.source_description));
+    
     // PART D: Instead of resetting to 0, convert to inferred with the existing score
-    if (answer.answer_value !== 0 && !hasValidSource && !hasStoredUrls && answer.confidence !== 'high') {
+    // But DON'T convert if we have legislative citations
+    if (answer.answer_value !== 0 && !hasValidSource && !hasStoredUrls && !citesLegislation && answer.confidence !== 'high') {
       console.log(`[Validation] Converting unsourced answer for ${answer.question_id} to inferred (keeping score ${answer.answer_value})`);
       convertedToInferredCount++;
       return { 
