@@ -627,7 +627,7 @@ export type Database = {
           created_at: string | null
           id: string
           position: string
-          vote_number: number | null
+          vote_number: number
         }
         Insert: {
           action_date: string
@@ -637,7 +637,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           position: string
-          vote_number?: number | null
+          vote_number?: number
         }
         Update: {
           action_date?: string
@@ -647,7 +647,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           position?: string
-          vote_number?: number | null
+          vote_number?: number
         }
         Relationships: [
           {
