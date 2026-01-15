@@ -8,9 +8,14 @@ const corsHeaders = {
 
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
+const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
 const CONGRESS_GOV_API_KEY = Deno.env.get('CONGRESS_GOV_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+// Rate limiting for Perplexity
+let perplexityCallCount = 0;
+const PERPLEXITY_BATCH_LIMIT = 50; // Max Perplexity calls per request
 
 const CHUNK_SIZE = 10;
 
@@ -827,6 +832,156 @@ function validateScoreConsistency(
   // but -10 on another (if the question is about limiting protections).
   // The AI now receives question options and should score correctly at generation time.
   return answerValue;
+}
+
+// =============================================================================
+// PERPLEXITY DEEP RESEARCH (NEW PRIMARY RESEARCH ENGINE)
+// =============================================================================
+
+interface PerplexityResult {
+  found: boolean;
+  researchText: string;
+  citations: string[];
+  citationTitles: string[];
+}
+
+/**
+ * Research candidate position using Perplexity's sonar-deep-research model
+ * PRIMARY research engine - uses multi-query analysis with automatic citations
+ */
+async function researchWithPerplexity(
+  candidateName: string,
+  candidateOffice: string,
+  candidateState: string,
+  questionText: string,
+  topicName: string
+): Promise<PerplexityResult> {
+  if (!PERPLEXITY_API_KEY) {
+    console.log('[Perplexity] API key not configured, skipping');
+    return { found: false, researchText: '', citations: [], citationTitles: [] };
+  }
+
+  // Rate limit check
+  if (perplexityCallCount >= PERPLEXITY_BATCH_LIMIT) {
+    console.log('[Perplexity] Batch limit reached, falling back to Gemini');
+    return { found: false, researchText: '', citations: [], citationTitles: [] };
+  }
+
+  perplexityCallCount++;
+  const keyPhrase = extractKeyPhrase(questionText);
+  const officialDomain = buildOfficialSiteDomain(candidateName, candidateOffice);
+
+  try {
+    // 1-second delay between Perplexity calls for rate limiting
+    await new Promise(r => setTimeout(r, 1000));
+
+    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'sonar-deep-research',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a political research analyst finding concrete evidence of ${candidateName}'s positions.
+
+PRIORITY SOURCES (in order):
+1. Official .gov websites (${officialDomain}) - press releases, floor statements
+2. Congress.gov voting records and bill sponsorships
+3. C-SPAN floor speeches and committee hearings
+4. Official campaign websites and press releases
+5. Verified news interviews with direct quotes
+
+EVIDENCE TO FIND:
+- Specific bill numbers (H.R.XXX, S.XXX) they voted on, sponsored, or cosponsored
+- Direct quotes from speeches, interviews, or statements
+- Official position statements
+- Roll call votes (Yea/Nay) on relevant legislation
+
+OUTPUT: Provide factual evidence with specific citations. If no concrete evidence exists, clearly state "NO DOCUMENTED POSITION FOUND".`
+          },
+          {
+            role: 'user',
+            content: `Research ${candidateName} (${candidateOffice}, ${candidateState})'s position on: "${keyPhrase}"
+
+Topic area: ${topicName}
+Full question: ${questionText}`
+          }
+        ],
+        search_domain_filter: [
+          'congress.gov', 'senate.gov', 'house.gov',
+          'c-span.org', 'govtrack.us', 'votesmart.org'
+        ],
+        search_recency_filter: 'year'
+      }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        console.warn('[Perplexity] Rate limited, falling back to Gemini');
+        return { found: false, researchText: '', citations: [], citationTitles: [] };
+      }
+      console.error(`[Perplexity] API error: ${response.status}`);
+      return { found: false, researchText: '', citations: [], citationTitles: [] };
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+    const citations = data.citations || [];
+
+    // Check if actual evidence was found
+    const hasEvidence = !content.toLowerCase().includes('no documented position') &&
+                        !content.toLowerCase().includes('no evidence found') &&
+                        !content.toLowerCase().includes('unable to find') &&
+                        content.length > 100;
+
+    console.log(`[Perplexity] Research for "${questionText.slice(0, 50)}...": ${hasEvidence ? 'FOUND' : 'NOT FOUND'}, ${citations.length} citations`);
+
+    return {
+      found: hasEvidence,
+      researchText: hasEvidence ? smartTruncate(content, 2000) : '',
+      citations: citations.slice(0, 5),
+      citationTitles: citations.slice(0, 5).map((url: string) => extractDomainName(url)),
+    };
+  } catch (e) {
+    console.error('[Perplexity] Research error:', e);
+    return { found: false, researchText: '', citations: [], citationTitles: [] };
+  }
+}
+
+/**
+ * Hybrid research: Try Perplexity first, fall back to Gemini
+ */
+async function hybridResearch(
+  candidateName: string,
+  candidateOffice: string,
+  candidateState: string,
+  questionText: string,
+  topicName: string
+): Promise<GroundingResult> {
+  // Step 1: Try Perplexity deep research first
+  const perplexityResult = await researchWithPerplexity(
+    candidateName, candidateOffice, candidateState, questionText, topicName
+  );
+
+  if (perplexityResult.found && perplexityResult.researchText.length > 100) {
+    console.log(`[HybridResearch] Perplexity found evidence for "${questionText.slice(0, 50)}..."`);
+    return {
+      researchText: perplexityResult.researchText,
+      sourceUrls: perplexityResult.citations,
+      sourceTitles: perplexityResult.citationTitles,
+      success: true,
+    };
+  }
+
+  // Step 2: Fall back to Gemini grounded search
+  console.log(`[HybridResearch] Perplexity found nothing, trying Gemini for "${questionText.slice(0, 50)}..."`);
+  return researchCandidatePosition(
+    candidateName, candidateOffice, candidateState, questionText, topicName
+  );
 }
 
 /**
@@ -2169,19 +2324,23 @@ async function generateAnswersInChunks(
       // Identify remaining questions needing research
       const questionsNeedingResearch = chunk.filter(q => !answersById.has(q.id));
 
-      // Phase 2: Research with Gemini grounding (for unanswered questions)
+      // Phase 2: Hybrid Research (Perplexity first, then Gemini fallback)
       const researchResults = new Map<string, GroundingResult>();
+      const hasAnyResearch = !!PERPLEXITY_API_KEY || !!GOOGLE_GEMINI_API_KEY;
       
-      if (hasGrounding && questionsNeedingResearch.length > 0) {
+      if (hasAnyResearch && questionsNeedingResearch.length > 0) {
+        console.log(`[Phase2] Starting hybrid research for ${questionsNeedingResearch.length} questions (Perplexity: ${!!PERPLEXITY_API_KEY}, Gemini: ${!!GOOGLE_GEMINI_API_KEY})`);
+        
         for (const q of questionsNeedingResearch) {
-          const research = await researchCandidatePosition(
+          // Use hybrid research: Perplexity first, Gemini fallback
+          const research = await hybridResearch(
             candidateName, candidateOffice, candidateState, q.text, q.topic_id
           );
           researchResults.set(q.id, research);
           if (research.success) totalResearched++;
           
-          // Rate limiting: 2 second delay for reliability
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Rate limiting handled inside hybridResearch, but add small delay between questions
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
       

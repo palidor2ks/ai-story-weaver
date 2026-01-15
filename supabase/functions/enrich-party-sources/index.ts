@@ -10,8 +10,13 @@ const corsHeaders = {
 };
 
 const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
+const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+// Rate limiting for Perplexity
+let perplexityCallCount = 0;
+const PERPLEXITY_BATCH_LIMIT = 25;
 
 const PARTY_NAMES: Record<string, string> = {
   democrat: 'Democratic Party',
@@ -191,6 +196,107 @@ function createTextFragmentUrl(baseUrl: string, quote: string): string {
   const encoded = encodeURIComponent(cleanQuote);
   
   return `${urlWithoutFragment}#:~:text=${encoded}`;
+}
+
+// =============================================================================
+// PERPLEXITY RESEARCH FOR PARTY SOURCE ENRICHMENT
+// =============================================================================
+
+/**
+ * Research party sources using Perplexity for faster discovery
+ */
+async function researchPartySourcesWithPerplexity(
+  partyId: string,
+  partyName: string,
+  questionText: string,
+  answerValue: number
+): Promise<GroundingResult> {
+  if (!PERPLEXITY_API_KEY) {
+    return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
+  }
+
+  if (perplexityCallCount >= PERPLEXITY_BATCH_LIMIT) {
+    return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
+  }
+
+  perplexityCallCount++;
+
+  const partyDomains: Record<string, string[]> = {
+    democrat: ['democrats.org', 'dnc.org'],
+    republican: ['gop.com', 'rnc.org'],
+    green: ['gp.org'],
+    libertarian: ['lp.org'],
+  };
+
+  try {
+    await new Promise(r => setTimeout(r, 1000));
+
+    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'sonar',
+        messages: [
+          {
+            role: 'system',
+            content: `Find official ${partyName} sources documenting their position on policy questions.`
+          },
+          {
+            role: 'user',
+            content: `Find ${partyName} official sources on: "${questionText}"`
+          }
+        ],
+        search_domain_filter: [...(partyDomains[partyId] || []), 'congress.gov', 'c-span.org'],
+        search_recency_filter: 'year'
+      }),
+    });
+
+    if (!response.ok) {
+      return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+    const citations = data.citations || [];
+
+    if (content.length > 50 && citations.length > 0) {
+      return {
+        sourceDescription: smartTruncate(content, 500),
+        sourceUrls: citations.slice(0, 5),
+        sourceTitles: citations.slice(0, 5).map((url: string) => extractDomainName(url)),
+        keyQuote: '',
+        success: true
+      };
+    }
+
+    return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
+  } catch (e) {
+    console.error('[Perplexity] Party source error:', e);
+    return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
+  }
+}
+
+/**
+ * Hybrid party source research
+ */
+async function hybridPartySourceResearch(
+  partyId: string,
+  partyName: string,
+  questionText: string,
+  answerValue: number
+): Promise<GroundingResult> {
+  const perplexityResult = await researchPartySourcesWithPerplexity(
+    partyId, partyName, questionText, answerValue
+  );
+
+  if (perplexityResult.success) {
+    return perplexityResult;
+  }
+
+  return researchSources(partyId, partyName, questionText, answerValue);
 }
 
 /**
@@ -489,8 +595,8 @@ serve(async (req) => {
         const question = answer.questions as any;
         const questionText = question?.text || '';
 
-        // Research sources
-        const result = await researchSources(partyId, partyName, questionText, answer.answer_value);
+        // Hybrid source research: Perplexity first, Gemini fallback
+        const result = await hybridPartySourceResearch(partyId, partyName, questionText, answer.answer_value);
 
         if (result.success) {
           // Update the answer with new sources (keep existing answer_value)

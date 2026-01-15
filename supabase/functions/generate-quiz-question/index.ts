@@ -24,6 +24,7 @@ interface NewsResearch {
 const MAX_WORDS_PER_OPTION = 15;
 const MAX_RETRIES = 2;
 const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
+const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(w => w.length > 0).length;
@@ -40,15 +41,57 @@ function validateOptionLengths(options: GeneratedQuestion['options']): { valid: 
   return { valid: violations.length === 0, violations };
 }
 
-// Phase 1: Research recent news and trending topics using Gemini with Google Search grounding
+// Phase 1: Research recent news using HYBRID approach (Perplexity first, Gemini fallback)
 async function researchTopicNews(topicName: string): Promise<NewsResearch> {
+  // Try Perplexity first for deeper news research
+  if (PERPLEXITY_API_KEY) {
+    try {
+      console.log(`[Perplexity] Researching news for topic: ${topicName}`);
+      
+      const response = await fetch('https://api.perplexity.ai/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'sonar',
+          messages: [{
+            role: 'user',
+            content: `Find the latest U.S. political news and trending debates about "${topicName}" from the past 30 days. Include:
+1. Recent headlines and controversies
+2. Current legislative debates or bills
+3. Recent policy announcements or court decisions
+4. Trending political discussions
+
+Provide 3-5 bullet points of factual, newsworthy angles that would make good quiz questions. Be politically neutral.`
+          }],
+          search_recency_filter: 'week'
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || '';
+        
+        if (content.length >= 50) {
+          console.log(`[Perplexity] News research completed: ${content.length} chars`);
+          return { context: content.slice(0, 2000), success: true };
+        }
+      }
+    } catch (e) {
+      console.error('[Perplexity] News research error:', e);
+    }
+  }
+
+  // Fallback to Gemini with Google Search
   if (!GOOGLE_GEMINI_API_KEY) {
-    console.log('GOOGLE_GEMINI_API_KEY not configured, skipping news research');
+    console.log('No API keys configured for news research');
     return { context: '', success: false };
   }
 
   try {
-    console.log(`Researching recent news for topic: ${topicName}`);
+    console.log(`[Gemini] Researching recent news for topic: ${topicName}`);
     
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_GEMINI_API_KEY}`,
@@ -78,7 +121,7 @@ Keep it politically neutral and factual.`
     );
 
     if (!response.ok) {
-      console.error(`Gemini news research error: ${response.status}`);
+      console.error(`[Gemini] News research error: ${response.status}`);
       return { context: '', success: false };
     }
 
@@ -86,15 +129,15 @@ Keep it politically neutral and factual.`
     const researchText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
     if (researchText.length < 50) {
-      console.log('Insufficient news research results');
+      console.log('[Gemini] Insufficient news research results');
       return { context: '', success: false };
     }
     
-    console.log(`News research completed: ${researchText.length} chars`);
+    console.log(`[Gemini] News research completed: ${researchText.length} chars`);
     return { context: researchText.slice(0, 2000), success: true };
     
   } catch (e) {
-    console.error('News research error:', e);
+    console.error('[Gemini] News research error:', e);
     return { context: '', success: false };
   }
 }

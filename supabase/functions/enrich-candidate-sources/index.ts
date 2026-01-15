@@ -7,8 +7,13 @@ const corsHeaders = {
 };
 
 const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
+const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+// Rate limiting for Perplexity
+let perplexityCallCount = 0;
+const PERPLEXITY_BATCH_LIMIT = 25;
 
 // Known unreliable/broken domains to filter out
 const BLOCKED_DOMAINS = [
@@ -143,6 +148,122 @@ function createTextFragmentUrl(baseUrl: string, quote: string): string {
   const encoded = encodeURIComponent(cleanQuote);
   
   return `${urlWithoutFragment}#:~:text=${encoded}`;
+}
+
+// =============================================================================
+// PERPLEXITY DEEP RESEARCH FOR SOURCE ENRICHMENT
+// =============================================================================
+
+/**
+ * Research sources using Perplexity's sonar model for faster source discovery
+ */
+async function researchSourcesWithPerplexity(
+  candidateName: string,
+  questionText: string,
+  answerValue: number,
+  party: string,
+  office: string,
+  state: string
+): Promise<GroundingResult> {
+  if (!PERPLEXITY_API_KEY) {
+    return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
+  }
+
+  // Rate limit check
+  if (perplexityCallCount >= PERPLEXITY_BATCH_LIMIT) {
+    console.log('[Perplexity] Batch limit reached, falling back to Gemini');
+    return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
+  }
+
+  perplexityCallCount++;
+
+  const positionDesc = answerValue <= -7 ? 'strongly supports progressive position' :
+                       answerValue <= -3 ? 'leans progressive' :
+                       answerValue >= 7 ? 'strongly supports conservative position' :
+                       answerValue >= 3 ? 'leans conservative' :
+                       'holds a centrist position';
+
+  try {
+    await new Promise(r => setTimeout(r, 1000));
+
+    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'sonar',
+        messages: [
+          {
+            role: 'system',
+            content: `Find official sources documenting ${candidateName}'s position on specific policy questions. The candidate ${positionDesc}. Find direct quotes and voting records.`
+          },
+          {
+            role: 'user',
+            content: `Find sources for ${candidateName} (${office}, ${state}, ${party}) on: "${questionText}"`
+          }
+        ],
+        search_domain_filter: ['congress.gov', 'senate.gov', 'house.gov', 'c-span.org', 'govtrack.us'],
+        search_recency_filter: 'year'
+      }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        console.warn('[Perplexity] Rate limited');
+      }
+      return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+    const citations = data.citations || [];
+
+    const hasEvidence = content.length > 50 && 
+      !content.toLowerCase().includes('no documented position') &&
+      citations.length > 0;
+
+    if (hasEvidence) {
+      console.log(`[Perplexity] Source enrichment found ${citations.length} citations`);
+      return {
+        sourceDescription: content.slice(0, 500),
+        sourceUrls: citations.slice(0, 5),
+        sourceTitles: citations.slice(0, 5).map((url: string) => extractDomainName(url)),
+        keyQuote: '',
+        success: true
+      };
+    }
+
+    return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
+  } catch (e) {
+    console.error('[Perplexity] Source enrichment error:', e);
+    return { sourceDescription: '', sourceUrls: [], sourceTitles: [], keyQuote: '', success: false };
+  }
+}
+
+/**
+ * Hybrid source research: Try Perplexity first, fall back to Gemini
+ */
+async function hybridSourceResearch(
+  candidateName: string,
+  questionText: string,
+  answerValue: number,
+  party: string,
+  office: string,
+  state: string
+): Promise<GroundingResult> {
+  // Try Perplexity first
+  const perplexityResult = await researchSourcesWithPerplexity(
+    candidateName, questionText, answerValue, party, office, state
+  );
+
+  if (perplexityResult.success) {
+    return perplexityResult;
+  }
+
+  // Fall back to Gemini
+  return researchSources(candidateName, questionText, answerValue, party, office, state);
 }
 
 /**
@@ -427,8 +548,8 @@ serve(async (req) => {
       const question = answer.questions as any;
       const questionText = question?.text || '';
 
-      // Research sources
-      const result = await researchSources(
+      // Hybrid source research: Perplexity first, Gemini fallback
+      const result = await hybridSourceResearch(
         candidate.name,
         questionText,
         answer.answer_value,
