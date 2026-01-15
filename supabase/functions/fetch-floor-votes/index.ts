@@ -546,6 +546,10 @@ async function persistVotesBatch(
   const candidateVotesData: any[] = [];
   
   for (const v of uniqueVotes) {
+    // Parse bill_id to extract type and number
+    const parsed = parseBillId(v.bill_id);
+    const isPlaceholder = v.bill_id.startsWith('VOTE-');
+    
     // Upsert bill data (deduplicated by bill_id)
     if (!billsMap.has(v.bill_id)) {
       billsMap.set(v.bill_id, {
@@ -562,6 +566,10 @@ async function persistVotesBatch(
         summary: v.bill_summary || null,
         summary_fetched_at: v.summary_fetched_at || null,
         last_action_date: v.date,
+        // ADD: Required columns for bills table
+        bill_type: isPlaceholder ? 'PROC' : (parsed?.type || 'HR'),
+        bill_number: isPlaceholder ? 0 : (parsed?.number || 0),
+        introduced_date: v.date, // Use vote date as fallback
       });
     }
     
@@ -572,7 +580,7 @@ async function persistVotesBatch(
       action_type: 'floor_vote',
       position: v.position,
       action_date: v.date,
-      vote_number: v.vote_number,
+      vote_number: v.vote_number || 0, // Ensure vote_number is never null for unique constraint
     });
   }
   
@@ -585,29 +593,48 @@ async function persistVotesBatch(
       .upsert(bills, { onConflict: 'id', ignoreDuplicates: false });
     
     if (billsError) {
-      console.error(`[BG] Error upserting bills:`, billsError);
-      throw new Error(billsError.message);
+      console.error(`[BG] Error upserting bills:`, {
+        error: billsError,
+        code: billsError.code,
+        message: billsError.message,
+        sampleBill: bills[0],
+      });
+      // Don't throw - try candidate_votes anyway, some bills might already exist
     }
   }
   
-  // Insert candidate_votes
+  // Insert candidate_votes with correct 4-column conflict clause
   if (candidateVotesData.length > 0) {
+    // First try with the proper unique constraint
     const { error: votesError } = await supabase
       .from('candidate_votes')
       .upsert(candidateVotesData, { 
-        onConflict: 'bill_id,candidate_id,action_type',
+        onConflict: 'bill_id,candidate_id,action_type,vote_number',
         ignoreDuplicates: true 
       });
     
     if (votesError) {
-      // Fallback: insert one by one if composite key doesn't exist
+      console.error(`[BG] Error inserting candidate_votes:`, {
+        error: votesError,
+        code: votesError.code,
+        message: votesError.message,
+        sampleVote: candidateVotesData[0],
+      });
+      
+      // Fallback: insert one by one if composite key issues
       if (votesError.code === '42P10' || votesError.message?.includes('there is no unique')) {
+        console.log(`[BG] Falling back to individual inserts for ${candidateVotesData.length} votes...`);
+        let inserted = 0;
         for (const cv of candidateVotesData) {
-          await supabase.from('candidate_votes').insert(cv).select().maybeSingle();
+          const { error: singleError } = await supabase
+            .from('candidate_votes')
+            .insert(cv)
+            .select()
+            .maybeSingle();
+          
+          if (!singleError) inserted++;
         }
-      } else {
-        console.error(`[BG] Error inserting candidate_votes:`, votesError);
-        throw new Error(votesError.message);
+        console.log(`[BG] Individual inserts: ${inserted}/${candidateVotesData.length} succeeded`);
       }
     }
   }
