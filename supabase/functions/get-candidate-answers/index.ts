@@ -96,18 +96,34 @@ function extractKeyPhrase(questionText: string): string {
 }
 
 // Build official site search domain based on office type
-function buildOfficialSiteDomain(candidateName: string, candidateOffice: string): string {
-  const lastName = candidateName.split(' ').pop()?.toLowerCase() || '';
+// Returns a valid hostname for Perplexity domain filtering (no paths, no special chars)
+function buildOfficialSiteDomain(candidateName: string, candidateOffice: string): string | null {
+  // Extract and sanitize last name: remove punctuation, suffixes, and special chars
+  let lastName = candidateName.split(' ').pop()?.toLowerCase() || '';
+  lastName = lastName
+    .replace(/[^a-z0-9-]/g, '') // Remove anything not alphanumeric or hyphen
+    .replace(/^-+|-+$/g, '');   // Trim leading/trailing hyphens
+  
+  if (!lastName || lastName.length < 2) return null;
+  
   const officeLower = candidateOffice.toLowerCase();
   
   if (officeLower.includes('senator') || officeLower.includes('senate')) {
     return `${lastName}.senate.gov`;
   } else if (officeLower.includes('representative') || officeLower.includes('house') || officeLower.includes('congress')) {
     return `${lastName}.house.gov`;
-  } else if (officeLower.includes('governor')) {
-    return `gov.${lastName}`;
   }
-  return `congress.gov/member/${lastName}`;
+  
+  // For non-congressional (governors, local officials), don't return a domain
+  // that would be invalid - Perplexity requires valid hostnames
+  return null;
+}
+
+// Validate that a domain is safe for Perplexity's search_domain_filter
+function isValidPerplexityDomain(domain: string | null): boolean {
+  if (!domain) return false;
+  // Must be a valid hostname: alphanumeric/hyphens with dots, no paths/slashes
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain);
 }
 
 // Validate that evidence is relevant to the question
@@ -912,7 +928,8 @@ Full question: ${questionText}`
           }
         ],
         search_domain_filter: [
-          officialDomain,         // Rep's specific .gov site (PRIORITY)
+          // Only include officialDomain if it's a valid hostname
+          ...(isValidPerplexityDomain(officialDomain) ? [officialDomain] : []),
           'congress.gov',         // Voting records, bill text
           'senate.gov',           // All Senate sites
           'house.gov',            // All House sites
@@ -920,7 +937,7 @@ Full question: ${questionText}`
           'govtrack.us',          // Vote tracking
           'votesmart.org',        // Position statements
           'ballotpedia.org',      // Comprehensive profiles
-        ],
+        ].filter(Boolean),
         search_recency_filter: 'year'
       }),
     });
@@ -1021,13 +1038,13 @@ async function researchCandidatePosition(
 SPECIFIC QUESTION: "${extractKeyPhrase(questionText)}"
 
 SEARCH STRATEGY - Try these searches in order:
-1. site:${buildOfficialSiteDomain(candidateName, candidateOffice)} "${extractKeyPhrase(questionText)}"
+1. ${buildOfficialSiteDomain(candidateName, candidateOffice) ? `site:${buildOfficialSiteDomain(candidateName, candidateOffice)} "${extractKeyPhrase(questionText)}"` : `"${candidateName}" official statement "${extractKeyPhrase(questionText)}"`}
 2. "${candidateName}" "${topicName}" "${extractKeyPhrase(questionText)}"
 3. "${candidateName}" statement OR said "${extractKeyPhrase(questionText)}"
 4. "${candidateName}" facebook OR twitter "${extractKeyPhrase(questionText)}"
 
 PRIORITY SOURCES (use in this order):
-1. Official .gov website (${buildOfficialSiteDomain(candidateName, candidateOffice)}) - press releases, floor statements
+1. ${buildOfficialSiteDomain(candidateName, candidateOffice) ? `Official .gov website (${buildOfficialSiteDomain(candidateName, candidateOffice)}) - press releases, floor statements` : 'Official government websites - press releases, floor statements'}
 2. Social media posts (X/Twitter, Facebook) with direct quotes
 3. Local news interviews with direct quotes
 4. C-SPAN floor speeches
@@ -1581,6 +1598,7 @@ async function searchCandidateStatements(
   const keyPhrase = extractKeyPhrase(question.text);
   const officialSite = buildOfficialSiteDomain(candidateName, candidateOffice);
   const lastName = candidateName.split(' ').pop() || candidateName;
+  const officialSiteDisplay = officialSite || 'their official website';
 
   const searchPrompt = `Search for DIRECT STATEMENTS by ${candidateName} (${candidateParty} ${candidateOffice} from ${candidateState}) on "${topicName}":
 
@@ -1588,13 +1606,13 @@ SPECIFIC TOPIC: "${keyPhrase}"
 ${optionsContext}
 
 SEARCH QUERIES TO TRY (in order):
-1. site:${officialSite} "${keyPhrase}"
+1. ${officialSite ? `site:${officialSite} "${keyPhrase}"` : `"${candidateName}" official statement "${keyPhrase}"`}
 2. "${candidateName}" "${topicName}" statement OR press release
 3. "${candidateName}" facebook OR twitter "${keyPhrase}"
 4. "${lastName}" interview "${keyPhrase}" 2023 OR 2024 OR 2025
 
 PRIORITY SOURCES (in order):
-1. Official .gov website (${officialSite}) - press releases, floor statements
+1. Official .gov website (${officialSiteDisplay}) - press releases, floor statements
 2. Social media posts (X/Twitter, Facebook) with direct quotes from ${candidateName}
 3. Video interviews or podcasts (local news, town halls) where they state their position
 4. Op-eds or articles WRITTEN BY ${candidateName}
