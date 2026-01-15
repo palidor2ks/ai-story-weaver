@@ -367,13 +367,20 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
           });
         }
         
-        // Create candidate_vote record
+        // Skip invalid bill_ids to prevent data corruption
+        if (!v.bill_id || v.bill_id.includes('null') || v.bill_id.includes('undefined')) {
+          console.warn(`[BG] Skipping invalid bill_id: ${v.bill_id}`);
+          continue;
+        }
+        
+        // Create candidate_vote record with vote_number = 0 for sponsor/cosponsor
         candidateVotes.push({
           bill_id: v.bill_id,
           candidate_id: v.candidate_id,
           action_type: v.position === 'Sponsored' ? 'sponsor' : 'cosponsor',
           position: v.position,
           action_date: v.date,
+          vote_number: 0, // Explicit 0 for sponsor/cosponsor to enable proper deduplication
         });
       }
       
@@ -426,11 +433,11 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
         
         while (!success && retries < MAX_RETRIES) {
           try {
-            // Use insert with onConflict to ignore duplicates
+            // Use insert with onConflict to ignore duplicates - 4-column constraint
             const { error } = await supabase
               .from('candidate_votes')
               .upsert(chunk, { 
-                onConflict: 'bill_id,candidate_id,action_type',
+                onConflict: 'bill_id,candidate_id,action_type,vote_number',
                 ignoreDuplicates: true 
               });
             
