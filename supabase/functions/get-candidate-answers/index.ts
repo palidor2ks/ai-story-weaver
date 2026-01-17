@@ -331,6 +331,9 @@ Return the answer_value from OPTIONS that best matches ALL evidence found. If mu
       return null;
     }
 
+    // Ensure confidence is valid
+    const validConfidence = ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'medium';
+    
     // Build source URLs from citations and parsed sources
     const sourceUrls: string[] = [];
     const sourceTitles: string[] = [];
@@ -369,7 +372,7 @@ Return the answer_value from OPTIONS that best matches ALL evidence found. If mu
       source_urls: sourceUrls,
       source_titles: sourceTitles,
       source_type: mapEvidenceToSourceType(parsed.evidence_type),
-      confidence: parsed.confidence || 'medium',
+      confidence: validConfidence as 'high' | 'medium' | 'low',
       evidence_type: validateEvidenceType(parsed.evidence_type),
       voting_record_summary: parsed.evidence_type === 'voting_record' ? parsed.source_description : undefined,
       public_statement_summary: ['public_statement', 'social_media', 'news_quote'].includes(parsed.evidence_type) ? parsed.source_description : undefined,
@@ -467,7 +470,14 @@ Return JSON:
       return null;
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      console.error(`[Gemini] Failed to parse response as JSON`);
+      return null;
+    }
+    
     const content = data.choices?.[0]?.message?.content || '';
     const parsed = extractJsonFromText(content);
 
@@ -475,6 +485,9 @@ Return JSON:
       return null;
     }
 
+    // Ensure confidence is valid
+    const validConfidence = ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'low';
+    
     return {
       question_id: question.id,
       answer_value: snapToValidValue(parsed.answer_value),
@@ -483,7 +496,7 @@ Return JSON:
       source_urls: [],
       source_titles: [],
       source_type: mapEvidenceToSourceType(parsed.evidence_type || 'inferred'),
-      confidence: parsed.confidence || 'low',
+      confidence: validConfidence as 'high' | 'medium' | 'low',
       evidence_type: validateEvidenceType(parsed.evidence_type || 'inferred'),
     };
 
@@ -644,24 +657,32 @@ async function generateAnswersForCandidate(
 
   console.log(`[Generate] Processing ${questions.length} questions for ${candidateName} (${candidateParty})`);
 
-  const answers: GeneratedAnswer[] = [];
+  // Track answers by question_id to avoid duplicates
+  const answersMap = new Map<string, GeneratedAnswer>();
 
   for (const question of questions) {
+    // Skip if we already have an answer for this question
+    if (answersMap.has(question.id)) {
+      console.log(`[Generate] Skipping duplicate question ${question.id}`);
+      continue;
+    }
+    
     try {
       const answer = await researchQuestionPosition(
         candidateName, candidateOffice, candidateState, candidateParty, question
       );
       
-      answers.push(answer);
+      answersMap.set(answer.question_id, answer);
       
       if (answer.evidence_type !== 'inferred') {
         researchedCount++;
       }
 
       // Save every 10 answers to avoid data loss
-      if (answers.length % 10 === 0) {
+      const answers = Array.from(answersMap.values());
+      if (answers.length % 10 === 0 && answers.length > 0) {
         await saveAnswersBatch(supabase, candidateId, answers.slice(-10), questions);
-        totalGenerated += 10;
+        totalGenerated = answers.length;
         console.log(`[Generate] Saved batch: ${totalGenerated}/${questions.length}`);
       }
 
@@ -669,16 +690,21 @@ async function generateAnswersForCandidate(
       console.error(`[Generate] Error for ${question.id}:`, e);
       failedCount++;
       
-      // Add a neutral answer on error
-      answers.push(createNeutralAnswer(question.id, 'Error during research'));
+      // Add a neutral answer on error (only if not already present)
+      if (!answersMap.has(question.id)) {
+        answersMap.set(question.id, createNeutralAnswer(question.id, 'Error during research'));
+      }
     }
   }
 
-  // Save remaining answers
-  const remaining = answers.slice(totalGenerated);
-  if (remaining.length > 0) {
-    await saveAnswersBatch(supabase, candidateId, remaining, questions);
-    totalGenerated += remaining.length;
+  // Save all remaining answers
+  const allAnswers = Array.from(answersMap.values());
+  if (allAnswers.length > totalGenerated) {
+    const remaining = allAnswers.slice(totalGenerated);
+    if (remaining.length > 0) {
+      await saveAnswersBatch(supabase, candidateId, remaining, questions);
+      totalGenerated = allAnswers.length;
+    }
   }
 
   console.log(`[Generate] Complete: ${totalGenerated} generated, ${researchedCount} researched, ${failedCount} failed`);
