@@ -394,6 +394,9 @@ Return the answer_value from OPTIONS that best matches ALL evidence found. If mu
     // Rate limiting delay
     await new Promise(r => setTimeout(r, PERPLEXITY_DELAY_MS));
 
+    console.log(`[Perplexity] Starting research for ${question.id} (${candidateName})...`);
+    const perplexityStartTime = Date.now();
+
     const response = await fetch('https://api.perplexity.ai/chat/completions', {
       method: 'POST',
       headers: {
@@ -462,7 +465,8 @@ Return the answer_value from OPTIONS that best matches ALL evidence found. If mu
     const content = data.choices?.[0]?.message?.content || '';
     const citations = data.citations || [];
     
-    console.log(`[Perplexity] Response for ${question.id}: ${content.length} chars, ${citations.length} citations`);
+    const elapsedSec = Math.round((Date.now() - perplexityStartTime) / 1000);
+    console.log(`[Perplexity] Completed ${question.id} in ${elapsedSec}s - ${content.length} chars, ${citations.length} citations`);
 
     // Parse the response
     const parsed = extractJsonFromText(content);
@@ -818,12 +822,19 @@ async function generateAnswersForCandidate(
   // Track answers by question_id to avoid duplicates
   const answersMap = new Map<string, GeneratedAnswer>();
 
-  for (const question of questions) {
+  for (let i = 0; i < questions.length; i++) {
+    const question = questions[i];
+    
     // Skip if we already have an answer for this question
     if (answersMap.has(question.id)) {
       console.log(`[Generate] Skipping duplicate question ${question.id}`);
       continue;
     }
+    
+    console.log(`[Generate] Question ${i + 1}/${questions.length}: ${question.id}`);
+    
+    // Update global progress for shutdown handler
+    globalProgress.processed = i;
     
     try {
       const answer = await researchQuestionPosition(
@@ -982,8 +993,16 @@ async function processAnswersInBackground(
     await updateCandidateScore(supabase, candidateId, officialInfo.name);
 
     const elapsed = Math.round((Date.now() - globalProgress.startTime) / 1000);
-    console.log(`[Background] COMPLETE for ${officialInfo.name}: ${generated} generated, ${failed} failed in ${elapsed}s`);
-    console.log(`[Background] Questions with real evidence (not inferred): ${researched}`);
+    const elapsedMin = (elapsed / 60).toFixed(1);
+    
+    console.log(`[Background] ========================================`);
+    console.log(`[Background] JOB COMPLETE: ${officialInfo.name}`);
+    console.log(`[Background] Questions processed: ${generated + failed}`);
+    console.log(`[Background] Successfully generated: ${generated}`);
+    console.log(`[Background] Failed: ${failed}`);
+    console.log(`[Background] With real evidence (not inferred): ${researched}`);
+    console.log(`[Background] Duration: ${elapsedMin} minutes (${elapsed}s)`);
+    console.log(`[Background] ========================================`);
     
   } catch (error) {
     globalProgress.status = 'error';

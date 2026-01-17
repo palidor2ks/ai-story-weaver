@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { usePopulateCandidateAnswers } from '@/hooks/usePopulateCandidateAnswers';
+import { useBackgroundProcessingStatus } from '@/hooks/useBackgroundProcessingStatus';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +12,7 @@ import { Loader2, RefreshCw, CheckCircle2, XCircle, ChevronDown, ExternalLink, S
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getSourceInfo, getSourceBadgeClass } from '@/lib/sourceUtils';
+import { ProcessingStatusIndicator } from './ProcessingStatusIndicator';
 
 interface CandidateAnswersDialogProps {
   candidateId: string;
@@ -334,6 +336,7 @@ export function CandidateAnswersDialog({
   const [regeneratingTopicId, setRegeneratingTopicId] = useState<string | null>(null);
   const { data: topics, isLoading, refetch } = useCandidateAnswersByTopic(candidateId, open);
   const { populateCandidateQuestion, isQuestionLoading } = usePopulateCandidateAnswers();
+  const { jobs, addJob, removeJob, clearAllJobs, isProcessing } = useBackgroundProcessingStatus();
 
   const handleRegenerateQuestion = async (questionId: string) => {
     await populateCandidateQuestion(candidateId, questionId, candidateName);
@@ -342,16 +345,44 @@ export function CandidateAnswersDialog({
 
   const handleRegenerateTopic = async (topicId: string, topicName: string, questions: QuestionAnswer[]) => {
     setRegeneratingTopicId(topicId);
-    toast.info(`Regenerating all answers for ${topicName}...`);
     
-    // Regenerate each question in the topic sequentially
-    for (const question of questions) {
-      await populateCandidateQuestion(candidateId, question.questionId, candidateName);
+    try {
+      // Call the edge function directly with all question IDs for background processing
+      const { data, error } = await supabase.functions.invoke('get-candidate-answers', {
+        body: { 
+          candidateId, 
+          candidateName,
+          questionIds: questions.map(q => q.questionId),
+          forceRegenerate: true 
+        },
+      });
+
+      if (error) {
+        toast.error(`Failed to regenerate ${topicName}`);
+        console.error('[RegenerateTopic] Error:', error);
+      } else if (data?.status === 'processing') {
+        // Add to tracking list for polling
+        addJob({
+          candidateId,
+          candidateName,
+          questionsQueued: data.questionsQueued || questions.length,
+          estimatedMinutes: data.estimatedMinutes || Math.ceil(questions.length * 3),
+        });
+        
+        toast.info(`Deep research started for ${topicName}`, {
+          description: `${data.questionsQueued || questions.length} questions. Results in ~${data.estimatedMinutes || Math.ceil(questions.length * 3)} minutes.`,
+        });
+      } else {
+        // Synchronous processing completed
+        refetch();
+        toast.success(`Finished regenerating ${topicName} answers`);
+      }
+    } catch (err) {
+      console.error('[RegenerateTopic] Exception:', err);
+      toast.error(`Failed to regenerate ${topicName}`);
     }
     
-    refetch();
     setRegeneratingTopicId(null);
-    toast.success(`Finished regenerating ${topicName} answers`);
   };
 
   const selectedTopic = topics?.find(t => t.topicId === selectedTopicId) || topics?.[0];
@@ -377,7 +408,7 @@ export function CandidateAnswersDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl h-[80vh] flex flex-col p-0">
-        <DialogHeader className="px-6 py-4 border-b shrink-0">
+        <DialogHeader className="px-6 py-4 border-b shrink-0 space-y-3">
           <DialogTitle className="flex items-center justify-between">
             <div>
               <span className="text-lg font-semibold">{candidateName}</span>
@@ -394,6 +425,16 @@ export function CandidateAnswersDialog({
               </Badge>
             </div>
           </DialogTitle>
+          
+          {/* Processing Status Indicator for this candidate */}
+          {isProcessing && jobs.filter(j => j.candidateId === candidateId).length > 0 && (
+            <ProcessingStatusIndicator 
+              jobs={jobs.filter(j => j.candidateId === candidateId)}
+              onClearJob={removeJob}
+              onClearAll={clearAllJobs}
+              compact
+            />
+          )}
         </DialogHeader>
 
         <div className="flex flex-1 min-h-0">
