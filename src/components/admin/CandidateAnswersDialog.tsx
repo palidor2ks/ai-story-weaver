@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { usePopulateCandidateAnswers } from '@/hooks/usePopulateCandidateAnswers';
-import { useBackgroundProcessingStatus } from '@/hooks/useBackgroundProcessingStatus';
+import { useBackgroundProcessing } from '@/context/BackgroundProcessingContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -336,11 +336,25 @@ export function CandidateAnswersDialog({
   const [regeneratingTopicId, setRegeneratingTopicId] = useState<string | null>(null);
   const { data: topics, isLoading, refetch } = useCandidateAnswersByTopic(candidateId, open);
   const { populateCandidateQuestion, isQuestionLoading } = usePopulateCandidateAnswers();
-  const { jobs, addJob, removeJob, clearAllJobs, isProcessing } = useBackgroundProcessingStatus();
+  const { jobs, addJob, removeJob, clearAllJobs, isProcessing } = useBackgroundProcessing();
 
   const handleRegenerateQuestion = async (questionId: string) => {
-    await populateCandidateQuestion(candidateId, questionId, candidateName);
-    refetch();
+    await populateCandidateQuestion(
+      candidateId, 
+      questionId, 
+      candidateName,
+      // Callback when background job starts
+      async (jobInfo) => {
+        await addJob({
+          candidateId,
+          candidateName,
+          questionsQueued: jobInfo.questionsQueued,
+          questionIds: jobInfo.questionIds,
+          estimatedMinutes: jobInfo.estimatedMinutes,
+        });
+      }
+    );
+    // Don't refetch immediately for background jobs - let polling handle it
   };
 
   const handleRegenerateTopic = async (topicId: string, topicName: string, questions: QuestionAnswer[]) => {
@@ -361,11 +375,12 @@ export function CandidateAnswersDialog({
         toast.error(`Failed to regenerate ${topicName}`);
         console.error('[RegenerateTopic] Error:', error);
       } else if (data?.status === 'processing') {
-        // Add to tracking list for polling
-        addJob({
+        // Add to tracking list for polling with question IDs
+        await addJob({
           candidateId,
           candidateName,
           questionsQueued: data.questionsQueued || questions.length,
+          questionIds: questions.map(q => q.questionId),
           estimatedMinutes: data.estimatedMinutes || Math.ceil(questions.length * 3),
         });
         
