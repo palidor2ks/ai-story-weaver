@@ -736,24 +736,32 @@ async function researchQuestionPosition(
     candidateName, candidateOffice, candidateState, candidateParty, question
   );
   
-  if (perplexityAnswer && perplexityAnswer.answer_value !== 0) {
+  // Accept if Perplexity found concrete evidence (not inferred) - score 0 is valid for neutral positions
+  if (perplexityAnswer && perplexityAnswer.evidence_type !== 'inferred') {
+    console.log(`[Research] Using Perplexity: evidence=${perplexityAnswer.evidence_type}, score=${perplexityAnswer.answer_value}`);
     return perplexityAnswer;
   }
 
-  // Step 2: Try Gemini fallback (if Perplexity failed/rate limited)
-  if (!perplexityAnswer) {
-    console.log(`[Research] Trying Gemini fallback for ${question.id}`);
-    const geminiAnswer = await researchWithGeminiFallback(
-      candidateName, candidateOffice, candidateState, candidateParty, question
-    );
-    
-    if (geminiAnswer && geminiAnswer.answer_value !== 0) {
-      return geminiAnswer;
-    }
+  // Log why Perplexity was rejected
+  if (perplexityAnswer) {
+    console.log(`[Research] Perplexity returned inferred for ${question.id}, trying Gemini...`);
+  } else {
+    console.log(`[Research] Perplexity failed for ${question.id}, trying Gemini...`);
   }
 
-  // Step 3: Fall back to party inference
-  console.log(`[Research] No evidence found for ${question.id}, inferring from party alignment`);
+  // Step 2: Try Gemini fallback
+  const geminiAnswer = await researchWithGeminiFallback(
+    candidateName, candidateOffice, candidateState, candidateParty, question
+  );
+  
+  // Accept if Gemini found concrete evidence (not inferred)
+  if (geminiAnswer && geminiAnswer.evidence_type !== 'inferred') {
+    console.log(`[Research] Using Gemini: evidence=${geminiAnswer.evidence_type}, score=${geminiAnswer.answer_value}`);
+    return geminiAnswer;
+  }
+
+  // Step 3: Fall back to party inference (last resort)
+  console.log(`[Research] No evidence from Perplexity or Gemini for ${question.id}, using party alignment`);
   return inferFromPartyAlignment(candidateName, candidateParty, question);
 }
 
