@@ -197,6 +197,78 @@ function extractJsonFromText(text: string): any | null {
 }
 
 // =============================================================================
+// SMART EVIDENCE TYPE DETECTION (based on description content)
+// =============================================================================
+
+function detectEvidenceTypeFromDescription(description: string): GeneratedAnswer['evidence_type'] {
+  if (!description) return 'inferred';
+  
+  const desc = description.toUpperCase();
+  
+  // Check for voting record indicators
+  if (desc.includes('VOTED YEA') || desc.includes('VOTED NAY') || 
+      desc.includes('VOTED FOR') || desc.includes('VOTED AGAINST') ||
+      desc.includes('ROLL CALL') || desc.includes('VOTING RECORD') ||
+      desc.match(/AFL-CIO|HERITAGE ACTION|LCV SCORE|NRA GRADE|ACLU SCORE/)) {
+    return 'voting_record';
+  }
+  
+  // Check for sponsorship indicators (also voting record evidence)
+  if (desc.includes('SPONSORED') || desc.includes('CO-SPONSORED') ||
+      desc.includes('COSPONSORED') || desc.includes('INTRODUCED') ||
+      desc.match(/H\.R\.\s*\d+|S\.\s*\d+|H\.RES|S\.RES/)) {
+    return 'voting_record';
+  }
+  
+  // Check for organization scorecard indicators
+  if (desc.match(/RATED|SCORED|GRADE[D]?|SCORECARD|% SCORE|RATING FROM|ACTION SCORE/)) {
+    return 'organization_scorecard';
+  }
+  
+  // Check for public statement indicators
+  if (desc.includes('STATED') || desc.includes('SAID') || desc.includes('ANNOUNCED') ||
+      desc.includes('DECLARED') || desc.includes('PRESS RELEASE') ||
+      desc.includes('FLOOR SPEECH') || desc.includes('REMARKS') ||
+      desc.includes('TESTIFIED') || desc.includes('STATEMENT')) {
+    return 'public_statement';
+  }
+  
+  // Check for campaign/website positions
+  if (desc.includes('CAMPAIGN') || desc.includes('WEBSITE') || 
+      desc.includes('PLATFORM') || desc.includes('POSITION PAGE') ||
+      desc.includes('CAMPAIGN SITE') || desc.includes('OFFICIAL SITE')) {
+    return 'campaign_position';
+  }
+  
+  // Check for social media
+  if (desc.includes('TWITTER') || desc.includes('X.COM') || desc.includes('TWEET') ||
+      desc.includes('FACEBOOK') || desc.includes('INSTAGRAM') || desc.includes('POSTED ON')) {
+    return 'social_media';
+  }
+  
+  // Check for news/interview
+  if (desc.includes('INTERVIEW') || desc.includes('TOWN HALL') ||
+      desc.includes('REPORTED') || desc.includes('NEWS') || 
+      desc.includes('TOLD REPORTERS') || desc.includes('IN AN INTERVIEW')) {
+    return 'news_quote';
+  }
+  
+  // Check for party alignment only (should be inferred)
+  if (desc.includes('PARTY ALIGNMENT') || desc.includes('PARTY PLATFORM') ||
+      desc.includes('BASED ON PARTY') || desc.includes('INFERRED FROM PARTY') ||
+      desc.includes('NO DOCUMENTED POSITION') || desc.includes('NO DIRECT EVIDENCE')) {
+    return 'inferred';
+  }
+  
+  // If we got here but there's substantive content, it's likely mixed research
+  if (desc.length > 100 && !desc.includes('INFERRED') && !desc.includes('PARTY AFFILIATION')) {
+    return 'mixed';
+  }
+  
+  return 'inferred';
+}
+
+// =============================================================================
 // PERPLEXITY DEEP RESEARCH (PRIMARY RESEARCH ENGINE)
 // =============================================================================
 
@@ -239,24 +311,24 @@ EVIDENCE QUALITY HIERARCHY:
 2. MEDIUM confidence: Campaign statements, verified social media posts, news interviews with direct quotes, organization scorecards
 3. LOW confidence: Party alignment inference, general party platform statements
 
+CRITICAL EVIDENCE TYPE RULES (follow exactly):
+- "voting_record": Use when you find roll call votes, bill sponsorships, cosponsored legislation, or organization voting scorecards (Heritage Action, AFL-CIO, LCV, NRA, ACLU, etc.)
+- "organization_scorecard": Use when you find ratings/grades from advocacy organizations
+- "public_statement": Use when you find official statements, floor speeches, press releases, or direct quotes from .gov sources
+- "campaign_position": Use when you find campaign website positions or platform documents
+- "social_media": Use when you find Twitter/X, Facebook, or social media posts
+- "news_quote": Use when you find interview quotes or news article citations
+- "inferred": ONLY use this if you found ZERO concrete evidence and must rely purely on party affiliation
+
+DO NOT USE "inferred" if you found ANY votes, bills, statements, scorecards, or quotes!
+
 OUTPUT RULES:
 - Use the answer_value from the OPTIONS that matches the evidence found
-- Start source_description with evidence type: "VOTED YEA on...", "SPONSORED...", "STATED on Twitter...", "RATED by Heritage Foundation...", etc.
+- ALWAYS start source_description with evidence type in caps: "VOTED YEA on...", "SPONSORED...", "CO-SPONSORED...", "STATED...", "RATED by...", etc.
 - Include specific bill numbers (H.R.XXX, S.XXX) when citing legislation
 - Include dates when available
 - If evidence shows SUPPORT for the policy, use the positive option value
-- If evidence shows OPPOSITION, use the negative option value
-- If NO concrete evidence found, return answer_value: 0 with evidence_type: "inferred" and explain based on party alignment
-
-CRITICAL: Return ONLY valid JSON matching this schema:
-{
-  "answer_value": <number from -10 to 10>,
-  "confidence": "high" | "medium" | "low",
-  "evidence_type": "voting_record" | "public_statement" | "campaign_position" | "social_media" | "news_quote" | "organization_scorecard" | "inferred",
-  "source_description": "<concise evidence starting with type, max 500 chars>",
-  "primary_source": {"url": "<url>", "title": "<title>", "date": "<date if known>"},
-  "additional_sources": [{"url": "<url>", "title": "<title>"}]
-}`;
+- If evidence shows OPPOSITION, use the negative option value`;
 
   const userPrompt = `Research ${candidateName} (${candidateParty} ${candidateOffice}, ${candidateState}) position on this question:
 
@@ -303,6 +375,44 @@ Return the answer_value from OPTIONS that best matches ALL evidence found. If mu
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'candidate_position',
+            schema: {
+              type: 'object',
+              properties: {
+                answer_value: { type: 'integer' },
+                confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+                evidence_type: { 
+                  type: 'string', 
+                  enum: ['voting_record', 'public_statement', 'campaign_position', 
+                         'social_media', 'news_quote', 'organization_scorecard', 'inferred'] 
+                },
+                source_description: { type: 'string' },
+                primary_source: {
+                  type: 'object',
+                  properties: {
+                    url: { type: 'string' },
+                    title: { type: 'string' },
+                    date: { type: 'string' }
+                  }
+                },
+                additional_sources: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      url: { type: 'string' },
+                      title: { type: 'string' }
+                    }
+                  }
+                }
+              },
+              required: ['answer_value', 'confidence', 'evidence_type', 'source_description']
+            }
+          }
+        }
       }),
     });
 
@@ -364,6 +474,15 @@ Return the answer_value from OPTIONS that best matches ALL evidence found. If mu
       });
     }
 
+    // Smart evidence type detection - don't blindly trust what Perplexity returns
+    const perplexityEvidenceType = parsed.evidence_type;
+    const detectedEvidenceType = detectEvidenceTypeFromDescription(parsed.source_description || '');
+    
+    // Use detected type if it found concrete evidence, otherwise trust Perplexity's response
+    const finalEvidenceType = detectedEvidenceType !== 'inferred' 
+      ? detectedEvidenceType 
+      : validateEvidenceType(perplexityEvidenceType);
+
     const answer: GeneratedAnswer = {
       question_id: question.id,
       answer_value: snapToValidValue(parsed.answer_value),
@@ -371,14 +490,14 @@ Return the answer_value from OPTIONS that best matches ALL evidence found. If mu
       source_url: sourceUrls[0] || null,
       source_urls: sourceUrls,
       source_titles: sourceTitles,
-      source_type: mapEvidenceToSourceType(parsed.evidence_type),
+      source_type: mapEvidenceToSourceType(finalEvidenceType),
       confidence: validConfidence as 'high' | 'medium' | 'low',
-      evidence_type: validateEvidenceType(parsed.evidence_type),
-      voting_record_summary: parsed.evidence_type === 'voting_record' ? parsed.source_description : undefined,
-      public_statement_summary: ['public_statement', 'social_media', 'news_quote'].includes(parsed.evidence_type) ? parsed.source_description : undefined,
+      evidence_type: finalEvidenceType,
+      voting_record_summary: ['voting_record', 'organization_scorecard'].includes(finalEvidenceType) ? parsed.source_description : undefined,
+      public_statement_summary: ['public_statement', 'social_media', 'news_quote'].includes(finalEvidenceType) ? parsed.source_description : undefined,
     };
 
-    console.log(`[Perplexity] ${question.id}: score=${answer.answer_value}, type=${answer.evidence_type}, confidence=${answer.confidence}`);
+    console.log(`[Perplexity] ${question.id}: score=${answer.answer_value}, perplexity_type=${perplexityEvidenceType}, detected_type=${detectedEvidenceType}, final_type=${finalEvidenceType}, confidence=${answer.confidence}`);
     return answer;
 
   } catch (e) {
