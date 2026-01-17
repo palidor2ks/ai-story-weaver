@@ -194,8 +194,28 @@ function snapToValidValue(value: number): number {
 }
 
 function extractJsonFromText(text: string): any | null {
+  // Handle extremely long responses - trim to essential content first
+  let workingText = text;
+  if (text.length > 50000) {
+    console.log(`[JSON Extract] Large response (${text.length} chars), attempting to extract JSON subset`);
+    // Find the JSON object boundaries and extract just that section
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd > jsonStart) {
+      workingText = text.slice(jsonStart, jsonEnd + 1);
+      console.log(`[JSON Extract] Trimmed to ${workingText.length} chars`);
+    }
+  }
+
+  // Try direct parse first (for clean JSON responses)
+  try {
+    return JSON.parse(workingText);
+  } catch {
+    // Continue to extraction methods
+  }
+
   // Try to find JSON object in the text
-  const jsonMatch = text.match(/\{[\s\S]*?\}(?=\s*$|\s*```|\s*\n\n)/);
+  const jsonMatch = workingText.match(/\{[\s\S]*?\}(?=\s*$|\s*```|\s*\n\n)/);
   if (jsonMatch) {
     try {
       return JSON.parse(jsonMatch[0]);
@@ -205,7 +225,7 @@ function extractJsonFromText(text: string): any | null {
   }
   
   // Try to extract from markdown code blocks
-  const codeBlockMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+  const codeBlockMatch = workingText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
   if (codeBlockMatch) {
     try {
       return JSON.parse(codeBlockMatch[1]);
@@ -214,8 +234,30 @@ function extractJsonFromText(text: string): any | null {
     }
   }
   
-  // Last resort: find any JSON-like structure
-  const anyJsonMatch = text.match(/\{[^{}]*"answer_value"[^{}]*\}/);
+  // Look for JSON with required fields - more flexible matching for nested objects
+  const structuredMatch = workingText.match(/\{[^{}]*"answer_value"\s*:\s*-?\d+[^{}]*"evidence_type"\s*:\s*"[^"]+"/);
+  if (structuredMatch) {
+    // Try to find the complete object by matching braces
+    const startIdx = workingText.indexOf(structuredMatch[0]);
+    let braceCount = 0;
+    let endIdx = startIdx;
+    for (let i = startIdx; i < workingText.length; i++) {
+      if (workingText[i] === '{') braceCount++;
+      if (workingText[i] === '}') braceCount--;
+      if (braceCount === 0) {
+        endIdx = i;
+        break;
+      }
+    }
+    try {
+      return JSON.parse(workingText.slice(startIdx, endIdx + 1));
+    } catch {
+      // Continue
+    }
+  }
+  
+  // Last resort: find any JSON-like structure with answer_value
+  const anyJsonMatch = workingText.match(/\{[^{}]*"answer_value"[^{}]*\}/);
   if (anyJsonMatch) {
     try {
       return JSON.parse(anyJsonMatch[0]);
@@ -642,6 +684,20 @@ Return JSON:
     // Ensure confidence is valid
     const validConfidence = ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'low';
     
+    // CRITICAL: Apply smart evidence detection from description (same as Perplexity path)
+    const geminiEvidenceType = parsed.evidence_type || 'inferred';
+    const detectedEvidenceType = detectEvidenceTypeFromDescription(parsed.source_description || '');
+    const finalEvidenceType = detectedEvidenceType !== 'inferred' 
+      ? detectedEvidenceType 
+      : validateEvidenceType(geminiEvidenceType);
+    
+    // Log when detection overrides AI's evidence type
+    if (detectedEvidenceType !== 'inferred' && detectedEvidenceType !== geminiEvidenceType) {
+      console.log(`[Gemini] Evidence type override: ${geminiEvidenceType} → ${detectedEvidenceType} (detected from description)`);
+    }
+    
+    console.log(`[Gemini] ${question.id}: score=${parsed.answer_value}, gemini_type=${geminiEvidenceType}, detected_type=${detectedEvidenceType}, final_type=${finalEvidenceType}`);
+    
     return {
       question_id: question.id,
       answer_value: snapToValidValue(parsed.answer_value),
@@ -649,9 +705,9 @@ Return JSON:
       source_url: null,
       source_urls: [],
       source_titles: [],
-      source_type: mapEvidenceToSourceType(parsed.evidence_type || 'inferred'),
+      source_type: mapEvidenceToSourceType(finalEvidenceType),
       confidence: validConfidence as 'high' | 'medium' | 'low',
-      evidence_type: validateEvidenceType(parsed.evidence_type || 'inferred'),
+      evidence_type: finalEvidenceType,
     };
 
   } catch (e) {
