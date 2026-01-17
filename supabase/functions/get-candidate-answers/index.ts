@@ -1,5 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+// Declare EdgeRuntime for Supabase Edge Functions background processing
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -14,6 +19,32 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 let perplexityCallCount = 0;
 const PERPLEXITY_BATCH_LIMIT = 100;
 const PERPLEXITY_DELAY_MS = 1200; // 1.2 seconds between calls
+
+// =============================================================================
+// BACKGROUND PROCESSING PROGRESS TRACKING
+// =============================================================================
+
+let globalProgress = {
+  candidateId: '',
+  candidateName: '',
+  processed: 0,
+  total: 0,
+  startTime: 0,
+  status: 'idle' as 'idle' | 'running' | 'completed' | 'error',
+};
+
+// Log progress on shutdown (helps debug if function is terminated early)
+addEventListener('beforeunload', (ev: Event) => {
+  const detail = (ev as unknown as { detail?: { reason?: string } }).detail;
+  const elapsed = globalProgress.startTime 
+    ? Math.round((Date.now() - globalProgress.startTime) / 1000) 
+    : 0;
+  console.log(`=== SHUTDOWN (${detail?.reason || 'unknown'}) ===`);
+  console.log(`Candidate: ${globalProgress.candidateName} (${globalProgress.candidateId})`);
+  console.log(`Progress: ${globalProgress.processed}/${globalProgress.total} questions`);
+  console.log(`Elapsed: ${elapsed} seconds`);
+  console.log(`Status: ${globalProgress.status}`);
+});
 
 // =============================================================================
 // TRUSTED SOURCES - Expanded for comprehensive research
@@ -908,6 +939,59 @@ async function updateCandidateScore(supabase: any, candidateId: string, candidat
 }
 
 // =============================================================================
+// BACKGROUND PROCESSING FUNCTION
+// =============================================================================
+
+async function processAnswersInBackground(
+  candidateId: string,
+  officialInfo: { name: string; party: string; office: string; state: string },
+  questionsToGenerate: Question[],
+  supabaseUrl: string,
+  supabaseKey: string
+) {
+  // Create a fresh Supabase client for background processing
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  
+  globalProgress = {
+    candidateId,
+    candidateName: officialInfo.name,
+    processed: 0,
+    total: questionsToGenerate.length,
+    startTime: Date.now(),
+    status: 'running',
+  };
+
+  console.log(`[Background] Starting deep research for ${officialInfo.name}: ${questionsToGenerate.length} questions`);
+  console.log(`[Background] Using sonar-deep-research model (2-5 min per question)`);
+
+  try {
+    const { generated, failed, researched } = await generateAnswersForCandidate(
+      supabase,
+      candidateId,
+      officialInfo.name,
+      officialInfo.party,
+      officialInfo.office,
+      officialInfo.state,
+      questionsToGenerate
+    );
+
+    // Update progress
+    globalProgress.processed = generated + failed;
+    globalProgress.status = 'completed';
+
+    await updateCandidateScore(supabase, candidateId, officialInfo.name);
+
+    const elapsed = Math.round((Date.now() - globalProgress.startTime) / 1000);
+    console.log(`[Background] COMPLETE for ${officialInfo.name}: ${generated} generated, ${failed} failed in ${elapsed}s`);
+    console.log(`[Background] Questions with real evidence (not inferred): ${researched}`);
+    
+  } catch (error) {
+    globalProgress.status = 'error';
+    console.error(`[Background] ERROR for ${officialInfo.name}:`, error);
+  }
+}
+
+// =============================================================================
 // MAIN HANDLER
 // =============================================================================
 
@@ -925,6 +1009,7 @@ Deno.serve(async (req) => {
       candidateParty,
       candidateOffice,
       candidateState,
+      useBackground = true, // Default to background processing for deep research
     } = await req.json();
 
     if (!candidateId) {
@@ -1010,7 +1095,55 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    console.log(`Generating ${missingBefore} answers for ${officialInfo.name} using Perplexity-first research...`);
+    // =========================================================================
+    // BACKGROUND PROCESSING: For large batches, process in background to avoid timeout
+    // =========================================================================
+    
+    // Use background processing for:
+    // - 2+ questions (deep research takes 2-5 min per question)
+    // - Force regenerate scenarios (typically full topic/candidate refresh)
+    const shouldUseBackground = useBackground && (missingBefore >= 2 || forceRegenerate);
+    
+    if (shouldUseBackground) {
+      console.log(`[Background] Queuing ${missingBefore} questions for ${officialInfo.name} - returning immediately`);
+      
+      // Start background processing - DO NOT await
+      EdgeRuntime.waitUntil(processAnswersInBackground(
+        candidateId,
+        officialInfo,
+        questionsToGenerate,
+        SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY
+      ));
+
+      // Estimate completion time (2-5 min per question with sonar-deep-research)
+      const estimatedMinutes = Math.ceil(missingBefore * 3); // ~3 min average per question
+      
+      // Return immediately with "processing" status
+      return new Response(JSON.stringify({
+        status: 'processing',
+        message: `Deep research started for ${officialInfo.name}. ${missingBefore} questions being processed in background using sonar-deep-research.`,
+        candidateId,
+        candidateName: officialInfo.name,
+        questionsQueued: missingBefore,
+        existingAnswers: existingCount,
+        estimatedMinutes,
+        researchEngine: 'perplexity-sonar-deep-research',
+        logsUrl: `https://supabase.com/dashboard/project/ornnzinjrcyigazecctf/functions/get-candidate-answers/logs`,
+        tips: [
+          `Answers will be saved to database as they complete (expect ${estimatedMinutes} minutes)`,
+          'Refresh the page after processing completes to see results',
+          'Check logs for detailed progress of each question',
+          'Each question uses deep web research for highest quality results',
+        ],
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // =========================================================================
+    // SYNCHRONOUS PROCESSING: For single questions, process immediately
+    // =========================================================================
+    
+    console.log(`Generating ${missingBefore} answers for ${officialInfo.name} synchronously (single question)...`);
 
     const { generated, failed, researched } = await generateAnswersForCandidate(
       supabase,
