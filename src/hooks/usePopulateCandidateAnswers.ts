@@ -46,7 +46,11 @@ export function usePopulateCandidateAnswers() {
   const isPausedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const populateCandidate = async (candidateId: string, forceRegenerate = false): Promise<PopulateResult> => {
+  const populateCandidate = async (
+    candidateId: string, 
+    forceRegenerate = false,
+    onBackgroundJobStarted?: (job: { questionsQueued: number; estimatedMinutes: number }) => void
+  ): Promise<PopulateResult> => {
     setLoadingCandidates(prev => ({ ...prev, [candidateId]: true }));
     
     try {
@@ -56,6 +60,26 @@ export function usePopulateCandidateAnswers() {
 
       if (error) {
         throw new Error(error.message);
+      }
+
+      // Handle background processing response
+      if (data?.status === 'processing') {
+        toast.info(`Deep research started`, {
+          description: `${data.questionsQueued || 'Multiple'} questions. Results in ~${data.estimatedMinutes || 3} minutes.`,
+        });
+        
+        onBackgroundJobStarted?.({
+          questionsQueued: data.questionsQueued || 0,
+          estimatedMinutes: data.estimatedMinutes || 3,
+        });
+        
+        return { 
+          success: true, 
+          candidateId, 
+          generated: 0, 
+          existing: 0, 
+          missingBefore: data.questionsQueued || 0 
+        };
       }
 
       const generated = data?.generated || 0;
@@ -289,8 +313,9 @@ export function usePopulateCandidateAnswers() {
   const populateCandidateQuestion = async (
     candidateId: string,
     questionId: string,
-    candidateName?: string
-  ): Promise<{ success: boolean; error?: string }> => {
+    candidateName?: string,
+    onBackgroundJobStarted?: (job: { questionsQueued: number; estimatedMinutes: number; questionIds: string[] }) => void
+  ): Promise<{ success: boolean; error?: string; isBackground?: boolean }> => {
     const loadingKey = `${candidateId}-${questionId}`;
     setLoadingQuestions(prev => ({ ...prev, [loadingKey]: true }));
 
@@ -305,12 +330,31 @@ export function usePopulateCandidateAnswers() {
 
       if (error) throw new Error(error.message);
 
+      // Handle background processing response
+      if (data?.status === 'processing') {
+        toast.info(`Deep research started for ${candidateName || 'candidate'}`, {
+          description: `Results in ~${data.estimatedMinutes || 3} minutes`,
+        });
+        
+        // Notify caller so they can add to job tracking
+        onBackgroundJobStarted?.({
+          questionsQueued: data.questionsQueued || 1,
+          estimatedMinutes: data.estimatedMinutes || 3,
+          questionIds: [questionId],
+        });
+        
+        return { success: true, isBackground: true };
+      }
+
+      // Handle synchronous completion
       const generated = data?.generated || 0;
       
       if (generated > 0) {
         toast.success(`Regenerated answer for ${candidateName || 'candidate'}`);
+      } else if (data?.missingBefore === 0) {
+        toast.info('Answer already exists');
       } else {
-        toast.info('No answer generated');
+        toast.warning('Research completed but no answer generated');
       }
 
       // Invalidate queries
@@ -318,6 +362,7 @@ export function usePopulateCandidateAnswers() {
         queryClient.invalidateQueries({ queryKey: ['candidate-topic-questions', candidateId] }),
         queryClient.invalidateQueries({ queryKey: ['candidates-answer-coverage'] }),
         queryClient.invalidateQueries({ queryKey: ['candidate-answers', candidateId] }),
+        queryClient.invalidateQueries({ queryKey: ['candidate-answers-dialog', candidateId] }),
       ]);
 
       return { success: generated > 0 };

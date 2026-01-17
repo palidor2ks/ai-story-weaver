@@ -1,9 +1,9 @@
-import { Loader2, X, Clock } from 'lucide-react';
+import { Loader2, X, Clock, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
-import type { ProcessingJob } from '@/hooks/useBackgroundProcessingStatus';
+import type { ProcessingJob } from '@/context/BackgroundProcessingContext';
 
 interface ProcessingStatusIndicatorProps {
   jobs: ProcessingJob[];
@@ -43,7 +43,14 @@ export function ProcessingStatusIndicator({
         <div className="space-y-2">
           {jobs.map((job) => {
             const elapsed = (Date.now() - job.startTime) / 60000;
-            const progressPct = Math.min(100, (elapsed / job.estimatedMinutes) * 100);
+            // Use real progress if available, otherwise fall back to time-based estimate
+            const hasRealProgress = job.completedCount > 0 || job.questionsQueued > 0;
+            const realProgressPct = hasRealProgress 
+              ? (job.completedCount / job.questionsQueued) * 100
+              : 0;
+            const timeProgressPct = Math.min(100, (elapsed / job.estimatedMinutes) * 100);
+            // Show whichever is higher (so progress never goes backwards)
+            const progressPct = Math.max(realProgressPct, timeProgressPct * 0.8);
             const remainingMinutes = Math.max(1, Math.ceil(job.estimatedMinutes - elapsed));
             
             return (
@@ -54,8 +61,11 @@ export function ProcessingStatusIndicator({
                       {job.candidateName}
                     </span>
                     <span className="text-muted-foreground text-xs">
-                      {job.questionsQueued} question{job.questionsQueued !== 1 ? 's' : ''}
+                      {job.completedCount}/{job.questionsQueued} question{job.questionsQueued !== 1 ? 's' : ''}
                     </span>
+                    {job.completedCount > 0 && job.completedCount < job.questionsQueued && (
+                      <CheckCircle2 className="h-3 w-3 text-green-500" />
+                    )}
                   </div>
                   <Progress value={progressPct} className="h-1.5 mt-1" />
                 </div>
@@ -78,7 +88,7 @@ export function ProcessingStatusIndicator({
         </div>
         
         <p className="text-xs text-muted-foreground mt-2">
-          Using Perplexity sonar-deep-research. Auto-refresh every 30 seconds.
+          Using Perplexity sonar-deep-research. Auto-refresh every 15 seconds.
         </p>
       </CardContent>
     </Card>

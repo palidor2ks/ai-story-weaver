@@ -58,7 +58,7 @@ import { ScoreTextInline } from "@/components/ScoreText";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useBackgroundProcessingStatus } from "@/hooks/useBackgroundProcessingStatus";
+import { useBackgroundProcessing } from "@/context/BackgroundProcessingContext";
 
 const PARTIES = ['all', 'Democrat', 'Republican', 'Independent', 'Other'] as const;
 
@@ -174,7 +174,7 @@ export function AnswerCoveragePanel() {
   }, [allOverrides]);
 
   const { populateCandidate, populateBatch, pauseBatch, resumeBatch, cancelBatch, isLoading, isBatchRunning, batchProgress } = usePopulateCandidateAnswers();
-  const { jobs: backgroundJobs, removeJob: removeBackgroundJob, clearAllJobs: clearAllBackgroundJobs, isProcessing: isBackgroundProcessing } = useBackgroundProcessingStatus();
+  const { jobs: backgroundJobs, removeJob: removeBackgroundJob, clearAllJobs: clearAllBackgroundJobs, isProcessing: isBackgroundProcessing } = useBackgroundProcessing();
   const { recalculateAll, isRecalculatingAll } = useRecalculateCoverageTiers();
   const { mutate: enrichSources, isPending: isEnrichingSource } = useEnrichCandidateSources();
   const { 

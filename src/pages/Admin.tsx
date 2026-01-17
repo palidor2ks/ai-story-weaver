@@ -10,6 +10,7 @@ import { ClaimReviewPanel } from "@/components/admin/ClaimReviewPanel";
 import { DonorAliasesPanel } from "@/components/admin/DonorAliasesPanel";
 import { ScoreFixesTab } from "@/pages/admin/tabs/ScoreFixesTab";
 import { BillSummaryDashboard } from "@/components/admin/BillSummaryDashboard";
+import { BackgroundProcessingProvider } from "@/context/BackgroundProcessingContext";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -202,6 +203,7 @@ export default function Admin() {
   };
 
   return (
+    <BackgroundProcessingProvider>
     <div className="min-h-screen bg-background">
       <Header />
       
@@ -697,5 +699,6 @@ export default function Admin() {
         </Tabs>
       </main>
     </div>
+    </BackgroundProcessingProvider>
   );
 }
