@@ -698,13 +698,22 @@ Return JSON:
     
     console.log(`[Gemini] ${question.id}: score=${parsed.answer_value}, gemini_type=${geminiEvidenceType}, detected_type=${detectedEvidenceType}, final_type=${finalEvidenceType}`);
     
+    // Extract legislative sources from description text (Gemini doesn't return citations)
+    const extractedSources = (finalEvidenceType === 'voting_record' || finalEvidenceType === 'mixed')
+      ? extractSourcesFromDescription(parsed.source_description || '')
+      : { urls: [], titles: [] };
+    
+    if (extractedSources.urls.length > 0) {
+      console.log(`[Gemini] Extracted ${extractedSources.urls.length} sources from description: ${extractedSources.titles.join(', ')}`);
+    }
+    
     return {
       question_id: question.id,
       answer_value: snapToValidValue(parsed.answer_value),
       source_description: smartTruncate(parsed.source_description || 'Position inferred', 1000),
-      source_url: null,
-      source_urls: [],
-      source_titles: [],
+      source_url: extractedSources.urls[0] || null,
+      source_urls: extractedSources.urls,
+      source_titles: extractedSources.titles,
       source_type: mapEvidenceToSourceType(finalEvidenceType),
       confidence: validConfidence as 'high' | 'medium' | 'low',
       evidence_type: finalEvidenceType,
@@ -714,6 +723,73 @@ Return JSON:
     console.error(`[Gemini] Error:`, e);
     return null;
   }
+}
+
+// =============================================================================
+// SOURCE EXTRACTION FROM DESCRIPTION TEXT
+// =============================================================================
+
+function extractSourcesFromDescription(description: string): { urls: string[], titles: string[] } {
+  const urls: string[] = [];
+  const titles: string[] = [];
+  
+  if (!description) return { urls, titles };
+  
+  const foundBills = new Set<string>();
+  
+  // Extract bill references (S.1234, H.R.1234, S.Amdt.1234, etc.)
+  // Senate bills: S.4230, S. 4230
+  const senateBillMatches = description.matchAll(/\bS\.?\s?(\d+)/gi);
+  for (const match of senateBillMatches) {
+    const num = match[1];
+    const key = `S.${num}`;
+    if (!foundBills.has(key)) {
+      foundBills.add(key);
+      urls.push(`https://www.congress.gov/bill/119th-congress/senate-bill/${num}`);
+      titles.push(`S.${num}`);
+    }
+  }
+  
+  // House bills: H.R.7608, HR 7608, H.R. 7608
+  const houseBillMatches = description.matchAll(/\bH\.?R\.?\s?(\d+)/gi);
+  for (const match of houseBillMatches) {
+    const num = match[1];
+    const key = `HR.${num}`;
+    if (!foundBills.has(key)) {
+      foundBills.add(key);
+      urls.push(`https://www.congress.gov/bill/119th-congress/house-bill/${num}`);
+      titles.push(`H.R.${num}`);
+    }
+  }
+  
+  // Senate amendments: S.Amdt.2323, S. Amdt. 2323
+  const senateAmendMatches = description.matchAll(/\bS\.?\s?Amdt\.?\s?(\d+)/gi);
+  for (const match of senateAmendMatches) {
+    const num = match[1];
+    const key = `S.Amdt.${num}`;
+    if (!foundBills.has(key)) {
+      foundBills.add(key);
+      urls.push(`https://www.congress.gov/amendment/119th-congress/senate-amendment/${num}`);
+      titles.push(`S.Amdt.${num}`);
+    }
+  }
+  
+  // House amendments: H.Amdt.1234
+  const houseAmendMatches = description.matchAll(/\bH\.?\s?Amdt\.?\s?(\d+)/gi);
+  for (const match of houseAmendMatches) {
+    const num = match[1];
+    const key = `H.Amdt.${num}`;
+    if (!foundBills.has(key)) {
+      foundBills.add(key);
+      urls.push(`https://www.congress.gov/amendment/119th-congress/house-amendment/${num}`);
+      titles.push(`H.Amdt.${num}`);
+    }
+  }
+  
+  console.log(`[Source Extraction] Found ${urls.length} legislative references in description`);
+  
+  // Limit to 5 sources max
+  return { urls: urls.slice(0, 5), titles: titles.slice(0, 5) };
 }
 
 // =============================================================================
