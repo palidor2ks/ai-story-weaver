@@ -219,8 +219,9 @@ serve(async (req) => {
             continue;
           }
 
-          // RPC returns a single row (not array)
-          const ct = cmteLocalData;
+          // RPC returns an array of rows - normalize to first row
+          const ct = Array.isArray(cmteLocalData) ? cmteLocalData[0] : cmteLocalData;
+          console.log(`[RECONCILIATION] ${candidate.name}: Committee ${cmte.fec_committee_id} local RPC: isArray=${Array.isArray(cmteLocalData)}, itemized_total=${ct?.itemized_total}`);
           if (ct) {
             committeeTotalsMap.set(cmte.fec_committee_id, {
               individual_itemized: Number(ct.individual_itemized) || 0,
