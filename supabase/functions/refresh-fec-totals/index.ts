@@ -209,14 +209,15 @@ serve(async (req) => {
                 p_cycle: cycle
               });
             
-            if (cmteLocalErr) {
-              console.warn(`[REFRESH-FEC-TOTALS] Error fetching local totals for committee ${committee.fec_committee_id}:`, cmteLocalErr);
-              continue;
-            }
+      if (cmteLocalErr) {
+        console.warn(`[REFRESH-FEC-TOTALS] Error fetching local totals for committee ${committee.fec_committee_id}:`, cmteLocalErr);
+        continue;
+      }
 
-            // RPC returns a single row (not array)
-            const ct = cmteLocalData;
-            if (ct) {
+      // RPC returns an array of rows - normalize to first row
+      const ct = Array.isArray(cmteLocalData) ? cmteLocalData[0] : cmteLocalData;
+      console.log(`[REFRESH-FEC-TOTALS] Committee ${committee.fec_committee_id} local RPC: isArray=${Array.isArray(cmteLocalData)}, itemized_total=${ct?.itemized_total}`);
+      if (ct) {
               committeeTotalsMap.set(committee.fec_committee_id, {
                 individual_itemized: Number(ct.individual_itemized) || 0,
                 individual_gross: Number(ct.individual_gross) || 0,
@@ -432,8 +433,9 @@ serve(async (req) => {
         continue;
       }
 
-      // RPC returns a single row (not array)
-      const ct = cmteLocalData;
+      // RPC returns an array of rows - normalize to first row
+      const ct = Array.isArray(cmteLocalData) ? cmteLocalData[0] : cmteLocalData;
+      console.log(`[REFRESH-FEC-TOTALS] Committee ${committee.fec_committee_id} local RPC: isArray=${Array.isArray(cmteLocalData)}, itemized_total=${ct?.itemized_total}`);
       if (ct) {
         committeeTotalsMap.set(committee.fec_committee_id, {
           individual_itemized: Number(ct.individual_itemized) || 0,
