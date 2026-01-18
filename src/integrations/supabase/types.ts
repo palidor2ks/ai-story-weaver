@@ -2326,40 +2326,52 @@ export type Database = {
         Args: { p_donor_types: string[]; patterns: string[] }
         Returns: number
       }
-      get_contribution_totals: {
-        Args: { p_candidate_id: string; p_cycle: string }
-        Returns: {
-          contribution_count: number
-          earmarked_total: number
-          gross_individual_total: number
-          individual_total: number
-          itemized_total: number
-          loans_total: number
-          organization_total: number
-          other_total: number
-          pac_total: number
-          party_total: number
-          passthrough_total: number
-          transfers_total: number
-        }[]
-      }
+      get_contribution_totals:
+        | {
+            Args: { p_candidate_id: string; p_cycle: string }
+            Returns: {
+              contribution_count: number
+              earmarked_total: number
+              gross_individual_total: number
+              individual_total: number
+              itemized_total: number
+              loans_total: number
+              organization_total: number
+              other_total: number
+              pac_total: number
+              party_total: number
+              passthrough_total: number
+              transfers_total: number
+            }[]
+          }
+        | {
+            Args: { p_candidate_id: string; p_cycle: string }
+            Returns: {
+              earmarked_total: number
+              individual_gross: number
+              individual_total: number
+              loan_total: number
+              memo_x_total: number
+              organization_total: number
+              other_total: number
+              pac_total: number
+              party_total: number
+              transfer_total: number
+            }[]
+          }
       get_contribution_totals_by_committee: {
         Args: { p_committee_id: string; p_cycle: string }
         Returns: {
-          contribution_count: number
-          donor_count: number
           earmarked_total: number
           individual_gross: number
-          individual_itemized: number
-          itemized_gross: number
-          itemized_total: number
-          loans_total: number
+          individual_total: number
+          loan_total: number
           memo_x_total: number
           organization_total: number
           other_total: number
           pac_total: number
           party_total: number
-          transfers_total: number
+          transfer_total: number
         }[]
       }
       has_role: {
