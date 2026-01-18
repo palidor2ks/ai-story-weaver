@@ -62,9 +62,9 @@ export function FinanceCategoryBreakdown({
   pacDeltaPct,
   className,
 }: FinanceCategoryBreakdownProps) {
-  // FEC's individual_itemized_contributions = Line 11A (Individuals + Organizations)
-  // For apples-to-apples comparison, we need: localGrossIndividual + localOrganization
-  const local11ATotal = localGrossIndividual + localOrganization;
+  // FEC's individual_itemized_contributions = Line 11A (Individuals + Organizations) NET of memo_code='X'
+  // For apples-to-apples comparison, we use NET values: localIndividualItemized + localOrganization
+  const local11ATotal = localIndividualItemized + localOrganization;
   
   // Calculate 11A delta using the combined total
   const calculated11ADeltaPct = fecItemized && fecItemized > 0 
@@ -146,12 +146,12 @@ export function FinanceCategoryBreakdown({
         </div>
       ))}
 
-      {/* Show 11A breakdown (Individuals vs Organizations) */}
-      {(localGrossIndividual > 0 || localOrganization > 0) && (
+      {/* Show 11A breakdown (Individuals vs Organizations) - NET values */}
+      {(localIndividualItemized > 0 || localOrganization > 0) && (
         <div className="space-y-0.5">
           <div className="grid grid-cols-4 gap-2 items-center text-xs text-muted-foreground bg-muted/30 rounded px-1 py-0.5">
-            <span className="text-xs italic pl-2">├ Individuals</span>
-            <span className="text-right">{formatCurrency(localGrossIndividual)}</span>
+            <span className="text-xs italic pl-2">├ Individuals (net)</span>
+            <span className="text-right">{formatCurrency(localIndividualItemized)}</span>
             <span></span>
             <span></span>
           </div>
@@ -164,13 +164,13 @@ export function FinanceCategoryBreakdown({
         </div>
       )}
 
-      {/* Show memo_code='X' breakdown if present */}
+      {/* Show memo_code='X' info if present (excluded from FEC itemized and our NET totals) */}
       {memoXAmount > 0 && (
         <div className="grid grid-cols-4 gap-2 items-center text-xs text-muted-foreground bg-muted/30 rounded px-1 py-0.5">
           <span className="text-xs italic pl-2">ℹ memo_code='X'</span>
           <span className="text-right">{formatCurrency(memoXAmount)}</span>
-          <span className="text-right text-muted-foreground text-xs">(in FEC)</span>
-          <span className="text-right text-xs">deducted for donors</span>
+          <span className="text-right text-muted-foreground text-xs">(excluded)</span>
+          <span className="text-right text-xs">pass-through</span>
         </div>
       )}
 
