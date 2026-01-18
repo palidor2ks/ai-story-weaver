@@ -17,11 +17,13 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
   fecTransfers: number | null;
   fecCandidateContribution: number | null;
   fecOtherReceipts: number | null;
+  fecOffsetsToOperatingExpenditures: number | null;
 }> {
   const nullResult = { 
     fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, 
     fecPacContributions: null, fecPartyContributions: null,
-    fecLoans: null, fecTransfers: null, fecCandidateContribution: null, fecOtherReceipts: null 
+    fecLoans: null, fecTransfers: null, fecCandidateContribution: null, fecOtherReceipts: null,
+    fecOffsetsToOperatingExpenditures: null
   };
   
   try {
@@ -46,6 +48,8 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
       fecTransfers: Math.round(totals.transfers_from_other_authorized_committee || 0),
       fecCandidateContribution: Math.round(totals.candidate_contribution || 0),
       fecOtherReceipts: Math.round(totals.other_receipts || 0),
+      // Line 14: Offsets to operating expenditures (refunds, rebates, etc.)
+      fecOffsetsToOperatingExpenditures: Math.round(totals.offsets_to_operating_expenditures || 0),
     };
   } catch {
     return nullResult;
@@ -236,6 +240,7 @@ serve(async (req) => {
         let fecTransfers = 0;
         let fecCandidateContribution = 0;
         let fecOtherReceipts = 0;
+        let fecOffsetsToOperatingExpenditures = 0;
 
         for (const cmte of committees) {
           const fecTotals = await fetchFECTotals(fecApiKey, cmte.fec_committee_id, cycle);
@@ -248,6 +253,7 @@ serve(async (req) => {
           fecTransfers += fecTotals.fecTransfers || 0;
           fecCandidateContribution += fecTotals.fecCandidateContribution || 0;
           fecOtherReceipts += fecTotals.fecOtherReceipts || 0;
+          fecOffsetsToOperatingExpenditures += fecTotals.fecOffsetsToOperatingExpenditures || 0;
 
           // Get THIS COMMITTEE's local totals (not candidate-wide totals!)
           const cmteTotals = committeeTotalsMap.get(cmte.fec_committee_id) || {
@@ -353,6 +359,8 @@ serve(async (req) => {
             local_party_contributions: localPartyContributions,
             local_loans: localLoans,
             local_organization: localOrganization,
+            // Local other receipts (Line 14 + 15)
+            local_other_receipts: localOther,
             // FEC data
             fec_itemized: fecItemized,
             fec_unitemized: fecUnitemized,
@@ -364,6 +372,8 @@ serve(async (req) => {
             fec_transfers: fecTransfers,
             fec_candidate_contribution: fecCandidateContribution,
             fec_other_receipts: fecOtherReceipts,
+            // FEC offsets (Line 14)
+            fec_offsets_to_operating_expenditures: fecOffsetsToOperatingExpenditures,
             // Category-level deltas
             individual_delta_amount: individualDeltaAmount,
             individual_delta_pct: individualDeltaPct,

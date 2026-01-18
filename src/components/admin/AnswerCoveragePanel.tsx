@@ -2005,19 +2005,27 @@ export function AnswerCoveragePanel() {
                       // This creates an apples-to-apples comparison with FEC Total Receipts
                       const localItemized = candidate.localItemized || 0; // Itemized contributions (Line 11)
                       const localTransfers = candidate.localTransfers || 0; // Committee transfers (Line 12) - tracked separately
+                      const localOtherReceipts = candidate.localOtherReceipts || 0; // Local Line 14 + 15
                       const fecUnitemized = candidate.fecUnitemized || 0;
                       const fecCandidateContribution = candidate.fecCandidateContribution || 0;
-                      const fecOtherReceipts = candidate.fecOtherReceipts || 0;
+                      const fecOtherReceipts = candidate.fecOtherReceipts || 0; // Line 15 only
+                      const fecOffsetsToOperatingExpenditures = candidate.fecOffsetsToOperatingExpenditures || 0; // Line 14
                       const fecLoans = candidate.fecLoans || 0;
                       const fecTransfers = candidate.fecTransfers || 0;
                       
                       // Local imports = itemized + transfers (tracked separately in our DB)
-                      // Add FEC-only items that we can't import: unitemized, candidate contributions, loans, other
+                      // Add FEC-only items that we can't import: unitemized, candidate contributions, loans
                       // For transfers: add our local transfers + any gap we haven't imported yet
                       const transferGap = Math.max(0, fecTransfers - localTransfers);
                       
-                      // Local Total = Local Itemized + Local Transfers + FEC-only summary items
-                      const localTotal = localItemized + localTransfers + fecUnitemized + fecCandidateContribution + fecOtherReceipts + transferGap + fecLoans;
+                      // FEC "Other" = Line 14 (offsets) + Line 15 (other receipts)
+                      const fecOtherTotal = fecOffsetsToOperatingExpenditures + fecOtherReceipts;
+                      
+                      // Other gap: if we haven't imported Line 14/15 locally, use FEC values
+                      const otherGap = Math.max(0, fecOtherTotal - localOtherReceipts);
+                      
+                      // Local Total = Local Itemized + Local Transfers + Local Other + gaps from FEC
+                      const localTotal = localItemized + localTransfers + localOtherReceipts + fecUnitemized + fecCandidateContribution + otherGap + transferGap + fecLoans;
                       
                       // Calculate delta inline: Local Total vs FEC Total Receipts
                       const fecTotalReceipts = financeStatus.fecTotalReceipts;

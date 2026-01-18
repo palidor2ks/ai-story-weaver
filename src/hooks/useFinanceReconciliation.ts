@@ -9,6 +9,7 @@ export interface FinanceReconciliation {
   local_itemized_net: number | null; // Excludes earmark pass-throughs - comparable to FEC
   local_transfers: number | null;
   local_earmarked: number | null;
+  local_other_receipts: number | null; // Line 14 + Line 15
   // Category-level local tracking
   local_individual_itemized: number | null;
   local_pac_contributions: number | null;
@@ -26,6 +27,7 @@ export interface FinanceReconciliation {
   fec_transfers: number | null;
   fec_candidate_contribution: number | null;
   fec_other_receipts: number | null;
+  fec_offsets_to_operating_expenditures: number | null; // Line 14
   // Category-level deltas
   individual_delta_amount: number | null;
   individual_delta_pct: number | null;
