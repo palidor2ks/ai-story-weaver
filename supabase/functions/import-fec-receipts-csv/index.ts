@@ -312,7 +312,7 @@ serve(async (req) => {
         .from('contributions')
         .upsert(chunk, { 
           onConflict: 'identity_hash,cycle',
-          ignoreDuplicates: true 
+          ignoreDuplicates: false  // Update existing rows with new data
         });
       
       if (error) {
