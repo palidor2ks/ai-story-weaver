@@ -244,11 +244,15 @@ serve(async (req) => {
           // Track summed local totals across all committees
           let localItemized = 0;
           let localIndividual = 0;
+          let localGrossIndividual = 0;
           let localPac = 0;
           let localParty = 0;
+          let localOrganization = 0;
           let localTransfers = 0;
           let localEarmarked = 0;
           let localLoans = 0;
+          let localOther = 0;
+          let localMemoX = 0;
 
           for (const committee of committees) {
             const totals = await fetchFECTotals(fecApiKey, committee.fec_committee_id, cycle);
@@ -271,11 +275,15 @@ serve(async (req) => {
             // Sum up local totals
             localItemized += cmteTotals.itemized_total;
             localIndividual += cmteTotals.individual_itemized;
+            localGrossIndividual += cmteTotals.individual_gross;
             localPac += cmteTotals.pac_total;
             localParty += cmteTotals.party_total;
+            localOrganization += (Number((cmteTotals as any).organization_total) || 0);
             localTransfers += cmteTotals.transfers_total;
             localEarmarked += cmteTotals.earmarked_total;
             localLoans += cmteTotals.loans_total;
+            localOther += cmteTotals.other_total;
+            localMemoX += (Number((cmteTotals as any).memo_x_total) || 0);
             
             if (totals.fecItemized !== null) {
               hasValidData = true;
@@ -311,22 +319,22 @@ serve(async (req) => {
           }
 
           if (hasValidData) {
-            // Calculate deltas - compare apples to apples
-            // FEC total itemized = individual + PAC + party contributions
-            const fecTotalItemized = totalFecItemized + totalFecPac + totalFecParty;
-            // itemized_total already excludes memo_code='X' entries (the informational duplicates)
-            // Do NOT subtract earmarked_total - those are real contributions that should count
-            const localItemizedNet = localItemized;
-            const deltaAmount = fecTotalItemized - localItemizedNet;
-            const deltaPct = fecTotalItemized > 0 ? (deltaAmount / fecTotalItemized) * 100 : 0;
-            const individualDeltaAmount = totalFecItemized - localIndividual;
+            // Calculate deltas - align with nightly-finance-reconciliation logic
+            const localComparableItemized = localGrossIndividual + localPac + localParty;
+            const fecComparableItemized = totalFecItemized + totalFecPac + totalFecParty;
+            
+            const deltaAmount = localComparableItemized - fecComparableItemized;
+            const deltaPct = fecComparableItemized > 0 ? (deltaAmount / fecComparableItemized) * 100 : 0;
+            
+            const individualDeltaAmount = localGrossIndividual - totalFecItemized;
             const individualDeltaPct = totalFecItemized > 0 ? (individualDeltaAmount / totalFecItemized) * 100 : 0;
-            const pacDeltaAmount = totalFecPac - localPac;
+            
+            const pacDeltaAmount = localPac - totalFecPac;
             const pacDeltaPct = totalFecPac > 0 ? (pacDeltaAmount / totalFecPac) * 100 : 0;
 
             const status = Math.abs(deltaPct) <= 2 ? 'ok' : Math.abs(deltaPct) <= 5 ? 'warning' : 'error';
 
-            // Update finance_reconciliation
+            // Update finance_reconciliation with ALL fields
             await supabase
               .from('finance_reconciliation')
               .upsert({
@@ -338,13 +346,17 @@ serve(async (req) => {
                 fec_pac_contributions: totalFecPac,
                 fec_party_contributions: totalFecParty,
                 local_itemized: localItemized,
-                local_itemized_net: localItemizedNet,
+                local_itemized_net: localItemized,
                 local_individual_itemized: localIndividual,
+                local_gross_individual: localGrossIndividual,
                 local_pac_contributions: localPac,
                 local_party_contributions: localParty,
+                local_organization: localOrganization,
                 local_transfers: localTransfers,
                 local_earmarked: localEarmarked,
                 local_loans: localLoans,
+                local_other_receipts: localOther,
+                memo_x_amount: localMemoX,
                 delta_amount: deltaAmount,
                 delta_pct: deltaPct,
                 individual_delta_amount: individualDeltaAmount,
@@ -463,11 +475,15 @@ serve(async (req) => {
     // Track summed local totals across all committees
     let localItemized = 0;
     let localIndividual = 0;
+    let localGrossIndividual = 0;
     let localPac = 0;
     let localParty = 0;
+    let localOrganization = 0;
     let localTransfers = 0;
     let localEarmarked = 0;
     let localLoans = 0;
+    let localOther = 0;
+    let localMemoX = 0;
 
     for (const committee of committees) {
       const totals = await fetchFECTotals(fecApiKey, committee.fec_committee_id, cycle);
@@ -490,11 +506,15 @@ serve(async (req) => {
       // Sum up local totals for this candidate
       localItemized += cmteTotals.itemized_total;
       localIndividual += cmteTotals.individual_itemized;
+      localGrossIndividual += cmteTotals.individual_gross;
       localPac += cmteTotals.pac_total;
       localParty += cmteTotals.party_total;
+      localOrganization += (Number((cmteTotals as any).organization_total) || 0);
       localTransfers += cmteTotals.transfers_total;
       localEarmarked += cmteTotals.earmarked_total;
       localLoans += cmteTotals.loans_total;
+      localOther += cmteTotals.other_total;
+      localMemoX += (Number((cmteTotals as any).memo_x_total) || 0);
       
       if (totals.fecItemized !== null) {
         totalFecItemized += totals.fecItemized;
@@ -540,40 +560,52 @@ serve(async (req) => {
       );
     }
 
-    // Calculate deltas - compare apples to apples
-    // FEC total itemized = individual + PAC + party contributions
-    const fecTotalItemized = totalFecItemized + totalFecPac + totalFecParty;
-    // itemized_total already excludes memo_code='X' entries (the informational duplicates)
-    // Do NOT subtract earmarked_total - those are real contributions that should count
-    const localItemizedNet = localItemized;
-    const deltaAmount = fecTotalItemized - localItemizedNet;
-    const deltaPct = fecTotalItemized > 0 ? (deltaAmount / fecTotalItemized) * 100 : 0;
-    const individualDeltaAmount = totalFecItemized - localIndividual;
+    // Calculate deltas - align with nightly-finance-reconciliation logic
+    // Use "comparable itemized" = gross individual + PAC + party for both sides
+    const localComparableItemized = localGrossIndividual + localPac + localParty;
+    const fecComparableItemized = totalFecItemized + totalFecPac + totalFecParty;
+    
+    const deltaAmount = localComparableItemized - fecComparableItemized;
+    const deltaPct = fecComparableItemized > 0 ? (deltaAmount / fecComparableItemized) * 100 : 0;
+    
+    // Individual delta: gross individual vs FEC itemized
+    const individualDeltaAmount = localGrossIndividual - totalFecItemized;
     const individualDeltaPct = totalFecItemized > 0 ? (individualDeltaAmount / totalFecItemized) * 100 : 0;
-    const pacDeltaAmount = totalFecPac - localPac;
+    
+    // PAC delta
+    const pacDeltaAmount = localPac - totalFecPac;
     const pacDeltaPct = totalFecPac > 0 ? (pacDeltaAmount / totalFecPac) * 100 : 0;
 
     const status = Math.abs(deltaPct) <= 2 ? 'ok' : Math.abs(deltaPct) <= 5 ? 'warning' : 'error';
 
-    // Update finance_reconciliation
+    console.log(`[REFRESH-FEC-TOTALS] ${candidateId}: localGrossInd=$${localGrossIndividual}, localPac=$${localPac}, localParty=$${localParty}, fecInd=$${totalFecItemized}, fecPac=$${totalFecPac}, fecParty=$${totalFecParty}`);
+
+    // Update finance_reconciliation with ALL fields matching nightly reconciliation
     await supabase
       .from('finance_reconciliation')
       .upsert({
         candidate_id: candidateId,
         cycle,
+        // FEC totals
         fec_itemized: totalFecItemized,
         fec_unitemized: totalFecUnitemized,
         fec_total_receipts: totalFecReceipts,
         fec_pac_contributions: totalFecPac,
         fec_party_contributions: totalFecParty,
+        // Local totals - ALL fields
         local_itemized: localItemized,
-        local_itemized_net: localItemizedNet,
+        local_itemized_net: localItemized, // same as itemized (net of memo X)
         local_individual_itemized: localIndividual,
+        local_gross_individual: localGrossIndividual,
         local_pac_contributions: localPac,
         local_party_contributions: localParty,
+        local_organization: localOrganization,
         local_transfers: localTransfers,
         local_earmarked: localEarmarked,
         local_loans: localLoans,
+        local_other_receipts: localOther,
+        memo_x_amount: localMemoX,
+        // Deltas
         delta_amount: deltaAmount,
         delta_pct: deltaPct,
         individual_delta_amount: individualDeltaAmount,
