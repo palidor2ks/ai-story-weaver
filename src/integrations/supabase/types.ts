@@ -824,6 +824,7 @@ export type Database = {
           cycle: string
           earmarked_for_candidate_id: string | null
           employer: string | null
+          fec_committee_transaction_id: string | null
           fec_transaction_id: string | null
           id: string
           identity_hash: string
@@ -852,6 +853,7 @@ export type Database = {
           cycle: string
           earmarked_for_candidate_id?: string | null
           employer?: string | null
+          fec_committee_transaction_id?: string | null
           fec_transaction_id?: string | null
           id?: string
           identity_hash: string
@@ -880,6 +882,7 @@ export type Database = {
           cycle?: string
           earmarked_for_candidate_id?: string | null
           employer?: string | null
+          fec_committee_transaction_id?: string | null
           fec_transaction_id?: string | null
           id?: string
           identity_hash?: string
