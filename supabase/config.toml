@@ -143,3 +143,36 @@ verify_jwt = false
 
 [functions.scan-bill-topics]
 verify_jwt = false
+
+[functions.import-fec-receipts-csv]
+verify_jwt = false
+
+[functions.fetch-all-bills]
+verify_jwt = false
+
+[functions.fetch-bill-actions]
+verify_jwt = false
+
+[functions.fetch-bill-sponsors]
+verify_jwt = false
+
+[functions.fetch-bioguide-ids]
+verify_jwt = false
+
+[functions.import-bills-excel]
+verify_jwt = false
+
+[functions.import-new-questions]
+verify_jwt = false
+
+[functions.nightly-bill-sync]
+verify_jwt = false
+
+[functions.backfill-bill-topics]
+verify_jwt = false
+
+[functions.clear-congress-bills]
+verify_jwt = false
+
+[functions.scan-evidence-relevance]
+verify_jwt = false
