@@ -198,6 +198,8 @@ serve(async (req) => {
             earmarked_total: number;
             loans_total: number;
             other_total: number;
+            organization_total: number;
+            memo_x_total: number;
             contribution_count: number;
           }>();
 
@@ -216,7 +218,7 @@ serve(async (req) => {
 
       // RPC returns an array of rows - normalize to first row
       const ct = Array.isArray(cmteLocalData) ? cmteLocalData[0] : cmteLocalData;
-      console.log(`[REFRESH-FEC-TOTALS] Committee ${committee.fec_committee_id} local RPC: isArray=${Array.isArray(cmteLocalData)}, itemized_total=${ct?.itemized_total}`);
+      console.log(`[REFRESH-FEC-TOTALS] Committee ${committee.fec_committee_id} local RPC: isArray=${Array.isArray(cmteLocalData)}, itemized_total=${ct?.itemized_total}, organization_total=${ct?.organization_total}`);
       if (ct) {
               committeeTotalsMap.set(committee.fec_committee_id, {
                 individual_itemized: Number(ct.individual_itemized) || 0,
@@ -229,6 +231,8 @@ serve(async (req) => {
                 earmarked_total: Number(ct.earmarked_total) || 0,
                 loans_total: Number(ct.loans_total) || 0,
                 other_total: Number(ct.other_total) || 0,
+                organization_total: Number(ct.organization_total) || 0,
+                memo_x_total: Number(ct.memo_x_total) || 0,
                 contribution_count: Number(ct.contribution_count) || 0,
               });
             }
@@ -269,6 +273,8 @@ serve(async (req) => {
               earmarked_total: 0,
               loans_total: 0,
               other_total: 0,
+              organization_total: 0,
+              memo_x_total: 0,
               contribution_count: 0,
             };
 
@@ -278,12 +284,12 @@ serve(async (req) => {
             localGrossIndividual += cmteTotals.individual_gross;
             localPac += cmteTotals.pac_total;
             localParty += cmteTotals.party_total;
-            localOrganization += (Number((cmteTotals as any).organization_total) || 0);
+            localOrganization += cmteTotals.organization_total;
             localTransfers += cmteTotals.transfers_total;
             localEarmarked += cmteTotals.earmarked_total;
             localLoans += cmteTotals.loans_total;
             localOther += cmteTotals.other_total;
-            localMemoX += (Number((cmteTotals as any).memo_x_total) || 0);
+            localMemoX += cmteTotals.memo_x_total;
             
             if (totals.fecItemized !== null) {
               hasValidData = true;
@@ -433,6 +439,8 @@ serve(async (req) => {
       earmarked_total: number;
       loans_total: number;
       other_total: number;
+      organization_total: number;
+      memo_x_total: number;
       contribution_count: number;
     }>();
 
@@ -451,7 +459,7 @@ serve(async (req) => {
 
       // RPC returns an array of rows - normalize to first row
       const ct = Array.isArray(cmteLocalData) ? cmteLocalData[0] : cmteLocalData;
-      console.log(`[REFRESH-FEC-TOTALS] Committee ${committee.fec_committee_id} local RPC: isArray=${Array.isArray(cmteLocalData)}, itemized_total=${ct?.itemized_total}`);
+      console.log(`[REFRESH-FEC-TOTALS] Committee ${committee.fec_committee_id} local RPC: isArray=${Array.isArray(cmteLocalData)}, itemized_total=${ct?.itemized_total}, organization_total=${ct?.organization_total}`);
       if (ct) {
         committeeTotalsMap.set(committee.fec_committee_id, {
           individual_itemized: Number(ct.individual_itemized) || 0,
@@ -464,6 +472,8 @@ serve(async (req) => {
           earmarked_total: Number(ct.earmarked_total) || 0,
           loans_total: Number(ct.loans_total) || 0,
           other_total: Number(ct.other_total) || 0,
+          organization_total: Number(ct.organization_total) || 0,
+          memo_x_total: Number(ct.memo_x_total) || 0,
           contribution_count: Number(ct.contribution_count) || 0,
         });
       }
@@ -504,6 +514,8 @@ serve(async (req) => {
         earmarked_total: 0,
         loans_total: 0,
         other_total: 0,
+        organization_total: 0,
+        memo_x_total: 0,
         contribution_count: 0,
       };
 
@@ -513,12 +525,12 @@ serve(async (req) => {
       localGrossIndividual += cmteTotals.individual_gross;
       localPac += cmteTotals.pac_total;
       localParty += cmteTotals.party_total;
-      localOrganization += (Number((cmteTotals as any).organization_total) || 0);
+      localOrganization += cmteTotals.organization_total;
       localTransfers += cmteTotals.transfers_total;
       localEarmarked += cmteTotals.earmarked_total;
       localLoans += cmteTotals.loans_total;
       localOther += cmteTotals.other_total;
-      localMemoX += (Number((cmteTotals as any).memo_x_total) || 0);
+      localMemoX += cmteTotals.memo_x_total;
       
       if (totals.fecItemized !== null) {
         totalFecItemized += totals.fecItemized;
