@@ -320,13 +320,16 @@ serve(async (req) => {
 
           if (hasValidData) {
             // Calculate deltas - align with nightly-finance-reconciliation logic
-            const localComparableItemized = localGrossIndividual + localPac + localParty;
+            // FEC's individual_itemized_contributions = Line 11A (Individuals + Organizations)
+            const local11ATotal = localGrossIndividual + localOrganization;
+            const localComparableItemized = local11ATotal + localPac + localParty;
             const fecComparableItemized = totalFecItemized + totalFecPac + totalFecParty;
             
             const deltaAmount = localComparableItemized - fecComparableItemized;
             const deltaPct = fecComparableItemized > 0 ? (deltaAmount / fecComparableItemized) * 100 : 0;
             
-            const individualDeltaAmount = localGrossIndividual - totalFecItemized;
+            // Individual delta: (gross individual + organization) vs FEC itemized (both are Line 11A)
+            const individualDeltaAmount = local11ATotal - totalFecItemized;
             const individualDeltaPct = totalFecItemized > 0 ? (individualDeltaAmount / totalFecItemized) * 100 : 0;
             
             const pacDeltaAmount = localPac - totalFecPac;
@@ -561,15 +564,17 @@ serve(async (req) => {
     }
 
     // Calculate deltas - align with nightly-finance-reconciliation logic
-    // Use "comparable itemized" = gross individual + PAC + party for both sides
-    const localComparableItemized = localGrossIndividual + localPac + localParty;
+    // FEC's individual_itemized_contributions = Line 11A (Individuals + Organizations)
+    // So we compare (localGrossIndividual + localOrganization) vs fecItemized for apples-to-apples
+    const local11ATotal = localGrossIndividual + localOrganization;
+    const localComparableItemized = local11ATotal + localPac + localParty;
     const fecComparableItemized = totalFecItemized + totalFecPac + totalFecParty;
     
     const deltaAmount = localComparableItemized - fecComparableItemized;
     const deltaPct = fecComparableItemized > 0 ? (deltaAmount / fecComparableItemized) * 100 : 0;
     
-    // Individual delta: gross individual vs FEC itemized
-    const individualDeltaAmount = localGrossIndividual - totalFecItemized;
+    // Individual delta: (gross individual + organization) vs FEC itemized (both are Line 11A)
+    const individualDeltaAmount = local11ATotal - totalFecItemized;
     const individualDeltaPct = totalFecItemized > 0 ? (individualDeltaAmount / totalFecItemized) * 100 : 0;
     
     // PAC delta
