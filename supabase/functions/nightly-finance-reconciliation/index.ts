@@ -193,17 +193,16 @@ serve(async (req) => {
         const localItemizedNet = localItemized - passThroughTotal;
 
         // Build a lookup map for per-committee local totals (will be populated in loop)
+        // UPDATED: field names now match RPC output (individual_total, transfer_total, loan_total, etc.)
         const committeeTotalsMap = new Map<string, {
-          individual_itemized: number;
+          individual_total: number;
           individual_gross: number;
           pac_total: number;
           party_total: number;
-          itemized_total: number;
-          itemized_gross: number;
-          transfers_total: number;
+          transfer_total: number;
           earmarked_total: number;
           other_total: number;
-          contribution_count: number;
+          organization_total: number;
         }>();
         
         // Fetch per-committee local totals for each committee BEFORE the main loop
@@ -221,19 +220,19 @@ serve(async (req) => {
 
           // RPC returns an array of rows - normalize to first row
           const ct = Array.isArray(cmteLocalData) ? cmteLocalData[0] : cmteLocalData;
-          console.log(`[RECONCILIATION] ${candidate.name}: Committee ${cmte.fec_committee_id} local RPC: isArray=${Array.isArray(cmteLocalData)}, itemized_total=${ct?.itemized_total}`);
+          // Log actual keys from RPC to debug field name mismatches
+          console.log(`[RECONCILIATION] ${candidate.name}: Committee ${cmte.fec_committee_id} local RPC keys: ${ct ? Object.keys(ct).join(', ') : 'null'}`);
           if (ct) {
             committeeTotalsMap.set(cmte.fec_committee_id, {
-              individual_itemized: Number(ct.individual_itemized) || 0,
+              // FIXED: Use correct RPC field names
+              individual_total: Number(ct.individual_total) || 0,
               individual_gross: Number(ct.individual_gross) || 0,
               pac_total: Number(ct.pac_total) || 0,
               party_total: Number(ct.party_total) || 0,
-              itemized_total: Number(ct.itemized_total) || 0,
-              itemized_gross: Number(ct.itemized_gross) || 0,
-              transfers_total: Number(ct.transfers_total) || 0,
+              transfer_total: Number(ct.transfer_total) || 0,
               earmarked_total: Number(ct.earmarked_total) || 0,
               other_total: Number(ct.other_total) || 0,
-              contribution_count: Number(ct.contribution_count) || 0,
+              organization_total: Number(ct.organization_total) || 0,
             });
           }
         }
@@ -266,20 +265,23 @@ serve(async (req) => {
           fecOffsetsToOperatingExpenditures += fecTotals.fecOffsetsToOperatingExpenditures || 0;
 
           // Get THIS COMMITTEE's local totals (not candidate-wide totals!)
+          // FIXED: Use correct field names matching RPC output
           const cmteTotals = committeeTotalsMap.get(cmte.fec_committee_id) || {
-            individual_itemized: 0,
+            individual_total: 0,
             individual_gross: 0,
             pac_total: 0,
             party_total: 0,
-            itemized_total: 0,
-            itemized_gross: 0,
-            transfers_total: 0,
+            transfer_total: 0,
             earmarked_total: 0,
             other_total: 0,
-            contribution_count: 0,
+            organization_total: 0,
           };
 
+          // Compute local_itemized = individual + organization + pac + party (Line 11A + 11B + 11C)
+          const cmteLocalItemized = cmteTotals.individual_total + cmteTotals.organization_total + cmteTotals.pac_total + cmteTotals.party_total;
+
           // Update committee rollup with fresh FEC data AND per-committee local totals
+          // FIXED: Use correct field names
           await supabase
             .from('committee_finance_rollups')
             .upsert({
@@ -290,15 +292,15 @@ serve(async (req) => {
               fec_itemized: fecTotals.fecItemized,
               fec_unitemized: fecTotals.fecUnitemized,
               fec_total_receipts: fecTotals.fecTotalReceipts,
-              // PER-COMMITTEE local totals (not candidate-wide!)
-              local_itemized: cmteTotals.itemized_total,
-              local_individual_itemized: cmteTotals.individual_itemized,
+              // PER-COMMITTEE local totals - FIXED field names
+              local_itemized: cmteLocalItemized,
+              local_individual_itemized: cmteTotals.individual_total,
               local_pac_contributions: cmteTotals.pac_total,
               local_party_contributions: cmteTotals.party_total,
-              local_transfers: cmteTotals.transfers_total,
+              local_transfers: cmteTotals.transfer_total,
               local_earmarked: cmteTotals.earmarked_total,
               local_other: cmteTotals.other_total,
-              contribution_count: cmteTotals.contribution_count,
+              local_organization: cmteTotals.organization_total,
               last_fec_check: new Date().toISOString(),
               updated_at: new Date().toISOString()
             }, { onConflict: 'committee_id,cycle' });
