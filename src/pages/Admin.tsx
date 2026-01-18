@@ -23,11 +23,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags, CheckCircle2 } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags, CheckCircle2, Upload } from "lucide-react";
 import { QuestionManagementPanel } from "@/components/admin/QuestionManagementPanel";
 import { PartyAnswersPanel } from "@/components/admin/PartyAnswersPanel";
 import { EvidenceReviewPanel } from "@/components/admin/EvidenceReviewPanel";
 import TopicReviewPanel from "@/components/admin/TopicReviewPanel";
+import { DonorImportPanel } from "@/components/admin/DonorImportPanel";
 import { BulkAnswerValidation } from "@/components/admin/BulkAnswerValidation";
 
 
@@ -467,6 +468,10 @@ export default function Admin() {
               <CheckCircle2 className="h-4 w-4" />
               Bulk Validation
             </TabsTrigger>
+            <TabsTrigger value="donor-import" className="gap-2">
+              <Upload className="h-4 w-4" />
+              Donor Import
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="officials">
@@ -694,6 +699,10 @@ export default function Admin() {
 
           <TabsContent value="bulk-validation">
             <BulkAnswerValidation />
+          </TabsContent>
+
+          <TabsContent value="donor-import">
+            <DonorImportPanel />
           </TabsContent>
 
         </Tabs>
