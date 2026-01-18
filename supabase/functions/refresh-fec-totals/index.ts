@@ -320,8 +320,9 @@ serve(async (req) => {
 
           if (hasValidData) {
             // Calculate deltas - align with nightly-finance-reconciliation logic
-            // FEC's individual_itemized_contributions = Line 11A (Individuals + Organizations)
-            const local11ATotal = localGrossIndividual + localOrganization;
+            // FEC's individual_itemized_contributions = Line 11A (Individuals + Organizations) NET of memo_code='X'
+            // So we use NET: (localIndividual + localOrganization) vs totalFecItemized
+            const local11ATotal = localIndividual + localOrganization;
             const localComparableItemized = local11ATotal + localPac + localParty;
             const fecComparableItemized = totalFecItemized + totalFecPac + totalFecParty;
             
@@ -564,9 +565,9 @@ serve(async (req) => {
     }
 
     // Calculate deltas - align with nightly-finance-reconciliation logic
-    // FEC's individual_itemized_contributions = Line 11A (Individuals + Organizations)
-    // So we compare (localGrossIndividual + localOrganization) vs fecItemized for apples-to-apples
-    const local11ATotal = localGrossIndividual + localOrganization;
+    // FEC's individual_itemized_contributions = Line 11A (Individuals + Organizations) NET of memo_code='X'
+    // So we use NET: (localIndividual + localOrganization) vs totalFecItemized for apples-to-apples
+    const local11ATotal = localIndividual + localOrganization;
     const localComparableItemized = local11ATotal + localPac + localParty;
     const fecComparableItemized = totalFecItemized + totalFecPac + totalFecParty;
     

@@ -316,9 +316,9 @@ serve(async (req) => {
         const fecDataBalanced = Math.abs(calculatedTotal - fecTotalReceipts) < 1;
         
         // Calculate category-level deltas (apples-to-apples comparisons)
-        // FEC's individual_itemized_contributions = Line 11A (Individuals + Organizations)
-        // So we compare (localGrossIndividual + localOrganization) vs fecItemized
-        const local11ATotal = localGrossIndividual + localOrganization;
+        // FEC's individual_itemized_contributions = Line 11A (Individuals + Organizations) NET of memo_code='X'
+        // So we compare NET values: (localIndividualItemized + localOrganization) vs fecItemized
+        const local11ATotal = localIndividualItemized + localOrganization;
         const individualDeltaAmount = local11ATotal - fecItemized;
         const individualDeltaPct = fecItemized > 0 
           ? Math.round((individualDeltaAmount / fecItemized) * 10000) / 100 
