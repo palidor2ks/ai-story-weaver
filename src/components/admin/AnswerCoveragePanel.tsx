@@ -2287,6 +2287,7 @@ export function AnswerCoveragePanel() {
                                 <FinanceCategoryBreakdown
                                   localIndividualItemized={candidate.localIndividualItemized}
                                   localGrossIndividual={candidate.localGrossIndividual}
+                                  localOrganization={candidate.localOrganization}
                                   memoXAmount={candidate.memoXAmount}
                                   localPacContributions={candidate.localPacContributions}
                                   localPartyContributions={candidate.localPartyContributions}

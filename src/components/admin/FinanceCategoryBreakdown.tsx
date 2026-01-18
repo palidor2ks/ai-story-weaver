@@ -10,15 +10,16 @@ interface CategoryData {
 }
 
 interface FinanceCategoryBreakdownProps {
-  localIndividualItemized: number;  // NET (excludes memo_code='X')
-  localGrossIndividual: number;     // GROSS (includes memo_code='X')
+  localIndividualItemized: number;  // NET individuals (excludes memo_code='X')
+  localGrossIndividual: number;     // GROSS individuals (includes memo_code='X')
+  localOrganization: number;        // Organizations (Line 11A non-Individual)
   memoXAmount: number;              // Difference (gross - net)
   localPacContributions: number;
   localPartyContributions: number;
-  fecItemized: number | null;       // FEC individual itemized (includes memo entries)
+  fecItemized: number | null;       // FEC individual_itemized_contributions (Line 11A = Ind + Org)
   fecPacContributions: number;
   fecPartyContributions: number;
-  individualDeltaPct: number | null;  // Uses GROSS for fair comparison
+  individualDeltaPct: number | null;  // Uses (Ind + Org) for fair comparison
   pacDeltaPct: number | null;
   className?: string;
 }
@@ -50,6 +51,7 @@ const getDeltaIcon = (deltaPct: number | null) => {
 export function FinanceCategoryBreakdown({
   localIndividualItemized,
   localGrossIndividual,
+  localOrganization,
   memoXAmount,
   localPacContributions,
   localPartyContributions,
@@ -60,22 +62,31 @@ export function FinanceCategoryBreakdown({
   pacDeltaPct,
   className,
 }: FinanceCategoryBreakdownProps) {
-  // Fallback: use net if gross is not yet populated
-  const effectiveGrossIndividual = localGrossIndividual > 0 ? localGrossIndividual : localIndividualItemized;
+  // FEC's individual_itemized_contributions = Line 11A (Individuals + Organizations)
+  // For apples-to-apples comparison, we need: localGrossIndividual + localOrganization
+  const local11ATotal = localGrossIndividual + localOrganization;
   
-  // Calculate party delta (simple since we have the values)
+  // Calculate 11A delta using the combined total
+  const calculated11ADeltaPct = fecItemized && fecItemized > 0 
+    ? ((local11ATotal - fecItemized) / fecItemized) * 100
+    : 0;
+  
+  // Use the passed-in delta if it matches, otherwise use calculated (for backwards compatibility)
+  const effective11ADeltaPct = individualDeltaPct ?? calculated11ADeltaPct;
+  
+  // Calculate party delta
   const partyDeltaPct = fecPartyContributions > 0 
     ? ((localPartyContributions - fecPartyContributions) / fecPartyContributions) * 100
     : localPartyContributions > 0 ? 100 : 0;
 
-  // Use GROSS individual for FEC comparison (apples-to-apples)
+  // Line 11A comparison (Ind + Org vs FEC individual_itemized)
   const categories: CategoryData[] = [
     {
-      label: 'Individuals (11A)',
-      local: effectiveGrossIndividual,  // Use effective GROSS for fair comparison with FEC
+      label: 'Line 11A (Ind + Org)',
+      local: local11ATotal,
       fec: fecItemized,
-      deltaAmount: fecItemized !== null ? effectiveGrossIndividual - fecItemized : null,
-      deltaPct: individualDeltaPct,
+      deltaAmount: fecItemized !== null ? local11ATotal - fecItemized : null,
+      deltaPct: effective11ADeltaPct,
     },
     {
       label: 'PACs (11C)',
@@ -93,8 +104,8 @@ export function FinanceCategoryBreakdown({
     },
   ];
 
-  // Calculate subtotals using effective GROSS individual
-  const localSubtotal = effectiveGrossIndividual + localPacContributions + localPartyContributions;
+  // Calculate subtotals using combined 11A
+  const localSubtotal = local11ATotal + localPacContributions + localPartyContributions;
   const fecSubtotal = (fecItemized ?? 0) + fecPacContributions + fecPartyContributions;
   const subtotalDelta = localSubtotal - fecSubtotal;
   const subtotalDeltaPct = fecSubtotal > 0 ? (subtotalDelta / fecSubtotal) * 100 : 0;
@@ -108,7 +119,7 @@ export function FinanceCategoryBreakdown({
 
   return (
     <div className={cn("space-y-2 text-sm", className)}>
-      <div className="font-medium border-b pb-1 mb-2">Category Comparison (Gross Local vs FEC)</div>
+      <div className="font-medium border-b pb-1 mb-2">Category Comparison (Local vs FEC)</div>
       
       {/* Header */}
       <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground pb-1 border-b">
@@ -135,10 +146,28 @@ export function FinanceCategoryBreakdown({
         </div>
       ))}
 
+      {/* Show 11A breakdown (Individuals vs Organizations) */}
+      {(localGrossIndividual > 0 || localOrganization > 0) && (
+        <div className="space-y-0.5">
+          <div className="grid grid-cols-4 gap-2 items-center text-xs text-muted-foreground bg-muted/30 rounded px-1 py-0.5">
+            <span className="text-xs italic pl-2">├ Individuals</span>
+            <span className="text-right">{formatCurrency(localGrossIndividual)}</span>
+            <span></span>
+            <span></span>
+          </div>
+          <div className="grid grid-cols-4 gap-2 items-center text-xs text-muted-foreground bg-muted/30 rounded px-1 py-0.5">
+            <span className="text-xs italic pl-2">└ Organizations</span>
+            <span className="text-right">{formatCurrency(localOrganization)}</span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      )}
+
       {/* Show memo_code='X' breakdown if present */}
       {memoXAmount > 0 && (
         <div className="grid grid-cols-4 gap-2 items-center text-xs text-muted-foreground bg-muted/30 rounded px-1 py-0.5">
-          <span className="text-xs italic pl-2">└ memo_code='X'</span>
+          <span className="text-xs italic pl-2">ℹ memo_code='X'</span>
           <span className="text-right">{formatCurrency(memoXAmount)}</span>
           <span className="text-right text-muted-foreground text-xs">(in FEC)</span>
           <span className="text-right text-xs">deducted for donors</span>
