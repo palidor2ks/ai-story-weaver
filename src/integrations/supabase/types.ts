@@ -1111,6 +1111,7 @@ export type Database = {
           fec_candidate_contribution: number | null
           fec_itemized: number | null
           fec_loans: number | null
+          fec_offsets_to_operating_expenditures: number | null
           fec_other_receipts: number | null
           fec_pac_contributions: number | null
           fec_party_contributions: number | null
@@ -1127,6 +1128,7 @@ export type Database = {
           local_itemized_net: number | null
           local_loans: number | null
           local_organization: number | null
+          local_other_receipts: number | null
           local_pac_contributions: number | null
           local_party_contributions: number | null
           local_transfers: number | null
@@ -1147,6 +1149,7 @@ export type Database = {
           fec_candidate_contribution?: number | null
           fec_itemized?: number | null
           fec_loans?: number | null
+          fec_offsets_to_operating_expenditures?: number | null
           fec_other_receipts?: number | null
           fec_pac_contributions?: number | null
           fec_party_contributions?: number | null
@@ -1163,6 +1166,7 @@ export type Database = {
           local_itemized_net?: number | null
           local_loans?: number | null
           local_organization?: number | null
+          local_other_receipts?: number | null
           local_pac_contributions?: number | null
           local_party_contributions?: number | null
           local_transfers?: number | null
@@ -1183,6 +1187,7 @@ export type Database = {
           fec_candidate_contribution?: number | null
           fec_itemized?: number | null
           fec_loans?: number | null
+          fec_offsets_to_operating_expenditures?: number | null
           fec_other_receipts?: number | null
           fec_pac_contributions?: number | null
           fec_party_contributions?: number | null
@@ -1199,6 +1204,7 @@ export type Database = {
           local_itemized_net?: number | null
           local_loans?: number | null
           local_organization?: number | null
+          local_other_receipts?: number | null
           local_pac_contributions?: number | null
           local_party_contributions?: number | null
           local_transfers?: number | null

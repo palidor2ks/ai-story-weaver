@@ -34,6 +34,7 @@ export interface CandidateAnswerCoverage {
   localTransfers: number;        // Committee transfers
   localEarmarked: number;        // Earmarked contributions
   localLoans: number;            // Candidate loans (Line 13A)
+  localOtherReceipts: number;    // Local Line 14 + Line 15 (offsets + other)
   // Category-level local data
   localIndividualItemized: number; // Individuals NET (excludes memo_code='X')
   localGrossIndividual: number;    // Individuals GROSS (includes memo_code='X' for FEC comparison)
@@ -50,7 +51,8 @@ export interface CandidateAnswerCoverage {
   fecLoans: number;              // Candidate loans
   fecTransfers: number;          // Committee transfers (line 12)
   fecCandidateContribution: number; // Candidate self-contribution (non-loan)
-  fecOtherReceipts: number;      // Other receipts
+  fecOtherReceipts: number;      // Other receipts (Line 15)
+  fecOffsetsToOperatingExpenditures: number; // Line 14 offsets
   // Overall delta
   deltaAmount: number | null;    // Difference between local NET and FEC
   deltaPct: number | null;       // Percentage difference
@@ -212,6 +214,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         local_transfers: number | null;
         local_earmarked: number | null;
         local_loans: number | null;
+        local_other_receipts: number | null;
         local_individual_itemized: number | null;
         local_gross_individual: number | null;
         memo_x_amount: number | null;
@@ -227,6 +230,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         fec_transfers: number | null;
         fec_candidate_contribution: number | null;
         fec_other_receipts: number | null;
+        fec_offsets_to_operating_expenditures: number | null;
         delta_amount: number | null;
         delta_pct: number | null;
         individual_delta_amount: number | null;
@@ -403,6 +407,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           localTransfers: rec?.local_transfers || 0,
           localEarmarked: rec?.local_earmarked || 0,
           localLoans: rec?.local_loans || 0,
+          localOtherReceipts: rec?.local_other_receipts || 0, // Line 14 + 15
           // Category-level local data
           localIndividualItemized: rec?.local_individual_itemized || 0,
         localGrossIndividual: rec?.local_gross_individual ?? rec?.local_individual_itemized ?? 0,
@@ -420,6 +425,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           fecTransfers: rec?.fec_transfers || 0,
           fecCandidateContribution: rec?.fec_candidate_contribution || 0,
           fecOtherReceipts: rec?.fec_other_receipts || 0,
+          fecOffsetsToOperatingExpenditures: rec?.fec_offsets_to_operating_expenditures || 0,
           // Overall delta
           deltaAmount: rec?.delta_amount ?? null,
           deltaPct: rec?.delta_pct ?? null,
