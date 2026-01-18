@@ -2317,8 +2317,12 @@ export function AnswerCoveragePanel() {
                                     <span>{formatCurrency(fecCandidateContribution)}</span>
                                   </div>
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Other</span>
+                                    <span className="text-muted-foreground">Other Receipts (Line 15)</span>
                                     <span>{formatCurrency(fecOtherReceipts)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Offsets (Line 14)</span>
+                                    <span>{formatCurrency(fecOffsetsToOperatingExpenditures)}</span>
                                   </div>
                                   <div className="flex justify-between border-t pt-1.5 mt-1.5">
                                     <span className="font-medium">FEC Total Receipts</span>

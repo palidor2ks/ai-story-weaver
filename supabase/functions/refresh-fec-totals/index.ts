@@ -186,35 +186,48 @@ serve(async (req) => {
             continue;
           }
 
-          // Get PER-COMMITTEE local totals using the new database function
-          const { data: perCommitteeTotals } = await supabase
-            .rpc('get_contribution_totals_by_committee', {
-              p_candidate_id: cId,
-              p_cycle: cycle
-            });
-
-          // Build lookup map for per-committee local totals
+          // Build lookup map for per-committee local totals (will be populated in loop)
           const committeeTotalsMap = new Map<string, {
-            individual_total: number;
+            individual_itemized: number;
+            individual_gross: number;
             pac_total: number;
             party_total: number;
             itemized_total: number;
+            itemized_gross: number;
             transfers_total: number;
             earmarked_total: number;
             loans_total: number;
+            other_total: number;
             contribution_count: number;
           }>();
 
-          if (perCommitteeTotals) {
-            for (const ct of perCommitteeTotals) {
-              committeeTotalsMap.set(ct.committee_id, {
-                individual_total: Number(ct.individual_total) || 0,
+          // Fetch per-committee local totals for each committee
+          for (const committee of committees) {
+            const { data: cmteLocalData, error: cmteLocalErr } = await supabase
+              .rpc('get_contribution_totals_by_committee', {
+                p_committee_id: committee.fec_committee_id,
+                p_cycle: cycle
+              });
+            
+            if (cmteLocalErr) {
+              console.warn(`[REFRESH-FEC-TOTALS] Error fetching local totals for committee ${committee.fec_committee_id}:`, cmteLocalErr);
+              continue;
+            }
+
+            // RPC returns a single row (not array)
+            const ct = cmteLocalData;
+            if (ct) {
+              committeeTotalsMap.set(committee.fec_committee_id, {
+                individual_itemized: Number(ct.individual_itemized) || 0,
+                individual_gross: Number(ct.individual_gross) || 0,
                 pac_total: Number(ct.pac_total) || 0,
                 party_total: Number(ct.party_total) || 0,
                 itemized_total: Number(ct.itemized_total) || 0,
+                itemized_gross: Number(ct.itemized_gross) || 0,
                 transfers_total: Number(ct.transfers_total) || 0,
                 earmarked_total: Number(ct.earmarked_total) || 0,
                 loans_total: Number(ct.loans_total) || 0,
+                other_total: Number(ct.other_total) || 0,
                 contribution_count: Number(ct.contribution_count) || 0,
               });
             }
@@ -239,21 +252,24 @@ serve(async (req) => {
           for (const committee of committees) {
             const totals = await fetchFECTotals(fecApiKey, committee.fec_committee_id, cycle);
             
-            // Get THIS committee's local totals
+            // Get THIS committee's local totals (already fetched above)
             const cmteTotals = committeeTotalsMap.get(committee.fec_committee_id) || {
-              individual_total: 0,
+              individual_itemized: 0,
+              individual_gross: 0,
               pac_total: 0,
               party_total: 0,
               itemized_total: 0,
+              itemized_gross: 0,
               transfers_total: 0,
               earmarked_total: 0,
               loans_total: 0,
+              other_total: 0,
               contribution_count: 0,
             };
 
             // Sum up local totals
             localItemized += cmteTotals.itemized_total;
-            localIndividual += cmteTotals.individual_total;
+            localIndividual += cmteTotals.individual_itemized;
             localPac += cmteTotals.pac_total;
             localParty += cmteTotals.party_total;
             localTransfers += cmteTotals.transfers_total;
@@ -280,12 +296,13 @@ serve(async (req) => {
                   fec_total_receipts: totals.fecTotalReceipts,
                   // PER-COMMITTEE local totals
                   local_itemized: cmteTotals.itemized_total,
-                  local_individual_itemized: cmteTotals.individual_total,
+                  local_individual_itemized: cmteTotals.individual_itemized,
                   local_pac_contributions: cmteTotals.pac_total,
                   local_party_contributions: cmteTotals.party_total,
                   local_transfers: cmteTotals.transfers_total,
                   local_earmarked: cmteTotals.earmarked_total,
                   local_loans: cmteTotals.loans_total,
+                  local_other: cmteTotals.other_total,
                   contribution_count: cmteTotals.contribution_count,
                   last_fec_check: new Date().toISOString()
                 }, { onConflict: 'committee_id,cycle' });
@@ -387,39 +404,48 @@ serve(async (req) => {
       );
     }
 
-    // Get PER-COMMITTEE local totals using the new database function
-    const { data: perCommitteeTotals, error: perCommitteeError } = await supabase
-      .rpc('get_contribution_totals_by_committee', {
-        p_candidate_id: candidateId,
-        p_cycle: cycle
-      });
-
-    if (perCommitteeError) {
-      console.warn(`[REFRESH-FEC-TOTALS] Error fetching per-committee totals:`, perCommitteeError);
-    }
-
-    // Build lookup map for per-committee local totals
+    // Build lookup map for per-committee local totals (will be populated in loop)
     const committeeTotalsMap = new Map<string, {
-      individual_total: number;
+      individual_itemized: number;
+      individual_gross: number;
       pac_total: number;
       party_total: number;
       itemized_total: number;
+      itemized_gross: number;
       transfers_total: number;
       earmarked_total: number;
       loans_total: number;
+      other_total: number;
       contribution_count: number;
     }>();
 
-    if (perCommitteeTotals) {
-      for (const ct of perCommitteeTotals) {
-        committeeTotalsMap.set(ct.committee_id, {
-          individual_total: Number(ct.individual_total) || 0,
+    // Fetch per-committee local totals for each committee BEFORE the main loop
+    for (const committee of committees) {
+      const { data: cmteLocalData, error: cmteLocalErr } = await supabase
+        .rpc('get_contribution_totals_by_committee', {
+          p_committee_id: committee.fec_committee_id,
+          p_cycle: cycle
+        });
+      
+      if (cmteLocalErr) {
+        console.warn(`[REFRESH-FEC-TOTALS] Error fetching local totals for committee ${committee.fec_committee_id}:`, cmteLocalErr);
+        continue;
+      }
+
+      // RPC returns a single row (not array)
+      const ct = cmteLocalData;
+      if (ct) {
+        committeeTotalsMap.set(committee.fec_committee_id, {
+          individual_itemized: Number(ct.individual_itemized) || 0,
+          individual_gross: Number(ct.individual_gross) || 0,
           pac_total: Number(ct.pac_total) || 0,
           party_total: Number(ct.party_total) || 0,
           itemized_total: Number(ct.itemized_total) || 0,
+          itemized_gross: Number(ct.itemized_gross) || 0,
           transfers_total: Number(ct.transfers_total) || 0,
           earmarked_total: Number(ct.earmarked_total) || 0,
           loans_total: Number(ct.loans_total) || 0,
+          other_total: Number(ct.other_total) || 0,
           contribution_count: Number(ct.contribution_count) || 0,
         });
       }
@@ -444,21 +470,24 @@ serve(async (req) => {
     for (const committee of committees) {
       const totals = await fetchFECTotals(fecApiKey, committee.fec_committee_id, cycle);
       
-      // Get THIS committee's local totals
+      // Get THIS committee's local totals (already fetched above)
       const cmteTotals = committeeTotalsMap.get(committee.fec_committee_id) || {
-        individual_total: 0,
+        individual_itemized: 0,
+        individual_gross: 0,
         pac_total: 0,
         party_total: 0,
         itemized_total: 0,
+        itemized_gross: 0,
         transfers_total: 0,
         earmarked_total: 0,
         loans_total: 0,
+        other_total: 0,
         contribution_count: 0,
       };
 
       // Sum up local totals for this candidate
       localItemized += cmteTotals.itemized_total;
-      localIndividual += cmteTotals.individual_total;
+      localIndividual += cmteTotals.individual_itemized;
       localPac += cmteTotals.pac_total;
       localParty += cmteTotals.party_total;
       localTransfers += cmteTotals.transfers_total;
@@ -485,12 +514,13 @@ serve(async (req) => {
             fec_total_receipts: totals.fecTotalReceipts,
             // PER-COMMITTEE local totals (not candidate-wide!)
             local_itemized: cmteTotals.itemized_total,
-            local_individual_itemized: cmteTotals.individual_total,
+            local_individual_itemized: cmteTotals.individual_itemized,
             local_pac_contributions: cmteTotals.pac_total,
             local_party_contributions: cmteTotals.party_total,
             local_transfers: cmteTotals.transfers_total,
             local_earmarked: cmteTotals.earmarked_total,
             local_loans: cmteTotals.loans_total,
+            local_other: cmteTotals.other_total,
             contribution_count: cmteTotals.contribution_count,
             last_fec_check: new Date().toISOString()
           }, { onConflict: 'committee_id,cycle' });
