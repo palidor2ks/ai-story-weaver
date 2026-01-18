@@ -2338,15 +2338,17 @@ export type Database = {
         }[]
       }
       get_contribution_totals_by_committee: {
-        Args: { p_candidate_id: string; p_cycle: string }
+        Args: { p_committee_id: string; p_cycle: string }
         Returns: {
-          committee_id: string
           contribution_count: number
+          donor_count: number
           earmarked_total: number
-          gross_individual_total: number
-          individual_total: number
+          individual_gross: number
+          individual_itemized: number
+          itemized_gross: number
           itemized_total: number
           loans_total: number
+          memo_x_total: number
           organization_total: number
           other_total: number
           pac_total: number
