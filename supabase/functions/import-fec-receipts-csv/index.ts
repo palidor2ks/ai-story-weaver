@@ -209,6 +209,8 @@ serve(async (req) => {
         const occupation = row.contributor_occupation || row.CONTRIBUTOR_OCCUPATION || '';
         const conduitCommitteeId = row.conduit_committee_id || row.CONDUIT_COMMITTEE_ID || null;
         const conduitCommitteeName = row.conduit_committee_name || row.CONDUIT_COMMITTEE_NAME || null;
+        // FEC.gov-visible transaction ID (different from sub_id)
+        const transactionId = row.transaction_id || row.TRANSACTION_ID || null;
 
         if (!contributorName || isNaN(amount)) {
           skippedRows++;
@@ -222,6 +224,7 @@ serve(async (req) => {
         contributions.push({
           identity_hash: identityHash,
           fec_transaction_id: subId,
+          fec_committee_transaction_id: transactionId, // FEC.gov-visible transaction ID
           contributor_name: contributorName,
           contributor_type: mapEntityType(entityType),
           amount: Math.round(amount),

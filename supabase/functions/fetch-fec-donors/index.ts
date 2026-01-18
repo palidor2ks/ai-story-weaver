@@ -871,6 +871,7 @@ serve(async (req) => {
     let contributionBatch: Array<{
       identity_hash: string;
       fec_transaction_id: string | null;
+      fec_committee_transaction_id: string | null; // FEC.gov-visible transaction ID
       candidate_id: string | null;
       recipient_committee_id: string;
       recipient_committee_name: string;
@@ -1212,9 +1213,13 @@ serve(async (req) => {
           }
         }
         
+        // FEC.gov-visible transaction ID (different from sub_id which we use for deduplication)
+        const fecCommitteeTransactionId = contribution?.transaction_id || null;
+        
         contributionBatch.push({
           identity_hash: contributionHash,
           fec_transaction_id: fecSubId,
+          fec_committee_transaction_id: fecCommitteeTransactionId, // FEC.gov-visible ID
           candidate_id: effectiveCandidateId, // null for J/U/B/D committees
           recipient_committee_id: committeeId,
           recipient_committee_name: committeeName,
