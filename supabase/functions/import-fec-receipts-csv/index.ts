@@ -224,7 +224,7 @@ serve(async (req) => {
           fec_transaction_id: subId,
           contributor_name: contributorName,
           contributor_type: mapEntityType(entityType),
-          amount: amount,
+          amount: Math.round(amount),
           cycle: rowCycle,
           receipt_date: receiptDate,
           line_number: lineNumber,
@@ -258,7 +258,7 @@ serve(async (req) => {
 
         if (donorAggregates.has(donorId)) {
           const existing = donorAggregates.get(donorId);
-          existing.amount += amount;
+          existing.amount += Math.round(amount);
           existing.transactionCount++;
           if (receiptDate) {
             if (!existing.firstReceiptDate || receiptDate < existing.firstReceiptDate) {
@@ -273,7 +273,7 @@ serve(async (req) => {
             id: donorId,
             name: contributorName,
             type: mapEntityType(entityType),
-            amount: amount,
+            amount: Math.round(amount),
             cycle: rowCycle,
             transactionCount: 1,
             firstReceiptDate: receiptDate,
