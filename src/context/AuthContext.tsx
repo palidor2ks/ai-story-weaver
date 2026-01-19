@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isReconnecting: boolean;
   signUp: (email: string, password: string, name: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -13,36 +15,120 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const MAX_AUTH_RETRIES = 3;
+const AUTH_RETRY_DELAY_MS = 2000;
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const loadingResolved = useRef(false);
+  const lastKnownSession = useRef<Session | null>(null);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+    let retryCount = 0;
+    let retryTimeout: NodeJS.Timeout | null = null;
+
+    const attemptGetSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          throw error;
+        }
+        
+        // Success - update state
         setSession(session);
         setUser(session?.user ?? null);
+        lastKnownSession.current = session;
+        setIsReconnecting(false);
+        retryCount = 0;
+        
         if (!loadingResolved.current) {
           loadingResolved.current = true;
           setLoading(false);
         }
+      } catch (err: any) {
+        console.error('[Auth] getSession error:', err.message);
+        
+        // Check if it's a transient error (504, network, etc.)
+        const isTransient = 
+          err.message?.includes('504') ||
+          err.message?.includes('fetch') ||
+          err.message?.includes('network') ||
+          err.message?.includes('timeout') ||
+          err.status === 504 ||
+          err.status === 503;
+        
+        if (isTransient && retryCount < MAX_AUTH_RETRIES) {
+          retryCount++;
+          setIsReconnecting(true);
+          
+          // Keep the last known session during reconnection attempts
+          if (lastKnownSession.current) {
+            setSession(lastKnownSession.current);
+            setUser(lastKnownSession.current.user);
+          }
+          
+          console.log(`[Auth] Retry ${retryCount}/${MAX_AUTH_RETRIES} in ${AUTH_RETRY_DELAY_MS}ms`);
+          
+          retryTimeout = setTimeout(() => {
+            attemptGetSession();
+          }, AUTH_RETRY_DELAY_MS * retryCount);
+        } else {
+          // Give up - clear session
+          setSession(null);
+          setUser(null);
+          setIsReconnecting(false);
+          
+          if (!loadingResolved.current) {
+            loadingResolved.current = true;
+            setLoading(false);
+          }
+          
+          if (retryCount >= MAX_AUTH_RETRIES) {
+            toast.error('Unable to connect to authentication service. Please refresh the page.');
+          }
+        }
+      }
+    };
+
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, newSession) => {
+        // Only update if we're not in a reconnecting state with a valid last session
+        if (!isReconnecting || !lastKnownSession.current) {
+          setSession(newSession);
+          setUser(newSession?.user ?? null);
+          lastKnownSession.current = newSession;
+        }
+        
+        if (!loadingResolved.current) {
+          loadingResolved.current = true;
+          setLoading(false);
+        }
+
+        // Handle specific auth events
+        if (event === 'TOKEN_REFRESHED') {
+          lastKnownSession.current = newSession;
+          setIsReconnecting(false);
+        } else if (event === 'SIGNED_OUT') {
+          lastKnownSession.current = null;
+          setIsReconnecting(false);
+        }
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (!loadingResolved.current) {
-        loadingResolved.current = true;
-        setLoading(false);
-      }
-    });
+    // THEN check for existing session with retry logic
+    attemptGetSession();
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+    };
   }, []);
 
   const signUp = async (email: string, password: string, name: string) => {
@@ -68,11 +154,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOut = async () => {
+    lastKnownSession.current = null;
     await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, isReconnecting, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

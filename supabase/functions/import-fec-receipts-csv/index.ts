@@ -151,7 +151,41 @@ function parseReceiptDate(dateStr: string | null): string | null {
   return null;
 }
 
-// Use modern Deno.serve() API instead of deprecated std/http server
+// Retry helper with exponential backoff and jitter
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 500
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const isRetryable = 
+        err.message?.includes('57014') ||
+        err.message?.includes('statement timeout') ||
+        err.message?.includes('upstream request timeout') ||
+        err.message?.includes('connection closed') ||
+        err.code === '57014';
+      
+      if (!isRetryable || attempt === maxRetries - 1) {
+        throw err;
+      }
+      
+      // Exponential backoff with jitter
+      const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 500;
+      console.log(`[CSV-IMPORT] Retry ${attempt + 1}/${maxRetries} after ${Math.round(delay)}ms: ${err.message}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
+// Use modern Deno.serve() API
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -173,7 +207,8 @@ Deno.serve(async (req) => {
     }
 
     const startTime = Date.now();
-    console.log(`[CSV-IMPORT] Processing batch of ${rows.length} rows for cycle ${cycle}`);
+    const batchTag = rows[0]?.sub_id || rows[0]?.SUB_ID || 'unknown';
+    console.log(`[CSV-IMPORT] batch_tag=${batchTag} rows=${rows.length} cycle=${cycle}`);
 
     // Pre-generate all contribution hashes in parallel for speed
     const hashPromises: Promise<{ index: number; subId: string; hash: string } | null>[] = rows.map(async (row, index) => {
@@ -190,167 +225,211 @@ Deno.serve(async (req) => {
       if (result) hashMap.set(result.index, result.hash);
     }
     
-    console.log(`[CSV-IMPORT] Pre-generated ${hashMap.size} hashes in ${Date.now() - startTime}ms`);
+    const hashTime = Date.now() - startTime;
 
-    // Process rows into contributions
-    const contributions: any[] = [];
-    const donorAggregates = new Map<string, any>();
+    // Build intermediate array for parallel donor ID generation
+    interface RowData {
+      index: number;
+      contributorName: string;
+      entityType: string;
+      city: string;
+      state: string;
+      zip: string;
+      recipientCommitteeId: string;
+      rowCycle: string;
+      amount: number;
+      receiptDate: string | null;
+      lineNumber: string;
+      memoCode: string | null;
+      memoText: string | null;
+      recipientCommitteeName: string;
+      employer: string;
+      occupation: string;
+      conduitCommitteeId: string | null;
+      conduitCommitteeName: string | null;
+      transactionId: string | null;
+      subId: string;
+    }
+
+    const rowDataArray: RowData[] = [];
     let skippedRows = 0;
     const errors: string[] = [];
 
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
       const row = rows[rowIndex];
       try {
-        // Get sub_id - required for deduplication
         const subId = row.sub_id || row.SUB_ID;
         if (!subId) {
           skippedRows++;
           continue;
         }
 
-        // Extract cycle from row or use provided
         const rowCycle = row.two_year_transaction_period || row.TWO_YEAR_TRANSACTION_PERIOD || cycle || '2024';
-        
-        // Map CSV columns to DB fields (handle both cases)
         const contributorName = row.contributor_name || row.CONTRIBUTOR_NAME || '';
         const entityType = row.entity_type || row.ENTITY_TYPE || 'IND';
         const amount = parseFloat(row.contribution_receipt_amount || row.CONTRIBUTION_RECEIPT_AMOUNT || '0');
-        const receiptDate = parseReceiptDate(row.contribution_receipt_date || row.CONTRIBUTION_RECEIPT_DATE);
-        const lineNumber = row.line_number || row.LINE_NUMBER || '';
-        const memoCode = row.memo_code || row.MEMO_CODE || null;
-        const memoText = row.memo_text || row.MEMO_TEXT || null;
-        const recipientCommitteeId = committeeId || row.committee_id || row.COMMITTEE_ID || '';
-        const recipientCommitteeName = row.committee_name || row.COMMITTEE_NAME || '';
-        const city = row.contributor_city || row.CONTRIBUTOR_CITY || '';
-        const state = row.contributor_state || row.CONTRIBUTOR_STATE || '';
-        const zip = row.contributor_zip || row.CONTRIBUTOR_ZIP || '';
-        const employer = row.contributor_employer || row.CONTRIBUTOR_EMPLOYER || '';
-        const occupation = row.contributor_occupation || row.CONTRIBUTOR_OCCUPATION || '';
-        const conduitCommitteeId = row.conduit_committee_id || row.CONDUIT_COMMITTEE_ID || null;
-        const conduitCommitteeName = row.conduit_committee_name || row.CONDUIT_COMMITTEE_NAME || null;
-        // FEC.gov-visible transaction ID (different from sub_id)
-        const transactionId = row.transaction_id || row.TRANSACTION_ID || null;
 
         if (!contributorName || isNaN(amount)) {
           skippedRows++;
           continue;
         }
 
-        // Use pre-computed hash
-        const identityHash = hashMap.get(rowIndex)!;
-        const lineClass = classifyLineNumber(lineNumber);
-        const earmarkInfo = parseEarmarkInfo(memoText);
-
-        contributions.push({
-          identity_hash: identityHash,
-          fec_transaction_id: subId,
-          fec_committee_transaction_id: transactionId, // FEC.gov-visible transaction ID
-          contributor_name: contributorName,
-          contributor_type: mapEntityType(entityType),
-          amount: Math.round(amount),
-          cycle: rowCycle,
-          receipt_date: receiptDate,
-          line_number: lineNumber,
-          memo_code: memoCode,
-          memo_text: memoText,
-          recipient_committee_id: recipientCommitteeId,
-          recipient_committee_name: recipientCommitteeName,
-          contributor_city: city,
-          contributor_state: state,
-          contributor_zip: zip,
-          employer: employer,
-          occupation: occupation,
-          conduit_committee_id: conduitCommitteeId,
-          conduit_committee_name: conduitCommitteeName,
-          is_contribution: lineClass.isContribution,
-          is_transfer: lineClass.isTransfer,
-          is_earmarked: earmarkInfo.isEarmarked,
-          candidate_id: candidateId || null
-        });
-
-        // Aggregate for donors table
-        const donorId = await generateDonorId(
+        rowDataArray.push({
+          index: rowIndex,
           contributorName,
           entityType,
-          city,
-          state,
-          zip,
-          recipientCommitteeId,
-          rowCycle
-        );
-
-        if (donorAggregates.has(donorId)) {
-          const existing = donorAggregates.get(donorId);
-          existing.amount += Math.round(amount);
-          existing.transactionCount++;
-          if (receiptDate) {
-            if (!existing.firstReceiptDate || receiptDate < existing.firstReceiptDate) {
-              existing.firstReceiptDate = receiptDate;
-            }
-            if (!existing.lastReceiptDate || receiptDate > existing.lastReceiptDate) {
-              existing.lastReceiptDate = receiptDate;
-            }
-          }
-        } else {
-          donorAggregates.set(donorId, {
-            id: donorId,
-            name: contributorName,
-            type: mapEntityType(entityType),
-            amount: Math.round(amount),
-            cycle: rowCycle,
-            transactionCount: 1,
-            firstReceiptDate: receiptDate,
-            lastReceiptDate: receiptDate,
-            city: city,
-            state: state,
-            zip: zip,
-            employer: employer,
-            occupation: occupation,
-            lineNumber: lineNumber,
-            isContribution: lineClass.isContribution,
-            isTransfer: lineClass.isTransfer,
-            recipientCommitteeId: recipientCommitteeId,
-            recipientCommitteeName: recipientCommitteeName,
-            candidateId: candidateId || null
-          });
-        }
+          city: row.contributor_city || row.CONTRIBUTOR_CITY || '',
+          state: row.contributor_state || row.CONTRIBUTOR_STATE || '',
+          zip: row.contributor_zip || row.CONTRIBUTOR_ZIP || '',
+          recipientCommitteeId: committeeId || row.committee_id || row.COMMITTEE_ID || '',
+          rowCycle,
+          amount,
+          receiptDate: parseReceiptDate(row.contribution_receipt_date || row.CONTRIBUTION_RECEIPT_DATE),
+          lineNumber: row.line_number || row.LINE_NUMBER || '',
+          memoCode: row.memo_code || row.MEMO_CODE || null,
+          memoText: row.memo_text || row.MEMO_TEXT || null,
+          recipientCommitteeName: row.committee_name || row.COMMITTEE_NAME || '',
+          employer: row.contributor_employer || row.CONTRIBUTOR_EMPLOYER || '',
+          occupation: row.contributor_occupation || row.CONTRIBUTOR_OCCUPATION || '',
+          conduitCommitteeId: row.conduit_committee_id || row.CONDUIT_COMMITTEE_ID || null,
+          conduitCommitteeName: row.conduit_committee_name || row.CONDUIT_COMMITTEE_NAME || null,
+          transactionId: row.transaction_id || row.TRANSACTION_ID || null,
+          subId
+        });
       } catch (err) {
-        errors.push(`Row error: ${err}`);
+        errors.push(`Row ${rowIndex} parse error: ${err}`);
         skippedRows++;
       }
     }
 
-    const prepTime = Date.now() - startTime;
-    console.log(`[CSV-IMPORT] Prepared ${contributions.length} contributions, ${donorAggregates.size} unique donors, ${skippedRows} skipped in ${prepTime}ms`);
+    // Generate all donor IDs in parallel
+    const donorIdPromises = rowDataArray.map(async (rd) => {
+      const donorId = await generateDonorId(
+        rd.contributorName,
+        rd.entityType,
+        rd.city,
+        rd.state,
+        rd.zip,
+        rd.recipientCommitteeId,
+        rd.rowCycle
+      );
+      return { ...rd, donorId };
+    });
 
-    // Upsert contributions in small chunks to avoid statement timeout
+    const rowsWithDonorIds = await Promise.all(donorIdPromises);
+    const donorIdTime = Date.now() - startTime - hashTime;
+
+    // Build contributions array and aggregate donors
+    const contributions: any[] = [];
+    const donorAggregates = new Map<string, any>();
+
+    for (const rd of rowsWithDonorIds) {
+      const identityHash = hashMap.get(rd.index)!;
+      const lineClass = classifyLineNumber(rd.lineNumber);
+      const earmarkInfo = parseEarmarkInfo(rd.memoText);
+
+      contributions.push({
+        identity_hash: identityHash,
+        fec_transaction_id: rd.subId,
+        fec_committee_transaction_id: rd.transactionId,
+        contributor_name: rd.contributorName,
+        contributor_type: mapEntityType(rd.entityType),
+        amount: Math.round(rd.amount),
+        cycle: rd.rowCycle,
+        receipt_date: rd.receiptDate,
+        line_number: rd.lineNumber,
+        memo_code: rd.memoCode,
+        memo_text: rd.memoText,
+        recipient_committee_id: rd.recipientCommitteeId,
+        recipient_committee_name: rd.recipientCommitteeName,
+        contributor_city: rd.city,
+        contributor_state: rd.state,
+        contributor_zip: rd.zip,
+        employer: rd.employer,
+        occupation: rd.occupation,
+        conduit_committee_id: rd.conduitCommitteeId,
+        conduit_committee_name: rd.conduitCommitteeName,
+        is_contribution: lineClass.isContribution,
+        is_transfer: lineClass.isTransfer,
+        is_earmarked: earmarkInfo.isEarmarked,
+        candidate_id: candidateId || null
+      });
+
+      // Aggregate for donors table
+      if (donorAggregates.has(rd.donorId)) {
+        const existing = donorAggregates.get(rd.donorId);
+        existing.amount += Math.round(rd.amount);
+        existing.transactionCount++;
+        if (rd.receiptDate) {
+          if (!existing.firstReceiptDate || rd.receiptDate < existing.firstReceiptDate) {
+            existing.firstReceiptDate = rd.receiptDate;
+          }
+          if (!existing.lastReceiptDate || rd.receiptDate > existing.lastReceiptDate) {
+            existing.lastReceiptDate = rd.receiptDate;
+          }
+        }
+      } else {
+        donorAggregates.set(rd.donorId, {
+          id: rd.donorId,
+          name: rd.contributorName,
+          type: mapEntityType(rd.entityType),
+          amount: Math.round(rd.amount),
+          cycle: rd.rowCycle,
+          transactionCount: 1,
+          firstReceiptDate: rd.receiptDate,
+          lastReceiptDate: rd.receiptDate,
+          city: rd.city,
+          state: rd.state,
+          zip: rd.zip,
+          employer: rd.employer,
+          occupation: rd.occupation,
+          lineNumber: rd.lineNumber,
+          isContribution: classifyLineNumber(rd.lineNumber).isContribution,
+          isTransfer: classifyLineNumber(rd.lineNumber).isTransfer,
+          recipientCommitteeId: rd.recipientCommitteeId,
+          recipientCommitteeName: rd.recipientCommitteeName,
+          candidateId: candidateId || null
+        });
+      }
+    }
+
+    const prepTime = Date.now() - startTime;
+
+    // Upsert contributions in small chunks with retry - INSERT ONLY (skip existing)
     let insertedContributions = 0;
-    const CONTRIBUTION_CHUNK_SIZE = 50;  // Reduced from 200 to prevent timeouts
-    const DONOR_CHUNK_SIZE = 25;          // Reduced from 50 to prevent timeouts
+    const CONTRIBUTION_CHUNK_SIZE = 100;  // Larger chunks since we're skipping conflicts
+    const DONOR_CHUNK_SIZE = 25;
     const totalContribChunks = Math.ceil(contributions.length / CONTRIBUTION_CHUNK_SIZE);
+    
+    const contribStartTime = Date.now();
     
     for (let i = 0; i < contributions.length; i += CONTRIBUTION_CHUNK_SIZE) {
       const chunkNum = Math.floor(i / CONTRIBUTION_CHUNK_SIZE) + 1;
       const chunk = contributions.slice(i, i + CONTRIBUTION_CHUNK_SIZE);
       
-      console.log(`[CSV-IMPORT] Contribution chunk ${chunkNum}/${totalContribChunks} (${chunk.length} rows)`);
-      
-      const { error, count } = await supabase
-        .from('contributions')
-        .upsert(chunk, { 
-          onConflict: 'identity_hash,cycle',
-          ignoreDuplicates: false  // Update existing rows with new data
-        });
-      
-      if (error) {
-        console.error(`[CSV-IMPORT] Contribution upsert error (chunk ${chunkNum}):`, error);
-        errors.push(`Contribution upsert: ${error.message}`);
-      } else {
-        insertedContributions += chunk.length;
+      try {
+        await retryWithBackoff(async () => {
+          const { error, count } = await supabase
+            .from('contributions')
+            .upsert(chunk, { 
+              onConflict: 'identity_hash,cycle',
+              ignoreDuplicates: true  // INSERT ONLY - skip existing rows, much faster
+            });
+          
+          if (error) {
+            throw error;
+          }
+          insertedContributions += chunk.length;
+        }, 3, 500);
+      } catch (err: any) {
+        console.error(`[CSV-IMPORT] Contribution chunk ${chunkNum}/${totalContribChunks} FAILED:`, err.message);
+        errors.push(`Contribution chunk ${chunkNum}: ${err.message}`);
       }
     }
+    
+    const contribTime = Date.now() - contribStartTime;
 
-    // Upsert donors
+    // Upsert donors with retry
     let insertedDonors = 0;
     const donorRows = Array.from(donorAggregates.values()).map(d => ({
       id: d.id,
@@ -375,30 +454,37 @@ Deno.serve(async (req) => {
     }));
 
     const totalDonorChunks = Math.ceil(donorRows.length / DONOR_CHUNK_SIZE);
+    const donorStartTime = Date.now();
     
     for (let i = 0; i < donorRows.length; i += DONOR_CHUNK_SIZE) {
       const chunkNum = Math.floor(i / DONOR_CHUNK_SIZE) + 1;
       const chunk = donorRows.slice(i, i + DONOR_CHUNK_SIZE);
       
-      console.log(`[CSV-IMPORT] Donor chunk ${chunkNum}/${totalDonorChunks} (${chunk.length} rows)`);
-      
-      const { error } = await supabase
-        .from('donors')
-        .upsert(chunk, {
-          onConflict: 'id',
-          ignoreDuplicates: false // Update existing with new totals
-        });
-      
-      if (error) {
-        console.error(`[CSV-IMPORT] Donor upsert error (chunk ${chunkNum}):`, error);
-        errors.push(`Donor upsert: ${error.message}`);
-      } else {
-        insertedDonors += chunk.length;
+      try {
+        await retryWithBackoff(async () => {
+          const { error } = await supabase
+            .from('donors')
+            .upsert(chunk, {
+              onConflict: 'id',
+              ignoreDuplicates: false // Donors need updates for aggregation
+            });
+          
+          if (error) {
+            throw error;
+          }
+          insertedDonors += chunk.length;
+        }, 3, 500);
+      } catch (err: any) {
+        console.error(`[CSV-IMPORT] Donor chunk ${chunkNum}/${totalDonorChunks} FAILED:`, err.message);
+        errors.push(`Donor chunk ${chunkNum}: ${err.message}`);
       }
     }
-
+    
+    const donorTime = Date.now() - donorStartTime;
     const totalTime = Date.now() - startTime;
-    console.log(`[CSV-IMPORT] Completed: ${insertedContributions} contributions, ${insertedDonors} donors in ${totalTime}ms`);
+
+    // Structured timing log for debugging
+    console.log(`[CSV-IMPORT] batch_tag=${batchTag} timing={"prep_ms":${prepTime},"hash_ms":${hashTime},"donor_id_ms":${donorIdTime},"contrib_upsert_ms":${contribTime},"donor_upsert_ms":${donorTime},"total_ms":${totalTime}} counts={"contributions":${insertedContributions},"donors":${insertedDonors},"skipped":${skippedRows},"errors":${errors.length}}`);
 
     return new Response(
       JSON.stringify({
@@ -407,7 +493,13 @@ Deno.serve(async (req) => {
         insertedContributions,
         insertedDonors,
         skippedRows,
-        errors: errors.slice(0, 10) // Limit error messages
+        errors: errors.slice(0, 10),
+        timing: {
+          prep_ms: prepTime,
+          contrib_upsert_ms: contribTime,
+          donor_upsert_ms: donorTime,
+          total_ms: totalTime
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
