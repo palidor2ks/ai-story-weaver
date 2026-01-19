@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { crypto } from "https://deno.land/std@0.177.0/crypto/mod.ts";
 import { encode as hexEncode } from "https://deno.land/std@0.177.0/encoding/hex.ts";
@@ -152,7 +151,8 @@ function parseReceiptDate(dateStr: string | null): string | null {
   return null;
 }
 
-serve(async (req) => {
+// Use modern Deno.serve() API instead of deprecated std/http server
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -323,13 +323,18 @@ serve(async (req) => {
     const prepTime = Date.now() - startTime;
     console.log(`[CSV-IMPORT] Prepared ${contributions.length} contributions, ${donorAggregates.size} unique donors, ${skippedRows} skipped in ${prepTime}ms`);
 
-    // Upsert contributions in larger chunks for speed
+    // Upsert contributions in small chunks to avoid statement timeout
     let insertedContributions = 0;
-    const CONTRIBUTION_CHUNK_SIZE = 200;  // contributions has fewer indexes
-    const DONOR_CHUNK_SIZE = 50;          // donors has 16 indexes - needs smaller chunks
+    const CONTRIBUTION_CHUNK_SIZE = 50;  // Reduced from 200 to prevent timeouts
+    const DONOR_CHUNK_SIZE = 25;          // Reduced from 50 to prevent timeouts
+    const totalContribChunks = Math.ceil(contributions.length / CONTRIBUTION_CHUNK_SIZE);
     
     for (let i = 0; i < contributions.length; i += CONTRIBUTION_CHUNK_SIZE) {
+      const chunkNum = Math.floor(i / CONTRIBUTION_CHUNK_SIZE) + 1;
       const chunk = contributions.slice(i, i + CONTRIBUTION_CHUNK_SIZE);
+      
+      console.log(`[CSV-IMPORT] Contribution chunk ${chunkNum}/${totalContribChunks} (${chunk.length} rows)`);
+      
       const { error, count } = await supabase
         .from('contributions')
         .upsert(chunk, { 
@@ -338,7 +343,7 @@ serve(async (req) => {
         });
       
       if (error) {
-        console.error(`[CSV-IMPORT] Contribution upsert error:`, error);
+        console.error(`[CSV-IMPORT] Contribution upsert error (chunk ${chunkNum}):`, error);
         errors.push(`Contribution upsert: ${error.message}`);
       } else {
         insertedContributions += chunk.length;
@@ -369,8 +374,14 @@ serve(async (req) => {
       candidate_id: d.candidateId
     }));
 
+    const totalDonorChunks = Math.ceil(donorRows.length / DONOR_CHUNK_SIZE);
+    
     for (let i = 0; i < donorRows.length; i += DONOR_CHUNK_SIZE) {
+      const chunkNum = Math.floor(i / DONOR_CHUNK_SIZE) + 1;
       const chunk = donorRows.slice(i, i + DONOR_CHUNK_SIZE);
+      
+      console.log(`[CSV-IMPORT] Donor chunk ${chunkNum}/${totalDonorChunks} (${chunk.length} rows)`);
+      
       const { error } = await supabase
         .from('donors')
         .upsert(chunk, {
@@ -379,14 +390,15 @@ serve(async (req) => {
         });
       
       if (error) {
-        console.error(`[CSV-IMPORT] Donor upsert error:`, error);
+        console.error(`[CSV-IMPORT] Donor upsert error (chunk ${chunkNum}):`, error);
         errors.push(`Donor upsert: ${error.message}`);
       } else {
         insertedDonors += chunk.length;
       }
     }
 
-    console.log(`[CSV-IMPORT] Completed: ${insertedContributions} contributions, ${insertedDonors} donors`);
+    const totalTime = Date.now() - startTime;
+    console.log(`[CSV-IMPORT] Completed: ${insertedContributions} contributions, ${insertedDonors} donors in ${totalTime}ms`);
 
     return new Response(
       JSON.stringify({
