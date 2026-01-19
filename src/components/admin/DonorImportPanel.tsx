@@ -32,8 +32,9 @@ export function DonorImportPanel() {
   const [existingCount, setExistingCount] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const BATCH_SIZE = 500;
-  const DELAY_MS = 200;
+  const BATCH_SIZE = 1000;
+  const DELAY_MS = 50;
+  const MAX_RETRIES = 3;
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -127,34 +128,62 @@ export function DonorImportPanel() {
           let skippedRows = 0;
           const errors: string[] = [];
 
-          // Process in batches
+          // Process in batches with retry logic
           for (let i = 0; i < totalRows; i += BATCH_SIZE) {
             const batch = allRows.slice(i, i + BATCH_SIZE);
+            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
             
-            try {
-              const { data, error } = await supabase.functions.invoke('import-fec-receipts-csv', {
-                body: {
-                  rows: batch,
-                  cycle,
-                  candidateId: candidateId || null,
-                  committeeId: committeeId || null
-                }
-              });
+            let success = false;
+            let retryCount = 0;
+            
+            while (!success && retryCount < MAX_RETRIES) {
+              try {
+                const { data, error } = await supabase.functions.invoke('import-fec-receipts-csv', {
+                  body: {
+                    rows: batch,
+                    cycle,
+                    candidateId: candidateId || null,
+                    committeeId: committeeId || null
+                  }
+                });
 
-              if (error) {
-                console.error('Batch error:', error);
-                errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`);
-              } else if (data) {
-                insertedContributions += data.insertedContributions || 0;
-                insertedDonors += data.insertedDonors || 0;
-                skippedRows += data.skippedRows || 0;
-                if (data.errors) {
-                  errors.push(...data.errors.slice(0, 5));
+                if (error) {
+                  // Check for WORKER_LIMIT error - retry with backoff
+                  if (error.message?.includes('WORKER_LIMIT') || error.message?.includes('546')) {
+                    retryCount++;
+                    const backoffMs = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
+                    console.log(`[DonorImport] WORKER_LIMIT hit, retry ${retryCount}/${MAX_RETRIES} after ${backoffMs}ms`);
+                    await new Promise(resolve => setTimeout(resolve, backoffMs));
+                    continue;
+                  }
+                  console.error('Batch error:', error);
+                  errors.push(`Batch ${batchNum}: ${error.message}`);
+                } else if (data) {
+                  insertedContributions += data.insertedContributions || 0;
+                  insertedDonors += data.insertedDonors || 0;
+                  skippedRows += data.skippedRows || 0;
+                  if (data.errors) {
+                    errors.push(...data.errors.slice(0, 5));
+                  }
                 }
+                success = true;
+              } catch (err: any) {
+                // Check for network/worker errors - retry with backoff
+                if (err.message?.includes('WORKER_LIMIT') || err.message?.includes('546') || err.message?.includes('Failed to send')) {
+                  retryCount++;
+                  const backoffMs = Math.pow(2, retryCount) * 1000;
+                  console.log(`[DonorImport] Error, retry ${retryCount}/${MAX_RETRIES} after ${backoffMs}ms`);
+                  await new Promise(resolve => setTimeout(resolve, backoffMs));
+                  continue;
+                }
+                console.error('Batch exception:', err);
+                errors.push(`Batch ${batchNum}: ${err.message}`);
+                success = true; // Don't retry non-recoverable errors
               }
-            } catch (err: any) {
-              console.error('Batch exception:', err);
-              errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${err.message}`);
+            }
+            
+            if (!success) {
+              errors.push(`Batch ${batchNum}: Failed after ${MAX_RETRIES} retries`);
             }
 
             processedRows = Math.min(i + BATCH_SIZE, totalRows);
@@ -168,7 +197,7 @@ export function DonorImportPanel() {
               errors
             });
 
-            // Rate limiting delay
+            // Rate limiting delay between batches
             if (i + BATCH_SIZE < totalRows) {
               await new Promise(resolve => setTimeout(resolve, DELAY_MS));
             }
