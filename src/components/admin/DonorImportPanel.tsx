@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -20,6 +20,17 @@ interface ImportStats {
   errors: string[];
 }
 
+interface DebugInfo {
+  batchNumber: number;
+  httpStatus?: number;
+  errorMessage?: string;
+  errorContext?: string;
+  requestId?: string;
+  timestamp: string;
+  cycle: string;
+  committeeId: string;
+}
+
 export function DonorImportPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [cycle, setCycle] = useState('2024');
@@ -30,11 +41,12 @@ export function DonorImportPanel() {
   const [stats, setStats] = useState<ImportStats | null>(null);
   const [detectedCommittee, setDetectedCommittee] = useState<string | null>(null);
   const [existingCount, setExistingCount] = useState<number | null>(null);
+  const [lastDebugInfo, setLastDebugInfo] = useState<DebugInfo | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const BATCH_SIZE = 500;  // Reduced from 1000 to help prevent statement timeouts
-  const DELAY_MS = 100;    // Increased delay between batches
-  const MAX_RETRIES = 5;   // More retries for transient errors
+  const BATCH_SIZE = 500;
+  const DELAY_MS = 150;  // Slightly more delay for stability
+  const MAX_RETRIES = 5;
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -45,6 +57,7 @@ export function DonorImportPanel() {
     setProgress(0);
     setDetectedCommittee(null);
     setExistingCount(null);
+    setLastDebugInfo(null);
 
     // Parse first few rows to detect committee
     const reader = new FileReader();
@@ -90,6 +103,14 @@ export function DonorImportPanel() {
     reader.readAsText(selectedFile.slice(0, 10000)); // Read first 10KB to detect
   };
 
+  const copyDebugInfo = () => {
+    if (!lastDebugInfo) return;
+    
+    const debugText = JSON.stringify(lastDebugInfo, null, 2);
+    navigator.clipboard.writeText(debugText);
+    toast.success('Debug info copied to clipboard');
+  };
+
   const handleImport = async () => {
     if (!file) {
       toast.error('Please select a CSV file');
@@ -98,6 +119,7 @@ export function DonorImportPanel() {
 
     setIsImporting(true);
     setProgress(0);
+    setLastDebugInfo(null);
     setStats({
       totalRows: 0,
       processedRows: 0,
@@ -132,6 +154,7 @@ export function DonorImportPanel() {
           for (let i = 0; i < totalRows; i += BATCH_SIZE) {
             const batch = allRows.slice(i, i + BATCH_SIZE);
             const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+            const totalBatches = Math.ceil(totalRows / BATCH_SIZE);
             
             let success = false;
             let retryCount = 0;
@@ -148,32 +171,50 @@ export function DonorImportPanel() {
                 });
 
                 if (error) {
-                  // Check for retryable errors (WORKER_LIMIT, statement timeout, connection issues)
+                  // Capture debug info
+                  const debugInfo: DebugInfo = {
+                    batchNumber: batchNum,
+                    httpStatus: error.status,
+                    errorMessage: error.message,
+                    errorContext: error.context?.toString(),
+                    timestamp: new Date().toISOString(),
+                    cycle,
+                    committeeId
+                  };
+                  setLastDebugInfo(debugInfo);
+                  
+                  // Check for retryable errors
                   const isRetryable = 
                     error.message?.includes('WORKER_LIMIT') || 
                     error.message?.includes('546') ||
                     error.message?.includes('statement timeout') ||
-                    error.message?.includes('connection closed');
+                    error.message?.includes('connection closed') ||
+                    error.message?.includes('upstream request timeout') ||
+                    error.status === 504 ||
+                    error.status === 503;
                   
-                  if (isRetryable) {
+                  if (isRetryable && retryCount < MAX_RETRIES - 1) {
                     retryCount++;
-                    const backoffMs = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s, 16s, 32s
-                    console.log(`[DonorImport] Retryable error, retry ${retryCount}/${MAX_RETRIES} after ${backoffMs}ms: ${error.message}`);
+                    const backoffMs = Math.pow(2, retryCount) * 1000 + Math.random() * 500;
+                    console.log(`[DonorImport] Batch ${batchNum}/${totalBatches} retry ${retryCount}/${MAX_RETRIES} after ${Math.round(backoffMs)}ms: ${error.message}`);
                     await new Promise(resolve => setTimeout(resolve, backoffMs));
                     continue;
                   }
-                  console.error('Batch error:', error);
-                  errors.push(`Batch ${batchNum}: ${error.message}`);
+                  
+                  console.error(`[DonorImport] Batch ${batchNum} error:`, error);
+                  errors.push(`Batch ${batchNum}: ${error.message || 'Unknown error'}`);
                 } else if (data) {
-                  // Check for statement timeout errors in the response
+                  // Check for errors in the response
                   const hasTimeoutError = data.errors?.some((e: string) => 
-                    e.includes('statement timeout') || e.includes('canceling statement')
+                    e.includes('statement timeout') || 
+                    e.includes('canceling statement') ||
+                    e.includes('connection closed')
                   );
                   
-                  if (hasTimeoutError && retryCount < MAX_RETRIES) {
+                  if (hasTimeoutError && retryCount < MAX_RETRIES - 1) {
                     retryCount++;
-                    const backoffMs = Math.pow(2, retryCount) * 1000;
-                    console.log(`[DonorImport] Statement timeout in response, retry ${retryCount}/${MAX_RETRIES} after ${backoffMs}ms`);
+                    const backoffMs = Math.pow(2, retryCount) * 1000 + Math.random() * 500;
+                    console.log(`[DonorImport] Batch ${batchNum} partial timeout, retry ${retryCount}/${MAX_RETRIES} after ${Math.round(backoffMs)}ms`);
                     await new Promise(resolve => setTimeout(resolve, backoffMs));
                     continue;
                   }
@@ -181,28 +222,47 @@ export function DonorImportPanel() {
                   insertedContributions += data.insertedContributions || 0;
                   insertedDonors += data.insertedDonors || 0;
                   skippedRows += data.skippedRows || 0;
-                  if (data.errors) {
-                    errors.push(...data.errors.slice(0, 5));
+                  
+                  if (data.timing) {
+                    console.log(`[DonorImport] Batch ${batchNum}/${totalBatches} timing:`, data.timing);
+                  }
+                  
+                  if (data.errors && data.errors.length > 0) {
+                    errors.push(...data.errors.slice(0, 3).map((e: string) => `Batch ${batchNum}: ${e}`));
                   }
                 }
                 success = true;
               } catch (err: any) {
+                // Capture debug info for exceptions
+                const debugInfo: DebugInfo = {
+                  batchNumber: batchNum,
+                  errorMessage: err.message,
+                  errorContext: err.stack?.slice(0, 500),
+                  timestamp: new Date().toISOString(),
+                  cycle,
+                  committeeId
+                };
+                setLastDebugInfo(debugInfo);
+                
                 // Check for retryable network/worker errors
                 const isRetryable = 
                   err.message?.includes('WORKER_LIMIT') || 
                   err.message?.includes('546') || 
                   err.message?.includes('Failed to send') ||
                   err.message?.includes('statement timeout') ||
-                  err.message?.includes('connection closed');
+                  err.message?.includes('connection closed') ||
+                  err.message?.includes('fetch') ||
+                  err.message?.includes('network');
                 
-                if (isRetryable) {
+                if (isRetryable && retryCount < MAX_RETRIES - 1) {
                   retryCount++;
-                  const backoffMs = Math.pow(2, retryCount) * 1000;
-                  console.log(`[DonorImport] Exception, retry ${retryCount}/${MAX_RETRIES} after ${backoffMs}ms: ${err.message}`);
+                  const backoffMs = Math.pow(2, retryCount) * 1000 + Math.random() * 500;
+                  console.log(`[DonorImport] Batch ${batchNum} exception, retry ${retryCount}/${MAX_RETRIES} after ${Math.round(backoffMs)}ms: ${err.message}`);
                   await new Promise(resolve => setTimeout(resolve, backoffMs));
                   continue;
                 }
-                console.error('Batch exception:', err);
+                
+                console.error(`[DonorImport] Batch ${batchNum} exception:`, err);
                 errors.push(`Batch ${batchNum}: ${err.message}`);
                 success = true; // Don't retry non-recoverable errors
               }
@@ -230,7 +290,12 @@ export function DonorImportPanel() {
           }
 
           setProgress(100);
-          toast.success(`Import complete: ${insertedContributions} contributions added`);
+          
+          if (errors.length > 0) {
+            toast.warning(`Import complete with ${errors.length} errors: ${insertedContributions} contributions added`);
+          } else {
+            toast.success(`Import complete: ${insertedContributions} contributions added`);
+          }
         },
         error: (error) => {
           console.error('CSV parse error:', error);
@@ -253,6 +318,7 @@ export function DonorImportPanel() {
     setExistingCount(null);
     setCandidateId('');
     setCommitteeId('');
+    setLastDebugInfo(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -376,15 +442,32 @@ export function DonorImportPanel() {
 
             {stats?.errors && stats.errors.length > 0 && (
               <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
-                <div className="flex items-center gap-2 text-destructive font-medium mb-2">
-                  <AlertCircle className="h-4 w-4" />
-                  Errors ({stats.errors.length})
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-destructive font-medium">
+                    <AlertCircle className="h-4 w-4" />
+                    Errors ({stats.errors.length})
+                  </div>
+                  {lastDebugInfo && (
+                    <Button variant="ghost" size="sm" onClick={copyDebugInfo} className="text-destructive">
+                      <Copy className="h-3 w-3 mr-1" />
+                      Copy Debug Info
+                    </Button>
+                  )}
                 </div>
                 <ul className="text-sm text-destructive/80 space-y-1">
                   {stats.errors.slice(0, 5).map((err, i) => (
                     <li key={i} className="truncate">{err}</li>
                   ))}
                 </ul>
+                <a 
+                  href="https://supabase.com/dashboard/project/ornnzinjrcyigazecctf/functions/import-fec-receipts-csv/logs"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-2"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  View Edge Function Logs
+                </a>
               </div>
             )}
           </div>
