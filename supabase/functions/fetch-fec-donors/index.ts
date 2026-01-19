@@ -1338,7 +1338,7 @@ serve(async (req) => {
       // Query actual totals from contributions table for accuracy
       const { data: dbTotals } = await supabase.rpc(
         'get_contribution_totals_by_committee',
-        { p_candidate_id: candidateId, p_cycle: cycle }
+        { p_committee_id: committeeId, p_cycle: cycle }
       );
       
       // Find totals for this specific committee
