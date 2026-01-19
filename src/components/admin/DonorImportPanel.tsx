@@ -32,9 +32,9 @@ export function DonorImportPanel() {
   const [existingCount, setExistingCount] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const BATCH_SIZE = 1000;
-  const DELAY_MS = 50;
-  const MAX_RETRIES = 3;
+  const BATCH_SIZE = 500;  // Reduced from 1000 to help prevent statement timeouts
+  const DELAY_MS = 100;    // Increased delay between batches
+  const MAX_RETRIES = 5;   // More retries for transient errors
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -148,17 +148,36 @@ export function DonorImportPanel() {
                 });
 
                 if (error) {
-                  // Check for WORKER_LIMIT error - retry with backoff
-                  if (error.message?.includes('WORKER_LIMIT') || error.message?.includes('546')) {
+                  // Check for retryable errors (WORKER_LIMIT, statement timeout, connection issues)
+                  const isRetryable = 
+                    error.message?.includes('WORKER_LIMIT') || 
+                    error.message?.includes('546') ||
+                    error.message?.includes('statement timeout') ||
+                    error.message?.includes('connection closed');
+                  
+                  if (isRetryable) {
                     retryCount++;
-                    const backoffMs = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
-                    console.log(`[DonorImport] WORKER_LIMIT hit, retry ${retryCount}/${MAX_RETRIES} after ${backoffMs}ms`);
+                    const backoffMs = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s, 16s, 32s
+                    console.log(`[DonorImport] Retryable error, retry ${retryCount}/${MAX_RETRIES} after ${backoffMs}ms: ${error.message}`);
                     await new Promise(resolve => setTimeout(resolve, backoffMs));
                     continue;
                   }
                   console.error('Batch error:', error);
                   errors.push(`Batch ${batchNum}: ${error.message}`);
                 } else if (data) {
+                  // Check for statement timeout errors in the response
+                  const hasTimeoutError = data.errors?.some((e: string) => 
+                    e.includes('statement timeout') || e.includes('canceling statement')
+                  );
+                  
+                  if (hasTimeoutError && retryCount < MAX_RETRIES) {
+                    retryCount++;
+                    const backoffMs = Math.pow(2, retryCount) * 1000;
+                    console.log(`[DonorImport] Statement timeout in response, retry ${retryCount}/${MAX_RETRIES} after ${backoffMs}ms`);
+                    await new Promise(resolve => setTimeout(resolve, backoffMs));
+                    continue;
+                  }
+                  
                   insertedContributions += data.insertedContributions || 0;
                   insertedDonors += data.insertedDonors || 0;
                   skippedRows += data.skippedRows || 0;
@@ -168,11 +187,18 @@ export function DonorImportPanel() {
                 }
                 success = true;
               } catch (err: any) {
-                // Check for network/worker errors - retry with backoff
-                if (err.message?.includes('WORKER_LIMIT') || err.message?.includes('546') || err.message?.includes('Failed to send')) {
+                // Check for retryable network/worker errors
+                const isRetryable = 
+                  err.message?.includes('WORKER_LIMIT') || 
+                  err.message?.includes('546') || 
+                  err.message?.includes('Failed to send') ||
+                  err.message?.includes('statement timeout') ||
+                  err.message?.includes('connection closed');
+                
+                if (isRetryable) {
                   retryCount++;
                   const backoffMs = Math.pow(2, retryCount) * 1000;
-                  console.log(`[DonorImport] Error, retry ${retryCount}/${MAX_RETRIES} after ${backoffMs}ms`);
+                  console.log(`[DonorImport] Exception, retry ${retryCount}/${MAX_RETRIES} after ${backoffMs}ms: ${err.message}`);
                   await new Promise(resolve => setTimeout(resolve, backoffMs));
                   continue;
                 }
