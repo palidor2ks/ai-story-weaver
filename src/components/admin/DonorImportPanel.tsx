@@ -397,14 +397,22 @@ export function DonorImportPanel() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="candidate-id">Candidate ID (optional)</Label>
+            <Label htmlFor="candidate-id">
+              Candidate ID <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="candidate-id"
               value={candidateId}
               onChange={(e) => setCandidateId(e.target.value)}
-              placeholder="e.g., C001088"
+              placeholder="e.g., G000574"
               disabled={isImporting}
+              className={!candidateId && file ? 'border-amber-500' : ''}
             />
+            {!candidateId && file && (
+              <p className="text-xs text-amber-600">
+                ⚠️ Required for reconciliation. Auto-detected from committee if linked.
+              </p>
+            )}
           </div>
         </div>
 
@@ -477,7 +485,7 @@ export function DonorImportPanel() {
         <div className="flex gap-2">
           <Button
             onClick={handleImport}
-            disabled={!file || isImporting}
+            disabled={!file || isImporting || !candidateId}
             className="flex-1"
           >
             {isImporting ? (
@@ -489,6 +497,11 @@ export function DonorImportPanel() {
               <>
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 Complete
+              </>
+            ) : !candidateId && file ? (
+              <>
+                <AlertCircle className="mr-2 h-4 w-4" />
+                Candidate ID Required
               </>
             ) : (
               <>
