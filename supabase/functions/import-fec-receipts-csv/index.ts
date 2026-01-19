@@ -325,10 +325,11 @@ serve(async (req) => {
 
     // Upsert contributions in larger chunks for speed
     let insertedContributions = 0;
-    const CHUNK_SIZE = 200;
+    const CONTRIBUTION_CHUNK_SIZE = 200;  // contributions has fewer indexes
+    const DONOR_CHUNK_SIZE = 50;          // donors has 16 indexes - needs smaller chunks
     
-    for (let i = 0; i < contributions.length; i += CHUNK_SIZE) {
-      const chunk = contributions.slice(i, i + CHUNK_SIZE);
+    for (let i = 0; i < contributions.length; i += CONTRIBUTION_CHUNK_SIZE) {
+      const chunk = contributions.slice(i, i + CONTRIBUTION_CHUNK_SIZE);
       const { error, count } = await supabase
         .from('contributions')
         .upsert(chunk, { 
@@ -368,8 +369,8 @@ serve(async (req) => {
       candidate_id: d.candidateId
     }));
 
-    for (let i = 0; i < donorRows.length; i += CHUNK_SIZE) {
-      const chunk = donorRows.slice(i, i + CHUNK_SIZE);
+    for (let i = 0; i < donorRows.length; i += DONOR_CHUNK_SIZE) {
+      const chunk = donorRows.slice(i, i + DONOR_CHUNK_SIZE);
       const { error } = await supabase
         .from('donors')
         .upsert(chunk, {
