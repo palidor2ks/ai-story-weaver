@@ -172,7 +172,25 @@ serve(async (req) => {
       );
     }
 
+    const startTime = Date.now();
     console.log(`[CSV-IMPORT] Processing batch of ${rows.length} rows for cycle ${cycle}`);
+
+    // Pre-generate all contribution hashes in parallel for speed
+    const hashPromises: Promise<{ index: number; subId: string; hash: string } | null>[] = rows.map(async (row, index) => {
+      const subId = row.sub_id || row.SUB_ID;
+      if (!subId) return null;
+      const rowCycle = row.two_year_transaction_period || row.TWO_YEAR_TRANSACTION_PERIOD || cycle || '2024';
+      const hash = await generateContributionHash(subId, rowCycle);
+      return { index, subId, hash };
+    });
+    
+    const hashResults = await Promise.all(hashPromises);
+    const hashMap = new Map<number, string>();
+    for (const result of hashResults) {
+      if (result) hashMap.set(result.index, result.hash);
+    }
+    
+    console.log(`[CSV-IMPORT] Pre-generated ${hashMap.size} hashes in ${Date.now() - startTime}ms`);
 
     // Process rows into contributions
     const contributions: any[] = [];
@@ -180,7 +198,8 @@ serve(async (req) => {
     let skippedRows = 0;
     const errors: string[] = [];
 
-    for (const row of rows) {
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      const row = rows[rowIndex];
       try {
         // Get sub_id - required for deduplication
         const subId = row.sub_id || row.SUB_ID;
@@ -217,7 +236,8 @@ serve(async (req) => {
           continue;
         }
 
-        const identityHash = await generateContributionHash(subId, rowCycle);
+        // Use pre-computed hash
+        const identityHash = hashMap.get(rowIndex)!;
         const lineClass = classifyLineNumber(lineNumber);
         const earmarkInfo = parseEarmarkInfo(memoText);
 
@@ -300,11 +320,12 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[CSV-IMPORT] Prepared ${contributions.length} contributions, ${donorAggregates.size} unique donors, ${skippedRows} skipped`);
+    const prepTime = Date.now() - startTime;
+    console.log(`[CSV-IMPORT] Prepared ${contributions.length} contributions, ${donorAggregates.size} unique donors, ${skippedRows} skipped in ${prepTime}ms`);
 
-    // Upsert contributions in chunks
+    // Upsert contributions in larger chunks for speed
     let insertedContributions = 0;
-    const CHUNK_SIZE = 50;
+    const CHUNK_SIZE = 200;
     
     for (let i = 0; i < contributions.length; i += CHUNK_SIZE) {
       const chunk = contributions.slice(i, i + CHUNK_SIZE);
