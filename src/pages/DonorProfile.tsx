@@ -159,19 +159,25 @@ const DonorProfile = () => {
     queryFn: async () => {
       if (!donor?.name || !donor?.type) return null;
       
+      // Fetch all active aliases (without filtering by type initially)
       const { data, error } = await supabase
         .from('donor_aliases')
         .select('*')
-        .eq('donor_type', donor.type)
         .eq('is_active', true);
       
       if (error) throw error;
       
-      // Find matching alias using ILIKE pattern matching (client-side simulation)
+      // Find matching alias - check if donor's type is in donor_types array
       const matchingAlias = (data || []).find(alias => {
+        // Check name pattern match
         const pattern = alias.alias_pattern.replace(/%/g, '.*').replace(/_/g, '.');
         const regex = new RegExp(`^${pattern}$`, 'i');
-        return regex.test(donor.name);
+        const nameMatches = regex.test(donor.name);
+        
+        // Check type match - either in donor_types array or legacy donor_type field
+        const typeMatches = alias.donor_types?.includes(donor.type) || alias.donor_type === donor.type;
+        
+        return nameMatches && typeMatches;
       });
       
       return matchingAlias || null;
