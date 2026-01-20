@@ -178,36 +178,38 @@ export const CommitteeProfile = () => {
               {donors.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {donors.slice(0, 6).map((donor) => (
-                    <Card key={donor.id} className="h-full">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-foreground truncate">
-                              {donor.name}
-                            </p>
-                            {(donor.city || donor.state) && (
-                              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                <MapPin className="w-3 h-3 flex-shrink-0" />
-                                {donor.city && donor.state 
-                                  ? `${donor.city}, ${donor.state}` 
-                                  : donor.state || donor.city}
+                    <Link key={donor.id} to={`/donor/${donor.id}`}>
+                      <Card className="h-full hover:border-primary/50 hover:shadow-md transition-all cursor-pointer">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-foreground truncate">
+                                {donor.name}
                               </p>
-                            )}
+                              {(donor.city || donor.state) && (
+                                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                                  {donor.city && donor.state 
+                                    ? `${donor.city}, ${donor.state}` 
+                                    : donor.state || donor.city}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        {(donor.employer || donor.occupation) && (
-                          <p className="text-xs text-muted-foreground mb-2 truncate">
-                            {donor.occupation}{donor.occupation && donor.employer && ' • '}{donor.employer}
-                          </p>
-                        )}
-                        <div className="flex items-center justify-between pt-2 border-t border-border">
-                          <span className="text-xs text-muted-foreground">
-                            {donor.contributionCount} contribution{donor.contributionCount !== 1 ? 's' : ''}
-                          </span>
-                          <span className="font-bold text-agree">{formatCurrency(donor.totalAmount)}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
+                          {(donor.employer || donor.occupation) && (
+                            <p className="text-xs text-muted-foreground mb-2 truncate">
+                              {donor.occupation}{donor.occupation && donor.employer && ' • '}{donor.employer}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-between pt-2 border-t border-border">
+                            <span className="text-xs text-muted-foreground">
+                              {donor.contributionCount} contribution{donor.contributionCount !== 1 ? 's' : ''}
+                            </span>
+                            <span className="font-bold text-agree">{formatCurrency(donor.totalAmount)}</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </Link>
                   ))}
                 </div>
               ) : (
