@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowLeft, DollarSign, Users, Landmark, MapPin, Calendar, RefreshCw } from 'lucide-react';
+import { Loader2, ArrowLeft, DollarSign, Users, Landmark, MapPin, Calendar, RefreshCw, TrendingUp } from 'lucide-react';
 import { useCommittee, useCommitteeDonors } from '@/hooks/useCommittees';
 import { useFetchCommitteeDonors } from '@/hooks/useImportExternalCommittee';
 import { useAdminRole } from '@/hooks/useAdminRole';
@@ -167,6 +167,57 @@ export const CommitteeProfile = () => {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Top Contributors Section */}
+            <section>
+              <div className="flex items-center gap-3 mb-4">
+                <TrendingUp className="w-5 h-5 text-primary" />
+                <h2 className="font-display text-xl font-bold text-foreground">Top Contributors</h2>
+              </div>
+
+              {donors.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {donors.slice(0, 6).map((donor) => (
+                    <Card key={donor.id} className="h-full">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-foreground truncate">
+                              {donor.name}
+                            </p>
+                            {(donor.city || donor.state) && (
+                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                <MapPin className="w-3 h-3 flex-shrink-0" />
+                                {donor.city && donor.state 
+                                  ? `${donor.city}, ${donor.state}` 
+                                  : donor.state || donor.city}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        {(donor.employer || donor.occupation) && (
+                          <p className="text-xs text-muted-foreground mb-2 truncate">
+                            {donor.occupation}{donor.occupation && donor.employer && ' • '}{donor.employer}
+                          </p>
+                        )}
+                        <div className="flex items-center justify-between pt-2 border-t border-border">
+                          <span className="text-xs text-muted-foreground">
+                            {donor.contributionCount} contribution{donor.contributionCount !== 1 ? 's' : ''}
+                          </span>
+                          <span className="font-bold text-agree">{formatCurrency(donor.totalAmount)}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="py-10 text-center text-muted-foreground">
+                    No contributors found for this committee.
+                  </CardContent>
+                </Card>
+              )}
+            </section>
 
             <Card>
               <CardContent className="p-5">
