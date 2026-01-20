@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, ExternalLink } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, ExternalLink, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -21,6 +21,8 @@ interface ImportStats {
   errors: string[];
   corruptedSubIds: number;        // For file health warning
   uniqueHashes: number;           // For collision detection
+  currentBatch: number;           // Current batch number
+  totalBatches: number;           // Total batch count
 }
 
 interface DebugInfo {
@@ -46,11 +48,24 @@ export function DonorImportPanel() {
   const [existingCount, setExistingCount] = useState<number | null>(null);
   const [lastDebugInfo, setLastDebugInfo] = useState<DebugInfo | null>(null);
   const [fileHealthWarning, setFileHealthWarning] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const currentSessionRef = useRef<string | null>(null);
 
   const BATCH_SIZE = 500;
   const DELAY_MS = 150;  // Slightly more delay for stability
   const MAX_RETRIES = 5;
+
+  // Cancel the current import session
+  const cancelImport = useCallback(() => {
+    if (currentSessionRef.current) {
+      console.log(`[DonorImport] Cancelling session ${currentSessionRef.current}`);
+      currentSessionRef.current = null;
+      setActiveSessionId(null);
+      setIsImporting(false);
+      toast.info('Import cancelled');
+    }
+  }, []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -151,6 +166,17 @@ export function DonorImportPanel() {
       return;
     }
 
+    // Prevent concurrent imports
+    if (isImporting && currentSessionRef.current) {
+      toast.warning('An import is already in progress. Cancel it first to start a new one.');
+      return;
+    }
+
+    // Generate unique session ID
+    const sessionId = `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    currentSessionRef.current = sessionId;
+    setActiveSessionId(sessionId);
+
     setIsImporting(true);
     setProgress(0);
     setLastDebugInfo(null);
@@ -163,8 +189,12 @@ export function DonorImportPanel() {
       skippedRows: 0,
       errors: [],
       corruptedSubIds: 0,
-      uniqueHashes: 0
+      uniqueHashes: 0,
+      currentBatch: 0,
+      totalBatches: 0
     });
+
+    console.log(`[DonorImport] Starting session ${sessionId}`);
 
     try {
       // Parse entire file
@@ -176,10 +206,17 @@ export function DonorImportPanel() {
         complete: async (results) => {
           const allRows = results.data as any[];
           const totalRows = allRows.length;
+          const totalBatches = Math.ceil(totalRows / BATCH_SIZE);
           
-          setStats(prev => prev ? { ...prev, totalRows } : null);
+          // Check if session was cancelled before starting
+          if (currentSessionRef.current !== sessionId) {
+            console.log(`[DonorImport] Session ${sessionId} cancelled before start`);
+            return;
+          }
           
-          console.log(`[DonorImport] Starting import of ${totalRows} rows`);
+          setStats(prev => prev ? { ...prev, totalRows, totalBatches } : null);
+          
+          console.log(`[DonorImport] Session ${sessionId}: Starting import of ${totalRows} rows in ${totalBatches} batches`);
           
           let processedRows = 0;
           let insertedContributions = 0;
@@ -192,9 +229,14 @@ export function DonorImportPanel() {
 
           // Process in batches with retry logic
           for (let i = 0; i < totalRows; i += BATCH_SIZE) {
+            // Check if session was cancelled
+            if (currentSessionRef.current !== sessionId) {
+              console.log(`[DonorImport] Session ${sessionId} cancelled at batch ${Math.floor(i / BATCH_SIZE) + 1}`);
+              return;
+            }
+            
             const batch = allRows.slice(i, i + BATCH_SIZE);
             const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-            const totalBatches = Math.ceil(totalRows / BATCH_SIZE);
             
             let success = false;
             let retryCount = 0;
@@ -316,18 +358,24 @@ export function DonorImportPanel() {
             }
 
             processedRows = Math.min(i + BATCH_SIZE, totalRows);
-            setProgress(Math.round((processedRows / totalRows) * 100));
-            setStats({
-              totalRows,
-              processedRows,
-              insertedContributions,
-              skippedDuplicates,
-              insertedDonors,
-              skippedRows,
-              errors,
-              corruptedSubIds,
-              uniqueHashes
-            });
+            
+            // Only update stats if this session is still active
+            if (currentSessionRef.current === sessionId) {
+              setProgress(Math.round((processedRows / totalRows) * 100));
+              setStats({
+                totalRows,
+                processedRows,
+                insertedContributions,
+                skippedDuplicates,
+                insertedDonors,
+                skippedRows,
+                errors,
+                corruptedSubIds,
+                uniqueHashes,
+                currentBatch: batchNum,
+                totalBatches
+              });
+            }
 
             // Rate limiting delay between batches
             if (i + BATCH_SIZE < totalRows) {
@@ -335,17 +383,24 @@ export function DonorImportPanel() {
             }
           }
 
-          setProgress(100);
-          
-          if (errors.length > 0) {
-            toast.warning(`Import complete with ${errors.length} errors: ${insertedContributions} contributions added`);
-          } else {
-            toast.success(`Import complete: ${insertedContributions} contributions added`);
+          // Only update final state if session is still active
+          if (currentSessionRef.current === sessionId) {
+            setProgress(100);
+            setActiveSessionId(null);
+            currentSessionRef.current = null;
+            
+            if (errors.length > 0) {
+              toast.warning(`Import complete with ${errors.length} errors: ${insertedContributions} contributions added`);
+            } else {
+              toast.success(`Import complete: ${insertedContributions} contributions added`);
+            }
           }
         },
         error: (error) => {
-          console.error('CSV parse error:', error);
-          toast.error('Failed to parse CSV file');
+          if (currentSessionRef.current === sessionId) {
+            console.error('CSV parse error:', error);
+            toast.error('Failed to parse CSV file');
+          }
         }
       });
     } catch (err: any) {
@@ -357,6 +412,11 @@ export function DonorImportPanel() {
   };
 
   const resetForm = () => {
+    // Cancel any active import first
+    if (currentSessionRef.current) {
+      currentSessionRef.current = null;
+      setActiveSessionId(null);
+    }
     setFile(null);
     setStats(null);
     setProgress(0);
@@ -485,6 +545,26 @@ export function DonorImportPanel() {
               </div>
               <Progress value={progress} />
             </div>
+
+            {/* Session indicator */}
+            {activeSessionId && (
+              <div className="flex items-center justify-between p-2 rounded-lg bg-primary/10 border border-primary/20">
+                <div className="flex items-center gap-2 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span className="text-muted-foreground">Session:</span>
+                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{activeSessionId.slice(7, 19)}</code>
+                  {stats?.currentBatch && stats?.totalBatches && (
+                    <span className="text-muted-foreground">
+                      Batch {stats.currentBatch}/{stats.totalBatches}
+                    </span>
+                  )}
+                </div>
+                <Button variant="ghost" size="sm" onClick={cancelImport} className="text-destructive hover:text-destructive">
+                  <XCircle className="h-4 w-4 mr-1" />
+                  Cancel
+                </Button>
+              </div>
+            )}
 
             {stats && (
               <div className="space-y-3">
