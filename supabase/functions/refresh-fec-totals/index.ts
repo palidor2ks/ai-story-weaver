@@ -188,19 +188,20 @@ serve(async (req) => {
 
           // Build lookup map for per-committee local totals (will be populated in loop)
           // UPDATED: field names now match RPC output (individual_total, transfer_total, loan_total, etc.)
-          const committeeTotalsMap = new Map<string, {
-            individual_total: number;
-            individual_gross: number;
-            pac_total: number;
-            party_total: number;
-            transfer_total: number;
-            earmarked_total: number;
-            loan_total: number;
-            other_total: number;
-            organization_total: number;
-            memo_x_total: number;
-            conduit_excluded: number;
-          }>();
+        const committeeTotalsMap = new Map<string, {
+          individual_total: number;
+          individual_gross: number;
+          pac_total: number;
+          party_total: number;
+          transfer_total: number;
+          earmarked_total: number;
+          loan_total: number;
+          other_total: number;
+          organization_total: number;
+          memo_x_total: number;
+          conduit_excluded: number;
+          pass_through_excluded: number;
+        }>();
 
           // Fetch per-committee local totals for each committee
           for (const committee of committees) {
@@ -220,20 +221,21 @@ serve(async (req) => {
             // Log actual keys from RPC to debug field name mismatches
             console.log(`[REFRESH-FEC-TOTALS] Committee ${committee.fec_committee_id} local RPC keys: ${ct ? Object.keys(ct).join(', ') : 'null'}`);
             if (ct) {
-              committeeTotalsMap.set(committee.fec_committee_id, {
-                // FIXED: Use correct RPC field names
-                individual_total: Number(ct.individual_total) || 0,
-                individual_gross: Number(ct.individual_gross) || 0,
-                pac_total: Number(ct.pac_total) || 0,
-                party_total: Number(ct.party_total) || 0,
-                transfer_total: Number(ct.transfer_total) || 0,
-                earmarked_total: Number(ct.earmarked_total) || 0,
-                loan_total: Number(ct.loan_total) || 0,
-                other_total: Number(ct.other_total) || 0,
-                organization_total: Number(ct.organization_total) || 0,
-                memo_x_total: Number(ct.memo_x_total) || 0,
-                conduit_excluded: Number(ct.conduit_excluded) || 0,
-              });
+            committeeTotalsMap.set(committee.fec_committee_id, {
+              // FIXED: Use correct RPC field names
+              individual_total: Number(ct.individual_total) || 0,
+              individual_gross: Number(ct.individual_gross) || 0,
+              pac_total: Number(ct.pac_total) || 0,
+              party_total: Number(ct.party_total) || 0,
+              transfer_total: Number(ct.transfer_total) || 0,
+              earmarked_total: Number(ct.earmarked_total) || 0,
+              loan_total: Number(ct.loan_total) || 0,
+              other_total: Number(ct.other_total) || 0,
+              organization_total: Number(ct.organization_total) || 0,
+              memo_x_total: Number(ct.memo_x_total) || 0,
+              conduit_excluded: Number(ct.conduit_excluded) || 0,
+              pass_through_excluded: Number(ct.pass_through_excluded) || 0,
+            });
             }
           }
 
@@ -257,6 +259,7 @@ serve(async (req) => {
           let localOther = 0;
           let localMemoX = 0;
           let localConduitExcluded = 0;
+          let localPassThroughExcluded = 0;
 
           for (const committee of committees) {
             const totals = await fetchFECTotals(fecApiKey, committee.fec_committee_id, cycle);
@@ -275,6 +278,7 @@ serve(async (req) => {
               organization_total: 0,
               memo_x_total: 0,
               conduit_excluded: 0,
+              pass_through_excluded: 0,
             };
 
             // Sum up local totals - FIXED field names
@@ -292,6 +296,7 @@ serve(async (req) => {
             localOther += cmteTotals.other_total;
             localMemoX += cmteTotals.memo_x_total;
             localConduitExcluded += cmteTotals.conduit_excluded;
+            localPassThroughExcluded += cmteTotals.pass_through_excluded;
             
             if (totals.fecItemized !== null) {
               hasValidData = true;
@@ -370,6 +375,7 @@ serve(async (req) => {
                 local_loans: localLoans,
                 local_other_receipts: localOther,
                 memo_x_amount: localMemoX,
+                pass_through_excluded: localPassThroughExcluded,
                 delta_amount: deltaAmount,
                 delta_pct: deltaPct,
                 individual_delta_amount: individualDeltaAmount,
@@ -444,6 +450,7 @@ serve(async (req) => {
       organization_total: number;
       memo_x_total: number;
       conduit_excluded: number;
+      pass_through_excluded: number;
     }>();
 
     // Fetch per-committee local totals for each committee BEFORE the main loop
@@ -477,6 +484,7 @@ serve(async (req) => {
           organization_total: Number(ct.organization_total) || 0,
           memo_x_total: Number(ct.memo_x_total) || 0,
           conduit_excluded: Number(ct.conduit_excluded) || 0,
+          pass_through_excluded: Number(ct.pass_through_excluded) || 0,
         });
       }
     }
@@ -501,6 +509,7 @@ serve(async (req) => {
     let localOther = 0;
     let localMemoX = 0;
     let localConduitExcluded = 0;
+    let localPassThroughExcluded = 0;
 
     for (const committee of committees) {
       const totals = await fetchFECTotals(fecApiKey, committee.fec_committee_id, cycle);
@@ -519,6 +528,7 @@ serve(async (req) => {
         organization_total: 0,
         memo_x_total: 0,
         conduit_excluded: 0,
+        pass_through_excluded: 0,
       };
 
       // Sum up local totals for this candidate - FIXED field names
@@ -536,6 +546,7 @@ serve(async (req) => {
       localOther += cmteTotals.other_total;
       localMemoX += cmteTotals.memo_x_total;
       localConduitExcluded += cmteTotals.conduit_excluded;
+      localPassThroughExcluded += cmteTotals.pass_through_excluded;
       
       if (totals.fecItemized !== null) {
         totalFecItemized += totals.fecItemized;
@@ -629,6 +640,7 @@ serve(async (req) => {
         local_loans: localLoans,
         local_other_receipts: localOther,
         memo_x_amount: localMemoX,
+        pass_through_excluded: localPassThroughExcluded,
         // Deltas
         delta_amount: deltaAmount,
         delta_pct: deltaPct,

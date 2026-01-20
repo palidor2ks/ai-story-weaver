@@ -1163,6 +1163,7 @@ export type Database = {
           notes: string | null
           pac_delta_amount: number | null
           pac_delta_pct: number | null
+          pass_through_excluded: number | null
           status: string | null
           updated_at: string | null
         }
@@ -1201,6 +1202,7 @@ export type Database = {
           notes?: string | null
           pac_delta_amount?: number | null
           pac_delta_pct?: number | null
+          pass_through_excluded?: number | null
           status?: string | null
           updated_at?: string | null
         }
@@ -1239,6 +1241,7 @@ export type Database = {
           notes?: string | null
           pac_delta_amount?: number | null
           pac_delta_pct?: number | null
+          pass_through_excluded?: number | null
           status?: string | null
           updated_at?: string | null
         }
@@ -2365,6 +2368,7 @@ export type Database = {
           other_total: number
           pac_total: number
           party_total: number
+          pass_through_excluded: number
           transfer_total: number
         }[]
       }
@@ -2380,6 +2384,7 @@ export type Database = {
           other_total: number
           pac_total: number
           party_total: number
+          pass_through_excluded: number
           transfer_total: number
         }[]
       }
