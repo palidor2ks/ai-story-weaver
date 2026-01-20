@@ -14,6 +14,7 @@ interface FinanceCategoryBreakdownProps {
   localGrossIndividual: number;     // GROSS individuals (includes memo_code='X')
   localOrganization: number;        // Organizations (Line 11A non-Individual)
   memoXAmount: number;              // Difference (gross - net)
+  conduitExcluded?: number;         // Conduit orgs excluded from organization_total
   localPacContributions: number;
   localPartyContributions: number;
   fecItemized: number | null;       // FEC individual_itemized_contributions (Line 11A = Ind + Org)
@@ -53,6 +54,7 @@ export function FinanceCategoryBreakdown({
   localGrossIndividual,
   localOrganization,
   memoXAmount,
+  conduitExcluded = 0,
   localPacContributions,
   localPartyContributions,
   fecItemized,
@@ -161,6 +163,16 @@ export function FinanceCategoryBreakdown({
             <span></span>
             <span></span>
           </div>
+        </div>
+      )}
+
+      {/* Show conduit organizations excluded (ActBlue, WinRed, etc.) */}
+      {conduitExcluded > 0 && (
+        <div className="grid grid-cols-4 gap-2 items-center text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-1 py-0.5">
+          <span className="text-xs italic pl-2">⚠ Conduits excluded</span>
+          <span className="text-right">{formatCurrency(conduitExcluded)}</span>
+          <span className="text-right text-xs">(excluded)</span>
+          <span className="text-right text-xs">ActBlue/WinRed</span>
         </div>
       )}
 

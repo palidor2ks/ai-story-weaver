@@ -199,6 +199,7 @@ serve(async (req) => {
             other_total: number;
             organization_total: number;
             memo_x_total: number;
+            conduit_excluded: number;
           }>();
 
           // Fetch per-committee local totals for each committee
@@ -231,6 +232,7 @@ serve(async (req) => {
                 other_total: Number(ct.other_total) || 0,
                 organization_total: Number(ct.organization_total) || 0,
                 memo_x_total: Number(ct.memo_x_total) || 0,
+                conduit_excluded: Number(ct.conduit_excluded) || 0,
               });
             }
           }
@@ -254,6 +256,7 @@ serve(async (req) => {
           let localLoans = 0;
           let localOther = 0;
           let localMemoX = 0;
+          let localConduitExcluded = 0;
 
           for (const committee of committees) {
             const totals = await fetchFECTotals(fecApiKey, committee.fec_committee_id, cycle);
@@ -271,6 +274,7 @@ serve(async (req) => {
               other_total: 0,
               organization_total: 0,
               memo_x_total: 0,
+              conduit_excluded: 0,
             };
 
             // Sum up local totals - FIXED field names
@@ -287,6 +291,7 @@ serve(async (req) => {
             localLoans += cmteTotals.loan_total;
             localOther += cmteTotals.other_total;
             localMemoX += cmteTotals.memo_x_total;
+            localConduitExcluded += cmteTotals.conduit_excluded;
             
             if (totals.fecItemized !== null) {
               hasValidData = true;
@@ -438,6 +443,7 @@ serve(async (req) => {
       other_total: number;
       organization_total: number;
       memo_x_total: number;
+      conduit_excluded: number;
     }>();
 
     // Fetch per-committee local totals for each committee BEFORE the main loop
@@ -470,6 +476,7 @@ serve(async (req) => {
           other_total: Number(ct.other_total) || 0,
           organization_total: Number(ct.organization_total) || 0,
           memo_x_total: Number(ct.memo_x_total) || 0,
+          conduit_excluded: Number(ct.conduit_excluded) || 0,
         });
       }
     }
@@ -493,6 +500,7 @@ serve(async (req) => {
     let localLoans = 0;
     let localOther = 0;
     let localMemoX = 0;
+    let localConduitExcluded = 0;
 
     for (const committee of committees) {
       const totals = await fetchFECTotals(fecApiKey, committee.fec_committee_id, cycle);
@@ -510,6 +518,7 @@ serve(async (req) => {
         other_total: 0,
         organization_total: 0,
         memo_x_total: 0,
+        conduit_excluded: 0,
       };
 
       // Sum up local totals for this candidate - FIXED field names
@@ -526,6 +535,7 @@ serve(async (req) => {
       localLoans += cmteTotals.loan_total;
       localOther += cmteTotals.other_total;
       localMemoX += cmteTotals.memo_x_total;
+      localConduitExcluded += cmteTotals.conduit_excluded;
       
       if (totals.fecItemized !== null) {
         totalFecItemized += totals.fecItemized;
