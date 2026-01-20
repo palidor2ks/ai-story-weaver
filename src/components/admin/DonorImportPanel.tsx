@@ -14,10 +14,13 @@ import Papa from 'papaparse';
 interface ImportStats {
   totalRows: number;
   processedRows: number;
-  insertedContributions: number;
+  insertedContributions: number;  // Actual new inserts
+  skippedDuplicates: number;      // Already existed
   insertedDonors: number;
-  skippedRows: number;
+  skippedRows: number;            // Invalid/missing data
   errors: string[];
+  corruptedSubIds: number;        // For file health warning
+  uniqueHashes: number;           // For collision detection
 }
 
 interface DebugInfo {
@@ -42,6 +45,7 @@ export function DonorImportPanel() {
   const [detectedCommittee, setDetectedCommittee] = useState<string | null>(null);
   const [existingCount, setExistingCount] = useState<number | null>(null);
   const [lastDebugInfo, setLastDebugInfo] = useState<DebugInfo | null>(null);
+  const [fileHealthWarning, setFileHealthWarning] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const BATCH_SIZE = 500;
@@ -57,21 +61,51 @@ export function DonorImportPanel() {
     setProgress(0);
     setDetectedCommittee(null);
     setExistingCount(null);
+    setFileHealthWarning(null);
     setLastDebugInfo(null);
 
-    // Parse first few rows to detect committee
+    // Parse first 500 rows to detect committee and check file health
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
-      const lines = text.split('\n').slice(0, 10);
       
-      Papa.parse(lines.join('\n'), {
+      Papa.parse(text, {
         header: true,
+        preview: 500, // Check first 500 rows for health
         complete: async (results) => {
           if (results.data.length > 0) {
-            const firstRow = results.data[0] as any;
+            const rows = results.data as any[];
+            const firstRow = rows[0];
             const detectedId = firstRow.committee_id || firstRow.COMMITTEE_ID;
             const detectedName = firstRow.committee_name || firstRow.COMMITTEE_NAME;
+            
+            // Check for corrupted sub_id values (scientific notation from Excel)
+            let corruptedCount = 0;
+            const subIdSet = new Set<string>();
+            for (const row of rows) {
+              const subId = row.sub_id || row.SUB_ID || '';
+              subIdSet.add(subId);
+              // Check for scientific notation patterns
+              if (/[eE][+-]?\d+/.test(subId) || (subId.includes('.') && subId.length < 15)) {
+                corruptedCount++;
+              }
+            }
+            
+            // Warn if high corruption or collision rate
+            const collisionRate = 1 - (subIdSet.size / rows.length);
+            if (corruptedCount > rows.length * 0.1) {
+              setFileHealthWarning(
+                `⚠️ ${Math.round(corruptedCount/rows.length*100)}% of rows have corrupted sub_id values (scientific notation). ` +
+                `This usually happens when the CSV was opened in Excel. Re-download the CSV from FEC and avoid opening it in Excel before import.`
+              );
+            } else if (collisionRate > 0.5) {
+              setFileHealthWarning(
+                `⚠️ High sub_id collision rate (${Math.round(collisionRate*100)}%). ` +
+                `Only ${subIdSet.size} unique IDs found in ${rows.length} rows. This may cause data to be overwritten.`
+              );
+            } else {
+              setFileHealthWarning(null);
+            }
             
             if (detectedId) {
               setCommitteeId(detectedId);
@@ -100,7 +134,7 @@ export function DonorImportPanel() {
         }
       });
     };
-    reader.readAsText(selectedFile.slice(0, 10000)); // Read first 10KB to detect
+    reader.readAsText(selectedFile.slice(0, 500000)); // Read first 500KB to detect and check health
   };
 
   const copyDebugInfo = () => {
@@ -124,9 +158,12 @@ export function DonorImportPanel() {
       totalRows: 0,
       processedRows: 0,
       insertedContributions: 0,
+      skippedDuplicates: 0,
       insertedDonors: 0,
       skippedRows: 0,
-      errors: []
+      errors: [],
+      corruptedSubIds: 0,
+      uniqueHashes: 0
     });
 
     try {
@@ -146,8 +183,11 @@ export function DonorImportPanel() {
           
           let processedRows = 0;
           let insertedContributions = 0;
+          let skippedDuplicates = 0;
           let insertedDonors = 0;
           let skippedRows = 0;
+          let corruptedSubIds = 0;
+          let uniqueHashes = 0;
           const errors: string[] = [];
 
           // Process in batches with retry logic
@@ -220,8 +260,11 @@ export function DonorImportPanel() {
                   }
                   
                   insertedContributions += data.insertedContributions || 0;
+                  skippedDuplicates += data.skippedDuplicates || 0;
                   insertedDonors += data.insertedDonors || 0;
                   skippedRows += data.skippedRows || 0;
+                  corruptedSubIds += data.corruptedSubIds || 0;
+                  uniqueHashes += data.uniqueHashes || 0;
                   
                   if (data.timing) {
                     console.log(`[DonorImport] Batch ${batchNum}/${totalBatches} timing:`, data.timing);
@@ -278,9 +321,12 @@ export function DonorImportPanel() {
               totalRows,
               processedRows,
               insertedContributions,
+              skippedDuplicates,
               insertedDonors,
               skippedRows,
-              errors
+              errors,
+              corruptedSubIds,
+              uniqueHashes
             });
 
             // Rate limiting delay between batches
@@ -319,6 +365,7 @@ export function DonorImportPanel() {
     setCandidateId('');
     setCommitteeId('');
     setLastDebugInfo(null);
+    setFileHealthWarning(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -380,6 +427,18 @@ export function DonorImportPanel() {
           </div>
         )}
 
+        {/* File Health Warning */}
+        {fileHealthWarning && (
+          <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-amber-700 dark:text-amber-400">
+                {fileHealthWarning}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Configuration */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -428,22 +487,44 @@ export function DonorImportPanel() {
             </div>
 
             {stats && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-3 rounded-lg bg-muted">
-                  <div className="text-2xl font-bold">{stats.totalRows.toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground">Total Rows</div>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 rounded-lg bg-muted">
+                    <div className="text-2xl font-bold">{stats.totalRows.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">Total Rows</div>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-muted">
+                    <div className="text-2xl font-bold text-green-600">{stats.insertedContributions.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">New Contributions</div>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-muted">
+                    <div className="text-2xl font-bold text-blue-600">{stats.skippedDuplicates.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">Already Existed</div>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-muted">
+                    <div className="text-2xl font-bold text-amber-600">{stats.skippedRows.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">Invalid/Skipped</div>
+                  </div>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-muted">
-                  <div className="text-2xl font-bold text-green-600">{stats.insertedContributions.toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground">Contributions Added</div>
-                </div>
-                <div className="text-center p-3 rounded-lg bg-muted">
-                  <div className="text-2xl font-bold text-blue-600">{stats.insertedDonors.toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground">Donors Updated</div>
-                </div>
-                <div className="text-center p-3 rounded-lg bg-muted">
-                  <div className="text-2xl font-bold text-amber-600">{stats.skippedRows.toLocaleString()}</div>
-                  <div className="text-xs text-muted-foreground">Skipped/Dupes</div>
+                
+                {/* Secondary stats row */}
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div className="text-center p-2 rounded bg-muted/50">
+                    <span className="text-muted-foreground">Donors: </span>
+                    <span className="font-medium">{stats.insertedDonors.toLocaleString()}</span>
+                  </div>
+                  {stats.corruptedSubIds > 0 && (
+                    <div className="text-center p-2 rounded bg-amber-100 dark:bg-amber-900/20">
+                      <span className="text-amber-700 dark:text-amber-400">Corrupted IDs: </span>
+                      <span className="font-medium text-amber-700 dark:text-amber-400">{stats.corruptedSubIds.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {stats.uniqueHashes > 0 && stats.uniqueHashes < stats.processedRows * 0.9 && (
+                    <div className="text-center p-2 rounded bg-amber-100 dark:bg-amber-900/20">
+                      <span className="text-amber-700 dark:text-amber-400">Unique IDs: </span>
+                      <span className="font-medium text-amber-700 dark:text-amber-400">{stats.uniqueHashes.toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

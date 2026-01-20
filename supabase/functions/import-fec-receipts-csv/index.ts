@@ -83,9 +83,37 @@ function parseEarmarkInfo(memoText: string | null): { isEarmarked: boolean; isEa
   return { isEarmarked: false, isEarmarkPassThrough: false };
 }
 
+// Check if sub_id looks corrupted (scientific notation from Excel)
+function isCorruptedSubId(subId: string): boolean {
+  if (!subId) return true;
+  // Scientific notation patterns: 4.02272E+18, 4.02E18, etc.
+  if (/[eE][+-]?\d+/.test(subId)) return true;
+  // Should be a long integer, not contain dots unless scientific
+  if (subId.includes('.') && !subId.includes('E') && !subId.includes('e')) return true;
+  return false;
+}
+
 // Generate identity hash for deduplication
-async function generateContributionHash(subId: string, cycle: string): Promise<string> {
-  const identityKey = `${subId}|${cycle}`;
+// Uses sub_id if valid, otherwise falls back to a composite key
+async function generateContributionHash(
+  subId: string, 
+  cycle: string,
+  fallbackKey?: { committeeId: string; transactionId: string; fileNumber?: string; amount?: number; date?: string }
+): Promise<string> {
+  let identityKey: string;
+  
+  if (!isCorruptedSubId(subId)) {
+    // Clean sub_id - use it directly
+    identityKey = `${subId}|${cycle}`;
+  } else if (fallbackKey?.transactionId) {
+    // Corrupted sub_id but we have transaction_id - use composite fallback
+    identityKey = `${fallbackKey.committeeId}|${cycle}|${fallbackKey.transactionId}|${fallbackKey.amount || 0}|${fallbackKey.date || ''}`;
+    console.log(`[CSV-IMPORT] Using fallback identity for corrupted sub_id: ${subId}`);
+  } else {
+    // Last resort - use the corrupted sub_id (will cause collisions but better than nothing)
+    identityKey = `${subId}|${cycle}`;
+  }
+  
   const encoder = new TextEncoder();
   const data = encoder.encode(identityKey);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -132,20 +160,23 @@ async function generateDonorId(
   return `fec-${hashHex.slice(0, 32)}`;
 }
 
-// Parse date from FEC format (MM/DD/YYYY or YYYY-MM-DD)
+// Parse date from FEC format (MM/DD/YYYY, MM/DD/YYYY H:MM, or YYYY-MM-DD)
 function parseReceiptDate(dateStr: string | null): string | null {
   if (!dateStr) return null;
   
+  // Strip any time component first (e.g., "1/11/2024 0:00" -> "1/11/2024")
+  const dateOnly = dateStr.split(' ')[0].trim();
+  
   // Try MM/DD/YYYY format
-  const slashMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const slashMatch = dateOnly.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (slashMatch) {
     const [, month, day, year] = slashMatch;
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
   
   // Already in YYYY-MM-DD format
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+    return dateOnly;
   }
   
   return null;
@@ -210,19 +241,49 @@ Deno.serve(async (req) => {
     const batchTag = rows[0]?.sub_id || rows[0]?.SUB_ID || 'unknown';
     console.log(`[CSV-IMPORT] batch_tag=${batchTag} rows=${rows.length} cycle=${cycle}`);
 
+    // Check for corrupted sub_ids and warn
+    let corruptedSubIdCount = 0;
+    for (const row of rows) {
+      const subId = row.sub_id || row.SUB_ID || '';
+      if (isCorruptedSubId(subId)) corruptedSubIdCount++;
+    }
+    if (corruptedSubIdCount > rows.length * 0.1) {
+      console.warn(`[CSV-IMPORT] WARNING: ${corruptedSubIdCount}/${rows.length} (${Math.round(corruptedSubIdCount/rows.length*100)}%) rows have corrupted sub_id values (scientific notation). Using fallback identity.`);
+    }
+
     // Pre-generate all contribution hashes in parallel for speed
     const hashPromises: Promise<{ index: number; subId: string; hash: string } | null>[] = rows.map(async (row, index) => {
       const subId = row.sub_id || row.SUB_ID;
       if (!subId) return null;
       const rowCycle = row.two_year_transaction_period || row.TWO_YEAR_TRANSACTION_PERIOD || cycle || '2024';
-      const hash = await generateContributionHash(subId, rowCycle);
+      const transactionId = row.transaction_id || row.TRANSACTION_ID || '';
+      const amount = parseFloat(row.contribution_receipt_amount || row.CONTRIBUTION_RECEIPT_AMOUNT || '0');
+      const date = row.contribution_receipt_date || row.CONTRIBUTION_RECEIPT_DATE || '';
+      const rowCommitteeId = committeeId || row.committee_id || row.COMMITTEE_ID || '';
+      
+      const hash = await generateContributionHash(subId, rowCycle, {
+        committeeId: rowCommitteeId,
+        transactionId,
+        amount,
+        date
+      });
       return { index, subId, hash };
     });
     
     const hashResults = await Promise.all(hashPromises);
     const hashMap = new Map<number, string>();
+    const uniqueHashes = new Set<string>();
     for (const result of hashResults) {
-      if (result) hashMap.set(result.index, result.hash);
+      if (result) {
+        hashMap.set(result.index, result.hash);
+        uniqueHashes.add(result.hash);
+      }
+    }
+    
+    // Log collision rate for debugging
+    const collisionRate = 1 - (uniqueHashes.size / hashMap.size);
+    if (collisionRate > 0.1) {
+      console.warn(`[CSV-IMPORT] High hash collision rate: ${Math.round(collisionRate*100)}% (${uniqueHashes.size} unique from ${hashMap.size} rows)`);
     }
     
     const hashTime = Date.now() - startTime;
@@ -395,8 +456,35 @@ Deno.serve(async (req) => {
 
     const prepTime = Date.now() - startTime;
 
+    // First, check which identity_hashes already exist to get accurate insert counts
+    const allHashes = contributions.map(c => c.identity_hash);
+    let existingHashSet = new Set<string>();
+    
+    // Query existing hashes in chunks to avoid query size limits
+    const HASH_CHECK_CHUNK = 500;
+    for (let i = 0; i < allHashes.length; i += HASH_CHECK_CHUNK) {
+      const hashChunk = allHashes.slice(i, i + HASH_CHECK_CHUNK);
+      const { data: existingRows } = await supabase
+        .from('contributions')
+        .select('identity_hash')
+        .eq('cycle', cycle)
+        .in('identity_hash', hashChunk);
+      
+      if (existingRows) {
+        for (const row of existingRows) {
+          existingHashSet.add(row.identity_hash);
+        }
+      }
+    }
+    
+    const newContributions = contributions.filter(c => !existingHashSet.has(c.identity_hash));
+    const skippedDuplicates = contributions.length - newContributions.length;
+    
+    console.log(`[CSV-IMPORT] Pre-check: ${newContributions.length} new, ${skippedDuplicates} existing (will skip)`);
+
     // Upsert contributions in small chunks with retry - INSERT ONLY (skip existing)
     let insertedContributions = 0;
+    let actualInserts = 0;
     const CONTRIBUTION_CHUNK_SIZE = 100;  // Larger chunks since we're skipping conflicts
     const DONOR_CHUNK_SIZE = 25;
     const totalContribChunks = Math.ceil(contributions.length / CONTRIBUTION_CHUNK_SIZE);
@@ -406,10 +494,11 @@ Deno.serve(async (req) => {
     for (let i = 0; i < contributions.length; i += CONTRIBUTION_CHUNK_SIZE) {
       const chunkNum = Math.floor(i / CONTRIBUTION_CHUNK_SIZE) + 1;
       const chunk = contributions.slice(i, i + CONTRIBUTION_CHUNK_SIZE);
+      const newInChunk = chunk.filter(c => !existingHashSet.has(c.identity_hash)).length;
       
       try {
         await retryWithBackoff(async () => {
-          const { error, count } = await supabase
+          const { error } = await supabase
             .from('contributions')
             .upsert(chunk, { 
               onConflict: 'identity_hash,cycle',
@@ -420,6 +509,7 @@ Deno.serve(async (req) => {
             throw error;
           }
           insertedContributions += chunk.length;
+          actualInserts += newInChunk;
         }, 3, 500);
       } catch (err: any) {
         console.error(`[CSV-IMPORT] Contribution chunk ${chunkNum}/${totalContribChunks} FAILED:`, err.message);
@@ -484,15 +574,18 @@ Deno.serve(async (req) => {
     const totalTime = Date.now() - startTime;
 
     // Structured timing log for debugging
-    console.log(`[CSV-IMPORT] batch_tag=${batchTag} timing={"prep_ms":${prepTime},"hash_ms":${hashTime},"donor_id_ms":${donorIdTime},"contrib_upsert_ms":${contribTime},"donor_upsert_ms":${donorTime},"total_ms":${totalTime}} counts={"contributions":${insertedContributions},"donors":${insertedDonors},"skipped":${skippedRows},"errors":${errors.length}}`);
+    console.log(`[CSV-IMPORT] batch_tag=${batchTag} timing={"prep_ms":${prepTime},"hash_ms":${hashTime},"donor_id_ms":${donorIdTime},"contrib_upsert_ms":${contribTime},"donor_upsert_ms":${donorTime},"total_ms":${totalTime}} counts={"processed":${insertedContributions},"inserted":${actualInserts},"skipped_dupes":${skippedDuplicates},"skipped_invalid":${skippedRows},"donors":${insertedDonors},"errors":${errors.length}}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         processed: rows.length,
-        insertedContributions,
+        insertedContributions: actualInserts,  // Now reflects ACTUAL new inserts
+        skippedDuplicates,                      // Rows that already existed
         insertedDonors,
-        skippedRows,
+        skippedRows,                            // Rows with missing/invalid data
+        uniqueHashes: uniqueHashes.size,        // For debugging collision issues
+        corruptedSubIds: corruptedSubIdCount,   // For file health warning
         errors: errors.slice(0, 10),
         timing: {
           prep_ms: prepTime,
