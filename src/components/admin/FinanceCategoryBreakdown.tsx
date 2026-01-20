@@ -15,6 +15,7 @@ interface FinanceCategoryBreakdownProps {
   localOrganization: number;        // Organizations (Line 11A non-Individual)
   memoXAmount: number;              // Difference (gross - net)
   conduitExcluded?: number;         // Conduit orgs excluded from organization_total
+  passThroughExcluded?: number;     // Pass-through contributions excluded via memo_text detection
   localPacContributions: number;
   localPartyContributions: number;
   fecItemized: number | null;       // FEC individual_itemized_contributions (Line 11A = Ind + Org)
@@ -55,6 +56,7 @@ export function FinanceCategoryBreakdown({
   localOrganization,
   memoXAmount,
   conduitExcluded = 0,
+  passThroughExcluded = 0,
   localPacContributions,
   localPartyContributions,
   fecItemized,
@@ -183,6 +185,16 @@ export function FinanceCategoryBreakdown({
           <span className="text-right">{formatCurrency(memoXAmount)}</span>
           <span className="text-right text-muted-foreground text-xs">(excluded)</span>
           <span className="text-right text-xs">pass-through</span>
+        </div>
+      )}
+
+      {/* Show pass-through excluded (detected via memo_text pattern) */}
+      {passThroughExcluded > 0 && (
+        <div className="grid grid-cols-4 gap-2 items-center text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-1 py-0.5">
+          <span className="text-xs italic pl-2">⚠ Pass-through (11C)</span>
+          <span className="text-right">{formatCurrency(passThroughExcluded)}</span>
+          <span className="text-right text-xs">(excluded)</span>
+          <span className="text-right text-xs">memo_text</span>
         </div>
       )}
 
