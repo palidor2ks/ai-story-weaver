@@ -809,6 +809,33 @@ export type Database = {
         }
         Relationships: []
       }
+      conduit_organizations: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       contributions: {
         Row: {
           amount: number
@@ -2329,25 +2356,23 @@ export type Database = {
       get_contribution_totals: {
         Args: { p_candidate_id: string; p_cycle: string }
         Returns: {
-          contribution_count: number
+          conduit_excluded: number
           earmarked_total: number
-          gross_individual_total: number
           individual_total: number
-          itemized_total: number
-          loans_total: number
+          loan_total: number
+          memo_x_total: number
           organization_total: number
           other_total: number
           pac_total: number
           party_total: number
-          passthrough_total: number
-          transfers_total: number
+          transfer_total: number
         }[]
       }
       get_contribution_totals_by_committee: {
         Args: { p_committee_id: string; p_cycle: string }
         Returns: {
+          conduit_excluded: number
           earmarked_total: number
-          individual_gross: number
           individual_total: number
           loan_total: number
           memo_x_total: number
