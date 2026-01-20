@@ -173,12 +173,13 @@ serve(async (req) => {
       
       for (const cId of toProcess) {
         try {
-          // Get committees for this candidate
+          // Get committees for this candidate (P/A designations OR active with null designation for legacy data)
           const { data: committees } = await supabase
             .from('candidate_committees')
-            .select('fec_committee_id, designation')
+            .select('fec_committee_id, designation, active')
             .eq('candidate_id', cId)
-            .in('designation', ['P', 'A']);
+            .eq('active', true)
+            .or('designation.in.(P,A),designation.is.null');
           
           if (!committees || committees.length === 0) {
             results.skipped++;
@@ -422,12 +423,13 @@ serve(async (req) => {
 
     console.log(`[REFRESH-FEC-TOTALS] Refreshing FEC totals for candidate ${candidateId}`);
 
-    // Get committees for this candidate
+    // Get committees for this candidate (P/A designations OR active with null designation for legacy data)
     const { data: committees } = await supabase
       .from('candidate_committees')
-      .select('fec_committee_id, designation, name')
+      .select('fec_committee_id, designation, name, active')
       .eq('candidate_id', candidateId)
-      .in('designation', ['P', 'A']);
+      .eq('active', true)
+      .or('designation.in.(P,A),designation.is.null');
 
     if (!committees || committees.length === 0) {
       return new Response(
