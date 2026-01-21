@@ -2359,33 +2359,23 @@ export type Database = {
       get_contribution_totals: {
         Args: { p_candidate_id: string; p_cycle: string }
         Returns: {
-          conduit_excluded: number
-          earmarked_total: number
+          grand_total: number
           individual_total: number
-          loan_total: number
-          memo_x_total: number
           organization_total: number
           other_total: number
           pac_total: number
           party_total: number
-          pass_through_excluded: number
-          transfer_total: number
         }[]
       }
       get_contribution_totals_by_committee: {
         Args: { p_committee_id: string; p_cycle: string }
         Returns: {
-          conduit_excluded: number
-          earmarked_total: number
+          grand_total: number
           individual_total: number
-          loan_total: number
-          memo_x_total: number
           organization_total: number
           other_total: number
           pac_total: number
           party_total: number
-          pass_through_excluded: number
-          transfer_total: number
         }[]
       }
       has_role: {
