@@ -33,9 +33,12 @@ export interface FinanceReconciliation {
   individual_delta_pct: number | null;
   pac_delta_amount: number | null;
   pac_delta_pct: number | null;
-  // Overall delta
+  // Overall delta (itemized comparison for data integrity)
   delta_amount: number | null;
   delta_pct: number | null;
+  // Total receipts delta (for UI display - matches FEC/Local columns)
+  total_receipts_delta_amount: number | null;
+  total_receipts_delta_pct: number | null;
   status: string | null;
   checked_at: string | null;
 }

@@ -3,8 +3,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { TrendingDown, TrendingUp, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 interface DeltaBadgeProps {
+  // Total receipts delta (primary display - what FEC/Local columns show)
   deltaAmount?: number | null;
   deltaPct?: number | null;
+  // Itemized delta (secondary - for data integrity, shown in tooltip)
+  itemizedDeltaAmount?: number | null;
+  itemizedDeltaPct?: number | null;
   // Category-level deltas
   individualDeltaPct?: number | null;
   pacDeltaPct?: number | null;
@@ -14,6 +18,8 @@ interface DeltaBadgeProps {
 export function DeltaBadge({ 
   deltaAmount, 
   deltaPct, 
+  itemizedDeltaAmount,
+  itemizedDeltaPct,
   individualDeltaPct,
   pacDeltaPct,
   className 
@@ -75,21 +81,34 @@ export function DeltaBadge({
             <span className="text-muted-foreground/70">({deltaPct > 0 ? '+' : ''}{deltaPct.toFixed(1)}%)</span>
           </div>
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs max-w-[280px]">
+        <TooltipContent side="top" className="text-xs max-w-[300px]">
           <div className="space-y-1.5">
             <div className="font-medium">Finance Variance</div>
+            
+            {/* Total Receipts Delta (primary) */}
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Overall Delta:</span>
+              <span className="text-muted-foreground">Total Receipts:</span>
               <span className={colorClass}>
                 {deltaAmount < 0 ? '-' : '+'}${Math.abs(deltaAmount).toLocaleString()} ({deltaPct > 0 ? '+' : ''}{deltaPct.toFixed(1)}%)
               </span>
             </div>
             
+            {/* Itemized Delta (secondary - data integrity check) */}
+            {itemizedDeltaAmount !== null && itemizedDeltaAmount !== undefined && 
+             itemizedDeltaPct !== null && itemizedDeltaPct !== undefined && (
+              <div className="flex justify-between gap-4 text-[10px]">
+                <span className="text-muted-foreground">Itemized Only:</span>
+                <span className={getColorClass(itemizedDeltaPct)}>
+                  {itemizedDeltaAmount < 0 ? '-' : '+'}${Math.abs(itemizedDeltaAmount).toLocaleString()} ({itemizedDeltaPct > 0 ? '+' : ''}{itemizedDeltaPct.toFixed(1)}%)
+                </span>
+              </div>
+            )}
+            
             {/* Category breakdown */}
             {categories.length > 0 && (
               <>
                 <div className="border-t pt-1.5 mt-1.5">
-                  <div className="text-muted-foreground mb-1">By Category:</div>
+                  <div className="text-muted-foreground mb-1">Itemized by Category:</div>
                   {individualDeltaPct !== null && individualDeltaPct !== undefined && (
                     <div className="flex justify-between gap-4">
                       <span className="text-muted-foreground">├─ Individuals:</span>

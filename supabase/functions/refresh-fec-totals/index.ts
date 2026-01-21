@@ -353,6 +353,18 @@ serve(async (req) => {
 
             const status = Math.abs(deltaPct) <= 2 ? 'ok' : Math.abs(deltaPct) <= 5 ? 'warning' : 'error';
 
+            // Calculate TOTAL RECEIPTS delta (for UI display - matches FEC/Local columns)
+            // This mirrors the calculation in AnswerCoveragePanel lines 2004-2037
+            const transferGap = Math.max(0, (totalFecReceipts > 0 ? totalFecReceipts * 0.05 : 0) - localTransfers); // Estimated transfer gap
+            const localTotalReceipts = localItemized + localTransfers + localOther + totalFecUnitemized + transferGap + localLoans;
+            
+            const totalReceiptsDeltaAmount = totalFecReceipts > 0 
+              ? Math.round(localTotalReceipts - totalFecReceipts) 
+              : null;
+            const totalReceiptsDeltaPct = totalFecReceipts > 0 
+              ? ((localTotalReceipts - totalFecReceipts) / totalFecReceipts) * 100 
+              : null;
+
             // Update finance_reconciliation with ALL fields
             await supabase
               .from('finance_reconciliation')
@@ -383,6 +395,8 @@ serve(async (req) => {
                 individual_delta_pct: individualDeltaPct,
                 pac_delta_amount: pacDeltaAmount,
                 pac_delta_pct: pacDeltaPct,
+                total_receipts_delta_amount: totalReceiptsDeltaAmount,
+                total_receipts_delta_pct: totalReceiptsDeltaPct,
                 status,
                 checked_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
@@ -615,6 +629,17 @@ serve(async (req) => {
 
     const status = Math.abs(deltaPct) <= 2 ? 'ok' : Math.abs(deltaPct) <= 5 ? 'warning' : 'error';
 
+    // Calculate TOTAL RECEIPTS delta (for UI display - matches FEC/Local columns)
+    const transferGap = Math.max(0, (totalFecReceipts > 0 ? totalFecReceipts * 0.05 : 0) - localTransfers);
+    const localTotalReceipts = localItemized + localTransfers + localOther + totalFecUnitemized + transferGap + localLoans;
+    
+    const totalReceiptsDeltaAmount = totalFecReceipts > 0 
+      ? Math.round(localTotalReceipts - totalFecReceipts) 
+      : null;
+    const totalReceiptsDeltaPct = totalFecReceipts > 0 
+      ? ((localTotalReceipts - totalFecReceipts) / totalFecReceipts) * 100 
+      : null;
+
     console.log(`[REFRESH-FEC-TOTALS] ${candidateId}: localGrossInd=$${localGrossIndividual}, localPac=$${localPac}, localParty=$${localParty}, fecInd=$${totalFecItemized}, fecPac=$${totalFecPac}, fecParty=$${totalFecParty}`);
 
     // Update finance_reconciliation with ALL fields matching nightly reconciliation
@@ -650,6 +675,8 @@ serve(async (req) => {
         individual_delta_pct: individualDeltaPct,
         pac_delta_amount: pacDeltaAmount,
         pac_delta_pct: pacDeltaPct,
+        total_receipts_delta_amount: totalReceiptsDeltaAmount,
+        total_receipts_delta_pct: totalReceiptsDeltaPct,
         status,
         checked_at: new Date().toISOString(),
         updated_at: new Date().toISOString()

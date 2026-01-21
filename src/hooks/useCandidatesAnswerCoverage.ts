@@ -53,10 +53,13 @@ export interface CandidateAnswerCoverage {
   fecCandidateContribution: number; // Candidate self-contribution (non-loan)
   fecOtherReceipts: number;      // Other receipts (Line 15)
   fecOffsetsToOperatingExpenditures: number; // Line 14 offsets
-  // Overall delta
+  // Overall delta (itemized comparison for data integrity)
   deltaAmount: number | null;    // Difference between local NET and FEC
   deltaPct: number | null;       // Percentage difference
   reconciliationStatus: string | null; // ok, warning, error
+  // Total receipts delta (for UI display - matches FEC/Local columns)
+  totalReceiptsDeltaAmount: number | null;
+  totalReceiptsDeltaPct: number | null;
   // Category-level deltas
   individualDeltaAmount: number | null;
   individualDeltaPct: number | null;
@@ -237,6 +240,8 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         individual_delta_pct: number | null;
         pac_delta_amount: number | null;
         pac_delta_pct: number | null;
+        total_receipts_delta_amount: number | null;
+        total_receipts_delta_pct: number | null;
         status: string | null;
         checked_at: string | null;
       }
@@ -430,6 +435,9 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           deltaAmount: rec?.delta_amount ?? null,
           deltaPct: rec?.delta_pct ?? null,
           reconciliationStatus: rec?.status || null,
+          // Total receipts delta (for UI display - matches FEC/Local columns)
+          totalReceiptsDeltaAmount: rec?.total_receipts_delta_amount ?? null,
+          totalReceiptsDeltaPct: rec?.total_receipts_delta_pct ?? null,
           // Category-level deltas
           individualDeltaAmount: rec?.individual_delta_amount ?? null,
           individualDeltaPct: rec?.individual_delta_pct ?? null,
