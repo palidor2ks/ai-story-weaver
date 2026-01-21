@@ -38,6 +38,7 @@ serve(async (req) => {
 
     const { address } = await req.json();
 
+    // Validate address format and length
     if (typeof address !== 'string' || address.trim().length < 5 || address.trim().length > 200) {
       return new Response(JSON.stringify({ error: 'Address is required (5-200 characters)' }), {
         status: 400,
@@ -46,6 +47,18 @@ serve(async (req) => {
     }
 
     const normalizedAddress = address.trim();
+
+    // Validate address contains valid characters (letters, numbers, spaces, common punctuation)
+    // Must contain at least some alphanumeric characters
+    const addressPattern = /^[a-zA-Z0-9\s.,#'\-\/]+$/;
+    const hasAlphanumeric = /[a-zA-Z0-9]/.test(normalizedAddress);
+    
+    if (!addressPattern.test(normalizedAddress) || !hasAlphanumeric) {
+      return new Response(JSON.stringify({ error: 'Address contains invalid characters' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     console.log('Geocoding address:', normalizedAddress);
 

@@ -38,9 +38,27 @@ serve(async (req) => {
 
     const { placeId, sessionToken } = await req.json();
 
+    // Validate placeId type
     if (!placeId || typeof placeId !== 'string') {
       return new Response(
         JSON.stringify({ error: 'Place ID is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate placeId format (alphanumeric, hyphens, underscores only) and length
+    const placeIdPattern = /^[A-Za-z0-9_-]+$/;
+    if (!placeIdPattern.test(placeId) || placeId.length > 200) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid place ID format' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate sessionToken format if provided
+    if (sessionToken && (typeof sessionToken !== 'string' || sessionToken.length > 200)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid session token' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

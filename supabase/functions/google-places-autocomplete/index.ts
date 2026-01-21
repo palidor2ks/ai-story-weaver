@@ -38,9 +38,26 @@ serve(async (req) => {
 
     const { input, sessionToken } = await req.json();
 
+    // Validate input type and length
     if (!input || typeof input !== 'string') {
       return new Response(
         JSON.stringify({ error: 'Input is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Limit input length to prevent abuse
+    if (input.length > 500) {
+      return new Response(
+        JSON.stringify({ error: 'Input too long (max 500 characters)' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate sessionToken format if provided
+    if (sessionToken && (typeof sessionToken !== 'string' || sessionToken.length > 200)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid session token' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
