@@ -197,7 +197,9 @@ serve(async (req) => {
           transfer_total: number;
           earmarked_total: number;
           loan_total: number;
-          other_total: number;
+          offset_total: number;           // Line 14 only
+          other_receipts_total: number;   // Line 15 only
+          other_total: number;            // Legacy (not used)
           organization_total: number;
           memo_x_total: number;
           conduit_excluded: number;
@@ -231,7 +233,9 @@ serve(async (req) => {
               transfer_total: Number(ct.transfer_total) || 0,
               earmarked_total: Number(ct.earmarked_total) || 0,
               loan_total: Number(ct.loan_total) || 0,
-              other_total: Number(ct.other_total) || 0,
+              offset_total: Number(ct.offset_total) || 0,           // Line 14
+              other_receipts_total: Number(ct.other_receipts_total) || 0, // Line 15
+              other_total: Number(ct.other_total) || 0,             // Legacy
               organization_total: Number(ct.organization_total) || 0,
               memo_x_total: Number(ct.memo_x_total) || 0,
               conduit_excluded: Number(ct.conduit_excluded) || 0,
@@ -275,7 +279,9 @@ serve(async (req) => {
               transfer_total: 0,
               earmarked_total: 0,
               loan_total: 0,
-              other_total: 0,
+              offset_total: 0,           // Line 14 only
+              other_receipts_total: 0,   // Line 15 only
+              other_total: 0,            // Legacy (not used)
               organization_total: 0,
               memo_x_total: 0,
               conduit_excluded: 0,
@@ -294,7 +300,8 @@ serve(async (req) => {
             localTransfers += cmteTotals.transfer_total;
             localEarmarked += cmteTotals.earmarked_total;
             localLoans += cmteTotals.loan_total;
-            localOther += cmteTotals.other_total;
+            // Use ONLY Lines 14+15 (offsets + other receipts), NOT the legacy other_total
+            localOther += (cmteTotals.offset_total || 0) + (cmteTotals.other_receipts_total || 0);
             localMemoX += cmteTotals.memo_x_total;
             localConduitExcluded += cmteTotals.conduit_excluded;
             localPassThroughExcluded += cmteTotals.pass_through_excluded;
@@ -326,7 +333,7 @@ serve(async (req) => {
                   local_transfers: cmteTotals.transfer_total,
                   local_earmarked: cmteTotals.earmarked_total,
                   local_loans: cmteTotals.loan_total,
-                  local_other: cmteTotals.other_total,
+                  local_other: (cmteTotals.offset_total || 0) + (cmteTotals.other_receipts_total || 0),
                   local_organization: cmteTotals.organization_total,
                   last_fec_check: new Date().toISOString()
                 }, { onConflict: 'committee_id,cycle' });
@@ -462,7 +469,9 @@ serve(async (req) => {
       transfer_total: number;
       earmarked_total: number;
       loan_total: number;
-      other_total: number;
+      offset_total: number;           // Line 14 only
+      other_receipts_total: number;   // Line 15 only
+      other_total: number;            // Legacy (not used)
       organization_total: number;
       memo_x_total: number;
       conduit_excluded: number;
@@ -496,7 +505,9 @@ serve(async (req) => {
           transfer_total: Number(ct.transfer_total) || 0,
           earmarked_total: Number(ct.earmarked_total) || 0,
           loan_total: Number(ct.loan_total) || 0,
-          other_total: Number(ct.other_total) || 0,
+          offset_total: Number(ct.offset_total) || 0,           // Line 14
+          other_receipts_total: Number(ct.other_receipts_total) || 0, // Line 15
+          other_total: Number(ct.other_total) || 0,             // Legacy
           organization_total: Number(ct.organization_total) || 0,
           memo_x_total: Number(ct.memo_x_total) || 0,
           conduit_excluded: Number(ct.conduit_excluded) || 0,
@@ -540,7 +551,9 @@ serve(async (req) => {
         transfer_total: 0,
         earmarked_total: 0,
         loan_total: 0,
-        other_total: 0,
+        offset_total: 0,           // Line 14 only
+        other_receipts_total: 0,   // Line 15 only
+        other_total: 0,            // Legacy (not used)
         organization_total: 0,
         memo_x_total: 0,
         conduit_excluded: 0,
@@ -559,7 +572,8 @@ serve(async (req) => {
       localTransfers += cmteTotals.transfer_total;
       localEarmarked += cmteTotals.earmarked_total;
       localLoans += cmteTotals.loan_total;
-      localOther += cmteTotals.other_total;
+      // Use ONLY Lines 14+15 (offsets + other receipts), NOT the legacy other_total
+      localOther += (cmteTotals.offset_total || 0) + (cmteTotals.other_receipts_total || 0);
       localMemoX += cmteTotals.memo_x_total;
       localConduitExcluded += cmteTotals.conduit_excluded;
       localPassThroughExcluded += cmteTotals.pass_through_excluded;
@@ -591,7 +605,7 @@ serve(async (req) => {
             local_transfers: cmteTotals.transfer_total,
             local_earmarked: cmteTotals.earmarked_total,
             local_loans: cmteTotals.loan_total,
-            local_other: cmteTotals.other_total,
+            local_other: (cmteTotals.offset_total || 0) + (cmteTotals.other_receipts_total || 0),
             local_organization: cmteTotals.organization_total,
             last_fec_check: new Date().toISOString()
           }, { onConflict: 'committee_id,cycle' });
