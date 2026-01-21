@@ -354,9 +354,9 @@ serve(async (req) => {
             const status = Math.abs(deltaPct) <= 2 ? 'ok' : Math.abs(deltaPct) <= 5 ? 'warning' : 'error';
 
             // Calculate TOTAL RECEIPTS delta (for UI display - matches FEC/Local columns)
-            // Local total = locally imported data + FEC-only items (unitemized)
-            // We don't have FEC breakdowns for transfers/other/candidate, so use local values directly
-            const localTotalReceipts = localItemized + localTransfers + localOther + totalFecUnitemized + localLoans;
+            // Local total = locally imported data + FEC-only items (unitemized, candidate self-fund)
+            // We now track transfers, loans, and other receipts locally via Line 12/13/14/15
+            const localTotalReceipts = localItemized + localTransfers + localLoans + localOther + totalFecUnitemized;
             
             const totalReceiptsDeltaAmount = totalFecReceipts > 0 
               ? Math.round(localTotalReceipts - totalFecReceipts) 
