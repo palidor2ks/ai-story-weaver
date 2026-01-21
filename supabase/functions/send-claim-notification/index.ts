@@ -24,6 +24,23 @@ const maskEmail = (email: string): string => {
   return `${maskedLocal}@${domain}`;
 };
 
+// HTML escape function to prevent XSS in email templates
+const escapeHtml = (str: string): string => {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
+
+// Email format validation
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
 const handler = async (req: Request): Promise<Response> => {
   console.log("send-claim-notification function called");
 
@@ -35,16 +52,21 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const { email, candidateName, status, rejectionReason }: ClaimNotificationRequest = await req.json();
 
-    // Log with masked PII to prevent sensitive data exposure
-    console.log(`Sending ${status} notification to ${maskEmail(email)} for candidate ${candidateName}`);
-
-    if (!email) {
-      throw new Error("Email is required");
+    // Validate email format
+    if (!email || !isValidEmail(email)) {
+      throw new Error("Valid email is required");
     }
 
-    if (!candidateName) {
+    if (!candidateName || typeof candidateName !== 'string' || candidateName.trim().length === 0) {
       throw new Error("Candidate name is required");
     }
+
+    // Sanitize inputs to prevent XSS in email HTML
+    const safeCandidateName = escapeHtml(candidateName.trim().substring(0, 200));
+    const safeRejectionReason = escapeHtml((rejectionReason || '').trim().substring(0, 1000));
+
+    // Log with masked PII to prevent sensitive data exposure
+    console.log(`Sending ${status} notification to ${maskEmail(email)} for candidate`);
 
     if (!RESEND_API_KEY) {
       throw new Error("RESEND_API_KEY is not configured");
@@ -54,7 +76,7 @@ const handler = async (req: Request): Promise<Response> => {
     let html: string;
 
     if (status === "approved") {
-      subject = `✅ Your profile claim for ${candidateName} has been approved!`;
+      subject = `Your profile claim for ${safeCandidateName} has been approved!`;
       html = `
         <!DOCTYPE html>
         <html>
@@ -64,11 +86,11 @@ const handler = async (req: Request): Promise<Response> => {
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 24px;">🎉 Congratulations!</h1>
+            <h1 style="color: white; margin: 0; font-size: 24px;">Congratulations!</h1>
           </div>
           <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e5e7eb; border-top: none;">
             <p style="font-size: 16px; margin-bottom: 20px;">
-              Your claim request for the profile of <strong>${candidateName}</strong> has been <span style="color: #10b981; font-weight: bold;">approved</span>!
+              Your claim request for the profile of <strong>${safeCandidateName}</strong> has been <span style="color: #10b981; font-weight: bold;">approved</span>!
             </p>
             <p style="font-size: 16px; margin-bottom: 20px;">
               You now have access to edit your profile information. This allows you to:
@@ -89,7 +111,7 @@ const handler = async (req: Request): Promise<Response> => {
         </html>
       `;
     } else {
-      subject = `Profile claim for ${candidateName} - Update`;
+      subject = `Profile claim for ${safeCandidateName} - Update`;
       html = `
         <!DOCTYPE html>
         <html>
@@ -103,15 +125,15 @@ const handler = async (req: Request): Promise<Response> => {
           </div>
           <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e5e7eb; border-top: none;">
             <p style="font-size: 16px; margin-bottom: 20px;">
-              We've reviewed your claim request for the profile of <strong>${candidateName}</strong>.
+              We've reviewed your claim request for the profile of <strong>${safeCandidateName}</strong>.
             </p>
             <p style="font-size: 16px; margin-bottom: 20px;">
               Unfortunately, we were unable to approve your request at this time.
             </p>
-            ${rejectionReason ? `
+            ${safeRejectionReason ? `
               <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
                 <p style="font-size: 14px; color: #991b1b; margin: 0;">
-                  <strong>Reason:</strong> ${rejectionReason}
+                  <strong>Reason:</strong> ${safeRejectionReason}
                 </p>
               </div>
             ` : ''}
