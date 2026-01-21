@@ -2001,11 +2001,12 @@ export function AnswerCoveragePanel() {
                       const hasFecId = !!candidate.fecCandidateId;
                       const hasCommittee = !!candidate.fecCommitteeId;
                       const financeStatus = calculateFinanceStatus(candidate);
-                      // Calculate "Local Total" = Local Itemized + Local Transfers + FEC-only summary items
+                      // Calculate "Local Total" = Local Itemized + Local Other Receipts + FEC-only summary items
                       // This creates an apples-to-apples comparison with FEC Total Receipts
                       const localItemized = candidate.localItemized || 0; // Itemized contributions (Line 11)
-                      const localTransfers = candidate.localTransfers || 0; // Committee transfers (Line 12) - tracked separately
+                      const localTransfers = candidate.localTransfers || 0; // Committee transfers (Line 12)
                       const localOtherReceipts = candidate.localOtherReceipts || 0; // Local Line 14 + 15
+                      const localLoans = candidate.localLoans || 0; // Local loans (Line 13)
                       const fecUnitemized = candidate.fecUnitemized || 0;
                       const fecCandidateContribution = candidate.fecCandidateContribution || 0;
                       const fecOtherReceipts = candidate.fecOtherReceipts || 0; // Line 15 only
@@ -2016,13 +2017,9 @@ export function AnswerCoveragePanel() {
                       // FEC "Other" = Line 14 (offsets) + Line 15 (other receipts)
                       const fecOtherTotal = fecOffsetsToOperatingExpenditures + fecOtherReceipts;
                       
-                      // Use MAX of local vs FEC for each category to avoid double-counting
-                      // This ensures we capture the higher of: what we imported OR what FEC reports
-                      const effectiveTransfers = Math.max(localTransfers, fecTransfers);
-                      const effectiveOther = Math.max(localOtherReceipts, fecOtherTotal);
-                      
-                      // Local Total = Local Itemized + effective transfers/other + FEC-only items
-                      const localTotal = localItemized + effectiveTransfers + effectiveOther + fecUnitemized + fecCandidateContribution + fecLoans;
+                      // Local Total = Local Itemized + Local Transfers + Local Loans + Local Other + FEC-only items
+                      // Only Unitemized and Candidate Self-Fund are FEC-only (we can't import those)
+                      const localTotal = localItemized + localTransfers + localLoans + localOtherReceipts + fecUnitemized + fecCandidateContribution;
                       
                       // Calculate delta inline: Local Total vs FEC Total Receipts
                       const fecTotalReceipts = financeStatus.fecTotalReceipts;
@@ -2295,33 +2292,49 @@ export function AnswerCoveragePanel() {
                                   pacDeltaPct={candidate.pacDeltaPct}
                                 />
                                 
-                                {/* Additional FEC-only items */}
+                                {/* Additional Receipts - Local vs FEC comparison */}
                                 <div className="border-t mt-3 pt-3 space-y-1.5 text-xs">
-                                  <div className="font-medium text-muted-foreground mb-2">Additional Receipts (FEC Summary Only)</div>
+                                  <div className="font-medium text-muted-foreground mb-2">Additional Receipts</div>
+                                  
+                                  {/* FEC-only item: Unitemized */}
                                   <div className="flex justify-between">
                                     <span className="text-muted-foreground">Unitemized (&lt;$200)</span>
-                                    <span>{formatCurrency(fecUnitemized)}</span>
+                                    <span className="text-muted-foreground italic">{formatCurrency(fecUnitemized)} FEC</span>
                                   </div>
+                                  
+                                  {/* Local vs FEC: Transfers (Line 12) */}
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Transfers</span>
-                                    <span>{formatCurrency(fecTransfers)}</span>
+                                    <span className="text-muted-foreground">Transfers (Line 12)</span>
+                                    <span className="flex gap-2">
+                                      <span>{formatCurrency(localTransfers)}</span>
+                                      <span className="text-muted-foreground">/ {formatCurrency(fecTransfers)} FEC</span>
+                                    </span>
                                   </div>
+                                  
+                                  {/* Local vs FEC: Loans (Line 13) */}
                                   <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Loans</span>
-                                    <span>{formatCurrency(fecLoans)}</span>
+                                    <span className="text-muted-foreground">Loans (Line 13)</span>
+                                    <span className="flex gap-2">
+                                      <span>{formatCurrency(candidate.localLoans || 0)}</span>
+                                      <span className="text-muted-foreground">/ {formatCurrency(fecLoans)} FEC</span>
+                                    </span>
                                   </div>
+                                  
+                                  {/* Local vs FEC: Other (Lines 14+15) */}
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Other (Lines 14+15)</span>
+                                    <span className="flex gap-2">
+                                      <span>{formatCurrency(localOtherReceipts)}</span>
+                                      <span className="text-muted-foreground">/ {formatCurrency(fecOtherTotal)} FEC</span>
+                                    </span>
+                                  </div>
+                                  
+                                  {/* FEC-only item: Candidate Self-Fund */}
                                   <div className="flex justify-between">
                                     <span className="text-muted-foreground">Candidate Self-Fund</span>
-                                    <span>{formatCurrency(fecCandidateContribution)}</span>
+                                    <span className="text-muted-foreground italic">{formatCurrency(fecCandidateContribution)} FEC</span>
                                   </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Other Receipts (Line 15)</span>
-                                    <span>{formatCurrency(fecOtherReceipts)}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Offsets (Line 14)</span>
-                                    <span>{formatCurrency(fecOffsetsToOperatingExpenditures)}</span>
-                                  </div>
+                                  
                                   <div className="flex justify-between border-t pt-1.5 mt-1.5">
                                     <span className="font-medium">FEC Total Receipts</span>
                                     <span className="font-bold">{formatCurrency(fecTotalReceipts)}</span>
