@@ -1165,6 +1165,8 @@ export type Database = {
           pac_delta_pct: number | null
           pass_through_excluded: number | null
           status: string | null
+          total_receipts_delta_amount: number | null
+          total_receipts_delta_pct: number | null
           updated_at: string | null
         }
         Insert: {
@@ -1204,6 +1206,8 @@ export type Database = {
           pac_delta_pct?: number | null
           pass_through_excluded?: number | null
           status?: string | null
+          total_receipts_delta_amount?: number | null
+          total_receipts_delta_pct?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -1243,6 +1247,8 @@ export type Database = {
           pac_delta_pct?: number | null
           pass_through_excluded?: number | null
           status?: string | null
+          total_receipts_delta_amount?: number | null
+          total_receipts_delta_pct?: number | null
           updated_at?: string | null
         }
         Relationships: []
