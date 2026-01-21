@@ -2013,19 +2013,16 @@ export function AnswerCoveragePanel() {
                       const fecLoans = candidate.fecLoans || 0;
                       const fecTransfers = candidate.fecTransfers || 0;
                       
-                      // Local imports = itemized + transfers (tracked separately in our DB)
-                      // Add FEC-only items that we can't import: unitemized, candidate contributions, loans
-                      // For transfers: add our local transfers + any gap we haven't imported yet
-                      const transferGap = Math.max(0, fecTransfers - localTransfers);
-                      
                       // FEC "Other" = Line 14 (offsets) + Line 15 (other receipts)
                       const fecOtherTotal = fecOffsetsToOperatingExpenditures + fecOtherReceipts;
                       
-                      // Other gap: if we haven't imported Line 14/15 locally, use FEC values
-                      const otherGap = Math.max(0, fecOtherTotal - localOtherReceipts);
+                      // Use MAX of local vs FEC for each category to avoid double-counting
+                      // This ensures we capture the higher of: what we imported OR what FEC reports
+                      const effectiveTransfers = Math.max(localTransfers, fecTransfers);
+                      const effectiveOther = Math.max(localOtherReceipts, fecOtherTotal);
                       
-                      // Local Total = Local Itemized + Local Transfers + Local Other + gaps from FEC
-                      const localTotal = localItemized + localTransfers + localOtherReceipts + fecUnitemized + fecCandidateContribution + otherGap + transferGap + fecLoans;
+                      // Local Total = Local Itemized + effective transfers/other + FEC-only items
+                      const localTotal = localItemized + effectiveTransfers + effectiveOther + fecUnitemized + fecCandidateContribution + fecLoans;
                       
                       // Calculate delta inline: Local Total vs FEC Total Receipts
                       const fecTotalReceipts = financeStatus.fecTotalReceipts;

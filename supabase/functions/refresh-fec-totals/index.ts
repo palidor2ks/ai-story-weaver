@@ -354,9 +354,9 @@ serve(async (req) => {
             const status = Math.abs(deltaPct) <= 2 ? 'ok' : Math.abs(deltaPct) <= 5 ? 'warning' : 'error';
 
             // Calculate TOTAL RECEIPTS delta (for UI display - matches FEC/Local columns)
-            // This mirrors the calculation in AnswerCoveragePanel lines 2004-2037
-            const transferGap = Math.max(0, (totalFecReceipts > 0 ? totalFecReceipts * 0.05 : 0) - localTransfers); // Estimated transfer gap
-            const localTotalReceipts = localItemized + localTransfers + localOther + totalFecUnitemized + transferGap + localLoans;
+            // Local total = locally imported data + FEC-only items (unitemized)
+            // We don't have FEC breakdowns for transfers/other/candidate, so use local values directly
+            const localTotalReceipts = localItemized + localTransfers + localOther + totalFecUnitemized + localLoans;
             
             const totalReceiptsDeltaAmount = totalFecReceipts > 0 
               ? Math.round(localTotalReceipts - totalFecReceipts) 
