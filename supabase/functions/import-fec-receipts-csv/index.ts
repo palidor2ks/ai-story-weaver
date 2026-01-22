@@ -393,7 +393,16 @@ Deno.serve(async (req) => {
       // They should have memo_code='X' to be excluded from reconciliation totals (FEC excludes them)
       const contributorType = mapEntityType(rd.entityType);
       const isLine12Attribution = rd.lineNumber?.toUpperCase()?.startsWith('12') && contributorType === 'Individual';
-      const effectiveMemoCode = isLine12Attribution ? 'X' : (rd.memoCode || null);
+      
+      // CRITICAL: Conduit aggregate records (WINRED/ActBlue pass-through totals on Line 11AI)
+      // These are Organization records with memo_text like "TOTAL EARMARKED THROUGH CONDUIT..."
+      // FEC excludes them from individual_itemized_contributions - we should too
+      const isConduitAggregate = 
+        rd.lineNumber?.toUpperCase() === '11AI' && 
+        contributorType !== 'Individual' &&
+        rd.memoText?.toUpperCase()?.includes('EARMARKED THROUGH CONDUIT');
+      
+      const effectiveMemoCode = (isLine12Attribution || isConduitAggregate) ? 'X' : (rd.memoCode || null);
 
       contributions.push({
         identity_hash: identityHash,
