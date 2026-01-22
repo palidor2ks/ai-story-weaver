@@ -389,17 +389,23 @@ Deno.serve(async (req) => {
       const lineClass = classifyLineNumber(rd.lineNumber);
       const earmarkInfo = parseEarmarkInfo(rd.memoText);
 
+      // CRITICAL: Line 12 Individual records are attribution records showing WHO contributed through a JFC
+      // They should have memo_code='X' to be excluded from reconciliation totals (FEC excludes them)
+      const contributorType = mapEntityType(rd.entityType);
+      const isLine12Attribution = rd.lineNumber?.toUpperCase()?.startsWith('12') && contributorType === 'Individual';
+      const effectiveMemoCode = isLine12Attribution ? 'X' : (rd.memoCode || null);
+
       contributions.push({
         identity_hash: identityHash,
         fec_transaction_id: rd.subId,
         fec_committee_transaction_id: rd.transactionId,
         contributor_name: rd.contributorName,
-        contributor_type: mapEntityType(rd.entityType),
+        contributor_type: contributorType,
         amount: Math.round(rd.amount),
         cycle: rd.rowCycle,
         receipt_date: rd.receiptDate,
         line_number: rd.lineNumber,
-        memo_code: rd.memoCode,
+        memo_code: effectiveMemoCode,
         memo_text: rd.memoText,
         recipient_committee_id: rd.recipientCommitteeId,
         recipient_committee_name: rd.recipientCommitteeName,

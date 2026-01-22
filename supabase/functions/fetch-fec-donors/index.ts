@@ -1216,6 +1216,11 @@ serve(async (req) => {
         // FEC.gov-visible transaction ID (different from sub_id which we use for deduplication)
         const fecCommitteeTransactionId = contribution?.transaction_id || null;
         
+        // CRITICAL: Line 12 Individual records are attribution records showing WHO contributed through a JFC
+        // They should have memo_code='X' to be excluded from reconciliation totals (FEC excludes them)
+        const isLine12Attribution = lineNumber?.toUpperCase()?.startsWith('12') && type === 'Individual';
+        const effectiveMemoCode = isLine12Attribution ? 'X' : (memoCode || null);
+        
         contributionBatch.push({
           identity_hash: contributionHash,
           fec_transaction_id: fecSubId,
@@ -1236,7 +1241,7 @@ serve(async (req) => {
           conduit_committee_id: conduitCommitteeId,
           conduit_committee_name: conduitCommitteeName,
           memo_text: memoText,
-          memo_code: memoCode,
+          memo_code: effectiveMemoCode,
           contributor_city: city,
           contributor_state: state,
           contributor_zip: zip,
