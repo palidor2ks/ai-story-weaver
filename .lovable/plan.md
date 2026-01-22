@@ -1,86 +1,91 @@
 
 
-# Fix: WINRED/ActBlue Conduit Aggregate Records Inflating Local Itemized Totals
+# Fix: Rick Scott Total Receipts Delta Missing Self-Funding
 
 ## Problem Identified
 
-Daniel Webster shows **$1.08M local itemized** vs **$490K FEC itemized** - a **$216K delta (25% error)**.
+Rick Scott shows a **-3.27% delta ($1.2M under)** in Total Receipts because the `localTotalReceipts` calculation **does not include FEC's `candidate_contribution`** (self-funding).
 
-**Root Cause:** WINRED conduit aggregate records on Line 11AI are being counted in the local itemized total, but the FEC excludes these from their individual itemized contributions.
+| Component | FEC Amount | Included in Local? |
+|-----------|------------|-------------------|
+| Itemized Contributions | $3,327,273 | ✅ Yes |
+| Unitemized | $2,229,367 | ✅ Yes (FEC-only) |
+| Transfers | $8,562,714 | ✅ Yes |
+| Loans | $20,138,834 | ✅ Yes |
+| Other Receipts | $138,866 | ✅ Yes |
+| **Candidate Self-Fund** | **$1,255,016** | ❌ **NO - MISSING** |
+| **Total** | **$36,696,093** | — |
 
-| Record Type | Amount | FEC Counts? | We Count? |
-|-------------|--------|-------------|-----------|
-| Individual contributions (Line 11AI) | $490,421 | ✅ Yes | ✅ Yes |
-| WINRED aggregate conduit records (Line 11AI, Org) | $211,124 | ❌ No | ❌ Should exclude |
-| PAC contributions (Line 11AI + 11C) | $415,350 | Separate category | ✅ Yes |
-
-The WINRED records all have memo_text: `"TOTAL EARMARKED THROUGH CONDUIT. PAC LIMIT NOT AFFECTED."` - these are informational records showing aggregate pass-throughs, not actual contributions to be counted in itemized totals.
-
----
-
-## Why Current Exclusion Logic Doesn't Work
-
-The RPC has a `conduit_excluded` field that checks:
-```sql
-WHERE c.conduit_committee_id IS NOT NULL
-```
-
-But these WINRED records don't have `conduit_committee_id` set - they have `NULL`. The `conduit_organizations` table exists with WINRED entries, but the RPC **doesn't actually use this table** for exclusion.
+The FEC's `receipts` total includes `candidate_contribution` but our calculation excludes it, causing the ~$1.2M delta.
 
 ---
 
-## Solution: Mark Conduit Aggregate Records with memo_code='X'
+## Solution
 
-Similar to the Line 12 attribution fix, these conduit aggregate records should have `memo_code = 'X'` to be excluded from reconciliation totals.
+### Step 1: Update `fetchFECTotals()` to Return Self-Fund Amount
 
-### Step 1: One-Time Data Migration
+**File:** `supabase/functions/refresh-fec-totals/index.ts`
 
-```sql
--- Fix conduit aggregate records: Organization/PAC records on Line 11AI with conduit 
--- pass-through memo_text are aggregate records, not countable contributions.
--- Mark them with memo_code='X' to exclude from reconciliation totals.
-
-UPDATE contributions
-SET memo_code = 'X'
-WHERE line_number = '11AI'
-  AND contributor_type IN ('Organization', 'Unknown')
-  AND memo_text ILIKE '%EARMARKED THROUGH CONDUIT%'
-  AND (memo_code IS NULL OR memo_code = '');
-```
-
-### Step 2: Update Import Edge Functions
-
-Add detection logic to automatically flag these records during import:
+**Lines 81-117** - Expand the return type and include `candidate_contribution`:
 
 ```typescript
-// In fetch-fec-donors and import-fec-receipts-csv
-
-// CRITICAL: Conduit aggregate records (WINRED/ActBlue pass-through totals) 
-// should be excluded from itemized totals
-const isConduitAggregate = 
-  lineNumber === '11AI' && 
-  contributorType !== 'Individual' &&
-  memoText?.toUpperCase()?.includes('EARMARKED THROUGH CONDUIT');
-
-const effectiveMemoCode = isLine12Attribution || isConduitAggregate 
-  ? 'X' 
-  : (memoCode || null);
+async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: string): Promise<{
+  fecItemized: number | null;
+  fecUnitemized: number | null;
+  fecTotalReceipts: number | null;
+  fecPacContributions: number | null;
+  fecPartyContributions: number | null;
+  fecCandidateContribution: number | null;  // NEW
+}> {
+  // ... existing code ...
+  
+  return {
+    fecItemized: Math.round(totals.individual_itemized_contributions || 0),
+    fecUnitemized: Math.round(totals.individual_unitemized_contributions || 0),
+    fecTotalReceipts: Math.round(totals.receipts || 0),
+    fecPacContributions: Math.round(totals.other_political_committee_contributions || 0),
+    fecPartyContributions: Math.round(totals.political_party_committee_contributions || 0),
+    fecCandidateContribution: Math.round(totals.candidate_contribution || 0)  // NEW
+  };
+}
 ```
 
-### Step 3: Refresh FEC Totals
+### Step 2: Update Batch Mode to Include Self-Fund
 
-Refresh Webster's totals to verify the fix.
+**Lines ~360-375** - Add self-fund to aggregation and local total calculation:
 
----
+```typescript
+// Aggregate across committees
+let totalFecCandidateContribution = 0;  // NEW
 
-## Expected Result
+for (const fecData of fecResults) {
+  // ... existing aggregations ...
+  totalFecCandidateContribution += fecData.fecCandidateContribution ?? 0;  // NEW
+}
 
-After fix:
-- **Local Itemized**: ~$870K (excluding $211K WINRED conduit aggregates)
-- **FEC Itemized**: $490K (individual) + PAC/Party in separate categories
-- **Delta**: Should align closely with category breakdowns
+// Update local total calculation
+const localTotalReceipts = localItemized + localTransfers + localLoans + localOther 
+  + totalFecUnitemized + totalFecCandidateContribution;  // ADD self-fund
+```
 
-The `organization_total` in the RPC will drop from $211K to ~$0, as these were all conduit records.
+### Step 3: Update Single-Candidate Mode to Include Self-Fund
+
+**Lines ~648** - Same fix for single-candidate mode:
+
+```typescript
+// BEFORE
+const localTotalReceipts = localItemized + localTransfers + localLoans + localOther + totalFecUnitemized;
+
+// AFTER
+const localTotalReceipts = localItemized + localTransfers + localLoans + localOther 
+  + totalFecUnitemized + totalFecCandidateContribution;
+```
+
+### Step 4: Refresh Rick Scott's Totals
+
+After deploying the fix, refresh Rick Scott to verify:
+- Expected delta after fix: **+$56,848 (+0.15%)** instead of -$1,198,168 (-3.27%)
+- The small positive delta represents local transfers being slightly higher than FEC ($56K)
 
 ---
 
@@ -88,18 +93,21 @@ The `organization_total` in the RPC will drop from $211K to ~$0, as these were a
 
 | File | Changes |
 |------|---------|
-| Database migration | Mark existing conduit aggregate records with memo_code='X' |
-| `supabase/functions/fetch-fec-donors/index.ts` | Add conduit aggregate detection during import |
-| `supabase/functions/import-fec-receipts-csv/index.ts` | Add conduit aggregate detection during import |
+| `supabase/functions/refresh-fec-totals/index.ts` | 1. Add `fecCandidateContribution` to `fetchFECTotals()` return type and value<br>2. Aggregate `totalFecCandidateContribution` in batch mode<br>3. Include self-fund in `localTotalReceipts` calculation (both modes) |
 
 ---
 
-## Verification SQL
+## Expected Result After Fix
 
-After applying fix:
-```sql
-SELECT * FROM get_contribution_totals('W000806', '2024');
--- organization_total should be $0 or very low
--- memo_x_total should increase by ~$211K
-```
+| Candidate | Before Fix | After Fix |
+|-----------|------------|-----------|
+| Rick Scott | -3.27% ($1.2M under) | ~+0.15% ($57K over) |
+
+The remaining +$57K is legitimate: local transfers are slightly higher than FEC reports, which is acceptable variance from timing differences.
+
+---
+
+## Technical Note
+
+The column `fec_candidate_contribution` already exists in `finance_reconciliation` and is being stored correctly. The only issue is that it's not included in the `localTotalReceipts` formula used for delta calculation.
 
