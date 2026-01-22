@@ -1219,7 +1219,16 @@ serve(async (req) => {
         // CRITICAL: Line 12 Individual records are attribution records showing WHO contributed through a JFC
         // They should have memo_code='X' to be excluded from reconciliation totals (FEC excludes them)
         const isLine12Attribution = lineNumber?.toUpperCase()?.startsWith('12') && type === 'Individual';
-        const effectiveMemoCode = isLine12Attribution ? 'X' : (memoCode || null);
+        
+        // CRITICAL: Conduit aggregate records (WINRED/ActBlue pass-through totals on Line 11AI)
+        // These are Organization records with memo_text like "TOTAL EARMARKED THROUGH CONDUIT..."
+        // FEC excludes them from individual_itemized_contributions - we should too
+        const isConduitAggregate = 
+          lineNumber?.toUpperCase() === '11AI' && 
+          type !== 'Individual' &&
+          memoText?.toUpperCase()?.includes('EARMARKED THROUGH CONDUIT');
+        
+        const effectiveMemoCode = (isLine12Attribution || isConduitAggregate) ? 'X' : (memoCode || null);
         
         contributionBatch.push({
           identity_hash: contributionHash,
