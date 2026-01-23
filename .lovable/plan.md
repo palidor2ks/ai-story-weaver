@@ -1,113 +1,148 @@
 
 
-# Fix: Rick Scott Total Receipts Delta Missing Self-Funding
+# Investigation Plan: Missing Line 12 JFC Aggregate Transfers
 
-## Problem Identified
+## Problem Summary
 
-Rick Scott shows a **-3.27% delta ($1.2M under)** in Total Receipts because the `localTotalReceipts` calculation **does not include FEC's `candidate_contribution`** (self-funding).
+Dan Sullivan shows **$0 local transfers** vs **$381,064 FEC transfers** (-20.1% delta). The database contains 218 Line 12 "attribution" records (individual donors) all marked with `memo_code='X'`, but the **parent aggregate transfer records** from JFCs are completely missing.
 
-| Component | FEC Amount | Included in Local? |
-|-----------|------------|-------------------|
-| Itemized Contributions | $3,327,273 | ✅ Yes |
-| Unitemized | $2,229,367 | ✅ Yes (FEC-only) |
-| Transfers | $8,562,714 | ✅ Yes |
-| Loans | $20,138,834 | ✅ Yes |
-| Other Receipts | $138,866 | ✅ Yes |
-| **Candidate Self-Fund** | **$1,255,016** | ❌ **NO - MISSING** |
-| **Total** | **$36,696,093** | — |
+## How FEC Line 12 Transfers Work
 
-The FEC's `receipts` total includes `candidate_contribution` but our calculation excludes it, causing the ~$1.2M delta.
+```text
+JFC receives $3,300 from Individual Donor "ROSS, JEFFREY W"
+    ↓
+JFC transfers aggregate to Principal Committee
+    ↓
+FEC Schedule A shows TWO records:
+
+1. PARENT AGGREGATE (countable):
+   ├─ contributor_name: "SULLIVAN VICTORY" 
+   ├─ entity_type: COM
+   ├─ line_number: 12
+   ├─ memo_code: NULL ← countable!
+   └─ amount: $100,000
+
+2. ATTRIBUTION MEMO (informational):
+   ├─ contributor_name: "ROSS, JEFFREY W"
+   ├─ entity_type: IND
+   ├─ line_number: 12
+   ├─ memo_code: X ← excluded from totals
+   └─ amount: $3,300
+```
+
+Currently, we import record #2 but are missing record #1.
 
 ---
 
-## Solution
+## Investigation Steps
 
-### Step 1: Update `fetchFECTotals()` to Return Self-Fund Amount
+### Step 1: Verify FEC API Response
 
-**File:** `supabase/functions/refresh-fec-totals/index.ts`
+Manually query the FEC API to confirm whether parent aggregate records are returned in Schedule A:
 
-**Lines 81-117** - Expand the return type and include `candidate_contribution`:
-
-```typescript
-async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: string): Promise<{
-  fecItemized: number | null;
-  fecUnitemized: number | null;
-  fecTotalReceipts: number | null;
-  fecPacContributions: number | null;
-  fecPartyContributions: number | null;
-  fecCandidateContribution: number | null;  // NEW
-}> {
-  // ... existing code ...
-  
-  return {
-    fecItemized: Math.round(totals.individual_itemized_contributions || 0),
-    fecUnitemized: Math.round(totals.individual_unitemized_contributions || 0),
-    fecTotalReceipts: Math.round(totals.receipts || 0),
-    fecPacContributions: Math.round(totals.other_political_committee_contributions || 0),
-    fecPartyContributions: Math.round(totals.political_party_committee_contributions || 0),
-    fecCandidateContribution: Math.round(totals.candidate_contribution || 0)  // NEW
-  };
-}
+```text
+GET https://api.open.fec.gov/v1/schedules/schedule_a/
+    ?committee_id=C00570994
+    &two_year_transaction_period=2024
+    &line_number=12
+    &per_page=100
+    &api_key=[FEC_API_KEY]
 ```
 
-### Step 2: Update Batch Mode to Include Self-Fund
+**Expected:** Should see both `entity_type='COM'` (parent aggregates) and `entity_type='IND'` (attributions) records.
 
-**Lines ~360-375** - Add self-fund to aggregation and local total calculation:
+**If parent records are present:** The import logic is filtering them out.
+**If parent records are absent:** FEC may require a different endpoint or parameters.
 
-```typescript
-// Aggregate across committees
-let totalFecCandidateContribution = 0;  // NEW
+### Step 2: Check Import Logic Filtering
 
-for (const fecData of fecResults) {
-  // ... existing aggregations ...
-  totalFecCandidateContribution += fecData.fecCandidateContribution ?? 0;  // NEW
-}
+Review `fetch-fec-donors/index.ts` around lines 1130-1260 for any filtering that could exclude committee-to-committee transfers:
 
-// Update local total calculation
-const localTotalReceipts = localItemized + localTransfers + localLoans + localOther 
-  + totalFecUnitemized + totalFecCandidateContribution;  // ADD self-fund
+| Check Point | File:Line | What to Verify |
+|-------------|-----------|----------------|
+| Classification | L136-140 | Does `classifyLineNumber` return `isContribution=true` for Line 12 COM records? |
+| Entity mapping | L111-125 | Does `mapEntityType('COM')` return 'PAC' correctly? |
+| Skip logic | L1137-1140 | Is `includeOtherReceipts` accidentally filtering transfers? |
+| Contribution batch | L1233-1258 | Are COM records being added to `contributionBatch`? |
+
+### Step 3: Database Audit
+
+Query to identify if any Line 12 PAC/Organization records exist without memo_code='X':
+
+```sql
+SELECT 
+  contributor_type,
+  COUNT(*) as count,
+  SUM(amount) as total,
+  memo_code
+FROM contributions
+WHERE recipient_committee_id = 'C00570994'
+  AND cycle = '2024'
+  AND line_number LIKE '12%'
+  AND contributor_type != 'Individual'
+  AND (memo_code IS NULL OR memo_code != 'X')
+GROUP BY contributor_type, memo_code;
 ```
 
-### Step 3: Update Single-Candidate Mode to Include Self-Fund
+**Expected:** Should return the missing JFC aggregate transfers.
+**Current:** Returns empty (0 records).
 
-**Lines ~648** - Same fix for single-candidate mode:
+### Step 4: Compare with Other Candidates
 
-```typescript
-// BEFORE
-const localTotalReceipts = localItemized + localTransfers + localLoans + localOther + totalFecUnitemized;
+Check if this is a Sullivan-specific issue or a systemic problem:
 
-// AFTER
-const localTotalReceipts = localItemized + localTransfers + localLoans + localOther 
-  + totalFecUnitemized + totalFecCandidateContribution;
+```sql
+SELECT 
+  c.name as candidate_name,
+  fr.local_transfers,
+  fr.fec_transfers,
+  fr.fec_transfers - fr.local_transfers as transfer_gap,
+  CASE 
+    WHEN fr.fec_transfers > 0 
+    THEN ROUND(((fr.fec_transfers - fr.local_transfers) / fr.fec_transfers * 100), 2)
+    ELSE 0 
+  END as gap_pct
+FROM finance_reconciliation fr
+JOIN candidates c ON c.id = fr.candidate_id
+WHERE fr.cycle = '2024'
+  AND fr.fec_transfers > 10000
+  AND fr.local_transfers < fr.fec_transfers * 0.5
+ORDER BY transfer_gap DESC
+LIMIT 20;
 ```
-
-### Step 4: Refresh Rick Scott's Totals
-
-After deploying the fix, refresh Rick Scott to verify:
-- Expected delta after fix: **+$56,848 (+0.15%)** instead of -$1,198,168 (-3.27%)
-- The small positive delta represents local transfers being slightly higher than FEC ($56K)
 
 ---
 
-## Files to Modify
+## Potential Fixes (After Investigation)
 
-| File | Changes |
+### If FEC API Returns Parent Records (Import Bug)
+
+1. **Fix import filtering**: Ensure `entity_type='COM'` records on Line 12 are not inadvertently filtered
+2. **Re-sync affected committees**: Run fresh syncs for candidates with transfer gaps
+3. **Add logging**: Log Line 12 record types during import for debugging
+
+### If FEC API Doesn't Return Parent Records in Schedule A
+
+1. **Alternative endpoint**: Check if transfers are in a different FEC endpoint (e.g., Schedule H4 for JFC allocations)
+2. **Derived calculation**: Calculate transfers as: `FEC_transfers` value from committee totals endpoint
+3. **Use FEC summary as source**: Store `fec_transfers` directly without local itemization
+
+---
+
+## Files to Investigate
+
+| File | Purpose |
 |------|---------|
-| `supabase/functions/refresh-fec-totals/index.ts` | 1. Add `fecCandidateContribution` to `fetchFECTotals()` return type and value<br>2. Aggregate `totalFecCandidateContribution` in batch mode<br>3. Include self-fund in `localTotalReceipts` calculation (both modes) |
+| `supabase/functions/fetch-fec-donors/index.ts` | Main import logic - check for filtering |
+| `supabase/functions/import-fec-receipts-csv/index.ts` | CSV import - verify Line 12 handling |
+| `supabase/migrations/20260120154618*.sql` | RPC functions - verify transfer_total calculation |
 
 ---
 
-## Expected Result After Fix
+## Expected Outcome
 
-| Candidate | Before Fix | After Fix |
-|-----------|------------|-----------|
-| Rick Scott | -3.27% ($1.2M under) | ~+0.15% ($57K over) |
-
-The remaining +$57K is legitimate: local transfers are slightly higher than FEC reports, which is acceptable variance from timing differences.
-
----
-
-## Technical Note
-
-The column `fec_candidate_contribution` already exists in `finance_reconciliation` and is being stored correctly. The only issue is that it's not included in the `localTotalReceipts` formula used for delta calculation.
+After investigation, we'll know:
+1. Whether parent aggregate transfers ARE returned by FEC API (import bug) or NOT (API limitation)
+2. The scope of the issue (Sullivan-only vs. systemic)
+3. The correct fix approach (import logic vs. derived calculation)
 
