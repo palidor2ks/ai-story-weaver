@@ -562,6 +562,11 @@ serve(async (req) => {
     let totalFecPac = 0;
     let totalFecParty = 0;
     let totalFecCandidateContribution = 0;
+    // FEC breakdown fields for Math.max fallback calculation
+    let totalFecTransfers = 0;
+    let totalFecLoans = 0;
+    let totalFecOtherReceipts = 0;
+    let totalFecOffsetsToOperatingExpenditures = 0;
     let committeesUpdated = 0;
 
     // Track summed local totals across all committees
@@ -626,6 +631,11 @@ serve(async (req) => {
         totalFecPac += totals.fecPacContributions || 0;
         totalFecParty += totals.fecPartyContributions || 0;
         totalFecCandidateContribution += totals.fecCandidateContribution || 0;
+        // Sum FEC breakdown fields for Math.max fallback
+        totalFecTransfers += totals.fecTransfers || 0;
+        totalFecLoans += totals.fecLoans || 0;
+        totalFecOtherReceipts += totals.fecOtherReceipts || 0;
+        totalFecOffsetsToOperatingExpenditures += totals.fecOffsetsToOperatingExpenditures || 0;
         committeesUpdated++;
 
         // Update committee_finance_rollups with PER-COMMITTEE local totals
@@ -687,8 +697,12 @@ serve(async (req) => {
 
     // Calculate TOTAL RECEIPTS delta (for UI display - matches FEC/Local columns)
     // Local total = locally imported data + FEC-only items (unitemized, candidate self-fund)
-    // Include candidate self-funding (fecCandidateContribution) since FEC total receipts includes it
-    const localTotalReceipts = localItemized + localTransfers + localLoans + localOther + totalFecUnitemized + totalFecCandidateContribution;
+    // Use Math.max for Transfers/Loans/Other to fill gaps when local data is incomplete
+    // This handles cases where parent aggregate records are missing from local imports
+    const effectiveTransfers = Math.max(localTransfers, totalFecTransfers);
+    const effectiveLoans = Math.max(localLoans, totalFecLoans);
+    const effectiveOther = Math.max(localOther, totalFecOtherReceipts + totalFecOffsetsToOperatingExpenditures);
+    const localTotalReceipts = localItemized + effectiveTransfers + effectiveLoans + effectiveOther + totalFecUnitemized + totalFecCandidateContribution;
     
     const totalReceiptsDeltaAmount = totalFecReceipts > 0 
       ? Math.round(localTotalReceipts - totalFecReceipts) 
