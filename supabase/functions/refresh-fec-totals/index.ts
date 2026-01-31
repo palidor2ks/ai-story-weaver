@@ -77,7 +77,7 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
   throw new Error('Max retries exceeded');
 }
 
-// Fetch FEC totals for a committee
+// Fetch FEC totals for a committee - includes transfers, loans, and other receipts
 async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: string): Promise<{
   fecItemized: number | null;
   fecUnitemized: number | null;
@@ -85,14 +85,24 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
   fecPacContributions: number | null;
   fecPartyContributions: number | null;
   fecCandidateContribution: number | null;
+  fecTransfers: number | null;
+  fecLoans: number | null;
+  fecOtherReceipts: number | null;
+  fecOffsetsToOperatingExpenditures: number | null;
 }> {
+  const nullResult = {
+    fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, 
+    fecPacContributions: null, fecPartyContributions: null, fecCandidateContribution: null,
+    fecTransfers: null, fecLoans: null, fecOtherReceipts: null, fecOffsetsToOperatingExpenditures: null
+  };
+  
   try {
     const url = `https://api.open.fec.gov/v1/committee/${committeeId}/totals/?api_key=${fecApiKey}&cycle=${cycle}&per_page=1`;
     const response = await fetchWithRetry(url);
     
     if (!response?.ok) {
       console.warn(`[REFRESH-FEC-TOTALS] Could not fetch FEC totals for ${committeeId}:`, response?.status);
-      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null, fecCandidateContribution: null };
+      return nullResult;
     }
     
     let data;
@@ -100,13 +110,13 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
       data = await response.json();
     } catch {
       console.warn(`[REFRESH-FEC-TOTALS] Failed to parse FEC totals response for ${committeeId}`);
-      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null, fecCandidateContribution: null };
+      return nullResult;
     }
     
     const totals = data?.results?.[0];
     
     if (!totals) {
-      return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null, fecCandidateContribution: null };
+      return nullResult;
     }
     
     return {
@@ -115,11 +125,19 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
       fecTotalReceipts: Math.round(totals.receipts || 0),
       fecPacContributions: Math.round(totals.other_political_committee_contributions || 0),
       fecPartyContributions: Math.round(totals.political_party_committee_contributions || 0),
-      fecCandidateContribution: Math.round(totals.candidate_contribution || 0)
+      fecCandidateContribution: Math.round(totals.candidate_contribution || 0),
+      // Line 12: Transfers from authorized committees
+      fecTransfers: Math.round(totals.transfers_from_other_authorized_committee || 0),
+      // Line 13: Loans (candidate loans)
+      fecLoans: Math.round(totals.loans_made_by_candidate || 0),
+      // Line 15: Other receipts
+      fecOtherReceipts: Math.round(totals.other_receipts || 0),
+      // Line 14: Offsets to operating expenditures
+      fecOffsetsToOperatingExpenditures: Math.round(totals.offsets_to_operating_expenditures || 0),
     };
   } catch (err) {
     console.warn(`[REFRESH-FEC-TOTALS] Error fetching FEC totals for ${committeeId}:`, err);
-    return { fecItemized: null, fecUnitemized: null, fecTotalReceipts: null, fecPacContributions: null, fecPartyContributions: null, fecCandidateContribution: null };
+    return nullResult;
   }
 }
 
@@ -252,6 +270,10 @@ serve(async (req) => {
           let totalFecPac = 0;
           let totalFecParty = 0;
           let totalFecCandidateContribution = 0;
+          let totalFecTransfers = 0;
+          let totalFecLoans = 0;
+          let totalFecOtherReceipts = 0;
+          let totalFecOffsetsToOperatingExpenditures = 0;
           let hasValidData = false;
 
           // Track summed local totals across all committees
@@ -317,6 +339,10 @@ serve(async (req) => {
               totalFecPac += totals.fecPacContributions || 0;
               totalFecParty += totals.fecPartyContributions || 0;
               totalFecCandidateContribution += totals.fecCandidateContribution || 0;
+              totalFecTransfers += totals.fecTransfers || 0;
+              totalFecLoans += totals.fecLoans || 0;
+              totalFecOtherReceipts += totals.fecOtherReceipts || 0;
+              totalFecOffsetsToOperatingExpenditures += totals.fecOffsetsToOperatingExpenditures || 0;
 
               // Update committee_finance_rollups with PER-COMMITTEE local totals
               // FIXED: Use correct field names
@@ -366,9 +392,12 @@ serve(async (req) => {
 
             // Calculate TOTAL RECEIPTS delta (for UI display - matches FEC/Local columns)
             // Local total = locally imported data + FEC-only items (unitemized, candidate self-fund)
-            // We now track transfers, loans, and other receipts locally via Line 12/13/14/15
-            // Include candidate self-funding (fecCandidateContribution) since FEC total receipts includes it
-            const localTotalReceipts = localItemized + localTransfers + localLoans + localOther + totalFecUnitemized + totalFecCandidateContribution;
+            // Use Math.max for Transfers/Loans/Other to fill gaps when local data is incomplete
+            // This handles cases where parent aggregate records are missing from local imports
+            const effectiveTransfers = Math.max(localTransfers, totalFecTransfers);
+            const effectiveLoans = Math.max(localLoans, totalFecLoans);
+            const effectiveOther = Math.max(localOther, totalFecOtherReceipts + totalFecOffsetsToOperatingExpenditures);
+            const localTotalReceipts = localItemized + effectiveTransfers + effectiveLoans + effectiveOther + totalFecUnitemized + totalFecCandidateContribution;
             
             const totalReceiptsDeltaAmount = totalFecReceipts > 0 
               ? Math.round(localTotalReceipts - totalFecReceipts) 
@@ -388,6 +417,12 @@ serve(async (req) => {
                 fec_total_receipts: totalFecReceipts,
                 fec_pac_contributions: totalFecPac,
                 fec_party_contributions: totalFecParty,
+                // FEC breakdown for transfers, loans, and other receipts
+                fec_transfers: totalFecTransfers,
+                fec_loans: totalFecLoans,
+                fec_other_receipts: totalFecOtherReceipts,
+                fec_offsets_to_operating_expenditures: totalFecOffsetsToOperatingExpenditures,
+                fec_candidate_contribution: totalFecCandidateContribution,
                 local_itemized: localItemized,
                 local_itemized_net: localItemized,
                 local_individual_itemized: localIndividual,
