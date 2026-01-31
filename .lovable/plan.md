@@ -1,83 +1,67 @@
 
-# Fix Finance Reconciliation - Transfer Gap Issue
+# Fix: Inconsistent Delta Calculation in Single-Candidate Refresh
 
-## Problem Analysis
+## Problem Summary
 
-Dan Sullivan shows **$0 Local / $381,064 FEC** for Transfers (Line 12), causing a **-20.1% delta** in the Admin dashboard.
+The Admin dashboard shows conflicting data for Dan Sullivan:
+- **Transfer Details**: $0 Local / $381K FEC (correct - shows raw imported data)
+- **Local Column**: $1.9M (correct - uses `Math.max` fallback in frontend)
+- **FEC Column**: $1.9M (correct)
+- **Delta Column**: -$381K (-20.1%) (wrong - using stale database value)
 
-### Root Cause (Data Investigation)
+## Root Cause
 
-| Metric | Sullivan | Begich (Working) |
-|--------|----------|------------------|
-| Line 12 records with `memo_code=NULL` | **0** | 10 |
-| Line 12 records with `memo_code='X'` | 227 ($801K) | 97 ($193K) |
-| FEC Transfer Total | $381,064 | $176,572 |
-| Local Transfer Total (RPC) | $0 | $176,572 ✓ |
+The `refresh-fec-totals` edge function has **two code paths** that calculate `total_receipts_delta`:
 
-**Key Insight:** Sullivan's import only contains JFC attribution memos (`memo_code='X'`) — the **parent aggregate transfer records** that should have `memo_code=NULL` are missing. Begich's import has both, so his totals match.
+| Code Path | Line Range | Math.max Applied? | Status |
+|-----------|------------|-------------------|--------|
+| Batch mode | 397-400 | ✅ Yes | Working correctly |
+| Single-candidate mode | 691 | ❌ No | **Bug here** |
 
-**Why we can't sum `memo_code='X'` records:** They total $801K, which is **2x the FEC total** ($381K). JFC attribution memos represent individual donors across multiple committees, causing overlap.
+When Dan Sullivan was refreshed via single-candidate mode, the database stored the **incorrect delta** (-$381K) because `Math.max(local, fec)` wasn't applied for transfers/loans/other.
+
+## Solution
+
+Update the **single-candidate mode** in `supabase/functions/refresh-fec-totals/index.ts` to use the same `Math.max` fallback logic as batch mode.
 
 ---
 
-## Solution: Math.max Fallback for Line 12/13/14/15
+## Technical Changes
 
-Use `Math.max(local, fec)` for Transfers, Loans, and Other Receipts when calculating the "Local Total" for display. This ensures the most complete data is used when local imports are incomplete.
+### File: `supabase/functions/refresh-fec-totals/index.ts`
 
-### Files to Modify
-
-**1. Frontend - UI Calculation**
-`src/components/admin/AnswerCoveragePanel.tsx` (around line 2022)
-
+**Before (line 691):**
 ```typescript
-// BEFORE:
-const localTotal = localItemized + localTransfers + localLoans + localOtherReceipts 
-                 + fecUnitemized + fecCandidateContribution;
-
-// AFTER:
-// Use Math.max for Transfers/Loans/Other to fill gaps when local data is incomplete
-const effectiveTransfers = Math.max(localTransfers, fecTransfers);
-const effectiveLoans = Math.max(localLoans, fecLoans);
-const effectiveOther = Math.max(localOtherReceipts, fecOtherTotal);
-
-const localTotal = localItemized + effectiveTransfers + effectiveLoans + effectiveOther 
-                 + fecUnitemized + fecCandidateContribution;
+const localTotalReceipts = localItemized + localTransfers + localLoans + localOther + totalFecUnitemized + totalFecCandidateContribution;
 ```
 
-**2. Edge Function - Stored Delta Calculation**
-`supabase/functions/refresh-fec-totals/index.ts` (around line 371)
+**After:**
+```typescript
+// Use Math.max for Transfers/Loans/Other to fill gaps when local data is incomplete
+// This handles cases where parent aggregate records are missing from local imports
+const effectiveTransfers = Math.max(localTransfers, totalFecTransfers);
+const effectiveLoans = Math.max(localLoans, totalFecLoans);
+const effectiveOther = Math.max(localOther, totalFecOtherReceipts + totalFecOffsetsToOperatingExpenditures);
+const localTotalReceipts = localItemized + effectiveTransfers + effectiveLoans + effectiveOther + totalFecUnitemized + totalFecCandidateContribution;
+```
 
-Apply the same `Math.max` pattern so the database-stored `total_receipts_delta` matches the UI calculation.
+---
 
-**3. Nightly Reconciliation (Consistency)**
-`supabase/functions/nightly-finance-reconciliation/index.ts`
+## Verification Steps
 
-Apply the same `Math.max` pattern for batch reconciliation.
+After deploying the fix:
+
+1. **Re-sync Dan Sullivan** by clicking the refresh button in the Admin dashboard
+2. **Verify database update**: `total_receipts_delta_amount` should change from -$381K to ~$0
+3. **Verify UI consistency**: Delta column should now show ~$0 matching the Local/FEC columns
 
 ---
 
 ## Expected Result for Dan Sullivan
 
-| Line Item | Before Fix | After Fix |
-|-----------|------------|-----------|
-| Effective Transfers | $0 | $381,064 (from FEC) |
-| Effective Loans | $0 | $0 |
-| Effective Other | $73,615 | $73,615 |
-| Local Total | ~$1.5M | ~$1.9M |
-| Delta | **-20.1%** | **~0%** |
-
----
-
-## Technical Notes
-
-### Why Math.max Works
-
-According to the project memory notes (`finance/reconciliation-calculation-logic`), the `localTotal` should use `Math.max(local, fec)` for Lines 12, 13, 14, 15 to ensure the most complete data is used. Only **Unitemized** and **Candidate Self-Fund** remain as FEC-only line items.
-
-### Category Popover Transparency
-
-The "Category Comparison" popover will continue showing **$0 Local / $381,064 FEC** for Transfers to maintain transparency about what data was actually imported. Only the **total calculation** changes.
-
-### Future: Root Cause Fix
-
-The underlying issue is that parent aggregate Line 12 records are missing from Sullivan's import. A follow-up task could investigate why the FEC API or CSV export doesn't include these records.
+| Metric | Before Fix | After Fix |
+|--------|------------|-----------|
+| effectiveTransfers | $0 | $381,064 (Math.max) |
+| localTotalReceipts | ~$1.5M | ~$1.9M |
+| total_receipts_delta_amount | -$381,070 | ~$0 |
+| total_receipts_delta_pct | -20.1% | ~0% |
