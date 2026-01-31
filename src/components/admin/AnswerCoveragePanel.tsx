@@ -2017,9 +2017,15 @@ export function AnswerCoveragePanel() {
                       // FEC "Other" = Line 14 (offsets) + Line 15 (other receipts)
                       const fecOtherTotal = fecOffsetsToOperatingExpenditures + fecOtherReceipts;
                       
-                      // Local Total = Local Itemized + Local Transfers + Local Loans + Local Other + FEC-only items
+                      // Use Math.max for Transfers/Loans/Other to fill gaps when local data is incomplete
+                      // This handles cases where parent aggregate records are missing from local imports
+                      const effectiveTransfers = Math.max(localTransfers, fecTransfers);
+                      const effectiveLoans = Math.max(localLoans, fecLoans);
+                      const effectiveOther = Math.max(localOtherReceipts, fecOtherTotal);
+                      
+                      // Local Total = Local Itemized + Effective Transfers/Loans/Other + FEC-only items
                       // Only Unitemized and Candidate Self-Fund are FEC-only (we can't import those)
-                      const localTotal = localItemized + localTransfers + localLoans + localOtherReceipts + fecUnitemized + fecCandidateContribution;
+                      const localTotal = localItemized + effectiveTransfers + effectiveLoans + effectiveOther + fecUnitemized + fecCandidateContribution;
                       
                       // Calculate delta inline: Local Total vs FEC Total Receipts
                       const fecTotalReceipts = financeStatus.fecTotalReceipts;

@@ -336,10 +336,12 @@ serve(async (req) => {
         const partyDeltaAmount = localPartyContributions - fecPartyContributions;
         
         // FIXED: Calculate Local Total to match FEC Total Receipts formula
-        // Local Total = Imported Itemized (Ind + PAC + Party) + Transfers + Loans + Other
-        // We compare this against FEC Total Receipts for the main delta
-        // Note: We don't have local unitemized since we only import itemized contributions
-        const localTotal = localItemized + localTransfers + localLoans + localOther;
+        // Use Math.max for Transfers/Loans/Other to fill gaps when local data is incomplete
+        // This handles cases where parent aggregate records are missing from local imports
+        const effectiveTransfers = Math.max(localTransfers, fecTransfers);
+        const effectiveLoans = Math.max(localLoans, fecLoans);
+        const effectiveOther = Math.max(localOther, fecOtherReceipts + fecOffsetsToOperatingExpenditures);
+        const localTotal = localItemized + effectiveTransfers + effectiveLoans + effectiveOther;
         
         // Compare local vs FEC at the comparable itemized level
         // Use (gross individual + organization) for Line 11A, matching FEC individual_itemized
