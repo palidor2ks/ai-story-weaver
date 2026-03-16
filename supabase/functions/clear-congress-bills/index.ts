@@ -39,7 +39,7 @@ serve(async (req) => {
       throw new Error('Congress must be between 111 and 119');
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = adminClient;
 
     // Get count before delete
     const { count: beforeCount } = await supabase
