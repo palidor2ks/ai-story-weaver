@@ -284,7 +284,7 @@ export const Feed = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, candidatesWithScores, profile]);
+  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, candidatesWithScores, profile, isHidden]);
 
   const userTopicsList = userTopics.map(ut => ({
     id: ut.topics?.id || ut.topic_id,
