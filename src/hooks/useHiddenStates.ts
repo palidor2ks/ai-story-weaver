@@ -5,9 +5,9 @@ export const useHiddenStates = () => {
   const query = useQuery({
     queryKey: ['hidden-states'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('hidden_states').select('state_code');
+      const { data, error } = await supabase.rpc('get_hidden_state_codes');
       if (error) throw error;
-      return new Set<string>((data || []).map((r) => (r.state_code || '').toUpperCase()));
+      return new Set<string>((data || []).map((r: { state_code: string }) => (r.state_code || '').toUpperCase()));
     },
     staleTime: 5 * 60 * 1000,
   });

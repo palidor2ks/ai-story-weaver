@@ -2420,6 +2420,12 @@ export type Database = {
           transfer_total: number
         }[]
       }
+      get_hidden_state_codes: {
+        Args: never
+        Returns: {
+          state_code: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
