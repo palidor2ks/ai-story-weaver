@@ -10,6 +10,7 @@ import { ClaimReviewPanel } from "@/components/admin/ClaimReviewPanel";
 import { DonorAliasesPanel } from "@/components/admin/DonorAliasesPanel";
 import { ScoreFixesTab } from "@/pages/admin/tabs/ScoreFixesTab";
 import { BillSummaryDashboard } from "@/components/admin/BillSummaryDashboard";
+import { HiddenStatesPanel } from "@/components/admin/HiddenStatesPanel";
 import { BackgroundProcessingProvider } from "@/context/BackgroundProcessingContext";
 
 import { Button } from "@/components/ui/button";
