@@ -123,6 +123,9 @@ export function AnswerCoveragePanel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [stateFilter, setStateFilter] = useState<string>('all');
+  useEffect(() => {
+    if (stateFilter !== 'all' && isStateHidden(stateFilter)) setStateFilter('all');
+  }, [stateFilter, isStateHidden]);
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('all');
   const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
   const [deltaFilter, setDeltaFilter] = useState<'all' | 'within' | 'minor' | 'major' | 'no_data'>('all');
