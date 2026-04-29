@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useHiddenStates } from "@/hooks/useHiddenStates";
 import { Link } from "react-router-dom";
 import { useSyncStats } from "@/hooks/useSyncStats";
 import {
