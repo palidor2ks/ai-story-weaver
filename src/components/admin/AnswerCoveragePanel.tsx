@@ -1791,7 +1791,7 @@ export function AnswerCoveragePanel() {
               </SelectTrigger>
               <SelectContent className="bg-popover">
                 <SelectItem value="all">All</SelectItem>
-                {states?.map(s => (
+                {visibleStates.map(s => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
