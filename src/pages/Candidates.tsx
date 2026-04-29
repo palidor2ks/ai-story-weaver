@@ -8,6 +8,7 @@ import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useAllPoliticians } from '@/hooks/useAllPoliticians';
 import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
+import { useHiddenStates } from '@/hooks/useHiddenStates';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -287,8 +288,10 @@ export const Candidates = () => {
     }
   }, [activeTab, myRepsCombined, federalExecutiveCandidates, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, allCandidates]);
 
+  const { isHidden } = useHiddenStates();
+
   const filteredCandidates = useMemo(() => {
-    let result = [...tabCandidates];
+    let result = tabCandidates.filter(c => !isHidden(c.state));
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -321,7 +324,7 @@ export const Candidates = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, officeFilter, tabCandidates, profile]);
+  }, [searchQuery, sortBy, partyFilter, officeFilter, tabCandidates, profile, isHidden]);
 
   const isLoading = profileLoading || candidatesLoading || representativesLoading || allPoliticiansLoading || civicLoading;
 
