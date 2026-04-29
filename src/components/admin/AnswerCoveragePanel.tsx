@@ -104,6 +104,11 @@ function getCycleDateRange(cycle: string): string {
 export function AnswerCoveragePanel() {
   const { data: syncStats, isLoading: syncLoading, refetch: refetchSyncStats, isRefetching } = useSyncStats();
   const { data: states } = useUniqueStates();
+  const { isHidden: isStateHidden } = useHiddenStates();
+  const visibleStates = useMemo(
+    () => (states ?? []).filter((s) => !isStateHidden(s)),
+    [states, isStateHidden]
+  );
   
   // Use cached stats instead of direct queries
   const { data: candidateStatsCache, isLoading: statsLoading } = useCandidateAnswerStatsCache();
