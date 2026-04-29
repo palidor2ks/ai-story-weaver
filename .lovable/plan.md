@@ -1,67 +1,74 @@
+## Goal
 
-# Fix: Inconsistent Delta Calculation in Single-Candidate Refresh
+Let admins toggle which US states are visible to end users, without deleting any underlying data. Hidden-state politicians, candidates, civic officials, donors, and feed items will simply be filtered out of all user-facing queries.
 
-## Problem Summary
+## How It Will Work
 
-The Admin dashboard shows conflicting data for Dan Sullivan:
-- **Transfer Details**: $0 Local / $381K FEC (correct - shows raw imported data)
-- **Local Column**: $1.9M (correct - uses `Math.max` fallback in frontend)
-- **FEC Column**: $1.9M (correct)
-- **Delta Column**: -$381K (-20.1%) (wrong - using stale database value)
+1. **New table `hidden_states`** — stores 2-letter state codes that should be hidden from users. Admins can add/remove rows freely; the underlying `candidates`, `static_officials`, `donors`, etc. stay untouched.
+2. **New admin panel "Visible States"** added as a tab on `/admin`. Shows a 50-state + DC grid of toggles. Clicking a state hides/unhides it instantly.
+3. **Frontend filtering** — a single `useHiddenStates()` hook fetches the hidden list (cached), and the relevant pages (`Feed`, `Candidates`, `Donors`, `Parties`, representative lookup) filter out any record whose `state` is in that list before rendering.
 
-## Root Cause
+Because filtering happens at the read layer (not in the database), nothing is destructive — toggling a state back on instantly restores all its data.
 
-The `refresh-fec-totals` edge function has **two code paths** that calculate `total_receipts_delta`:
+## Plan
 
-| Code Path | Line Range | Math.max Applied? | Status |
-|-----------|------------|-------------------|--------|
-| Batch mode | 397-400 | ✅ Yes | Working correctly |
-| Single-candidate mode | 691 | ❌ No | **Bug here** |
+```text
+1. Database
+   └─ Create table `hidden_states` (state_code PK, hidden_at, hidden_by)
+      RLS: anyone can SELECT, only admins can INSERT/DELETE
 
-When Dan Sullivan was refreshed via single-candidate mode, the database stored the **incorrect delta** (-$381K) because `Math.max(local, fec)` wasn't applied for transfers/loans/other.
+2. Admin UI
+   ├─ New tab "Visible States" in src/pages/Admin.tsx
+   └─ New component src/components/admin/HiddenStatesPanel.tsx
+      - 51-cell grid (50 states + DC) with a Switch per state
+      - Shows count of candidates/officials currently in each state
+      - Toggle calls insert/delete on hidden_states
 
-## Solution
+3. Shared hook
+   └─ src/hooks/useHiddenStates.ts
+      - Returns Set<string> of hidden state codes
+      - Cached 5 min via react-query
 
-Update the **single-candidate mode** in `supabase/functions/refresh-fec-totals/index.ts` to use the same `Math.max` fallback logic as batch mode.
-
----
-
-## Technical Changes
-
-### File: `supabase/functions/refresh-fec-totals/index.ts`
-
-**Before (line 691):**
-```typescript
-const localTotalReceipts = localItemized + localTransfers + localLoans + localOther + totalFecUnitemized + totalFecCandidateContribution;
+4. Apply filter on user-facing pages
+   ├─ src/pages/Feed.tsx           → filter candidates list
+   ├─ src/pages/Candidates.tsx     → filter all tabs (My Reps, Federal, State, Local, All)
+   ├─ src/pages/Donors.tsx         → filter donor.contributor_state
+   ├─ src/pages/Parties.tsx        → filter party member rosters if applicable
+   └─ src/hooks/useRepresentatives.ts → filter representatives result
 ```
 
-**After:**
-```typescript
-// Use Math.max for Transfers/Loans/Other to fill gaps when local data is incomplete
-// This handles cases where parent aggregate records are missing from local imports
-const effectiveTransfers = Math.max(localTransfers, totalFecTransfers);
-const effectiveLoans = Math.max(localLoans, totalFecLoans);
-const effectiveOther = Math.max(localOther, totalFecOtherReceipts + totalFecOffsetsToOperatingExpenditures);
-const localTotalReceipts = localItemized + effectiveTransfers + effectiveLoans + effectiveOther + totalFecUnitemized + totalFecCandidateContribution;
-```
+## Technical Details
 
----
+- **Table schema**
+  ```sql
+  CREATE TABLE public.hidden_states (
+    state_code text PRIMARY KEY,           -- 'CA', 'TX', 'DC' …
+    hidden_at  timestamptz DEFAULT now(),
+    hidden_by  uuid REFERENCES auth.users(id)
+  );
+  ALTER TABLE public.hidden_states ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "anyone reads"  ON public.hidden_states FOR SELECT USING (true);
+  CREATE POLICY "admins manage" ON public.hidden_states FOR ALL
+    USING (has_role(auth.uid(),'admin')) WITH CHECK (has_role(auth.uid(),'admin'));
+  ```
 
-## Verification Steps
+- **Filter pattern** (applied in each page after data is loaded):
+  ```ts
+  const { hidden } = useHiddenStates();
+  const visible = candidates.filter(c => !hidden.has(c.state));
+  ```
 
-After deploying the fix:
+- **No edge function changes** required. Existing background jobs (FEC sync, bill ingestion, etc.) keep populating data for every state — only the UI hides it.
 
-1. **Re-sync Dan Sullivan** by clicking the refresh button in the Admin dashboard
-2. **Verify database update**: `total_receipts_delta_amount` should change from -$381K to ~$0
-3. **Verify UI consistency**: Delta column should now show ~$0 matching the Local/FEC columns
+- **Admin panel features**
+  - Search/filter the state grid
+  - "Hide all" / "Show all" bulk buttons
+  - Live count badge per state (`SELECT state, count(*) FROM candidates GROUP BY state`)
+  - Confirmation toast after each toggle
 
----
+## Out of Scope
 
-## Expected Result for Dan Sullivan
+- No deletion of historical data
+- No changes to scoring math, AI pipelines, or sync jobs
+- Hidden states still appear in admin views (admins always see everything)
 
-| Metric | Before Fix | After Fix |
-|--------|------------|-----------|
-| effectiveTransfers | $0 | $381,064 (Math.max) |
-| localTotalReceipts | ~$1.5M | ~$1.9M |
-| total_receipts_delta_amount | -$381,070 | ~$0 |
-| total_receipts_delta_pct | -20.1% | ~0% |

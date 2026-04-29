@@ -1253,6 +1253,24 @@ export type Database = {
         }
         Relationships: []
       }
+      hidden_states: {
+        Row: {
+          hidden_at: string
+          hidden_by: string | null
+          state_code: string
+        }
+        Insert: {
+          hidden_at?: string
+          hidden_by?: string | null
+          state_code: string
+        }
+        Update: {
+          hidden_at?: string
+          hidden_by?: string | null
+          state_code?: string
+        }
+        Relationships: []
+      }
       official_transitions: {
         Row: {
           ai_confidence: string | null
