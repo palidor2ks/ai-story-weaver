@@ -10,6 +10,7 @@ import { ClaimReviewPanel } from "@/components/admin/ClaimReviewPanel";
 import { DonorAliasesPanel } from "@/components/admin/DonorAliasesPanel";
 import { ScoreFixesTab } from "@/pages/admin/tabs/ScoreFixesTab";
 import { BillSummaryDashboard } from "@/components/admin/BillSummaryDashboard";
+import { HiddenStatesPanel } from "@/components/admin/HiddenStatesPanel";
 import { BackgroundProcessingProvider } from "@/context/BackgroundProcessingContext";
 
 import { Button } from "@/components/ui/button";
@@ -472,7 +473,15 @@ export default function Admin() {
               <Upload className="h-4 w-4" />
               Donor Import
             </TabsTrigger>
+            <TabsTrigger value="visible-states" className="gap-2">
+              <Shield className="h-4 w-4" />
+              Visible States
+            </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="visible-states">
+            <HiddenStatesPanel />
+          </TabsContent>
 
           <TabsContent value="officials">
             <Card>

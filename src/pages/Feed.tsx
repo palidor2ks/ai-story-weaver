@@ -9,6 +9,7 @@ import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials } from '@/hooks/useCivicOfficials';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { useUserQuizQuestionIds, useRepresentativeAnswersAndScores } from '@/hooks/useRepresentativeScores';
+import { useHiddenStates } from '@/hooks/useHiddenStates';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -201,8 +202,10 @@ export const Feed = () => {
     });
   }, [transformedCandidates, scoreMap, scoresData]);
 
+  const { isHidden } = useHiddenStates();
+
   const filteredAndSortedCandidates = useMemo(() => {
-    let result = [...candidatesWithScores];
+    let result = candidatesWithScores.filter(c => !isHidden(c.state));
 
     // Filter by search query
     if (searchQuery) {
@@ -281,7 +284,7 @@ export const Feed = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, candidatesWithScores, profile]);
+  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, candidatesWithScores, profile, isHidden]);
 
   const userTopicsList = userTopics.map(ut => ({
     id: ut.topics?.id || ut.topic_id,
