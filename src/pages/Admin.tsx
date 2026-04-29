@@ -472,7 +472,15 @@ export default function Admin() {
               <Upload className="h-4 w-4" />
               Donor Import
             </TabsTrigger>
+            <TabsTrigger value="visible-states" className="gap-2">
+              <Shield className="h-4 w-4" />
+              Visible States
+            </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="visible-states">
+            <HiddenStatesPanel />
+          </TabsContent>
 
           <TabsContent value="officials">
             <Card>
