@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useHiddenStates } from "@/hooks/useHiddenStates";
 import { Link } from "react-router-dom";
 import { useSyncStats } from "@/hooks/useSyncStats";
 import {
@@ -103,6 +104,11 @@ function getCycleDateRange(cycle: string): string {
 export function AnswerCoveragePanel() {
   const { data: syncStats, isLoading: syncLoading, refetch: refetchSyncStats, isRefetching } = useSyncStats();
   const { data: states } = useUniqueStates();
+  const { isHidden: isStateHidden } = useHiddenStates();
+  const visibleStates = useMemo(
+    () => (states ?? []).filter((s) => !isStateHidden(s)),
+    [states, isStateHidden]
+  );
   
   // Use cached stats instead of direct queries
   const { data: candidateStatsCache, isLoading: statsLoading } = useCandidateAnswerStatsCache();
@@ -117,6 +123,9 @@ export function AnswerCoveragePanel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [stateFilter, setStateFilter] = useState<string>('all');
+  useEffect(() => {
+    if (stateFilter !== 'all' && isStateHidden(stateFilter)) setStateFilter('all');
+  }, [stateFilter, isStateHidden]);
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('all');
   const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
   const [deltaFilter, setDeltaFilter] = useState<'all' | 'within' | 'minor' | 'major' | 'no_data'>('all');
@@ -1782,7 +1791,7 @@ export function AnswerCoveragePanel() {
               </SelectTrigger>
               <SelectContent className="bg-popover">
                 <SelectItem value="all">All</SelectItem>
-                {states?.map(s => (
+                {visibleStates.map(s => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
