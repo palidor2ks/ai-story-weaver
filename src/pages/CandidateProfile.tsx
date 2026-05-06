@@ -1065,7 +1065,7 @@ export const CandidateProfile = () => {
               state: candidate.state,
               district: candidate.district,
               image_url: candidate.image_url,
-              overall_score: candidate.overall_score,
+              overall_score: resolvedScore,
               coverage_tier: candidate.coverage_tier || 'tier_3',
               confidence: candidate.confidence || 'medium',
             }}
