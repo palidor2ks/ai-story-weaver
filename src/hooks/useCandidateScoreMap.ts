@@ -22,7 +22,8 @@ export const useCandidateScoreMap = (candidateIds?: string[]) => {
       // Fetch saved scores from candidates and overrides tables
       let overridesQuery = supabase
         .from('candidate_overrides')
-        .select('candidate_id, overall_score');
+        .select('candidate_id, overall_score')
+        .eq('is_active', true);
 
       let candidatesQuery = supabase
         .from('candidates')
