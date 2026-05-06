@@ -62,6 +62,7 @@ export function CandidateEditDialog({
   const { data: existingOverride } = useCandidateOverride(candidateId);
   const upsertMutation = useUpsertCandidateOverride();
   const deleteMutation = useDeleteCandidateOverride();
+  const toggleMutation = useToggleCandidateOverride();
 
   const [formData, setFormData] = useState<FormData>({
     name: currentData.name,
