@@ -160,7 +160,7 @@ export const useCandidate = (id: string | undefined) => {
       
       // Fetch override, candidate, and topic scores in parallel for reduced latency
       const [overrideResult, candidateResult, topicScoresResult] = await Promise.all([
-        supabase.from('candidate_overrides').select('*').eq('candidate_id', id).maybeSingle(),
+        supabase.from('candidate_overrides').select('*').eq('candidate_id', id).eq('is_active', true).maybeSingle(),
         supabase.from('candidates').select('*').eq('id', id).maybeSingle(),
         supabase.from('candidate_topic_scores').select('topic_id, score, topics(name, icon)').eq('candidate_id', id),
       ]);
