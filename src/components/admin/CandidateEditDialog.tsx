@@ -9,7 +9,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, RotateCcw, AlertCircle } from 'lucide-react';
-import { useUpsertCandidateOverride, useDeleteCandidateOverride, useCandidateOverride } from '@/hooks/useCandidateOverrides';
+import { useUpsertCandidateOverride, useDeleteCandidateOverride, useCandidateOverride, useToggleCandidateOverride } from '@/hooks/useCandidateOverrides';
+import { Switch } from '@/components/ui/switch';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { FecIdsPanel } from './FecIdsPanel';
