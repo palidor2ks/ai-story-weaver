@@ -9,7 +9,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, RotateCcw, AlertCircle } from 'lucide-react';
-import { useUpsertCandidateOverride, useDeleteCandidateOverride, useCandidateOverride } from '@/hooks/useCandidateOverrides';
+import { useUpsertCandidateOverride, useDeleteCandidateOverride, useCandidateOverride, useToggleCandidateOverride } from '@/hooks/useCandidateOverrides';
+import { Switch } from '@/components/ui/switch';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { FecIdsPanel } from './FecIdsPanel';
@@ -61,6 +62,7 @@ export function CandidateEditDialog({
   const { data: existingOverride } = useCandidateOverride(candidateId);
   const upsertMutation = useUpsertCandidateOverride();
   const deleteMutation = useDeleteCandidateOverride();
+  const toggleMutation = useToggleCandidateOverride();
 
   const [formData, setFormData] = useState<FormData>({
     name: currentData.name,
@@ -143,8 +145,13 @@ export function CandidateEditDialog({
           <DialogTitle className="flex items-center gap-2">
             Edit Candidate: {candidateName}
             {existingOverride && (
-              <Badge variant="outline" className="text-xs border-primary text-primary">
-                Has Overrides
+              <Badge variant="outline" className={cn(
+                "text-xs",
+                existingOverride.is_active 
+                  ? "border-primary text-primary" 
+                  : "border-muted-foreground/50 text-muted-foreground"
+              )}>
+                {existingOverride.is_active ? 'Override Active' : 'Override Inactive'}
               </Badge>
             )}
           </DialogTitle>
@@ -154,15 +161,38 @@ export function CandidateEditDialog({
         </DialogHeader>
 
         {existingOverride && (
-          <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/20 rounded text-sm">
-            <AlertCircle className="h-4 w-4 text-primary shrink-0" />
+          <div className={cn(
+            "flex items-center gap-2 p-2 border rounded text-sm",
+            existingOverride.is_active 
+              ? "bg-primary/5 border-primary/20" 
+              : "bg-muted/50 border-muted-foreground/20"
+          )}>
+            <AlertCircle className={cn(
+              "h-4 w-4 shrink-0",
+              existingOverride.is_active ? "text-primary" : "text-muted-foreground"
+            )} />
             <div className="flex-1">
-              <span className="font-medium">Override active</span>
+              <span className="font-medium">
+                {existingOverride.is_active ? 'Override active' : 'Override inactive'}
+              </span>
               {existingOverride.updated_at && (
                 <span className="text-muted-foreground ml-2">
                   Last updated {formatDistanceToNow(new Date(existingOverride.updated_at), { addSuffix: true })}
                 </span>
               )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="override-active-toggle" className="text-xs text-muted-foreground">
+                {existingOverride.is_active ? 'Active' : 'Inactive'}
+              </Label>
+              <Switch
+                id="override-active-toggle"
+                checked={existingOverride.is_active}
+                onCheckedChange={(checked) => {
+                  toggleMutation.mutate({ candidateId, isActive: checked });
+                }}
+                disabled={toggleMutation.isPending}
+              />
             </div>
           </div>
         )}

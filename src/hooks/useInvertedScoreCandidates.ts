@@ -51,7 +51,8 @@ export const useInvertedScoreCandidates = () => {
       // Get candidate_overrides for saved scores (used for static officials)
       const { data: overrides, error: overridesError } = await supabase
         .from('candidate_overrides')
-        .select('candidate_id, overall_score');
+        .select('candidate_id, overall_score')
+        .eq('is_active', true);
       
       if (overridesError) throw overridesError;
 

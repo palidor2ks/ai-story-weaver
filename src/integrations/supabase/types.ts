@@ -528,6 +528,7 @@ export type Database = {
           district: string | null
           id: string
           image_url: string | null
+          is_active: boolean
           name: string | null
           notes: string | null
           office: string | null
@@ -546,6 +547,7 @@ export type Database = {
           district?: string | null
           id?: string
           image_url?: string | null
+          is_active?: boolean
           name?: string | null
           notes?: string | null
           office?: string | null
@@ -564,6 +566,7 @@ export type Database = {
           district?: string | null
           id?: string
           image_url?: string | null
+          is_active?: boolean
           name?: string | null
           notes?: string | null
           office?: string | null
