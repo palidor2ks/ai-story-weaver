@@ -94,7 +94,7 @@ export const useCandidates = () => {
       const [candidatesResult, topicScoresResult, overridesResult] = await Promise.all([
         supabase.from('candidates').select('*').order('name'),
         supabase.from('calculated_candidate_topic_scores').select('candidate_id, topic_id, calculated_score'),
-        supabase.from('candidate_overrides').select('candidate_id, overall_score, name, party, office, state, district, image_url, coverage_tier, confidence'),
+        supabase.from('candidate_overrides').select('candidate_id, overall_score, name, party, office, state, district, image_url, coverage_tier, confidence').eq('is_active', true),
       ]);
 
       if (candidatesResult.error) throw candidatesResult.error;
