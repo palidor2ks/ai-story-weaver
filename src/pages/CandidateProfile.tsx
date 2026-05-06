@@ -308,7 +308,7 @@ export const CandidateProfile = () => {
                   candidateName={candidate.name}
                   candidateOffice={candidate.office}
                   candidateParty={candidate.party}
-                  candidateScore={candidate.overall_score}
+                  candidateScore={resolvedScore}
                   userScore={userScore}
                   matchScore={matchScore}
                   agreements={agreements}
@@ -319,7 +319,7 @@ export const CandidateProfile = () => {
 
               {/* Score Display */}
               <div className="mb-3">
-                <ScoreText score={candidate.overall_score} size="lg" showLabel />
+                <ScoreText score={resolvedScore} size="lg" showLabel />
               </div>
 
               {/* Badges */}
