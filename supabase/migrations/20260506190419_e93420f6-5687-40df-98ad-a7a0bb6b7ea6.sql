@@ -1,0 +1,2 @@
+INSERT INTO public.candidates (id, name, party, state, office, is_incumbent, coverage_tier, confidence, overall_score, created_at, last_updated)
+VALUES ('S001236', 'JD Vance', 'Republican', 'US', 'Vice President', true, 'tier_3', 'low', 0, now(), now());
