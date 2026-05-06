@@ -204,52 +204,38 @@ export const Candidates = () => {
   }, [federalExecutiveCandidates, allCongressCandidates, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, dbTransformed]);
 
   // My Reps combined (federal + state + local for user's address)
+  // Prefer DB candidates (with scores) over civic duplicates
   const myRepsCombined: Candidate[] = useMemo(() => {
-    const seen = new Set<string>();
+    const seenIds = new Set<string>();
+    const seenNames = new Set<string>();
     const result: Candidate[] = [];
-    
-    // Add federal executive
-    for (const c of federalExecutiveCandidates) {
-      if (!seen.has(c.id)) {
-        seen.add(c.id);
-        result.push(c);
-      }
+
+    const addRep = (c: Candidate) => {
+      if (seenIds.has(c.id)) return;
+      const nameKey = normalizeNameKey(c.name, c.office);
+      if (seenNames.has(nameKey)) return;
+      seenIds.add(c.id);
+      seenNames.add(nameKey);
+      result.push(c);
+    };
+
+    // Add DB versions first (they have scores)
+    for (const c of dbTransformed) {
+      // Only include DB candidates that match a civic official by name
+      const nameKey = normalizeNameKey(c.name, c.office);
+      const isCivicMatch = [...federalExecutiveCandidates, ...stateExecutiveCandidates, ...stateLegislativeCandidates, ...localCandidates, ...userRepresentatives]
+        .some(civic => normalizeNameKey(civic.name, civic.office) === nameKey);
+      if (isCivicMatch) addRep(c);
     }
-    
-    // Add user's federal reps (from Congress.gov)
-    for (const c of userRepresentatives) {
-      if (!seen.has(c.id)) {
-        seen.add(c.id);
-        result.push(c);
-      }
-    }
-    
-    // Add state executive
-    for (const c of stateExecutiveCandidates) {
-      if (!seen.has(c.id)) {
-        seen.add(c.id);
-        result.push(c);
-      }
-    }
-    
-    // Add state legislative
-    for (const c of stateLegislativeCandidates) {
-      if (!seen.has(c.id)) {
-        seen.add(c.id);
-        result.push(c);
-      }
-    }
-    
-    // Add local
-    for (const c of localCandidates) {
-      if (!seen.has(c.id)) {
-        seen.add(c.id);
-        result.push(c);
-      }
-    }
+
+    for (const c of federalExecutiveCandidates) addRep(c);
+    for (const c of userRepresentatives) addRep(c);
+    for (const c of stateExecutiveCandidates) addRep(c);
+    for (const c of stateLegislativeCandidates) addRep(c);
+    for (const c of localCandidates) addRep(c);
     
     return result;
-  }, [federalExecutiveCandidates, userRepresentatives, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates]);
+  }, [federalExecutiveCandidates, userRepresentatives, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, dbTransformed]);
 
   // Get unique offices for filter
   const uniqueOffices = useMemo(() => {
