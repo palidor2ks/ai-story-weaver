@@ -14,6 +14,7 @@ import { useFECIntegration } from '@/hooks/useFECIntegration';
 import { useFECTotals } from '@/hooks/useFECTotals';
 import { useFinanceReconciliation, useCommitteeRollups } from '@/hooks/useFinanceReconciliation';
 import { useBillSponsors } from '@/hooks/useBillSponsors';
+import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { cn } from '@/lib/utils';
