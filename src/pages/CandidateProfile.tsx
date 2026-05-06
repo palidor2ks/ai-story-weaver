@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { useFECIntegration } from '@/hooks/useFECIntegration';
 import { useFECTotals } from '@/hooks/useFECTotals';
 import { useFinanceReconciliation, useCommitteeRollups } from '@/hooks/useFinanceReconciliation';
 import { useBillSponsors } from '@/hooks/useBillSponsors';
+import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { cn } from '@/lib/utils';
@@ -42,6 +43,7 @@ export const CandidateProfile = () => {
   const { data: profile } = useProfile();
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
+  const { data: scoreMap } = useCandidateScoreMap(id ? [id] : undefined);
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id);
   const { data: votes = [] } = useCandidateVotes(id);
   const { data: representativeDetails } = useRepresentativeDetails(id);
@@ -109,7 +111,13 @@ export const CandidateProfile = () => {
   }
 
   const userScore = profile?.overall_score ?? 0;
-  const matchScore = calculateMatchScore(userScore, candidate.overall_score);
+  // Use scoreMap (source of truth) for consistent score display across all pages
+  const resolvedScore = useMemo(() => {
+    if (!id) return candidate.overall_score;
+    const mapped = scoreMap?.get(id);
+    return mapped !== undefined ? mapped : candidate.overall_score;
+  }, [id, scoreMap, candidate.overall_score]);
+  const matchScore = calculateMatchScore(userScore, resolvedScore);
 
   const getPartyColor = (party: string) => {
     switch (party) {
@@ -300,7 +308,7 @@ export const CandidateProfile = () => {
                   candidateName={candidate.name}
                   candidateOffice={candidate.office}
                   candidateParty={candidate.party}
-                  candidateScore={candidate.overall_score}
+                  candidateScore={resolvedScore}
                   userScore={userScore}
                   matchScore={matchScore}
                   agreements={agreements}
@@ -311,7 +319,7 @@ export const CandidateProfile = () => {
 
               {/* Score Display */}
               <div className="mb-3">
-                <ScoreText score={candidate.overall_score} size="lg" showLabel />
+                <ScoreText score={resolvedScore} size="lg" showLabel />
               </div>
 
               {/* Badges */}
@@ -1057,7 +1065,7 @@ export const CandidateProfile = () => {
               state: candidate.state,
               district: candidate.district,
               image_url: candidate.image_url,
-              overall_score: candidate.overall_score,
+              overall_score: resolvedScore,
               coverage_tier: candidate.coverage_tier || 'tier_3',
               confidence: candidate.confidence || 'medium',
             }}

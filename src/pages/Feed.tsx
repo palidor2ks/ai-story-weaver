@@ -127,19 +127,31 @@ export const Feed = () => {
       scoreVersion: c.score_version,
     }));
 
-      // Combine: Congress data + Civic data (deduplicate by name + office + state + district + level)
-      const allCandidates = [...congressCandidates, ...civicCandidates];
-      const uniqueKeys = new Set<string>();
-      const deduped = allCandidates.filter(c => {
-        // Include state, district, and level to prevent legitimate candidates from being filtered out
-        const key = `${c.name}-${c.office}-${c.state}-${c.district || ''}-${c.level || ''}`;
-        if (uniqueKeys.has(key)) return false;
-        uniqueKeys.add(key);
-        return true;
-      });
+      // Combine all sources, preferring DB candidates (have scores/answers) over civic duplicates
+      const seenNames = new Set<string>();
+      const seenIds = new Set<string>();
+      const result: Candidate[] = [];
 
-    // Use combined data if available, otherwise fall back to DB
-    return deduped.length > 0 ? deduped : dbTransformed;
+      const normName = (name: string) => name.toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
+      const normOffice = (office: string) => office.toLowerCase().replace(/\s+of\s+the\s+united\s+states/g, '').replace(/\s+/g, ' ').trim();
+
+      const addCandidate = (c: Candidate) => {
+        if (seenIds.has(c.id)) return;
+        const nameKey = normName(c.name) + '::' + normOffice(c.office);
+        if (seenNames.has(nameKey)) return;
+        seenIds.add(c.id);
+        seenNames.add(nameKey);
+        result.push(c);
+      };
+
+      // DB candidates first (have scores, answers, topic data)
+      for (const c of dbTransformed) addCandidate(c);
+      // Then Congress API members
+      for (const c of congressCandidates) addCandidate(c);
+      // Then civic officials
+      for (const c of civicCandidates) addCandidate(c);
+
+    return result;
   }, [congressMembers, civicOfficials, dbCandidates]);
 
   // Get representative info for score generation
