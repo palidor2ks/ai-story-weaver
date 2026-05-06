@@ -111,7 +111,13 @@ export const CandidateProfile = () => {
   }
 
   const userScore = profile?.overall_score ?? 0;
-  const matchScore = calculateMatchScore(userScore, candidate.overall_score);
+  // Use scoreMap (source of truth) for consistent score display across all pages
+  const resolvedScore = useMemo(() => {
+    if (!id) return candidate.overall_score;
+    const mapped = scoreMap?.get(id);
+    return mapped !== undefined ? mapped : candidate.overall_score;
+  }, [id, scoreMap, candidate.overall_score]);
+  const matchScore = calculateMatchScore(userScore, resolvedScore);
 
   const getPartyColor = (party: string) => {
     switch (party) {
