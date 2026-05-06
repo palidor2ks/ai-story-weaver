@@ -158,10 +158,12 @@ export const Candidates = () => {
   }, [dbCandidates]);
 
   // Helper to create a normalized name key for deduplication
+  // Strips middle initials (e.g. "J.") and normalizes office titles
   const normalizeNameKey = (name: string, office: string) => {
-    // Remove middle initials, suffixes, normalize whitespace
-    const normalized = name.toLowerCase().replace(/\s+/g, ' ').trim();
-    const officeNorm = office.toLowerCase().replace(/\s+/g, ' ').trim();
+    // Remove single-letter initials with periods (e.g., "J.", "R.")
+    const normalized = name.toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
+    // Normalize office: strip "of the united states" and similar suffixes
+    const officeNorm = office.toLowerCase().replace(/\s+of\s+the\s+united\s+states/g, '').replace(/\s+/g, ' ').trim();
     return `${normalized}::${officeNorm}`;
   };
 
