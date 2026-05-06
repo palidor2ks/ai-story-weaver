@@ -1,19 +1,24 @@
 
-# Fix Feed to only show user's representatives
-
 ## Problem
 
-My previous change to fix the Trump duplicate inadvertently added ALL database candidates into the Feed. The Feed should only show representatives relevant to the user's address (zip code).
+JD Vance's candidate record uses ID `S001236` (a Senate LIS-style ID), but the Congress API identifies him by bioguide ID `V000137`. The Feed page sources representatives from the Congress API (using `V000137`), then tries to look up scores and answers using that ID — finding nothing, since all 140 answers and the candidate record are stored under `S001236`.
+
+The admin page queries the `candidates` table directly and shows the correct score for `S001236`.
 
 ## Fix
 
-Restore the Feed's original behavior: only show Congress API members + Civic API officials (which are already filtered by the user's address). Use DB candidates only as a fallback when no API data is available.
+Run a migration to:
 
-Keep the name-based deduplication logic so that when a DB candidate matches a civic/congress official by name, the DB version (with scores) is preferred — but only for candidates that already appear in the user's API results.
+1. Update `candidate_answers` rows from `candidate_id = 'S001236'` to `'V000137'`
+2. Update `candidate_overrides` (if any) similarly
+3. Update `candidate_topic_scores` similarly
+4. Update `candidate_votes` similarly
+5. Update `candidate_committees` and `candidate_fec_ids` similarly
+6. Update the `candidates` table row: change `id` from `S001236` to `V000137`
 
-### Changes to `src/pages/Feed.tsx`
+Since `id` is a primary key on `candidates`, we'll need to insert a new row with `V000137` and delete the old `S001236` row (or use a temporary approach).
 
-In the combine step, instead of dumping all DB candidates first:
-1. First merge congress + civic candidates (these are address-filtered)
-2. Then, for each merged candidate, check if a DB candidate exists with the same normalized name — if so, swap in the DB version (for better score data)
-3. Only fall back to showing all DB candidates if no API data is available at all
+## Technical Details
+
+- Single SQL migration handling all related tables
+- No code changes needed — the Feed's name-based merge and scoreMap lookups will work correctly once IDs align
