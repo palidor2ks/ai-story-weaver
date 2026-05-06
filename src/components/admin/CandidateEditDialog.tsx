@@ -145,8 +145,13 @@ export function CandidateEditDialog({
           <DialogTitle className="flex items-center gap-2">
             Edit Candidate: {candidateName}
             {existingOverride && (
-              <Badge variant="outline" className="text-xs border-primary text-primary">
-                Has Overrides
+              <Badge variant="outline" className={cn(
+                "text-xs",
+                existingOverride.is_active 
+                  ? "border-primary text-primary" 
+                  : "border-muted-foreground/50 text-muted-foreground"
+              )}>
+                {existingOverride.is_active ? 'Override Active' : 'Override Inactive'}
               </Badge>
             )}
           </DialogTitle>
@@ -156,15 +161,38 @@ export function CandidateEditDialog({
         </DialogHeader>
 
         {existingOverride && (
-          <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/20 rounded text-sm">
-            <AlertCircle className="h-4 w-4 text-primary shrink-0" />
+          <div className={cn(
+            "flex items-center gap-2 p-2 border rounded text-sm",
+            existingOverride.is_active 
+              ? "bg-primary/5 border-primary/20" 
+              : "bg-muted/50 border-muted-foreground/20"
+          )}>
+            <AlertCircle className={cn(
+              "h-4 w-4 shrink-0",
+              existingOverride.is_active ? "text-primary" : "text-muted-foreground"
+            )} />
             <div className="flex-1">
-              <span className="font-medium">Override active</span>
+              <span className="font-medium">
+                {existingOverride.is_active ? 'Override active' : 'Override inactive'}
+              </span>
               {existingOverride.updated_at && (
                 <span className="text-muted-foreground ml-2">
                   Last updated {formatDistanceToNow(new Date(existingOverride.updated_at), { addSuffix: true })}
                 </span>
               )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="override-active-toggle" className="text-xs text-muted-foreground">
+                {existingOverride.is_active ? 'Active' : 'Inactive'}
+              </Label>
+              <Switch
+                id="override-active-toggle"
+                checked={existingOverride.is_active}
+                onCheckedChange={(checked) => {
+                  toggleMutation.mutate({ candidateId, isActive: checked });
+                }}
+                disabled={toggleMutation.isPending}
+              />
             </div>
           </div>
         )}
