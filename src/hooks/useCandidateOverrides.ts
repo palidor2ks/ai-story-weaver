@@ -16,6 +16,7 @@ export interface CandidateOverride {
   coverage_tier: string | null;
   confidence: string | null;
   notes: string | null;
+  is_active: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -34,9 +35,10 @@ export interface CandidateOverrideInput {
   coverage_tier?: string | null;
   confidence?: string | null;
   notes?: string | null;
+  is_active?: boolean;
 }
 
-// Fetch single override for a candidate
+// Fetch single override for a candidate (only active)
 export const useCandidateOverride = (candidateId: string | undefined) => {
   return useQuery({
     queryKey: ['candidate_override', candidateId],
@@ -56,7 +58,7 @@ export const useCandidateOverride = (candidateId: string | undefined) => {
   });
 };
 
-// Fetch all overrides (for Admin page)
+// Fetch all overrides (for Admin page) - includes inactive for management
 export const useCandidateOverrides = () => {
   return useQuery({
     queryKey: ['candidate_overrides'],
@@ -120,11 +122,45 @@ export const useUpsertCandidateOverride = () => {
       queryClient.invalidateQueries({ queryKey: ['candidate_override', variables.candidate_id] });
       queryClient.invalidateQueries({ queryKey: ['candidate_overrides'] });
       queryClient.invalidateQueries({ queryKey: ['candidate', variables.candidate_id] });
+      queryClient.invalidateQueries({ queryKey: ['candidate-score-map'] });
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
       toast.success('Override saved successfully');
     },
     onError: (error) => {
       console.error('Failed to save override:', error);
       toast.error('Failed to save override');
+    },
+  });
+};
+
+// Toggle override active/inactive
+export const useToggleCandidateOverride = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ candidateId, isActive }: { candidateId: string; isActive: boolean }) => {
+      const { data, error } = await supabase
+        .from('candidate_overrides')
+        .update({ is_active: isActive, updated_by: user?.id })
+        .eq('candidate_id', candidateId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['candidate_override', variables.candidateId] });
+      queryClient.invalidateQueries({ queryKey: ['candidate_overrides'] });
+      queryClient.invalidateQueries({ queryKey: ['candidate', variables.candidateId] });
+      queryClient.invalidateQueries({ queryKey: ['candidate-score-map'] });
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      toast.success(variables.isActive ? 'Override activated' : 'Override deactivated — using base data');
+    },
+    onError: (error) => {
+      console.error('Failed to toggle override:', error);
+      toast.error('Failed to toggle override');
     },
   });
 };
@@ -146,6 +182,8 @@ export const useDeleteCandidateOverride = () => {
       queryClient.invalidateQueries({ queryKey: ['candidate_override', candidateId] });
       queryClient.invalidateQueries({ queryKey: ['candidate_overrides'] });
       queryClient.invalidateQueries({ queryKey: ['candidate', candidateId] });
+      queryClient.invalidateQueries({ queryKey: ['candidate-score-map'] });
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
       toast.success('Override removed - reverting to API data');
     },
     onError: (error) => {
