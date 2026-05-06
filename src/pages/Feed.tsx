@@ -127,30 +127,35 @@ export const Feed = () => {
       scoreVersion: c.score_version,
     }));
 
-      // Combine all sources, preferring DB candidates (have scores/answers) over civic duplicates
+      // Combine Congress + Civic (both address-filtered), then enhance with DB scores
+      const normName = (name: string) => name.toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
+      const normOffice = (office: string) => office.toLowerCase().replace(/\s+of\s+the\s+united\s+states/g, '').replace(/\s+/g, ' ').trim();
+
+      // Build a lookup of DB candidates by normalized name for score enhancement
+      const dbByName = new Map<string, Candidate>();
+      for (const c of dbTransformed) {
+        dbByName.set(normName(c.name) + '::' + normOffice(c.office), c);
+      }
+
+      // Merge congress + civic (address-filtered sources only)
+      const apiCandidates = [...congressCandidates, ...civicCandidates];
       const seenNames = new Set<string>();
       const seenIds = new Set<string>();
       const result: Candidate[] = [];
 
-      const normName = (name: string) => name.toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
-      const normOffice = (office: string) => office.toLowerCase().replace(/\s+of\s+the\s+united\s+states/g, '').replace(/\s+/g, ' ').trim();
-
-      const addCandidate = (c: Candidate) => {
-        if (seenIds.has(c.id)) return;
+      for (const c of apiCandidates) {
+        if (seenIds.has(c.id)) continue;
         const nameKey = normName(c.name) + '::' + normOffice(c.office);
-        if (seenNames.has(nameKey)) return;
+        if (seenNames.has(nameKey)) continue;
         seenIds.add(c.id);
         seenNames.add(nameKey);
-        result.push(c);
-      };
+        // If a DB version exists with better data (scores), use it instead
+        const dbVersion = dbByName.get(nameKey);
+        result.push(dbVersion && dbVersion.overallScore ? dbVersion : c);
+      }
 
-      // DB candidates first (have scores, answers, topic data)
-      for (const c of dbTransformed) addCandidate(c);
-      // Then Congress API members
-      for (const c of congressCandidates) addCandidate(c);
-      // Then civic officials
-      for (const c of civicCandidates) addCandidate(c);
-
+      // Fall back to DB candidates only if no API data available
+      if (result.length === 0) return dbTransformed;
     return result;
   }, [congressMembers, civicOfficials, dbCandidates]);
 
