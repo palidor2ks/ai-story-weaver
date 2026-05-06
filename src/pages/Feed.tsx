@@ -132,9 +132,12 @@ export const Feed = () => {
       const seenIds = new Set<string>();
       const result: Candidate[] = [];
 
+      const normName = (name: string) => name.toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
+      const normOffice = (office: string) => office.toLowerCase().replace(/\s+of\s+the\s+united\s+states/g, '').replace(/\s+/g, ' ').trim();
+
       const addCandidate = (c: Candidate) => {
         if (seenIds.has(c.id)) return;
-        const nameKey = c.name.toLowerCase().replace(/\s+/g, ' ').trim() + '::' + c.office.toLowerCase().replace(/\s+/g, ' ').trim();
+        const nameKey = normName(c.name) + '::' + normOffice(c.office);
         if (seenNames.has(nameKey)) return;
         seenIds.add(c.id);
         seenNames.add(nameKey);
