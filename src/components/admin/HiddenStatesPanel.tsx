@@ -28,6 +28,9 @@ const STATES: { code: string; name: string }[] = [
   { code: "TN", name: "Tennessee" }, { code: "TX", name: "Texas" }, { code: "UT", name: "Utah" },
   { code: "VT", name: "Vermont" }, { code: "VA", name: "Virginia" }, { code: "WA", name: "Washington" },
   { code: "WV", name: "West Virginia" }, { code: "WI", name: "Wisconsin" }, { code: "WY", name: "Wyoming" },
+  { code: "AS", name: "American Samoa" }, { code: "GU", name: "Guam" },
+  { code: "MP", name: "N. Mariana Islands" }, { code: "PR", name: "Puerto Rico" },
+  { code: "US", name: "National" }, { code: "VI", name: "U.S. Virgin Islands" },
 ];
 
 export function HiddenStatesPanel() {
