@@ -43,6 +43,7 @@ export const CandidateProfile = () => {
   const { data: profile } = useProfile();
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
+  const { data: scoreMap } = useCandidateScoreMap(id ? [id] : undefined);
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id);
   const { data: votes = [] } = useCandidateVotes(id);
   const { data: representativeDetails } = useRepresentativeDetails(id);
