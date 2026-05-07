@@ -415,7 +415,10 @@ async function fetchOpenStatesOfficials(
         const title = (role.title || '').toLowerCase();
         
         // Only include governors and lieutenant governors
-        if (!title.includes('governor')) continue;
+        if (!title.includes('governor')) {
+          console.log(`[Open States] SKIPPING executive "${person.name}" — title "${role.title}" does not contain "governor"`);
+          continue;
+        }
 
         const isLtGov = title.includes('lieutenant') || title.includes('lt.');
         
