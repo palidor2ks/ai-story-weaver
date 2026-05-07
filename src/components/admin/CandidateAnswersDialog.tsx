@@ -576,20 +576,35 @@ export function CandidateAnswersDialog({
                       ({selectedTopic.answeredCount}/{selectedTopic.questions.length} answered)
                     </span>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRegenerateTopic(selectedTopic.topicId, selectedTopic.topicName, selectedTopic.questions)}
-                    disabled={regeneratingTopicId === selectedTopic.topicId}
-                  >
-                    {regeneratingTopicId === selectedTopic.topicId ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                    ) : (
-                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                    )}
-                    Regenerate Topic
-                  </Button>
-                </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleFillUnanswered(selectedTopic.topicId, selectedTopic.topicName, selectedTopic.questions)}
+                      disabled={fillingTopicId === selectedTopic.topicId || regeneratingTopicId === selectedTopic.topicId || selectedTopic.answeredCount === selectedTopic.questions.length}
+                    >
+                      {fillingTopicId === selectedTopic.topicId ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Fill Unanswered
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRegenerateTopic(selectedTopic.topicId, selectedTopic.topicName, selectedTopic.questions)}
+                      disabled={regeneratingTopicId === selectedTopic.topicId || fillingTopicId === selectedTopic.topicId}
+                    >
+                      {regeneratingTopicId === selectedTopic.topicId ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Regenerate Topic
+                    </Button>
+                  </div>
+                 </div>
                 <ScrollArea className="flex-1">
                   <div className="divide-y divide-border/50">
                     {selectedTopic.questions.map(question => (
