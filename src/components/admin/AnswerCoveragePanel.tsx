@@ -1758,6 +1758,7 @@ export function AnswerCoveragePanel() {
                 setScoreFilter('all');
                 setTierFilter('all');
                 setFecIdFilter('all');
+                setLevelFilter('all');
               }}
               className="text-xs h-8"
             >
