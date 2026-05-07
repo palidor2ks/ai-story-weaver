@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 
+export type CandidateSource = 'federal' | 'civic';
+export type GovernmentLevel = 'federal_executive' | 'federal_legislative' | 'state_executive' | 'state_legislative' | 'local' | 'unknown';
+
 export interface CandidateAnswerCoverage {
   id: string;
   name: string;
