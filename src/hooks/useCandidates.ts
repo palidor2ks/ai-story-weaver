@@ -273,6 +273,7 @@ export const useCandidate = (id: string | undefined) => {
             claimed_at: null,
             topicScores: [],
             hasOverride: true,
+            priorOffices: (override.prior_offices as unknown as PriorOffice[]) || [],
           } as CandidateWithOverride;
         }
         // Executive not found anywhere
