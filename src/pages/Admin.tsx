@@ -430,6 +430,10 @@ export default function Admin() {
               <Users className="h-4 w-4" />
               Static Officials
             </TabsTrigger>
+            <TabsTrigger value="civic-officials" className="gap-2">
+              <MapPin className="h-4 w-4" />
+              Civic Officials
+            </TabsTrigger>
             <TabsTrigger value="overrides" className="gap-2">
               <FileEdit className="h-4 w-4" />
               Overrides ({overrides?.length || 0})
