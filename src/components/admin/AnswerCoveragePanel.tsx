@@ -209,7 +209,7 @@ export function AnswerCoveragePanel() {
   }, [allOverrides]);
 
   const { populateCandidate, populateBatch, pauseBatch, resumeBatch, cancelBatch, isLoading, isBatchRunning, batchProgress } = usePopulateCandidateAnswers();
-  const { jobs: backgroundJobs, removeJob: removeBackgroundJob, clearAllJobs: clearAllBackgroundJobs, isProcessing: isBackgroundProcessing } = useBackgroundProcessing();
+  const { jobs: backgroundJobs, removeJob: removeBackgroundJob, clearAllJobs: clearAllBackgroundJobs, retryJob: retryBackgroundJob, isProcessing: isBackgroundProcessing } = useBackgroundProcessing();
   const { recalculateAll, isRecalculatingAll } = useRecalculateCoverageTiers();
   const { mutate: enrichSources, isPending: isEnrichingSource } = useEnrichCandidateSources();
   const { 
@@ -1712,6 +1712,7 @@ export function AnswerCoveragePanel() {
             jobs={backgroundJobs}
             onClearJob={removeBackgroundJob}
             onClearAll={clearAllBackgroundJobs}
+            onRetryJob={retryBackgroundJob}
           />
         )}
 

@@ -12,6 +12,8 @@ export interface ProcessingJob {
   estimatedMinutes: number;
   baselineTimestamps: Map<string, string | null>;
   completedCount: number;
+  lastProgressAt: number; // Track when progress last changed
+  isStalled: boolean;
 }
 
 interface BackgroundProcessingContextType {
@@ -26,9 +28,13 @@ interface BackgroundProcessingContextType {
   }) => Promise<void>;
   removeJob: (candidateId: string) => void;
   clearAllJobs: () => void;
+  retryJob: (candidateId: string) => void;
 }
 
 const BackgroundProcessingContext = createContext<BackgroundProcessingContextType | null>(null);
+
+const STALE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes with no progress = stalled
+const AUTO_DISMISS_MS = 30 * 60 * 1000; // 30 minutes with no progress = auto-dismiss
 
 export function BackgroundProcessingProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
@@ -68,6 +74,8 @@ export function BackgroundProcessingProvider({ children }: { children: ReactNode
         startTime: Date.now(),
         baselineTimestamps,
         completedCount: 0,
+        lastProgressAt: Date.now(),
+        isStalled: false,
       }];
     });
   }, []);
@@ -79,6 +87,16 @@ export function BackgroundProcessingProvider({ children }: { children: ReactNode
   const clearAllJobs = useCallback(() => {
     setJobs([]);
   }, []);
+
+  const retryJob = useCallback((candidateId: string) => {
+    const job = jobs.find(j => j.candidateId === candidateId);
+    if (!job) return;
+    
+    // Remove the stalled job - user can click "Regenerate Topics" again
+    // which will only generate missing answers (the ones that weren't completed)
+    removeJob(candidateId);
+    toast.info(`Cleared stalled job for ${job.candidateName}. Click "Regenerate Topics" to resume remaining questions.`);
+  }, [jobs, removeJob]);
 
   // Poll for completion every 15 seconds when jobs are active
   useEffect(() => {
@@ -92,7 +110,7 @@ export function BackgroundProcessingProvider({ children }: { children: ReactNode
 
     const checkCompletion = async () => {
       const jobsToRemove: string[] = [];
-      const jobUpdates: { candidateId: string; completedCount: number }[] = [];
+      const jobUpdates: { candidateId: string; completedCount: number; isStalled: boolean }[] = [];
       
       for (const job of jobs) {
         try {
@@ -116,19 +134,35 @@ export function BackgroundProcessingProvider({ children }: { children: ReactNode
           }
 
           const elapsed = (Date.now() - job.startTime) / 60000;
+          const timeSinceProgress = Date.now() - job.lastProgressAt;
           
           console.log(`[BackgroundProcessing] Checking ${job.candidateName}: ${completedCount}/${job.questionsQueued} complete, elapsed ${elapsed.toFixed(1)}min`);
 
-          // Track progress updates
-          if (completedCount !== job.completedCount) {
-            jobUpdates.push({ candidateId: job.candidateId, completedCount });
+          // Detect stall: no progress for STALE_THRESHOLD_MS
+          const progressChanged = completedCount !== job.completedCount;
+          const isStalled = !progressChanged && timeSinceProgress > STALE_THRESHOLD_MS && completedCount < job.questionsQueued;
+
+          // Auto-dismiss after AUTO_DISMISS_MS with no progress
+          if (!progressChanged && timeSinceProgress > AUTO_DISMISS_MS && completedCount < job.questionsQueued) {
+            console.log(`[BackgroundProcessing] Auto-dismissing stalled job for ${job.candidateName} (${completedCount}/${job.questionsQueued}, no progress for ${Math.round(timeSinceProgress / 60000)}min)`);
+            toast.warning(`Research for ${job.candidateName} appears stalled`, {
+              description: `${completedCount}/${job.questionsQueued} completed. Click "Regenerate Topics" to resume.`,
+            });
+            jobsToRemove.push(job.candidateId);
+            continue;
           }
+
+          // Track progress updates
+          jobUpdates.push({ 
+            candidateId: job.candidateId, 
+            completedCount,
+            isStalled,
+          });
           
-          // Job complete if all questions updated OR timed out
+          // Job complete if all questions updated
           const allComplete = completedCount >= job.questionsQueued;
-          const timedOut = elapsed >= job.estimatedMinutes * 1.5;
           
-          if (allComplete || timedOut) {
+          if (allComplete) {
             toast.success(`Research complete for ${job.candidateName}!`, {
               description: `${completedCount} answer${completedCount !== 1 ? 's' : ''} updated`,
               action: {
@@ -152,11 +186,18 @@ export function BackgroundProcessingProvider({ children }: { children: ReactNode
       if (jobUpdates.length > 0) {
         setJobs(prev => prev.map(j => {
           const update = jobUpdates.find(u => u.candidateId === j.candidateId);
-          return update ? { ...j, completedCount: update.completedCount } : j;
+          if (!update) return j;
+          const progressChanged = update.completedCount !== j.completedCount;
+          return { 
+            ...j, 
+            completedCount: update.completedCount,
+            lastProgressAt: progressChanged ? Date.now() : j.lastProgressAt,
+            isStalled: update.isStalled,
+          };
         }));
       }
       
-      // Remove completed jobs
+      // Remove completed/dismissed jobs
       if (jobsToRemove.length > 0) {
         setJobs(prev => prev.filter(j => !jobsToRemove.includes(j.candidateId)));
       }
@@ -180,6 +221,7 @@ export function BackgroundProcessingProvider({ children }: { children: ReactNode
       addJob,
       removeJob,
       clearAllJobs,
+      retryJob,
     }}>
       {children}
     </BackgroundProcessingContext.Provider>
