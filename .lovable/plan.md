@@ -1,23 +1,37 @@
 
-# Fix State/Local Official Filtering
-
 ## Problem
-Two bugs in `fetch-civic-officials` edge function are causing incorrect results:
 
-1. **per_page=100 is invalid** for Open States API (max is 50). The API returns a 400 error, so zero state legislators (State Senator, State Representative/Assemblyperson) are being returned. This is why Dale Caldwell (likely cached from an earlier session) appeared instead of the correct officials.
-
-2. **Geocoding returns undefined coordinates** — the function falls back to the less precise jurisdiction-wide endpoint, which would return ALL officials for the state rather than just those for the user's district.
+When a user's civic officials are fetched (via Open States / GitHub), the results are returned ephemerally and never saved. Each user hitting the same officials triggers redundant lookups, and no `candidate_answers` are ever generated for these officials — meaning comparisons can't work.
 
 ## Plan
 
-### 1. Fix Open States per_page limit
-In `supabase/functions/fetch-civic-officials/index.ts`, change `per_page=100` to `per_page=50` on the jurisdiction endpoint (line 335). This aligns with the existing memory rule ([OpenStates Pagination](mem://technical/open-states-api-pagination-constraint)).
+### 1. Persist officials to `candidate_overrides` in `fetch-civic-officials`
 
-### 2. Fix geocoding fallback
-The `geocodeAddress` function uses the Google Places API key (`GOOGLE_PLACES_API_KEY`), but the geocode endpoint may need a different key or the key may not have the Geocoding API enabled. Add logging to diagnose, and ensure the geo endpoint is used when coordinates are available so only district-specific officials are returned.
+After assembling the officials list, upsert each official into `candidate_overrides` (using service role) with:
+- `candidate_id` = the official's ID (e.g. `openstates_ocd-person_...`)
+- `name`, `party`, `office`, `state`, `district`, `image_url`
+- `is_active = true`
+- Skip if the record already exists (upsert on `candidate_id`)
 
-### 3. Ensure Feed and Profile use the same data
-Both pages already call `useCivicOfficials(profile?.address)` — once the edge function returns correct data, both pages will show the same officials. No frontend changes needed.
+This ensures the official is discoverable by other users and the comparison system.
 
-### Files changed
-- `supabase/functions/fetch-civic-officials/index.ts` — fix per_page and geocoding
+### 2. Queue AI answer population for new officials
+
+After persisting, check which officials do NOT yet have `candidate_answers`. For those, call `populate-candidate-answers` in the background (via `EdgeRuntime.waitUntil`) to research and store their positions using the existing Perplexity deep-research pipeline.
+
+To avoid blocking the response, the answer population runs as a background task. A `last_answers_sync` timestamp on `candidate_overrides` prevents re-processing.
+
+### 3. Update `useCandidateAnswers` hook to also check `candidate_overrides`
+
+Currently `useCandidateAnswers` may only look up candidates in the `candidates` table. Ensure it also resolves officials stored in `candidate_overrides` so the comparison card can find their answers.
+
+### Technical details
+
+**Edge function changes** (`fetch-civic-officials/index.ts`):
+- After line ~727, add a `persistOfficials()` call using service role client
+- Upsert into `candidate_overrides` table (already has the right schema: `candidate_id`, `name`, `party`, `office`, `state`, `district`, `image_url`)
+- For officials without answers, invoke `populate-candidate-answers` in background
+
+**No migration needed** — `candidate_overrides` already has all required columns.
+
+**No frontend changes needed** — `useCandidateAnswers` already queries by `candidate_id` which matches the IDs used for civic officials.
