@@ -1079,8 +1079,10 @@ async function updateCandidateScore(supabase: any, candidateId: string, candidat
 }
 
 // =============================================================================
-// BACKGROUND PROCESSING FUNCTION
+// BACKGROUND PROCESSING FUNCTION (CHUNKED)
 // =============================================================================
+
+const CHUNK_SIZE = 5; // Process max 5 questions per invocation to stay within wall-clock limit
 
 async function processAnswersInBackground(
   candidateId: string,
@@ -1092,16 +1094,20 @@ async function processAnswersInBackground(
   // Create a fresh Supabase client for background processing
   const supabase = createClient(supabaseUrl, supabaseKey);
   
+  // Only process the first CHUNK_SIZE questions in this invocation
+  const chunk = questionsToGenerate.slice(0, CHUNK_SIZE);
+  const remaining = questionsToGenerate.slice(CHUNK_SIZE);
+  
   globalProgress = {
     candidateId,
     candidateName: officialInfo.name,
     processed: 0,
-    total: questionsToGenerate.length,
+    total: chunk.length,
     startTime: Date.now(),
     status: 'running',
   };
 
-  console.log(`[Background] Starting deep research for ${officialInfo.name}: ${questionsToGenerate.length} questions`);
+  console.log(`[Background] Starting chunk: ${chunk.length} questions for ${officialInfo.name} (${remaining.length} remaining for next chunk)`);
   console.log(`[Background] Using sonar-deep-research model (2-5 min per question)`);
 
   try {
@@ -1112,7 +1118,7 @@ async function processAnswersInBackground(
       officialInfo.party,
       officialInfo.office,
       officialInfo.state,
-      questionsToGenerate
+      chunk
     );
 
     // Update progress
@@ -1125,17 +1131,72 @@ async function processAnswersInBackground(
     const elapsedMin = (elapsed / 60).toFixed(1);
     
     console.log(`[Background] ========================================`);
-    console.log(`[Background] JOB COMPLETE: ${officialInfo.name}`);
-    console.log(`[Background] Questions processed: ${generated + failed}`);
+    console.log(`[Background] CHUNK COMPLETE: ${officialInfo.name}`);
+    console.log(`[Background] Questions in chunk: ${chunk.length}`);
     console.log(`[Background] Successfully generated: ${generated}`);
     console.log(`[Background] Failed: ${failed}`);
-    console.log(`[Background] With real evidence (not inferred): ${researched}`);
+    console.log(`[Background] With real evidence: ${researched}`);
     console.log(`[Background] Duration: ${elapsedMin} minutes (${elapsed}s)`);
+    console.log(`[Background] Remaining questions: ${remaining.length}`);
     console.log(`[Background] ========================================`);
+
+    // Self-chain: if there are remaining questions, invoke ourselves for the next chunk
+    if (remaining.length > 0) {
+      const remainingIds = remaining.map(q => q.id);
+      console.log(`[Background] Self-chaining next chunk of ${Math.min(CHUNK_SIZE, remaining.length)} questions...`);
+      
+      try {
+        const chainResponse = await fetch(`${supabaseUrl}/functions/v1/get-candidate-answers`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            candidateId,
+            questionIds: remainingIds,
+            forceRegenerate: true,
+            useBackground: true,
+            _isChainedChunk: true, // Internal flag for logging
+          }),
+        });
+        
+        if (!chainResponse.ok) {
+          console.error(`[Background] Self-chain failed: HTTP ${chainResponse.status}`);
+        } else {
+          console.log(`[Background] Self-chain invoked successfully for ${remaining.length} remaining questions`);
+        }
+      } catch (chainError) {
+        console.error(`[Background] Self-chain error:`, chainError);
+      }
+    }
     
   } catch (error) {
     globalProgress.status = 'error';
     console.error(`[Background] ERROR for ${officialInfo.name}:`, error);
+    
+    // Even on error, try to chain remaining questions so they aren't lost
+    if (remaining.length > 0) {
+      console.log(`[Background] Attempting to chain remaining ${remaining.length} questions despite error...`);
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/get-candidate-answers`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            candidateId,
+            questionIds: remaining.map(q => q.id),
+            forceRegenerate: true,
+            useBackground: true,
+            _isChainedChunk: true,
+          }),
+        });
+      } catch (chainError) {
+        console.error(`[Background] Recovery chain failed:`, chainError);
+      }
+    }
   }
 }
 
