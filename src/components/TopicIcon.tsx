@@ -12,6 +12,12 @@ const emojiMap: Record<string, string> = {
   Cpu: '💻',
   Gavel: '⚖️',
   Globe: '🌐',
+  // Local topic icons
+  '🏫': '🏫',
+  '🏠': '🏠',
+  '🩺': '🩺',
+  '💲': '💲',
+  '🚔': '🚔',
 };
 
 // Check if string is already an emoji

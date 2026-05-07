@@ -374,10 +374,17 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const { candidateId, batchSize = 3 } = body;
 
-    // Load questions with topics
+    // Load only local-scope questions (civic officials answer local topics only)
+    const { data: localTopics } = await supabase
+      .from('topics')
+      .select('id')
+      .eq('scope', 'local');
+    const localTopicIds = (localTopics || []).map((t: any) => t.id);
+
     const { data: questions } = await supabase
       .from('questions')
-      .select('id, text, topic_id, topics:topic_id(name)');
+      .select('id, text, topic_id, topics:topic_id(name)')
+      .in('topic_id', localTopicIds);
 
     const questionList: Question[] = (questions || []).map((q: any) => ({
       id: q.id,
