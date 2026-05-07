@@ -97,9 +97,29 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
   return useQuery({
     queryKey: ['candidate-answers-dialog', candidateId],
     queryFn: async (): Promise<TopicWithQuestions[]> => {
+      // Determine if candidate is local to filter topics by scope
+      const { isLocalOfficial } = await import('@/lib/localOfficeUtils');
+      let office: string | null = null;
+      const { data: cand } = await supabase
+        .from('candidates')
+        .select('office')
+        .eq('id', candidateId)
+        .maybeSingle();
+      office = cand?.office ?? null;
+      if (!office) {
+        const { data: co } = await supabase
+          .from('candidate_overrides')
+          .select('office')
+          .eq('candidate_id', candidateId)
+          .maybeSingle();
+        office = co?.office ?? null;
+      }
+      const scope = isLocalOfficial(office) ? 'local' : 'all';
+
       const { data: topics, error: topicsError } = await supabase
         .from('topics')
         .select('id, name, icon')
+        .eq('scope', scope)
         .order('name');
       if (topicsError) throw topicsError;
 
