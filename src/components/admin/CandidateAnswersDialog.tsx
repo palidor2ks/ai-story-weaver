@@ -354,6 +354,7 @@ export function CandidateAnswersDialog({
 }: CandidateAnswersDialogProps) {
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [regeneratingTopicId, setRegeneratingTopicId] = useState<string | null>(null);
+  const [fillingTopicId, setFillingTopicId] = useState<string | null>(null);
   const { data: topics, isLoading, refetch } = useCandidateAnswersByTopic(candidateId, open);
   const { populateCandidateQuestion, isQuestionLoading } = usePopulateCandidateAnswers();
   const { jobs, addJob, removeJob, clearAllJobs, retryJob, isProcessing } = useBackgroundProcessing();
@@ -418,6 +419,48 @@ export function CandidateAnswersDialog({
     }
     
     setRegeneratingTopicId(null);
+  };
+
+  const handleFillUnanswered = async (topicId: string, topicName: string, questions: QuestionAnswer[]) => {
+    const unanswered = questions.filter(q => q.answerValue === null);
+    if (unanswered.length === 0) {
+      toast.info(`All questions in ${topicName} are already answered`);
+      return;
+    }
+
+    setFillingTopicId(topicId);
+    try {
+      const { data, error } = await supabase.functions.invoke('get-candidate-answers', {
+        body: {
+          candidateId,
+          candidateName,
+          questionIds: unanswered.map(q => q.questionId),
+        },
+      });
+
+      if (error) {
+        toast.error(`Failed to fill unanswered for ${topicName}`);
+        console.error('[FillUnanswered] Error:', error);
+      } else if (data?.status === 'processing') {
+        await addJob({
+          candidateId,
+          candidateName,
+          questionsQueued: data.questionsQueued || unanswered.length,
+          questionIds: unanswered.map(q => q.questionId),
+          estimatedMinutes: data.estimatedMinutes || Math.ceil(unanswered.length * 3),
+        });
+        toast.info(`Deep research started for ${unanswered.length} unanswered in ${topicName}`, {
+          description: `Results in ~${data.estimatedMinutes || Math.ceil(unanswered.length * 3)} minutes.`,
+        });
+      } else {
+        refetch();
+        toast.success(`Finished filling ${unanswered.length} unanswered in ${topicName}`);
+      }
+    } catch (err) {
+      console.error('[FillUnanswered] Exception:', err);
+      toast.error(`Failed to fill unanswered for ${topicName}`);
+    }
+    setFillingTopicId(null);
   };
 
   const selectedTopic = topics?.find(t => t.topicId === selectedTopicId) || topics?.[0];
@@ -533,20 +576,35 @@ export function CandidateAnswersDialog({
                       ({selectedTopic.answeredCount}/{selectedTopic.questions.length} answered)
                     </span>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRegenerateTopic(selectedTopic.topicId, selectedTopic.topicName, selectedTopic.questions)}
-                    disabled={regeneratingTopicId === selectedTopic.topicId}
-                  >
-                    {regeneratingTopicId === selectedTopic.topicId ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                    ) : (
-                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                    )}
-                    Regenerate Topic
-                  </Button>
-                </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleFillUnanswered(selectedTopic.topicId, selectedTopic.topicName, selectedTopic.questions)}
+                      disabled={fillingTopicId === selectedTopic.topicId || regeneratingTopicId === selectedTopic.topicId || selectedTopic.answeredCount === selectedTopic.questions.length}
+                    >
+                      {fillingTopicId === selectedTopic.topicId ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Fill Unanswered
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRegenerateTopic(selectedTopic.topicId, selectedTopic.topicName, selectedTopic.questions)}
+                      disabled={regeneratingTopicId === selectedTopic.topicId || fillingTopicId === selectedTopic.topicId}
+                    >
+                      {regeneratingTopicId === selectedTopic.topicId ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Regenerate Topic
+                    </Button>
+                  </div>
+                 </div>
                 <ScrollArea className="flex-1">
                   <div className="divide-y divide-border/50">
                     {selectedTopic.questions.map(question => (
