@@ -421,6 +421,48 @@ export function CandidateAnswersDialog({
     setRegeneratingTopicId(null);
   };
 
+  const handleFillUnanswered = async (topicId: string, topicName: string, questions: QuestionAnswer[]) => {
+    const unanswered = questions.filter(q => q.answerValue === null);
+    if (unanswered.length === 0) {
+      toast.info(`All questions in ${topicName} are already answered`);
+      return;
+    }
+
+    setFillingTopicId(topicId);
+    try {
+      const { data, error } = await supabase.functions.invoke('get-candidate-answers', {
+        body: {
+          candidateId,
+          candidateName,
+          questionIds: unanswered.map(q => q.questionId),
+        },
+      });
+
+      if (error) {
+        toast.error(`Failed to fill unanswered for ${topicName}`);
+        console.error('[FillUnanswered] Error:', error);
+      } else if (data?.status === 'processing') {
+        await addJob({
+          candidateId,
+          candidateName,
+          questionsQueued: data.questionsQueued || unanswered.length,
+          questionIds: unanswered.map(q => q.questionId),
+          estimatedMinutes: data.estimatedMinutes || Math.ceil(unanswered.length * 3),
+        });
+        toast.info(`Deep research started for ${unanswered.length} unanswered in ${topicName}`, {
+          description: `Results in ~${data.estimatedMinutes || Math.ceil(unanswered.length * 3)} minutes.`,
+        });
+      } else {
+        refetch();
+        toast.success(`Finished filling ${unanswered.length} unanswered in ${topicName}`);
+      }
+    } catch (err) {
+      console.error('[FillUnanswered] Exception:', err);
+      toast.error(`Failed to fill unanswered for ${topicName}`);
+    }
+    setFillingTopicId(null);
+  };
+
   const selectedTopic = topics?.find(t => t.topicId === selectedTopicId) || topics?.[0];
 
   if (isLoading) {
