@@ -7,16 +7,14 @@ import { QuizQuestion } from '@/components/QuizQuestion';
 import { ScoreText } from '@/components/ScoreText';
 import { DemographicsForm, DemographicsData } from '@/components/DemographicsForm';
 import { useAuth } from '@/context/AuthContext';
-import { useTopics, useAllCanonicalQuestions } from '@/hooks/useCandidates';
+import { useTopics, useAllCanonicalQuestions, useCanonicalQuestions } from '@/hooks/useCandidates';
 import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { OnboardingStep, Topic, QuestionOption, QuizAnswer, TopicScore } from '@/types';
 import { calculateQuizScore } from '@/lib/score';
-import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Minimum required answers is now dynamically calculated based on available questions
-
-type ExtendedOnboardingStep = OnboardingStep | 'demographics';
+type ExtendedOnboardingStep = OnboardingStep | 'demographics' | 'local_topics' | 'local_quiz';
 
 export const Onboarding = () => {
   const navigate = useNavigate();
@@ -35,23 +33,45 @@ export const Onboarding = () => {
   const [calculatedScores, setCalculatedScores] = useState<{ overall: number; byTopic: TopicScore[] } | null>(null);
   const [skippedQuestionIds, setSkippedQuestionIds] = useState<Set<string>>(new Set());
 
+  // Local topics state
+  const [selectedLocalTopics, setSelectedLocalTopics] = useState<Topic[]>([]);
+  const [localQuizAnswers, setLocalQuizAnswers] = useState<QuizAnswer[]>([]);
+  const [currentLocalQuestionIndex, setCurrentLocalQuestionIndex] = useState(0);
+  const [skippedLocalQuestionIds, setSkippedLocalQuestionIds] = useState<Set<string>>(new Set());
+
   // Get selected topic IDs in order (for saving user topics)
   const selectedTopicIds = useMemo(() => selectedTopics.map(t => t.id), [selectedTopics]);
+  const selectedLocalTopicIds = useMemo(() => selectedLocalTopics.map(t => t.id), [selectedLocalTopics]);
   
-  // Fetch ALL canonical onboarding questions (20 total - 2 per each of 10 topics)
+  // Fetch ALL canonical onboarding questions for federal topics
   const { data: canonicalQuestions = [], isLoading: questionsLoading } = useAllCanonicalQuestions();
 
-  // Transform database topics to app format — exclude local-only topics from quiz
+  // Fetch canonical questions for selected local topics
+  const { data: localCanonicalQuestions = [], isLoading: localQuestionsLoading } = useCanonicalQuestions(selectedLocalTopicIds);
+
+  // Transform database topics to app format — federal topics only
   const topics: Topic[] = dbTopics
     .filter(t => (t as any).scope !== 'local')
     .map(t => ({
       id: t.id,
       name: t.name,
+      displayName: (t as any).display_name || undefined,
       icon: t.icon,
       weight: t.weight || 1,
     }));
 
-  // Transform questions to app format
+  // Local topics
+  const localTopics: Topic[] = dbTopics
+    .filter(t => (t as any).scope === 'local')
+    .map(t => ({
+      id: t.id,
+      name: t.name,
+      displayName: (t as any).display_name || undefined,
+      icon: t.icon,
+      weight: t.weight || 1,
+    }));
+
+  // Transform federal questions to app format
   const questions = useMemo(() => canonicalQuestions.map(q => ({
     id: q.id,
     topicId: q.topic_id,
@@ -64,22 +84,46 @@ export const Onboarding = () => {
     })),
   })), [canonicalQuestions]);
 
+  // Transform local questions to app format
+  const localQuestions = useMemo(() => localCanonicalQuestions.map(q => ({
+    id: q.id,
+    topicId: q.topic_id,
+    text: q.text,
+    options: (q.options || []).map((o: any) => ({
+      id: o.id,
+      text: o.text,
+      value: o.value,
+      is_skip_option: o.is_skip_option ?? false,
+    })),
+  })), [localCanonicalQuestions]);
+
   // Filter out skipped questions to get active questions
   const activeQuestions = useMemo(() => 
     questions.filter(q => !skippedQuestionIds.has(q.id)),
   [questions, skippedQuestionIds]);
+
+  const activeLocalQuestions = useMemo(() =>
+    localQuestions.filter(q => !skippedLocalQuestionIds.has(q.id)),
+  [localQuestions, skippedLocalQuestionIds]);
 
   // Dynamic minimum: at least 50% of available questions, minimum of 1
   const minRequiredAnswers = useMemo(() => 
     Math.max(1, Math.ceil(questions.length / 2)),
   [questions.length]);
 
-  // Clamp currentQuestionIndex when activeQuestions shrinks (e.g., after skipping)
+  // Clamp currentQuestionIndex when activeQuestions shrinks
   useEffect(() => {
     if (activeQuestions.length > 0 && currentQuestionIndex >= activeQuestions.length) {
       setCurrentQuestionIndex(activeQuestions.length - 1);
     }
   }, [activeQuestions.length, currentQuestionIndex]);
+
+  // Clamp local question index
+  useEffect(() => {
+    if (activeLocalQuestions.length > 0 && currentLocalQuestionIndex >= activeLocalQuestions.length) {
+      setCurrentLocalQuestionIndex(activeLocalQuestions.length - 1);
+    }
+  }, [activeLocalQuestions.length, currentLocalQuestionIndex]);
 
   const handleTopicToggle = (topic: Topic) => {
     setSelectedTopics(prev => {
@@ -94,10 +138,29 @@ export const Onboarding = () => {
         return prev;
       }
       
-      // Re-normalize weights based on new order (3 = highest priority, 1 = lowest)
       return newTopics.map((t, index) => ({
         ...t,
         weight: 3 - index
+      }));
+    });
+  };
+
+  const handleLocalTopicToggle = (topic: Topic) => {
+    setSelectedLocalTopics(prev => {
+      const exists = prev.some(t => t.id === topic.id);
+      let newTopics: Topic[];
+
+      if (exists) {
+        newTopics = prev.filter(t => t.id !== topic.id);
+      } else if (prev.length < 2) {
+        newTopics = [...prev, topic];
+      } else {
+        return prev;
+      }
+
+      return newTopics.map((t, index) => ({
+        ...t,
+        weight: 2 - index
       }));
     });
   };
@@ -120,12 +183,39 @@ export const Onboarding = () => {
       return [...prev, newAnswer];
     });
     
-    // Auto-advance to next question after a short delay
     setTimeout(() => {
       if (currentQuestionIndex < activeQuestions.length - 1) {
         setCurrentQuestionIndex(prev => prev + 1);
       } else {
-        // Calculate scores and show results
+        // Federal quiz done → go to local topics
+        setStep('local_topics');
+      }
+    }, 300);
+  };
+
+  const handleLocalOptionSelect = (option: QuestionOption) => {
+    const questionId = activeLocalQuestions[currentLocalQuestionIndex].id;
+    setLocalQuizAnswers(prev => {
+      const existing = prev.findIndex(a => a.questionId === questionId);
+      const newAnswer = {
+        questionId,
+        selectedOptionId: option.id,
+        value: option.value,
+        isSkipped: option.is_skip_option ?? false,
+      };
+      if (existing !== -1) {
+        const updated = [...prev];
+        updated[existing] = newAnswer;
+        return updated;
+      }
+      return [...prev, newAnswer];
+    });
+
+    setTimeout(() => {
+      if (currentLocalQuestionIndex < activeLocalQuestions.length - 1) {
+        setCurrentLocalQuestionIndex(prev => prev + 1);
+      } else {
+        // Local quiz done → calculate and show results
         const scores = calculateUserScore();
         setCalculatedScores(scores);
         setStep('results');
@@ -138,29 +228,45 @@ export const Onboarding = () => {
     const newSkippedIds = new Set([...skippedQuestionIds, currentQuestion.id]);
     setSkippedQuestionIds(newSkippedIds);
     
-    // Calculate how many answers we'll have after this skip
-    const remainingQuestions = activeQuestions.length - 1; // After removing current
     const currentAnswerCount = quizAnswers.length;
     
-    // If we're at the last question or will have too few questions left
     if (currentQuestionIndex >= activeQuestions.length - 1) {
-      // Check if we have enough answers to proceed
       if (currentAnswerCount >= minRequiredAnswers) {
-        const scores = calculateUserScore();
-        setCalculatedScores(scores);
-        setStep('results');
+        setStep('local_topics');
       } else {
         toast.error(`Please answer at least ${minRequiredAnswers} questions to continue.`);
       }
     }
-    // Otherwise the activeQuestions memo will update and show next question
+  };
+
+  const handleLocalSkipQuestion = () => {
+    const currentQuestion = activeLocalQuestions[currentLocalQuestionIndex];
+    const newSkippedIds = new Set([...skippedLocalQuestionIds, currentQuestion.id]);
+    setSkippedLocalQuestionIds(newSkippedIds);
+
+    if (currentLocalQuestionIndex >= activeLocalQuestions.length - 1) {
+      if (localQuizAnswers.length >= 1) {
+        const scores = calculateUserScore();
+        setCalculatedScores(scores);
+        setStep('results');
+      } else {
+        toast.error('Please answer at least 1 local question to continue.');
+      }
+    }
   };
 
   const handleNextQuestion = () => {
     if (currentQuestionIndex < activeQuestions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
-      // Calculate scores
+      setStep('local_topics');
+    }
+  };
+
+  const handleLocalNextQuestion = () => {
+    if (currentLocalQuestionIndex < activeLocalQuestions.length - 1) {
+      setCurrentLocalQuestionIndex(prev => prev + 1);
+    } else {
       const scores = calculateUserScore();
       setCalculatedScores(scores);
       setStep('results');
@@ -173,8 +279,14 @@ export const Onboarding = () => {
     }
   };
 
+  const handleLocalPrevQuestion = () => {
+    if (currentLocalQuestionIndex > 0) {
+      setCurrentLocalQuestionIndex(prev => prev - 1);
+    }
+  };
+
   const calculateUserScore = () => {
-    // Build weights: priority topics get 3/2/1, all other topics get weight of 1
+    // Build weights for federal topics
     const allTopicsWithWeights = topics.map(t => {
       const priorityIndex = selectedTopics.findIndex(st => st.id === t.id);
       return {
@@ -183,35 +295,54 @@ export const Onboarding = () => {
       };
     });
 
+    // Add local topic weights
+    const localTopicWeights = selectedLocalTopics.map((t, index) => ({
+      id: t.id,
+      weight: 2 - index, // 2 for first, 1 for second
+    }));
+
+    const combinedWeights = [...allTopicsWithWeights, ...localTopicWeights];
+    const allAnswers = [...quizAnswers, ...localQuizAnswers];
+    const allQuestionMeta = [
+      ...questions.map(q => ({ id: q.id, topicId: q.topicId })),
+      ...localQuestions.map(q => ({ id: q.id, topicId: q.topicId })),
+    ];
+    const allTopicNames = [
+      ...topics.map(t => ({ id: t.id, name: t.name })),
+      ...selectedLocalTopics.map(t => ({ id: t.id, name: t.displayName || t.name })),
+    ];
+
     return calculateQuizScore(
-      quizAnswers,
-      questions.map(q => ({ id: q.id, topicId: q.topicId })),
-      allTopicsWithWeights,
-      topics.map(t => ({ id: t.id, name: t.name }))
+      allAnswers,
+      allQuestionMeta,
+      combinedWeights,
+      allTopicNames
     );
   };
 
   const handleComplete = async () => {
     if (!calculatedScores) return;
     
-    // Final guard: ensure minimum answers
-    if (quizAnswers.length < minRequiredAnswers) {
+    const allAnswers = [...quizAnswers, ...localQuizAnswers];
+    
+    if (allAnswers.length < minRequiredAnswers) {
       toast.error(`Please answer at least ${minRequiredAnswers} questions before continuing.`);
       return;
     }
 
     try {
-      // Save user topics with proper weights
-      await saveUserTopics.mutateAsync(selectedTopicIds);
+      // Save all 5 topic IDs (3 federal + 2 local) with weights
+      const allTopicIds = [...selectedTopicIds, ...selectedLocalTopicIds];
+      await saveUserTopics.mutateAsync(allTopicIds);
       
-      // Save quiz results
+      // Save all quiz results (federal + local answers combined)
       await saveQuizResults.mutateAsync({
         overallScore: calculatedScores.overall,
         topicScores: calculatedScores.byTopic.map(ts => ({
           topicId: ts.topicId,
           score: ts.score,
         })),
-        answers: quizAnswers,
+        answers: allAnswers,
       });
 
       toast.success('Profile created successfully!');
@@ -222,12 +353,17 @@ export const Onboarding = () => {
     }
   };
 
-  // Calculate if user can complete (has enough answers)
-  const canComplete = quizAnswers.length >= minRequiredAnswers;
-  const skippedCount = skippedQuestionIds.size;
+  // Calculate if user can complete
+  const allAnswers = [...quizAnswers, ...localQuizAnswers];
+  const canComplete = allAnswers.length >= minRequiredAnswers;
+  const skippedCount = skippedQuestionIds.size + skippedLocalQuestionIds.size;
 
   const currentAnswer = quizAnswers.find(
     a => a.questionId === activeQuestions[currentQuestionIndex]?.id
+  );
+
+  const currentLocalAnswer = localQuizAnswers.find(
+    a => a.questionId === activeLocalQuestions[currentLocalQuestionIndex]?.id
   );
 
   // Get current question's topic for display
@@ -236,6 +372,12 @@ export const Onboarding = () => {
     const topicId = activeQuestions[currentQuestionIndex]?.topicId;
     return topics.find(t => t.id === topicId);
   }, [currentQuestionIndex, activeQuestions, topics]);
+
+  const currentLocalQuestionTopic = useMemo(() => {
+    if (activeLocalQuestions.length === 0 || currentLocalQuestionIndex >= activeLocalQuestions.length) return null;
+    const topicId = activeLocalQuestions[currentLocalQuestionIndex]?.topicId;
+    return localTopics.find(t => t.id === topicId);
+  }, [currentLocalQuestionIndex, activeLocalQuestions, localTopics]);
 
   if (topicsLoading) {
     return (
@@ -285,8 +427,8 @@ export const Onboarding = () => {
                   <Target className="w-6 h-6 text-agree" />
                 </div>
                 <div className="text-left">
-                  <h3 className="font-semibold text-foreground">Select Your Top 3 Topics</h3>
-                  <p className="text-sm text-muted-foreground">Choose the issues that matter most to you</p>
+                  <h3 className="font-semibold text-foreground">Select Your Top Topics</h3>
+                  <p className="text-sm text-muted-foreground">3 federal issues + 2 local issues that matter most</p>
                 </div>
               </div>
               
@@ -295,8 +437,8 @@ export const Onboarding = () => {
                   <Sparkles className="w-6 h-6 text-accent" />
                 </div>
                 <div className="text-left">
-                  <h3 className="font-semibold text-foreground">Answer 20 Questions</h3>
-                  <p className="text-sm text-muted-foreground">2 questions for each of the 10 policy topics</p>
+                  <h3 className="font-semibold text-foreground">Answer 24 Questions</h3>
+                  <p className="text-sm text-muted-foreground">20 federal questions + 4 local questions</p>
                 </div>
               </div>
               
@@ -345,10 +487,10 @@ export const Onboarding = () => {
           <div className="max-w-3xl mx-auto animate-fade-in">
             <div className="text-center mb-8">
               <h2 className="font-display text-3xl font-bold text-foreground mb-3">
-                Select Your Top 3 Topics
+                Select Your Top 3 Federal Topics
               </h2>
               <p className="text-muted-foreground">
-                Choose the 3 issues that matter most to you. Order matters - select most important first!
+                Choose the 3 federal issues that matter most to you. Order matters - select most important first!
                 <span className="text-foreground font-medium"> ({selectedTopics.length}/3 selected)</span>
               </p>
             </div>
@@ -416,7 +558,6 @@ export const Onboarding = () => {
           );
         }
 
-        // Defensive check: ensure current question exists
         const currentQuestion = activeQuestions[currentQuestionIndex];
         if (!currentQuestion) {
           return (
@@ -428,7 +569,6 @@ export const Onboarding = () => {
         
         return (
           <div className="max-w-2xl mx-auto">
-            {/* Topic indicator */}
             {currentQuestionTopic && (
               <div className="flex items-center justify-center gap-2 mb-4">
                 <TopicIcon name={currentQuestionTopic.icon} className="w-6 h-6" />
@@ -461,7 +601,141 @@ export const Onboarding = () => {
                 onClick={handleNextQuestion}
                 disabled={!currentAnswer}
               >
-                {currentQuestionIndex === activeQuestions.length - 1 ? 'See Results' : 'Next Question'}
+                {currentQuestionIndex === activeQuestions.length - 1 ? 'Continue to Local Topics' : 'Next Question'}
+                <ArrowRight className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
+        );
+
+      case 'local_topics':
+        return (
+          <div className="max-w-3xl mx-auto animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <MapPin className="w-6 h-6 text-primary" />
+                <span className="text-sm font-medium text-primary uppercase tracking-wide">Local Issues</span>
+              </div>
+              <h2 className="font-display text-3xl font-bold text-foreground mb-3">
+                Select Your Top 2 Local Topics
+              </h2>
+              <p className="text-muted-foreground">
+                Choose the 2 local issues that matter most in your community. Order matters!
+                <span className="text-foreground font-medium"> ({selectedLocalTopics.length}/2 selected)</span>
+              </p>
+            </div>
+
+            <TopicSelector
+              topics={localTopics}
+              selectedTopics={selectedLocalTopics}
+              onToggle={handleLocalTopicToggle}
+              maxSelections={2}
+            />
+
+            {selectedLocalTopics.length > 0 && (
+              <div className="mt-6 p-4 rounded-lg bg-secondary/50 border border-border">
+                <p className="text-sm font-medium text-foreground mb-2">Your local priority order:</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedLocalTopics.map((topic, index) => (
+                    <span key={topic.id} className="text-sm px-3 py-1 rounded-full bg-primary/10 text-primary">
+                      {index + 1}. {topic.displayName || topic.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between mt-10">
+              <Button variant="ghost" onClick={() => setStep('quiz')}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Federal Quiz
+              </Button>
+              <Button 
+                size="lg"
+                variant="hero"
+                onClick={() => {
+                  setCurrentLocalQuestionIndex(0);
+                  setLocalQuizAnswers([]);
+                  setStep('local_quiz');
+                }}
+                disabled={selectedLocalTopics.length !== 2}
+              >
+                Continue to Local Quiz (4 questions)
+                <ArrowRight className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
+        );
+
+      case 'local_quiz':
+        if (localQuestionsLoading) {
+          return (
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            </div>
+          );
+        }
+
+        if (activeLocalQuestions.length === 0) {
+          return (
+            <div className="text-center py-16">
+              <p className="text-muted-foreground">No local questions available for your selected topics.</p>
+              <Button variant="ghost" className="mt-4" onClick={() => setStep('local_topics')}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Select different local topics
+              </Button>
+            </div>
+          );
+        }
+
+        const currentLocalQuestion = activeLocalQuestions[currentLocalQuestionIndex];
+        if (!currentLocalQuestion) {
+          return (
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            </div>
+          );
+        }
+
+        return (
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <MapPin className="w-4 h-4 text-primary" />
+              <span className="text-xs font-medium text-primary uppercase tracking-wide">Local Issues</span>
+            </div>
+            {currentLocalQuestionTopic && (
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <TopicIcon name={currentLocalQuestionTopic.icon} className="w-6 h-6" />
+                <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  {currentLocalQuestionTopic.displayName || currentLocalQuestionTopic.name}
+                </span>
+              </div>
+            )}
+
+            <QuizQuestion
+              question={currentLocalQuestion}
+              selectedOptionId={currentLocalAnswer?.selectedOptionId || null}
+              onSelect={handleLocalOptionSelect}
+              onSkip={handleLocalSkipQuestion}
+              questionNumber={currentLocalQuestionIndex + 1}
+              totalQuestions={activeLocalQuestions.length}
+            />
+
+            <div className="flex justify-between mt-8">
+              <Button 
+                variant="ghost" 
+                onClick={currentLocalQuestionIndex === 0 ? () => setStep('local_topics') : handleLocalPrevQuestion}
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                {currentLocalQuestionIndex === 0 ? 'Back to Local Topics' : 'Previous'}
+              </Button>
+              <Button 
+                size="lg"
+                variant="hero"
+                onClick={handleLocalNextQuestion}
+                disabled={!currentLocalAnswer}
+              >
+                {currentLocalQuestionIndex === activeLocalQuestions.length - 1 ? 'See Results' : 'Next Question'}
                 <ArrowRight className="w-5 h-5" />
               </Button>
             </div>
@@ -483,7 +757,6 @@ export const Onboarding = () => {
               Based on your answers, here's where you stand on the Left-Right spectrum.
             </p>
 
-            {/* Skipped questions warning */}
             {skippedCount > 0 && (
               <div className="flex items-center gap-3 p-4 rounded-xl bg-warning/10 border border-warning/20 mb-6 text-left">
                 <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0" />
@@ -492,7 +765,7 @@ export const Onboarding = () => {
                     {skippedCount} question{skippedCount !== 1 ? 's' : ''} skipped
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Your score is based on {quizAnswers.length} of {quizAnswers.length + skippedCount} questions.
+                    Your score is based on {allAnswers.length} of {allAnswers.length + skippedCount} questions.
                   </p>
                 </div>
               </div>
