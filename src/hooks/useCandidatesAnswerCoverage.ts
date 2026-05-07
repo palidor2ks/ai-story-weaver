@@ -404,7 +404,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
       let results: CandidateAnswerCoverage[] = (candidates || []).map(c => {
         const answerCount = answerCountMap[c.id] || 0;
         const sourcedCount = sourcedCountMap[c.id] || 0;
-        const percentage = totalQuestions ? Math.round((answerCount / totalQuestions) * 100) : 0;
+        const percentage = federalQuestions ? Math.round((answerCount / federalQuestions) * 100) : 0;
         const sourcePercentage = answerCount > 0 ? Math.round((sourcedCount / answerCount) * 100) : 0;
         const rec = reconciliationMap[c.id];
         
@@ -462,7 +462,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           office: c.office,
           state: c.state,
           answerCount,
-          totalQuestions: totalQuestions || 0,
+          totalQuestions: federalQuestions,
           percentage,
           sourcedCount,
           sourcePercentage,
@@ -578,7 +578,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
             for (const co of civicOfficials) {
               if (federalIds.has(co.candidate_id)) continue;
               const ac = civicAnswerMap[co.candidate_id] || { count: 0, sourced: 0 };
-              results.push(makeCivicCoverage(co, ac.count, ac.sourced, totalQuestions || 0));
+              results.push(makeCivicCoverage(co, ac.count, ac.sourced, allQuestions));
               if (co.name && co.state) {
                 civicNameStateKeys.add(`${co.name.toLowerCase()}|${co.state.toLowerCase()}`);
               }
