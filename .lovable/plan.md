@@ -1,26 +1,39 @@
 
 ## Problem
 
-"Regenerate Topic" fails for two reasons found in the edge function logs:
+When you click "Regenerate Topic" for a civic official like Bob Smith, the edge function `get-candidate-answers` can't find them because:
 
-### 1. Perplexity API quota exhausted
-The Perplexity API key has exceeded its quota. Every research call returns `401 insufficient_quota`. This affects **all** candidates, not just civic officials.
+1. The frontend (`CandidateAnswersDialog`) only passes `candidateName` — it does NOT pass `candidateParty`, `candidateOffice`, or `candidateState`.
+2. The edge function falls through to DB lookup, checking `candidates` then `static_officials` tables — but civic officials live in `candidate_overrides`.
+3. Since the official isn't found, the function returns early with 0 answers generated.
 
-**Fix:** You need to add credits to your Perplexity account at https://www.perplexity.ai/settings/api. No code change needed for this — it's a billing issue.
+## Fix (two changes)
 
-### 2. Foreign key constraint blocks civic officials
-`candidate_answers` has a FK `candidate_answers_candidate_id_fkey` pointing to `candidates.id`. Civic officials (openstates_*, nj_*, etc.) only exist in `candidate_overrides`, not in `candidates`. So even when Perplexity returns valid answers, saving them fails with:
+### 1. Frontend: Pass full candidate info to the edge function
 
+In `CandidateAnswersDialog.tsx`, update `handleRegenerateTopic` (and `handleRegenerateQuestion`) to pass the candidate's party, office, and state alongside the name. This requires the dialog to receive or fetch these fields.
+
+The simplest approach: update `CandidateAnswersDialogProps` to accept optional `candidateParty`, `candidateOffice`, and `candidateState` props, and pass them through to the edge function call. Then update callers to provide these values.
+
+### 2. Edge function: Add `candidate_overrides` as a fallback lookup
+
+In `get-candidate-answers/index.ts` (around line 1216-1219), after checking `candidates` and `static_officials`, add a third fallback that checks `candidate_overrides`:
+
+```typescript
+if (!officialInfo) {
+  const { data: override } = await supabase
+    .from('candidate_overrides')
+    .select('candidate_id, name, party, office, state')
+    .eq('candidate_id', candidateId)
+    .maybeSingle();
+  if (override) {
+    officialInfo = { id: override.candidate_id, name: override.name, party: override.party, office: override.office, state: override.state };
+  }
+}
 ```
-insert or update on table "candidate_answers" violates foreign key constraint "candidate_answers_candidate_id_fkey"
-```
 
-**Fix:** Drop the FK constraint so `candidate_answers.candidate_id` can reference either `candidates` or `candidate_overrides` records.
+This is the more robust fix since it handles all callers (batch, single question, topic regeneration) without requiring every frontend caller to pass extra fields.
 
-### Changes
+## Recommendation
 
-1. **Migration: Drop the FK constraint** on `candidate_answers.candidate_id → candidates.id`. This allows storing answers for civic officials who only exist in `candidate_overrides`.
-
-2. **Migration: Drop the FK constraint** on `candidate_answers.question_id → questions.id` is NOT needed (questions are shared). Only the candidate FK is the issue.
-
-No edge function or frontend code changes needed — the code already works correctly, it's just blocked by the database constraint and the exhausted API quota.
+Implement change #2 only (edge function fallback) — it's a single-file change that fixes the root cause for all callers.
