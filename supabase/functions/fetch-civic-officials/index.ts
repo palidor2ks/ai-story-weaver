@@ -831,6 +831,42 @@ async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader
   }
 }
 
+// Fetch manually-added civic officials from candidate_overrides (non-openstates, non-federal)
+async function fetchManualCivicOverrides(state: string): Promise<OfficialInfo[]> {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data, error } = await supabase
+      .from('candidate_overrides')
+      .select('candidate_id, name, party, office, state, district, image_url')
+      .eq('state', state.toUpperCase())
+      .eq('is_active', true)
+      .not('candidate_id', 'like', 'openstates_%'); // openstates ones are added via Open States API
+
+    if (error) {
+      console.error('[Manual Overrides] Error:', error);
+      return [];
+    }
+
+    return (data || []).filter(o => o.name).map(o => ({
+      id: o.candidate_id,
+      name: o.name!,
+      party: mapParty(o.party || undefined),
+      office: o.office || 'Official',
+      level: (o.office?.toLowerCase().includes('governor') ? 'state_executive' : 'local') as OfficeLevelType,
+      state: o.state || state.toUpperCase(),
+      district: o.district || undefined,
+      image_url: o.image_url || '',
+      is_incumbent: true,
+      overall_score: null,
+      coverage_tier: 'tier_3',
+      confidence: 'low',
+    }));
+  } catch (error) {
+    console.error('[Manual Overrides] Exception:', error);
+    return [];
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
