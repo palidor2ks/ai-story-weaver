@@ -145,6 +145,29 @@ export function AnswerCoveragePanel() {
   // Batch reconciliation state
   const [isBatchReconciling, setIsBatchReconciling] = useState(false);
   
+  // Civic AI research state
+  const [civicResearchingIds, setCivicResearchingIds] = useState<Set<string>>(new Set());
+  
+  const handleCivicResearch = async (candidateId: string, name: string) => {
+    setCivicResearchingIds(prev => new Set(prev).add(candidateId));
+    try {
+      const { error } = await supabase.functions.invoke('populate-civic-answers', {
+        body: { candidateId },
+      });
+      if (error) throw error;
+      toast.success(`AI research started for ${name}`);
+    } catch (err) {
+      console.error('Error starting civic research:', err);
+      toast.error(`Failed to start research for ${name}`);
+    } finally {
+      setCivicResearchingIds(prev => {
+        const next = new Set(prev);
+        next.delete(candidateId);
+        return next;
+      });
+    }
+  };
+  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
 
