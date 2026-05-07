@@ -673,6 +673,9 @@ export default function Admin() {
             <PartyAnswersPanel />
           </TabsContent>
 
+          <TabsContent value="civic-officials">
+            <CivicOfficialsPanel />
+          </TabsContent>
 
           {/* Score Fixes - lazy loaded only when tab is active */}
           <TabsContent value="scores">
