@@ -72,6 +72,13 @@ export const CandidateProfile = () => {
   const canEdit = isAdmin || isPoliticianOwner;
   const isClaimed = !!candidate?.claimed_by_user_id;
 
+  // Must be before early returns to maintain consistent hook order
+  const resolvedScore = useMemo(() => {
+    if (!id || !candidate) return candidate?.overall_score ?? 0;
+    const mapped = scoreMap?.get(id);
+    return mapped !== undefined ? mapped : candidate.overall_score;
+  }, [id, scoreMap, candidate]);
+
   const handleFetchDonors = async () => {
     if (!candidate?.fec_candidate_id || !id) return;
     
