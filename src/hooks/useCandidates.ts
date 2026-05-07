@@ -148,8 +148,18 @@ export const useCandidates = () => {
   });
 };
 
+export interface PriorOffice {
+  office: string;
+  state: string;
+  district?: string;
+  start_year?: number;
+  end_year?: number;
+  candidate_id?: string;
+}
+
 export interface CandidateWithOverride extends Candidate {
   hasOverride?: boolean;
+  priorOffices?: PriorOffice[];
 }
 
 export const useCandidate = (id: string | undefined) => {
