@@ -650,6 +650,44 @@ function applyTransitions(officials: OfficialInfo[], transitions: OfficialTransi
 // PERSIST OFFICIALS & TRIGGER AI RESEARCH (background)
 // =============================================================================
 
+// Max officials to trigger AI research per single request to avoid overloading Perplexity
+const MAX_RESEARCH_PER_RUN = 3;
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 2000; // 2s base, exponential backoff
+
+async function fetchWithRetry(
+  url: string, 
+  options: RequestInit, 
+  officialName: string
+): Promise<Response> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      
+      // Retry on 429 (rate limit) or 502/503/504 (server overload)
+      if ((response.status === 429 || response.status >= 502) && attempt < MAX_RETRIES) {
+        const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1); // 2s, 4s, 8s
+        console.log(`[Persist] ${officialName}: ${response.status}, retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`);
+        await response.text(); // consume body
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      return response;
+    } catch (err) {
+      if (attempt < MAX_RETRIES) {
+        const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        console.log(`[Persist] ${officialName}: network error, retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+  // Should never reach here, but TypeScript needs it
+  throw new Error(`Max retries exceeded for ${officialName}`);
+}
+
 async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader: string) {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -710,14 +748,20 @@ async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader
       return;
     }
 
-    console.log(`[Persist] ${officialsNeedingResearch.length} officials need AI answer research`);
+    // Cap to MAX_RESEARCH_PER_RUN to avoid Perplexity/function overload
+    const toProcess = officialsNeedingResearch.slice(0, MAX_RESEARCH_PER_RUN);
+    const skipped = officialsNeedingResearch.length - toProcess.length;
+    
+    console.log(`[Persist] ${officialsNeedingResearch.length} officials need research, processing ${toProcess.length} (max ${MAX_RESEARCH_PER_RUN}/run)${skipped > 0 ? `, ${skipped} deferred to next request` : ''}`);
 
-    // Trigger get-candidate-answers for each official (sequentially to avoid overload)
-    for (const official of officialsNeedingResearch) {
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const official of toProcess) {
       try {
         console.log(`[Persist] Triggering answer generation for ${official.name} (${official.id})`);
         
-        const response = await fetch(
+        const response = await fetchWithRetry(
           `${SUPABASE_URL}/functions/v1/get-candidate-answers`,
           {
             method: 'POST',
@@ -733,24 +777,31 @@ async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader
               candidateState: official.state,
               useBackground: true,
             }),
-          }
+          },
+          official.name
         );
 
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`[Persist] Failed to trigger answers for ${official.name}: ${response.status} - ${errorText}`);
+          failCount++;
         } else {
+          await response.text(); // consume body
           console.log(`[Persist] Successfully triggered answer generation for ${official.name}`);
+          successCount++;
         }
 
-        // Small delay between calls to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Stagger calls: 3s between triggers to spread Perplexity load
+        if (toProcess.indexOf(official) < toProcess.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
       } catch (err) {
         console.error(`[Persist] Error triggering answers for ${official.name}:`, err);
+        failCount++;
       }
     }
 
-    console.log(`[Persist] Finished triggering answer research for ${officialsNeedingResearch.length} officials`);
+    console.log(`[Persist] Research triggers complete: ${successCount} success, ${failCount} failed, ${skipped} deferred`);
   } catch (error) {
     console.error('[Persist] Top-level error:', error);
   }
