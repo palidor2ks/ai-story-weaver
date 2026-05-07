@@ -1,33 +1,50 @@
-# Convert Local Question Options to Yes/No Format
 
-## What
-Update all 100 local questions (across 5 topics: Local Cost of Living, Local Education, Local Housing, Local Public Health, Local Public Safety) from the generic "Strongly Disagree / Disagree / Neutral / Agree / Strongly Agree / Not important to me" format to the contextual "Yes—because… / Yes—but… / Neutral—… / No—but… / No—because…" format used by federal questions.
+# Adding Images for Local Politicians
 
-## Scope
-- **500 option texts** need updating (5 per question × 100 questions)
-- The 6th option ("Not important to me") stays unchanged
-- Option IDs, values (-10, -5, 0, 5, 10), and display_order remain the same
-- No code changes needed — this is a data-only migration
+## Current State
 
-## Approach
-1. Write a migration script that uses AI to generate contextual Yes/No explanations for each question, then runs UPDATE statements on the `question_options` table.
-2. Actually, since we need deterministic, high-quality text for each of 100 questions, I'll generate all 500 option texts in a script, review them, and apply via a single SQL migration.
+- **Open States API** already provides `person.image` for many state legislators, and that URL is saved to `candidate_overrides.image_url` during the persist step (line 745 of `fetch-civic-officials`).
+- 3 out of 4 existing civic officials already have images. The issue is that **some officials have no image from Open States** (the field comes back null/empty).
+- The `OfficialAvatar` component already handles missing images with a party-colored initials fallback.
 
-## Process
-1. Generate a complete SQL migration with all 500 UPDATE statements — one per option, each with a contextual explanation tailored to the question.
-2. Apply via `supabase--migration`.
+## Problem
 
-## Format Pattern
-For each question (e.g., "Should the state cap annual rent increases?"):
-- **Value -10**: `Yes—because tenants need protection from price gouging.`
-- **Value -5**: `Yes—but with reasonable limits that still allow market adjustments.`
-- **Value 0**: `Neutral—support studying the issue before acting.`
-- **Value 5**: `No—but encourage voluntary landlord restraint.`
-- **Value 10**: `No—because rent control distorts the housing market.`
+When Open States doesn't provide an image, there's no secondary source to fill it in. This affects some state legislators and most manually-added local officials.
 
-## Existing user answers
-Quiz answers store `question_id`, `value`, and `selected_option` (FK to `question_options.id`). Since option IDs and values don't change, existing user answers remain valid — only the display text changes.
+## Proposed Solution
 
-## Technical Details
-- Single migration with ~500 UPDATE statements on `question_options` table
-- No schema changes, no new tables, no RLS changes
+### 1. Web-search image enrichment during onboarding
+
+After persisting officials in `fetch-civic-officials`, for any official missing an image, use a web search to find an official headshot.
+
+- Add a step in `persistAndResearchOfficials()` that checks for officials with empty `image_url`
+- For each, query a search API (Google Custom Search or similar) for `"{name}" {office} {state} official photo`
+- Save the first relevant result to `candidate_overrides.image_url`
+
+### 2. Manual image upload in admin panel
+
+Add an image upload/URL input to the `CivicOfficialsPanel` so admins can manually set or override images for any civic official.
+
+- Add an edit dialog or inline URL input per official
+- Update `candidate_overrides.image_url` on save
+- Optionally support uploading to the existing `avatars` Supabase storage bucket
+
+### 3. AI research image enrichment (alternative/complementary)
+
+During the `populate-civic-answers` AI research step, also attempt to find an official photo URL and save it.
+
+---
+
+## Recommendation
+
+**Start with option 2 (manual admin upload)** since it's the most reliable and doesn't require additional API keys. Then optionally layer on option 1 or 3 for automation.
+
+## Technical Changes
+
+1. **`CivicOfficialsPanel.tsx`** — Add an image column showing the current photo (or initials fallback) and a button to edit the image URL or upload a file to the `avatars` bucket.
+
+2. **`candidate_overrides`** — Already has `image_url` column, no schema change needed.
+
+3. **(Optional) `fetch-civic-officials/index.ts`** — Could add a Google image search fallback for officials with no `person.image` from Open States, but this requires a Google Custom Search API key.
+
+No database migration needed — `image_url` already exists on `candidate_overrides`.

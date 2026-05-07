@@ -6,9 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Loader2, ExternalLink, Trash2, Pencil, Brain, Sparkles } from 'lucide-react';
+import { Loader2, ExternalLink, Trash2, Pencil, Brain, Sparkles, ImagePlus } from 'lucide-react';
 import { useDeleteCandidateOverride } from '@/hooks/useCandidateOverrides';
+import { OfficialAvatar } from '@/components/OfficialAvatar';
 import { toast } from 'sonner';
 
 interface CivicOfficial {
@@ -19,6 +23,7 @@ interface CivicOfficial {
   office: string | null;
   state: string | null;
   district: string | null;
+  image_url: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -29,7 +34,6 @@ const useCivicOfficials = () => {
   return useQuery({
     queryKey: ['civic-officials-admin'],
     queryFn: async () => {
-      // Get all civic officials - openstates_ IDs and manually added state/local officials
       const { data, error } = await supabase
         .from('candidate_overrides')
         .select('*')
@@ -80,6 +84,9 @@ export function CivicOfficialsPanel() {
   const queryClient = useQueryClient();
   const [populatingIds, setPopulatingIds] = useState<Set<string>>(new Set());
   const [populatingAll, setPopulatingAll] = useState(false);
+  const [editingImage, setEditingImage] = useState<CivicOfficial | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
+  const [savingImage, setSavingImage] = useState(false);
 
   const handleDelete = async (candidateId: string) => {
     try {
@@ -99,7 +106,6 @@ export function CivicOfficialsPanel() {
 
       if (error) throw error;
       toast.success(`AI research started for ${name}. Check edge function logs for progress.`);
-      // Refresh answer counts after a delay
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['civic-officials-answer-counts'] });
       }, 30000);
@@ -135,137 +141,227 @@ export function CivicOfficialsPanel() {
     }
   };
 
+  const handleOpenImageEdit = (official: CivicOfficial) => {
+    setEditingImage(official);
+    setImageUrl(official.image_url || '');
+  };
+
+  const handleSaveImage = async () => {
+    if (!editingImage) return;
+    setSavingImage(true);
+    try {
+      const { error } = await supabase
+        .from('candidate_overrides')
+        .update({ image_url: imageUrl.trim() || null })
+        .eq('candidate_id', editingImage.candidate_id);
+
+      if (error) throw error;
+      toast.success(`Image updated for ${editingImage.name}`);
+      queryClient.invalidateQueries({ queryKey: ['civic-officials-admin'] });
+      setEditingImage(null);
+    } catch (err) {
+      console.error('Error saving image:', err);
+      toast.error('Failed to save image URL');
+    } finally {
+      setSavingImage(false);
+    }
+  };
+
   const officialsWithoutAnswers = (officials || []).filter(o => !answerCounts[o.candidate_id]);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Civic Officials (State & Local)</CardTitle>
-            <CardDescription>
-              State and local officials added when users look up their address. Use AI research to populate their positions on quiz questions.
-            </CardDescription>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Civic Officials (State & Local)</CardTitle>
+              <CardDescription>
+                State and local officials added when users look up their address. Use AI research to populate their positions on quiz questions.
+              </CardDescription>
+            </div>
+            {officialsWithoutAnswers.length > 0 && (
+              <Button
+                onClick={handlePopulateAll}
+                disabled={populatingAll}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+              >
+                {populatingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Research All ({officialsWithoutAnswers.length} pending)
+              </Button>
+            )}
           </div>
-          {officialsWithoutAnswers.length > 0 && (
-            <Button
-              onClick={handlePopulateAll}
-              disabled={populatingAll}
-              variant="outline"
-              size="sm"
-              className="gap-2"
-            >
-              {populatingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Research All ({officialsWithoutAnswers.length} pending)
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : officials && officials.length > 0 ? (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Office</TableHead>
-                  <TableHead>Party</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>District</TableHead>
-                  <TableHead>Answers</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {officials.map((official) => {
-                  const count = answerCounts[official.candidate_id] || 0;
-                  const isPopulating = populatingIds.has(official.candidate_id);
-                  return (
-                    <TableRow key={official.id}>
-                      <TableCell className="font-medium">
-                        <Link to={`/candidate/${official.candidate_id}`} className="hover:underline flex items-center gap-1">
-                          {official.name || official.candidate_id}
-                          <ExternalLink className="h-3 w-3" />
-                        </Link>
-                      </TableCell>
-                      <TableCell>{official.office || '-'}</TableCell>
-                      <TableCell>
-                        {official.party ? (
-                          <Badge className={getPartyColor(official.party)}>{official.party}</Badge>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell>{official.state || '-'}</TableCell>
-                      <TableCell>{official.district || '-'}</TableCell>
-                      <TableCell>
-                        <Badge variant={count > 0 ? 'default' : 'secondary'}>
-                          {count}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={official.is_active ? 'default' : 'secondary'}>
-                          {official.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="AI Research"
-                            disabled={isPopulating}
-                            onClick={() => handlePopulateAnswers(official.candidate_id, official.name || 'Unknown')}
-                          >
-                            {isPopulating ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Brain className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Link to={`/candidate/${official.candidate_id}`}>
-                            <Button variant="ghost" size="icon">
-                              <Pencil className="h-4 w-4" />
-                            </Button>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : officials && officials.length > 0 ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Photo</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Office</TableHead>
+                    <TableHead>Party</TableHead>
+                    <TableHead>State</TableHead>
+                    <TableHead>District</TableHead>
+                    <TableHead>Answers</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {officials.map((official) => {
+                    const count = answerCounts[official.candidate_id] || 0;
+                    const isPopulating = populatingIds.has(official.candidate_id);
+                    return (
+                      <TableRow key={official.id}>
+                        <TableCell>
+                          <div className="cursor-pointer" onClick={() => handleOpenImageEdit(official)} title="Click to edit image">
+                            <OfficialAvatar
+                              imageUrl={official.image_url}
+                              name={official.name || '?'}
+                              party={official.party || 'Other'}
+                              size="sm"
+                            />
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <Link to={`/candidate/${official.candidate_id}`} className="hover:underline flex items-center gap-1">
+                            {official.name || official.candidate_id}
+                            <ExternalLink className="h-3 w-3" />
                           </Link>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="text-destructive">
-                                <Trash2 className="h-4 w-4" />
+                        </TableCell>
+                        <TableCell>{official.office || '-'}</TableCell>
+                        <TableCell>
+                          {official.party ? (
+                            <Badge className={getPartyColor(official.party)}>{official.party}</Badge>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>{official.state || '-'}</TableCell>
+                        <TableCell>{official.district || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant={count > 0 ? 'default' : 'secondary'}>
+                            {count}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={official.is_active ? 'default' : 'secondary'}>
+                            {official.is_active ? 'Active' : 'Inactive'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Edit Image"
+                              onClick={() => handleOpenImageEdit(official)}
+                            >
+                              <ImagePlus className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="AI Research"
+                              disabled={isPopulating}
+                              onClick={() => handlePopulateAnswers(official.candidate_id, official.name || 'Unknown')}
+                            >
+                              {isPopulating ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Brain className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Link to={`/candidate/${official.candidate_id}`}>
+                              <Button variant="ghost" size="icon">
+                                <Pencil className="h-4 w-4" />
                               </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete {official.name || 'this official'}?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will remove the civic official and their override data. Their answers will remain in the database.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(official.candidate_id)} className="bg-destructive text-destructive-foreground">
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                            </Link>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-destructive">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete {official.name || 'this official'}?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will remove the civic official and their override data. Their answers will remain in the database.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDelete(official.candidate_id)} className="bg-destructive text-destructive-foreground">
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No civic officials yet. They are automatically added when users look up their address.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Image Edit Dialog */}
+      <Dialog open={!!editingImage} onOpenChange={(open) => !open && setEditingImage(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Photo — {editingImage?.name}</DialogTitle>
+            <DialogDescription>
+              Paste a direct URL to an official headshot photo for this politician.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex justify-center">
+              <OfficialAvatar
+                imageUrl={imageUrl || null}
+                name={editingImage?.name || '?'}
+                party={editingImage?.party || 'Other'}
+                size="lg"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="image-url">Image URL</Label>
+              <Input
+                id="image-url"
+                placeholder="https://example.com/photo.jpg"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+              />
+            </div>
+            {imageUrl && (
+              <p className="text-xs text-muted-foreground">
+                Preview updates live above. Make sure the image loads correctly before saving.
+              </p>
+            )}
           </div>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            No civic officials yet. They are automatically added when users look up their address.
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingImage(null)}>Cancel</Button>
+            <Button onClick={handleSaveImage} disabled={savingImage}>
+              {savingImage ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
