@@ -1232,9 +1232,27 @@ Deno.serve(async (req) => {
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Get questions
+    // Determine if this is a local official (governor and below)
+    const localOffices = ['governor', 'lieutenant governor', 'attorney general', 'secretary of state',
+      'state treasurer', 'state auditor', 'state comptroller', 'state senator', 'state representative',
+      'mayor', 'city council', 'county executive', 'county commissioner', 'alderman', 'selectman',
+      'town council', 'school board', 'sheriff', 'district attorney', 'municipal', 'borough',
+      'township', 'village', 'assessor', 'clerk', 'recorder', 'coroner', 'public defender'];
+    const officeLower = (officialInfo.office || '').toLowerCase();
+    const isLocalOfficial = localOffices.some(lo => officeLower.includes(lo));
+
+    // Get the correct topic scope for this official
+    const targetScope = isLocalOfficial ? 'local' : 'all';
+    const { data: scopeTopics } = await supabase.from('topics').select('id').eq('scope', targetScope);
+    const scopeTopicIds = (scopeTopics || []).map((t: any) => t.id);
+
+    // Get questions filtered by scope
     let questionsQuery = supabase.from('questions').select('id, text, topic_id, question_options(value, text)');
-    if (questionIds && questionIds.length > 0) questionsQuery = questionsQuery.in('id', questionIds);
+    if (questionIds && questionIds.length > 0) {
+      questionsQuery = questionsQuery.in('id', questionIds);
+    } else {
+      questionsQuery = questionsQuery.in('topic_id', scopeTopicIds);
+    }
 
     const { data: questions, error: questionsError } = await questionsQuery;
     if (questionsError) throw questionsError;
