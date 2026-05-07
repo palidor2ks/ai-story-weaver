@@ -661,25 +661,24 @@ export function useCandidatesAnswerCoverageProgressive(filters: Filters = {}, op
 }
 
 export function useCandidateAnswerStats() {
+  const { data: questionCounts } = useQuestionCounts();
+
   return useQuery({
     queryKey: ['candidate-answer-stats'],
+    enabled: !!questionCounts,
     queryFn: async () => {
-      // Get federal topic IDs for scope-aware question counting
-      const { data: fedTopics } = await supabase.from('topics').select('id').eq('scope', 'all');
-      const fedTopicIds = (fedTopics || []).map(t => t.id);
+      const { federalQuestions } = questionCounts!;
 
-      // Parallel fetch: federal questions count, candidates count, and answer coverage stats
-      const [questionsResult, candidatesResult, coverageResult] = await Promise.all([
-        supabase.from('questions').select('*', { count: 'exact', head: true }).in('topic_id', fedTopicIds),
+      // Parallel fetch: candidates count and answer coverage stats
+      const [candidatesResult, coverageResult] = await Promise.all([
         supabase.from('candidates').select('*', { count: 'exact', head: true }),
         supabase.from('candidate_answer_coverage_stats').select('candidate_id, answer_count'),
       ]);
 
-      if (questionsResult.error) throw questionsResult.error;
       if (candidatesResult.error) throw candidatesResult.error;
       if (coverageResult.error) throw coverageResult.error;
 
-      const totalQuestions = questionsResult.count || 0; // Federal questions (240)
+      const totalQuestions = federalQuestions; // 240 (federal questions)
       const totalCandidates = candidatesResult.count || 0;
       const coverageData = coverageResult.data || [];
 
