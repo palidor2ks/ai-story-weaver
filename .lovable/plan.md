@@ -1,12 +1,30 @@
 
 ## Problem
 
-Mikie Sherrill's profile page at `/candidate/nj_governor_sherrill` doesn't load because the `useCandidate` hook has a prefix allowlist for non-Congress IDs that doesn't include `nj_`. It only recognizes: `exec_`, `gov_`, `local_`, `state_`, `openstates`, `federal_`.
+The CandidateAnswersDialog filters topics by scope based on the candidate's office. Since Mikie Sherrill is now "Governor" (a local office), `isLocalOfficial('Governor')` returns `true`, and the dialog only shows **local** topics (5 topics). Her 240 federal-topic answers are hidden from the admin answer management view.
 
-Since the ID `nj_governor_sherrill` doesn't match any prefix, the hook skips the override lookup path and falls through to the Congress API, which obviously can't find a state governor.
+Per project rules: "12 federal + 5 local topics (17 total). Local topics only for governor+below." This means local topics are **added** for governor+below — they should see all 17 topics, not just 5.
 
 ## Fix
 
-Update the prefix check in `useCandidate` (in `src/hooks/useCandidates.ts`, ~line 249) to also include the state-prefix civic official IDs used by the civic officials system: `nj_`, `ny_`, `ca_`, `tx_`, `fl_`, `pa_`.
+In `src/components/admin/CandidateAnswersDialog.tsx` (line ~117-122): change the scope filter logic so that:
+- **Federal officials** (Senator, Representative): show only `scope = 'all'` topics (12 federal)  
+- **Local officials** (Governor and below): show **both** `scope = 'all'` AND `scope = 'local'` topics (all 17)
 
-This is a one-line change — add the same prefixes already used in `useCandidatesAnswerCoverage.ts` line 536.
+Change:
+```ts
+const scope = isLocalOfficial(office) ? 'local' : 'all';
+// .eq('scope', scope)
+```
+To:
+```ts
+if (isLocalOfficial(office)) {
+  // Governor+below: show ALL topics (federal + local)
+  // No scope filter needed — fetch all
+} else {
+  // Federal: only federal topics
+  query = query.eq('scope', 'all');
+}
+```
+
+This is a ~5-line change in one file.

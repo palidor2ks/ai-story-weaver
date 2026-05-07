@@ -114,13 +114,18 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
           .maybeSingle();
         office = co?.office ?? null;
       }
-      const scope = isLocalOfficial(office) ? 'local' : 'all';
+      const isLocal = isLocalOfficial(office);
 
-      const { data: topics, error: topicsError } = await supabase
+      let topicsQuery = supabase
         .from('topics')
         .select('id, name, icon')
-        .eq('scope', scope)
         .order('name');
+      // Local officials (governor+below) see ALL 17 topics (federal + local)
+      // Federal officials only see federal topics (scope='all')
+      if (!isLocal) {
+        topicsQuery = topicsQuery.eq('scope', 'all');
+      }
+      const { data: topics, error: topicsError } = await topicsQuery;
       if (topicsError) throw topicsError;
 
       // Fetch questions with their options using relational query
