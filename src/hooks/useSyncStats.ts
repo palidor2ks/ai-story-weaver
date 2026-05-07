@@ -98,8 +98,10 @@ export function useSyncStats() {
       if (topicsResult.error) throw topicsResult.error;
 
       const candidates = candidatesResult.data || [];
-      const questions = questionsResult.data || [];
       const topics = topicsResult.data || [];
+      // Filter questions to only federal topics
+      const federalTopicIds = new Set(topics.map(t => t.id));
+      const questions = (questionsResult.data || []).filter(q => federalTopicIds.has(q.topic_id));
       const totalActualAnswers = answersCountResult.count || 0;
       
       const totalCandidates = candidates.length;
