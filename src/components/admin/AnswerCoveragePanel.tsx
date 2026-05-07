@@ -1816,6 +1816,22 @@ export function AnswerCoveragePanel() {
           </div>
 
           <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Level:</span>
+            <Select value={levelFilter} onValueChange={setLevelFilter}>
+              <SelectTrigger className="w-[120px] h-7 text-xs bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="federal_legislative">Congress</SelectItem>
+                <SelectItem value="state_executive">State Exec</SelectItem>
+                <SelectItem value="state_legislative">State Leg</SelectItem>
+                <SelectItem value="local">Local</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1">
             <span className="text-xs font-medium text-muted-foreground">Score:</span>
             <Select value={scoreFilter} onValueChange={(v) => setScoreFilter(v as typeof scoreFilter)}>
               <SelectTrigger className="w-[95px] h-7 text-xs bg-background">
