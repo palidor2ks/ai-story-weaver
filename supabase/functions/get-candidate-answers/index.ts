@@ -1233,7 +1233,12 @@ Deno.serve(async (req) => {
       candidateOffice,
       candidateState,
       useBackground = true, // Default to background processing for deep research
+      _isChainedChunk = false, // Internal: set by self-chaining
     } = await req.json();
+
+    if (_isChainedChunk) {
+      console.log(`[Chain] Received chained chunk for ${candidateId} with ${questionIds?.length || 0} question IDs`);
+    }
 
     if (!candidateId) {
       return new Response(JSON.stringify({ error: 'candidateId is required' }), {
