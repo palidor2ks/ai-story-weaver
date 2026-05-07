@@ -467,6 +467,7 @@ export function CandidateAnswersDialog({
               jobs={jobs.filter(j => j.candidateId === candidateId)}
               onClearJob={removeJob}
               onClearAll={clearAllJobs}
+              onRetryJob={retryJob}
               compact
             />
           )}
