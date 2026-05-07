@@ -127,6 +127,7 @@ export function AnswerCoveragePanel() {
     if (stateFilter !== 'all' && isStateHidden(stateFilter)) setStateFilter('all');
   }, [stateFilter, isStateHidden]);
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('all');
+  const [levelFilter, setLevelFilter] = useState<string>('all');
   const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
   const [deltaFilter, setDeltaFilter] = useState<'all' | 'within' | 'minor' | 'major' | 'no_data'>('all');
   const [syncFilter, setSyncFilter] = useState<'all' | 'needs_sync' | 'partial' | 'complete' | 'has_committee' | 'no_committee' | 'has_donors' | 'no_donors' | 'fec_mismatch'>('all');
