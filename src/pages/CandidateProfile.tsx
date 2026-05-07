@@ -72,6 +72,13 @@ export const CandidateProfile = () => {
   const canEdit = isAdmin || isPoliticianOwner;
   const isClaimed = !!candidate?.claimed_by_user_id;
 
+  // Must be before early returns to maintain consistent hook order
+  const resolvedScore = useMemo(() => {
+    if (!id || !candidate) return candidate?.overall_score ?? 0;
+    const mapped = scoreMap?.get(id);
+    return mapped !== undefined ? mapped : candidate.overall_score;
+  }, [id, scoreMap, candidate]);
+
   const handleFetchDonors = async () => {
     if (!candidate?.fec_candidate_id || !id) return;
     
@@ -111,12 +118,6 @@ export const CandidateProfile = () => {
   }
 
   const userScore = profile?.overall_score ?? 0;
-  // Use scoreMap (source of truth) for consistent score display across all pages
-  const resolvedScore = useMemo(() => {
-    if (!id) return candidate.overall_score;
-    const mapped = scoreMap?.get(id);
-    return mapped !== undefined ? mapped : candidate.overall_score;
-  }, [id, scoreMap, candidate.overall_score]);
   const matchScore = calculateMatchScore(userScore, resolvedScore);
 
   const getPartyColor = (party: string) => {
