@@ -524,6 +524,60 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         };
       });
 
+      // === CIVIC OFFICIALS: Fetch from candidate_overrides ===
+      // Skip if level filter is set to a federal level
+      const skipCivic = filters.level && ['federal_executive', 'federal_legislative'].includes(filters.level);
+      
+      if (!skipCivic) {
+        let civicQuery = supabase
+          .from('candidate_overrides')
+          .select('candidate_id, name, party, office, state, overall_score, coverage_tier, confidence')
+          .not('name', 'is', null)
+          .or('candidate_id.like.openstates_%,candidate_id.like.nj_%,candidate_id.like.ny_%,candidate_id.like.ca_%,candidate_id.like.tx_%,candidate_id.like.fl_%,candidate_id.like.pa_%');
+
+        if (filters.party && filters.party !== 'all') {
+          civicQuery = civicQuery.eq('party', filters.party);
+        }
+        if (filters.state && filters.state !== 'all') {
+          civicQuery = civicQuery.eq('state', filters.state);
+        }
+
+        const { data: civicOfficials } = await civicQuery;
+
+        if (civicOfficials && civicOfficials.length > 0) {
+          // Exclude any that already exist in the federal results (shouldn't happen, but safety)
+          const federalIds = new Set(results.map(r => r.id));
+          const newCivicIds = civicOfficials.filter(co => !federalIds.has(co.candidate_id)).map(co => co.candidate_id);
+
+          // Fetch answer counts for civic officials
+          if (newCivicIds.length > 0) {
+            const { data: civicAnswerData } = await supabase
+              .from('candidate_answer_coverage_stats')
+              .select('candidate_id, answer_count, sourced_count')
+              .in('candidate_id', newCivicIds);
+
+            const civicAnswerMap: Record<string, { count: number; sourced: number }> = {};
+            (civicAnswerData || []).forEach(row => {
+              civicAnswerMap[row.candidate_id] = {
+                count: Number(row.answer_count) || 0,
+                sourced: Number(row.sourced_count) || 0,
+              };
+            });
+
+            for (const co of civicOfficials) {
+              if (federalIds.has(co.candidate_id)) continue;
+              const ac = civicAnswerMap[co.candidate_id] || { count: 0, sourced: 0 };
+              results.push(makeCivicCoverage(co, ac.count, ac.sourced, totalQuestions || 0));
+            }
+          }
+        }
+      }
+
+      // Apply level filter
+      if (filters.level && filters.level !== 'all') {
+        results = results.filter(c => c.level === filters.level);
+      }
+
       // Apply coverage filter
       let filtered = results;
       if (filters.coverageFilter === 'none') {
