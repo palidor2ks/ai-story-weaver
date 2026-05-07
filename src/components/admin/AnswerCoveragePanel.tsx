@@ -152,6 +152,7 @@ export function AnswerCoveragePanel() {
   const hasSelectedFilters = partyFilter !== 'all' || 
     stateFilter !== 'all' || 
     coverageFilter !== 'all' || 
+    levelFilter !== 'all' ||
     searchQuery.length > 0 ||
     financeFilter !== 'all' ||
     deltaFilter !== 'all' ||
