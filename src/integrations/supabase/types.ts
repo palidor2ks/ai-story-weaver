@@ -520,6 +520,7 @@ export type Database = {
           office: string | null
           overall_score: number | null
           party: string | null
+          prior_offices: Json | null
           state: string | null
           updated_at: string | null
           updated_by: string | null
@@ -539,6 +540,7 @@ export type Database = {
           office?: string | null
           overall_score?: number | null
           party?: string | null
+          prior_offices?: Json | null
           state?: string | null
           updated_at?: string | null
           updated_by?: string | null
@@ -558,6 +560,7 @@ export type Database = {
           office?: string | null
           overall_score?: number | null
           party?: string | null
+          prior_offices?: Json | null
           state?: string | null
           updated_at?: string | null
           updated_by?: string | null
