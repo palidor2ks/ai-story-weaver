@@ -1174,24 +1174,23 @@ async function processAnswersInBackground(
     // Even on error, try to chain remaining questions so they aren't lost
     if (remaining.length > 0) {
       console.log(`[Background] Attempting to chain remaining ${remaining.length} questions despite error...`);
-      try {
-        await fetch(`${supabaseUrl}/functions/v1/get-candidate-answers`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
-          },
-          body: JSON.stringify({
-            candidateId,
-            questionIds: remaining.map(q => q.id),
-            forceRegenerate: true,
-            useBackground: true,
-            _isChainedChunk: true,
-          }),
-        });
-      } catch (chainError) {
-        console.error(`[Background] Recovery chain failed:`, chainError);
-      }
+       try {
+         const chainClient = createClient(supabaseUrl, supabaseKey);
+         const { error: chainError } = await chainClient.functions.invoke('get-candidate-answers', {
+           body: {
+             candidateId,
+             questionIds: remaining.map(q => q.id),
+             forceRegenerate: true,
+             useBackground: true,
+             _isChainedChunk: true,
+           },
+         });
+         if (chainError) {
+           console.error(`[Background] Recovery chain failed:`, chainError);
+         }
+       } catch (chainError) {
+         console.error(`[Background] Recovery chain failed:`, chainError);
+       }
     }
   }
 }
