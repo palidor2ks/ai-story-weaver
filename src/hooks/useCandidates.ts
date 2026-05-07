@@ -206,6 +206,7 @@ export const useCandidate = (id: string | undefined) => {
             topics: ts.topics,
           })),
           hasOverride: !!override,
+          priorOffices: (override?.prior_offices as PriorOffice[]) || [],
         };
 
         return mergedCandidate;
