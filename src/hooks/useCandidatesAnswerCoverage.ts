@@ -459,6 +459,9 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           // Validation flags
           fecIdMismatch: fecIdValidation.mismatch,
           fecIdMismatchReason: fecIdValidation.reason,
+          // Source tracking
+          source: 'federal' as CandidateSource,
+          level: inferLevel(c.office, 'federal'),
         };
       });
 
