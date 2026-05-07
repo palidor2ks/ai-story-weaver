@@ -191,7 +191,7 @@ export function RepresentativeComparisonCard({ official, resolvedScore }: Repres
       </Link>
 
       {/* AI Comparison Summary */}
-      {canGenerate && (
+      {canGenerate ? (
         <div className="px-4 pb-4">
           <RepComparisonSummary
             summary={comparison?.summary || null}
@@ -207,7 +207,13 @@ export function RepresentativeComparisonCard({ official, resolvedScore }: Repres
             hasDeepAnalysis={!!comparison?.deep_analysis}
           />
         </div>
-      )}
+      ) : userAnswers.length > 0 && repAnswers.length === 0 ? (
+        <div className="px-4 pb-4">
+          <p className="text-xs text-muted-foreground italic">
+            AI analysis pending — position data is being researched for this official.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
