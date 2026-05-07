@@ -59,11 +59,10 @@ export function useSyncStats() {
         supabase
           .from('candidates')
           .select('id, name, party, last_answers_sync'),
-        // Get questions with topic IDs (federal scope only)
+        // Get questions with topic IDs
         supabase
           .from('questions')
-          .select('id, topic_id, topics!inner(scope)')
-          .eq('topics.scope', 'all'),
+          .select('id, topic_id'),
         // Get all federal topics
         supabase
           .from('topics')
