@@ -12,7 +12,7 @@ import { ScoreFixesTab } from "@/pages/admin/tabs/ScoreFixesTab";
 import { BillSummaryDashboard } from "@/components/admin/BillSummaryDashboard";
 import { HiddenStatesPanel } from "@/components/admin/HiddenStatesPanel";
 import { BackgroundProcessingProvider } from "@/context/BackgroundProcessingContext";
-import { CivicOfficialsPanel } from "@/components/admin/CivicOfficialsPanel";
+
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
