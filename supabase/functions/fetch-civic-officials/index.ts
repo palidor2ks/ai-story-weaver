@@ -486,9 +486,10 @@ async function fetchLocalOfficialsFromDB(state: string): Promise<OfficialInfo[]>
 
 // Geocode address to get coordinates
 async function geocodeAddress(address: string): Promise<{ lat: number, lng: number } | null> {
-  const GOOGLE_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY');
+  // Try GOOGLE_PLACES_API_KEY first, then GOOGLE_CIVIC_API_KEY as fallback
+  const GOOGLE_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY') || Deno.env.get('GOOGLE_CIVIC_API_KEY');
   if (!GOOGLE_API_KEY) {
-    console.log('[Geocode] No Google API key available');
+    console.log('[Geocode] No Google API key available (checked GOOGLE_PLACES_API_KEY and GOOGLE_CIVIC_API_KEY)');
     return null;
   }
 
@@ -496,20 +497,28 @@ async function geocodeAddress(address: string): Promise<{ lat: number, lng: numb
     const encodedAddress = encodeURIComponent(address);
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${GOOGLE_API_KEY}`;
     
+    console.log(`[Geocode] Requesting geocode for: "${address}"`);
     const response = await fetch(url);
     if (!response.ok) {
-      console.error('[Geocode] API error:', response.status);
+      console.error(`[Geocode] HTTP error: ${response.status}`);
       return null;
     }
 
     const data = await response.json();
+    console.log(`[Geocode] Response status: ${data.status}, results: ${data.results?.length || 0}`);
+    
+    if (data.status === 'REQUEST_DENIED') {
+      console.error(`[Geocode] API request denied: ${data.error_message || 'unknown reason'}`);
+      return null;
+    }
+    
     if (data.status === 'OK' && data.results?.length > 0) {
       const location = data.results[0].geometry.location;
-      console.log(`[Geocode] Found coordinates: ${location.lat}, ${location.lng}`);
+      console.log(`[Geocode] Found coordinates: ${location.lat}, ${location.lng} (${data.results[0].formatted_address})`);
       return { lat: location.lat, lng: location.lng };
     }
 
-    console.log('[Geocode] No results found');
+    console.log(`[Geocode] No results found (status: ${data.status})`);
     return null;
   } catch (error) {
     console.error('[Geocode] Error:', error);
