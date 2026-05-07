@@ -733,6 +733,10 @@ serve(async (req) => {
     allOfficials = applyTransitions(allOfficials, transitions);
 
     console.log(`Total officials after transitions: ${allOfficials.length}`);
+
+    // Persist officials to database and trigger answer generation in background
+    EdgeRuntime.waitUntil(persistAndResearchOfficials(allOfficials, authHeader));
+
     console.log(`=== FETCH CIVIC OFFICIALS END ===`);
 
     // Re-categorize for response
