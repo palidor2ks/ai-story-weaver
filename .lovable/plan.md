@@ -1,28 +1,78 @@
 
 ## Problem
 
-The admin "Answers" column shows `X/340` for **all** candidates. But 340 is only correct for local officials (governor+below) who get all 17 topics. Federal legislators should show `X/240` (12 federal topics × 20 questions).
+Every time `useCandidatesAnswerCoverage` or `useCandidateAnswerStats` runs their `queryFn`, they each independently:
 
-The root cause is in `src/hooks/useCandidatesAnswerCoverage.ts`:
-- Line 160-162: fetches a single `totalQuestions` count from ALL questions (340) with no scope filter
-- Line 456 and 572: uses this same 340 for both federal and civic candidates
+1. Fetch federal topic IDs from `topics` table (1 query)
+2. Count all questions (1 query)
+3. Count federal-only questions (1 query)
 
-The database function `calculate_coverage_tier` already handles this correctly with scope-aware counting, but the frontend hook doesn't.
+That's **3 redundant queries per hook invocation** for data that almost never changes (topics and question counts are effectively static during a session). When the coverage hook refetches due to filter changes, it re-fetches these counts every time even though they haven't changed.
 
-## Fix
+### Current impact
 
-**File: `src/hooks/useCandidatesAnswerCoverage.ts`**
+| Query | When it runs | Cost |
+|-------|-------------|------|
+| `topics.select('id').eq('scope','all')` | Every queryFn call in both hooks | ~50ms round-trip |
+| `questions.select(count).head()` (all) | Every queryFn call in coverage hook | ~50ms round-trip |
+| `questions.select(count).head().in(topic_id)` | Every queryFn call in both hooks | ~50ms round-trip |
 
-1. Fetch TWO question counts in parallel:
-   - `federalQuestions`: count where topic scope = 'all' (240)
-   - `allQuestions`: count of all questions (340)
+With progressive loading (initial + full load), the coverage hook runs its queryFn **twice**, so that's 6 unnecessary queries just for topic/question metadata. Add `useCandidateAnswerStats` and it's 9 total queries for data that could be fetched once.
 
-2. For federal candidates (lines ~395-456): use `federalQuestions` as their `totalQuestions`
+### Real-world effect
 
-3. For civic officials (line ~572): use `allQuestions` as their `totalQuestions`
+- **~150-300ms wasted per admin page load** on redundant Supabase round-trips
+- Filter changes (party, state) trigger full refetches including these static counts
+- Progressive loading doubles the waste since initial + full queries both re-fetch
 
-4. In `useCandidateAnswerStats` (line ~648): same pattern — use scope-aware counts for percentage calculations
+## Proposed fix
 
-5. `makeCivicCoverage` already accepts `totalQuestions` as a parameter, so we just pass the right value.
+1. **Extract a shared `useQuestionCounts` hook** that fetches federal topic IDs and both question counts, cached via React Query with a long `staleTime` (5 minutes).
 
-This keeps the existing architecture and just passes the correct denominator based on candidate type.
+2. **Both hooks consume `useQuestionCounts`** instead of fetching their own copies. Their `queryFn` receives the cached values, eliminating 2-3 queries per invocation.
+
+3. The new hook returns `{ federalTopicIds, federalQuestions, allQuestions, isLoading }`.
+
+### Technical details
+
+**New: `useQuestionCounts` (in same file)**
+```ts
+function useQuestionCounts() {
+  return useQuery({
+    queryKey: ['question-counts'],
+    staleTime: 5 * 60 * 1000, // 5 min — topics/questions rarely change
+    queryFn: async () => {
+      const { data: federalTopics } = await supabase
+        .from('topics').select('id').eq('scope', 'all');
+      const federalTopicIds = (federalTopics || []).map(t => t.id);
+      const [allQ, fedQ] = await Promise.all([
+        supabase.from('questions').select('*', { count: 'exact', head: true }),
+        supabase.from('questions').select('*', { count: 'exact', head: true })
+          .in('topic_id', federalTopicIds),
+      ]);
+      return {
+        federalTopicIds,
+        allQuestions: allQ.count || 0,
+        federalQuestions: fedQ.count || 0,
+      };
+    },
+  });
+}
+```
+
+**Modified: `useCandidatesAnswerCoverage`**
+- Add `useQuestionCounts()` call at top
+- Remove lines 160-173 (inline topic/question fetching)
+- Use cached values from the shared hook
+- Add `enabled: !!questionCounts` to avoid running before counts are ready
+
+**Modified: `useCandidateAnswerStats`**
+- Same pattern — consume `useQuestionCounts()` instead of fetching its own copy
+
+### What does NOT change
+
+- No database schema changes
+- No API changes
+- No visible UI changes
+- All existing filtering, progressive loading, and display logic stays the same
+- The denominator logic (240 for federal, 340 for local) is preserved exactly
