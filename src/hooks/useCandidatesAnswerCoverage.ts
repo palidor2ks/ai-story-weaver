@@ -75,14 +75,18 @@ export interface CandidateAnswerCoverage {
   reconciliationCheckedAt: string | null; // When reconciliation was last checked
   syncStatus: 'never' | 'partial' | 'complete'; // Aggregated sync status
   // Validation flags
-  fecIdMismatch: boolean;        // True if FEC ID prefix doesn't match office (H=House, S=Senate, P=President)
-  fecIdMismatchReason: string | null; // Human-readable reason for the mismatch
+  fecIdMismatch: boolean;
+  fecIdMismatchReason: string | null;
+  // Source tracking
+  source: CandidateSource;
+  level: GovernmentLevel;
 }
 
 interface Filters {
   party?: string;
   state?: string;
   coverageFilter?: 'all' | 'none' | 'low' | 'full';
+  level?: 'all' | GovernmentLevel;
 }
 
 export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean; limit?: number }) {
