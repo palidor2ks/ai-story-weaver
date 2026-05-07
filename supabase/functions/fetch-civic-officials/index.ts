@@ -605,48 +605,69 @@ function applyTransitions(officials: OfficialInfo[], transitions: OfficialTransi
     return official;
   });
 
-  // Add incoming officials who aren't yet in the list
-  const incomingOfficials: OfficialInfo[] = [];
+  // Add incoming officials who aren't yet in the list (pre-inauguration)
+  // AND add already-inaugurated officials missing from Open States (data correction)
+  const additionalOfficials: OfficialInfo[] = [];
   
   for (const transition of transitions) {
     const inaugDate = new Date(transition.inauguration_date);
     const isBeforeInauguration = today < inaugDate;
     
-    if (!isBeforeInauguration) continue; // Already inaugurated, skip
-    
     // Check if this person is already in our list
-    const alreadyInList = officials.some(o => 
+    const alreadyInList = updatedOfficials.some(o => 
       o.name.toLowerCase() === transition.official_name.toLowerCase()
     );
     
     if (!alreadyInList) {
-      // Add as incoming official
-      incomingOfficials.push({
-        id: `transition_${transition.id}`,
-        name: transition.official_name,
-        party: (transition.party as 'Democrat' | 'Republican' | 'Independent' | 'Other') || 'Other',
-        office: transition.new_office,
-        level: transition.new_office.toLowerCase().includes('governor') 
-          ? 'state_executive' 
-          : transition.new_office.toLowerCase().includes('senator') || transition.new_office.toLowerCase().includes('representative')
-            ? 'state_legislative'
-            : 'local',
-        state: transition.state,
-        district: transition.district || undefined,
-        image_url: '',
-        is_incumbent: false,
-        overall_score: null,
-        coverage_tier: 'tier_2',
-        confidence: transition.ai_confidence || 'medium',
-        transition_status: 'incoming',
-        new_office: transition.new_office,
-        inauguration_date: transition.inauguration_date,
-      });
+      const level: OfficeLevelType = transition.new_office.toLowerCase().includes('governor') 
+        ? 'state_executive' 
+        : transition.new_office.toLowerCase().includes('senator') || transition.new_office.toLowerCase().includes('representative')
+          ? 'state_legislative'
+          : 'local';
+
+      if (isBeforeInauguration) {
+        // Future inauguration — add as incoming
+        additionalOfficials.push({
+          id: `transition_${transition.id}`,
+          name: transition.official_name,
+          party: (transition.party as 'Democrat' | 'Republican' | 'Independent' | 'Other') || 'Other',
+          office: transition.new_office,
+          level,
+          state: transition.state,
+          district: transition.district || undefined,
+          image_url: '',
+          is_incumbent: false,
+          overall_score: null,
+          coverage_tier: 'tier_2',
+          confidence: transition.ai_confidence || 'medium',
+          transition_status: 'incoming',
+          new_office: transition.new_office,
+          inauguration_date: transition.inauguration_date,
+        });
+      } else {
+        // Already inaugurated but missing from Open States — add as current
+        console.log(`[Transitions] Adding missing inaugurated official: ${transition.official_name} as ${transition.new_office}`);
+        additionalOfficials.push({
+          id: `transition_${transition.id}`,
+          name: transition.official_name,
+          party: (transition.party as 'Democrat' | 'Republican' | 'Independent' | 'Other') || 'Other',
+          office: transition.new_office,
+          level,
+          state: transition.state,
+          district: transition.district || undefined,
+          image_url: '',
+          is_incumbent: true,
+          overall_score: null,
+          coverage_tier: 'tier_3',
+          confidence: transition.ai_confidence || 'medium',
+          transition_status: 'current',
+        });
+      }
     }
   }
 
-  console.log(`[Transitions] Added ${incomingOfficials.length} incoming officials`);
-  return [...updatedOfficials, ...incomingOfficials];
+  console.log(`[Transitions] Added ${additionalOfficials.length} additional officials (incoming + corrections)`);
+  return [...updatedOfficials, ...additionalOfficials];
 }
 
 // =============================================================================
