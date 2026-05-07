@@ -392,7 +392,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
       };
 
       // Build result with coverage info
-      const results: CandidateAnswerCoverage[] = (candidates || []).map(c => {
+      let results: CandidateAnswerCoverage[] = (candidates || []).map(c => {
         const answerCount = answerCountMap[c.id] || 0;
         const sourcedCount = sourcedCountMap[c.id] || 0;
         const percentage = totalQuestions ? Math.round((answerCount / totalQuestions) * 100) : 0;
