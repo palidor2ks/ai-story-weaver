@@ -127,6 +127,7 @@ export function AnswerCoveragePanel() {
     if (stateFilter !== 'all' && isStateHidden(stateFilter)) setStateFilter('all');
   }, [stateFilter, isStateHidden]);
   const [coverageFilter, setCoverageFilter] = useState<'all' | 'none' | 'low' | 'full'>('all');
+  const [levelFilter, setLevelFilter] = useState<string>('all');
   const [financeFilter, setFinanceFilter] = useState<'all' | 'mismatch'>('all');
   const [deltaFilter, setDeltaFilter] = useState<'all' | 'within' | 'minor' | 'major' | 'no_data'>('all');
   const [syncFilter, setSyncFilter] = useState<'all' | 'needs_sync' | 'partial' | 'complete' | 'has_committee' | 'no_committee' | 'has_donors' | 'no_donors' | 'fec_mismatch'>('all');
@@ -151,6 +152,7 @@ export function AnswerCoveragePanel() {
   const hasSelectedFilters = partyFilter !== 'all' || 
     stateFilter !== 'all' || 
     coverageFilter !== 'all' || 
+    levelFilter !== 'all' ||
     searchQuery.length > 0 ||
     financeFilter !== 'all' ||
     deltaFilter !== 'all' ||
@@ -164,7 +166,8 @@ export function AnswerCoveragePanel() {
     party: partyFilter,
     state: stateFilter,
     coverageFilter,
-  }), [partyFilter, stateFilter, coverageFilter]);
+    level: levelFilter as any,
+  }), [partyFilter, stateFilter, coverageFilter, levelFilter]);
 
   const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, isLoadingMore, refetch: refetchCandidates } = useCandidatesAnswerCoverageProgressive(
     queryFilters,
@@ -1809,6 +1812,22 @@ export function AnswerCoveragePanel() {
                 <SelectItem value="none">None (0%)</SelectItem>
                 <SelectItem value="low">Low (&lt;50%)</SelectItem>
                 <SelectItem value="full">Full (100%)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Level:</span>
+            <Select value={levelFilter} onValueChange={setLevelFilter}>
+              <SelectTrigger className="w-[120px] h-7 text-xs bg-background">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="federal_legislative">Congress</SelectItem>
+                <SelectItem value="state_executive">State Exec</SelectItem>
+                <SelectItem value="state_legislative">State Leg</SelectItem>
+                <SelectItem value="local">Local</SelectItem>
               </SelectContent>
             </Select>
           </div>
