@@ -63,10 +63,11 @@ export function useSyncStats() {
         supabase
           .from('questions')
           .select('id, topic_id'),
-        // Get all topics
+        // Get all federal topics
         supabase
           .from('topics')
-          .select('id, name, icon'),
+          .select('id, name, icon')
+          .eq('scope', 'all'),
         // Get total answer count efficiently
         supabase
           .from('candidate_answers')
@@ -97,8 +98,10 @@ export function useSyncStats() {
       if (topicsResult.error) throw topicsResult.error;
 
       const candidates = candidatesResult.data || [];
-      const questions = questionsResult.data || [];
       const topics = topicsResult.data || [];
+      // Filter questions to only federal topics
+      const federalTopicIds = new Set(topics.map(t => t.id));
+      const questions = (questionsResult.data || []).filter(q => federalTopicIds.has(q.topic_id));
       const totalActualAnswers = answersCountResult.count || 0;
       
       const totalCandidates = candidates.length;
