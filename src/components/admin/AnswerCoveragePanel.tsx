@@ -439,7 +439,7 @@ export function AnswerCoveragePanel() {
   );
 
   // Reset to page 1 when any filter changes
-  const filterDependencies = [partyFilter, stateFilter, coverageFilter, searchQuery, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter];
+  const filterDependencies = [partyFilter, stateFilter, coverageFilter, levelFilter, searchQuery, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter];
   useMemo(() => {
     setCurrentPage(1);
   }, filterDependencies);
