@@ -1,41 +1,14 @@
 
-# Fix Self-Chain 401 Error in get-candidate-answers
+# Add "Fill Unanswered" Button in Answer Management
 
-## Problem
-When `get-candidate-answers` finishes processing a chunk of 5 questions, it tries to self-invoke via `fetch()` using `SUPABASE_SERVICE_ROLE_KEY` as the Bearer token. The Lovable gateway rejects this with HTTP 401 because it uses a signing-key auth system — the service role key is not a valid Bearer token for edge function invocation.
+## What
+Add a button next to the existing "Regenerate Topic" button that only sends unanswered questions (where `answerValue === null`) to the edge function, skipping already-answered ones.
 
-Result: Only the first chunk of 5 questions gets processed. The remaining 15 questions are never started. Joe Danielsen processed 5/20 local questions before stalling.
+## Changes
 
-## Fix
+### `src/components/admin/CandidateAnswersDialog.tsx`
+1. Add a new handler `handleFillUnanswered` that filters `selectedTopic.questions` to only those with `answerValue === null`, then calls `get-candidate-answers` with just those question IDs (without `forceRegenerate`).
+2. Add a "Fill Unanswered" button in the topic header bar (line ~536-548), next to the existing "Regenerate Topic" button. Disabled when there are no unanswered questions or when a job is running.
+3. Track a separate loading state (`fillingTopicId`) for this button.
 
-Change the self-chaining mechanism to use the Supabase JS client's `functions.invoke()` method, which properly handles Lovable's auth system.
-
-### File: `supabase/functions/get-candidate-answers/index.ts`
-
-Replace the raw `fetch()` self-chain calls (lines ~1149-1168 and ~1182-1195) with:
-
-```typescript
-const chainClient = createClient(supabaseUrl, supabaseKey);
-const { error: chainError } = await chainClient.functions.invoke('get-candidate-answers', {
-  body: {
-    candidateId,
-    questionIds: remainingIds,
-    forceRegenerate: true,
-    useBackground: true,
-    _isChainedChunk: true,
-  },
-});
-if (chainError) {
-  console.error(`[Background] Self-chain failed:`, chainError);
-} else {
-  console.log(`[Background] Self-chain invoked successfully for ${remaining.length} remaining questions`);
-}
-```
-
-Do the same for the error-recovery chain block.
-
-Also update the auth check (line ~1218) — the `isServiceRole` comparison is no longer needed since Lovable's gateway handles auth. Simplify to just validate via `getUser()` for browser-initiated calls, and allow `_isChainedChunk` requests that pass gateway auth.
-
-### Verification
-- Deploy the updated function
-- Check logs to confirm self-chain no longer returns 401
+No edge function changes needed — `get-candidate-answers` already supports receiving specific `questionIds` without `forceRegenerate`.
