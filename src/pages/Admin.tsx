@@ -12,7 +12,7 @@ import { ScoreFixesTab } from "@/pages/admin/tabs/ScoreFixesTab";
 import { BillSummaryDashboard } from "@/components/admin/BillSummaryDashboard";
 import { HiddenStatesPanel } from "@/components/admin/HiddenStatesPanel";
 import { BackgroundProcessingProvider } from "@/context/BackgroundProcessingContext";
-import { CivicOfficialsPanel } from "@/components/admin/CivicOfficialsPanel";
+
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags, CheckCircle2, Upload, MapPin } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags, CheckCircle2, Upload } from "lucide-react";
 import { QuestionManagementPanel } from "@/components/admin/QuestionManagementPanel";
 import { PartyAnswersPanel } from "@/components/admin/PartyAnswersPanel";
 import { EvidenceReviewPanel } from "@/components/admin/EvidenceReviewPanel";
@@ -430,10 +430,6 @@ export default function Admin() {
               <Users className="h-4 w-4" />
               Static Officials
             </TabsTrigger>
-            <TabsTrigger value="civic-officials" className="gap-2">
-              <MapPin className="h-4 w-4" />
-              Civic Officials
-            </TabsTrigger>
             <TabsTrigger value="overrides" className="gap-2">
               <FileEdit className="h-4 w-4" />
               Overrides ({overrides?.length || 0})
@@ -673,9 +669,6 @@ export default function Admin() {
             <PartyAnswersPanel />
           </TabsContent>
 
-          <TabsContent value="civic-officials">
-            <CivicOfficialsPanel />
-          </TabsContent>
 
           {/* Score Fixes - lazy loaded only when tab is active */}
           <TabsContent value="scores">

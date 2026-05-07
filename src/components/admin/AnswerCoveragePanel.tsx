@@ -39,7 +39,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit, Zap, MoreHorizontal, Check } from "lucide-react";
+import { Loader2, RefreshCw, BarChart3, Users, FileText, HelpCircle, Search, Plus, ExternalLink, CheckCircle2, Pause, Play, X, AlertTriangle, Calculator, Vote, DollarSign, Link2, RotateCcw, ChevronDown, Sparkles, Building2, Download, Copy, Edit, Zap, MoreHorizontal, Check, Brain } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CoverageTierBadge } from "@/components/CoverageTierBadge";
 import { CommitteeBreakdown } from "@/components/admin/CommitteeBreakdown";
@@ -144,6 +144,29 @@ export function AnswerCoveragePanel() {
   
   // Batch reconciliation state
   const [isBatchReconciling, setIsBatchReconciling] = useState(false);
+  
+  // Civic AI research state
+  const [civicResearchingIds, setCivicResearchingIds] = useState<Set<string>>(new Set());
+  
+  const handleCivicResearch = async (candidateId: string, name: string) => {
+    setCivicResearchingIds(prev => new Set(prev).add(candidateId));
+    try {
+      const { error } = await supabase.functions.invoke('populate-civic-answers', {
+        body: { candidateId },
+      });
+      if (error) throw error;
+      toast.success(`AI research started for ${name}`);
+    } catch (err) {
+      console.error('Error starting civic research:', err);
+      toast.error(`Failed to start research for ${name}`);
+    } finally {
+      setCivicResearchingIds(prev => {
+        const next = new Set(prev);
+        next.delete(candidateId);
+        return next;
+      });
+    }
+  };
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -439,7 +462,7 @@ export function AnswerCoveragePanel() {
   );
 
   // Reset to page 1 when any filter changes
-  const filterDependencies = [partyFilter, stateFilter, coverageFilter, searchQuery, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter];
+  const filterDependencies = [partyFilter, stateFilter, coverageFilter, levelFilter, searchQuery, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter];
   useMemo(() => {
     setCurrentPage(1);
   }, filterDependencies);
@@ -1758,6 +1781,7 @@ export function AnswerCoveragePanel() {
                 setScoreFilter('all');
                 setTierFilter('all');
                 setFecIdFilter('all');
+                setLevelFilter('all');
               }}
               className="text-xs h-8"
             >
@@ -2787,6 +2811,22 @@ export function AnswerCoveragePanel() {
                                 )}
                                 
                                 {/* AI Actions */}
+                                {candidate.source === 'civic' && (
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      handleCivicResearch(candidate.id, candidate.name);
+                                    }}
+                                    disabled={civicResearchingIds.has(candidate.id)}
+                                  >
+                                    {civicResearchingIds.has(candidate.id) ? (
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : (
+                                      <Brain className="h-4 w-4 mr-2 text-purple-500" />
+                                    )}
+                                    AI Research (Civic)
+                                  </DropdownMenuItem>
+                                )}
                                 {candidate.answerCount < candidate.totalQuestions && (
                                   <DropdownMenuItem
                                     onSelect={(e) => {
