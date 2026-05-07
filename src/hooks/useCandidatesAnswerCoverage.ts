@@ -564,11 +564,23 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
               };
             });
 
+            // Build a set of civic official name+state keys for dedup against federal records
+            const civicNameStateKeys = new Set<string>();
             for (const co of civicOfficials) {
               if (federalIds.has(co.candidate_id)) continue;
               const ac = civicAnswerMap[co.candidate_id] || { count: 0, sourced: 0 };
               results.push(makeCivicCoverage(co, ac.count, ac.sourced, totalQuestions || 0));
+              if (co.name && co.state) {
+                civicNameStateKeys.add(`${co.name.toLowerCase()}|${co.state.toLowerCase()}`);
+              }
             }
+
+            // Remove non-incumbent federal candidates that now have a civic override (e.g., transitioned to state office)
+            results = results.filter(r => {
+              if (r.source !== 'federal') return true;
+              const key = `${r.name.toLowerCase()}|${r.state.toLowerCase()}`;
+              return !civicNameStateKeys.has(key);
+            });
           }
         }
       }

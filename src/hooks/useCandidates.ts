@@ -148,8 +148,18 @@ export const useCandidates = () => {
   });
 };
 
+export interface PriorOffice {
+  office: string;
+  state: string;
+  district?: string;
+  start_year?: number;
+  end_year?: number;
+  candidate_id?: string;
+}
+
 export interface CandidateWithOverride extends Candidate {
   hasOverride?: boolean;
+  priorOffices?: PriorOffice[];
 }
 
 export const useCandidate = (id: string | undefined) => {
@@ -196,6 +206,7 @@ export const useCandidate = (id: string | undefined) => {
             topics: ts.topics,
           })),
           hasOverride: !!override,
+          priorOffices: (override?.prior_offices as unknown as PriorOffice[]) || [],
         };
 
         return mergedCandidate;
@@ -229,6 +240,7 @@ export const useCandidate = (id: string | undefined) => {
           last_donor_sync: null,
           topicScores: [],
           hasOverride: !!override,
+          priorOffices: (override?.prior_offices as unknown as PriorOffice[]) || [],
         };
         return mergedOfficial;
       }
@@ -262,6 +274,7 @@ export const useCandidate = (id: string | undefined) => {
             claimed_at: null,
             topicScores: [],
             hasOverride: true,
+            priorOffices: (override.prior_offices as unknown as PriorOffice[]) || [],
           } as CandidateWithOverride;
         }
         // Executive not found anywhere
