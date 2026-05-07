@@ -1,78 +1,56 @@
 
-## Problem
+# Add Local Topics to Onboarding
 
-Every time `useCandidatesAnswerCoverage` or `useCandidateAnswerStats` runs their `queryFn`, they each independently:
+## Overview
 
-1. Fetch federal topic IDs from `topics` table (1 query)
-2. Count all questions (1 query)
-3. Count federal-only questions (1 query)
+Add a new onboarding step where all users select their top 2 local topics (from the 5 local-scope topics), then answer 4 local questions (2 per selected local topic) as a separate quiz section after the federal quiz.
 
-That's **3 redundant queries per hook invocation** for data that almost never changes (topics and question counts are effectively static during a session). When the coverage hook refetches due to filter changes, it re-fetches these counts every time even though they haven't changed.
+## Flow Changes
 
-### Current impact
+Current: Welcome → Demographics → Topics (3 federal) → Quiz (20 federal) → Results
 
-| Query | When it runs | Cost |
-|-------|-------------|------|
-| `topics.select('id').eq('scope','all')` | Every queryFn call in both hooks | ~50ms round-trip |
-| `questions.select(count).head()` (all) | Every queryFn call in coverage hook | ~50ms round-trip |
-| `questions.select(count).head().in(topic_id)` | Every queryFn call in both hooks | ~50ms round-trip |
+New: Welcome → Demographics → Topics (3 federal) → Quiz (20 federal) → **Local Topics (2 local)** → **Local Quiz (4 local)** → Results
 
-With progressive loading (initial + full load), the coverage hook runs its queryFn **twice**, so that's 6 unnecessary queries just for topic/question metadata. Add `useCandidateAnswerStats` and it's 9 total queries for data that could be fetched once.
+## Changes
 
-### Real-world effect
+### 1. Onboarding.tsx — New steps and state
 
-- **~150-300ms wasted per admin page load** on redundant Supabase round-trips
-- Filter changes (party, state) trigger full refetches including these static counts
-- Progressive loading doubles the waste since initial + full queries both re-fetch
+- Add two new step values to `ExtendedOnboardingStep`: `'local_topics'` and `'local_quiz'`
+- Add state: `selectedLocalTopics` (Topic[]), `localQuizAnswers` (QuizAnswer[]), `currentLocalQuestionIndex`, `skippedLocalQuestionIds`
+- Fetch local topics separately from `dbTopics` (filter `scope === 'local'`)
+- Fetch canonical questions for selected local topic IDs using `useCanonicalQuestions(selectedLocalTopicIds)`
+- After the federal quiz results calculation, transition to `'local_topics'` instead of `'results'`
 
-## Proposed fix
+### 2. Local Topics step UI
 
-1. **Extract a shared `useQuestionCounts` hook** that fetches federal topic IDs and both question counts, cached via React Query with a long `staleTime` (5 minutes).
+- Similar to the federal topics step but labeled "Select Your Top 2 Local Topics"
+- Shows only the 5 local topics (🏫 🏠 🩺 💲 🚔)
+- `maxSelections={2}`
+- Back button returns to the last federal quiz question; Continue goes to local quiz
 
-2. **Both hooks consume `useQuestionCounts`** instead of fetching their own copies. Their `queryFn` receives the cached values, eliminating 2-3 queries per invocation.
+### 3. Local Quiz step UI
 
-3. The new hook returns `{ federalTopicIds, federalQuestions, allQuestions, isLoading }`.
+- Identical quiz UI to the federal quiz but for 4 local questions
+- Progress shows "Question X of 4"
+- After completing, combine federal + local answers, recalculate scores including local topics, then show results
 
-### Technical details
+### 4. Results and saving
 
-**New: `useQuestionCounts` (in same file)**
-```ts
-function useQuestionCounts() {
-  return useQuery({
-    queryKey: ['question-counts'],
-    staleTime: 5 * 60 * 1000, // 5 min — topics/questions rarely change
-    queryFn: async () => {
-      const { data: federalTopics } = await supabase
-        .from('topics').select('id').eq('scope', 'all');
-      const federalTopicIds = (federalTopics || []).map(t => t.id);
-      const [allQ, fedQ] = await Promise.all([
-        supabase.from('questions').select('*', { count: 'exact', head: true }),
-        supabase.from('questions').select('*', { count: 'exact', head: true })
-          .in('topic_id', federalTopicIds),
-      ]);
-      return {
-        federalTopicIds,
-        allQuestions: allQ.count || 0,
-        federalQuestions: fedQ.count || 0,
-      };
-    },
-  });
-}
-```
+- `calculateUserScore()` updated to include local topics in the weight map (selected local topics get weight 2/1)
+- `handleComplete()` saves all 5 topic IDs (3 federal + 2 local) via `save_user_topics`
+- All quiz answers (federal + local) saved together via `save_quiz_results`
 
-**Modified: `useCandidatesAnswerCoverage`**
-- Add `useQuestionCounts()` call at top
-- Remove lines 160-173 (inline topic/question fetching)
-- Use cached values from the shared hook
-- Add `enabled: !!questionCounts` to avoid running before counts are ready
+### 5. Welcome step update
 
-**Modified: `useCandidateAnswerStats`**
-- Same pattern — consume `useQuestionCounts()` instead of fetching its own copy
+- Update welcome text: "Select Your Top 3 Topics" → also mention "Top 2 Local Topics"
+- Update "Answer 20 Questions" → "Answer 24 Questions" (20 federal + 4 local)
 
-### What does NOT change
+### 6. Memory update
 
-- No database schema changes
-- No API changes
-- No visible UI changes
-- All existing filtering, progressive loading, and display logic stays the same
-- The denominator logic (240 for federal, 340 for local) is preserved exactly
+- Update topic architecture memory to note that local topics now appear in user onboarding quiz
+
+## Technical Notes
+
+- No database changes needed — `save_user_topics` and `save_quiz_results` RPCs already handle arbitrary topic IDs and answers
+- `useCanonicalQuestions` hook already exists and filters by topic IDs + `is_onboarding_canonical`
+- The 5 local topics must have canonical onboarding questions (2 per topic) already seeded in the DB — if not present, they need to be created via admin
