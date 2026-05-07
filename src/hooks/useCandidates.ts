@@ -240,6 +240,7 @@ export const useCandidate = (id: string | undefined) => {
           last_donor_sync: null,
           topicScores: [],
           hasOverride: !!override,
+          priorOffices: (override?.prior_offices as unknown as PriorOffice[]) || [],
         };
         return mergedOfficial;
       }
