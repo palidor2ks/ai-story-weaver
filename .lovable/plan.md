@@ -1,37 +1,21 @@
 
 ## Problem
 
-When a user's civic officials are fetched (via Open States / GitHub), the results are returned ephemerally and never saved. Each user hitting the same officials triggers redundant lookups, and no `candidate_answers` are ever generated for these officials — meaning comparisons can't work.
+Civic officials added via the Open States API (e.g. Kevin Egan) are persisted to `candidate_overrides` but with NULL values for name, party, office, and state. This is caused by the upsert using `ignoreDuplicates: true`, which skips updates on existing records. Additionally, these officials aren't visible in the main Candidates tab on the admin page — they only appear in the Overrides tab as blank rows.
 
-## Plan
+## Fix 1: Fix the upsert to actually save data
 
-### 1. Persist officials to `candidate_overrides` in `fetch-civic-officials`
+In `fetch-civic-officials/index.ts`, change `ignoreDuplicates: true` to `ignoreDuplicates: false` so that when a civic official record already exists, it gets updated with the correct name/party/office/state data.
 
-After assembling the officials list, upsert each official into `candidate_overrides` (using service role) with:
-- `candidate_id` = the official's ID (e.g. `openstates_ocd-person_...`)
-- `name`, `party`, `office`, `state`, `district`, `image_url`
-- `is_active = true`
-- Skip if the record already exists (upsert on `candidate_id`)
+Also fix the 4 existing broken records in the database by running an update.
 
-This ensures the official is discoverable by other users and the comparison system.
+## Fix 2: Show civic officials in admin Candidates management
 
-### 2. Queue AI answer population for new officials
+Add civic officials (from `candidate_overrides` where `candidate_id` starts with `openstates_`) to the admin's main candidate management view alongside senators and representatives. This involves:
 
-After persisting, check which officials do NOT yet have `candidate_answers`. For those, call `populate-candidate-answers` in the background (via `EdgeRuntime.waitUntil`) to research and store their positions using the existing Perplexity deep-research pipeline.
+- In the Admin page, merge data from `candidates` table with civic-official records from `candidate_overrides` into a unified candidate list
+- Add a "Source" badge (e.g. "Civic API", "Federal") so admins can distinguish data origins
+- Link each row to the existing `/candidate/:id` profile page for editing
+- Add filtering by source type
 
-To avoid blocking the response, the answer population runs as a background task. A `last_answers_sync` timestamp on `candidate_overrides` prevents re-processing.
-
-### 3. Update `useCandidateAnswers` hook to also check `candidate_overrides`
-
-Currently `useCandidateAnswers` may only look up candidates in the `candidates` table. Ensure it also resolves officials stored in `candidate_overrides` so the comparison card can find their answers.
-
-### Technical details
-
-**Edge function changes** (`fetch-civic-officials/index.ts`):
-- After line ~727, add a `persistOfficials()` call using service role client
-- Upsert into `candidate_overrides` table (already has the right schema: `candidate_id`, `name`, `party`, `office`, `state`, `district`, `image_url`)
-- For officials without answers, invoke `populate-candidate-answers` in background
-
-**No migration needed** — `candidate_overrides` already has all required columns.
-
-**No frontend changes needed** — `useCandidateAnswers` already queries by `candidate_id` which matches the IDs used for civic officials.
+This lets admins manage local/state officials with the same tools used for federal candidates — viewing answers, triggering research, editing profiles, etc.

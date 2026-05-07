@@ -1,0 +1,1 @@
+DELETE FROM candidate_overrides WHERE candidate_id LIKE 'openstates_%' AND name IS NULL;

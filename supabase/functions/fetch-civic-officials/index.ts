@@ -724,7 +724,7 @@ async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader
 
     const { error: upsertError } = await supabase
       .from('candidate_overrides')
-      .upsert(overrides, { onConflict: 'candidate_id', ignoreDuplicates: true });
+      .upsert(overrides, { onConflict: 'candidate_id', ignoreDuplicates: false });
 
     if (upsertError) {
       console.error('[Persist] Error upserting officials:', upsertError);
