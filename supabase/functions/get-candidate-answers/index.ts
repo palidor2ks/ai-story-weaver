@@ -1216,6 +1216,11 @@ Deno.serve(async (req) => {
       else {
         const { data: staticOfficial } = await supabase.from('static_officials').select('id, name, party, office, state').eq('id', candidateId).maybeSingle();
         if (staticOfficial) officialInfo = staticOfficial;
+        else {
+          // Fallback: civic officials stored in candidate_overrides
+          const { data: override } = await supabase.from('candidate_overrides').select('candidate_id, name, party, office, state').eq('candidate_id', candidateId).maybeSingle();
+          if (override) officialInfo = { id: override.candidate_id, name: override.name, party: override.party, office: override.office, state: override.state };
+        }
       }
     }
 
