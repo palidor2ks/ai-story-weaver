@@ -486,39 +486,33 @@ async function fetchLocalOfficialsFromDB(state: string): Promise<OfficialInfo[]>
 
 // Geocode address to get coordinates
 async function geocodeAddress(address: string): Promise<{ lat: number, lng: number } | null> {
-  // Try GOOGLE_PLACES_API_KEY first, then GOOGLE_CIVIC_API_KEY as fallback
-  const GOOGLE_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY') || Deno.env.get('GOOGLE_CIVIC_API_KEY');
-  if (!GOOGLE_API_KEY) {
-    console.log('[Geocode] No Google API key available (checked GOOGLE_PLACES_API_KEY and GOOGLE_CIVIC_API_KEY)');
-    return null;
-  }
-
   try {
+    // Use Census Bureau geocoder (free, no API key needed) — same as geocode-address edge function
     const encodedAddress = encodeURIComponent(address);
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${GOOGLE_API_KEY}`;
+    const url = `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodedAddress}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`;
     
-    console.log(`[Geocode] Requesting geocode for: "${address}"`);
+    console.log(`[Geocode] Census geocoding for: "${address}"`);
     const response = await fetch(url);
     if (!response.ok) {
-      console.error(`[Geocode] HTTP error: ${response.status}`);
+      console.error(`[Geocode] Census API HTTP error: ${response.status}`);
       return null;
     }
 
     const data = await response.json();
-    console.log(`[Geocode] Response status: ${data.status}, results: ${data.results?.length || 0}`);
+    const addressMatch = data?.result?.addressMatches?.[0];
     
-    if (data.status === 'REQUEST_DENIED') {
-      console.error(`[Geocode] API request denied: ${data.error_message || 'unknown reason'}`);
+    if (!addressMatch) {
+      console.log('[Geocode] No address matches from Census');
       return null;
     }
-    
-    if (data.status === 'OK' && data.results?.length > 0) {
-      const location = data.results[0].geometry.location;
-      console.log(`[Geocode] Found coordinates: ${location.lat}, ${location.lng} (${data.results[0].formatted_address})`);
-      return { lat: location.lat, lng: location.lng };
+
+    const coords = addressMatch.coordinates;
+    if (coords?.x && coords?.y) {
+      console.log(`[Geocode] Found coordinates: ${coords.y}, ${coords.x} (${addressMatch.matchedAddress})`);
+      return { lat: coords.y, lng: coords.x };
     }
 
-    console.log(`[Geocode] No results found (status: ${data.status})`);
+    console.log('[Geocode] No coordinates in Census response');
     return null;
   } catch (error) {
     console.error('[Geocode] Error:', error);
