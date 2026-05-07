@@ -41,13 +41,15 @@ export const Onboarding = () => {
   // Fetch ALL canonical onboarding questions (20 total - 2 per each of 10 topics)
   const { data: canonicalQuestions = [], isLoading: questionsLoading } = useAllCanonicalQuestions();
 
-  // Transform database topics to app format
-  const topics: Topic[] = dbTopics.map(t => ({
-    id: t.id,
-    name: t.name,
-    icon: t.icon,
-    weight: t.weight || 1,
-  }));
+  // Transform database topics to app format — exclude local-only topics from quiz
+  const topics: Topic[] = dbTopics
+    .filter(t => (t as any).scope !== 'local')
+    .map(t => ({
+      id: t.id,
+      name: t.name,
+      icon: t.icon,
+      weight: t.weight || 1,
+    }));
 
   // Transform questions to app format
   const questions = useMemo(() => canonicalQuestions.map(q => ({
