@@ -1712,6 +1712,7 @@ export function AnswerCoveragePanel() {
             jobs={backgroundJobs}
             onClearJob={removeBackgroundJob}
             onClearAll={clearAllBackgroundJobs}
+            onRetryJob={retryBackgroundJob}
           />
         )}
 
