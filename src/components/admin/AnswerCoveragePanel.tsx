@@ -2811,6 +2811,22 @@ export function AnswerCoveragePanel() {
                                 )}
                                 
                                 {/* AI Actions */}
+                                {candidate.source === 'civic' && (
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      e.preventDefault();
+                                      handleCivicResearch(candidate.id, candidate.name);
+                                    }}
+                                    disabled={civicResearchingIds.has(candidate.id)}
+                                  >
+                                    {civicResearchingIds.has(candidate.id) ? (
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : (
+                                      <Brain className="h-4 w-4 mr-2 text-purple-500" />
+                                    )}
+                                    AI Research (Civic)
+                                  </DropdownMenuItem>
+                                )}
                                 {candidate.answerCount < candidate.totalQuestions && (
                                   <DropdownMenuItem
                                     onSelect={(e) => {
