@@ -332,7 +332,7 @@ async function fetchOpenStatesOfficials(
       legislatorsUrl = `https://v3.openstates.org/people.geo?lat=${lat}&lng=${lng}`;
       console.log(`[Open States] Using geo endpoint: ${legislatorsUrl}`);
     } else {
-      legislatorsUrl = `https://v3.openstates.org/people?jurisdiction=${state.toLowerCase()}&per_page=100`;
+      legislatorsUrl = `https://v3.openstates.org/people?jurisdiction=${state.toLowerCase()}&per_page=50`;
       console.log(`[Open States] Using jurisdiction endpoint: ${legislatorsUrl}`);
     }
 
