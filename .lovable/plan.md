@@ -1,30 +1,28 @@
 
 ## Problem
 
-The CandidateAnswersDialog filters topics by scope based on the candidate's office. Since Mikie Sherrill is now "Governor" (a local office), `isLocalOfficial('Governor')` returns `true`, and the dialog only shows **local** topics (5 topics). Her 240 federal-topic answers are hidden from the admin answer management view.
+The admin "Answers" column shows `X/340` for **all** candidates. But 340 is only correct for local officials (governor+below) who get all 17 topics. Federal legislators should show `X/240` (12 federal topics × 20 questions).
 
-Per project rules: "12 federal + 5 local topics (17 total). Local topics only for governor+below." This means local topics are **added** for governor+below — they should see all 17 topics, not just 5.
+The root cause is in `src/hooks/useCandidatesAnswerCoverage.ts`:
+- Line 160-162: fetches a single `totalQuestions` count from ALL questions (340) with no scope filter
+- Line 456 and 572: uses this same 340 for both federal and civic candidates
+
+The database function `calculate_coverage_tier` already handles this correctly with scope-aware counting, but the frontend hook doesn't.
 
 ## Fix
 
-In `src/components/admin/CandidateAnswersDialog.tsx` (line ~117-122): change the scope filter logic so that:
-- **Federal officials** (Senator, Representative): show only `scope = 'all'` topics (12 federal)  
-- **Local officials** (Governor and below): show **both** `scope = 'all'` AND `scope = 'local'` topics (all 17)
+**File: `src/hooks/useCandidatesAnswerCoverage.ts`**
 
-Change:
-```ts
-const scope = isLocalOfficial(office) ? 'local' : 'all';
-// .eq('scope', scope)
-```
-To:
-```ts
-if (isLocalOfficial(office)) {
-  // Governor+below: show ALL topics (federal + local)
-  // No scope filter needed — fetch all
-} else {
-  // Federal: only federal topics
-  query = query.eq('scope', 'all');
-}
-```
+1. Fetch TWO question counts in parallel:
+   - `federalQuestions`: count where topic scope = 'all' (240)
+   - `allQuestions`: count of all questions (340)
 
-This is a ~5-line change in one file.
+2. For federal candidates (lines ~395-456): use `federalQuestions` as their `totalQuestions`
+
+3. For civic officials (line ~572): use `allQuestions` as their `totalQuestions`
+
+4. In `useCandidateAnswerStats` (line ~648): same pattern — use scope-aware counts for percentage calculations
+
+5. `makeCivicCoverage` already accepts `totalQuestions` as a parameter, so we just pass the right value.
+
+This keeps the existing architecture and just passes the correct denominator based on candidate type.
