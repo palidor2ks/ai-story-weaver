@@ -1896,18 +1896,21 @@ export type Database = {
           icon: string
           id: string
           name: string
+          scope: string
           weight: number | null
         }
         Insert: {
           icon: string
           id: string
           name: string
+          scope?: string
           weight?: number | null
         }
         Update: {
           icon?: string
           id?: string
           name?: string
+          scope?: string
           weight?: number | null
         }
         Relationships: []
