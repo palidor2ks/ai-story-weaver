@@ -354,6 +354,7 @@ export function CandidateAnswersDialog({
 }: CandidateAnswersDialogProps) {
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [regeneratingTopicId, setRegeneratingTopicId] = useState<string | null>(null);
+  const [fillingTopicId, setFillingTopicId] = useState<string | null>(null);
   const { data: topics, isLoading, refetch } = useCandidateAnswersByTopic(candidateId, open);
   const { populateCandidateQuestion, isQuestionLoading } = usePopulateCandidateAnswers();
   const { jobs, addJob, removeJob, clearAllJobs, retryJob, isProcessing } = useBackgroundProcessing();
