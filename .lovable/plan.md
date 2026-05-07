@@ -1,50 +1,57 @@
 
-# Adding Images for Local Politicians
-
-## Current State
-
-- **Open States API** already provides `person.image` for many state legislators, and that URL is saved to `candidate_overrides.image_url` during the persist step (line 745 of `fetch-civic-officials`).
-- 3 out of 4 existing civic officials already have images. The issue is that **some officials have no image from Open States** (the field comes back null/empty).
-- The `OfficialAvatar` component already handles missing images with a party-colored initials fallback.
-
 ## Problem
 
-When Open States doesn't provide an image, there's no secondary source to fill it in. This affects some state legislators and most manually-added local officials.
+Mikie Sherrill appears twice in the admin AnswerCoveragePanel because she exists as two separate records:
+- **`candidates` table**: `S001207` — Representative, 240/340 answers, Tier 1
+- **`candidate_overrides` table**: `nj_governor_sherrill` — Governor, 11/340 answers, Tier 3
 
-## Proposed Solution
+The AnswerCoveragePanel merges both sources but only deduplicates by ID (which differs). This will happen for any politician who changes office.
 
-### 1. Web-search image enrichment during onboarding
+## Plan
 
-After persisting officials in `fetch-civic-officials`, for any official missing an image, use a web search to find an official headshot.
+### 1. Database: Add `prior_offices` column to `candidate_overrides`
 
-- Add a step in `persistAndResearchOfficials()` that checks for officials with empty `image_url`
-- For each, query a search API (Google Custom Search or similar) for `"{name}" {office} {state} official photo`
-- Save the first relevant result to `candidate_overrides.image_url`
+Add a JSONB column `prior_offices` to `candidate_overrides` to store historical positions:
+```json
+[
+  { "office": "Representative", "state": "NJ", "district": "11", "start_year": 2019, "end_year": 2025, "candidate_id": "S001207" }
+]
+```
 
-### 2. Manual image upload in admin panel
+### 2. Data migration: Merge Sherrill's records
 
-Add an image upload/URL input to the `CivicOfficialsPanel` so admins can manually set or override images for any civic official.
+- Update the `candidate_overrides` record for `nj_governor_sherrill`:
+  - Set `prior_offices` with her Representative history
+  - Migrate her 240 answers from `S001207` to `nj_governor_sherrill` (re-key the `candidate_id`)
+  - Copy her image, score, and other data from the federal record
+- Mark `S001207` in `candidates` as no longer incumbent (`is_incumbent = false`)
 
-- Add an edit dialog or inline URL input per official
-- Update `candidate_overrides.image_url` on save
-- Optionally support uploading to the existing `avatars` Supabase storage bucket
+### 3. Frontend: Dedup logic in AnswerCoveragePanel
 
-### 3. AI research image enrichment (alternative/complementary)
+Update the dedup check in `useCandidatesAnswerCoverage.ts` (line ~549) to also match by name + state, so that civic officials who were formerly in the `candidates` table don't appear twice. If a civic override exists for the same person, prefer the override (current role) and hide the old federal record.
 
-During the `populate-civic-answers` AI research step, also attempt to find an official photo URL and save it.
+### 4. Frontend: "Prior Positions" section on CandidateProfile
+
+Add a section to the candidate profile page that reads `prior_offices` from the override and displays prior roles (e.g., "US Representative, NJ-11 (2019-2025)").
+
+### 5. Admin: Merge tool (future)
+
+For now this will be a manual data operation. A general-purpose merge tool can be added later as more transitions occur.
 
 ---
 
-## Recommendation
+### Technical details
 
-**Start with option 2 (manual admin upload)** since it's the most reliable and doesn't require additional API keys. Then optionally layer on option 1 or 3 for automation.
+**Migration SQL:**
+- `ALTER TABLE candidate_overrides ADD COLUMN prior_offices JSONB DEFAULT '[]'`
 
-## Technical Changes
+**Data update (via insert tool):**
+- Update `nj_governor_sherrill` override with prior_offices, merged score data
+- Update `candidate_answers` to re-key 240 answers from `S001207` to `nj_governor_sherrill`
+- Set `candidates.is_incumbent = false` for `S001207`
 
-1. **`CivicOfficialsPanel.tsx`** — Add an image column showing the current photo (or initials fallback) and a button to edit the image URL or upload a file to the `avatars` bucket.
+**Dedup logic:**
+- In `useCandidatesAnswerCoverage.ts`, after building civic results, filter out any federal candidates where `is_incumbent = false` AND a civic override exists with matching name+state.
 
-2. **`candidate_overrides`** — Already has `image_url` column, no schema change needed.
-
-3. **(Optional) `fetch-civic-officials/index.ts`** — Could add a Google image search fallback for officials with no `person.image` from Open States, but this requires a Google Custom Search API key.
-
-No database migration needed — `image_url` already exists on `candidate_overrides`.
+**Profile UI:**
+- In `CandidateProfile.tsx`, fetch `prior_offices` from the override and render a "Prior Positions" card if non-empty.
