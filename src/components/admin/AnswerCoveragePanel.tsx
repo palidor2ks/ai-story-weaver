@@ -165,7 +165,8 @@ export function AnswerCoveragePanel() {
     party: partyFilter,
     state: stateFilter,
     coverageFilter,
-  }), [partyFilter, stateFilter, coverageFilter]);
+    level: levelFilter as any,
+  }), [partyFilter, stateFilter, coverageFilter, levelFilter]);
 
   const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, isLoadingMore, refetch: refetchCandidates } = useCandidatesAnswerCoverageProgressive(
     queryFilters,
