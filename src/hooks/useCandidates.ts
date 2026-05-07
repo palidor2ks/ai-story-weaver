@@ -251,7 +251,13 @@ export const useCandidate = (id: string | undefined) => {
                                id.startsWith('local_') || 
                                id.startsWith('state_') ||
                                id.startsWith('openstates') ||
-                               id.startsWith('federal_');
+                               id.startsWith('federal_') ||
+                               id.startsWith('nj_') ||
+                               id.startsWith('ny_') ||
+                               id.startsWith('ca_') ||
+                               id.startsWith('tx_') ||
+                               id.startsWith('fl_') ||
+                               id.startsWith('pa_');
       
       if (isNonCongressId) {
         // For executive IDs not in DB, return basic info from override if available
