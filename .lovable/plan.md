@@ -1,21 +1,29 @@
-
 ## Problem
 
-Mikie Sherrill was inaugurated as NJ Governor on Jan 20, 2026, with Dale Caldwell as Lt. Governor. However, Open States API either hasn't updated or has incorrect data — it returns Caldwell with a "Governor" title and may not include Sherrill at all. This means your civic officials list is **incomplete/wrong** for NJ executive officials.
+State legislators and executives (e.g., Kevin Egan, Mikie Sherrill as Governor) show no AI comparison summary on the user profile page. The `RepresentativeComparisonCard` requires `repAnswers.length > 0` to trigger AI summary generation, but all civic officials currently have **0 answers** in `candidate_answers`.
 
-This isn't a code bug — it's an **upstream data staleness** issue with Open States. Your code correctly queries the API and filters by title, but the API has bad data.
+The `populate-candidate-answers` / `batch-populate-answers` flow only runs for federal candidates. Civic officials fetched via Open States are never queued for AI answer population.
 
-## Proposed Fixes
+## Root Cause
 
-### Fix 1: Add Sherrill via the official_transitions table (quick fix)
-Use the existing `official_transitions` system to add Mikie Sherrill as the incoming NJ Governor and correct Dale Caldwell to Lt. Governor. This data is already supported by the `applyTransitions()` function in your edge function. This is the fastest path to correcting the data.
+The answer population pipeline doesn't include civic officials. Without answers, the comparison card correctly skips AI generation (there's nothing to compare).
 
-### Fix 2: Improve executive fallback (longer-term)
-Add a secondary data source for state governors — e.g., scrape the National Governors Association (NGA) list or use a static config for the 50 governors. This ensures governor data is accurate even when Open States lags behind elections.
+## Proposed Fix
 
-### Fix 3: Log all excluded executives for debugging
-Currently the code silently skips non-"governor" titled executives. Add logging to show which executives were returned but filtered out, so you can spot data issues faster.
+### 1. Add civic officials to the batch answer population pipeline
 
-## Recommendation
+Modify `batch-populate-answers` (or create a trigger in the civic officials fetch flow) to automatically queue newly fetched civic officials for AI answer population. When a civic official is added to `candidate_overrides`, it should be eligible for the same Perplexity-based research that federal candidates get.
 
-Start with **Fix 1** (add transition records to correct the data immediately) + **Fix 3** (add debug logging). Fix 2 can be done later as a more robust solution.
+### 2. Add a manual "Populate Answers" button in the Civic Officials admin panel
+
+Allow admins to trigger answer population for specific civic officials from the admin panel, similar to how it works for federal candidates.
+
+### 3. (Optional) Show a "No data yet" message instead of hiding the summary
+
+Currently, if there are no rep answers, the comparison section is silently hidden. We could show a message like "AI analysis pending — answers are being researched" so users know it's coming.
+
+## Technical Details
+
+- The `populate-candidate-answers` edge function already works with any `candidate_id` — it queries questions and calls Perplexity to research positions. It should work for state officials without modification.
+- The `batch-populate-answers` function queries candidates to process — this query needs to include civic officials (those with `openstates_` or manually added IDs).
+- The civic officials panel (`CivicOfficialsPanel.tsx`) needs a "Populate Answers" action button per official.
