@@ -1,32 +1,26 @@
-## Merge Civic Officials into Main Candidates Table
 
-Remove the separate "Civic Officials" tab and integrate state/local officials directly into the existing Answer Coverage panel (the main candidates table with filters).
+## Problem
+
+"Regenerate Topic" fails for two reasons found in the edge function logs:
+
+### 1. Perplexity API quota exhausted
+The Perplexity API key has exceeded its quota. Every research call returns `401 insufficient_quota`. This affects **all** candidates, not just civic officials.
+
+**Fix:** You need to add credits to your Perplexity account at https://www.perplexity.ai/settings/api. No code change needed for this — it's a billing issue.
+
+### 2. Foreign key constraint blocks civic officials
+`candidate_answers` has a FK `candidate_answers_candidate_id_fkey` pointing to `candidates.id`. Civic officials (openstates_*, nj_*, etc.) only exist in `candidate_overrides`, not in `candidates`. So even when Perplexity returns valid answers, saving them fails with:
+
+```
+insert or update on table "candidate_answers" violates foreign key constraint "candidate_answers_candidate_id_fkey"
+```
+
+**Fix:** Drop the FK constraint so `candidate_answers.candidate_id` can reference either `candidates` or `candidate_overrides` records.
 
 ### Changes
 
-#### 1. Expand `useCandidatesAnswerCoverage` hook to include civic officials
+1. **Migration: Drop the FK constraint** on `candidate_answers.candidate_id → candidates.id`. This allows storing answers for civic officials who only exist in `candidate_overrides`.
 
-Currently queries only `candidates` table. Add a parallel query to `candidate_overrides` for civic official records (`openstates_%`, `nj_%`, etc.), then merge them into the same `CandidateAnswerCoverage[]` array.
+2. **Migration: Drop the FK constraint** on `candidate_answers.question_id → questions.id` is NOT needed (questions are shared). Only the candidate FK is the issue.
 
-Civic officials won't have FEC data, vote sync data, or committee data — those fields will default to zero/null. They will have answer counts from `candidate_answer_coverage_stats` (same table used for federal candidates).
-
-Add a new field `source: 'federal' | 'civic'` to `CandidateAnswerCoverage` so the UI can distinguish them.
-
-#### 2. Add a "Level" filter to `AnswerCoveragePanel`
-
-Add a new filter dropdown: `Level: All | Federal | State Executive | State Legislature | Local` so admins can filter by government level. This replaces the need for a separate tab.
-
-#### 3. Add the AI Research (🧠) button to the table rows for civic officials
-
-Move the "Populate Answers" action from the separate panel into the existing table's action menu. For civic officials, show the Brain icon to trigger `populate-civic-answers`. Federal candidates keep their existing Congress.gov sync action.
-
-#### 4. Remove the "Civic Officials" tab from Admin.tsx
-
-Remove the `TabsTrigger` and `TabsContent` for `civic-officials`, and the `CivicOfficialsPanel` import.
-
-### Technical Details
-
-- `candidate_overrides` has: `candidate_id`, `name`, `party`, `office`, `state`, `district`, `overall_score`, `is_active`
-- The merge will union federal candidates (from `candidates` table) with civic officials (from `candidate_overrides` where `candidate_id` matches civic patterns)
-- Civic officials will show "N/A" for FEC-specific columns (donor count, committee count, finance data)
-- A `Badge` or icon will distinguish civic officials from federal candidates in the table
+No edge function or frontend code changes needed — the code already works correctly, it's just blocked by the database constraint and the exhausted API quota.
