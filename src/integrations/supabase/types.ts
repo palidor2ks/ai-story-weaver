@@ -361,20 +361,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "candidate_answers_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "candidate_voting_coverage"
-            referencedColumns: ["candidate_id"]
-          },
-          {
-            foreignKeyName: "candidate_answers_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "candidates"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "candidate_answers_question_id_fkey"
             columns: ["question_id"]
             isOneToOne: false
@@ -2230,20 +2216,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "candidate_answers_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "candidate_voting_coverage"
-            referencedColumns: ["candidate_id"]
-          },
-          {
-            foreignKeyName: "candidate_answers_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "candidates"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "questions_topic_id_fkey"
             columns: ["topic_id"]
             isOneToOne: false
@@ -2258,22 +2230,7 @@ export type Database = {
           candidate_id: string | null
           sourced_count: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "candidate_answers_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "candidate_voting_coverage"
-            referencedColumns: ["candidate_id"]
-          },
-          {
-            foreignKeyName: "candidate_answers_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "candidates"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       candidate_donor_counts: {
         Row: {

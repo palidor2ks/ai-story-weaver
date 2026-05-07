@@ -1,0 +1,1 @@
+ALTER TABLE public.candidate_answers DROP CONSTRAINT IF EXISTS candidate_answers_candidate_id_fkey;
