@@ -1,0 +1,1 @@
+UPDATE candidate_overrides SET office = 'Lieutenant Governor' WHERE candidate_id = 'openstates_ocd-person_45caac41-0f71-4243-99cc-bb18b7b82386';

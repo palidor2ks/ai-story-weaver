@@ -415,7 +415,10 @@ async function fetchOpenStatesOfficials(
         const title = (role.title || '').toLowerCase();
         
         // Only include governors and lieutenant governors
-        if (!title.includes('governor')) continue;
+        if (!title.includes('governor')) {
+          console.log(`[Open States] SKIPPING executive "${person.name}" — title "${role.title}" does not contain "governor"`);
+          continue;
+        }
 
         const isLtGov = title.includes('lieutenant') || title.includes('lt.');
         
@@ -602,48 +605,69 @@ function applyTransitions(officials: OfficialInfo[], transitions: OfficialTransi
     return official;
   });
 
-  // Add incoming officials who aren't yet in the list
-  const incomingOfficials: OfficialInfo[] = [];
+  // Add incoming officials who aren't yet in the list (pre-inauguration)
+  // AND add already-inaugurated officials missing from Open States (data correction)
+  const additionalOfficials: OfficialInfo[] = [];
   
   for (const transition of transitions) {
     const inaugDate = new Date(transition.inauguration_date);
     const isBeforeInauguration = today < inaugDate;
     
-    if (!isBeforeInauguration) continue; // Already inaugurated, skip
-    
     // Check if this person is already in our list
-    const alreadyInList = officials.some(o => 
+    const alreadyInList = updatedOfficials.some(o => 
       o.name.toLowerCase() === transition.official_name.toLowerCase()
     );
     
     if (!alreadyInList) {
-      // Add as incoming official
-      incomingOfficials.push({
-        id: `transition_${transition.id}`,
-        name: transition.official_name,
-        party: (transition.party as 'Democrat' | 'Republican' | 'Independent' | 'Other') || 'Other',
-        office: transition.new_office,
-        level: transition.new_office.toLowerCase().includes('governor') 
-          ? 'state_executive' 
-          : transition.new_office.toLowerCase().includes('senator') || transition.new_office.toLowerCase().includes('representative')
-            ? 'state_legislative'
-            : 'local',
-        state: transition.state,
-        district: transition.district || undefined,
-        image_url: '',
-        is_incumbent: false,
-        overall_score: null,
-        coverage_tier: 'tier_2',
-        confidence: transition.ai_confidence || 'medium',
-        transition_status: 'incoming',
-        new_office: transition.new_office,
-        inauguration_date: transition.inauguration_date,
-      });
+      const level: OfficeLevelType = transition.new_office.toLowerCase().includes('governor') 
+        ? 'state_executive' 
+        : transition.new_office.toLowerCase().includes('senator') || transition.new_office.toLowerCase().includes('representative')
+          ? 'state_legislative'
+          : 'local';
+
+      if (isBeforeInauguration) {
+        // Future inauguration — add as incoming
+        additionalOfficials.push({
+          id: `transition_${transition.id}`,
+          name: transition.official_name,
+          party: (transition.party as 'Democrat' | 'Republican' | 'Independent' | 'Other') || 'Other',
+          office: transition.new_office,
+          level,
+          state: transition.state,
+          district: transition.district || undefined,
+          image_url: '',
+          is_incumbent: false,
+          overall_score: null,
+          coverage_tier: 'tier_2',
+          confidence: transition.ai_confidence || 'medium',
+          transition_status: 'incoming',
+          new_office: transition.new_office,
+          inauguration_date: transition.inauguration_date,
+        });
+      } else {
+        // Already inaugurated but missing from Open States — add as current
+        console.log(`[Transitions] Adding missing inaugurated official: ${transition.official_name} as ${transition.new_office}`);
+        additionalOfficials.push({
+          id: `transition_${transition.id}`,
+          name: transition.official_name,
+          party: (transition.party as 'Democrat' | 'Republican' | 'Independent' | 'Other') || 'Other',
+          office: transition.new_office,
+          level,
+          state: transition.state,
+          district: transition.district || undefined,
+          image_url: '',
+          is_incumbent: true,
+          overall_score: null,
+          coverage_tier: 'tier_3',
+          confidence: transition.ai_confidence || 'medium',
+          transition_status: 'current',
+        });
+      }
     }
   }
 
-  console.log(`[Transitions] Added ${incomingOfficials.length} incoming officials`);
-  return [...updatedOfficials, ...incomingOfficials];
+  console.log(`[Transitions] Added ${additionalOfficials.length} additional officials (incoming + corrections)`);
+  return [...updatedOfficials, ...additionalOfficials];
 }
 
 // =============================================================================
@@ -724,7 +748,7 @@ async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader
 
     const { error: upsertError } = await supabase
       .from('candidate_overrides')
-      .upsert(overrides, { onConflict: 'candidate_id', ignoreDuplicates: false });
+      .upsert(overrides, { onConflict: 'candidate_id', ignoreDuplicates: true });
 
     if (upsertError) {
       console.error('[Persist] Error upserting officials:', upsertError);
@@ -807,6 +831,42 @@ async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader
   }
 }
 
+// Fetch manually-added civic officials from candidate_overrides (non-openstates, non-federal)
+async function fetchManualCivicOverrides(state: string): Promise<OfficialInfo[]> {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data, error } = await supabase
+      .from('candidate_overrides')
+      .select('candidate_id, name, party, office, state, district, image_url')
+      .eq('state', state.toUpperCase())
+      .eq('is_active', true)
+      .not('candidate_id', 'like', 'openstates_%'); // openstates ones are added via Open States API
+
+    if (error) {
+      console.error('[Manual Overrides] Error:', error);
+      return [];
+    }
+
+    return (data || []).filter(o => o.name).map(o => ({
+      id: o.candidate_id,
+      name: o.name!,
+      party: mapParty(o.party || undefined),
+      office: o.office || 'Official',
+      level: (o.office?.toLowerCase().includes('governor') ? 'state_executive' : 'local') as OfficeLevelType,
+      state: o.state || state.toUpperCase(),
+      district: o.district || undefined,
+      image_url: o.image_url || '',
+      is_incumbent: true,
+      overall_score: null,
+      coverage_tier: 'tier_3',
+      confidence: 'low',
+    }));
+  } catch (error) {
+    console.error('[Manual Overrides] Exception:', error);
+    return [];
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -865,12 +925,13 @@ serve(async (req) => {
     // First fetch federal legislator names to filter from Open States results
     const federalLegislatorNames = await fetchFederalLegislatorNames(state);
 
-    // Fetch from all sources in parallel (including transitions)
-    const [federalExecutive, openStatesResult, localOfficials, transitions] = await Promise.all([
+    // Fetch from all sources in parallel (including transitions and manual overrides)
+    const [federalExecutive, openStatesResult, localOfficials, transitions, manualOverrides] = await Promise.all([
       fetchFederalExecutiveFromGitHub(),
       fetchOpenStatesOfficials(state, coords?.lat, coords?.lng, federalLegislatorNames),
       fetchLocalOfficialsFromDB(state),
       fetchOfficialTransitions(state),
+      fetchManualCivicOverrides(state),
     ]);
 
     const { legislators: stateLegislative, governors: stateExecutiveFromAPI } = openStatesResult;
@@ -881,6 +942,7 @@ serve(async (req) => {
     console.log(`State Legislative: ${stateLegislative.length} (from Open States API)`);
     console.log(`Local: ${localOfficials.length} (from DB - no free API exists)`);
     console.log(`Transitions: ${transitions.length} (from DB)`);
+    console.log(`Manual Overrides: ${manualOverrides.length} (from candidate_overrides)`);
 
     // Combine all officials
     let allOfficials = [
@@ -888,6 +950,7 @@ serve(async (req) => {
       ...stateExecutiveFromAPI,
       ...stateLegislative,
       ...localOfficials,
+      ...manualOverrides,
     ];
 
     // Apply transition data (mark outgoing, add incoming officials)
