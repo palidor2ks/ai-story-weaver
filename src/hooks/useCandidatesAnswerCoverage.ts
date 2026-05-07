@@ -148,29 +148,41 @@ function makeCivicCoverage(
   };
 }
 
-export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean; limit?: number }) {
-  const limit = options?.limit;
-  
+// Shared hook: caches federal topic IDs and question counts (rarely change)
+function useQuestionCounts() {
   return useQuery({
-    queryKey: ['candidates-answer-coverage', filters, limit ?? 'all'],
-    enabled: options?.enabled !== false, // Default to true, but allow disabling
-    placeholderData: (previousData) => previousData, // Keep previous data during filter transitions
-    queryFn: async (): Promise<CandidateAnswerCoverage[]> => {
-      // Get federal topic IDs first, then count questions per scope
+    queryKey: ['question-counts'],
+    staleTime: 5 * 60 * 1000, // 5 min — topics/questions rarely change
+    queryFn: async () => {
       const { data: federalTopics } = await supabase
         .from('topics')
         .select('id')
         .eq('scope', 'all');
       const federalTopicIds = (federalTopics || []).map(t => t.id);
-
-      const [allQResult, federalQResult] = await Promise.all([
+      const [allQ, fedQ] = await Promise.all([
         supabase.from('questions').select('*', { count: 'exact', head: true }),
         supabase.from('questions').select('*', { count: 'exact', head: true }).in('topic_id', federalTopicIds),
       ]);
+      if (allQ.error) throw allQ.error;
+      return {
+        federalTopicIds,
+        allQuestions: allQ.count || 0,       // 340 (17 topics)
+        federalQuestions: fedQ.count || 0,   // 240 (12 federal topics)
+      };
+    },
+  });
+}
 
-      if (allQResult.error) throw allQResult.error;
-      const allQuestions = allQResult.count || 0;       // 340 (17 topics)
-      const federalQuestions = federalQResult.count || 0; // 240 (12 federal topics)
+export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean; limit?: number }) {
+  const limit = options?.limit;
+  const { data: questionCounts } = useQuestionCounts();
+  
+  return useQuery({
+    queryKey: ['candidates-answer-coverage', filters, limit ?? 'all'],
+    enabled: options?.enabled !== false && !!questionCounts,
+    placeholderData: (previousData) => previousData, // Keep previous data during filter transitions
+    queryFn: async (): Promise<CandidateAnswerCoverage[]> => {
+      const { allQuestions, federalQuestions } = questionCounts!;
 
       // Get candidates with coverage tier and confidence
       let candidatesQuery = supabase
