@@ -156,12 +156,21 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
     enabled: options?.enabled !== false, // Default to true, but allow disabling
     placeholderData: (previousData) => previousData, // Keep previous data during filter transitions
     queryFn: async (): Promise<CandidateAnswerCoverage[]> => {
-      // Get total questions count
-      const { count: totalQuestions, error: questionsError } = await supabase
-        .from('questions')
-        .select('*', { count: 'exact', head: true });
+      // Get federal topic IDs first, then count questions per scope
+      const { data: federalTopics } = await supabase
+        .from('topics')
+        .select('id')
+        .eq('scope', 'all');
+      const federalTopicIds = (federalTopics || []).map(t => t.id);
 
-      if (questionsError) throw questionsError;
+      const [allQResult, federalQResult] = await Promise.all([
+        supabase.from('questions').select('*', { count: 'exact', head: true }),
+        supabase.from('questions').select('*', { count: 'exact', head: true }).in('topic_id', federalTopicIds),
+      ]);
+
+      if (allQResult.error) throw allQResult.error;
+      const allQuestions = allQResult.count || 0;       // 340 (17 topics)
+      const federalQuestions = federalQResult.count || 0; // 240 (12 federal topics)
 
       // Get candidates with coverage tier and confidence
       let candidatesQuery = supabase
