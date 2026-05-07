@@ -646,6 +646,116 @@ function applyTransitions(officials: OfficialInfo[], transitions: OfficialTransi
   return [...updatedOfficials, ...incomingOfficials];
 }
 
+// =============================================================================
+// PERSIST OFFICIALS & TRIGGER AI RESEARCH (background)
+// =============================================================================
+
+async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader: string) {
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Filter to state/local officials only (federal are already in candidates table)
+    const persistable = officials.filter(o => 
+      o.level === 'state_executive' || o.level === 'state_legislative' || o.level === 'local'
+    );
+
+    if (persistable.length === 0) {
+      console.log('[Persist] No state/local officials to persist');
+      return;
+    }
+
+    console.log(`[Persist] Upserting ${persistable.length} officials to candidate_overrides`);
+
+    // Map party string to the enum type used in candidate_overrides
+    const mapPartyForDb = (party: string): string => {
+      if (party === 'Democrat' || party === 'Republican' || party === 'Independent') return party;
+      return 'Other';
+    };
+
+    // Upsert each official into candidate_overrides
+    const overrides = persistable.map(o => ({
+      candidate_id: o.id,
+      name: o.name,
+      party: mapPartyForDb(o.party),
+      office: o.office,
+      state: o.state,
+      district: o.district || null,
+      image_url: o.image_url || null,
+      is_active: true,
+    }));
+
+    const { error: upsertError } = await supabase
+      .from('candidate_overrides')
+      .upsert(overrides, { onConflict: 'candidate_id', ignoreDuplicates: true });
+
+    if (upsertError) {
+      console.error('[Persist] Error upserting officials:', upsertError);
+      return;
+    }
+
+    console.log(`[Persist] Successfully upserted ${overrides.length} officials`);
+
+    // Check which officials need answer generation
+    const officialIds = persistable.map(o => o.id);
+    const { data: existingAnswers } = await supabase
+      .from('candidate_answers')
+      .select('candidate_id')
+      .in('candidate_id', officialIds);
+
+    const idsWithAnswers = new Set((existingAnswers || []).map((a: any) => a.candidate_id));
+    const officialsNeedingResearch = persistable.filter(o => !idsWithAnswers.has(o.id));
+
+    if (officialsNeedingResearch.length === 0) {
+      console.log('[Persist] All officials already have answers cached');
+      return;
+    }
+
+    console.log(`[Persist] ${officialsNeedingResearch.length} officials need AI answer research`);
+
+    // Trigger get-candidate-answers for each official (sequentially to avoid overload)
+    for (const official of officialsNeedingResearch) {
+      try {
+        console.log(`[Persist] Triggering answer generation for ${official.name} (${official.id})`);
+        
+        const response = await fetch(
+          `${SUPABASE_URL}/functions/v1/get-candidate-answers`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': authHeader,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              candidateId: official.id,
+              candidateName: official.name,
+              candidateParty: official.party,
+              candidateOffice: official.office,
+              candidateState: official.state,
+              useBackground: true,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[Persist] Failed to trigger answers for ${official.name}: ${response.status} - ${errorText}`);
+        } else {
+          console.log(`[Persist] Successfully triggered answer generation for ${official.name}`);
+        }
+
+        // Small delay between calls to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (err) {
+        console.error(`[Persist] Error triggering answers for ${official.name}:`, err);
+      }
+    }
+
+    console.log(`[Persist] Finished triggering answer research for ${officialsNeedingResearch.length} officials`);
+  } catch (error) {
+    console.error('[Persist] Top-level error:', error);
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
