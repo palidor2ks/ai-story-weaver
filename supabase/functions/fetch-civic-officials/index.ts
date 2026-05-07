@@ -889,12 +889,13 @@ serve(async (req) => {
     // First fetch federal legislator names to filter from Open States results
     const federalLegislatorNames = await fetchFederalLegislatorNames(state);
 
-    // Fetch from all sources in parallel (including transitions)
-    const [federalExecutive, openStatesResult, localOfficials, transitions] = await Promise.all([
+    // Fetch from all sources in parallel (including transitions and manual overrides)
+    const [federalExecutive, openStatesResult, localOfficials, transitions, manualOverrides] = await Promise.all([
       fetchFederalExecutiveFromGitHub(),
       fetchOpenStatesOfficials(state, coords?.lat, coords?.lng, federalLegislatorNames),
       fetchLocalOfficialsFromDB(state),
       fetchOfficialTransitions(state),
+      fetchManualCivicOverrides(state),
     ]);
 
     const { legislators: stateLegislative, governors: stateExecutiveFromAPI } = openStatesResult;
@@ -905,6 +906,7 @@ serve(async (req) => {
     console.log(`State Legislative: ${stateLegislative.length} (from Open States API)`);
     console.log(`Local: ${localOfficials.length} (from DB - no free API exists)`);
     console.log(`Transitions: ${transitions.length} (from DB)`);
+    console.log(`Manual Overrides: ${manualOverrides.length} (from candidate_overrides)`);
 
     // Combine all officials
     let allOfficials = [
@@ -912,6 +914,7 @@ serve(async (req) => {
       ...stateExecutiveFromAPI,
       ...stateLegislative,
       ...localOfficials,
+      ...manualOverrides,
     ];
 
     // Apply transition data (mark outgoing, add incoming officials)
