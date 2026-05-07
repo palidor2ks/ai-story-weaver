@@ -364,6 +364,38 @@ export const CandidateProfile = () => {
           />
         </div>
 
+        {/* Prior Positions Section */}
+        {candidate?.priorOffices && candidate.priorOffices.length > 0 && (
+          <div className="mb-8">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-muted-foreground" />
+                  Prior Positions
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {candidate.priorOffices.map((po, idx) => (
+                    <div key={idx} className="flex items-center justify-between py-2 border-b last:border-b-0 border-border">
+                      <div>
+                        <span className="font-medium">{po.office}</span>
+                        {po.district && <span className="text-muted-foreground">, District {po.district}</span>}
+                        <span className="text-muted-foreground"> — {po.state}</span>
+                      </div>
+                      {(po.start_year || po.end_year) && (
+                        <span className="text-sm text-muted-foreground">
+                          {po.start_year}–{po.end_year || 'Present'}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Contact Info Section */}
         {representativeDetails && (
           <div className="mb-8">
