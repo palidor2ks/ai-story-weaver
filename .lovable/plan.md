@@ -1,39 +1,22 @@
-
 ## Problem
 
-When you click "Regenerate Topic" for a civic official like Bob Smith, the edge function `get-candidate-answers` can't find them because:
+The `get-candidate-answers` edge function uses `sonar-deep-research` which takes ~60s per question. The platform kills the function at ~6 minutes (wall_clock), but answers are only saved in batches of 10. Since only 5-7 questions complete before shutdown, **zero answers are ever saved**.
 
-1. The frontend (`CandidateAnswersDialog`) only passes `candidateName` — it does NOT pass `candidateParty`, `candidateOffice`, or `candidateState`.
-2. The edge function falls through to DB lookup, checking `candidates` then `static_officials` tables — but civic officials live in `candidate_overrides`.
-3. Since the official isn't found, the function returns early with 0 answers generated.
+The function already skips existing answers on retry (line 1253-1254), so if we save incrementally, re-clicking "Regenerate Topic" would resume from where it left off.
 
-## Fix (two changes)
+## Fix
 
-### 1. Frontend: Pass full candidate info to the edge function
+**Single change in `supabase/functions/get-candidate-answers/index.ts`** (~lines 957-998):
 
-In `CandidateAnswersDialog.tsx`, update `handleRegenerateTopic` (and `handleRegenerateQuestion`) to pass the candidate's party, office, and state alongside the name. This requires the dialog to receive or fetch these fields.
+Save each answer immediately after generation instead of accumulating and saving every 10. This way:
+- Each ~60s research call produces a persisted result
+- If shutdown occurs at question 6, questions 1-5 are saved
+- Re-clicking "Regenerate Topic" picks up at question 6
 
-The simplest approach: update `CandidateAnswersDialogProps` to accept optional `candidateParty`, `candidateOffice`, and `candidateState` props, and pass them through to the edge function call. Then update callers to provide these values.
+The `generateAnswersForCandidate` function loop will call `saveAnswersBatch` with a single answer after each successful research, replacing the current `if (answers.length % 10 === 0)` batch logic.
 
-### 2. Edge function: Add `candidate_overrides` as a fallback lookup
+## Impact
 
-In `get-candidate-answers/index.ts` (around line 1216-1219), after checking `candidates` and `static_officials`, add a third fallback that checks `candidate_overrides`:
-
-```typescript
-if (!officialInfo) {
-  const { data: override } = await supabase
-    .from('candidate_overrides')
-    .select('candidate_id, name, party, office, state')
-    .eq('candidate_id', candidateId)
-    .maybeSingle();
-  if (override) {
-    officialInfo = { id: override.candidate_id, name: override.name, party: override.party, office: override.office, state: override.state };
-  }
-}
-```
-
-This is the more robust fix since it handles all callers (batch, single question, topic regeneration) without requiring every frontend caller to pass extra fields.
-
-## Recommendation
-
-Implement change #2 only (edge function fallback) — it's a single-file change that fixes the root cause for all callers.
+- No schema changes needed
+- No frontend changes needed  
+- The existing background polling in the client will start seeing incremental progress (1/20, 2/20...) instead of stuck at 0/20

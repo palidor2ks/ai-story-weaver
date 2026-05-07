@@ -979,13 +979,10 @@ async function generateAnswersForCandidate(
         researchedCount++;
       }
 
-      // Save every 10 answers to avoid data loss
-      const answers = Array.from(answersMap.values());
-      if (answers.length % 10 === 0 && answers.length > 0) {
-        await saveAnswersBatch(supabase, candidateId, answers.slice(-10), questions);
-        totalGenerated = answers.length;
-        console.log(`[Generate] Saved batch: ${totalGenerated}/${questions.length}`);
-      }
+      // Save each answer immediately to avoid data loss on shutdown
+      await saveAnswersBatch(supabase, candidateId, [answer], questions);
+      totalGenerated = answersMap.size;
+      console.log(`[Generate] Saved ${totalGenerated}/${questions.length}`);
 
     } catch (e) {
       console.error(`[Generate] Error for ${question.id}:`, e);
