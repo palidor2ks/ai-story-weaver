@@ -89,6 +89,65 @@ interface Filters {
   level?: 'all' | GovernmentLevel;
 }
 
+function inferLevel(office: string, source: CandidateSource): GovernmentLevel {
+  const o = (office || '').toLowerCase();
+  if (source === 'federal') {
+    if (o.includes('president') || o.includes('vice president')) return 'federal_executive';
+    return 'federal_legislative';
+  }
+  if (o.includes('governor') || o.includes('lieutenant governor')) return 'state_executive';
+  if (o.includes('state senator') || o.includes('state representative') || o.includes('state assembl') || o.includes('state legislat')) return 'state_legislative';
+  if (o.includes('mayor') || o.includes('council') || o.includes('commissioner') || o.includes('sheriff') || o.includes('clerk') || o.includes('treasurer')) return 'local';
+  if (o.includes('state')) return 'state_legislative';
+  return 'unknown';
+}
+
+function makeCivicCoverage(
+  c: { candidate_id: string; name: string | null; party: string | null; office: string | null; state: string | null; overall_score: number | null; coverage_tier: string | null; confidence: string | null },
+  answerCount: number,
+  sourcedCount: number,
+  totalQuestions: number,
+): CandidateAnswerCoverage {
+  const percentage = totalQuestions ? Math.round((answerCount / totalQuestions) * 100) : 0;
+  const sourcePercentage = answerCount > 0 ? Math.round((sourcedCount / answerCount) * 100) : 0;
+  return {
+    id: c.candidate_id,
+    name: c.name || c.candidate_id,
+    party: c.party || 'Unknown',
+    office: c.office || 'Unknown',
+    state: c.state || '',
+    answerCount,
+    totalQuestions,
+    percentage,
+    sourcedCount,
+    sourcePercentage,
+    overallScore: c.overall_score ?? null,
+    coverageTier: (c.coverage_tier as CoverageTier) || 'tier_3',
+    confidence: (c.confidence as ConfidenceLevel) || 'low',
+    voteCount: 0, legislativeActionsCount: 0, floorVotesCount: 0,
+    expectedVoteCount: null, expectedFloorVotes: null,
+    voteSyncStatus: 'never', floorVoteSyncStatus: 'never', lastVoteSyncAt: null,
+    donorCount: 0, fecCandidateId: null, fecCommitteeId: null, committeeCount: 0,
+    localItemized: 0, localItemizedNet: 0, localTransfers: 0, localEarmarked: 0,
+    localLoans: 0, localOtherReceipts: 0,
+    localIndividualItemized: 0, localGrossIndividual: 0, memoXAmount: 0,
+    localPacContributions: 0, localPartyContributions: 0, localOrganization: 0,
+    fecItemized: null, fecUnitemized: null, fecTotalReceipts: null,
+    fecPacContributions: 0, fecPartyContributions: 0, fecLoans: 0,
+    fecTransfers: 0, fecCandidateContribution: 0, fecOtherReceipts: 0,
+    fecOffsetsToOperatingExpenditures: 0,
+    deltaAmount: null, deltaPct: null, reconciliationStatus: null,
+    totalReceiptsDeltaAmount: null, totalReceiptsDeltaPct: null,
+    individualDeltaAmount: null, individualDeltaPct: null,
+    pacDeltaAmount: null, pacDeltaPct: null,
+    hasPartialSync: false, lastDonorSync: null, lastSyncDate: null,
+    reconciliationCheckedAt: null, syncStatus: 'never',
+    fecIdMismatch: false, fecIdMismatchReason: null,
+    source: 'civic',
+    level: inferLevel(c.office || '', 'civic'),
+  };
+}
+
 export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean; limit?: number }) {
   const limit = options?.limit;
   
