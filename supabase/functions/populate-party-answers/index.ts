@@ -1119,63 +1119,69 @@ serve(async (req) => {
 
     console.log(`Processing ${formattedQuestions.length} questions for ${partyContext.name}...`);
 
-    // Process in batches
-    let totalInserted = 0;
-    let totalErrors = 0;
-    let totalResearched = 0;
+    // Run processing in background to avoid 150s idle timeout
+    const backgroundWork = async () => {
+      let totalInserted = 0;
+      let totalErrors = 0;
+      let totalResearched = 0;
 
-    for (let i = 0; i < formattedQuestions.length; i += batchSize) {
-      const batch = formattedQuestions.slice(i, i + batchSize);
-      const batchNum = Math.floor(i / batchSize) + 1;
-      const totalBatches = Math.ceil(formattedQuestions.length / batchSize);
-      console.log(`Processing batch ${batchNum}/${totalBatches} (${batch.length} questions)`);
+      for (let i = 0; i < formattedQuestions.length; i += batchSize) {
+        const batch = formattedQuestions.slice(i, i + batchSize);
+        const batchNum = Math.floor(i / batchSize) + 1;
+        const totalBatches = Math.ceil(formattedQuestions.length / batchSize);
+        console.log(`Processing batch ${batchNum}/${totalBatches} (${batch.length} questions)`);
 
-      try {
-        const { answers, researched } = await processQuestionsWithHierarchy(
-          batch,
-          partyId,
-          partyContext,
-          supabase,
-          hasGrounding
-        );
-        
-        totalResearched += researched;
+        try {
+          const { answers, researched } = await processQuestionsWithHierarchy(
+            batch,
+            partyId,
+            partyContext,
+            supabase,
+            hasGrounding
+          );
+          
+          totalResearched += researched;
 
-        if (answers.length > 0) {
-          const { error: upsertError } = await supabase
-            .from('party_answers')
-            .upsert(answers, { 
-              onConflict: 'party_id,question_id',
-              ignoreDuplicates: false 
-            });
+          if (answers.length > 0) {
+            const { error: upsertError } = await supabase
+              .from('party_answers')
+              .upsert(answers, { 
+                onConflict: 'party_id,question_id',
+                ignoreDuplicates: false 
+              });
 
-          if (upsertError) {
-            console.error(`Upsert error:`, upsertError);
-            totalErrors += batch.length;
-          } else {
-            totalInserted += answers.length;
-            console.log(`Inserted ${answers.length} answers (total: ${totalInserted})`);
+            if (upsertError) {
+              console.error(`Upsert error:`, upsertError);
+              totalErrors += batch.length;
+            } else {
+              totalInserted += answers.length;
+              console.log(`Inserted ${answers.length} answers (total: ${totalInserted})`);
+            }
           }
+        } catch (batchError) {
+          console.error(`Batch error:`, batchError);
+          totalErrors += batch.length;
         }
-      } catch (batchError) {
-        console.error(`Batch error:`, batchError);
-        totalErrors += batch.length;
+
+        if (i + batchSize < formattedQuestions.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
 
-      if (i + batchSize < formattedQuestions.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
+      console.log(`Population complete for ${partyContext.name}: ${totalInserted} inserted, ${totalErrors} errors, ${totalResearched} researched`);
+    };
 
-    console.log(`Population complete for ${partyContext.name}: ${totalInserted} inserted, ${totalErrors} errors, ${totalResearched} researched`);
+    // Use EdgeRuntime.waitUntil to process in background
+    EdgeRuntime.waitUntil(backgroundWork());
 
+    // Return immediately so the request doesn't hit the 150s idle timeout
     return new Response(JSON.stringify({
       success: true,
       party: partyContext.name,
       partyId,
-      questionsProcessed: totalInserted,
-      errors: totalErrors,
-      questionsResearched: totalResearched,
+      questionsToProcess: formattedQuestions.length,
+      status: 'processing_in_background',
+      message: `Started background processing of ${formattedQuestions.length} questions for ${partyContext.name}. Check logs for progress.`,
       hasGrounding,
       evidenceHierarchy: ['inferred_from_reps (HIGH)', 'platform (MEDIUM)', 'ai_inferred (LOW)'],
     }), {
