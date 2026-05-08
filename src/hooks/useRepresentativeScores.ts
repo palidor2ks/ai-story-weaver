@@ -111,7 +111,7 @@ export const useRepresentativeAnswersAndScores = (
       const repsNeedingGeneration: RepresentativeInfo[] = [];
       const neededQuestions = userAnswers.map(a => a.question_id);
 
-      for (const rep of representatives) {
+      for (const rep of eligibleReps) {
         const repAnswers = answersByCandidate[rep.id] || [];
         
         // If we have enough answers, calculate score immediately
