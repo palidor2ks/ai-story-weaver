@@ -25,7 +25,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags, CheckCircle2, Upload } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags, CheckCircle2, Upload, Sparkles } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { QuestionManagementPanel } from "@/components/admin/QuestionManagementPanel";
 import { PartyAnswersPanel } from "@/components/admin/PartyAnswersPanel";
 import { EvidenceReviewPanel } from "@/components/admin/EvidenceReviewPanel";
@@ -89,6 +92,25 @@ export default function Admin() {
   const [editingOfficial, setEditingOfficial] = useState<StaticOfficial | null>(null);
   const [formData, setFormData] = useState<OfficialFormData>(defaultFormData);
   const [activeTab, setActiveTab] = useState("officials");
+  const [scrapingPiscataway, setScrapingPiscataway] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleScrapePiscataway = async () => {
+    setScrapingPiscataway(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('scrape-piscataway-officials', {});
+      if (error) throw error;
+      const updated = data?.updated ?? 0;
+      const total = data?.processed ?? 0;
+      toast.success(`Piscataway: ${updated}/${total} officials refreshed`);
+      queryClient.invalidateQueries({ queryKey: ['static-officials'] });
+    } catch (err) {
+      console.error('Error scraping Piscataway:', err);
+      toast.error('Failed to refresh Piscataway officials');
+    } finally {
+      setScrapingPiscataway(false);
+    }
+  };
 
   // Loading states
   if (authLoading || adminLoading) {
@@ -502,10 +524,24 @@ export default function Admin() {
           <TabsContent value="officials">
             <Card>
               <CardHeader>
-                <CardTitle>Manual Entry Officials</CardTitle>
-                <CardDescription>
-                  Officials without API coverage: President, Vice President, and local officials
-                </CardDescription>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <CardTitle>Manual Entry Officials</CardTitle>
+                    <CardDescription>
+                      Officials without API coverage: President, Vice President, and local officials
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={handleScrapePiscataway}
+                    disabled={scrapingPiscataway}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 shrink-0"
+                  >
+                    {scrapingPiscataway ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Refresh Piscataway
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {officialsLoading ? (
