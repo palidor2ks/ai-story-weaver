@@ -333,14 +333,25 @@ export default function Admin() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="district">District (optional)</Label>
-                  <Input
-                    id="district"
-                    value={formData.district}
-                    onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                    placeholder="e.g., CA-12"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="district">District (optional)</Label>
+                    <Input
+                      id="district"
+                      value={formData.district}
+                      onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                      placeholder="e.g., CA-12"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="city">City (required for Mayor / local)</Label>
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      placeholder="e.g., Newark"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
