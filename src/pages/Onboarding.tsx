@@ -323,7 +323,13 @@ export const Onboarding = () => {
   const handleComplete = async () => {
     if (!calculatedScores) return;
     
-    const allAnswers = [...quizAnswers, ...localQuizAnswers];
+    // Deduplicate by questionId — local answers take priority over federal
+    const allAnswers = [...quizAnswers];
+    for (const la of localQuizAnswers) {
+      const idx = allAnswers.findIndex(a => a.questionId === la.questionId);
+      if (idx >= 0) allAnswers[idx] = la;
+      else allAnswers.push(la);
+    }
     
     if (allAnswers.length < minRequiredAnswers) {
       toast.error(`Please answer at least ${minRequiredAnswers} questions before continuing.`);
