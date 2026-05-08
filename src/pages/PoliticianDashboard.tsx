@@ -47,29 +47,51 @@ export default function PoliticianDashboard() {
   const [selectedTopic, setSelectedTopic] = useState<string>('all');
   const [showAnswered, setShowAnswered] = useState<'all' | 'answered' | 'unanswered'>('all');
 
-  // Fetch all questions
+  // Determine which scope of questions/topics this politician should answer.
+  // Local/state officials (governor and below) → 5 local-scope topics only.
+  // Federal officials → 12 federal-scope topics only.
+  const officeScope: 'local' | 'all' | null = useMemo(() => {
+    if (!claimedProfile?.office) return null;
+    // Lazy import to avoid circular deps; small inline check is fine
+    const lower = claimedProfile.office.toLowerCase();
+    const localKw = ['governor','state senator','state rep','mayor','city council','county','alderman','selectman','town council','school board','sheriff','district attorney','municipal','attorney general','secretary of state','treasurer','auditor','comptroller'];
+    return localKw.some(k => lower.includes(k)) ? 'local' : 'all';
+  }, [claimedProfile?.office]);
+
+  // Fetch questions scoped to this official's level
   const { data: questions = [], isLoading: questionsLoading } = useQuery({
-    queryKey: ['all-questions'],
+    queryKey: ['politician-questions', officeScope],
+    enabled: !!officeScope,
     queryFn: async () => {
+      const { data: scopedTopics, error: tErr } = await supabase
+        .from('topics')
+        .select('id')
+        .eq('scope', officeScope!);
+      if (tErr) throw tErr;
+      const topicIds = (scopedTopics || []).map(t => t.id);
+      if (topicIds.length === 0) return [] as Question[];
       const { data, error } = await supabase
         .from('questions')
         .select('id, text, topic_id, topics(id, name)')
+        .in('topic_id', topicIds)
         .order('topic_id');
-      
+
       if (error) throw error;
       return data as Question[];
     },
   });
 
-  // Fetch all topics
+  // Fetch topics scoped to this official's level
   const { data: topics = [] } = useQuery({
-    queryKey: ['topics'],
+    queryKey: ['politician-topics', officeScope],
+    enabled: !!officeScope,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('topics')
         .select('id, name, icon')
+        .eq('scope', officeScope!)
         .order('name');
-      
+
       if (error) throw error;
       return data as Topic[];
     },

@@ -154,20 +154,23 @@ function useQuestionCounts() {
     queryKey: ['question-counts'],
     staleTime: 5 * 60 * 1000, // 5 min — topics/questions rarely change
     queryFn: async () => {
-      const { data: federalTopics } = await supabase
+      const { data: topicRows } = await supabase
         .from('topics')
-        .select('id')
-        .eq('scope', 'all');
-      const federalTopicIds = (federalTopics || []).map(t => t.id);
-      const [allQ, fedQ] = await Promise.all([
+        .select('id, scope');
+      const federalTopicIds = (topicRows || []).filter(t => t.scope === 'all').map(t => t.id);
+      const localTopicIds = (topicRows || []).filter(t => t.scope === 'local').map(t => t.id);
+      const [allQ, fedQ, localQ] = await Promise.all([
         supabase.from('questions').select('*', { count: 'exact', head: true }),
         supabase.from('questions').select('*', { count: 'exact', head: true }).in('topic_id', federalTopicIds),
+        supabase.from('questions').select('*', { count: 'exact', head: true }).in('topic_id', localTopicIds),
       ]);
       if (allQ.error) throw allQ.error;
       return {
         federalTopicIds,
+        localTopicIds,
         allQuestions: allQ.count || 0,       // 340 (17 topics)
         federalQuestions: fedQ.count || 0,   // 240 (12 federal topics)
+        localQuestions: localQ.count || 0,   // local-scope total (5 topics)
       };
     },
   });
@@ -182,7 +185,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
     enabled: options?.enabled !== false && !!questionCounts,
     placeholderData: (previousData) => previousData, // Keep previous data during filter transitions
     queryFn: async (): Promise<CandidateAnswerCoverage[]> => {
-      const { allQuestions, federalQuestions } = questionCounts!;
+      const { federalQuestions, localQuestions } = questionCounts!;
 
       // Get candidates with coverage tier and confidence
       let candidatesQuery = supabase
@@ -590,7 +593,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
             for (const co of civicOfficials) {
               if (federalIds.has(co.candidate_id)) continue;
               const ac = civicAnswerMap[co.candidate_id] || { count: 0, sourced: 0 };
-              results.push(makeCivicCoverage(co, ac.count, ac.sourced, allQuestions));
+              results.push(makeCivicCoverage(co, ac.count, ac.sourced, localQuestions));
               if (co.name && co.state) {
                 civicNameStateKeys.add(`${co.name.toLowerCase()}|${co.state.toLowerCase()}`);
               }
@@ -643,6 +646,10 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
 
           for (const s of newStatic) {
             const ac = staticAnswerMap[s.id] || { count: 0, sourced: 0 };
+            // Federal executives (e.g., President) answer federal-scope questions;
+            // governor-and-below static officials answer local-scope only.
+            const isFederalExec = (s.level || '').toString() === 'federal_executive';
+            const denom = isFederalExec ? federalQuestions : localQuestions;
             results.push(makeCivicCoverage(
               {
                 candidate_id: s.id,
@@ -656,7 +663,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
               },
               ac.count,
               ac.sourced,
-              allQuestions,
+              denom,
             ));
           }
         }

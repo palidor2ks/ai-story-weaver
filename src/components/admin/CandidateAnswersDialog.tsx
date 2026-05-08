@@ -116,15 +116,13 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
       }
       const isLocal = isLocalOfficial(office);
 
-      let topicsQuery = supabase
+      // Local/state officials (governor+below) answer ONLY the 5 local-scope topics.
+      // Federal officials answer ONLY the 12 federal-scope topics (scope='all').
+      const topicsQuery = supabase
         .from('topics')
         .select('id, name, icon')
+        .eq('scope', isLocal ? 'local' : 'all')
         .order('name');
-      // Local officials (governor+below) see ALL 17 topics (federal + local)
-      // Federal officials only see federal topics (scope='all')
-      if (!isLocal) {
-        topicsQuery = topicsQuery.eq('scope', 'all');
-      }
       const { data: topics, error: topicsError } = await topicsQuery;
       if (topicsError) throw topicsError;
 
