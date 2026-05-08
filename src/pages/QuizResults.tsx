@@ -413,14 +413,18 @@ export const QuizResults = () => {
                     <div className="space-y-3">
                       {federalReps.map((rep) => {
                         const repId = rep.bioguide_id || rep.id;
-                        const official = {
+                        const official: CivicOfficial = {
                           id: repId,
                           name: rep.name,
                           office: rep.office,
                           party: rep.party,
-                          image_url: rep.image_url || null,
+                          image_url: rep.image_url || '',
                           overall_score: rep.overall_score,
-                          source: 'congress' as const,
+                          level: 'federal' as OfficeLevelType,
+                          state: '',
+                          is_incumbent: true,
+                          coverage_tier: 'tier_3',
+                          confidence: 'low',
                         };
                         return (
                           <RepresentativeComparisonCard
