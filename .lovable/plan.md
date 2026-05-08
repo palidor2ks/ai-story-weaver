@@ -1,43 +1,37 @@
-## Goal
+# Restore Pulse Score for local officials in admin
 
-State and local officials (governor and below) should only deal with the 5 **local-scope** topics — never the 12 federal-scope topics. Today, several places still show or count all 17 topics for them, which is why the admin answer-management dialog lists 340 questions.
+## Problem
 
-## Current behavior
+In the admin Answer Coverage table, several NJ local officials (Brian Wahler, Michele Lombardi, Sharon Carmichael, …) show **no Pulse Score**, while Joe Danielsen (state rep) does show one (`L3.47`).
 
-- Edge function `get-candidate-answers` already restricts local officials to `scope='local'` ✓
-- Edge function `populate-civic-answers` already loads only local-scope questions ✓
-- DB function `calculate_coverage_tier` already uses local-scope total for local officials ✓
-- **Bug 1**: `CandidateAnswersDialog` (admin) does the *opposite* — local officials see all 17 topics; federal officials see only the 12.
-- **Bug 2**: Admin coverage table denominator (`/340`) uses the global total for everyone, including state/local — should be the local-question count for them.
-- **Bug 3**: Politician self-service dashboard and any score/onboarding paths that load "all questions" don't gate by official scope.
-- **Data**: Some state/local candidates already have federal-scope answers stored from earlier runs.
+## Root cause
 
-## Changes
+`src/hooks/useCandidatesAnswerCoverage.ts` builds local/civic rows from two sources:
 
-### 1. Admin `CandidateAnswersDialog` (src/components/admin/CandidateAnswersDialog.tsx)
-Flip the topic filter so local officials see `scope='local'` only and federal officials see `scope='all'` (current federal behavior preserved). Remove the "see all 17" branch.
+1. **`candidate_overrides`** — picked via an `OR` filter that only matches IDs starting with:
+   `openstates_%, nj_%, ny_%, ca_%, tx_%, fl_%, pa_%`
+2. **`static_officials`** — fallback for everything else.
 
-### 2. Admin coverage denominator (src/hooks/useCandidatesAnswerCoverage.ts)
-Compute two totals up front: `federalTotal` (questions in `scope='all'`) and `localTotal` (questions in `scope='local'`). For each row, pick the denominator based on `isLocalOfficial(office)` so the admin table shows e.g. `5/40` instead of `5/340` for local officials.
+The IDs of the missing officials are `mayor_nj_piscataway`, `local_nj_piscataway_town_council_member_…`. They do **not** match the OR prefixes (`mayor_…`, `local_…` are not listed), so they fall through to the `static_officials` branch.
 
-### 3. Politician self-edit dashboard (src/pages/PoliticianDashboard.tsx)
-Filter `questions` to local-scope only when the claimed candidate is a local official; otherwise federal-scope only. (Same `isLocalOfficial` helper.)
+In that branch (line ~660), `overall_score` is hardcoded to `null` when constructing the coverage row — even though `candidate_overrides` actually has a real score for these IDs (verified: Wahler `-4.23`, Lombardi `-4.68`, Carmichael `-5.65`).
 
-### 4. `useCandidateTopicQuestions` (src/hooks/useCandidateTopicQuestions.ts)
-No change — already scoped per topic_id.
+Result: Pulse Score column is empty for those rows.
 
-### 5. Cleanup of stale federal answers for state/local officials
-One-time migration: delete rows from `candidate_answers` where the candidate is a local official (per `candidates.office` / `candidate_overrides.office`) **and** the question's topic is `scope='all'`. This removes leftover federal answers that should never have been generated for them.
+Joe Danielsen works because his ID starts with `openstates_`, matches the OR filter, and his `overall_score` is read directly.
 
-### 6. Update memory rule
-Replace the existing core rule "Local topics only for governor+below" with the stricter version: **"Governor and below answer ONLY the 5 local-scope topics. Federal officials answer ONLY the 12 federal-scope topics."**
+## Fix
+
+In `src/hooks/useCandidatesAnswerCoverage.ts`, in the `static_officials` block (around lines 626–668):
+
+1. After fetching `staticOfficials` and computing `newIds`, also fetch matching rows from `candidate_overrides` (`candidate_id, overall_score, coverage_tier, confidence`) keyed by those same `newIds`, in parallel with the existing `candidate_answer_coverage_stats` query.
+2. Build an override lookup map.
+3. When constructing each static row via `makeCivicCoverage`, pass `overall_score: overrideMap[s.id]?.overall_score ?? null` instead of hardcoded `null`. Also prefer override `coverage_tier` / `confidence` when present.
+
+No DB changes, no other call sites affected. The federal/openstates path is untouched.
 
 ## Out of scope
 
-- No changes to topic definitions or question content.
-- No changes to the user/voter quiz flow (Onboarding already separates federal vs local quiz sections).
-- No UI redesign — just correct filtering and denominators.
-
-## Open question
-
-The screenshot shows totals like `28/340` for NJ candidates. After the fix, those denominators will drop to whatever the local question count is (likely ~30-50). Confirm at implementation time and we'll show the actual number.
+- Expanding the OR-prefix filter (would duplicate the same data through two paths).
+- Backfilling scores for officials that genuinely have no override row.
+- Any UI/styling changes — the Pulse Score column will simply populate.

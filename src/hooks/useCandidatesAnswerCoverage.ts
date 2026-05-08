@@ -631,21 +631,36 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           const newIds = newStatic.map(s => s.id);
 
           let staticAnswerMap: Record<string, { count: number; sourced: number }> = {};
+          let staticOverrideMap: Record<string, { overall_score: number | null; coverage_tier: string | null; confidence: string | null }> = {};
           if (newIds.length > 0) {
-            const { data: staticAnswerData } = await supabase
-              .from('candidate_answer_coverage_stats')
-              .select('candidate_id, answer_count, sourced_count')
-              .in('candidate_id', newIds);
-            (staticAnswerData || []).forEach(row => {
+            const [staticAnswerRes, staticOverrideRes] = await Promise.all([
+              supabase
+                .from('candidate_answer_coverage_stats')
+                .select('candidate_id, answer_count, sourced_count')
+                .in('candidate_id', newIds),
+              supabase
+                .from('candidate_overrides')
+                .select('candidate_id, overall_score, coverage_tier, confidence')
+                .in('candidate_id', newIds),
+            ]);
+            (staticAnswerRes.data || []).forEach(row => {
               staticAnswerMap[row.candidate_id] = {
                 count: Number(row.answer_count) || 0,
                 sourced: Number(row.sourced_count) || 0,
+              };
+            });
+            (staticOverrideRes.data || []).forEach(row => {
+              staticOverrideMap[row.candidate_id] = {
+                overall_score: row.overall_score,
+                coverage_tier: row.coverage_tier,
+                confidence: row.confidence,
               };
             });
           }
 
           for (const s of newStatic) {
             const ac = staticAnswerMap[s.id] || { count: 0, sourced: 0 };
+            const ov = staticOverrideMap[s.id];
             // Federal executives (e.g., President) answer federal-scope questions;
             // governor-and-below static officials answer local-scope only.
             const isFederalExec = (s.level || '').toString() === 'federal_executive';
@@ -657,9 +672,9 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
                 party: s.party,
                 office: s.office,
                 state: s.state,
-                overall_score: null,
-                coverage_tier: s.coverage_tier,
-                confidence: s.confidence,
+                overall_score: ov?.overall_score ?? null,
+                coverage_tier: ov?.coverage_tier ?? s.coverage_tier,
+                confidence: ov?.confidence ?? s.confidence,
               },
               ac.count,
               ac.sourced,
