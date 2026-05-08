@@ -50,7 +50,7 @@ interface CivicOfficialsResult {
 
 export function useCivicOfficials(address: string | null | undefined) {
   return useQuery({
-    queryKey: ['civic-officials', address, 'v4'],
+    queryKey: ['civic-officials', address, 'v5'],
     queryFn: async (): Promise<CivicOfficialsResult> => {
       if (!address) {
         console.log('No address provided for civic officials');
