@@ -524,10 +524,24 @@ export default function Admin() {
           <TabsContent value="officials">
             <Card>
               <CardHeader>
-                <CardTitle>Manual Entry Officials</CardTitle>
-                <CardDescription>
-                  Officials without API coverage: President, Vice President, and local officials
-                </CardDescription>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <CardTitle>Manual Entry Officials</CardTitle>
+                    <CardDescription>
+                      Officials without API coverage: President, Vice President, and local officials
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={handleScrapePiscataway}
+                    disabled={scrapingPiscataway}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 shrink-0"
+                  >
+                    {scrapingPiscataway ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Refresh Piscataway
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {officialsLoading ? (
