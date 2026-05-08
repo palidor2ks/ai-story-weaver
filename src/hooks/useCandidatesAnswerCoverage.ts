@@ -659,7 +659,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
               },
               ac.count,
               ac.sourced,
-              allQuestions,
+              localQuestions,
             ));
           }
         }
