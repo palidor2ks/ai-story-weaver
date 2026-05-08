@@ -361,7 +361,7 @@ export const Onboarding = () => {
 
   // Calculate if user can complete
   const allDisplayAnswers = [...quizAnswers, ...localQuizAnswers];
-  const canComplete = allAnswers.length >= minRequiredAnswers;
+  const canComplete = allDisplayAnswers.length >= minRequiredAnswers;
   const skippedCount = skippedQuestionIds.size + skippedLocalQuestionIds.size;
 
   const currentAnswer = quizAnswers.find(
