@@ -1035,7 +1035,35 @@ serve(async (req) => {
     // Apply transition data (mark outgoing, add incoming officials)
     allOfficials = applyTransitions(allOfficials, transitions);
 
-    console.log(`Total officials after transitions: ${allOfficials.length}`);
+    // Final city-safety pass: drop any local officials whose static_officials.city
+    // doesn't match the user's city. Also de-duplicate by id (prefer first occurrence).
+    {
+      const userCity = (city || '').trim().toLowerCase();
+      const localIds = allOfficials.filter(o => o.level === 'local').map(o => o.id).filter(Boolean) as string[];
+      let cityById = new Map<string, string | null>();
+      if (localIds.length) {
+        const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const { data: staticRows } = await sb
+          .from('static_officials')
+          .select('id, city')
+          .in('id', localIds);
+        cityById = new Map((staticRows || []).map(r => [r.id, r.city ?? null]));
+      }
+      const seen = new Set<string>();
+      allOfficials = allOfficials.filter(o => {
+        if (o.id) {
+          if (seen.has(o.id)) return false;
+          seen.add(o.id);
+        }
+        if (o.level !== 'local') return true;
+        const rowCity = cityById.get(o.id);
+        if (rowCity == null) return true; // city-agnostic local row, keep
+        if (!userCity) return false;
+        return rowCity.trim().toLowerCase() === userCity;
+      });
+    }
+
+    console.log(`Total officials after transitions + city filter: ${allOfficials.length}`);
 
     // Persist officials to database and trigger answer generation in background
     EdgeRuntime.waitUntil(persistAndResearchOfficials(allOfficials, authHeader));

@@ -1,27 +1,18 @@
-## Why Colonia + Piscataway officials both appear
+## Issue
+Your current request is for `13 ORION PL, COLONIA, NJ, 07067`, and the Edge Function correctly extracts `City: COLONIA`. The response still includes Piscataway officials because the final combined officials list includes both city-filtered `static_officials` rows and unfiltered/incorrectly retained `candidate_overrides` rows.
 
-**Root cause:** `fetch-civic-officials` pulls local officials from **two** sources:
+## Plan
+1. Tighten `fetchManualCivicOverrides` so local `candidate_overrides` are kept only when their matching `static_officials.city` exactly matches the user's city.
+   - If a local override has a matching static official for a different city, drop it.
+   - If a local override has no matching static official and appears city-specific from its office/id, drop it unless it matches the user's city.
+   - Keep state-level officials like Governor statewide.
 
-1. `static_officials` — properly filtered by user's city (`city IS NULL OR city ILIKE userCity`).
-2. `candidate_overrides` (via `fetchManualCivicOverrides`) — filtered by **state only**. No city column exists on this table, so every NJ user receives every NJ local official, including all of Colonia's and Piscataway's town council and mayors.
+2. Add a final de-duplication and city-safety pass before returning the Edge Function response.
+   - Prefer one record per official ID.
+   - For `level === 'local'`, remove any record whose static city does not match the extracted city.
+   - This protects against leakage from any source, not only manual overrides.
 
-Since the same people exist in both tables (e.g., `mayor_nj_colonia`, `local_nj_piscataway_*`), the override path leaks them into every NJ feed regardless of address.
+3. Bump the frontend React Query cache key for `useCivicOfficials` so your browser does not keep showing the old cached mixed response.
 
-## Fix
-
-In `supabase/functions/fetch-civic-officials/index.ts` `fetchManualCivicOverrides(state, city)`:
-
-1. Accept `city` as a second argument (already known by the caller).
-2. After loading override rows, fetch the matching `static_officials` rows by `id` (only `id, city`).
-3. Build a `city-by-id` map. For each override row whose level resolves to `local`:
-   - Keep it if the static row's `city` is `NULL` (city-agnostic) **or** matches `city` (case-insensitive).
-   - Drop it otherwise.
-4. Non-local overrides (e.g., governor) are unaffected — still returned for the whole state.
-5. Pass `city` through at the call site (line 963).
-
-Result: a Piscataway voter sees only Piscataway local officials; a Colonia voter sees only Colonia ones. No DB schema changes needed.
-
-## Out of scope
-
-- Adding a `city` column to `candidate_overrides` (not needed; `static_officials` already has it).
-- Fixing the separate data-quality issue that John E. McCormac is listed as "Mayor of COLONIA" (he's actually mayor of Woodbridge Township) — flag for a follow-up.
+## Expected result
+For a Colonia address, the Local Officials section should show only Colonia local officials. For a Piscataway address, it should show only Piscataway local officials. State and federal officials remain unchanged.
