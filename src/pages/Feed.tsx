@@ -150,8 +150,9 @@ export const Feed = () => {
         seenIds.add(c.id);
         seenNames.add(nameKey);
         // If a DB version exists with better data (scores), use it instead
+        // but preserve the level classification from the API source.
         const dbVersion = dbByName.get(nameKey);
-        result.push(dbVersion && dbVersion.overallScore ? dbVersion : c);
+        result.push(dbVersion && dbVersion.overallScore ? { ...dbVersion, level: c.level } : c);
       }
 
       // Fall back to DB candidates only if no API data available
