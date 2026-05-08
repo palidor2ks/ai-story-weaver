@@ -51,6 +51,7 @@ interface OfficialFormData {
   level: 'federal_executive' | 'state_executive' | 'state_legislative' | 'local';
   state: string;
   district: string;
+  city: string;
   image_url: string;
   website_url: string;
   is_active: boolean;
@@ -66,6 +67,7 @@ const defaultFormData: OfficialFormData = {
   level: 'federal_executive',
   state: '',
   district: '',
+  city: '',
   image_url: '',
   website_url: '',
   is_active: true,
