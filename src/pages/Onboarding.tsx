@@ -360,7 +360,7 @@ export const Onboarding = () => {
   };
 
   // Calculate if user can complete
-  const allAnswers = [...quizAnswers, ...localQuizAnswers];
+  const allDisplayAnswers = [...quizAnswers, ...localQuizAnswers];
   const canComplete = allAnswers.length >= minRequiredAnswers;
   const skippedCount = skippedQuestionIds.size + skippedLocalQuestionIds.size;
 
