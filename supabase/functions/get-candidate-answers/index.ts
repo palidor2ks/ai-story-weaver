@@ -1178,6 +1178,7 @@ async function processAnswersInBackground(
        try {
          const chainClient = createClient(supabaseUrl, supabaseKey);
          const { error: chainError } = await chainClient.functions.invoke('get-candidate-answers', {
+           headers: { Authorization: `Bearer ${supabaseKey}` },
            body: {
              candidateId,
              questionIds: remaining.map(q => q.id),
