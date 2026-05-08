@@ -1160,6 +1160,7 @@ async function processAnswersInBackground(
             forceRegenerate: true,
             useBackground: true,
             _isChainedChunk: true,
+            _internalChainSecret: supabaseKey,
           }),
         });
 
@@ -1197,6 +1198,7 @@ async function processAnswersInBackground(
             forceRegenerate: true,
             useBackground: true,
             _isChainedChunk: true,
+            _internalChainSecret: supabaseKey,
           }),
         });
         if (!resp.ok) {
