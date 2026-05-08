@@ -1,12 +1,11 @@
-## Problem
+## Issue
 
-Donald Trump's record exists in `static_officials` (id `P80001571`), but the stored `image_url` (a Wikipedia thumbnail) returns HTTP 400 — so no photo renders on `/feed`.
+The badge tooltips (incumbent star, tier shield, confidence icon) on `CandidateCard` get clipped because the card root has `overflow-hidden` (line 83 of `src/components/CandidateCard.tsx`). Radix tooltips render via portal but only escape if no ancestor clips them — `overflow-hidden` here blocks the top edge.
 
-## Plan
+## Fix
 
-1. **Download the official 2025 White House portrait** of Donald Trump from a reliable source (whitehouse.gov / Wikimedia Commons full-resolution URL, not a broken thumb path).
-2. **Upload it to the `official-photos` Supabase storage bucket** as `P80001571.jpg` (matches the convention used by `enrich-official-photos`), with a cache-busting `?v=` query string.
-3. **Update `static_officials.image_url`** for `P80001571` to the new public URL via a migration (so the change is permanent and re-runnable).
-4. Verify on `/feed` that Trump's avatar now loads instead of falling back to initials.
+In `src/components/CandidateCard.tsx`, remove `overflow-hidden` from the Card's className. The card uses `rounded-2xl` which already visually contains content; the only thing previously clipped were hover effects, which still render correctly without it.
 
-No frontend code changes needed — `OfficialAvatar` already handles the URL.
+If any hover/scale effect actually needs clipping, wrap the inner content area (not the whole card) in an `overflow-hidden` div instead, so the tooltip portal layer remains free.
+
+No other files need changes.
