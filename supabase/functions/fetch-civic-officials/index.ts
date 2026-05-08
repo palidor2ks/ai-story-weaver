@@ -173,6 +173,8 @@ function extractCityFromAddress(address: string): string {
   // Fallback: second part
   return parts[1] || '';
 }
+
+// Fetch federal executives from GitHub (unitedstates/congress-legislators)
 async function fetchFederalExecutiveFromGitHub(): Promise<OfficialInfo[]> {
   const now = Date.now();
   
