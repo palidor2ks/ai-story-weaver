@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 interface OfficialAvatarProps {
@@ -57,6 +57,7 @@ export const OfficialAvatar = ({
   className,
 }: OfficialAvatarProps) => {
   const [imageError, setImageError] = useState(false);
+  useEffect(() => { setImageError(false); }, [imageUrl]);
   const hasValidImage = imageUrl && imageUrl.trim() !== '' && !imageError;
 
   return (
