@@ -93,91 +93,114 @@ function getEvidenceBadge(evidenceType: string | null) {
   }
 }
 
-function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
-  return useQuery({
-    queryKey: ['candidate-answers-dialog', candidateId],
-    queryFn: async (): Promise<TopicWithQuestions[]> => {
-      // Determine if candidate is local to filter topics by scope
-      const { isLocalOfficial } = await import('@/lib/localOfficeUtils');
-      let office: string | null = null;
-      const { data: cand } = await supabase
-        .from('candidates')
-        .select('office')
-        .eq('id', candidateId)
-        .maybeSingle();
-      office = cand?.office ?? null;
-      if (!office) {
-        const { data: co } = await supabase
-          .from('candidate_overrides')
-          .select('office')
-          .eq('candidate_id', candidateId)
-          .maybeSingle();
-        office = co?.office ?? null;
-      }
-      const isLocal = isLocalOfficial(office);
+interface TopicQuestionsBundle {
+  topics: Array<{ id: string; name: string; icon: string }>;
+  questionsByTopic: Map<string, Array<{ id: string; text: string; options: Array<{ value: number; text: string }> }>>;
+}
 
-      // Local/state officials (governor+below) answer ONLY the 5 local-scope topics.
-      // Federal officials answer ONLY the 12 federal-scope topics (scope='all').
-      const topicsQuery = supabase
+function useTopicsWithQuestions(scope: 'all' | 'local' | null) {
+  return useQuery({
+    queryKey: ['topics-with-questions', scope],
+    enabled: scope !== null,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<TopicQuestionsBundle> => {
+      const { data: topics, error: topicsError } = await supabase
         .from('topics')
         .select('id, name, icon')
-        .eq('scope', isLocal ? 'local' : 'all')
+        .eq('scope', scope!)
         .order('name');
-      const { data: topics, error: topicsError } = await topicsQuery;
       if (topicsError) throw topicsError;
+      const topicIds = (topics || []).map(t => t.id);
 
-      // Fetch questions with their options using relational query
-      const { data: questions, error: questionsError } = await supabase
-        .from('questions')
-        .select('id, text, topic_id, question_options(value, text)');
-      if (questionsError) throw questionsError;
+      let questions: any[] = [];
+      if (topicIds.length > 0) {
+        const { data, error } = await supabase
+          .from('questions')
+          .select('id, text, topic_id, question_options(value, text)')
+          .in('topic_id', topicIds);
+        if (error) throw error;
+        questions = data || [];
+      }
 
+      const questionsByTopic = new Map<string, Array<{ id: string; text: string; options: Array<{ value: number; text: string }> }>>();
+      for (const q of questions) {
+        const arr = questionsByTopic.get(q.topic_id) || [];
+        arr.push({
+          id: q.id,
+          text: q.text,
+          options: ((q as any).question_options || []).map((o: any) => ({ value: o.value, text: o.text })),
+        });
+        questionsByTopic.set(q.topic_id, arr);
+      }
+
+      return { topics: topics || [], questionsByTopic };
+    },
+  });
+}
+
+function useCandidateScope(candidateId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['candidate-scope', candidateId],
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<'all' | 'local'> => {
+      const { isLocalOfficial } = await import('@/lib/localOfficeUtils');
+      const [candRes, ovrRes] = await Promise.all([
+        supabase.from('candidates').select('office').eq('id', candidateId).maybeSingle(),
+        supabase.from('candidate_overrides').select('office').eq('candidate_id', candidateId).maybeSingle(),
+      ]);
+      const office = candRes.data?.office ?? ovrRes.data?.office ?? null;
+      return isLocalOfficial(office) ? 'local' : 'all';
+    },
+  });
+}
+
+function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
+  const { data: scope } = useCandidateScope(candidateId, enabled);
+  const { data: bundle } = useTopicsWithQuestions(enabled && scope ? scope : null);
+
+  return useQuery({
+    queryKey: ['candidate-answers-dialog', candidateId, scope],
+    enabled: enabled && !!bundle && !!scope,
+    staleTime: 30000,
+    queryFn: async (): Promise<TopicWithQuestions[]> => {
       const { data: answers, error: answersError } = await supabase
         .from('candidate_answers')
         .select('question_id, answer_value, confidence, source_description, source_url, source_urls, source_titles, evidence_type')
         .eq('candidate_id', candidateId);
       if (answersError) throw answersError;
 
-      const answerMap = new Map(
-        (answers || []).map(a => [a.question_id, a])
-      );
+      const answerMap = new Map((answers || []).map(a => [a.question_id, a]));
 
-      return (topics || []).map(topic => {
-        const topicQuestions = (questions || [])
-          .filter(q => q.topic_id === topic.id)
-          .map(q => {
-            const answer = answerMap.get(q.id);
-            const sourceUrls = answer?.source_urls || (answer?.source_url ? [answer.source_url] : null);
-            const sourceTitles = (answer as any)?.source_titles || null;
-            const evidenceType = (answer as any)?.evidence_type || null;
-            
-            // Fix hasSource to be truthful:
-            // - Has source if we have actual source URLs
-            // - OR if evidence_type is voting_record (floor votes/sponsored bills have data, not URLs)
-            const hasActualUrls = sourceUrls && sourceUrls.length > 0;
-            const hasSource = hasActualUrls || evidenceType === 'voting_record';
-            
-            // Override evidence type display if no actual sources exist
-            // "public_statement" or "social_media" without URLs should show as "inferred"
-            const displayEvidenceType = 
-              (evidenceType === 'public_statement' || evidenceType === 'social_media') && 
-              !hasActualUrls 
-                ? 'inferred' 
-                : evidenceType;
-            
-            return {
-              questionId: q.id,
-              questionText: q.text,
-              answerValue: answer?.answer_value ?? null,
-              confidence: answer?.confidence ?? null,
-              sourceDescription: answer?.source_description ?? null,
-              sourceUrls,
-              sourceTitles,
-              evidenceType: displayEvidenceType,
-              hasSource,
-              options: ((q as any).question_options || []).map((o: any) => ({ value: o.value, text: o.text })),
-            };
-          });
+      return bundle!.topics.map(topic => {
+        const topicQuestions = (bundle!.questionsByTopic.get(topic.id) || []).map(q => {
+          const answer = answerMap.get(q.id);
+          const sourceUrls = answer?.source_urls || (answer?.source_url ? [answer.source_url] : null);
+          const sourceTitles = (answer as any)?.source_titles || null;
+          const evidenceType = (answer as any)?.evidence_type || null;
+
+          const hasActualUrls = sourceUrls && sourceUrls.length > 0;
+          const hasSource = hasActualUrls || evidenceType === 'voting_record';
+
+          const displayEvidenceType =
+            (evidenceType === 'public_statement' || evidenceType === 'social_media') &&
+            !hasActualUrls
+              ? 'inferred'
+              : evidenceType;
+
+          return {
+            questionId: q.id,
+            questionText: q.text,
+            answerValue: answer?.answer_value ?? null,
+            confidence: answer?.confidence ?? null,
+            sourceDescription: answer?.source_description ?? null,
+            sourceUrls,
+            sourceTitles,
+            evidenceType: displayEvidenceType,
+            hasSource,
+            options: q.options,
+          };
+        });
 
         const answeredCount = topicQuestions.filter(q => q.answerValue !== null).length;
         const sourcedCount = topicQuestions.filter(q => q.hasSource).length;
@@ -192,8 +215,6 @@ function useCandidateAnswersByTopic(candidateId: string, enabled: boolean) {
         };
       }).filter(t => t.questions.length > 0);
     },
-    enabled,
-    staleTime: 30000,
   });
 }
 
