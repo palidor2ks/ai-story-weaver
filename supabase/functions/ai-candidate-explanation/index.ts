@@ -163,19 +163,38 @@ Remember to be objective and non-partisan.${personalizedInstructions}`;
       throw new Error('No content in AI response');
     }
 
-    // Parse the JSON response
-    let analysis;
-    try {
-      analysis = JSON.parse(content);
-    } catch (e) {
+    // Parse the JSON response (robust against code fences / leading prose)
+    const extractJson = (raw: string): any | null => {
+      if (!raw) return null;
+      let s = raw.trim();
+      // Strip ```json ... ``` or ``` ... ``` fences
+      const fenceMatch = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+      if (fenceMatch) s = fenceMatch[1].trim();
+      try { return JSON.parse(s); } catch { /* fall through */ }
+      // Slice from first { to last }
+      const first = s.indexOf('{');
+      const last = s.lastIndexOf('}');
+      if (first !== -1 && last > first) {
+        try { return JSON.parse(s.slice(first, last + 1)); } catch { /* ignore */ }
+      }
+      return null;
+    };
+
+    const parsed = extractJson(content);
+    if (!parsed) {
       console.error('Failed to parse AI response:', content);
-      // Fallback if JSON parsing fails
-      analysis = {
-        summary: content.substring(0, 200),
-        deepAnalysis: content,
-        sources: [],
-      };
+      return new Response(
+        JSON.stringify({ error: 'AI returned an unparseable response. Please try again.' }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+
+    const analysis = {
+      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+      deepAnalysis: typeof parsed.deepAnalysis === 'string' ? parsed.deepAnalysis : '',
+      personalizedComparison: parsed.personalizedComparison ?? undefined,
+      sources: Array.isArray(parsed.sources) ? parsed.sources : [],
+    };
 
     console.log('AI analysis generated successfully, personalized:', !!analysis.personalizedComparison);
 
