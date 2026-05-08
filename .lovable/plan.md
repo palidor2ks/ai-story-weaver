@@ -1,41 +1,45 @@
-# Fix: Missing executives & local officials on Results page
+# Why McCormac has federal answers
+
+John E. McCormac is the **Mayor of Colonia, NJ** — a local official. Per the project rule, governors and below should only answer the 5 local-scope topics. But his record in `candidate_answers` includes 174 rows across federal topics (Defense, Foreign Affairs, Environment, Civil Rights, Healthcare, Immigration, etc.), including 27 marked as `voting_record` (impossible for a mayor) and 84 marked `inferred`.
 
 ## Root cause
 
-The `/results` page already supports rendering Federal Executive (President/VP), State Executive (Governor), State Legislative, and Local (Mayor, council) sections. They aren't appearing because the **`fetch-civic-officials` edge function fails to parse your saved address**.
+In `supabase/functions/get-candidate-answers/index.ts` (lines 1328–1348), the scope filter is only applied when the caller does **not** pass `questionIds`:
 
-Edge function logs confirm:
+```ts
+if (questionIds && questionIds.length > 0) {
+  questionsQuery = questionsQuery.in('id', questionIds); // scope ignored
+} else {
+  questionsQuery = questionsQuery.in('topic_id', scopeTopicIds);
+}
 ```
-Address: 13 ORION PL, COLONIA, NJ, 07067
-State: , City: NJ
-ERROR Could not extract state from address
-```
 
-Two regexes in `supabase/functions/fetch-civic-officials/index.ts` only handle `City, ST ZIP` (space) and break on `City, ST, ZIP` (comma — which is what the Census/Google Address Validation fallback returns):
+The matching flow (`useRepresentativeScores` → `get-candidate-answers`) always passes the user's quiz `questionIds`, which are federal-scope. So when a user matches against a mayor, the function generates federal answers for that mayor and bypasses the local-only rule entirely. The `populate-civic-answers` function correctly enforces local-only, but it isn't the path that produced these rows.
 
-- `extractStateFromAddress` (line 127): regex `/,\s*([A-Z]{2})\s+\d{5}/` requires a space between state and zip
-- `extractCityFromAddress` (line 160): walks from the right, hits `07067`, picks the prior segment `NJ` as the city instead of skipping state-only segments
+## Fix plan
 
-When state extraction returns `''`, the function returns early with only the federal executives — and even those are dropped by the page because the Federal Executive section renders only when `civicData` is populated (it is, but the bigger issue is no state/local data gets fetched).
+### 1. Enforce scope in `get-candidate-answers`
+Always compute `scopeTopicIds` for the official, and **intersect** the requested `questionIds` against questions whose `topic_id` is in scope. Out-of-scope question IDs are silently dropped (no answer generated, no row written).
 
-## What to change
+### 2. Skip out-of-scope reps in match scoring
+In `useRepresentativeScores`, before invoking `get-candidate-answers`, filter out local officials when the user's quiz contains only federal questions (and vice versa) so we don't waste calls and don't show a misleading "0 shared" score. Reuse `isLocalOfficial` from `src/lib/localOfficeUtils.ts`.
 
-Single file: `supabase/functions/fetch-civic-officials/index.ts`
+### 3. Clean up existing bad rows
+One-off migration / admin script: delete `candidate_answers` rows where the candidate is a local official (from `static_officials` with `level = 'local'`, or candidates whose `office` matches the local keyword list) AND the question's `topic_id` is in a federal-scope topic. Affects ~174 rows for McCormac and likely similar counts for any other civic officials touched by the matching flow.
 
-1. **`extractStateFromAddress`** — accept comma OR space between state and zip:
-   - Replace the regex with one that matches `,\s*([A-Z]{2})\s*[, ]\s*\d{5}` and also accept `,\s*([A-Z]{2})\s*$` (no zip).
-
-2. **`extractCityFromAddress`** — when the right-hand segment is a state-only or zip-only token, skip both and pick the segment two steps back if needed. Concretely: if `parts[i-1]` matches the state-abbrev pattern, use `parts[i-2]` instead.
-
-3. Add one log line echoing parsed `{state, city}` so we can verify the fix from logs.
-
-## Verification
-
-After deploy:
-- Reload `/results`. The page should show new sections: **Federal Executive**, **State Executive**, **State Legislative**, **Local Officials** (in addition to U.S. Congress).
-- Confirm via `fetch-civic-officials` logs: `State: NJ, City: COLONIA` and no "Could not extract state" error.
+### 4. Also tighten `batch-populate-answers` / `populate-candidate-answers`
+Audit those two functions the same way and add the same scope guard so future runs can't reintroduce the problem.
 
 ## Out of scope
 
-- No data-model changes. No new edge function. No UI changes — the rendering logic on `QuizResults.tsx` already exists and works.
-- If after the fix some sections are still empty (e.g. no Mayor row in DB for Colonia), that's a separate data-coverage issue we can address next; the AI mayor-research is already fire-and-forget triggered by the same edge function.
+- Changing what topics count as local vs federal (the 5/12 split stays).
+- UI changes on the rep card — once the data is clean and scope is enforced, the card will naturally show only local topics for McCormac.
+
+## Technical notes
+
+Files to touch:
+- `supabase/functions/get-candidate-answers/index.ts` — scope intersection at lines ~1338–1348.
+- `supabase/functions/batch-populate-answers/index.ts` — add scope guard.
+- `supabase/functions/populate-candidate-answers/index.ts` — add scope guard.
+- `src/hooks/useRepresentativeScores.ts` — filter reps by scope before invoke.
+- New migration: `DELETE FROM candidate_answers ca USING questions q, topics t, static_officials s WHERE ca.question_id=q.id AND q.topic_id=t.id AND ca.candidate_id=s.id AND s.level='local' AND t.scope='all';`
