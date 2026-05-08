@@ -1,37 +1,33 @@
-# Fix: Seed Local Onboarding Questions
+# Fix: Duplicate Questions in Onboarding Quiz Save
 
 ## Problem
-The 5 local topics each have 20 questions, but **none** are marked `is_onboarding_canonical = true`. The onboarding local quiz filters for canonical questions only, so it finds 0 and shows "No local questions available."
 
-## Solution
-Run a data update to set `is_onboarding_canonical = true` and assign `onboarding_slot` values for 2 questions per local topic (10 total).
+After marking local questions as `is_onboarding_canonical`, the `useAllCanonicalQuestions` hook fetches ALL canonical questions (federal + local). This means:
 
-### Selected questions (2 per topic):
+1. The federal quiz now includes local questions (34 total instead of 24)
+2. The local quiz step asks the same local questions again
+3. When saving, `handleComplete` combines both answer arrays, creating duplicate `questionId` entries
+4. The `save_quiz_results` RPC crashes with "ON CONFLICT DO UPDATE command cannot affect row a second time"
 
-**Local Education**
-1. `local-edu-1` — "Should the state increase funding for public K-12 schools?"
-2. `local-edu-5` — "Should the state expand school choice voucher programs?"
+## Fix
 
-**Local Housing**
-1. `local-housing-1` — "Should local governments reform zoning laws to allow more housing development?"
-2. `local-housing-3` — "Should the state fund affordable housing programs?"
+### 1. Filter `useAllCanonicalQuestions` to federal-only
 
-**Local Public Health**
-1. `local-ph-1` — "Should the state expand Medicaid coverage?"
-2. `local-ph-7` — "Should local governments regulate vaping and tobacco sales?"
+In `src/hooks/useCandidates.ts`, update `useAllCanonicalQuestions` to join with `topics` and filter where `scope != 'local'` (i.e., `scope = 'all'`). This keeps the federal quiz at 24 questions.
 
-**Local Cost of Living**
-1. `local-col-1` — "Should the state or city set a minimum wage above the federal level?"
-2. `local-col-4` — "Should groceries be exempt from state and local sales tax?"
+Since the Supabase query already uses the `questions` table, we can filter by checking `topic_id` is NOT in the set of local topic IDs. The simplest approach: add a `.not('topic_id', 'like', 'local-%')` filter to exclude local topics.
 
-**Local Public Safety**
-1. `local-ps-1` — "Should local police departments receive increased funding?"
-2. `local-ps-5` — "Should the state implement stricter gun control laws?"
+### 2. Deduplicate answers in `handleComplete` (defensive)
 
-### Changes
-- **Database**: UPDATE 10 rows in `questions` table — set `is_onboarding_canonical = true` and `onboarding_slot` (1 or 2)
-- **No code changes needed** — the existing onboarding flow already queries for `is_onboarding_canonical` questions by topic ID
+In `src/pages/Onboarding.tsx`, when building `allAnswers`, deduplicate by `questionId` (local answers take priority since they're the user's most recent response). This prevents the crash even if questions overlap for any reason.
 
-## Technical Notes
-- This is a data-only change (UPDATE existing rows), not a schema change
-- The onboarding code in `Onboarding.tsx` already handles local questions correctly — the only missing piece was the data flags
+```typescript
+const allAnswers = [...quizAnswers];
+for (const la of localQuizAnswers) {
+  const idx = allAnswers.findIndex(a => a.questionId === la.questionId);
+  if (idx >= 0) allAnswers[idx] = la;
+  else allAnswers.push(la);
+}
+```
+
+## No database changes needed

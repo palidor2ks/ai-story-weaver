@@ -323,7 +323,13 @@ export const Onboarding = () => {
   const handleComplete = async () => {
     if (!calculatedScores) return;
     
-    const allAnswers = [...quizAnswers, ...localQuizAnswers];
+    // Deduplicate by questionId — local answers take priority over federal
+    const allAnswers = [...quizAnswers];
+    for (const la of localQuizAnswers) {
+      const idx = allAnswers.findIndex(a => a.questionId === la.questionId);
+      if (idx >= 0) allAnswers[idx] = la;
+      else allAnswers.push(la);
+    }
     
     if (allAnswers.length < minRequiredAnswers) {
       toast.error(`Please answer at least ${minRequiredAnswers} questions before continuing.`);
@@ -354,8 +360,8 @@ export const Onboarding = () => {
   };
 
   // Calculate if user can complete
-  const allAnswers = [...quizAnswers, ...localQuizAnswers];
-  const canComplete = allAnswers.length >= minRequiredAnswers;
+  const allDisplayAnswers = [...quizAnswers, ...localQuizAnswers];
+  const canComplete = allDisplayAnswers.length >= minRequiredAnswers;
   const skippedCount = skippedQuestionIds.size + skippedLocalQuestionIds.size;
 
   const currentAnswer = quizAnswers.find(
@@ -765,7 +771,7 @@ export const Onboarding = () => {
                     {skippedCount} question{skippedCount !== 1 ? 's' : ''} skipped
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Your score is based on {allAnswers.length} of {allAnswers.length + skippedCount} questions.
+                    Your score is based on {allDisplayAnswers.length} of {allDisplayAnswers.length + skippedCount} questions.
                   </p>
                 </div>
               </div>
