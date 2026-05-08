@@ -473,23 +473,32 @@ async function fetchOpenStatesOfficials(
 }
 
 // Fetch local officials from database (no free API exists)
-async function fetchLocalOfficialsFromDB(state: string): Promise<OfficialInfo[]> {
+async function fetchLocalOfficialsFromDB(state: string, city?: string): Promise<OfficialInfo[]> {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
-    const { data, error } = await supabase
+    let query = supabase
       .from('static_officials')
       .select('*')
       .eq('level', 'local')
       .eq('state', state.toUpperCase())
       .eq('is_active', true);
 
+    // Match rows that are city-agnostic (city IS NULL) OR match this user's city (case-insensitive)
+    if (city && city.trim()) {
+      query = query.or(`city.is.null,city.ilike.${city.trim()}`);
+    } else {
+      query = query.is('city', null);
+    }
+
+    const { data, error } = await query;
+
     if (error) {
       console.error('[DB] Error fetching local officials:', error);
       return [];
     }
 
-    console.log(`[DB] Found ${data?.length || 0} local officials for ${state}`);
+    console.log(`[DB] Found ${data?.length || 0} local officials for ${state}${city ? ` / ${city}` : ''}`);
     
     return (data || []).map(official => ({
       id: official.id,
