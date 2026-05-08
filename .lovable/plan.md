@@ -1,19 +1,12 @@
-The scores are missing because the admin table renders `candidate_overrides.overall_score`, but several officials have `overall_score = null` even though they already have `candidate_answers` rows. I verified examples like Craig Coughlin, Joe Vitale, Yvonne Lopez, and Colonia officials: they each have answer counts and calculable averages, but the stored score field is null.
+## Problem
 
-Plan:
+Donald Trump's record exists in `static_officials` (id `P80001571`), but the stored `image_url` (a Wikipedia thumbnail) returns HTTP 400 — so no photo renders on `/feed`.
 
-1. Update the admin coverage hook so scores fall back to calculated answer averages when `overall_score` is null.
-   - Query `candidate_answers` for the currently loaded candidate IDs.
-   - Calculate the average `answer_value` per candidate.
-   - Use that calculated score only as a fallback, preserving manually stored override scores when present.
+## Plan
 
-2. Apply the same fallback to civic/static officials.
-   - This will make state officials and local officials show scores as soon as answers exist.
-   - It will not change the database; it only fixes admin display.
+1. **Download the official 2025 White House portrait** of Donald Trump from a reliable source (whitehouse.gov / Wikimedia Commons full-resolution URL, not a broken thumb path).
+2. **Upload it to the `official-photos` Supabase storage bucket** as `P80001571.jpg` (matches the convention used by `enrich-official-photos`), with a cache-busting `?v=` query string.
+3. **Update `static_officials.image_url`** for `P80001571` to the new public URL via a migration (so the change is permanent and re-runnable).
+4. Verify on `/feed` that Trump's avatar now loads instead of falling back to initials.
 
-3. Keep the current score format.
-   - Values will continue displaying as `Lx.xx`, `CLx.xx`, `C`, `CRx.xx`, or `Rx.xx`.
-
-Expected result:
-- Officials with answers but null stored scores stop showing `—`.
-- Examples from the screenshot should display calculated scores like Craig Coughlin, Joe Vitale, Yvonne Lopez, and the Colonia local officials.
+No frontend code changes needed — `OfficialAvatar` already handles the URL.
