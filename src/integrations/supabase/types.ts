@@ -1893,7 +1893,6 @@ export type Database = {
           coverage_tier: string | null
           created_at: string | null
           district: string | null
-          email: string | null
           id: string
           image_url: string | null
           is_active: boolean | null
@@ -1901,7 +1900,6 @@ export type Database = {
           name: string
           office: string
           party: string
-          phone: string | null
           source_last_fetched_at: string | null
           source_url: string | null
           state: string
@@ -1917,7 +1915,6 @@ export type Database = {
           coverage_tier?: string | null
           created_at?: string | null
           district?: string | null
-          email?: string | null
           id: string
           image_url?: string | null
           is_active?: boolean | null
@@ -1925,7 +1922,6 @@ export type Database = {
           name: string
           office: string
           party: string
-          phone?: string | null
           source_last_fetched_at?: string | null
           source_url?: string | null
           state: string
@@ -1941,7 +1937,6 @@ export type Database = {
           coverage_tier?: string | null
           created_at?: string | null
           district?: string | null
-          email?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean | null
@@ -1949,7 +1944,6 @@ export type Database = {
           name?: string
           office?: string
           party?: string
-          phone?: string | null
           source_last_fetched_at?: string | null
           source_url?: string | null
           state?: string
