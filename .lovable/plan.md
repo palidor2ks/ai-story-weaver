@@ -1,48 +1,31 @@
-## Problem
+## Goal
+Group the Feed page's representative cards into the same sections used on the Profile page, instead of one flat grid.
 
-Two issues blocking local officials for Piscataway, NJ:
+## Sections (in order)
+1. **Federal Executive** — President, Vice President
+2. **U.S. Congress** — Senators + House Representatives (from Congress API)
+3. **State Executive** — Governor, Lt. Governor, AG, etc.
+4. **State Legislature** — State Senate / Assembly
+5. **Local Officials** — Mayor, City Council, etc.
 
-1. **Mayor fetch failing** — `fetch-mayor` logs show `Perplexity 401: insufficient_quota`. Quota is exhausted, so no mayor ever gets cached.
-2. **No council members** (e.g. Dennis Espinosa) — the function only researches the **Mayor**. There's no logic anywhere to discover council/aldermen/local officials.
+Each section renders only when it has at least one card. Section header matches Profile's style: small uppercase muted heading with `Building2` / `MapPin` icon and a count badge.
 
-## Plan
+## Behavior
+- Search, party filter, incumbent filter, and sort all continue to apply — they just operate within each section.
+- The existing Federal/State/Local **tabs** remain. Selecting a specific tab hides the other section groups (e.g. "Federal" shows only Federal Executive + U.S. Congress sections).
+- Card layout inside each section stays the responsive grid (`md:grid-cols-2 lg:grid-cols-3`) so it still looks like the current Feed, just chunked.
+- Empty-state message only appears when *all* sections are empty.
 
-### 1. Add Lovable AI fallback to `fetch-mayor` (keep Perplexity as primary)
+## Implementation (single file: `src/pages/Feed.tsx`)
+1. After `filteredAndSortedCandidates` is built, derive a `groupedCandidates` object by classifying each candidate's `level` + `office`:
+   - Federal Executive: office matches `/president|vice president/i`
+   - U.S. Congress: `level === 'federal'` and not exec
+   - State Executive: `level === 'state'` and office matches `/governor|lieutenant|attorney general|secretary of state|treasurer|comptroller/i`
+   - State Legislature: `level === 'state'` and remaining
+   - Local: `level === 'local'`
+2. Replace the single `<div className="grid …">{map}</div>` with a `sections` array rendered in order, each as `<section>` with header + grid.
+3. Reuse `CandidateCard` as-is. No business-logic changes.
 
-- Try Perplexity `sonar` first (current behavior — returns citations natively).
-- If Perplexity fails with **401 (quota), 402 (payment), 429 (rate limit), or 5xx**, automatically fall back to **Lovable AI Gateway** (`google/gemini-2.5-pro`) with the same prompt and JSON-tool-call schema.
-- If Lovable AI also returns 402/429, mark the queue row `failed` with the reason so it retries later instead of poisoning the cache with `no_data`.
-- Log which provider succeeded so we can monitor Perplexity health.
-
-### 2. Expand scope: full local roster, not just Mayor
-
-- Update the prompt to request **Mayor + sitting City/Town Council members** for `{city, state}`, returning an array.
-- Insert one `static_officials` row per official:
-  - `office`: `"Mayor of Piscataway"` / `"City Council Member, Piscataway"` (+ ward if known)
-  - `level: 'local'`, `city`, `state` populated
-- Add a `kind` column to `mayor_fetch_queue` (default `'roster'`) so one queue entry covers the whole city.
-- Rename the function internally to handle a roster, but keep the `/fetch-mayor` endpoint name for compatibility.
-
-### 3. Display path (no changes needed)
-
-- `fetch-civic-officials` already filters local officials by `(state AND (city = userCity OR city IS NULL))` — confirmed in logs. Once rows land, they appear automatically in the user's reps page and the Local filter on Candidates.
-
-### 4. Admin tools
-
-- Add a "Refresh local officials" button per city in Admin → Static Officials so you can re-trigger AI research when a council changes.
-
-## Technical notes
-
-- **Provider order**: Perplexity → Lovable AI fallback (no swap, both stay wired).
-- **Lovable AI uses tool-calling** for structured output (per gateway docs), not `response_format: json_schema`.
-- **Council scoring is optional** — listing-only is essentially free; running each member through `populate-civic-answers` costs ~$0.30/city.
-
-## Files to change
-
-- `supabase/functions/fetch-mayor/index.ts` — add Lovable AI fallback + expand to roster
-- `supabase/migrations/...` — add `kind` column to `mayor_fetch_queue`
-- `src/pages/Admin.tsx` — add "Refresh local officials" button
-
-## Open question
-
-**Should council members be scored** (run through `populate-civic-answers` like the mayor) or just **listed as contacts**? Listing is free; scoring ~9 council members per city adds ~$0.30/city and ~30s of background work.
+## Out of scope
+- No changes to data fetching, scoring, or filtering logic.
+- No changes to Profile page or shared components.
