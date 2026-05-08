@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useRef } from 'react';
 import { calculateMatchPercentage, calculateEntityScore } from '@/lib/scoring';
+import { isLocalOfficial } from '@/lib/localOfficeUtils';
 
 interface QuizAnswer {
   question_id: string;
@@ -63,12 +64,17 @@ export const useRepresentativeAnswersAndScores = (
 ) => {
   // Track whether we've already generated answers this session
   const hasGeneratedRef = useRef<Set<string>>(new Set());
-  
+
+  // Quiz questions are federal-scope. Local officials (mayor, governor, etc.) only
+  // answer the 5 local-scope topics, so they cannot be matched against a federal quiz.
+  // Filter them out to avoid generating out-of-scope answers and showing misleading scores.
+  const eligibleReps = representatives.filter(r => !isLocalOfficial(r.office));
+
   // Only run query when we have both reps and answers
-  const hasData = representatives.length > 0 && userAnswers.length > 0;
-  
+  const hasData = eligibleReps.length > 0 && userAnswers.length > 0;
+
   // Create stable query keys by sorting
-  const repIds = [...representatives.map(r => r.id)].sort().join(',');
+  const repIds = [...eligibleReps.map(r => r.id)].sort().join(',');
   const questionIds = [...userAnswers.map(a => a.question_id)].sort().join(',');
 
   return useQuery({
@@ -85,7 +91,7 @@ export const useRepresentativeAnswersAndScores = (
       const { data: existingAnswers, error: fetchError } = await supabase
         .from('candidate_answers')
         .select('candidate_id, question_id, answer_value')
-        .in('candidate_id', representatives.map(r => r.id))
+        .in('candidate_id', eligibleReps.map(r => r.id))
         .in('question_id', userAnswers.map(a => a.question_id));
 
       if (fetchError) {
@@ -105,7 +111,7 @@ export const useRepresentativeAnswersAndScores = (
       const repsNeedingGeneration: RepresentativeInfo[] = [];
       const neededQuestions = userAnswers.map(a => a.question_id);
 
-      for (const rep of representatives) {
+      for (const rep of eligibleReps) {
         const repAnswers = answersByCandidate[rep.id] || [];
         
         // If we have enough answers, calculate score immediately
