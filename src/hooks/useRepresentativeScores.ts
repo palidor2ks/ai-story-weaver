@@ -64,12 +64,17 @@ export const useRepresentativeAnswersAndScores = (
 ) => {
   // Track whether we've already generated answers this session
   const hasGeneratedRef = useRef<Set<string>>(new Set());
-  
+
+  // Quiz questions are federal-scope. Local officials (mayor, governor, etc.) only
+  // answer the 5 local-scope topics, so they cannot be matched against a federal quiz.
+  // Filter them out to avoid generating out-of-scope answers and showing misleading scores.
+  const eligibleReps = representatives.filter(r => !isLocalOfficial(r.office));
+
   // Only run query when we have both reps and answers
-  const hasData = representatives.length > 0 && userAnswers.length > 0;
-  
+  const hasData = eligibleReps.length > 0 && userAnswers.length > 0;
+
   // Create stable query keys by sorting
-  const repIds = [...representatives.map(r => r.id)].sort().join(',');
+  const repIds = [...eligibleReps.map(r => r.id)].sort().join(',');
   const questionIds = [...userAnswers.map(a => a.question_id)].sort().join(',');
 
   return useQuery({
