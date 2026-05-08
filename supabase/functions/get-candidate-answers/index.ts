@@ -1143,29 +1143,37 @@ async function processAnswersInBackground(
     // Self-chain: if there are remaining questions, invoke ourselves for the next chunk
     if (remaining.length > 0) {
       const remainingIds = remaining.map(q => q.id);
-      console.log(`[Background] Self-chaining next chunk of ${Math.min(CHUNK_SIZE, remaining.length)} questions...`);
-      
-       try {
-         const chainClient = createClient(supabaseUrl, supabaseKey);
-         const { error: chainError } = await chainClient.functions.invoke('get-candidate-answers', {
-           headers: { Authorization: `Bearer ${supabaseKey}` },
-           body: {
-             candidateId,
-             questionIds: remainingIds,
-             forceRegenerate: true,
-             useBackground: true,
-             _isChainedChunk: true,
-           },
-         });
-         
-         if (chainError) {
-           console.error(`[Background] Self-chain failed:`, chainError);
-         } else {
-           console.log(`[Background] Self-chain invoked successfully for ${remaining.length} remaining questions`);
-         }
-       } catch (chainError) {
-         console.error(`[Background] Self-chain error:`, chainError);
-       }
+      console.log(`[Background] Self-chaining next chunk of ${Math.min(CHUNK_SIZE, remaining.length)} questions via direct fetch...`);
+
+      try {
+        const chainUrl = `${supabaseUrl}/functions/v1/get-candidate-answers`;
+        const resp = await fetch(chainUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'apikey': supabaseKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            candidateId,
+            questionIds: remainingIds,
+            forceRegenerate: true,
+            useBackground: true,
+            _isChainedChunk: true,
+          }),
+        });
+
+        if (!resp.ok) {
+          const bodyText = await resp.text().catch(() => '<no body>');
+          console.error(`[Background] Self-chain HTTP ${resp.status}: ${bodyText.slice(0, 500)}`);
+        } else {
+          console.log(`[Background] Self-chain invoked successfully for ${remaining.length} remaining questions (HTTP ${resp.status})`);
+          // Drain body to free resources
+          await resp.text().catch(() => {});
+        }
+      } catch (chainError) {
+        console.error(`[Background] Self-chain fetch error:`, chainError);
+      }
     }
     
   } catch (error) {
@@ -1175,24 +1183,32 @@ async function processAnswersInBackground(
     // Even on error, try to chain remaining questions so they aren't lost
     if (remaining.length > 0) {
       console.log(`[Background] Attempting to chain remaining ${remaining.length} questions despite error...`);
-       try {
-         const chainClient = createClient(supabaseUrl, supabaseKey);
-         const { error: chainError } = await chainClient.functions.invoke('get-candidate-answers', {
-           headers: { Authorization: `Bearer ${supabaseKey}` },
-           body: {
-             candidateId,
-             questionIds: remaining.map(q => q.id),
-             forceRegenerate: true,
-             useBackground: true,
-             _isChainedChunk: true,
-           },
-         });
-         if (chainError) {
-           console.error(`[Background] Recovery chain failed:`, chainError);
-         }
-       } catch (chainError) {
-         console.error(`[Background] Recovery chain failed:`, chainError);
-       }
+      try {
+        const chainUrl = `${supabaseUrl}/functions/v1/get-candidate-answers`;
+        const resp = await fetch(chainUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'apikey': supabaseKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            candidateId,
+            questionIds: remaining.map(q => q.id),
+            forceRegenerate: true,
+            useBackground: true,
+            _isChainedChunk: true,
+          }),
+        });
+        if (!resp.ok) {
+          const bodyText = await resp.text().catch(() => '<no body>');
+          console.error(`[Background] Recovery chain HTTP ${resp.status}: ${bodyText.slice(0, 500)}`);
+        } else {
+          await resp.text().catch(() => {});
+        }
+      } catch (chainError) {
+        console.error(`[Background] Recovery chain fetch error:`, chainError);
+      }
     }
   }
 }
