@@ -1,11 +1,7 @@
-## Issue
+Root cause found: the live database record being used is `public.candidates`, not `static_officials`. That row still has a Wikimedia thumbnail URL, and that URL is currently returning HTTP 429, so the avatar falls back to “DT”.
 
-The badge tooltips (incumbent star, tier shield, confidence icon) on `CandidateCard` get clipped because the card root has `overflow-hidden` (line 83 of `src/components/CandidateCard.tsx`). Radix tooltips render via portal but only escape if no ancestor clips them — `overflow-hidden` here blocks the top edge.
-
-## Fix
-
-In `src/components/CandidateCard.tsx`, remove `overflow-hidden` from the Card's className. The card uses `rounded-2xl` which already visually contains content; the only thing previously clipped were hover effects, which still render correctly without it.
-
-If any hover/scale effect actually needs clipping, wrap the inner content area (not the whole card) in an `overflow-hidden` div instead, so the tooltip portal layer remains free.
-
-No other files need changes.
+Plan:
+1. Update `public.candidates.image_url` for `P80001571` to the verified White House portrait URL that returns HTTP 200.
+2. Keep the existing `fetch-representatives` White House URL fix so future representative refreshes do not reintroduce the broken image.
+3. Update `OfficialAvatar` so if an image URL changes after a failed load, it resets the error state and tries the new URL instead of staying stuck on initials.
+4. Verify the candidate profile uses the new image URL and the portrait renders on `/candidate/P80001571`.
