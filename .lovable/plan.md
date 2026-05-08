@@ -1,33 +1,42 @@
-# Fix: Duplicate Questions in Onboarding Quiz Save
+
+# Add AI Summaries Per Politician to Quiz Results Page
 
 ## Problem
+The Quiz Results page (`/results`) shows representatives with a basic inline `RepresentativeCard` that only displays name, office, party, and score. It lacks the AI-generated comparison summaries that the User Profile page (`/profile`) provides via `RepresentativeComparisonCard`.
 
-After marking local questions as `is_onboarding_canonical`, the `useAllCanonicalQuestions` hook fetches ALL canonical questions (federal + local). This means:
+## Changes
 
-1. The federal quiz now includes local questions (34 total instead of 24)
-2. The local quiz step asks the same local questions again
-3. When saving, `handleComplete` combines both answer arrays, creating duplicate `questionId` entries
-4. The `save_quiz_results` RPC crashes with "ON CONFLICT DO UPDATE command cannot affect row a second time"
+### 1. Replace inline RepresentativeCard with RepresentativeComparisonCard in QuizResults.tsx
 
-## Fix
+- Import `RepresentativeComparisonCard` from `@/components/RepresentativeComparisonCard`
+- Import `useCandidateScoreMap` hook (already used in UserProfile) to resolve scores for officials
+- Remove the inline `RepresentativeCard` component definition (lines ~213-251)
+- Replace all `<RepresentativeCard>` usages in the representatives section with `<RepresentativeComparisonCard>` — for federal executive, U.S. Congress, state executive, state legislative, and local officials
+- Pass `resolvedScore` using the same `getResolvedScore` pattern from UserProfile
+- This automatically gives each politician card the AI comparison summary, match percentage, and expandable details
 
-### 1. Filter `useAllCanonicalQuestions` to federal-only
+### 2. Add score resolution logic
 
-In `src/hooks/useCandidates.ts`, update `useAllCanonicalQuestions` to join with `topics` and filter where `scope != 'local'` (i.e., `scope = 'all'`). This keeps the federal quiz at 24 questions.
+- Collect all official IDs (from `civicData` and `federalReps`) into an array using `useMemo`
+- Call `useCandidateScoreMap(allOfficialIds)` to fetch saved scores
+- Add `getResolvedScore` helper (same as UserProfile)
 
-Since the Supabase query already uses the `questions` table, we can filter by checking `topic_id` is NOT in the set of local topic IDs. The simplest approach: add a `.not('topic_id', 'like', 'local-%')` filter to exclude local topics.
+### 3. Remove unused code
 
-### 2. Deduplicate answers in `handleComplete` (defensive)
+- Remove the `politicianMatches` state and `generateMatchReason` function (lines ~29-165) — these are replaced by the per-card AI comparisons
+- Remove the "Top Politician Matches" card that used the old `candidates` data — it showed generic matches from all candidates, not the user's actual representatives
+- Remove `useCandidates` import if no longer needed
+- Clean up unused state variables (`isLoadingMatches`, `politicianMatches`)
 
-In `src/pages/Onboarding.tsx`, when building `allAnswers`, deduplicate by `questionId` (local answers take priority since they're the user's most recent response). This prevents the crash even if questions overlap for any reason.
+### What stays the same
+- Overall Score card
+- Party Alignment card
+- AI Profile Summary card
+- Topic Breakdown card
+- Share functionality
+- CTA button at bottom
 
-```typescript
-const allAnswers = [...quizAnswers];
-for (const la of localQuizAnswers) {
-  const idx = allAnswers.findIndex(a => a.questionId === la.questionId);
-  if (idx >= 0) allAnswers[idx] = la;
-  else allAnswers.push(la);
-}
-```
-
-## No database changes needed
+### Technical details
+- `RepresentativeComparisonCard` accepts `{ official: CivicOfficial, resolvedScore: number | null }` — same props pattern used in UserProfile
+- The component internally handles fetching/generating AI comparison summaries via `useRepComparison` and `useGenerateRepComparison` hooks
+- No new edge functions or database changes needed — all infrastructure already exists
