@@ -1,31 +1,28 @@
-## Goal
-Group the Feed page's representative cards into the same sections used on the Profile page, instead of one flat grid.
+## Plan
 
-## Sections (in order)
-1. **Federal Executive** — President, Vice President
-2. **U.S. Congress** — Senators + House Representatives (from Congress API)
-3. **State Executive** — Governor, Lt. Governor, AG, etc.
-4. **State Legislature** — State Senate / Assembly
-5. **Local Officials** — Mayor, City Council, etc.
+Fix the Admin officials list so fetched local officials like Dennis Espinosa appear in the main “Manage Politicians” / answer coverage table, not only the Static Officials tab.
 
-Each section renders only when it has at least one card. Section header matches Profile's style: small uppercase muted heading with `Building2` / `MapPin` icon and a count badge.
+## What I found
 
-## Behavior
-- Search, party filter, incumbent filter, and sort all continue to apply — they just operate within each section.
-- The existing Federal/State/Local **tabs** remain. Selecting a specific tab hides the other section groups (e.g. "Federal" shows only Federal Executive + U.S. Congress sections).
-- Card layout inside each section stays the responsive grid (`md:grid-cols-2 lg:grid-cols-3`) so it still looks like the current Feed, just chunked.
-- Empty-state message only appears when *all* sections are empty.
+- Local officials do exist in `static_officials` and are active.
+- The smaller “Static Officials” tab already reads `static_officials`.
+- The large Admin coverage table reads `candidates` plus `candidate_overrides`, but it does not include `static_officials`, so fetched local officials are omitted there.
 
-## Implementation (single file: `src/pages/Feed.tsx`)
-1. After `filteredAndSortedCandidates` is built, derive a `groupedCandidates` object by classifying each candidate's `level` + `office`:
-   - Federal Executive: office matches `/president|vice president/i`
-   - U.S. Congress: `level === 'federal'` and not exec
-   - State Executive: `level === 'state'` and office matches `/governor|lieutenant|attorney general|secretary of state|treasurer|comptroller/i`
-   - State Legislature: `level === 'state'` and remaining
-   - Local: `level === 'local'`
-2. Replace the single `<div className="grid …">{map}</div>` with a `sections` array rendered in order, each as `<section>` with header + grid.
-3. Reuse `CandidateCard` as-is. No business-logic changes.
+## Implementation
 
-## Out of scope
-- No changes to data fetching, scoring, or filtering logic.
-- No changes to Profile page or shared components.
+1. Update `src/hooks/useCandidatesAnswerCoverage.ts`:
+   - Add `static_officials` as a source for civic officials.
+   - Include active local officials from `static_officials` when the Admin coverage table loads civic/local results.
+   - Preserve existing party/state/level filters.
+   - Deduplicate against existing `candidates` and `candidate_overrides` by candidate ID.
+   - Use existing `candidate_answer_coverage_stats` to show answer counts for those local officials.
+
+2. Keep UI unchanged:
+   - No layout changes.
+   - Existing filters, search, AI research button, and table columns continue to work.
+
+## Scope
+
+- Frontend query logic only.
+- No database schema changes.
+- No changes to mayor/local official fetching.
