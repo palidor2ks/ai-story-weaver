@@ -1263,6 +1263,48 @@ export type Database = {
         }
         Relationships: []
       }
+      mayor_fetch_queue: {
+        Row: {
+          attempts: number
+          city: string
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          last_attempted_at: string | null
+          resulting_candidate_id: string | null
+          state: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          city: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          last_attempted_at?: string | null
+          resulting_candidate_id?: string | null
+          state: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          city?: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          last_attempted_at?: string | null
+          resulting_candidate_id?: string | null
+          state?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       official_transitions: {
         Row: {
           ai_confidence: string | null
@@ -1845,6 +1887,7 @@ export type Database = {
       }
       static_officials: {
         Row: {
+          city: string | null
           confidence: string | null
           coverage_tier: string | null
           created_at: string | null
@@ -1861,6 +1904,7 @@ export type Database = {
           website_url: string | null
         }
         Insert: {
+          city?: string | null
           confidence?: string | null
           coverage_tier?: string | null
           created_at?: string | null
@@ -1877,6 +1921,7 @@ export type Database = {
           website_url?: string | null
         }
         Update: {
+          city?: string | null
           confidence?: string | null
           coverage_tier?: string | null
           created_at?: string | null
