@@ -185,7 +185,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
     enabled: options?.enabled !== false && !!questionCounts,
     placeholderData: (previousData) => previousData, // Keep previous data during filter transitions
     queryFn: async (): Promise<CandidateAnswerCoverage[]> => {
-      const { allQuestions, federalQuestions, localQuestions } = questionCounts!;
+      const { federalQuestions, localQuestions } = questionCounts!;
 
       // Get candidates with coverage tier and confidence
       let candidatesQuery = supabase
