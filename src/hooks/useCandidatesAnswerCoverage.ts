@@ -606,6 +606,62 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         }
       }
 
+      // === STATIC OFFICIALS: federal_executive + local (Mayors, City Council, etc.) ===
+      if (!skipCivic) {
+        let staticQuery = supabase
+          .from('static_officials')
+          .select('id, name, party, office, state, level, coverage_tier, confidence')
+          .eq('is_active', true);
+
+        if (filters.party && filters.party !== 'all') {
+          staticQuery = staticQuery.eq('party', filters.party);
+        }
+        if (filters.state && filters.state !== 'all') {
+          staticQuery = staticQuery.eq('state', filters.state);
+        }
+
+        const { data: staticOfficials } = await staticQuery;
+
+        if (staticOfficials && staticOfficials.length > 0) {
+          const existingIds = new Set(results.map(r => r.id));
+          const newStatic = staticOfficials.filter(s => !existingIds.has(s.id));
+          const newIds = newStatic.map(s => s.id);
+
+          let staticAnswerMap: Record<string, { count: number; sourced: number }> = {};
+          if (newIds.length > 0) {
+            const { data: staticAnswerData } = await supabase
+              .from('candidate_answer_coverage_stats')
+              .select('candidate_id, answer_count, sourced_count')
+              .in('candidate_id', newIds);
+            (staticAnswerData || []).forEach(row => {
+              staticAnswerMap[row.candidate_id] = {
+                count: Number(row.answer_count) || 0,
+                sourced: Number(row.sourced_count) || 0,
+              };
+            });
+          }
+
+          for (const s of newStatic) {
+            const ac = staticAnswerMap[s.id] || { count: 0, sourced: 0 };
+            results.push(makeCivicCoverage(
+              {
+                candidate_id: s.id,
+                name: s.name,
+                party: s.party,
+                office: s.office,
+                state: s.state,
+                overall_score: null,
+                coverage_tier: s.coverage_tier,
+                confidence: s.confidence,
+              },
+              ac.count,
+              ac.sourced,
+              allQuestions,
+            ));
+          }
+        }
+      }
+
       // Apply level filter
       if (filters.level && filters.level !== 'all') {
         results = results.filter(c => c.level === filters.level);
