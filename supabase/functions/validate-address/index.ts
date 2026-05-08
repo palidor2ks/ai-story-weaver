@@ -21,7 +21,58 @@ interface AddressValidationResult {
   lng?: number;
   validationGranularity?: string;
   geocodeGranularity?: string;
+  validationSource?: string;
 }
+
+const jsonResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+
+const parseMatchedAddress = (matchedAddress: string, originalAddress: string): AddressValidationResult => {
+  const parts = matchedAddress.split(',').map((part) => part.trim()).filter(Boolean);
+  const streetLine = parts[0] || originalAddress;
+  const city = parts.length >= 4 ? parts[parts.length - 3] : '';
+  const state = parts.length >= 3 ? parts[parts.length - 2] : '';
+  const zipCode = parts.length >= 2 ? parts[parts.length - 1] : '';
+  const streetMatch = streetLine.match(/^(\S+)\s+(.+)$/);
+
+  return {
+    isValid: Boolean(matchedAddress),
+    formattedAddress: matchedAddress || originalAddress,
+    streetNumber: streetMatch?.[1] || '',
+    street: streetMatch?.[2] || streetLine,
+    city,
+    county: '',
+    state,
+    stateFull: state,
+    zipCode,
+    country: 'US',
+    validationGranularity: matchedAddress ? 'PREMISE' : 'UNKNOWN',
+    geocodeGranularity: matchedAddress ? 'PREMISE' : 'UNKNOWN',
+    validationSource: 'census',
+  };
+};
+
+const validateWithCensus = async (address: string): Promise<AddressValidationResult> => {
+  const encodedAddress = encodeURIComponent(address.trim());
+  const response = await fetch(
+    `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodedAddress}&benchmark=Public_AR_Current&format=json`,
+  );
+
+  if (!response.ok) {
+    console.error('Census geocoder error:', response.status, await response.text());
+    return parseMatchedAddress('', address);
+  }
+
+  const data = await response.json();
+  const match = data?.result?.addressMatches?.[0];
+  const result = parseMatchedAddress(match?.matchedAddress || '', address);
+  result.lat = match?.coordinates?.y;
+  result.lng = match?.coordinates?.x;
+  return result;
+};
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -33,32 +84,27 @@ serve(async (req) => {
     // Auth check - require authenticated user
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse({ error: 'Unauthorized' }, 401);
     }
     const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
     const { address } = await req.json();
 
     if (!address || typeof address !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'Address is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return jsonResponse({ error: 'Address is required' }, 400);
     }
 
     const apiKey = Deno.env.get('GOOGLE_PLACES_API_KEY');
     if (!apiKey) {
       console.error('GOOGLE_PLACES_API_KEY not configured');
-      return new Response(
-        JSON.stringify({ error: 'Google API not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      const fallbackResult = await validateWithCensus(address);
+      return jsonResponse(fallbackResult);
     }
 
     console.log('Validating address:', address);
@@ -84,23 +130,16 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Google API error:', response.status, errorText);
-      return new Response(
-        JSON.stringify({ error: 'Failed to validate address', details: errorText }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      const fallbackResult = await validateWithCensus(address);
+      return jsonResponse(fallbackResult);
     }
 
     const data = await response.json();
     console.log('Address validation response received');
 
     if (!data.result) {
-      return new Response(
-        JSON.stringify({ 
-          isValid: false, 
-          error: 'Could not validate address' 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      const fallbackResult = await validateWithCensus(address);
+      return jsonResponse(fallbackResult);
     }
 
     const result = data.result;
@@ -142,20 +181,15 @@ serve(async (req) => {
       lng: geocode?.location?.longitude,
       validationGranularity,
       geocodeGranularity,
+      validationSource: 'google-address-validation',
     };
 
     console.log('Address validated:', addressDetails.formattedAddress, '- Valid:', isValid);
 
-    return new Response(
-      JSON.stringify(addressDetails),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse(addressDetails);
 
   } catch (error) {
     console.error('Error in validate-address:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({ error: 'Internal server error' }, 500);
   }
 });
