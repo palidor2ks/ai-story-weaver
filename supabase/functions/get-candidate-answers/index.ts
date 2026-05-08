@@ -1221,10 +1221,15 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const requestBody = await req.json().catch(() => ({}));
+
     // Auth check - require authenticated user OR internal chained request
     const authHeader = req.headers.get('Authorization');
     const internalChainSecret = req.headers.get(INTERNAL_CHAIN_HEADER);
-    const isInternalChain = internalChainSecret === SUPABASE_SERVICE_ROLE_KEY;
+    const bodyChainSecret = typeof requestBody?._internalChainSecret === 'string'
+      ? requestBody._internalChainSecret
+      : null;
+    const isInternalChain = internalChainSecret === SUPABASE_SERVICE_ROLE_KEY || bodyChainSecret === SUPABASE_SERVICE_ROLE_KEY;
 
     if (!isInternalChain) {
       if (!authHeader?.startsWith('Bearer ')) {
@@ -1254,7 +1259,7 @@ Deno.serve(async (req) => {
       candidateState,
       useBackground = true, // Default to background processing for deep research
       _isChainedChunk = false, // Internal: set by self-chaining
-    } = await req.json();
+    } = requestBody;
 
     if (_isChainedChunk) {
       console.log(`[Chain] Received chained chunk for ${candidateId} with ${questionIds?.length || 0} question IDs`);
