@@ -1887,11 +1887,13 @@ export type Database = {
       }
       static_officials: {
         Row: {
+          bio: string | null
           city: string | null
           confidence: string | null
           coverage_tier: string | null
           created_at: string | null
           district: string | null
+          email: string | null
           id: string
           image_url: string | null
           is_active: boolean | null
@@ -1899,16 +1901,23 @@ export type Database = {
           name: string
           office: string
           party: string
+          phone: string | null
+          source_last_fetched_at: string | null
+          source_url: string | null
           state: string
+          term_end: string | null
+          term_start: string | null
           updated_at: string | null
           website_url: string | null
         }
         Insert: {
+          bio?: string | null
           city?: string | null
           confidence?: string | null
           coverage_tier?: string | null
           created_at?: string | null
           district?: string | null
+          email?: string | null
           id: string
           image_url?: string | null
           is_active?: boolean | null
@@ -1916,16 +1925,23 @@ export type Database = {
           name: string
           office: string
           party: string
+          phone?: string | null
+          source_last_fetched_at?: string | null
+          source_url?: string | null
           state: string
+          term_end?: string | null
+          term_start?: string | null
           updated_at?: string | null
           website_url?: string | null
         }
         Update: {
+          bio?: string | null
           city?: string | null
           confidence?: string | null
           coverage_tier?: string | null
           created_at?: string | null
           district?: string | null
+          email?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean | null
@@ -1933,7 +1949,12 @@ export type Database = {
           name?: string
           office?: string
           party?: string
+          phone?: string | null
+          source_last_fetched_at?: string | null
+          source_url?: string | null
           state?: string
+          term_end?: string | null
+          term_start?: string | null
           updated_at?: string | null
           website_url?: string | null
         }

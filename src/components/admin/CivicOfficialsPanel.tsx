@@ -88,6 +88,24 @@ export function CivicOfficialsPanel() {
   const [imageUrl, setImageUrl] = useState('');
   const [savingImage, setSavingImage] = useState(false);
   const [enrichingPhotos, setEnrichingPhotos] = useState(false);
+  const [scrapingPiscataway, setScrapingPiscataway] = useState(false);
+
+  const handleScrapePiscataway = async () => {
+    setScrapingPiscataway(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('scrape-piscataway-officials', {});
+      if (error) throw error;
+      const updated = data?.updated ?? 0;
+      const total = data?.processed ?? 0;
+      toast.success(`Piscataway: ${updated}/${total} officials refreshed`);
+      queryClient.invalidateQueries({ queryKey: ['civic-officials-admin'] });
+    } catch (err) {
+      console.error('Error scraping Piscataway:', err);
+      toast.error('Failed to refresh Piscataway officials');
+    } finally {
+      setScrapingPiscataway(false);
+    }
+  };
 
   const handleEnrichPhotos = async (mode: 'missing' | 'rehost-all' = 'missing') => {
     setEnrichingPhotos(true);
@@ -220,6 +238,16 @@ export function CivicOfficialsPanel() {
               >
                 {enrichingPhotos ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
                 Re-host All Photos
+              </Button>
+              <Button
+                onClick={handleScrapePiscataway}
+                disabled={scrapingPiscataway}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+              >
+                {scrapingPiscataway ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Refresh Piscataway
               </Button>
               {officialsWithoutAnswers.length > 0 && (
                 <Button
