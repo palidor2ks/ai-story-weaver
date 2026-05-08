@@ -87,6 +87,26 @@ export function CivicOfficialsPanel() {
   const [editingImage, setEditingImage] = useState<CivicOfficial | null>(null);
   const [imageUrl, setImageUrl] = useState('');
   const [savingImage, setSavingImage] = useState(false);
+  const [enrichingPhotos, setEnrichingPhotos] = useState(false);
+
+  const handleEnrichPhotos = async () => {
+    setEnrichingPhotos(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enrich-official-photos', {
+        body: { limit: 25 },
+      });
+      if (error) throw error;
+      const updated = data?.updated ?? 0;
+      const attempted = data?.attempted ?? 0;
+      toast.success(`Photo enrichment: ${updated}/${attempted} updated`);
+      queryClient.invalidateQueries({ queryKey: ['civic-officials-admin'] });
+    } catch (err) {
+      console.error('Error enriching photos:', err);
+      toast.error('Failed to enrich photos');
+    } finally {
+      setEnrichingPhotos(false);
+    }
+  };
 
   const handleDelete = async (candidateId: string) => {
     try {
