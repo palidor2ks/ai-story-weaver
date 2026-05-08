@@ -92,6 +92,25 @@ export default function Admin() {
   const [editingOfficial, setEditingOfficial] = useState<StaticOfficial | null>(null);
   const [formData, setFormData] = useState<OfficialFormData>(defaultFormData);
   const [activeTab, setActiveTab] = useState("officials");
+  const [scrapingPiscataway, setScrapingPiscataway] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleScrapePiscataway = async () => {
+    setScrapingPiscataway(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('scrape-piscataway-officials', {});
+      if (error) throw error;
+      const updated = data?.updated ?? 0;
+      const total = data?.processed ?? 0;
+      toast.success(`Piscataway: ${updated}/${total} officials refreshed`);
+      queryClient.invalidateQueries({ queryKey: ['static-officials'] });
+    } catch (err) {
+      console.error('Error scraping Piscataway:', err);
+      toast.error('Failed to refresh Piscataway officials');
+    } finally {
+      setScrapingPiscataway(false);
+    }
+  };
 
   // Loading states
   if (authLoading || adminLoading) {
