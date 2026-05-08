@@ -123,11 +123,14 @@ function mapParty(party: string | undefined): 'Democrat' | 'Republican' | 'Indep
 
 // Extract state from address
 function extractStateFromAddress(address: string): string {
-  // Common state abbreviations pattern
-  const stateMatch = address.match(/,\s*([A-Z]{2})\s+\d{5}/);
+  // "City, ST 07067" OR "City, ST, 07067" OR "City, ST,07067"
+  const stateMatch = address.match(/,\s*([A-Z]{2})\s*[,\s]\s*\d{5}/);
   if (stateMatch) return stateMatch[1];
-  
-  // Try to find state name
+
+  // "City, ST" at end, no zip
+  const tailMatch = address.match(/,\s*([A-Z]{2})\s*$/);
+  if (tailMatch) return tailMatch[1];
+
   const stateNames: Record<string, string> = {
     'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
     'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
@@ -140,37 +143,35 @@ function extractStateFromAddress(address: string): string {
     'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
     'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
   };
-  
+
   const lowerAddress = address.toLowerCase();
   for (const [name, abbr] of Object.entries(stateNames)) {
     if (lowerAddress.includes(name)) return abbr;
   }
-  
-  // Look for abbreviation anywhere
+
   const abbrevMatch = address.match(/\b([A-Z]{2})\b/);
   if (abbrevMatch && Object.values(stateNames).includes(abbrevMatch[1])) {
     return abbrevMatch[1];
   }
-  
+
   return '';
 }
 
-// Extract city from address. Census-style: "234 DAVIS AVE, PISCATAWAY, NJ, 08854"
-// or user-typed: "234 Davis Ave, Piscataway, NJ 08854"
+// Extract city from address. Handles "234 DAVIS AVE, PISCATAWAY, NJ, 08854",
+// "234 Davis Ave, Piscataway, NJ 08854", and "...Piscataway, NJ" (no zip).
 function extractCityFromAddress(address: string): string {
   if (!address) return '';
   const parts = address.split(',').map(p => p.trim()).filter(Boolean);
   if (parts.length < 2) return '';
-  // Walk from the right looking for the part immediately before "STATE [ZIP]"
+  const stateOrZip = /^[A-Z]{2}(\s+\d{5}(-\d{4})?)?$|^\d{5}(-\d{4})?$/;
+  const stateOnly = /^[A-Z]{2}$/;
   for (let i = parts.length - 1; i >= 1; i--) {
-    const seg = parts[i];
-    // matches "NJ" or "NJ 08854" or "08854"
-    if (/^[A-Z]{2}(\s+\d{5}(-\d{4})?)?$/.test(seg) || /^\d{5}(-\d{4})?$/.test(seg)) {
-      const candidate = parts[i - 1];
-      if (candidate && !/^\d/.test(candidate)) return candidate;
-    }
+    if (!stateOrZip.test(parts[i])) continue;
+    let j = i - 1;
+    if (j >= 1 && stateOnly.test(parts[j])) j--; // skip "NJ" when zip is its own segment
+    const candidate = parts[j];
+    if (candidate && !/^\d/.test(candidate) && !stateOnly.test(candidate)) return candidate;
   }
-  // Fallback: second part
   return parts[1] || '';
 }
 
