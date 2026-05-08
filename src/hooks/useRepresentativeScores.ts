@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useRef } from 'react';
 import { calculateMatchPercentage, calculateEntityScore } from '@/lib/scoring';
+import { isLocalOfficial } from '@/lib/localOfficeUtils';
 
 interface QuizAnswer {
   question_id: string;
