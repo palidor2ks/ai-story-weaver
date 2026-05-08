@@ -1,0 +1,1 @@
+DELETE FROM public.static_officials WHERE id IN ('federal_president', 'federal_vice_president');
