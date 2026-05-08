@@ -158,6 +158,7 @@ export default function Admin() {
     const officialData = {
       ...formData,
       district: formData.district || undefined,
+      city: formData.city || undefined,
       image_url: formData.image_url || undefined,
       website_url: formData.website_url || undefined,
     };
