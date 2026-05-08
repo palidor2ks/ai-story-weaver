@@ -1226,10 +1226,7 @@ Deno.serve(async (req) => {
     // Auth check - require authenticated user OR internal chained request
     const authHeader = req.headers.get('Authorization');
     const internalChainSecret = req.headers.get(INTERNAL_CHAIN_HEADER);
-    const bodyChainSecret = typeof requestBody?._internalChainSecret === 'string'
-      ? requestBody._internalChainSecret
-      : null;
-    const isInternalChain = internalChainSecret === SUPABASE_SERVICE_ROLE_KEY || bodyChainSecret === SUPABASE_SERVICE_ROLE_KEY;
+    const isInternalChain = internalChainSecret === SUPABASE_SERVICE_ROLE_KEY;
 
     if (!isInternalChain) {
       if (!authHeader?.startsWith('Bearer ')) {
