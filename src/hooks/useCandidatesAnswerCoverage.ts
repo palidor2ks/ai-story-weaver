@@ -154,20 +154,23 @@ function useQuestionCounts() {
     queryKey: ['question-counts'],
     staleTime: 5 * 60 * 1000, // 5 min — topics/questions rarely change
     queryFn: async () => {
-      const { data: federalTopics } = await supabase
+      const { data: topicRows } = await supabase
         .from('topics')
-        .select('id')
-        .eq('scope', 'all');
-      const federalTopicIds = (federalTopics || []).map(t => t.id);
-      const [allQ, fedQ] = await Promise.all([
+        .select('id, scope');
+      const federalTopicIds = (topicRows || []).filter(t => t.scope === 'all').map(t => t.id);
+      const localTopicIds = (topicRows || []).filter(t => t.scope === 'local').map(t => t.id);
+      const [allQ, fedQ, localQ] = await Promise.all([
         supabase.from('questions').select('*', { count: 'exact', head: true }),
         supabase.from('questions').select('*', { count: 'exact', head: true }).in('topic_id', federalTopicIds),
+        supabase.from('questions').select('*', { count: 'exact', head: true }).in('topic_id', localTopicIds),
       ]);
       if (allQ.error) throw allQ.error;
       return {
         federalTopicIds,
+        localTopicIds,
         allQuestions: allQ.count || 0,       // 340 (17 topics)
         federalQuestions: fedQ.count || 0,   // 240 (12 federal topics)
+        localQuestions: localQ.count || 0,   // local-scope total (5 topics)
       };
     },
   });
