@@ -254,11 +254,11 @@ function mapExecutiveToRepresentative(executive: Executive): any | null {
   
   // For executives, use bioguide image or official White House images
   let imageUrl: string;
-  if (executive.id.bioguide) {
-    imageUrl = `https://bioguide.congress.gov/bioguide/photo/${bioguideId[0]}/${bioguideId}.jpg`;
-  } else if (isPrez) {
+  if (isPrez) {
     // Official White House portrait for President Trump
-    imageUrl = 'https://www.whitehouse.gov/wp-content/uploads/2025/01/P20250120CS-0029-1536x2048.jpg';
+    imageUrl = 'https://www.whitehouse.gov/wp-content/uploads/2025/06/President-Donald-Trump-Official-Presidential-Portrait.png';
+  } else if (executive.id.bioguide && bioguideId !== 'V000137') {
+    imageUrl = `https://bioguide.congress.gov/bioguide/photo/${bioguideId[0]}/${bioguideId}.jpg`;
   } else {
     // Official White House portrait for Vice President Vance
     imageUrl = 'https://www.whitehouse.gov/wp-content/uploads/2025/01/P20250120CS-0100-1536x2048.jpg';
