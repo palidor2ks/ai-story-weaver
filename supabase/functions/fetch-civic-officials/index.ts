@@ -861,7 +861,7 @@ async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader
 }
 
 // Fetch manually-added civic officials from candidate_overrides (non-openstates, non-federal)
-async function fetchManualCivicOverrides(state: string): Promise<OfficialInfo[]> {
+async function fetchManualCivicOverrides(state: string, city?: string): Promise<OfficialInfo[]> {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const { data, error } = await supabase
@@ -876,20 +876,49 @@ async function fetchManualCivicOverrides(state: string): Promise<OfficialInfo[]>
       return [];
     }
 
-    return (data || []).filter(o => o.name).map(o => ({
-      id: o.candidate_id,
-      name: o.name!,
-      party: mapParty(o.party || undefined),
-      office: o.office || 'Official',
-      level: (o.office?.toLowerCase().includes('governor') ? 'state_executive' : 'local') as OfficeLevelType,
-      state: o.state || state.toUpperCase(),
-      district: o.district || undefined,
-      image_url: o.image_url || '',
-      is_incumbent: true,
-      overall_score: null,
-      coverage_tier: 'tier_3',
-      confidence: 'low',
-    }));
+    const rows = (data || []).filter(o => o.name);
+
+    // City-filter local overrides using static_officials.city as the source of truth.
+    // Non-local rows (e.g., governor) are kept regardless of city.
+    let cityById = new Map<string, string | null>();
+    const ids = rows.map(r => r.candidate_id).filter(Boolean) as string[];
+    if (ids.length) {
+      const { data: staticRows } = await supabase
+        .from('static_officials')
+        .select('id, city')
+        .in('id', ids);
+      cityById = new Map((staticRows || []).map(r => [r.id, r.city ?? null]));
+    }
+    const userCity = (city || '').trim().toLowerCase();
+
+    return rows
+      .map(o => {
+        const level: OfficeLevelType = o.office?.toLowerCase().includes('governor')
+          ? 'state_executive'
+          : 'local';
+        return { row: o, level };
+      })
+      .filter(({ row, level }) => {
+        if (level !== 'local') return true;
+        const rowCity = cityById.get(row.candidate_id);
+        if (rowCity == null) return true; // city-agnostic
+        if (!userCity) return false; // unknown user city → drop city-specific overrides
+        return rowCity.trim().toLowerCase() === userCity;
+      })
+      .map(({ row: o, level }) => ({
+        id: o.candidate_id,
+        name: o.name!,
+        party: mapParty(o.party || undefined),
+        office: o.office || 'Official',
+        level,
+        state: o.state || state.toUpperCase(),
+        district: o.district || undefined,
+        image_url: o.image_url || '',
+        is_incumbent: true,
+        overall_score: null,
+        coverage_tier: 'tier_3',
+        confidence: 'low',
+      }));
   } catch (error) {
     console.error('[Manual Overrides] Exception:', error);
     return [];
