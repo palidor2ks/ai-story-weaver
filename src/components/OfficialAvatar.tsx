@@ -7,6 +7,7 @@ interface OfficialAvatarProps {
   party: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
+  imageClassName?: string;
 }
 
 const getPartyRingColor = (party: string) => {
@@ -55,6 +56,7 @@ export const OfficialAvatar = ({
   party,
   size = 'md',
   className,
+  imageClassName,
 }: OfficialAvatarProps) => {
   const [imageError, setImageError] = useState(false);
   useEffect(() => { setImageError(false); }, [imageUrl]);
@@ -73,7 +75,7 @@ export const OfficialAvatar = ({
         <img
           src={imageUrl}
           alt={name}
-          className="w-full h-full object-cover"
+          className={cn("w-full h-full object-cover object-top", imageClassName)}
           onError={() => setImageError(true)}
         />
       ) : (

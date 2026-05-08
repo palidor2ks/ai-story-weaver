@@ -239,6 +239,7 @@ export const CandidateProfile = () => {
               party={candidate.party}
               size="lg"
               className="rounded-2xl"
+              imageClassName="object-top scale-110"
             />
 
             {/* Info */}
