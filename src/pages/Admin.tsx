@@ -142,6 +142,7 @@ export default function Admin() {
       level: official.level,
       state: official.state,
       district: official.district || '',
+      city: official.city || '',
       image_url: official.image_url || '',
       website_url: official.website_url || '',
       is_active: official.is_active,
