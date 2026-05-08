@@ -91,7 +91,7 @@ export const useRepresentativeAnswersAndScores = (
       const { data: existingAnswers, error: fetchError } = await supabase
         .from('candidate_answers')
         .select('candidate_id, question_id, answer_value')
-        .in('candidate_id', representatives.map(r => r.id))
+        .in('candidate_id', eligibleReps.map(r => r.id))
         .in('question_id', userAnswers.map(a => a.question_id));
 
       if (fetchError) {
