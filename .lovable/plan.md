@@ -1,42 +1,35 @@
-
-# Add AI Summaries Per Politician to Quiz Results Page
-
 ## Problem
-The Quiz Results page (`/results`) shows representatives with a basic inline `RepresentativeCard` that only displays name, office, party, and score. It lacks the AI-generated comparison summaries that the User Profile page (`/profile`) provides via `RepresentativeComparisonCard`.
 
-## Changes
+`get-candidate-answers` processes questions in chunks of 5, then self-chains for the next chunk. The self-chain call returns **401 Unauthorized**, so only the first 5 questions are ever processed per request.
 
-### 1. Replace inline RepresentativeCard with RepresentativeComparisonCard in QuizResults.tsx
+Cause: the chained call uses `createClient(url, SERVICE_ROLE_KEY).functions.invoke(...)`, but `supabase-js` does not automatically attach the service role as the `Authorization: Bearer ...` header — it only sends `apikey`. The handler's auth gate (`token === SUPABASE_SERVICE_ROLE_KEY`) therefore rejects the request.
 
-- Import `RepresentativeComparisonCard` from `@/components/RepresentativeComparisonCard`
-- Import `useCandidateScoreMap` hook (already used in UserProfile) to resolve scores for officials
-- Remove the inline `RepresentativeCard` component definition (lines ~213-251)
-- Replace all `<RepresentativeCard>` usages in the representatives section with `<RepresentativeComparisonCard>` — for federal executive, U.S. Congress, state executive, state legislative, and local officials
-- Pass `resolvedScore` using the same `getResolvedScore` pattern from UserProfile
-- This automatically gives each politician card the AI comparison summary, match percentage, and expandable details
+## Fix
 
-### 2. Add score resolution logic
+In `supabase/functions/get-candidate-answers/index.ts`, change both self-chain invocations (the success path around line 1149 and the recovery path around line 1178) to explicitly pass the `Authorization` header with the service role key:
 
-- Collect all official IDs (from `civicData` and `federalReps`) into an array using `useMemo`
-- Call `useCandidateScoreMap(allOfficialIds)` to fetch saved scores
-- Add `getResolvedScore` helper (same as UserProfile)
+```ts
+const { error: chainError } = await chainClient.functions.invoke('get-candidate-answers', {
+  headers: {
+    Authorization: `Bearer ${supabaseKey}`,
+  },
+  body: { candidateId, questionIds: remainingIds, forceRegenerate: true, useBackground: true, _isChainedChunk: true },
+});
+```
 
-### 3. Remove unused code
+That makes the receiving handler see `Bearer <SERVICE_ROLE_KEY>`, which matches its `isServiceRole` check, and the chain continues until `remaining.length === 0`.
 
-- Remove the `politicianMatches` state and `generateMatchReason` function (lines ~29-165) — these are replaced by the per-card AI comparisons
-- Remove the "Top Politician Matches" card that used the old `candidates` data — it showed generic matches from all candidates, not the user's actual representatives
-- Remove `useCandidates` import if no longer needed
-- Clean up unused state variables (`isLoadingMatches`, `politicianMatches`)
+## Optional follow-up (not required to unblock)
 
-### What stays the same
-- Overall Score card
-- Party Alignment card
-- AI Profile Summary card
-- Topic Breakdown card
-- Share functionality
-- CTA button at bottom
+- Add a small `await new Promise(r => setTimeout(r, 250))` before chaining to ensure the prior background `EdgeRuntime.waitUntil` work has flushed DB writes.
+- Increase `CHUNK_SIZE` from 5 to 8 if wall-clock budget allows, to reduce chain hops. Keep at 5 if Perplexity quota issues are common (logs show repeated 401s from Perplexity falling back to Gemini, which slows each question).
 
-### Technical details
-- `RepresentativeComparisonCard` accepts `{ official: CivicOfficial, resolvedScore: number | null }` — same props pattern used in UserProfile
-- The component internally handles fetching/generating AI comparison summaries via `useRepComparison` and `useGenerateRepComparison` hooks
-- No new edge functions or database changes needed — all infrastructure already exists
+## Out of scope
+
+- The Perplexity 401 (`exceeded your current quota`) is a separate billing issue and is not what's blocking the chunking. Gemini fallback already handles it.
+
+## Verification
+
+1. Trigger answer generation for a candidate with >5 missing questions.
+2. Watch edge function logs — should see repeated `[Background] Self-chain invoked successfully` and `[Chain] Received chained chunk` until all questions are saved.
+3. Confirm `candidate_answers` row count for that candidate equals total expected questions.
