@@ -1,35 +1,25 @@
-## Problem
+## Plan
 
-`get-candidate-answers` processes questions in chunks of 5, then self-chains for the next chunk. The self-chain call returns **401 Unauthorized**, so only the first 5 questions are ever processed per request.
+The codebase already contains the intended `Authorization` header fix, but the live logs still show chained calls returning `401 Unauthorized` and no `[Chain] Received chained chunk` messages. That means either the deployed function is still on the old code, or `supabase.functions.invoke()` is still not forwarding the service-role Authorization header during self-invocation.
 
-Cause: the chained call uses `createClient(url, SERVICE_ROLE_KEY).functions.invoke(...)`, but `supabase-js` does not automatically attach the service role as the `Authorization: Bearer ...` header — it only sends `apikey`. The handler's auth gate (`token === SUPABASE_SERVICE_ROLE_KEY`) therefore rejects the request.
+### 1. Make self-chaining more reliable
+- Replace the self-chain `chainClient.functions.invoke('get-candidate-answers', ...)` calls with a direct `fetch()` to:
+  `https://<project>.supabase.co/functions/v1/get-candidate-answers`
+- Send both required auth headers explicitly:
+  - `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>`
+  - `apikey: <SUPABASE_SERVICE_ROLE_KEY>`
+- Keep the same body payload so the next chunk still runs in background mode.
 
-## Fix
+### 2. Improve diagnostics if it fails again
+- When a chain call returns non-2xx, log the HTTP status and response body instead of only the generic `FunctionsHttpError`.
+- Add a minimal log that confirms chained requests reached the handler.
 
-In `supabase/functions/get-candidate-answers/index.ts`, change both self-chain invocations (the success path around line 1149 and the recovery path around line 1178) to explicitly pass the `Authorization` header with the service role key:
+### 3. Deploy and verify the edge function
+- Deploy `get-candidate-answers` after the code change.
+- Check fresh logs for:
+  - `[Chain] Received chained chunk ...`
+  - `[Background] Self-chain invoked successfully ...`
+  - Additional chunks processing beyond the first 5.
 
-```ts
-const { error: chainError } = await chainClient.functions.invoke('get-candidate-answers', {
-  headers: {
-    Authorization: `Bearer ${supabaseKey}`,
-  },
-  body: { candidateId, questionIds: remainingIds, forceRegenerate: true, useBackground: true, _isChainedChunk: true },
-});
-```
-
-That makes the receiving handler see `Bearer <SERVICE_ROLE_KEY>`, which matches its `isServiceRole` check, and the chain continues until `remaining.length === 0`.
-
-## Optional follow-up (not required to unblock)
-
-- Add a small `await new Promise(r => setTimeout(r, 250))` before chaining to ensure the prior background `EdgeRuntime.waitUntil` work has flushed DB writes.
-- Increase `CHUNK_SIZE` from 5 to 8 if wall-clock budget allows, to reduce chain hops. Keep at 5 if Perplexity quota issues are common (logs show repeated 401s from Perplexity falling back to Gemini, which slows each question).
-
-## Out of scope
-
-- The Perplexity 401 (`exceeded your current quota`) is a separate billing issue and is not what's blocking the chunking. Gemini fallback already handles it.
-
-## Verification
-
-1. Trigger answer generation for a candidate with >5 missing questions.
-2. Watch edge function logs — should see repeated `[Background] Self-chain invoked successfully` and `[Chain] Received chained chunk` until all questions are saved.
-3. Confirm `candidate_answers` row count for that candidate equals total expected questions.
+### Technical note
+The chunk size of 5 is intentional to avoid Edge Function wall-clock limits. The bug is not that it processes 5 at a time; the bug is that the handoff to the next chunk is still being rejected with 401.
