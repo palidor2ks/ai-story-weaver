@@ -200,18 +200,30 @@ export function CivicOfficialsPanel() {
                 State and local officials added when users look up their address. Use AI research to populate their positions on quiz questions.
               </CardDescription>
             </div>
-            {officialsWithoutAnswers.length > 0 && (
+            <div className="flex items-center gap-2">
               <Button
-                onClick={handlePopulateAll}
-                disabled={populatingAll}
+                onClick={handleEnrichPhotos}
+                disabled={enrichingPhotos}
                 variant="outline"
                 size="sm"
                 className="gap-2"
               >
-                {populatingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                Research All ({officialsWithoutAnswers.length} pending)
+                {enrichingPhotos ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                Find Missing Photos
               </Button>
-            )}
+              {officialsWithoutAnswers.length > 0 && (
+                <Button
+                  onClick={handlePopulateAll}
+                  disabled={populatingAll}
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                >
+                  {populatingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Research All ({officialsWithoutAnswers.length} pending)
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
