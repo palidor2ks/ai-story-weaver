@@ -98,19 +98,33 @@ serve(async (req) => {
     
     console.log('Available geography layers:', Object.keys(geographies || {}));
     
-    // Extract state from the matched address
+    // Extract state and city from the matched address
     let state: string | null = null;
+    let city: string | null = null;
     if (matchedAddress) {
       // Census returns addresses like "234 DAVIS AVE, PISCATAWAY, NJ, 08854"
       const parts = matchedAddress.split(',').map((p: string) => p.trim());
       if (parts.length >= 3) {
         state = parts[parts.length - 2]; // State is second to last
+        city = parts[parts.length - 3];  // City is third from last
       }
     }
-    
+
     // Also try to get state from geographies
     if (!state && geographies?.['States']?.[0]) {
       state = geographies['States'][0].STUSAB || geographies['States'][0].STATE;
+    }
+
+    // Try to extract city from Incorporated Places / Census Designated Places layers
+    if (!city) {
+      const placeLayers = ['Incorporated Places', 'Census Designated Places', '2020 Census Designated Places'];
+      for (const layer of placeLayers) {
+        const place = geographies?.[layer]?.[0];
+        if (place?.NAME || place?.BASENAME) {
+          city = place.BASENAME || place.NAME;
+          break;
+        }
+      }
     }
     
     // Try multiple possible layer names for congressional districts
