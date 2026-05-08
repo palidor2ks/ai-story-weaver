@@ -158,11 +158,12 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Geocode result - State: ${state}, District: ${district}`);
+    console.log(`Geocode result - State: ${state}, City: ${city}, District: ${district}`);
 
     return new Response(JSON.stringify({ 
       district, 
       state,
+      city,
       matchedAddress
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
