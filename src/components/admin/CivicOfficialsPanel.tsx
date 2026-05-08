@@ -239,6 +239,16 @@ export function CivicOfficialsPanel() {
                 {enrichingPhotos ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
                 Re-host All Photos
               </Button>
+              <Button
+                onClick={handleScrapePiscataway}
+                disabled={scrapingPiscataway}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+              >
+                {scrapingPiscataway ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Refresh Piscataway
+              </Button>
               {officialsWithoutAnswers.length > 0 && (
                 <Button
                   onClick={handlePopulateAll}
