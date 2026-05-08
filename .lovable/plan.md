@@ -1,101 +1,48 @@
-## Goal
+## Problem
 
-Add Mayors as a new class of politician that:
-1. Is auto-fetched from an external source per US city (no manual data entry)
-2. Is matched to users by **city** parsed from their address
-3. Appears in: (a) the user's local representatives panel, (b) the global Candidates browse list, and (c) the AI quiz-answer research pipeline
+Two issues blocking local officials for Piscataway, NJ:
 
-## Reality check on data sources
+1. **Mayor fetch failing** — `fetch-mayor` logs show `Perplexity 401: insufficient_quota`. Quota is exhausted, so no mayor ever gets cached.
+2. **No council members** (e.g. Dennis Espinosa) — the function only researches the **Mayor**. There's no logic anywhere to discover council/aldermen/local officials.
 
-There is **no free, reliable, comprehensive US mayors API**. Options:
-- **Google Civic API** — `representativeInfoByAddress` was shut down in April 2025. Not viable.
-- **OpenStates** — state legislators only, no mayors.
-- **Ballotpedia/Wikipedia scraping** — possible but brittle and ToS-risky.
-- **Perplexity `sonar` deep research** — already integrated, can resolve "Who is the current mayor of {city}, {state}?" with a sourced answer. Reliable for the ~300 cities with >50k people; cacheable.
+## Plan
 
-**Recommended approach: Perplexity-backed auto-fetch with city-level caching in `static_officials`.** Treat Perplexity as the "API." When a user looks up an address in a city we don't have a mayor for yet, we trigger a background research job; the result is cached and reused for every other user in that city.
+### 1. Add Lovable AI fallback to `fetch-mayor` (keep Perplexity as primary)
 
-## Architecture
+- Try Perplexity `sonar` first (current behavior — returns citations natively).
+- If Perplexity fails with **401 (quota), 402 (payment), 429 (rate limit), or 5xx**, automatically fall back to **Lovable AI Gateway** (`google/gemini-2.5-pro`) with the same prompt and JSON-tool-call schema.
+- If Lovable AI also returns 402/429, mark the queue row `failed` with the reason so it retries later instead of poisoning the cache with `no_data`.
+- Log which provider succeeded so we can monitor Perplexity health.
 
-```text
-User enters address
-    │
-    ▼
-geocode-address ──► city + state
-    │
-    ▼
-fetch-civic-officials
-    ├── existing federal/state/local lookups
-    └── NEW: getMayorForCity(city, state)
-            │
-            ├── hit  ─► return cached static_officials row (level='local', office='Mayor', city=...)
-            └── miss ─► enqueue fetch-mayor edge function (background)
-                        │
-                        ▼
-                  Perplexity sonar research
-                        │
-                        ▼
-                  Insert static_officials row + trigger populate-civic-answers
-```
+### 2. Expand scope: full local roster, not just Mayor
 
-## Database changes
+- Update the prompt to request **Mayor + sitting City/Town Council members** for `{city, state}`, returning an array.
+- Insert one `static_officials` row per official:
+  - `office`: `"Mayor of Piscataway"` / `"City Council Member, Piscataway"` (+ ward if known)
+  - `level: 'local'`, `city`, `state` populated
+- Add a `kind` column to `mayor_fetch_queue` (default `'roster'`) so one queue entry covers the whole city.
+- Rename the function internally to handle a roster, but keep the `/fetch-mayor` endpoint name for compatibility.
 
-Add a `city` column to `static_officials` so mayors can be filtered by city, not just state:
+### 3. Display path (no changes needed)
 
-- `city text` (nullable; only set for Mayor rows)
-- Composite index on `(state, city, level)` for fast lookups
-- Backfill: existing local rows get `city = NULL` (still surfaced state-wide as today)
+- `fetch-civic-officials` already filters local officials by `(state AND (city = userCity OR city IS NULL))` — confirmed in logs. Once rows land, they appear automatically in the user's reps page and the Local filter on Candidates.
 
-Add a `mayor_fetch_queue` table to deduplicate concurrent lookups for the same city:
-- `state`, `city`, `status` (pending/done/failed), `last_attempted_at`, `error`
-- Unique on `(state, city)`
+### 4. Admin tools
 
-## New edge function: `fetch-mayor`
+- Add a "Refresh local officials" button per city in Admin → Static Officials so you can re-trigger AI research when a council changes.
 
-- Input: `{ state, city }`
-- Looks up cached `static_officials` row → returns it if found.
-- Otherwise calls Perplexity `sonar-deep-research` with a strict JSON schema:
-  - `{ name, party, took_office_date, official_website, photo_url, source_urls[] }`
-- Validates output (name non-empty, party in enum, ≥1 source URL).
-- Inserts a row in `static_officials` with id `mayor_{state}_{city_slug}`, `level='local'`, `office='Mayor of {City}'`, `city`, photo, website, party.
-- Optionally triggers `populate-civic-answers` for this new candidate.
-- Uses `EdgeRuntime.waitUntil()` for the slow Perplexity call so the user request returns instantly.
+## Technical notes
 
-## Updates to existing code
+- **Provider order**: Perplexity → Lovable AI fallback (no swap, both stay wired).
+- **Lovable AI uses tool-calling** for structured output (per gateway docs), not `response_format: json_schema`.
+- **Council scoring is optional** — listing-only is essentially free; running each member through `populate-civic-answers` costs ~$0.30/city.
 
-**`supabase/functions/geocode-address/index.ts`**
-- Already returns state. Add `city` to response (Census geocoder returns it; expose it).
+## Files to change
 
-**`supabase/functions/fetch-civic-officials/index.ts`**
-- Parse `city` from geocode response.
-- In `fetchLocalOfficialsFromDB`, filter by `state AND (city = userCity OR city IS NULL)` so Mayor rows are city-scoped.
-- After fetching, if no Mayor row exists for `(state, city)`, fire-and-forget invoke `fetch-mayor`.
+- `supabase/functions/fetch-mayor/index.ts` — add Lovable AI fallback + expand to roster
+- `supabase/migrations/...` — add `kind` column to `mayor_fetch_queue`
+- `src/pages/Admin.tsx` — add "Refresh local officials" button
 
-**`src/hooks/useRepresentatives.ts` and `useCivicOfficials.ts`**
-- No interface change needed — Mayor flows through the existing `local` bucket.
+## Open question
 
-**`src/pages/Candidates.tsx` (browse list)**
-- Already merges `static_officials` via `useInvertedScoreCandidates` / `useCandidates`. Confirm the Local filter chip surfaces mayors. Add a "Local" level filter if missing.
-
-**Admin → Static Officials tab** (`src/pages/Admin.tsx`)
-- Add a `city` field to the create/edit form.
-- Add a "Refresh from AI" button per row that re-runs `fetch-mayor` to update photo/party.
-
-**AI quiz-answer research**
-- `populate-civic-answers` already accepts any `candidate_id` from `static_officials`. Mayors will be picked up automatically once inserted. Add Mayor to the local-scope topic/question mapping (they should answer the 5 local topics, not the 12 federal).
-
-## User-facing behavior
-
-- First user in a new city sees: "Looking up your mayor…" placeholder card; Mayor populates within ~30s.
-- Subsequent users in that city get the Mayor instantly from cache.
-- Admin can review, edit, override, or delete any auto-fetched mayor in the existing Static Officials tab.
-
-## Out of scope (could come later)
-
-- City Council members, school board, sheriff (same pattern, but each adds a new lookup).
-- Mayor election history / challengers.
-- Photo hosting (we'll just store the source URL Perplexity returns; broken photos fall back to the avatar placeholder).
-
-## Open question to confirm before building
-
-Perplexity costs roughly $0.005–0.05 per deep-research call. With ~30k US cities, the worst case is small (~$300 one-time, then cached forever). OK to proceed with Perplexity as the source, or do you want to limit it to cities above a population threshold (e.g. 25k+)?
+**Should council members be scored** (run through `populate-civic-answers` like the mayor) or just **listed as contacts**? Listing is free; scoring ~9 council members per city adds ~$0.30/city and ~30s of background work.
