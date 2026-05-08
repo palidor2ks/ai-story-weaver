@@ -155,7 +155,24 @@ function extractStateFromAddress(address: string): string {
   return '';
 }
 
-// Fetch federal executives from GitHub (unitedstates/congress-legislators)
+// Extract city from address. Census-style: "234 DAVIS AVE, PISCATAWAY, NJ, 08854"
+// or user-typed: "234 Davis Ave, Piscataway, NJ 08854"
+function extractCityFromAddress(address: string): string {
+  if (!address) return '';
+  const parts = address.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length < 2) return '';
+  // Walk from the right looking for the part immediately before "STATE [ZIP]"
+  for (let i = parts.length - 1; i >= 1; i--) {
+    const seg = parts[i];
+    // matches "NJ" or "NJ 08854" or "08854"
+    if (/^[A-Z]{2}(\s+\d{5}(-\d{4})?)?$/.test(seg) || /^\d{5}(-\d{4})?$/.test(seg)) {
+      const candidate = parts[i - 1];
+      if (candidate && !/^\d/.test(candidate)) return candidate;
+    }
+  }
+  // Fallback: second part
+  return parts[1] || '';
+}
 async function fetchFederalExecutiveFromGitHub(): Promise<OfficialInfo[]> {
   const now = Date.now();
   
