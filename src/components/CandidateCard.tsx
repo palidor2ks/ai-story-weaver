@@ -80,7 +80,7 @@ export const CandidateCard = ({
   const cardContent = (
     <Card 
       className={cn(
-        "group overflow-hidden transition-all duration-300 cursor-pointer",
+        "group transition-all duration-300 cursor-pointer",
         "animate-slide-up bg-card border-border",
         compareMode 
           ? isSelected 
