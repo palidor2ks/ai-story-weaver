@@ -14,6 +14,7 @@ const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const INTERNAL_CHAIN_HEADER = 'x-internal-chain-secret';
 
 // Rate limiting for Perplexity
 let perplexityCallCount = 0;
@@ -1150,8 +1151,7 @@ async function processAnswersInBackground(
         const resp = await fetch(chainUrl, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${supabaseKey}`,
-            'apikey': supabaseKey,
+            [INTERNAL_CHAIN_HEADER]: supabaseKey,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -1188,8 +1188,7 @@ async function processAnswersInBackground(
         const resp = await fetch(chainUrl, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${supabaseKey}`,
-            'apikey': supabaseKey,
+            [INTERNAL_CHAIN_HEADER]: supabaseKey,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -1222,20 +1221,23 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-    // Auth check - require authenticated user OR service role key (for self-chaining)
+    // Auth check - require authenticated user OR internal chained request
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-    const token = authHeader.replace('Bearer ', '');
-    const isServiceRole = token === SUPABASE_SERVICE_ROLE_KEY;
-    
-    if (!isServiceRole) {
+    const internalChainSecret = req.headers.get(INTERNAL_CHAIN_HEADER);
+    const isInternalChain = internalChainSecret === SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!isInternalChain) {
+      if (!authHeader?.startsWith('Bearer ')) {
+        console.error('[Auth] Missing bearer token and no valid internal chain header');
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
         global: { headers: { Authorization: authHeader } },
       });
       const { data: { user }, error: authError } = await userClient.auth.getUser();
       if (authError || !user) {
+        console.error('[Auth] User auth failed for non-chained request:', authError?.message || 'no user');
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
     }
