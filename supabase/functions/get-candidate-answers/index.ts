@@ -1339,12 +1339,14 @@ Deno.serve(async (req) => {
     const { data: scopeTopics } = await supabase.from('topics').select('id').eq('scope', targetScope);
     const scopeTopicIds = (scopeTopics || []).map((t: any) => t.id);
 
-    // Get questions filtered by scope
-    let questionsQuery = supabase.from('questions').select('id, text, topic_id, question_options(value, text)');
+    // Get questions filtered by scope - ALWAYS enforce scope, even when caller passes questionIds.
+    // This prevents federal questions from being answered for local officials (and vice versa).
+    let questionsQuery = supabase
+      .from('questions')
+      .select('id, text, topic_id, question_options(value, text)')
+      .in('topic_id', scopeTopicIds);
     if (questionIds && questionIds.length > 0) {
       questionsQuery = questionsQuery.in('id', questionIds);
-    } else {
-      questionsQuery = questionsQuery.in('topic_id', scopeTopicIds);
     }
 
     const { data: questions, error: questionsError } = await questionsQuery;
