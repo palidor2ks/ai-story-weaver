@@ -155,6 +155,25 @@ function extractStateFromAddress(address: string): string {
   return '';
 }
 
+// Extract city from address. Census-style: "234 DAVIS AVE, PISCATAWAY, NJ, 08854"
+// or user-typed: "234 Davis Ave, Piscataway, NJ 08854"
+function extractCityFromAddress(address: string): string {
+  if (!address) return '';
+  const parts = address.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length < 2) return '';
+  // Walk from the right looking for the part immediately before "STATE [ZIP]"
+  for (let i = parts.length - 1; i >= 1; i--) {
+    const seg = parts[i];
+    // matches "NJ" or "NJ 08854" or "08854"
+    if (/^[A-Z]{2}(\s+\d{5}(-\d{4})?)?$/.test(seg) || /^\d{5}(-\d{4})?$/.test(seg)) {
+      const candidate = parts[i - 1];
+      if (candidate && !/^\d/.test(candidate)) return candidate;
+    }
+  }
+  // Fallback: second part
+  return parts[1] || '';
+}
+
 // Fetch federal executives from GitHub (unitedstates/congress-legislators)
 async function fetchFederalExecutiveFromGitHub(): Promise<OfficialInfo[]> {
   const now = Date.now();
@@ -454,23 +473,32 @@ async function fetchOpenStatesOfficials(
 }
 
 // Fetch local officials from database (no free API exists)
-async function fetchLocalOfficialsFromDB(state: string): Promise<OfficialInfo[]> {
+async function fetchLocalOfficialsFromDB(state: string, city?: string): Promise<OfficialInfo[]> {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
-    const { data, error } = await supabase
+    let query = supabase
       .from('static_officials')
       .select('*')
       .eq('level', 'local')
       .eq('state', state.toUpperCase())
       .eq('is_active', true);
 
+    // Match rows that are city-agnostic (city IS NULL) OR match this user's city (case-insensitive)
+    if (city && city.trim()) {
+      query = query.or(`city.is.null,city.ilike.${city.trim()}`);
+    } else {
+      query = query.is('city', null);
+    }
+
+    const { data, error } = await query;
+
     if (error) {
       console.error('[DB] Error fetching local officials:', error);
       return [];
     }
 
-    console.log(`[DB] Found ${data?.length || 0} local officials for ${state}`);
+    console.log(`[DB] Found ${data?.length || 0} local officials for ${state}${city ? ` / ${city}` : ''}`);
     
     return (data || []).map(official => ({
       id: official.id,
@@ -898,13 +926,13 @@ serve(async (req) => {
       throw new Error('Address is required');
     }
 
-    // Extract state from address
+    // Extract state and city from address
     const state = extractStateFromAddress(address);
-    console.log(`State extracted from address: ${state}`);
+    const city = extractCityFromAddress(address);
+    console.log(`State: ${state}, City: ${city}`);
 
     if (!state) {
       console.error('Could not extract state from address');
-      // Still try to get federal executive even without state
       const federalExecutive = await fetchFederalExecutiveFromGitHub();
       return new Response(JSON.stringify({ 
         officials: federalExecutive,
@@ -929,10 +957,31 @@ serve(async (req) => {
     const [federalExecutive, openStatesResult, localOfficials, transitions, manualOverrides] = await Promise.all([
       fetchFederalExecutiveFromGitHub(),
       fetchOpenStatesOfficials(state, coords?.lat, coords?.lng, federalLegislatorNames),
-      fetchLocalOfficialsFromDB(state),
+      fetchLocalOfficialsFromDB(state, city),
       fetchOfficialTransitions(state),
       fetchManualCivicOverrides(state),
     ]);
+
+    // If we have a city but no Mayor row yet, fire-and-forget AI research (cached after first lookup)
+    if (city) {
+      const citySlug = city.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      const hasMayor = localOfficials.some(o =>
+        (o.office || '').toLowerCase().startsWith('mayor') &&
+        (o.id || '').toLowerCase().includes(citySlug)
+      );
+      if (!hasMayor) {
+        console.log(`[Mayor] No mayor cached for ${city}, ${state} — triggering fetch-mayor`);
+        fetch(`${SUPABASE_URL}/functions/v1/fetch-mayor`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'apikey': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ state, city, background: true }),
+        }).catch((e) => console.error('[Mayor] fetch-mayor invoke failed', e));
+      }
+    }
 
     const { legislators: stateLegislative, governors: stateExecutiveFromAPI } = openStatesResult;
 

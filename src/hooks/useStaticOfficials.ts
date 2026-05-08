@@ -10,6 +10,7 @@ export interface StaticOfficial {
   level: 'federal_executive' | 'state_executive' | 'state_legislative' | 'local';
   state: string;
   district?: string;
+  city?: string;
   image_url?: string;
   website_url?: string;
   is_active: boolean;

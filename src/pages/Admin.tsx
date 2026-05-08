@@ -51,6 +51,7 @@ interface OfficialFormData {
   level: 'federal_executive' | 'state_executive' | 'state_legislative' | 'local';
   state: string;
   district: string;
+  city: string;
   image_url: string;
   website_url: string;
   is_active: boolean;
@@ -66,6 +67,7 @@ const defaultFormData: OfficialFormData = {
   level: 'federal_executive',
   state: '',
   district: '',
+  city: '',
   image_url: '',
   website_url: '',
   is_active: true,
@@ -140,6 +142,7 @@ export default function Admin() {
       level: official.level,
       state: official.state,
       district: official.district || '',
+      city: official.city || '',
       image_url: official.image_url || '',
       website_url: official.website_url || '',
       is_active: official.is_active,
@@ -155,6 +158,7 @@ export default function Admin() {
     const officialData = {
       ...formData,
       district: formData.district || undefined,
+      city: formData.city || undefined,
       image_url: formData.image_url || undefined,
       website_url: formData.website_url || undefined,
     };
@@ -329,14 +333,25 @@ export default function Admin() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="district">District (optional)</Label>
-                  <Input
-                    id="district"
-                    value={formData.district}
-                    onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                    placeholder="e.g., CA-12"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="district">District (optional)</Label>
+                    <Input
+                      id="district"
+                      value={formData.district}
+                      onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                      placeholder="e.g., CA-12"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="city">City (required for Mayor / local)</Label>
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      placeholder="e.g., Newark"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
