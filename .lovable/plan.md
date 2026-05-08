@@ -1,35 +1,38 @@
-# Speed up Answer Management dialog
-
 ## Problem
 
-Clicking "Answers" for a candidate opens `CandidateAnswersDialog`, which currently takes several seconds to render. The data fetch in `useCandidateAnswersByTopic` (`src/components/admin/CandidateAnswersDialog.tsx`, ~lines 96–198) is the bottleneck.
+On the candidate profile (e.g. Michele Lombardi), the "AI Stance Analysis" card renders raw JSON text — both the summary line and the "Deep Analysis" panel show `{ "summary": "...", "deepAnalysis": "...", ... }` instead of the parsed fields.
 
-## Root causes
+## Root Cause
 
-The hook performs **5 round-trips, almost all sequential**:
+`supabase/functions/ai-candidate-explanation/index.ts` calls the AI with `response_format: { type: 'json_object' }` and then does a plain `JSON.parse(content)`. When the model returns the JSON wrapped in a markdown code fence (```` ```json ... ``` ````) or with leading/trailing prose, `JSON.parse` throws and the fallback branch runs:
 
-1. `await supabase.from('candidates').select('office')…`
-2. If no office → `await supabase.from('candidate_overrides').select('office')…`
-3. `await supabase.from('topics').select(...).eq('scope', …)`
-4. `await supabase.from('questions').select('id, text, topic_id, question_options(value, text)')` — **no filter**, returns ALL questions across ALL topics (federal + local, ~340 rows) plus the nested `question_options` join, even though only ~60 of them belong to the topics this candidate cares about.
-5. `await supabase.from('candidate_answers')...eq('candidate_id', candidateId)`
+```ts
+analysis = {
+  summary: content.substring(0, 200),   // raw JSON, truncated
+  deepAnalysis: content,                // full raw JSON blob
+  sources: [],
+};
+```
 
-Each await blocks the next. The questions query is the heaviest (full table + nested join) and is run for every dialog open. There is no `staleTime` benefit across candidates because the cache key is per-candidate, and questions/topics rarely change.
+That's exactly what the screenshot shows — `summary` is the first ~200 chars of the raw JSON string, and `deepAnalysis` is the whole blob. `personalizedComparison` is missing, which is why the agree/differ panel never renders.
 
-## Fix
+## Fix Plan (single file: `supabase/functions/ai-candidate-explanation/index.ts`)
 
-Refactor `useCandidateAnswersByTopic` to:
+1. Add a small `extractJson(content)` helper that:
+   - Trims whitespace.
+   - Strips ```` ```json ```` / ```` ``` ```` fences if present.
+   - Falls back to slicing from the first `{` to the last `}` before parsing.
+   - Returns `null` on failure.
+2. Replace the current try/catch around `JSON.parse(content)` with this helper. If it still fails, log and return a clean error response (not a fake "summary" containing the raw JSON).
+3. Defensive shape check: ensure `summary`, `deepAnalysis`, `sources` exist; coerce missing fields to safe defaults so the UI never gets the raw blob.
+4. Keep the prompt/UI unchanged.
 
-1. **Parallelize the office lookup**: run `candidates` and `candidate_overrides` selects in `Promise.all`, take whichever returns a non-null `office`.
-2. **Parallelize topics + answers + office** in a single `Promise.all`. (`topics`, `candidate_answers`, and the office lookup are all independent.)
-3. **Filter `questions` by `topic_id`**: after `topics` resolves, fetch questions with `.in('topic_id', topicIds)`. This drops the payload from ~340 rows to ~60 (local) or ~240 (federal) and skips unrelated `question_options`.
-4. **Cache topics/questions across candidates**: split topics+questions into a separate `useQuery(['topics-with-questions', scope], …, { staleTime: 5 * 60_000 })` keyed by scope (`'all'` vs `'local'`). Compose with the per-candidate answers query. This makes second/third dialog opens essentially instant — only the small `candidate_answers` fetch runs.
-5. Keep the existing `staleTime: 30_000` on the per-candidate query so reopening the same candidate within 30s is instant.
+## Out of Scope
 
-No schema changes, no UI changes, no behavior changes — same data, same shape, same scope filtering rules. Only `src/components/admin/CandidateAnswersDialog.tsx` is touched.
+- No changes to `AIExplanation.tsx` or any other component.
+- No prompt rewording, no model swap, no schema/tool-calling migration.
 
-## Expected impact
+## Verification
 
-- First open of any candidate in a session: ~1 round-trip pair instead of 5 sequential round-trips.
-- Subsequent opens (any candidate, same scope): only the small `candidate_answers` query runs (~50–200ms).
-- Payload for the heavy `questions` query shrinks 4–5× because it's filtered to relevant topics only.
+- Reload the Lombardi profile, open AI Stance Analysis, confirm the summary is a normal sentence and the Deep Analysis panel shows readable paragraphs (not JSON).
+- Check edge function logs to confirm no "Failed to parse AI response" entries on subsequent calls.
