@@ -590,6 +590,7 @@ export const useAllCanonicalQuestions = () => {
         .from('questions')
         .select('*, question_options(*)')
         .eq('is_onboarding_canonical', true)
+        .not('topic_id', 'like', 'local-%')
         .order('onboarding_slot');
       
       if (error) throw error;
