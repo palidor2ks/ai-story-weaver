@@ -646,6 +646,10 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
 
           for (const s of newStatic) {
             const ac = staticAnswerMap[s.id] || { count: 0, sourced: 0 };
+            // Federal executives (e.g., President) answer federal-scope questions;
+            // governor-and-below static officials answer local-scope only.
+            const isFederalExec = (s.level || '').toString() === 'federal_executive';
+            const denom = isFederalExec ? federalQuestions : localQuestions;
             results.push(makeCivicCoverage(
               {
                 candidate_id: s.id,
@@ -659,7 +663,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
               },
               ac.count,
               ac.sourced,
-              localQuestions,
+              denom,
             ));
           }
         }
