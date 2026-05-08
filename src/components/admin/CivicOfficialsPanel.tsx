@@ -202,7 +202,7 @@ export function CivicOfficialsPanel() {
             </div>
             <div className="flex items-center gap-2">
               <Button
-                onClick={handleEnrichPhotos}
+                onClick={() => handleEnrichPhotos('missing')}
                 disabled={enrichingPhotos}
                 variant="outline"
                 size="sm"
@@ -210,6 +210,16 @@ export function CivicOfficialsPanel() {
               >
                 {enrichingPhotos ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
                 Find Missing Photos
+              </Button>
+              <Button
+                onClick={() => handleEnrichPhotos('rehost-all')}
+                disabled={enrichingPhotos}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+              >
+                {enrichingPhotos ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                Re-host All Photos
               </Button>
               {officialsWithoutAnswers.length > 0 && (
                 <Button
