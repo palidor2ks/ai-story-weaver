@@ -989,7 +989,7 @@ serve(async (req) => {
       fetchOpenStatesOfficials(state, coords?.lat, coords?.lng, federalLegislatorNames),
       fetchLocalOfficialsFromDB(state, city),
       fetchOfficialTransitions(state),
-      fetchManualCivicOverrides(state),
+      fetchManualCivicOverrides(state, city),
     ]);
 
     // If we have a city but no Mayor row yet, fire-and-forget AI research (cached after first lookup)
