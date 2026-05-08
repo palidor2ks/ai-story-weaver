@@ -89,16 +89,16 @@ export function CivicOfficialsPanel() {
   const [savingImage, setSavingImage] = useState(false);
   const [enrichingPhotos, setEnrichingPhotos] = useState(false);
 
-  const handleEnrichPhotos = async () => {
+  const handleEnrichPhotos = async (mode: 'missing' | 'rehost-all' = 'missing') => {
     setEnrichingPhotos(true);
     try {
       const { data, error } = await supabase.functions.invoke('enrich-official-photos', {
-        body: { limit: 25 },
+        body: { mode, limit: 25 },
       });
       if (error) throw error;
       const updated = data?.updated ?? 0;
       const attempted = data?.attempted ?? 0;
-      toast.success(`Photo enrichment: ${updated}/${attempted} updated`);
+      toast.success(`Photos: ${updated}/${attempted} ${mode === 'rehost-all' ? 're-hosted' : 'fetched'}`);
       queryClient.invalidateQueries({ queryKey: ['civic-officials-admin'] });
     } catch (err) {
       console.error('Error enriching photos:', err);
