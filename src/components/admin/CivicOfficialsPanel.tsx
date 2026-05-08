@@ -88,6 +88,24 @@ export function CivicOfficialsPanel() {
   const [imageUrl, setImageUrl] = useState('');
   const [savingImage, setSavingImage] = useState(false);
   const [enrichingPhotos, setEnrichingPhotos] = useState(false);
+  const [scrapingPiscataway, setScrapingPiscataway] = useState(false);
+
+  const handleScrapePiscataway = async () => {
+    setScrapingPiscataway(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('scrape-piscataway-officials', {});
+      if (error) throw error;
+      const updated = data?.updated ?? 0;
+      const total = data?.processed ?? 0;
+      toast.success(`Piscataway: ${updated}/${total} officials refreshed`);
+      queryClient.invalidateQueries({ queryKey: ['civic-officials-admin'] });
+    } catch (err) {
+      console.error('Error scraping Piscataway:', err);
+      toast.error('Failed to refresh Piscataway officials');
+    } finally {
+      setScrapingPiscataway(false);
+    }
+  };
 
   const handleEnrichPhotos = async (mode: 'missing' | 'rehost-all' = 'missing') => {
     setEnrichingPhotos(true);
