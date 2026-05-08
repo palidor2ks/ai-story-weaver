@@ -464,16 +464,50 @@ export const Feed = () => {
           {hasAddress && congressMembers.length > 0 && ' from Congress.gov'}
         </p>
 
-        {/* Candidate Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredAndSortedCandidates.map((candidate, index) => (
-            <CandidateCard 
-              key={candidate.id} 
-              candidate={candidate}
-              index={index}
-            />
-          ))}
-        </div>
+        {/* Grouped Sections */}
+        {(() => {
+          const isExec = (o: string) => /president|vice president/i.test(o);
+          const isStateExec = (o: string) => /governor|lieutenant|attorney general|secretary of state|treasurer|comptroller/i.test(o);
+
+          const groups: { key: string; title: string; icon: typeof Building2; items: typeof filteredAndSortedCandidates }[] = [
+            { key: 'fed-exec', title: 'Federal Executive', icon: Building2, items: [] },
+            { key: 'congress', title: 'U.S. Congress', icon: Building2, items: [] },
+            { key: 'state-exec', title: 'State Executive', icon: Building2, items: [] },
+            { key: 'state-leg', title: 'State Legislature', icon: Building2, items: [] },
+            { key: 'local', title: 'Local Officials', icon: MapPin, items: [] },
+          ];
+
+          for (const c of filteredAndSortedCandidates) {
+            if (c.level === 'federal' && isExec(c.office)) groups[0].items.push(c);
+            else if (c.level === 'federal') groups[1].items.push(c);
+            else if (c.level === 'state' && isStateExec(c.office)) groups[2].items.push(c);
+            else if (c.level === 'state') groups[3].items.push(c);
+            else if (c.level === 'local') groups[4].items.push(c);
+            else groups[1].items.push(c);
+          }
+
+          return (
+            <div className="space-y-8">
+              {groups.filter(g => g.items.length > 0).map(g => {
+                const Icon = g.icon;
+                return (
+                  <section key={g.key}>
+                    <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+                      <Icon className="w-4 h-4" />
+                      {g.title}
+                      <span className="text-xs font-normal text-muted-foreground/70">({g.items.length})</span>
+                    </h2>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {g.items.map((candidate, index) => (
+                        <CandidateCard key={candidate.id} candidate={candidate} index={index} />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {filteredAndSortedCandidates.length === 0 && (
           <div className="text-center py-16">
