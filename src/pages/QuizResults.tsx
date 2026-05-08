@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ScoreText } from '@/components/ScoreText';
@@ -7,13 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useProfile, useUserTopicScores, useUserTopics } from '@/hooks/useProfile';
-import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
-import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
+import { useCivicOfficials, CivicOfficial, OfficeLevelType } from '@/hooks/useCivicOfficials';
+import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
+import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
-import { Loader2, Sparkles, ArrowRight, BarChart3, Users, CheckCircle, XCircle, Share2, Copy, Twitter, Facebook, Linkedin, Building2, MapPin, User } from 'lucide-react';
+import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Copy, Twitter, Facebook, Linkedin, Building2, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ProfileAnalysis {
@@ -26,33 +27,41 @@ interface ProfileAnalysis {
   overallScore: number;
 }
 
-interface PoliticianMatch {
-  id: string;
-  name: string;
-  party: 'Democrat' | 'Republican' | 'Independent' | 'Other';
-  office: string;
-  image_url: string | null;
-  matchScore: number;
-  overall_score: number;
-  aiReason?: string;
-}
-
 export const QuizResults = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: userTopics = [] } = useUserTopics();
-  const { data: candidates = [] } = useCandidates();
   const { data: repsData, isLoading: repsLoading } = useRepresentatives(profile?.address);
   const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
   const [profileAnalysis, setProfileAnalysis] = useState<ProfileAnalysis | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
-  const [politicianMatches, setPoliticianMatches] = useState<PoliticianMatch[]>([]);
-  const [isLoadingMatches, setIsLoadingMatches] = useState(false);
 
   const federalReps = repsData?.representatives ?? [];
   const allRepsLoading = repsLoading || civicLoading;
+
+  // Collect all official IDs for score resolution
+  const allOfficialIds = useMemo(() => {
+    const ids: string[] = [];
+    federalReps.forEach(rep => ids.push(rep.bioguide_id || rep.id));
+    if (civicData) {
+      civicData.federalExecutive.forEach(o => ids.push(o.id));
+      civicData.stateExecutive.forEach(o => ids.push(o.id));
+      civicData.stateLegislative.forEach(o => ids.push(o.id));
+      civicData.local.forEach(o => ids.push(o.id));
+    }
+    return ids.filter(Boolean);
+  }, [federalReps, civicData]);
+
+  const { data: scoreMap } = useCandidateScoreMap(allOfficialIds);
+
+  const getResolvedScore = (id: string, fallbackScore: number | null): number | null => {
+    if (scoreMap?.has(id)) {
+      return scoreMap.get(id) ?? null;
+    }
+    return fallbackScore;
+  };
 
   // Fetch AI profile analysis on mount
   useEffect(() => {
@@ -92,78 +101,6 @@ export const QuizResults = () => {
     fetchProfileAnalysis();
   }, [profile, userTopicScores, toast]);
 
-  // Calculate politician matches when candidates are loaded
-  useEffect(() => {
-    const calculateMatches = async () => {
-      if (!profile || candidates.length === 0) return;
-      
-      setIsLoadingMatches(true);
-      
-      // Calculate match scores for all candidates
-      const matches: PoliticianMatch[] = candidates
-        .filter(c => c.overall_score !== null)
-        .map(candidate => ({
-          id: candidate.id,
-          name: candidate.name,
-          party: candidate.party,
-          office: candidate.office,
-          image_url: candidate.image_url,
-          matchScore: calculateMatchScore(profile.overall_score || 0, candidate.overall_score || 0),
-          overall_score: candidate.overall_score || 0,
-        }))
-        .sort((a, b) => b.matchScore - a.matchScore)
-        .slice(0, 5); // Top 5 matches
-
-      // Generate AI reasons for top matches
-      try {
-        const matchesWithReasons = await Promise.all(
-          matches.map(async (match) => {
-            const reason = generateMatchReason(
-              profile.overall_score || 0,
-              match.overall_score,
-              match.party,
-              match.matchScore
-            );
-            return { ...match, aiReason: reason };
-          })
-        );
-        setPoliticianMatches(matchesWithReasons);
-      } catch (error) {
-        console.error('Failed to generate match reasons:', error);
-        setPoliticianMatches(matches);
-      } finally {
-        setIsLoadingMatches(false);
-      }
-    };
-
-    calculateMatches();
-  }, [profile, candidates]);
-
-  // Generate a match reason based on scores
-  const generateMatchReason = (
-    userScore: number,
-    candidateScore: number,
-    party: string,
-    matchScore: number
-  ): string => {
-    const scoreDiff = Math.abs(userScore - candidateScore);
-    const userLeaning = userScore < -2 ? 'progressive' : userScore > 2 ? 'conservative' : 'moderate';
-    const candidateLeaning = candidateScore < -2 ? 'progressive' : candidateScore > 2 ? 'conservative' : 'moderate';
-    
-    if (matchScore >= 80) {
-      if (userLeaning === candidateLeaning) {
-        return `Strong alignment on ${userLeaning} values. You share similar positions on most key issues.`;
-      }
-      return `High compatibility despite different leanings. Your centrist approach aligns well with this candidate.`;
-    } else if (matchScore >= 60) {
-      return `Moderate alignment. You agree on some issues but differ on others, particularly around ${userLeaning === 'progressive' ? 'economic' : 'social'} policy.`;
-    } else if (matchScore >= 40) {
-      return `Mixed compatibility. While you may share some common ground, there are notable differences in core policy areas.`;
-    } else {
-      return `Significant ideological differences. This ${party} candidate holds ${candidateLeaning} positions that contrast with your ${userLeaning} views.`;
-    }
-  };
-
   if (profileLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -184,70 +121,11 @@ export const QuizResults = () => {
   const sortedTopicScores = [...userTopicScores].sort((a, b) => {
     const aWeight = userTopics.find(ut => ut.topic_id === a.topic_id)?.weight || 0;
     const bWeight = userTopics.find(ut => ut.topic_id === b.topic_id)?.weight || 0;
-    return bWeight - aWeight; // Higher weight = higher priority
+    return bWeight - aWeight;
   });
 
   const getScoreBarWidth = (score: number) => {
-    // Convert -10 to +10 scale to 0-100% for visualization
     return ((score + 10) / 20) * 100;
-  };
-
-  const getPartyColor = (party: string) => {
-    switch (party) {
-      case 'Democrat': return 'bg-blue-500';
-      case 'Republican': return 'bg-red-500';
-      default: return 'bg-purple-500';
-    }
-  };
-
-  const getPartyBadgeColor = (party: string) => {
-    switch (party) {
-      case 'Democrat': return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
-      case 'Republican': return 'bg-red-500/10 text-red-600 border-red-500/20';
-      case 'Independent': return 'bg-purple-500/10 text-purple-600 border-purple-500/20';
-      default: return 'bg-muted text-muted-foreground';
-    }
-  };
-
-  // Helper component for civic officials
-  const RepresentativeCard = ({ 
-    official, 
-    userScore 
-  }: { 
-    official: CivicOfficial; 
-    userScore: number; 
-  }) => {
-    const matchScore = official.overall_score !== null 
-      ? calculateMatchScore(userScore, official.overall_score) 
-      : null;
-    
-    return (
-      <div className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 overflow-hidden">
-          {official.image_url ? (
-            <img src={official.image_url} alt={official.name} className="w-full h-full object-cover" />
-          ) : (
-            <User className="w-6 h-6 text-primary-foreground" />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-foreground line-clamp-2 break-words">{official.name}</h4>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-muted-foreground">{official.office}</span>
-            <Badge variant="outline" className={cn("text-xs", getPartyBadgeColor(official.party))}>
-              {official.party}
-            </Badge>
-          </div>
-        </div>
-        {official.overall_score !== null ? (
-          <ScoreText score={official.overall_score} size="md" />
-        ) : (
-          <Badge variant="outline" className="text-xs text-muted-foreground">
-            NA
-          </Badge>
-        )}
-      </div>
-    );
   };
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
@@ -426,6 +304,8 @@ export const QuizResults = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* AI Profile Summary */}
         <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '100ms' }}>
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
@@ -481,7 +361,7 @@ export const QuizResults = () => {
           </CardContent>
         </Card>
 
-        {/* Your Representatives Card */}
+        {/* Your Representatives Card — with AI comparison summaries */}
         <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '150ms' }}>
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
@@ -513,10 +393,10 @@ export const QuizResults = () => {
                     </h4>
                     <div className="space-y-3">
                       {civicData.federalExecutive.map((official) => (
-                        <RepresentativeCard
+                        <RepresentativeComparisonCard
                           key={official.id}
                           official={official}
-                          userScore={profile.overall_score ?? 0}
+                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
                     </div>
@@ -531,33 +411,29 @@ export const QuizResults = () => {
                       U.S. Congress
                     </h4>
                     <div className="space-y-3">
-                      {federalReps.map((rep) => (
-                          <Link
-                            key={rep.id}
-                            to={`/candidate/${rep.bioguide_id || rep.id}`}
-                            className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
-                          >
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0">
-                              <User className="w-6 h-6 text-primary-foreground" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-foreground truncate">{rep.name}</h4>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm text-muted-foreground">{rep.office}</span>
-                                <Badge variant="outline" className={cn("text-xs", getPartyBadgeColor(rep.party))}>
-                                  {rep.party}
-                                </Badge>
-                              </div>
-                            </div>
-                            {rep.overall_score !== null ? (
-                              <ScoreText score={rep.overall_score} size="md" />
-                            ) : (
-                              <Badge variant="outline" className="text-xs text-muted-foreground">
-                                NA
-                              </Badge>
-                            )}
-                          </Link>
-                        ))}
+                      {federalReps.map((rep) => {
+                        const repId = rep.bioguide_id || rep.id;
+                        const official: CivicOfficial = {
+                          id: repId,
+                          name: rep.name,
+                          office: rep.office,
+                          party: rep.party,
+                          image_url: rep.image_url || '',
+                          overall_score: rep.overall_score,
+                          level: 'federal' as OfficeLevelType,
+                          state: '',
+                          is_incumbent: true,
+                          coverage_tier: 'tier_3',
+                          confidence: 'low',
+                        };
+                        return (
+                          <RepresentativeComparisonCard
+                            key={repId}
+                            official={official}
+                            resolvedScore={getResolvedScore(repId, rep.overall_score)}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -571,10 +447,10 @@ export const QuizResults = () => {
                     </h4>
                     <div className="space-y-3">
                       {civicData.stateExecutive.map((official) => (
-                        <RepresentativeCard
+                        <RepresentativeComparisonCard
                           key={official.id}
                           official={official}
-                          userScore={profile.overall_score ?? 0}
+                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
                     </div>
@@ -590,10 +466,10 @@ export const QuizResults = () => {
                     </h4>
                     <div className="space-y-3">
                       {civicData.stateLegislative.map((official) => (
-                        <RepresentativeCard
+                        <RepresentativeComparisonCard
                           key={official.id}
                           official={official}
-                          userScore={profile.overall_score ?? 0}
+                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
                     </div>
@@ -609,10 +485,10 @@ export const QuizResults = () => {
                     </h4>
                     <div className="space-y-3">
                       {civicData.local.map((official) => (
-                        <RepresentativeCard
+                        <RepresentativeComparisonCard
                           key={official.id}
                           official={official}
-                          userScore={profile.overall_score ?? 0}
+                          resolvedScore={getResolvedScore(official.id, official.overall_score)}
                         />
                       ))}
                     </div>
