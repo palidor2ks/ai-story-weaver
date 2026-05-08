@@ -1160,7 +1160,6 @@ async function processAnswersInBackground(
             forceRegenerate: true,
             useBackground: true,
             _isChainedChunk: true,
-            _internalChainSecret: supabaseKey,
           }),
         });
 
