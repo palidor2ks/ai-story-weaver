@@ -684,6 +684,35 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         }
       }
 
+      // Fallback: compute overallScore from candidate_answers when stored score is null
+      const idsNeedingScore = results.filter(r => r.overallScore === null && r.answerCount > 0).map(r => r.id);
+      if (idsNeedingScore.length > 0) {
+        const computedScoreMap: Record<string, number> = {};
+        // Chunk to avoid URL length limits
+        const CHUNK = 100;
+        for (let i = 0; i < idsNeedingScore.length; i += CHUNK) {
+          const chunk = idsNeedingScore.slice(i, i + CHUNK);
+          const { data: answerRows } = await supabase
+            .from('candidate_answers')
+            .select('candidate_id, answer_value')
+            .in('candidate_id', chunk);
+          const sums: Record<string, { sum: number; count: number }> = {};
+          (answerRows || []).forEach(r => {
+            if (!sums[r.candidate_id]) sums[r.candidate_id] = { sum: 0, count: 0 };
+            sums[r.candidate_id].sum += Number(r.answer_value) || 0;
+            sums[r.candidate_id].count += 1;
+          });
+          for (const [cid, { sum, count }] of Object.entries(sums)) {
+            if (count > 0) computedScoreMap[cid] = Math.round((sum / count) * 100) / 100;
+          }
+        }
+        results = results.map(r =>
+          r.overallScore === null && computedScoreMap[r.id] !== undefined
+            ? { ...r, overallScore: computedScoreMap[r.id] }
+            : r
+        );
+      }
+
       // Apply level filter
       if (filters.level && filters.level !== 'all') {
         results = results.filter(c => c.level === filters.level);
