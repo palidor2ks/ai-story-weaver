@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useProfile, useUserTopicScores, useUserTopics } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
-import { useCivicOfficials } from '@/hooks/useCivicOfficials';
+import { useCivicOfficials, CivicOfficial, OfficeLevelType } from '@/hooks/useCivicOfficials';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 import { supabase } from '@/integrations/supabase/client';
