@@ -771,7 +771,7 @@ export const Onboarding = () => {
                     {skippedCount} question{skippedCount !== 1 ? 's' : ''} skipped
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Your score is based on {allAnswers.length} of {allAnswers.length + skippedCount} questions.
+                    Your score is based on {allDisplayAnswers.length} of {allDisplayAnswers.length + skippedCount} questions.
                   </p>
                 </div>
               </div>
