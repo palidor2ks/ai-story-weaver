@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScoreText } from '@/components/ScoreText';
-import { Search, SlidersHorizontal, TrendingUp, MapPin, AlertCircle, Sparkles } from 'lucide-react';
+import { Search, SlidersHorizontal, TrendingUp, MapPin, AlertCircle, Sparkles, Building2 } from 'lucide-react';
 import { Candidate, GovernmentLevel } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Link } from 'react-router-dom';
