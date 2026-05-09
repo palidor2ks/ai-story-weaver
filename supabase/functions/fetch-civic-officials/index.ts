@@ -362,7 +362,17 @@ async function fetchOpenStatesOfficials(
       console.log(`[Open States] Using jurisdiction endpoint: ${legislatorsUrl}`);
     }
 
-    const legislatorsResponse = await fetch(legislatorsUrl, { headers });
+    const legislatorsController = new AbortController();
+    const legislatorsTimeout = setTimeout(() => legislatorsController.abort(), 8000);
+    let legislatorsResponse: Response;
+    try {
+      legislatorsResponse = await fetch(legislatorsUrl, { headers, signal: legislatorsController.signal });
+    } catch (e) {
+      console.error('[Open States] Legislators fetch aborted/failed:', e);
+      clearTimeout(legislatorsTimeout);
+      return { legislators: [], governors: [] };
+    }
+    clearTimeout(legislatorsTimeout);
     console.log(`[Open States] Legislators response status: ${legislatorsResponse.status}`);
 
     if (legislatorsResponse.ok) {
