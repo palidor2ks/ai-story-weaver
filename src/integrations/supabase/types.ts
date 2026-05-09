@@ -726,6 +726,42 @@ export type Database = {
         }
         Relationships: []
       }
+      civic_lookup_cache: {
+        Row: {
+          cached_at: string
+          city: string | null
+          district: string | null
+          lat: number | null
+          lng: number | null
+          matched_address: string | null
+          normalized_address: string
+          payload: Json | null
+          state: string | null
+        }
+        Insert: {
+          cached_at?: string
+          city?: string | null
+          district?: string | null
+          lat?: number | null
+          lng?: number | null
+          matched_address?: string | null
+          normalized_address: string
+          payload?: Json | null
+          state?: string | null
+        }
+        Update: {
+          cached_at?: string
+          city?: string | null
+          district?: string | null
+          lat?: number | null
+          lng?: number | null
+          matched_address?: string | null
+          normalized_address?: string
+          payload?: Json | null
+          state?: string | null
+        }
+        Relationships: []
+      }
       committee_finance_rollups: {
         Row: {
           candidate_id: string
