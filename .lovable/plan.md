@@ -1,31 +1,38 @@
-## Problem
+## Goal
+On the Quiz Results page, change the **Share Results** dropdown so the user first picks one of two share modes, then sees the social/copy options for that mode.
 
-The admin candidate grid shows two Trumps and two Vances. The "yellow" duplicates (Donald Trump · R6.09 · 23/240, and J.D. Vance · 0/240) are placeholder rows from the `static_officials` table:
+## Two modes
 
-- `static_officials.federal_president` → "Donald Trump"
-- `static_officials.federal_vice_president` → "J.D. Vance"
+1. **Share my results** (existing behavior)
+   - Text includes their score + label, e.g. *"I just discovered my political profile! My score: L4.25 (Center-Left). Find out where you stand."*
+   - Links to the results URL.
 
-Meanwhile the real, fully-tracked records live in the `candidates` table:
+2. **Invite others to take the quiz** (new)
+   - No personal scores included.
+   - Generic encouraging text, e.g. *"I just took the Pulse political alignment quiz — it shows where you really stand on the issues. Take it and see your results:"*
+   - Links to the app's quiz/landing URL (not the user's personal results URL).
 
-- `candidates.P80001571` → "Donald J. Trump" (220/240, FEC linked, T1)
-- `candidates.V000137` → "JD Vance"
+## UX
 
-The admin grid merges both sources, so the static placeholders show up as duplicates with no FEC link and stale answer counts.
+In `src/pages/QuizResults.tsx`, replace the current single dropdown with a two-step dropdown:
 
-## Fix
+- Top level shows two items:
+  - **Share my results** →
+  - **Invite others to take the quiz** →
+- Each opens a sub-menu with: Copy link, Share on X, Share on Facebook, Share on LinkedIn, and native Share (when available).
 
-Delete the two duplicate placeholder rows from `static_officials` so only the canonical `candidates` records remain:
+Use `DropdownMenuSub` / `DropdownMenuSubTrigger` / `DropdownMenuSubContent` from the existing `dropdown-menu` component (already in the project).
 
-- Remove `static_officials` row where `id = 'federal_president'`
-- Remove `static_officials` row where `id = 'federal_vice_president'`
+## Technical details
 
-After deletion, the admin grid will show exactly one Trump (Donald J. Trump, P80001571) and one Vance (JD Vance, V000137).
+- Add a second pair of strings: `inviteShareText` and `inviteShareUrl` (the quiz landing URL, e.g. `${window.location.origin}/` or `/quiz`).
+- Refactor the four handlers (`handleCopyLink`, `handleShareTwitter`, `handleShareFacebook`, `handleShareLinkedIn`, `handleNativeShare`) to accept `(text, url)` parameters, then bind them per mode in the menu.
+- No backend, scoring, or data changes. Pure UI in `QuizResults.tsx`.
 
-## Why not a UI filter
+## Open question
 
-The `static_officials` table is meant for officials that aren't in `candidates` (e.g., state/local officials). For the federal President and Vice President we already have proper candidate records, so the static rows are stale duplicates that should be removed at the data layer rather than hidden in the UI.
+For the invite link, should it point to:
+- the site root (`/`), or
+- a dedicated quiz entry route (e.g. `/quiz` or `/onboarding`)?
 
-## Out of scope
-
-- No code changes. No edits to the candidate merge logic, scoring, or photo URLs.
-- The remaining Trump (`Donald J. Trump`) and Vance (`JD Vance`) rows stay exactly as they are.
+Default: site root unless you say otherwise.
