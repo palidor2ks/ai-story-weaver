@@ -55,7 +55,7 @@ export function useCivicOfficials(address: string | null | undefined) {
   const geocode = geocodeQuery.data;
 
   return useQuery({
-    queryKey: ['civic-officials', address, geocode?.state, geocode?.lat, geocode?.lng, 'v8'],
+    queryKey: ['civic-officials', address, geocode?.state, geocode?.lat, geocode?.lng, 'v9'],
     queryFn: async (): Promise<CivicOfficialsResult> => {
       if (!address) {
         return {
