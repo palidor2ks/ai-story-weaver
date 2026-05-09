@@ -13,10 +13,13 @@ import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { RELIGION_GROUPS } from '@/data/religionOptions';
 import { Pencil } from 'lucide-react';
 import { Profile } from '@/hooks/useProfile';
 
