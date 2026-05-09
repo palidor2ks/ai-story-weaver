@@ -131,12 +131,15 @@ export const QuizResults = () => {
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
   const shareText = `I just discovered my political profile! My score: ${formatScore(profile?.overall_score)} (${getScoreLabel(profile?.overall_score)}). Find out where you stand on the issues.`;
 
-  const handleCopyLink = async () => {
+  const inviteUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const inviteText = `I just took the Pulse political alignment quiz — it shows where you really stand on the issues. Take it and see your results:`;
+
+  const handleCopyLink = async (url: string) => {
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(url);
       toast({
         title: 'Link copied!',
-        description: 'Share your results with friends and family.',
+        description: 'Share it with friends and family.',
       });
     } catch (err) {
       toast({
@@ -147,34 +150,59 @@ export const QuizResults = () => {
     }
   };
 
-  const handleShareTwitter = () => {
-    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+  const handleShareTwitter = (text: string, url: string) => {
+    const shareLink = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+    window.open(shareLink, '_blank', 'noopener,noreferrer');
   };
 
-  const handleShareFacebook = () => {
-    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+  const handleShareFacebook = (text: string, url: string) => {
+    const shareLink = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`;
+    window.open(shareLink, '_blank', 'noopener,noreferrer');
   };
 
-  const handleShareLinkedIn = () => {
-    const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+  const handleShareLinkedIn = (url: string) => {
+    const shareLink = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`;
+    window.open(shareLink, '_blank', 'noopener,noreferrer');
   };
 
-  const handleNativeShare = async () => {
+  const handleNativeShare = async (title: string, text: string, url: string) => {
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: 'My Political Profile',
-          text: shareText,
-          url: shareUrl,
-        });
+        await navigator.share({ title, text, url });
       } catch (err) {
         // User cancelled or error
       }
     }
   };
+
+  const supportsNativeShare = typeof navigator !== 'undefined' && 'share' in navigator;
+
+  const renderShareOptions = (text: string, url: string, title: string) => (
+    <>
+      <DropdownMenuItem onClick={() => handleCopyLink(url)} className="cursor-pointer">
+        <Copy className="w-4 h-4 mr-2" />
+        Copy Link
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => handleShareTwitter(text, url)} className="cursor-pointer">
+        <Twitter className="w-4 h-4 mr-2" />
+        Share on X
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => handleShareFacebook(text, url)} className="cursor-pointer">
+        <Facebook className="w-4 h-4 mr-2" />
+        Share on Facebook
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => handleShareLinkedIn(url)} className="cursor-pointer">
+        <Linkedin className="w-4 h-4 mr-2" />
+        Share on LinkedIn
+      </DropdownMenuItem>
+      {supportsNativeShare && (
+        <DropdownMenuItem onClick={() => handleNativeShare(title, text, url)} className="cursor-pointer">
+          <Share2 className="w-4 h-4 mr-2" />
+          More Options...
+        </DropdownMenuItem>
+      )}
+    </>
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -198,29 +226,27 @@ export const QuizResults = () => {
                 Share Results
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" className="w-48">
-              <DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer">
-                <Copy className="w-4 h-4 mr-2" />
-                Copy Link
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleShareTwitter} className="cursor-pointer">
-                <Twitter className="w-4 h-4 mr-2" />
-                Share on X
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleShareFacebook} className="cursor-pointer">
-                <Facebook className="w-4 h-4 mr-2" />
-                Share on Facebook
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleShareLinkedIn} className="cursor-pointer">
-                <Linkedin className="w-4 h-4 mr-2" />
-                Share on LinkedIn
-              </DropdownMenuItem>
-              {typeof navigator !== 'undefined' && 'share' in navigator && (
-                <DropdownMenuItem onClick={handleNativeShare} className="cursor-pointer">
+            <DropdownMenuContent align="center" className="w-64">
+              <DropdownMenuLabel>What would you like to share?</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer">
                   <Share2 className="w-4 h-4 mr-2" />
-                  More Options...
-                </DropdownMenuItem>
-              )}
+                  Share my results
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-56">
+                  {renderShareOptions(shareText, shareUrl, 'My Political Profile')}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer">
+                  <Users className="w-4 h-4 mr-2" />
+                  Invite others to take it
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-56">
+                  {renderShareOptions(inviteText, inviteUrl, 'Take the Pulse Quiz')}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
