@@ -213,17 +213,13 @@ async function fetchFederalExecutiveFromGitHub(): Promise<OfficialInfo[]> {
         const standardId = isPrez ? 'federal_president' : 'federal_vice_president';
         const bioguideId = exec.id.bioguide || standardId;
 
-        // Construct image URL. Bioguide photo CDN blocks hotlinking for current
-        // executives (returns 403), so override with working portrait URLs for
-        // known IDs. Falls back to bioguide pattern for any future executives.
-        let imageUrl = '';
-        if (bioguideId === 'P80001571') {
-          imageUrl = 'https://www.whitehouse.gov/wp-content/uploads/2026/01/President-Donald-Trump-Official-Presidential-Portrait.png-1-1.jpg';
-        } else if (bioguideId === 'V000137') {
-          imageUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/JD_Vance_Vice_Presidential_Portrait.jpg/600px-JD_Vance_Vice_Presidential_Portrait.jpg';
-        } else if (exec.id.bioguide) {
-          imageUrl = `https://bioguide.congress.gov/bioguide/photo/${bioguideId[0]}/${bioguideId}.jpg`;
-        }
+        // Default to bioguide photo URL. The unified DB image-url resolver
+        // (runs after all officials are merged) will override this with the
+        // image_url stored in `candidates` / `candidate_overrides` whenever
+        // one exists, keeping Profile and Feed photos in sync.
+        const imageUrl = exec.id.bioguide
+          ? `https://bioguide.congress.gov/bioguide/photo/${bioguideId[0]}/${bioguideId}.jpg`
+          : '';
 
         currentExecutives.push({
           id: bioguideId,
