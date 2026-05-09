@@ -5,10 +5,13 @@ import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { RELIGION_GROUPS } from '@/data/religionOptions';
 import { ArrowRight, ArrowLeft, User } from 'lucide-react';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
@@ -57,17 +60,7 @@ const SEX_OPTIONS = [
   'Prefer not to say',
 ];
 
-const RELIGION_OPTIONS = [
-  'Christianity',
-  'Judaism',
-  'Islam',
-  'Hinduism',
-  'Buddhism',
-  'Sikhism',
-  'Atheist/Agnostic',
-  'Other',
-  'Prefer not to say',
-];
+
 
 export const DemographicsForm = ({
   initialData,
@@ -219,11 +212,16 @@ export const DemographicsForm = ({
               <SelectTrigger className="bg-background">
                 <SelectValue placeholder="Select your religion" />
               </SelectTrigger>
-              <SelectContent>
-                {RELIGION_OPTIONS.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
+              <SelectContent className="max-h-80">
+                {RELIGION_GROUPS.map((group) => (
+                  <SelectGroup key={group.label}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.options.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
