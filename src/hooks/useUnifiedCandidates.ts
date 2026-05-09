@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
-import { Candidate, GovernmentLevel, TransitionStatus } from '@/types';
+import { Candidate, TransitionStatus } from '@/types';
+
+type CandidateLevel = NonNullable<Candidate['level']>; // 'federal' | 'state' | 'local'
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { useCandidates } from './useCandidates';
 import { useAllPoliticians } from './useAllPoliticians';
@@ -40,7 +42,7 @@ const normOffice = (office: string) =>
   office.toLowerCase().replace(/\s+of\s+the\s+united\s+states/g, '').replace(/\s+/g, ' ').trim();
 const nameKey = (name: string, office: string) => `${normName(name)}::${normOffice(office)}`;
 
-const deriveLevelFromOffice = (office: string): GovernmentLevel => {
+const deriveLevelFromOffice = (office: string): CandidateLevel => {
   const o = office.toLowerCase();
   if (/president|vice president|senator|representative|congress/.test(o)) return 'federal';
   if (/governor|lieutenant|attorney general|secretary of state|treasurer|comptroller|state senator|state rep|assembly|delegate/.test(o)) return 'state';
@@ -48,7 +50,7 @@ const deriveLevelFromOffice = (office: string): GovernmentLevel => {
   return 'federal';
 };
 
-const civicLevelToGovLevel = (lvl?: string): GovernmentLevel => {
+const civicLevelToGovLevel = (lvl?: string): CandidateLevel => {
   if (!lvl) return 'federal';
   if (lvl.includes('state')) return 'state';
   if (lvl === 'local') return 'local';
@@ -87,7 +89,7 @@ const buildCandidate = (
 
   const isIncumbent = db?.is_incumbent ?? api?.is_incumbent ?? true;
 
-  let level: GovernmentLevel = 'federal';
+  let level: CandidateLevel = 'federal';
   if (civic) level = civicLevelToGovLevel(civic.level);
   else if (rep) level = 'federal';
   else level = deriveLevelFromOffice(office);
