@@ -137,51 +137,6 @@ export const Candidates = () => {
   const localCount = localCandidates.length;
 
 
-  const { isHidden } = useHiddenStates();
-
-  const filteredCandidates = useMemo(() => {
-    let result = tabCandidates.filter(c => !isHidden(c.state));
-
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(c => 
-        c.name.toLowerCase().includes(query) ||
-        c.state.toLowerCase().includes(query) ||
-        c.office.toLowerCase().includes(query)
-      );
-    }
-
-    if (partyFilter !== 'all') {
-      result = result.filter(c => c.party === partyFilter);
-    }
-
-    if (officeFilter !== 'all') {
-      result = result.filter(c => c.office === officeFilter);
-    }
-
-    const userScore = profile?.overall_score ?? 0;
-    switch (sortBy) {
-      case 'match':
-        result.sort((a, b) => calculateMatchScore(userScore, b.overallScore) - calculateMatchScore(userScore, a.overallScore));
-        break;
-      case 'name':
-        result.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case 'party':
-        result.sort((a, b) => a.party.localeCompare(b.party));
-        break;
-    }
-
-    return result;
-  }, [searchQuery, sortBy, partyFilter, officeFilter, tabCandidates, profile, isHidden]);
-
-  const isLoading = profileLoading || candidatesLoading || representativesLoading || allPoliticiansLoading || civicLoading;
-
-  // Count for tabs
-  const executiveCount = federalExecutiveCandidates.length + stateExecutiveCandidates.length;
-  const stateCount = stateExecutiveCandidates.length + stateLegislativeCandidates.length;
-  const localCount = localCandidates.length;
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
