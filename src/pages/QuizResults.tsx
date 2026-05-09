@@ -5,7 +5,7 @@ import { ScoreText } from '@/components/ScoreText';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useProfile, useUserTopicScores, useUserTopics } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial, OfficeLevelType } from '@/hooks/useCivicOfficials';
