@@ -22,7 +22,8 @@ interface FetchAllResponse {
   error?: string;
 }
 
-export function useAllPoliticians() {
+export function useAllPoliticians(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
   return useQuery({
     queryKey: ['all-politicians'],
     queryFn: async (): Promise<Representative[]> => {
@@ -48,6 +49,7 @@ export function useAllPoliticians() {
       console.log(`Fetched ${data?.representatives?.length || 0} Congress members`);
       return data?.representatives || [];
     },
+    enabled,
     staleTime: 1000 * 60 * 60, // Cache for 1 hour
     retry: 1,
   });

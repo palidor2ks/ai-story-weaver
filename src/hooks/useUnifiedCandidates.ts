@@ -150,9 +150,9 @@ export const useUnifiedCandidates = ({
   includeAllCongress = false,
 }: Options = {}): UnifiedCandidatesResult => {
   const { data: dbCandidates = [], isLoading: dbLoading } = useCandidates();
-  const { data: allPoliticiansData = [], isLoading: allPoliticiansLoading } = useAllPoliticians();
-  const allPoliticians = includeAllCongress ? allPoliticiansData : [];
-  const allLoading = includeAllCongress ? allPoliticiansLoading : false;
+  const { data: allPoliticians = [], isLoading: allLoading } = useAllPoliticians({
+    enabled: includeAllCongress,
+  });
   const { data: repsData, isLoading: repsLoading } = useRepresentatives(address);
   const { data: civicData, isLoading: civicLoading } = useCivicOfficials(address);
 
