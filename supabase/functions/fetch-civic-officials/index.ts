@@ -1124,8 +1124,51 @@ serve(async (req) => {
           const dbUrl = overrideImg.get(o.id) || candImg.get(o.id);
           if (dbUrl) o.image_url = dbUrl;
         }
+
+        // Name+office fallback for officials whose synthetic id (e.g.
+        // `federal_president`) doesn't match a DB id like `P80001571`.
+        // Mirrors useUnifiedCandidates so Profile/QuizResults stay in sync
+        // with Feed/Candidates.
+        const stillMissing = allOfficials.filter(o => !o.image_url);
+        let nameFallbackHits = 0;
+        if (stillMissing.length) {
+          const norm = (s: string) =>
+            (s || '').toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
+          const normOffice = (s: string) =>
+            (s || '').toLowerCase().replace(/\s+of\s+the\s+united\s+states/g, '').replace(/\s+/g, ' ').trim();
+
+          const names = Array.from(new Set(stillMissing.map(o => o.name).filter(Boolean)));
+          const [{ data: candByName }, { data: ovByName }] = await Promise.all([
+            sb.from('candidates').select('name, office, image_url').in('name', names),
+            sb.from('candidate_overrides')
+              .select('name, office, image_url, is_active')
+              .in('name', names)
+              .eq('is_active', true),
+          ]);
+
+          const byKey = new Map<string, string>();
+          for (const r of candByName || []) {
+            if (r?.name && r.image_url) {
+              byKey.set(`${norm(r.name)}::${normOffice(r.office || '')}`, r.image_url);
+            }
+          }
+          // Overrides take precedence
+          for (const r of ovByName || []) {
+            if (r?.name && r.image_url) {
+              byKey.set(`${norm(r.name)}::${normOffice(r.office || '')}`, r.image_url);
+            }
+          }
+          for (const o of stillMissing) {
+            const url = byKey.get(`${norm(o.name)}::${normOffice(o.office)}`);
+            if (url) {
+              o.image_url = url;
+              nameFallbackHits++;
+            }
+          }
+        }
+
         console.log(
-          `[ImageResolver] Applied DB image_url for ${overrideImg.size} overrides + ${candImg.size} candidates`
+          `[ImageResolver] Applied DB image_url: ${overrideImg.size} override-id + ${candImg.size} candidate-id + ${nameFallbackHits} name-fallback`
         );
       }
     } catch (e) {
