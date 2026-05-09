@@ -945,10 +945,17 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const { address, includeFederalLegislative = false } = await req.json();
-    
+    const body = await req.json();
+    const { address, includeFederalLegislative = false } = body;
+    // Optional pre-resolved geocode hints from the caller (skips re-geocoding)
+    const hintLat: number | undefined = typeof body.lat === 'number' ? body.lat : undefined;
+    const hintLng: number | undefined = typeof body.lng === 'number' ? body.lng : undefined;
+    const hintState: string | undefined = typeof body.state === 'string' ? body.state : undefined;
+    const hintCity: string | undefined = typeof body.city === 'string' ? body.city : undefined;
+
     console.log(`=== FETCH CIVIC OFFICIALS START ===`);
     console.log(`Address: ${address}`);
+    console.log(`Hints: state=${hintState}, lat/lng=${hintLat}/${hintLng}, city=${hintCity}`);
     console.log(`Include federal legislative: ${includeFederalLegislative}`);
     console.log(`OPEN_STATES_API_KEY set: ${!!OPEN_STATES_API_KEY}`);
 
@@ -956,9 +963,9 @@ serve(async (req) => {
       throw new Error('Address is required');
     }
 
-    // Extract state and city from address
-    const state = extractStateFromAddress(address);
-    const city = extractCityFromAddress(address);
+    // Use caller-provided hints when available; otherwise parse from address
+    const state = hintState || extractStateFromAddress(address);
+    const city = hintCity || extractCityFromAddress(address);
     console.log(`State: ${state}, City: ${city}`);
 
     if (!state) {
