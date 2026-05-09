@@ -212,11 +212,16 @@ export const DemographicsForm = ({
               <SelectTrigger className="bg-background">
                 <SelectValue placeholder="Select your religion" />
               </SelectTrigger>
-              <SelectContent>
-                {RELIGION_OPTIONS.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
+              <SelectContent className="max-h-80">
+                {RELIGION_GROUPS.map((group) => (
+                  <SelectGroup key={group.label}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.options.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
