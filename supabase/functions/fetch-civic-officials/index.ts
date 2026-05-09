@@ -1087,6 +1087,51 @@ serve(async (req) => {
 
     console.log(`Total officials after transitions + city filter: ${allOfficials.length}`);
 
+    // === Unified image_url resolver ===
+    // Both Profile and Feed must show the same photo. Feed reads `image_url`
+    // straight from the `candidates` table (with `candidate_overrides` as the
+    // edit layer). Pull those values here and prefer them over any URL we
+    // synthesized from external APIs (bioguide, OpenStates, etc.).
+    try {
+      const ids = Array.from(
+        new Set(allOfficials.map(o => o.id).filter((id): id is string => !!id))
+      );
+      if (ids.length) {
+        const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const [{ data: candRows }, { data: overrideRows }] = await Promise.all([
+          sb.from('candidates').select('id, image_url').in('id', ids),
+          sb.from('candidate_overrides')
+            .select('candidate_id, image_url')
+            .in('candidate_id', ids)
+            .eq('is_active', true),
+        ]);
+
+        const candImg = new Map<string, string>();
+        for (const r of candRows || []) {
+          if (r?.id && r.image_url && String(r.image_url).trim()) {
+            candImg.set(r.id, r.image_url);
+          }
+        }
+        const overrideImg = new Map<string, string>();
+        for (const r of overrideRows || []) {
+          if (r?.candidate_id && r.image_url && String(r.image_url).trim()) {
+            overrideImg.set(r.candidate_id, r.image_url);
+          }
+        }
+
+        // Priority: candidate_overrides > candidates > existing API-derived URL
+        for (const o of allOfficials) {
+          const dbUrl = overrideImg.get(o.id) || candImg.get(o.id);
+          if (dbUrl) o.image_url = dbUrl;
+        }
+        console.log(
+          `[ImageResolver] Applied DB image_url for ${overrideImg.size} overrides + ${candImg.size} candidates`
+        );
+      }
+    } catch (e) {
+      console.error('[ImageResolver] Failed to apply DB image_url overrides:', e);
+    }
+
     // Persist officials to database and trigger answer generation in background
     EdgeRuntime.waitUntil(persistAndResearchOfficials(allOfficials, authHeader));
 
