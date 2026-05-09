@@ -24,6 +24,7 @@ import PoliticianDashboard from "./pages/PoliticianDashboard";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
+import VerifyEmail from "./pages/VerifyEmail";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { Committees } from "./pages/Committees";
@@ -36,12 +37,14 @@ interface RouteGuardProps {
   children: React.ReactNode;
   requireAuth?: boolean;
   requireOnboarding?: boolean;
+  requireVerifiedEmail?: boolean;
 }
 
 const RouteGuard = ({ 
   children, 
   requireAuth = true, 
-  requireOnboarding = false 
+  requireOnboarding = false,
+  requireVerifiedEmail = true,
 }: RouteGuardProps) => {
   const { user, loading: authLoading } = useAuth();
   const { data: hasCompleted, isLoading: onboardingLoading } = useHasCompletedOnboarding();
@@ -55,6 +58,11 @@ const RouteGuard = ({
   
   if (requireAuth && !user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  // Block access until email is verified
+  if (requireAuth && requireVerifiedEmail && user && !user.email_confirmed_at) {
+    return <Navigate to="/verify-email" replace />;
   }
   
   if (requireOnboarding && !hasCompleted) {
@@ -70,6 +78,11 @@ const AppRoutes = () => {
       <Route path="/auth" element={<Auth />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/verify-email" element={
+        <RouteGuard requireAuth requireVerifiedEmail={false}>
+          <VerifyEmail />
+        </RouteGuard>
+      } />
       <Route path="/" element={
         <RouteGuard requireAuth requireOnboarding={false}>
           <Index />
