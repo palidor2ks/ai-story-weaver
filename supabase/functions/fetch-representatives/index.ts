@@ -257,7 +257,7 @@ function mapExecutiveToRepresentative(executive: Executive): any | null {
   let imageUrl: string;
   if (isPrez) {
     // Official White House portrait for President Trump
-    imageUrl = 'https://www.whitehouse.gov/wp-content/uploads/2025/06/President-Donald-Trump-Official-Presidential-Portrait.png';
+    imageUrl = 'https://www.whitehouse.gov/wp-content/uploads/2026/01/President-Donald-Trump-Official-Presidential-Portrait.png-1-1.jpg';
   } else if (executive.id.bioguide && bioguideId !== 'V000137') {
     imageUrl = `https://bioguide.congress.gov/bioguide/photo/${bioguideId[0]}/${bioguideId}.jpg`;
   } else {
