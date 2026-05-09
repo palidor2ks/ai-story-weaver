@@ -106,7 +106,9 @@ export const Auth = () => {
         toast.error(error.message);
       }
     } else {
-      toast.success('Account created! Check your email to confirm your account.');
+      toast.success('Account created! Check your email to verify your account before signing in.');
+      setActiveTab('signin');
+      setSignInEmail(signUpEmail);
     }
   };
 
