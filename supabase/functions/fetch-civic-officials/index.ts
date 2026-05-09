@@ -984,8 +984,10 @@ serve(async (req) => {
       });
     }
 
-    // Get coordinates for geo-based lookup
-    const coords = await geocodeAddress(address);
+    // Get coordinates: prefer caller-provided hints to avoid an extra Census round-trip
+    const coords = (hintLat != null && hintLng != null)
+      ? { lat: hintLat, lng: hintLng }
+      : await geocodeAddress(address);
 
     // First fetch federal legislator names to filter from Open States results
     const federalLegislatorNames = await fetchFederalLegislatorNames(state);
