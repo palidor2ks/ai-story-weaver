@@ -1,81 +1,63 @@
-# Plan: Installable App + Legal Pages
+# Speed up address → officials lookup
 
-Two independent workstreams. Both are frontend-only.
+## Why it's slow today
 
----
+The Feed waits on three sequential network hops, each gated by the previous one:
 
-## 1. Make Pulse installable (manifest-only, no service worker)
+```
+Address
+  └─► geocode-address (Census API)        ~1–3s
+        └─► fetch-representatives          ~0.5–1.5s
+        └─► fetch-civic-officials          ~2–4s  (Open States geo + governor + DB)
+```
 
-Per Lovable guidance, we'll skip `vite-plugin-pwa` and service workers (they break the editor preview and can serve stale builds). A plain web app manifest is enough for "Add to Home Screen" on iOS and the Android install prompt — which is what you actually want.
+Open States' `people.geo` call is the single slowest hop, and `fetch-civic-officials` re-geocodes internally instead of reusing what the frontend already resolved.
 
-### What we'll add
+## Goals
 
-- **`public/manifest.webmanifest`** — name "Pulse", short_name "Pulse", `start_url: "/feed"`, `display: "standalone"`, theme/background colors pulled from your design tokens, and icon entries.
-- **Icons in `public/`** — generate a 512×512 maskable PNG and a 192×192 PNG from the existing logo. Reuse `og-image.png` style branding.
-- **Apple touch icon** — 180×180 PNG (iOS ignores the manifest icon list for the home screen; it needs `apple-touch-icon`).
-- **`index.html` `<head>` additions**:
-  - `<link rel="manifest" href="/manifest.webmanifest">`
-  - `<link rel="apple-touch-icon" href="/apple-touch-icon.png">`
-  - `<meta name="apple-mobile-web-app-capable" content="yes">`
-  - `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">`
-  - `<meta name="apple-mobile-web-app-title" content="Pulse">`
-  - `<meta name="theme-color" content="<your primary in hex>">`
+1. Cut cold-load wall time roughly in half.
+2. Make repeat lookups for the same address effectively instant.
+3. Make the UI feel responsive even on the first hit.
 
-### How users install
-- **iOS Safari**: Share → Add to Home Screen
-- **Android Chrome**: browser menu → Install app (or auto prompt)
-- **Desktop Chrome/Edge**: install icon in URL bar
+## Changes
 
-No offline support, no push notifications — those need a real service worker, which we're intentionally avoiding for now.
+### 1. Cache geocode + civic results in Supabase
+New table `civic_lookup_cache` keyed by normalized address (uppercased, trimmed, punctuation-stripped).
+Stores: `lat`, `lng`, `state`, `district`, `city`, `officials` (jsonb), `cached_at`.
+TTL: 30 days (officials rarely change between elections).
 
----
+- `geocode-address` checks cache first; on miss, calls Census and writes back.
+- `fetch-civic-officials` checks cache first; on miss, calls Open States and writes back.
+- Read is public (no PII); write only via service role inside the edge functions.
 
-## 2. Add Terms of Service and Privacy Policy pages
+### 2. Pass lat/lng/state through instead of re-geocoding
+`fetch-civic-officials` currently re-resolves the address. Update its contract to accept optional `lat`, `lng`, `state` and skip its internal geocode when provided. The frontend already has these from the geocode step.
 
-### Pages
-- `src/pages/Terms.tsx` → route `/terms`
-- `src/pages/Privacy.tsx` → route `/privacy`
+### 3. Run reps + civic in parallel
+In `Feed.tsx` (or wherever both hooks fire), trigger `useRepresentatives` and `useCivicOfficials` from the same resolved geocode result so they run concurrently rather than each doing their own geocode.
 
-Both rendered as public routes (no auth required) so they're crawlable and linkable from app stores / social previews. Use existing `Header`-less simple layout with a back link, semantic HTML (`<h1>`, `<h2>`, `<section>`), and design-system tokens.
+### 4. Progressive UI
+Show three skeleton sections (Federal, State, Local) immediately after submit. Each section resolves independently as its query returns, so the user sees federal reps the moment they're back without waiting on Open States.
 
-### Content (starter templates — you'll want a lawyer to review before going truly "official")
+### 5. Open States timeout + graceful degradation
+Wrap the Open States fetch in a 6s `AbortController` timeout. On timeout, return federal + governor + local from cache/DB and mark state legislative as "loading… retry" rather than blocking the whole response.
 
-**Terms of Service** sections:
-- Acceptance of terms
-- Description of service ("Pulse helps users discover where they stand on political issues and compare to candidates / parties / representatives. Information is aggregated from public sources and AI analysis and may contain errors.")
-- Eligibility (13+ / 18+)
-- User accounts & responsibilities
-- Acceptable use (no scraping, no harassment, no manipulation of quiz data)
-- Intellectual property
-- Disclaimers (especially: scores and AI explanations are informational, not endorsements; users should verify with primary sources)
-- Limitation of liability
-- Termination
-- Changes to terms
-- Contact
+## Out of scope
 
-**Privacy Policy** sections:
-- What we collect (account info, address for representative matching, quiz answers, usage analytics)
-- How we use it (matching candidates, generating personalized comparisons, improving the service)
-- Third-party services we use (Supabase/Lovable Cloud for storage & auth, Google Places for address autocomplete, Perplexity & Lovable AI Gateway for research, Congress.gov & FEC for public data, OpenStates for civic info)
-- Data sharing (we don't sell your data)
-- Cookies & local storage
-- User rights (access, correction, deletion — request via email)
-- Data retention
-- Children's privacy
-- Security
-- Changes
-- Contact
+- No changes to scoring, AI research, or candidate data.
+- No new external APIs (zip-centroid fallback deferred — caching solves the common case).
+- No service worker / offline support.
 
-### Wiring
-- Register both routes in `src/App.tsx` **outside** `RouteGuard` so they're public.
-- Add footer links in `Header.tsx` mobile menu and a small footer component on key pages (or just the auth page) linking to `/terms` and `/privacy`.
-- Auth page: add "By signing up you agree to our Terms and Privacy Policy" line above the submit button.
+## Technical details
 
----
+- Migration: create `civic_lookup_cache (normalized_address text primary key, lat numeric, lng numeric, state text, district text, city text, payload jsonb, cached_at timestamptz default now())` with public read RLS and service-role-only write.
+- Helper `normalizeAddress(s)` shared by both edge functions: uppercase, collapse whitespace, strip trailing zip+4, drop punctuation except commas.
+- Edge function changes touch only `geocode-address/index.ts` and `fetch-civic-officials/index.ts`.
+- Frontend: `useCivicOfficials` accepts the geocode result from `useRepresentatives`'s shared query so both reuse the same geocode promise (via a new `useGeocode(address)` hook).
+- React Query `staleTime` stays at 1 hour; the DB cache handles cross-session/cross-user reuse.
 
-## Open questions before I implement
+## Expected impact
 
-1. **Contact email** for the legal pages (e.g. `support@polipulseapp.com`)?
-2. **Effective date** — use today (May 9, 2026) for both?
-3. **Minimum age** — 13+ (COPPA floor) or 18+ (since it's political)?
-4. **Footer scope** — add a global footer to every page, or only on Auth + legal pages?
+- Cold first-ever address: ~3–5s → ~2–3s (parallelism + skipped re-geocode).
+- Any address someone else has looked up before: ~3–5s → ~200–400ms (DB cache hit).
+- Same user revisiting Feed: already instant via React Query, unchanged.
