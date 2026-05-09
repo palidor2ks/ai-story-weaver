@@ -1,0 +1,1 @@
+DELETE FROM civic_lookup_cache WHERE state='NJ';
