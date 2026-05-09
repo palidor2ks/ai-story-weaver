@@ -257,7 +257,10 @@ export const Auth = () => {
         </Card>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          By continuing, you agree to our Terms of Service and Privacy Policy.
+          By continuing, you agree to our{' '}
+          <a href="/terms" className="text-primary underline underline-offset-2 hover:text-primary/80">Terms of Service</a>{' '}
+          and{' '}
+          <a href="/privacy" className="text-primary underline underline-offset-2 hover:text-primary/80">Privacy Policy</a>.
         </p>
       </div>
     </div>

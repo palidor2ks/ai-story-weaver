@@ -22,6 +22,8 @@ import { HowScoringWorks } from "./pages/HowScoringWorks";
 import Admin from "./pages/Admin";
 import PoliticianDashboard from "./pages/PoliticianDashboard";
 import NotFound from "./pages/NotFound";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { Committees } from "./pages/Committees";
@@ -66,6 +68,8 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/auth" element={<Auth />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
       <Route path="/" element={
         <RouteGuard requireAuth requireOnboarding={false}>
           <Index />
