@@ -129,21 +129,23 @@ export async function getDistrictFromAddress(address: string): Promise<{ distric
   }
 }
 
+import { useGeocode } from './useGeocode';
+
 export function useRepresentatives(address: string | null | undefined) {
+  // Reuse the shared geocode query so we don't double-call Census/our cache.
+  const geocodeQuery = useGeocode(address);
+  const geocode = geocodeQuery.data;
+
   return useQuery({
-    queryKey: ['representatives', address],
+    queryKey: ['representatives', address, geocode?.state, geocode?.district],
     queryFn: async (): Promise<RepresentativesResult> => {
       if (!address) {
-        console.log('No address provided');
         return { representatives: [], district: null, state: null };
       }
 
-      // Get state and district from the geocode edge function
-      const { district, state } = await getDistrictFromAddress(address);
-      
-      // Fallback to parsing state from address if geocode didn't return it
-      const parsedState = state || parseAddressForState(address).state;
-      
+      const district = geocode?.district ?? null;
+      const parsedState = geocode?.state || parseAddressForState(address).state;
+
       if (!parsedState) {
         console.log('Could not determine state from address:', address);
         return { representatives: [], district: null, state: null };
@@ -168,13 +170,14 @@ export function useRepresentatives(address: string | null | undefined) {
         return { representatives: [], district, state: parsedState };
       }
 
-      return { 
-        representatives: data?.representatives || [], 
-        district, 
-        state: parsedState 
+      return {
+        representatives: data?.representatives || [],
+        district,
+        state: parsedState,
       };
     },
-    enabled: !!address,
+    // Wait for geocode to resolve before firing reps lookup
+    enabled: !!address && !geocodeQuery.isLoading,
     staleTime: 1000 * 60 * 60, // Cache for 1 hour
     retry: 1,
   });
