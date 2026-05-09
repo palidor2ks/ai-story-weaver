@@ -3,12 +3,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
 import { QuestionUpdateAlert } from '@/components/QuestionUpdateAlert';
-import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
+import { calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile, useUserTopics } from '@/hooks/useProfile';
-import { useRepresentatives } from '@/hooks/useRepresentatives';
-import { useCivicOfficials } from '@/hooks/useCivicOfficials';
-import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
-import { useUserQuizQuestionIds, useRepresentativeAnswersAndScores } from '@/hooks/useRepresentativeScores';
+import { useUnifiedCandidates } from '@/hooks/useUnifiedCandidates';
 import { useHiddenStates } from '@/hooks/useHiddenStates';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,201 +23,56 @@ export const Feed = () => {
 
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
-  const { data: dbCandidates = [], isLoading: candidatesLoading } = useCandidates();
-  const { data: repsData, isLoading: representativesLoading, error: representativesError } = useRepresentatives(profile?.address);
-  const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
-  const { data: userQuizAnswers = [] } = useUserQuizQuestionIds();
-  const congressMembers = repsData?.representatives ?? [];
-  const civicOfficials = civicData?.officials ?? [];
-  
+  const unified = useUnifiedCandidates({ address: profile?.address });
+
+  const representativesError = null;
+
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('match');
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [levelFilter, setLevelFilter] = useState<GovernmentLevel>('all');
   const [incumbentFilter, setIncumbentFilter] = useState<string>('all');
 
-  // Combine database candidates with Congress API data and Civic API data
+  // Address-scoped officials only (Feed only shows the user's reps + civic, not all of Congress)
   const transformedCandidates: Candidate[] = useMemo(() => {
-    // Transform Congress API members (federal)
-    const congressCandidates: Candidate[] = congressMembers.map(member => ({
-      id: member.bioguide_id || member.id,
-      name: member.name,
-      party: member.party as 'Democrat' | 'Republican' | 'Independent' | 'Other',
-      office: member.office,
-      state: member.state,
-      district: member.district || undefined,
-      imageUrl: member.image_url || undefined,
-      overallScore: member.overall_score,
-      topicScores: [],
-      lastUpdated: new Date(),
-      coverageTier: (member.coverage_tier || 'tier_3') as 'tier_1' | 'tier_2' | 'tier_3',
-      confidence: (member.confidence || 'low') as 'high' | 'medium' | 'low',
-      isIncumbent: member.is_incumbent ?? true,
-      scoreVersion: 'v1.0',
-      level: member.office === 'President' || member.office === 'Vice President' 
-        ? 'federal' 
-        : 'federal',
-    }));
-
-    // Get set of congress member names (lowercase for comparison)
-    const congressMemberNames = new Set(
-      congressCandidates.map(c => c.name.toLowerCase())
-    );
-
-    // Transform Civic API officials (state and local)
-    const civicCandidates: Candidate[] = civicOfficials
-      .filter(official => {
-        // Exclude federal legislative (we get those from Congress API)
-        if (official.level === 'federal_legislative') return false;
-        
-        // Exclude if this name matches a federal representative
-        // (prevents Open States data quality issues causing duplicates)
-        if (congressMemberNames.has(official.name.toLowerCase())) {
-          console.log(`Excluding ${official.name} from civic data - matches federal representative`);
-          return false;
-        }
-        
-        return true;
-      })
-      .map(official => ({
-        id: official.id,
-        name: official.name,
-        party: official.party,
-        office: official.office,
-        state: official.state,
-        district: official.district,
-        imageUrl: official.image_url || undefined,
-        overallScore: official.overall_score,
-        topicScores: [],
-        lastUpdated: new Date(),
-        coverageTier: (official.coverage_tier || 'tier_3') as 'tier_1' | 'tier_2' | 'tier_3',
-        confidence: (official.confidence || 'low') as 'high' | 'medium' | 'low',
-        isIncumbent: official.is_incumbent ?? true,
-        scoreVersion: 'v1.0',
-        level: official.level?.includes('state') ? 'state' : 
-               official.level === 'local' ? 'local' : 'federal',
-        // Transition fields
-        transitionStatus: official.transition_status,
-        newOffice: official.new_office,
-        inaugurationDate: official.inauguration_date,
-      }));
-
-    // Transform database candidates (as fallback)
-    const dbTransformed: Candidate[] = dbCandidates.map(c => ({
-      id: c.id,
-      name: c.name,
-      party: c.party,
-      office: c.office,
-      state: c.state,
-      district: c.district || undefined,
-      imageUrl: c.image_url || undefined,
-      overallScore: c.overall_score,
-      topicScores: (c.topicScores || []).map(ts => ({
-        topicId: ts.topic_id,
-        topicName: ts.topics?.name || ts.topic_id,
-        score: ts.score,
-      })),
-      lastUpdated: new Date(c.last_updated),
-      coverageTier: c.coverage_tier,
-      confidence: c.confidence,
-      isIncumbent: c.is_incumbent,
-      scoreVersion: c.score_version,
-    }));
-
-      // Combine Congress + Civic (both address-filtered), then enhance with DB scores
-      const normName = (name: string) => name.toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
-      const normOffice = (office: string) => office.toLowerCase().replace(/\s+of\s+the\s+united\s+states/g, '').replace(/\s+/g, ' ').trim();
-
-      // Build a lookup of DB candidates by normalized name for score enhancement
-      const dbByName = new Map<string, Candidate>();
-      for (const c of dbTransformed) {
-        dbByName.set(normName(c.name) + '::' + normOffice(c.office), c);
-      }
-
-      // Merge congress + civic (address-filtered sources only)
-      const apiCandidates = [...congressCandidates, ...civicCandidates];
-      const seenNames = new Set<string>();
-      const seenIds = new Set<string>();
-      const result: Candidate[] = [];
-
-      for (const c of apiCandidates) {
-        if (seenIds.has(c.id)) continue;
-        const nameKey = normName(c.name) + '::' + normOffice(c.office);
-        if (seenNames.has(nameKey)) continue;
-        seenIds.add(c.id);
-        seenNames.add(nameKey);
-        // If a DB version exists with better data (scores), use it instead
-        // but preserve the level classification from the API source.
-        const dbVersion = dbByName.get(nameKey);
-        result.push(dbVersion && dbVersion.overallScore ? { ...dbVersion, level: c.level } : c);
-      }
-
-      // Fall back to DB candidates only if no API data available
-      if (result.length === 0) return dbTransformed;
-    return result;
-  }, [congressMembers, civicOfficials, dbCandidates]);
-
-  // Get representative info for score generation
-  const representativeInfoList = useMemo(() => {
-    return transformedCandidates.map(c => ({
-      id: c.id,
-      name: c.name,
-      party: c.party,
-      office: c.office,
-      state: c.state,
-    }));
-  }, [transformedCandidates]);
-
-  // Source-of-truth scores (saved to DB via get-candidate-answers)
-  const { data: scoreMap } = useCandidateScoreMap(representativeInfoList.map(r => r.id));
-
-  // Fetch/generate answers and calculate match scores for representatives
-  const { data: scoresData } = useRepresentativeAnswersAndScores(
-    representativeInfoList,
-    userQuizAnswers
-  );
+    const seen = new Set<string>();
+    const out: Candidate[] = [];
+    for (const c of [
+      ...unified.myReps,
+      ...unified.federalExec,
+      ...unified.stateExec,
+      ...unified.stateLeg,
+      ...unified.local,
+    ]) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push(c);
+    }
+    return out;
+  }, [unified.myReps, unified.federalExec, unified.stateExec, unified.stateLeg, unified.local]);
 
   // Track if we've shown the toast this session to avoid duplicates
   const toastShownRef = useRef(false);
+  const aiAnswersGenerated = useMemo(
+    () => transformedCandidates.filter(c => c.hasAIAnswers).length,
+    [transformedCandidates],
+  );
 
-  // Show toast when NEW answers are generated (only once per session)
   useEffect(() => {
-    if (scoresData?.answersGenerated && scoresData.answersGenerated > 0 && !toastShownRef.current) {
+    if (aiAnswersGenerated > 0 && !toastShownRef.current) {
       toastShownRef.current = true;
-      toast.success(`Generated ${scoresData.answersGenerated} AI-predicted positions for your representatives`, {
+      toast.success(`Generated AI-predicted positions for ${aiAnswersGenerated} of your representatives`, {
         icon: <Sparkles className="w-4 h-4" />,
       });
-
-      // Pull freshly-saved overall scores from the DB so all pages stay consistent
       queryClient.invalidateQueries({ queryKey: ['candidate-score-map'] });
       queryClient.invalidateQueries({ queryKey: ['candidates'] });
     }
-  }, [scoresData?.answersGenerated, queryClient]);
+  }, [aiAnswersGenerated, queryClient]);
 
-  // Merge DB-saved overall scores + per-user matchScore into candidates
-  const candidatesWithScores = useMemo(() => {
-    const base = transformedCandidates.map((candidate) => {
-      const stored = scoreMap?.get(candidate.id);
-      return stored !== undefined ? { ...candidate, overallScore: stored } : candidate;
-    });
-
-    if (!scoresData?.scores) return base;
-
-    return base.map((candidate) => {
-      const scoreInfo = scoresData.scores[candidate.id];
-      if (scoreInfo && scoreInfo.answerCount > 0) {
-        return {
-          ...candidate,
-          matchScore: scoreInfo.score,
-          hasAIAnswers: scoreInfo.generated,
-          answerCount: scoreInfo.answerCount,
-        };
-      }
-      return candidate;
-    });
-  }, [transformedCandidates, scoreMap, scoresData]);
+  const candidatesWithScores = transformedCandidates;
 
   const { isHidden } = useHiddenStates();
+
 
   const filteredAndSortedCandidates = useMemo(() => {
     let result = candidatesWithScores.filter(c => !isHidden(c.state));
@@ -319,7 +171,7 @@ export const Feed = () => {
     return Math.max(...matches);
   }, [candidatesWithScores, profile?.overall_score]);
 
-  const isLoading = profileLoading || candidatesLoading || representativesLoading || civicLoading;
+  const isLoading = profileLoading || unified.isLoading;
 
   if (isLoading) {
     return (
@@ -462,7 +314,7 @@ export const Feed = () => {
         {/* Results Count */}
         <p className="text-sm text-muted-foreground mb-4">
           Showing {filteredAndSortedCandidates.length} representative{filteredAndSortedCandidates.length !== 1 ? 's' : ''}
-          {hasAddress && congressMembers.length > 0 && ' from Congress.gov'}
+          {hasAddress && unified.myReps.length > 0 && ' from Congress.gov'}
         </p>
 
         {/* Grouped Sections */}
