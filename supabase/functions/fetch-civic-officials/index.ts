@@ -450,7 +450,7 @@ async function fetchOpenStatesOfficials(
           continue;
         }
 
-        const isLtGov = title.includes('lieutenant') || title.includes('lt.');
+        const isLtGov = title.includes('lieutenant') || title.includes('lt.') || title.includes('lt_') || /\blt\b/.test(title);
         
         const official: OfficialInfo = {
           id: `openstates_${person.id.replace(/\//g, '_')}`,
