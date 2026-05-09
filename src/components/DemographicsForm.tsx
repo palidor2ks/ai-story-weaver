@@ -60,17 +60,7 @@ const SEX_OPTIONS = [
   'Prefer not to say',
 ];
 
-const RELIGION_OPTIONS = [
-  'Christianity',
-  'Judaism',
-  'Islam',
-  'Hinduism',
-  'Buddhism',
-  'Sikhism',
-  'Atheist/Agnostic',
-  'Other',
-  'Prefer not to say',
-];
+
 
 export const DemographicsForm = ({
   initialData,
