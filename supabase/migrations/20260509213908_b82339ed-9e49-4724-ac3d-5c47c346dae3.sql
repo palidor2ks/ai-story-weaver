@@ -1,0 +1,2 @@
+UPDATE candidates SET image_url='https://www.whitehouse.gov/wp-content/uploads/2026/01/President-Donald-Trump-Official-Presidential-Portrait.png-1-1.jpg' WHERE id='P80001571';
+UPDATE candidate_overrides SET image_url='https://www.whitehouse.gov/wp-content/uploads/2026/01/President-Donald-Trump-Official-Presidential-Portrait.png-1-1.jpg' WHERE candidate_id='P80001571' AND image_url IS NOT NULL;
