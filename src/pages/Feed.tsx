@@ -171,7 +171,7 @@ export const Feed = () => {
     return Math.max(...matches);
   }, [candidatesWithScores, profile?.overall_score]);
 
-  const isLoading = profileLoading || candidatesLoading || representativesLoading || civicLoading;
+  const isLoading = profileLoading || unified.isLoading;
 
   if (isLoading) {
     return (
@@ -314,7 +314,7 @@ export const Feed = () => {
         {/* Results Count */}
         <p className="text-sm text-muted-foreground mb-4">
           Showing {filteredAndSortedCandidates.length} representative{filteredAndSortedCandidates.length !== 1 ? 's' : ''}
-          {hasAddress && congressMembers.length > 0 && ' from Congress.gov'}
+          {hasAddress && unified.myReps.length > 0 && ' from Congress.gov'}
         </p>
 
         {/* Grouped Sections */}
