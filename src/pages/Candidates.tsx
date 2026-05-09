@@ -2,17 +2,14 @@ import { useState, useMemo, useCallback } from 'react';
 import { Header } from '@/components/Header';
 import { CandidateCard } from '@/components/CandidateCard';
 import { ComparePanel } from '@/components/ComparePanel';
-import { useCandidates, calculateMatchScore } from '@/hooks/useCandidates';
+import { calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile } from '@/hooks/useProfile';
-import { useRepresentatives } from '@/hooks/useRepresentatives';
-import { useAllPoliticians } from '@/hooks/useAllPoliticians';
-import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
-import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
+import { useUnifiedCandidates } from '@/hooks/useUnifiedCandidates';
 import { useHiddenStates } from '@/hooks/useHiddenStates';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X } from 'lucide-react';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
@@ -20,20 +17,17 @@ import { cn } from '@/lib/utils';
 
 export const Candidates = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
-  const { data: dbCandidates = [], isLoading: candidatesLoading } = useCandidates();
-  const { data: repsData, isLoading: representativesLoading } = useRepresentatives(profile?.address);
-  const { data: allPoliticians = [], isLoading: allPoliticiansLoading } = useAllPoliticians();
-  const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
-  const { data: scoreMap } = useCandidateScoreMap();
-  
-  const userReps = repsData?.representatives ?? [];
-  
+  const unified = useUnifiedCandidates({
+    address: profile?.address,
+    includeAllCongress: true,
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('name');
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [officeFilter, setOfficeFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<string>('all');
-  
+
   // Compare mode state
   const [compareMode, setCompareMode] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState<Candidate[]>([]);
@@ -41,12 +35,8 @@ export const Candidates = () => {
   const handleToggleSelect = useCallback((candidate: Candidate) => {
     setSelectedCandidates(prev => {
       const exists = prev.find(c => c.id === candidate.id);
-      if (exists) {
-        return prev.filter(c => c.id !== candidate.id);
-      }
-      if (prev.length >= 4) {
-        return prev; // Max 4 candidates
-      }
+      if (exists) return prev.filter(c => c.id !== candidate.id);
+      if (prev.length >= 4) return prev;
       return [...prev, candidate];
     });
   }, []);
@@ -55,189 +45,24 @@ export const Candidates = () => {
     setSelectedCandidates(prev => prev.filter(c => c.id !== id));
   }, []);
 
-  const handleClearCompare = useCallback(() => {
-    setSelectedCandidates([]);
-  }, []);
+  const handleClearCompare = useCallback(() => setSelectedCandidates([]), []);
 
   const handleCloseCompare = useCallback(() => {
     setCompareMode(false);
     setSelectedCandidates([]);
   }, []);
 
-  // Transform representatives to Candidate type (with saved scores)
-  const transformRepToCandidate = useCallback((member: any): Candidate => {
-    const savedScore = scoreMap?.get(member.bioguide_id || member.id);
-    return {
-      id: member.bioguide_id || member.id,
-      name: member.name,
-      party: member.party as 'Democrat' | 'Republican' | 'Independent' | 'Other',
-      office: member.office,
-      state: member.state,
-      district: member.district || undefined,
-      imageUrl: member.image_url || undefined,
-      overallScore: savedScore ?? member.overall_score ?? 0,
-      topicScores: [],
-      lastUpdated: new Date(),
-      coverageTier: (member.coverage_tier || 'tier_3') as 'tier_1' | 'tier_2' | 'tier_3',
-      confidence: (member.confidence || 'low') as 'high' | 'medium' | 'low',
-      isIncumbent: member.is_incumbent ?? true,
-      scoreVersion: 'v1.0',
-    };
-  }, [scoreMap]);
-
-  // Transform civic official to Candidate type (with saved scores)
-  const transformCivicToCandidate = useCallback((official: CivicOfficial): Candidate => {
-    const savedScore = scoreMap?.get(official.id);
-    return {
-      id: official.id,
-      name: official.name,
-      party: official.party,
-      office: official.office,
-      state: official.state,
-      district: official.district,
-      imageUrl: official.image_url || undefined,
-      overallScore: savedScore ?? official.overall_score ?? 0,
-      topicScores: [],
-      lastUpdated: new Date(),
-      coverageTier: (official.coverage_tier || 'tier_3') as 'tier_1' | 'tier_2' | 'tier_3',
-      confidence: (official.confidence || 'low') as 'high' | 'medium' | 'low',
-      isIncumbent: official.is_incumbent ?? true,
-      scoreVersion: 'v1.0',
-    };
-  }, [scoreMap]);
-
-  // User's federal representatives (filtered by their district)
-  const userRepresentatives: Candidate[] = useMemo(() => {
-    return userReps.map(transformRepToCandidate);
-  }, [userReps, transformRepToCandidate]);
-
-  // All Congress members
-  const allCongressCandidates: Candidate[] = useMemo(() => {
-    return allPoliticians.map(transformRepToCandidate);
-  }, [allPoliticians, transformRepToCandidate]);
-
-  // Civic officials (President, VP, Governors, State/Local)
-  const federalExecutiveCandidates: Candidate[] = useMemo(() => {
-    return (civicData?.federalExecutive || []).map(transformCivicToCandidate);
-  }, [civicData?.federalExecutive, transformCivicToCandidate]);
-
-  const stateExecutiveCandidates: Candidate[] = useMemo(() => {
-    return (civicData?.stateExecutive || []).map(transformCivicToCandidate);
-  }, [civicData?.stateExecutive, transformCivicToCandidate]);
-
-  const stateLegislativeCandidates: Candidate[] = useMemo(() => {
-    return (civicData?.stateLegislative || []).map(transformCivicToCandidate);
-  }, [civicData?.stateLegislative, transformCivicToCandidate]);
-
-  const localCandidates: Candidate[] = useMemo(() => {
-    return (civicData?.local || []).map(transformCivicToCandidate);
-  }, [civicData?.local, transformCivicToCandidate]);
-
-  // Database candidates (local/state officials, running candidates)
-  const dbTransformed: Candidate[] = useMemo(() => {
-    return dbCandidates.map(c => ({
-      id: c.id,
-      name: c.name,
-      party: c.party,
-      office: c.office,
-      state: c.state,
-      district: c.district || undefined,
-      imageUrl: c.image_url || undefined,
-      overallScore: c.overall_score,
-      topicScores: (c.topicScores || []).map(ts => ({
-        topicId: ts.topic_id,
-        topicName: ts.topics?.name || ts.topic_id,
-        score: ts.score,
-      })),
-      lastUpdated: new Date(c.last_updated),
-      coverageTier: c.coverage_tier,
-      confidence: c.confidence,
-      isIncumbent: c.is_incumbent,
-      scoreVersion: c.score_version,
-    }));
-  }, [dbCandidates]);
-
-  // Helper to create a normalized name key for deduplication
-  // Strips middle initials (e.g. "J.") and normalizes office titles
-  const normalizeNameKey = (name: string, office: string) => {
-    // Remove single-letter initials with periods (e.g., "J.", "R.")
-    const normalized = name.toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
-    // Normalize office: strip "of the united states" and similar suffixes
-    const officeNorm = office.toLowerCase().replace(/\s+of\s+the\s+united\s+states/g, '').replace(/\s+/g, ' ').trim();
-    return `${normalized}::${officeNorm}`;
-  };
-
-  // All candidates combined (deduplicated by ID and by normalized name+office)
-  const allCandidates: Candidate[] = useMemo(() => {
-    const seenIds = new Set<string>();
-    const seenNames = new Set<string>();
-    const result: Candidate[] = [];
-
-    const addCandidate = (c: Candidate) => {
-      if (seenIds.has(c.id)) return;
-      // Also check by normalized name to catch "Donald Trump" vs "Donald J. Trump"
-      const nameKey = normalizeNameKey(c.name, c.office);
-      // Allow through if name not seen, or if this candidate has a real score (prefer scored entries)
-      if (seenNames.has(nameKey)) return;
-      seenIds.add(c.id);
-      seenNames.add(nameKey);
-      result.push(c);
-    };
-
-    // Add database candidates FIRST (they have scores, answers, topic data)
-    for (const c of dbTransformed) addCandidate(c);
-    
-    // Add Congress members (from Congress.gov API - detailed federal data)
-    for (const c of allCongressCandidates) addCandidate(c);
-    
-    // Add federal executive (President, VP from civic API)
-    for (const c of federalExecutiveCandidates) addCandidate(c);
-    
-    // Add state executive (Governors, etc.)
-    for (const c of stateExecutiveCandidates) addCandidate(c);
-    
-    // Add state legislative
-    for (const c of stateLegislativeCandidates) addCandidate(c);
-    
-    // Add local officials
-    for (const c of localCandidates) addCandidate(c);
-    
-    return result;
-  }, [federalExecutiveCandidates, allCongressCandidates, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, dbTransformed]);
-
-  // My Reps combined (federal + state + local for user's address)
-  // Prefer DB candidates (with scores) over civic duplicates
-  const myRepsCombined: Candidate[] = useMemo(() => {
-    const seenIds = new Set<string>();
-    const seenNames = new Set<string>();
-    const result: Candidate[] = [];
-
-    const addRep = (c: Candidate) => {
-      if (seenIds.has(c.id)) return;
-      const nameKey = normalizeNameKey(c.name, c.office);
-      if (seenNames.has(nameKey)) return;
-      seenIds.add(c.id);
-      seenNames.add(nameKey);
-      result.push(c);
-    };
-
-    // Add DB versions first (they have scores)
-    for (const c of dbTransformed) {
-      // Only include DB candidates that match a civic official by name
-      const nameKey = normalizeNameKey(c.name, c.office);
-      const isCivicMatch = [...federalExecutiveCandidates, ...stateExecutiveCandidates, ...stateLegislativeCandidates, ...localCandidates, ...userRepresentatives]
-        .some(civic => normalizeNameKey(civic.name, civic.office) === nameKey);
-      if (isCivicMatch) addRep(c);
-    }
-
-    for (const c of federalExecutiveCandidates) addRep(c);
-    for (const c of userRepresentatives) addRep(c);
-    for (const c of stateExecutiveCandidates) addRep(c);
-    for (const c of stateLegislativeCandidates) addRep(c);
-    for (const c of localCandidates) addRep(c);
-    
-    return result;
-  }, [federalExecutiveCandidates, userRepresentatives, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, dbTransformed]);
+  const allCandidates = unified.all;
+  const myRepsCombined = unified.myReps.concat(
+    unified.federalExec,
+    unified.stateExec,
+    unified.stateLeg,
+    unified.local,
+  ).filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i);
+  const federalExecutiveCandidates = unified.federalExec;
+  const stateExecutiveCandidates = unified.stateExec;
+  const stateLegislativeCandidates = unified.stateLeg;
+  const localCandidates = unified.local;
 
   // Get unique offices for filter
   const uniqueOffices = useMemo(() => {
@@ -265,6 +90,52 @@ export const Candidates = () => {
         return allCandidates;
     }
   }, [activeTab, myRepsCombined, federalExecutiveCandidates, stateExecutiveCandidates, stateLegislativeCandidates, localCandidates, allCandidates]);
+
+  const { isHidden } = useHiddenStates();
+
+  const filteredCandidates = useMemo(() => {
+    let result = tabCandidates.filter(c => !isHidden(c.state));
+
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(c =>
+        c.name.toLowerCase().includes(query) ||
+        c.state.toLowerCase().includes(query) ||
+        c.office.toLowerCase().includes(query)
+      );
+    }
+
+    if (partyFilter !== 'all') {
+      result = result.filter(c => c.party === partyFilter);
+    }
+
+    if (officeFilter !== 'all') {
+      result = result.filter(c => c.office === officeFilter);
+    }
+
+    const userScore = profile?.overall_score ?? 0;
+    switch (sortBy) {
+      case 'match':
+        result.sort((a, b) => calculateMatchScore(userScore, b.overallScore) - calculateMatchScore(userScore, a.overallScore));
+        break;
+      case 'name':
+        result.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'party':
+        result.sort((a, b) => a.party.localeCompare(b.party));
+        break;
+    }
+
+    return result;
+  }, [searchQuery, sortBy, partyFilter, officeFilter, tabCandidates, profile, isHidden]);
+
+  const isLoading = profileLoading || unified.isLoading;
+
+  // Count for tabs
+  const executiveCount = federalExecutiveCandidates.length + stateExecutiveCandidates.length;
+  const stateCount = stateExecutiveCandidates.length + stateLegislativeCandidates.length;
+  const localCount = localCandidates.length;
+
 
   const { isHidden } = useHiddenStates();
 
