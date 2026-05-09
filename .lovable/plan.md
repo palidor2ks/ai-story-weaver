@@ -1,22 +1,26 @@
-# Fix avatar upload RLS error
-
 ## Problem
-Uploading a profile avatar fails with `new row violates row-level security policy` (403). The `avatars` bucket has INSERT/UPDATE/DELETE policies on `storage.objects`, but no SELECT policy. Because `AvatarUpload.tsx` uploads with `upsert: true`, Supabase Storage must read `storage.objects` to detect an existing file — that read is blocked by RLS, and the operation aborts with the misleading "new row violates RLS" error.
+
+Trump's and Vance's photos are missing on Candidates, Profile, and Quiz Results pages, but show correctly on the Feed page.
+
+- Feed page reads them from the `candidates` table, which already has working portrait URLs (Wikimedia / White House).
+- Candidates / Profile / Quiz Results read them from the `fetch-civic-officials` edge function, which builds:
+  - Trump: `https://bioguide.congress.gov/bioguide/photo/P/P80001571.jpg` → **403 Forbidden**
+  - Vance: `https://bioguide.congress.gov/bioguide/photo/V/V000137.jpg` → **403 Forbidden**
+- The browser hides the broken image and shows the colored-initials fallback (`DT`, `JV`).
+
+The sister function `fetch-representatives` already overrides these two bioguide IDs with working White House portrait URLs. `fetch-civic-officials` was never updated.
 
 ## Fix
-Add a SELECT policy on `storage.objects` for the `avatars` bucket so authenticated users can read their own avatar rows (needed for upsert). Public CDN reads continue to work via the public bucket flag.
 
-```sql
-CREATE POLICY "Users can read their own avatar object"
-ON storage.objects FOR SELECT
-USING (
-  bucket_id = 'avatars'
-  AND (auth.uid())::text = (storage.foldername(name))[1]
-);
-```
+1. Update `supabase/functions/fetch-civic-officials/index.ts`, in `fetchFederalExecutiveFromGitHub`:
+   - For `P80001571` (Trump), set `image_url` to the working White House portrait URL.
+   - For `V000137` (Vance), set `image_url` to the working White House / Wikimedia portrait URL.
+   - Keep the bioguide pattern as the default for any other future executives.
 
-No frontend changes are required. After the migration, retry the avatar upload — it should succeed and the new image should appear immediately (cache-busted via the existing `?t=` query param).
+2. Bump the React Query key version in `src/hooks/useCivicOfficials.ts` from `'v6'` to `'v7'` so existing 1-hour-cached responses are refetched and clients pick up the new image URLs immediately.
 
-## Verification
-- Upload a new avatar from `/profile` → success toast, image updates.
-- Re-upload (overwrite) → still succeeds (the upsert pre-read is now allowed).
+3. Verify
+   - HEAD-check both portrait URLs return `200 image/...`.
+   - Reload `/candidates`, `/profile`, `/quiz/results` and confirm Trump and Vance show real portraits, no `DT`/`JV` initials fallback.
+
+No database migration is needed — the values are computed in the edge function each call.
