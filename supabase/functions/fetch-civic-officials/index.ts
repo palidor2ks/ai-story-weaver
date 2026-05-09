@@ -362,7 +362,17 @@ async function fetchOpenStatesOfficials(
       console.log(`[Open States] Using jurisdiction endpoint: ${legislatorsUrl}`);
     }
 
-    const legislatorsResponse = await fetch(legislatorsUrl, { headers });
+    const legislatorsController = new AbortController();
+    const legislatorsTimeout = setTimeout(() => legislatorsController.abort(), 8000);
+    let legislatorsResponse: Response;
+    try {
+      legislatorsResponse = await fetch(legislatorsUrl, { headers, signal: legislatorsController.signal });
+    } catch (e) {
+      console.error('[Open States] Legislators fetch aborted/failed:', e);
+      clearTimeout(legislatorsTimeout);
+      return { legislators: [], governors: [] };
+    }
+    clearTimeout(legislatorsTimeout);
     console.log(`[Open States] Legislators response status: ${legislatorsResponse.status}`);
 
     if (legislatorsResponse.ok) {
@@ -945,10 +955,17 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const { address, includeFederalLegislative = false } = await req.json();
-    
+    const body = await req.json();
+    const { address, includeFederalLegislative = false } = body;
+    // Optional pre-resolved geocode hints from the caller (skips re-geocoding)
+    const hintLat: number | undefined = typeof body.lat === 'number' ? body.lat : undefined;
+    const hintLng: number | undefined = typeof body.lng === 'number' ? body.lng : undefined;
+    const hintState: string | undefined = typeof body.state === 'string' ? body.state : undefined;
+    const hintCity: string | undefined = typeof body.city === 'string' ? body.city : undefined;
+
     console.log(`=== FETCH CIVIC OFFICIALS START ===`);
     console.log(`Address: ${address}`);
+    console.log(`Hints: state=${hintState}, lat/lng=${hintLat}/${hintLng}, city=${hintCity}`);
     console.log(`Include federal legislative: ${includeFederalLegislative}`);
     console.log(`OPEN_STATES_API_KEY set: ${!!OPEN_STATES_API_KEY}`);
 
@@ -956,9 +973,9 @@ serve(async (req) => {
       throw new Error('Address is required');
     }
 
-    // Extract state and city from address
-    const state = extractStateFromAddress(address);
-    const city = extractCityFromAddress(address);
+    // Use caller-provided hints when available; otherwise parse from address
+    const state = hintState || extractStateFromAddress(address);
+    const city = hintCity || extractCityFromAddress(address);
     console.log(`State: ${state}, City: ${city}`);
 
     if (!state) {
@@ -977,8 +994,10 @@ serve(async (req) => {
       });
     }
 
-    // Get coordinates for geo-based lookup
-    const coords = await geocodeAddress(address);
+    // Get coordinates: prefer caller-provided hints to avoid an extra Census round-trip
+    const coords = (hintLat != null && hintLng != null)
+      ? { lat: hintLat, lng: hintLng }
+      : await geocodeAddress(address);
 
     // First fetch federal legislator names to filter from Open States results
     const federalLegislatorNames = await fetchFederalLegislatorNames(state);

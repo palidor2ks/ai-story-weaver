@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { TransitionStatus } from '@/types';
+import { useGeocode } from './useGeocode';
 
 export type OfficeLevelType = 'federal_executive' | 'federal_legislative' | 'state_executive' | 'state_legislative' | 'local';
 
@@ -49,60 +50,59 @@ interface CivicOfficialsResult {
 }
 
 export function useCivicOfficials(address: string | null | undefined) {
+  // Reuse the shared geocode result to skip a duplicate Census round-trip server-side.
+  const geocodeQuery = useGeocode(address);
+  const geocode = geocodeQuery.data;
+
   return useQuery({
-    queryKey: ['civic-officials', address, 'v5'],
+    queryKey: ['civic-officials', address, geocode?.state, geocode?.lat, geocode?.lng, 'v6'],
     queryFn: async (): Promise<CivicOfficialsResult> => {
       if (!address) {
-        console.log('No address provided for civic officials');
-        return { 
-          officials: [], 
-          federalExecutive: [], 
-          stateExecutive: [], 
-          stateLegislative: [], 
-          local: [],
-          state: null,
-          hasTransitions: false,
+        return {
+          officials: [], federalExecutive: [], stateExecutive: [],
+          stateLegislative: [], local: [],
+          state: null, hasTransitions: false,
         };
       }
 
-      console.log('Fetching civic officials for address:', address);
+      console.log('Fetching civic officials for address:', address, 'geocode:', geocode);
 
       const { data, error } = await supabase.functions.invoke<FetchCivicOfficialsResponse>(
         'fetch-civic-officials',
         {
-          body: { address, includeFederalLegislative: false }
+          body: {
+            address,
+            includeFederalLegislative: false,
+            // Pass geocode hints so the edge function skips its own Census call
+            lat: geocode?.lat ?? undefined,
+            lng: geocode?.lng ?? undefined,
+            state: geocode?.state ?? undefined,
+            city: geocode?.city ?? undefined,
+          }
         }
       );
 
       if (error) {
         console.error('Error fetching civic officials:', error);
         return {
-          officials: [],
-          federalExecutive: [],
-          stateExecutive: [],
-          stateLegislative: [],
-          local: [],
-          state: null,
-          hasTransitions: false,
+          officials: [], federalExecutive: [], stateExecutive: [],
+          stateLegislative: [], local: [],
+          state: null, hasTransitions: false,
         };
       }
 
       if (data?.error) {
         console.error('Civic API error:', data.error);
-        return { 
-          officials: [], 
-          federalExecutive: [], 
-          stateExecutive: [], 
-          stateLegislative: [], 
-          local: [],
-          state: null,
-          hasTransitions: false,
+        return {
+          officials: [], federalExecutive: [], stateExecutive: [],
+          stateLegislative: [], local: [],
+          state: null, hasTransitions: false,
         };
       }
 
       console.log(`Fetched ${data?.officials?.length || 0} civic officials`);
 
-      return { 
+      return {
         officials: data?.officials || [],
         federalExecutive: data?.federalExecutive || [],
         stateExecutive: data?.stateExecutive || [],
@@ -112,8 +112,9 @@ export function useCivicOfficials(address: string | null | undefined) {
         hasTransitions: data?.hasTransitions || false,
       };
     },
-    enabled: !!address,
-    staleTime: 1000 * 60 * 60, // Cache for 1 hour
+    // Wait for geocode to finish before kicking off the civic call
+    enabled: !!address && !geocodeQuery.isLoading,
+    staleTime: 1000 * 60 * 60,
     retry: 1,
   });
 }

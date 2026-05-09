@@ -6,14 +6,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const CACHE_TTL_DAYS = 30;
+
+// Normalize an address for cache keying. Uppercase, collapse whitespace,
+// strip ZIP+4 suffix, and remove most punctuation except commas.
+function normalizeAddress(s: string): string {
+  return s
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .replace(/-\d{4}\b/g, '')        // drop ZIP+4 suffix
+    .replace(/[^A-Z0-9, ]/g, '')     // drop most punctuation
+    .trim();
+}
+
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Authenticate the user
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -24,6 +35,8 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } }
     });
@@ -38,7 +51,6 @@ serve(async (req) => {
 
     const { address } = await req.json();
 
-    // Validate address format and length
     if (typeof address !== 'string' || address.trim().length < 5 || address.trim().length > 200) {
       return new Response(JSON.stringify({ error: 'Address is required (5-200 characters)' }), {
         status: 400,
@@ -46,76 +58,84 @@ serve(async (req) => {
       });
     }
 
-    const normalizedAddress = address.trim();
-
-    // Validate address contains valid characters (letters, numbers, spaces, common punctuation)
-    // Must contain at least some alphanumeric characters
+    const trimmed = address.trim();
     const addressPattern = /^[a-zA-Z0-9\s.,#'\-\/]+$/;
-    const hasAlphanumeric = /[a-zA-Z0-9]/.test(normalizedAddress);
-    
-    if (!addressPattern.test(normalizedAddress) || !hasAlphanumeric) {
+    const hasAlphanumeric = /[a-zA-Z0-9]/.test(trimmed);
+    if (!addressPattern.test(trimmed) || !hasAlphanumeric) {
       return new Response(JSON.stringify({ error: 'Address contains invalid characters' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log('Geocoding address:', normalizedAddress);
+    const normalized = normalizeAddress(trimmed);
+    const serviceClient = createClient(supabaseUrl, serviceKey);
 
-    const encodedAddress = encodeURIComponent(normalizedAddress);
+    // 1. Try cache first
+    const { data: cached } = await serviceClient
+      .from('civic_lookup_cache')
+      .select('lat, lng, state, district, city, matched_address, cached_at')
+      .eq('normalized_address', normalized)
+      .maybeSingle();
+
+    if (cached) {
+      const ageDays = (Date.now() - new Date(cached.cached_at).getTime()) / (1000 * 60 * 60 * 24);
+      if (ageDays < CACHE_TTL_DAYS && (cached.lat !== null || cached.state !== null)) {
+        console.log(`[Geocode] Cache HIT for "${normalized}" (age ${ageDays.toFixed(1)}d)`);
+        return new Response(JSON.stringify({
+          district: cached.district,
+          state: cached.state,
+          city: cached.city,
+          lat: cached.lat,
+          lng: cached.lng,
+          matchedAddress: cached.matched_address,
+          cached: true,
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
+    console.log('[Geocode] Cache MISS — calling Census for:', normalized);
+
+    const encodedAddress = encodeURIComponent(trimmed);
     const url = `https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress?address=${encodedAddress}&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json`;
-    
-    console.log('Fetching from Census API');
-    
+
     const response = await fetch(url);
     if (!response.ok) {
       console.error('Census geocoder request failed with status:', response.status);
-      return new Response(JSON.stringify({ 
-        district: null, 
-        state: null,
-        error: `Census API error: ${response.status}` 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(JSON.stringify({
+        district: null, state: null,
+        error: `Census API error: ${response.status}`
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    
+
     const data = await response.json();
     const addressMatch = data?.result?.addressMatches?.[0];
-    
+
     if (!addressMatch) {
-      console.log('No address matches found in Census response');
-      return new Response(JSON.stringify({ 
-        district: null, 
-        state: null,
-        error: 'Address not found' 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(JSON.stringify({
+        district: null, state: null,
+        error: 'Address not found'
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const geographies = addressMatch.geographies;
     const matchedAddress = addressMatch.matchedAddress;
-    
-    console.log('Available geography layers:', Object.keys(geographies || {}));
-    
-    // Extract state and city from the matched address
+    const coords = addressMatch.coordinates;
+    const lat = coords?.y ?? null;
+    const lng = coords?.x ?? null;
+
     let state: string | null = null;
     let city: string | null = null;
     if (matchedAddress) {
-      // Census returns addresses like "234 DAVIS AVE, PISCATAWAY, NJ, 08854"
       const parts = matchedAddress.split(',').map((p: string) => p.trim());
       if (parts.length >= 3) {
-        state = parts[parts.length - 2]; // State is second to last
-        city = parts[parts.length - 3];  // City is third from last
+        state = parts[parts.length - 2];
+        city = parts[parts.length - 3];
       }
     }
-
-    // Also try to get state from geographies
     if (!state && geographies?.['States']?.[0]) {
       state = geographies['States'][0].STUSAB || geographies['States'][0].STATE;
     }
-
-    // Try to extract city from Incorporated Places / Census Designated Places layers
     if (!city) {
       const placeLayers = ['Incorporated Places', 'Census Designated Places', '2020 Census Designated Places'];
       for (const layer of placeLayers) {
@@ -126,56 +146,52 @@ serve(async (req) => {
         }
       }
     }
-    
-    // Try multiple possible layer names for congressional districts
+
     const possibleLayers = [
       '119th Congressional Districts',
-      '118th Congressional Districts', 
+      '118th Congressional Districts',
       'Congressional Districts',
       '2024 Congressional Districts',
       '2022 Congressional Districts'
     ];
-    
     let district: string | null = null;
-    
     for (const layer of possibleLayers) {
-      const congressionalDistrict = geographies?.[layer]?.[0];
-      if (congressionalDistrict) {
-        // Try multiple possible field names for the district number
-        const districtNum = congressionalDistrict.CD119 || 
-                           congressionalDistrict.CD118 || 
-                           congressionalDistrict.CD || 
-                           congressionalDistrict.BASENAME ||
-                           congressionalDistrict.NAME ||
-                           congressionalDistrict.GEOID;
+      const cd = geographies?.[layer]?.[0];
+      if (cd) {
+        const districtNum = cd.CD119 || cd.CD118 || cd.CD || cd.BASENAME || cd.NAME || cd.GEOID;
         if (districtNum) {
-          // Extract just the number - handle formats like "06", "6", "NJ-06", "Congressional District 6"
           const numMatch = String(districtNum).match(/\d+$/);
           district = numMatch ? numMatch[0] : String(districtNum);
-          console.log(`Found congressional district: ${district} from layer: ${layer}, field value: ${districtNum}`);
           break;
         }
       }
     }
 
-    console.log(`Geocode result - State: ${state}, City: ${city}, District: ${district}`);
+    console.log(`[Geocode] State: ${state}, City: ${city}, District: ${district}, lat/lng: ${lat}/${lng}`);
 
-    return new Response(JSON.stringify({ 
-      district, 
-      state,
-      city,
-      matchedAddress
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    // Write back to cache (best-effort, don't block the response on errors)
+    try {
+      await serviceClient
+        .from('civic_lookup_cache')
+        .upsert({
+          normalized_address: normalized,
+          lat, lng, state, district, city,
+          matched_address: matchedAddress,
+          cached_at: new Date().toISOString(),
+        }, { onConflict: 'normalized_address' });
+    } catch (e) {
+      console.error('[Geocode] Cache write failed:', e);
+    }
+
+    return new Response(JSON.stringify({
+      district, state, city, lat, lng, matchedAddress, cached: false,
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error in geocode-address function:', errorMessage);
-    return new Response(JSON.stringify({ 
-      district: null,
-      state: null,
-      error: errorMessage 
+    return new Response(JSON.stringify({
+      district: null, state: null, error: errorMessage
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
