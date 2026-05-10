@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Vote, Calendar, MapPin } from 'lucide-react';
+import { Vote, Calendar, MapPin, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useUpcomingElections, type UpcomingCandidate, type UpcomingElection } from '@/hooks/useUpcomingElections';
 import { ScoreText } from '@/components/ScoreText';
+import { ElectionDetailsDialog } from './ElectionDetailsDialog';
 
 interface Props {
   address: string | null | undefined;
