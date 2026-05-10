@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { CardData, CARD_SIZE, formatScoreSafe, labelSafe } from './types';
+import { PulseMark } from './PulseMark';
 
 interface Props {
   data: CardData;
@@ -82,6 +83,22 @@ export const EditorialCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
             }}
           />
         )}
+        {/* Brand badge over portrait */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 32,
+            left: 32,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            color: 'hsl(var(--primary-foreground))',
+            zIndex: 1,
+          }}
+        >
+          <PulseMark size={48} framed frameColor="rgba(255,255,255,0.22)" />
+          <span style={{ fontWeight: 700, fontSize: 24, letterSpacing: -0.3 }}>Pulse</span>
+        </div>
       </div>
 
       {/* Right column */}
@@ -97,6 +114,9 @@ export const EditorialCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
         <div>
           <div
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
               fontSize: 22,
               letterSpacing: 6,
               textTransform: 'uppercase',
@@ -104,7 +124,8 @@ export const EditorialCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
               marginBottom: 30,
             }}
           >
-            Pulse · {isCandidate ? 'Voter Match' : isInvite ? 'Invitation' : 'My Profile'}
+            <PulseMark size={48} />
+            <span>Pulse · {isCandidate ? 'Voter Match' : isInvite ? 'Invitation' : 'My Profile'}</span>
           </div>
           <div
             style={{
@@ -119,7 +140,7 @@ export const EditorialCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
           </div>
           <div
             style={{
-              fontSize: 78,
+              fontSize: 72,
               fontWeight: 700,
               lineHeight: 1.05,
               letterSpacing: -2,
