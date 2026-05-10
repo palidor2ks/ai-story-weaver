@@ -33,17 +33,31 @@ export const Feed = () => {
   const [levelFilter, setLevelFilter] = useState<GovernmentLevel>('all');
   const [incumbentFilter, setIncumbentFilter] = useState<string>('all');
 
-  // Build a robust dedup key that handles "Last, First Jr" vs "First Last, Jr."
-  // and varied office strings (e.g. "Representative" vs "U.S. House NJ-06").
+  // Robust dedup that consistently considers BOTH the person and the seat
+  // (office + state + district), so "Frank Pallone, Jr." (Representative) and
+  // "PALLONE, FRANK JR" (U.S. House NJ-06) collapse into one profile.
   const SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv']);
-  const personKey = (name: string): string => {
-    const tokens = (name || '')
+  const tokensOf = (name: string): string[] => {
+    return (name || '')
       .toLowerCase()
       .replace(/[.,]/g, ' ')
       .split(/\s+/)
       .map(t => t.replace(/[^a-z0-9]/g, ''))
       .filter(t => t && t.length > 1 && !SUFFIXES.has(t));
-    return Array.from(new Set(tokens)).sort().join(' ');
+  };
+  const personKey = (name: string): string =>
+    Array.from(new Set(tokensOf(name))).sort().join(' ');
+  const lastNameOf = (name: string): string => {
+    // For "Last, First" the last name is the first token; otherwise the longest
+    // trailing token. Falls back to whole personKey.
+    const raw = (name || '').trim();
+    if (raw.includes(',')) {
+      const head = raw.split(',')[0];
+      const t = tokensOf(head);
+      if (t.length) return t[0];
+    }
+    const t = tokensOf(raw);
+    return t.length ? t[t.length - 1] : personKey(raw);
   };
   const chamberOf = (office: string): string => {
     const o = (office || '').toLowerCase();
@@ -51,19 +65,36 @@ export const Feed = () => {
     if (/house|representative|congress/.test(o)) return 'house';
     if (/president/.test(o)) return 'president';
     if (/governor/.test(o)) return 'governor';
+    if (/mayor/.test(o)) return 'mayor';
     return o.replace(/[^a-z0-9]+/g, ' ').trim();
   };
-  const dedupKey = (name: string, office: string, state?: string | null, district?: string | null) => {
+  const seatKey = (office: string, state?: string | null, district?: string | null) => {
     const ch = chamberOf(office);
     const districtPart = ch === 'house' ? (district || '').toString().replace(/\D/g, '') : '';
-    return `${personKey(name)}|${(state || '').toLowerCase()}|${ch}|${districtPart}`;
+    return `${ch}|${(state || '').toLowerCase()}|${districtPart}`;
   };
+  // Two parallel keys for fuzzy-but-consistent matching:
+  //   nameSeatKey  = full normalized name + seat (chamber+state+district)
+  //   lastSeatKey  = last name + seat — catches "First Last" vs "LAST, FIRST"
+  const nameSeatKey = (name: string, office: string, state?: string | null, district?: string | null) =>
+    `${personKey(name)}::${seatKey(office, state, district)}`;
+  const lastSeatKey = (name: string, office: string, state?: string | null, district?: string | null) =>
+    `${lastNameOf(name)}::${seatKey(office, state, district)}`;
 
   // Address-scoped officials only (Feed only shows the user's reps + civic, not all of Congress)
   const transformedCandidates: Candidate[] = useMemo(() => {
-    const seen = new Set<string>();
-    const seenKeys = new Set<string>();
+    const seenIds = new Set<string>();
+    const seenNameSeat = new Set<string>();
+    const seenLastSeat = new Set<string>();
     const out: Candidate[] = [];
+    const register = (name: string, office: string, state?: string | null, district?: string | null) => {
+      seenNameSeat.add(nameSeatKey(name, office, state, district));
+      seenLastSeat.add(lastSeatKey(name, office, state, district));
+    };
+    const isDuplicate = (name: string, office: string, state?: string | null, district?: string | null) =>
+      seenNameSeat.has(nameSeatKey(name, office, state, district)) ||
+      seenLastSeat.has(lastSeatKey(name, office, state, district));
+
     for (const c of [
       ...unified.myReps,
       ...unified.federalExec,
@@ -71,23 +102,21 @@ export const Feed = () => {
       ...unified.stateLeg,
       ...unified.local,
     ]) {
-      if (seen.has(c.id)) continue;
-      seen.add(c.id);
-      seenKeys.add(dedupKey(c.name, c.office, c.state, c.district));
+      if (seenIds.has(c.id)) continue;
+      seenIds.add(c.id);
+      register(c.name, c.office, c.state, c.district);
       out.push(c);
     }
 
-    // Merge in upcoming-election candidates on the user's ballot
     if (upcomingElections) {
       const levels: Array<'federal' | 'state' | 'local'> = ['federal', 'state', 'local'];
       for (const level of levels) {
         for (const election of upcomingElections[level] ?? []) {
           for (const c of election.candidates) {
-            if (seen.has(c.candidate_id)) continue;
-            const key = dedupKey(c.name, c.office, c.state, c.district);
-            if (seenKeys.has(key)) continue;
-            seen.add(c.candidate_id);
-            seenKeys.add(key);
+            if (seenIds.has(c.candidate_id)) continue;
+            if (isDuplicate(c.name, c.office, c.state, c.district)) continue;
+            seenIds.add(c.candidate_id);
+            register(c.name, c.office, c.state, c.district);
             const partyVal = (c.party as Candidate['party']) || 'Other';
             out.push({
               id: c.candidate_id,
