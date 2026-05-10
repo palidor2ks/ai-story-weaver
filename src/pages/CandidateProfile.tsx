@@ -87,7 +87,8 @@ export const CandidateProfile = () => {
   const handleFetchDonors = async () => {
     if (!candidate?.fec_candidate_id || !id) return;
     
-    const result = await fetchFECDonors(id, candidate.fec_candidate_id);
+    const cycleForSync = effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : (cycleInfo?.defaultCycle ?? '2024');
+    const result = await fetchFECDonors(id, candidate.fec_candidate_id, cycleForSync);
     if (result.success) {
       toast.success(`Imported ${result.imported} donors totaling $${(result.totalRaised || 0).toLocaleString()}`);
       refetchDonors();
