@@ -71,6 +71,7 @@ interface ElectionResponseRow {
     is_incumbent: boolean;
     overall_score: number | null;
     coverage_tier: string;
+    confidence: string | null;
     answers_source: string | null;
     is_pending_research: boolean;
   }>;
