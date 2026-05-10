@@ -1089,6 +1089,95 @@ export type Database = {
           },
         ]
       }
+      election_candidates: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          election_id: string
+          id: string
+          is_incumbent: boolean
+          office: string
+          source: string
+          source_ref: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          election_id: string
+          id?: string
+          is_incumbent?: boolean
+          office: string
+          source: string
+          source_ref?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          election_id?: string
+          id?: string
+          is_incumbent?: boolean
+          office?: string
+          source?: string
+          source_ref?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "election_candidates_election_id_fkey"
+            columns: ["election_id"]
+            isOneToOne: false
+            referencedRelation: "elections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      elections: {
+        Row: {
+          created_at: string
+          election_date: string
+          election_type: string
+          id: string
+          jurisdiction: string | null
+          level: string
+          name: string
+          source: string
+          source_ref: string | null
+          state: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          election_date: string
+          election_type?: string
+          id?: string
+          jurisdiction?: string | null
+          level: string
+          name: string
+          source: string
+          source_ref?: string | null
+          state?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          election_date?: string
+          election_type?: string
+          id?: string
+          jurisdiction?: string | null
+          level?: string
+          name?: string
+          source?: string
+          source_ref?: string | null
+          state?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       external_committee_finance: {
         Row: {
           candidate_id: string | null
