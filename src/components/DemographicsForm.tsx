@@ -12,8 +12,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RELIGION_GROUPS } from '@/data/religionOptions';
-import { ArrowRight, ArrowLeft, User } from 'lucide-react';
+import { ArrowRight, ArrowLeft, User, Info } from 'lucide-react';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { useHiddenStates } from '@/hooks/useHiddenStates';
 
 export interface DemographicsData {
   address: string;
@@ -77,6 +78,10 @@ export const DemographicsForm = ({
     religion: initialData?.religion || '',
   });
 
+  const [addressState, setAddressState] = useState<{ code: string; name: string } | null>(null);
+  const { isHidden } = useHiddenStates();
+  const stateNotSupported = addressState ? isHidden(addressState.code) : false;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
@@ -110,10 +115,19 @@ export const DemographicsForm = ({
               onChange={(value) => setFormData(prev => ({ ...prev, address: value }))}
               onAddressSelect={(details) => {
                 setFormData(prev => ({ ...prev, address: details.formattedAddress }));
+                setAddressState({ code: details.state, name: details.stateFull || details.state });
               }}
               placeholder="Start typing your address..."
               className="bg-background"
             />
+            {stateNotSupported && (
+              <div className="flex gap-2 rounded-lg border border-border bg-muted/50 p-3 text-sm text-foreground">
+                <Info className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+                <p>
+                  <span className="font-medium">{addressState?.name}</span> isn't fully supported yet. You can still complete the quiz, see national candidates (President, etc.), and your local candidate requests will be saved for when we launch in your state.
+                </p>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               Used to show candidates in your area
             </p>
