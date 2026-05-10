@@ -59,9 +59,23 @@ export const CandidateProfile = () => {
   
   // Get FEC committee ID from first donor record or we'll pass null
   const committeeId = donors[0]?.recipient_committee_id ?? null;
-  const { data: fecTotals } = useFECTotals(committeeId, effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : '2024');
-  const { data: financeReconciliation } = useFinanceReconciliation(id, effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : undefined);
-  const { data: committeeRollups = [] } = useCommitteeRollups(id, effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : undefined);
+  const isAllCycles = effectiveCycle === 'all';
+  const concreteCycles = (cycleInfo?.cycles ?? []).filter((c) => c !== 'all');
+  const { data: fecTotals } = useFECTotals(
+    committeeId,
+    !isAllCycles && effectiveCycle ? effectiveCycle : '2024',
+    !!effectiveCycle && !isAllCycles,
+  );
+  const { data: financeReconciliation } = useFinanceReconciliation(
+    id,
+    effectiveCycle,
+    isAllCycles ? concreteCycles : undefined,
+  );
+  const { data: committeeRollups = [] } = useCommitteeRollups(
+    id,
+    effectiveCycle,
+    isAllCycles ? concreteCycles : undefined,
+  );
   
   // Fetch bills sponsored/cosponsored by this legislator
   const { data: sponsoredBills = [], isLoading: billsLoading } = useBillSponsors(id);

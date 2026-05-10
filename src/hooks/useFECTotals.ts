@@ -10,7 +10,7 @@ interface FECTotals {
   coverage_end_date: string | null;
 }
 
-export const useFECTotals = (committeeId: string | null | undefined, cycle: string = '2024') => {
+export const useFECTotals = (committeeId: string | null | undefined, cycle: string = '2024', enabled: boolean = true) => {
   return useQuery({
     queryKey: ['fec-totals', committeeId, cycle],
     queryFn: async (): Promise<FECTotals | null> => {
@@ -46,7 +46,7 @@ export const useFECTotals = (committeeId: string | null | undefined, cycle: stri
         return null;
       }
     },
-    enabled: !!committeeId,
+    enabled: !!committeeId && enabled,
     staleTime: 1000 * 60 * 60, // Cache for 1 hour
     retry: 1,
   });

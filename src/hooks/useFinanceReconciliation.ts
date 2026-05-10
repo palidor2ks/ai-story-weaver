@@ -65,44 +65,106 @@ export interface CommitteeRollup {
   last_fec_check: string | null;
 }
 
-// Hook to get reconciliation data for a single candidate
-export function useFinanceReconciliation(candidateId: string | undefined, cycle = '2024') {
+// Numeric fields on finance_reconciliation that are safe to sum across cycles.
+const SUMMABLE_RECONCILIATION_FIELDS: Array<keyof FinanceReconciliation> = [
+  'local_itemized', 'local_itemized_net', 'local_transfers', 'local_earmarked',
+  'local_other_receipts', 'local_individual_itemized', 'local_pac_contributions',
+  'local_party_contributions', 'local_organization', 'local_loans',
+  'fec_itemized', 'fec_unitemized', 'fec_total_receipts',
+  'fec_pac_contributions', 'fec_party_contributions', 'fec_loans',
+  'fec_transfers', 'fec_candidate_contribution', 'fec_other_receipts',
+  'fec_offsets_to_operating_expenditures',
+];
+
+function aggregateReconciliations(
+  rows: FinanceReconciliation[],
+  candidateId: string,
+): FinanceReconciliation | null {
+  if (!rows.length) return null;
+  const agg: any = {
+    id: 'aggregate',
+    candidate_id: candidateId,
+    cycle: 'all',
+    status: 'ok',
+    checked_at: rows.map(r => r.checked_at).filter(Boolean).sort().slice(-1)[0] ?? null,
+    individual_delta_amount: null, individual_delta_pct: null,
+    pac_delta_amount: null, pac_delta_pct: null,
+    delta_amount: null, delta_pct: null,
+    total_receipts_delta_amount: null, total_receipts_delta_pct: null,
+  };
+  for (const f of SUMMABLE_RECONCILIATION_FIELDS) {
+    agg[f] = rows.reduce((s, r) => s + (Number(r[f] ?? 0) || 0), 0);
+  }
+  return agg as FinanceReconciliation;
+}
+
+// Hook to get reconciliation data for a single candidate.
+// Pass cycle='all' (with cycles[]) to get a summed aggregate across cycles.
+export function useFinanceReconciliation(
+  candidateId: string | undefined,
+  cycle: string | undefined = '2024',
+  cyclesForAll?: string[],
+) {
+  const isAll = cycle === 'all';
   return useQuery({
-    queryKey: ['finance-reconciliation', candidateId, cycle],
+    queryKey: ['finance-reconciliation', candidateId, cycle, isAll ? cyclesForAll?.join(',') : null],
     queryFn: async () => {
       if (!candidateId) return null;
-      
+
+      if (isAll) {
+        let q = supabase
+          .from('finance_reconciliation')
+          .select('*')
+          .eq('candidate_id', candidateId);
+        if (cyclesForAll && cyclesForAll.length) q = q.in('cycle', cyclesForAll);
+        const { data, error } = await q;
+        if (error) throw error;
+        return aggregateReconciliations((data || []) as FinanceReconciliation[], candidateId);
+      }
+
       const { data, error } = await supabase
         .from('finance_reconciliation')
         .select('*')
         .eq('candidate_id', candidateId)
-        .eq('cycle', cycle)
+        .eq('cycle', cycle!)
         .maybeSingle();
-      
+
       if (error) throw error;
       return data as FinanceReconciliation | null;
     },
-    enabled: !!candidateId,
+    enabled: !!candidateId && !!cycle && (!isAll || !!cyclesForAll),
   });
 }
 
-// Hook to get all committee rollups for a candidate
-export function useCommitteeRollups(candidateId: string | undefined, cycle = '2024') {
+// Hook to get all committee rollups for a candidate.
+// Pass cycle='all' (with cycles[]) to fetch rollups across all listed cycles.
+export function useCommitteeRollups(
+  candidateId: string | undefined,
+  cycle: string | undefined = '2024',
+  cyclesForAll?: string[],
+) {
+  const isAll = cycle === 'all';
   return useQuery({
-    queryKey: ['committee-rollups', candidateId, cycle],
+    queryKey: ['committee-rollups', candidateId, cycle, isAll ? cyclesForAll?.join(',') : null],
     queryFn: async () => {
       if (!candidateId) return [];
-      
-      const { data, error } = await supabase
+
+      let q = supabase
         .from('committee_finance_rollups')
         .select('*')
-        .eq('candidate_id', candidateId)
-        .eq('cycle', cycle);
-      
+        .eq('candidate_id', candidateId);
+
+      if (isAll) {
+        if (cyclesForAll && cyclesForAll.length) q = q.in('cycle', cyclesForAll);
+      } else {
+        q = q.eq('cycle', cycle!);
+      }
+
+      const { data, error } = await q;
       if (error) throw error;
       return (data || []) as CommitteeRollup[];
     },
-    enabled: !!candidateId,
+    enabled: !!candidateId && !!cycle && (!isAll || !!cyclesForAll),
   });
 }
 
