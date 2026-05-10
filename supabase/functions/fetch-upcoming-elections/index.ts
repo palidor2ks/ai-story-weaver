@@ -312,7 +312,7 @@ Deno.serve(async (req) => {
     const { data: cands } = candidateIds.length
       ? await supabase
           .from('candidates')
-          .select('id, name, party, office, state, district, image_url, overall_score, coverage_tier, answers_source')
+          .select('id, name, party, office, state, district, image_url, overall_score, coverage_tier, confidence, answers_source')
           .in('id', candidateIds)
       : { data: [] as any[] };
 
@@ -332,7 +332,7 @@ Deno.serve(async (req) => {
             candidate_id: r.candidate_id, name: 'Unknown', party: 'Other',
             office: r.office, state: '', district: null, image_url: null,
             is_incumbent: r.is_incumbent, overall_score: null,
-            coverage_tier: 'tier_3', answers_source: null, is_pending_research: true,
+            coverage_tier: 'tier_3', confidence: null, answers_source: null, is_pending_research: true,
           };
         }
         return {
@@ -346,6 +346,7 @@ Deno.serve(async (req) => {
           is_incumbent: r.is_incumbent,
           overall_score: c.overall_score,
           coverage_tier: c.coverage_tier,
+          confidence: c.confidence ?? null,
           answers_source: c.answers_source,
           is_pending_research: c.answers_source === 'pending_research' || (c.overall_score === 0 && c.answers_source !== 'calculated_from_answers'),
         };
