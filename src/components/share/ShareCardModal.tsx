@@ -219,39 +219,6 @@ export const ShareCardModal = ({
     });
     openIntent(href);
   };
-
-  const handleCopyCaption = async () => {
-    try {
-      await navigator.clipboard.writeText(finalText);
-      toast.success('Caption copied to clipboard.');
-    } catch {
-      toast.error('Could not copy caption.');
-    }
-  };
-
-  const handleNative = async () => {
-    const node = getNode();
-    if (!node) return;
-    setBusy('native');
-    try {
-      let files: File[] | undefined;
-      try {
-        files = [await nodeToFile(node, filename)];
-      } catch {
-        files = undefined;
-      }
-      const ok = await nativeShare({
-        title: 'Pulse',
-        text: finalText,
-        url,
-        files,
-      });
-      if (!ok) toast.error('Share failed.');
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const SelectedComponent = TEMPLATES.find(t => t.id === selected)!.Component;
 
   return (
