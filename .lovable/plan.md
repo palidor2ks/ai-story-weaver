@@ -1,42 +1,44 @@
-## Goal
-Emit lightweight analytics events from the share flow so you can measure which templates, actions, and social destinations drive shares.
+## Problem
+The screenshot shows three issues in the share-card modal:
 
-## Approach
-No analytics provider is wired up yet, so add a tiny abstraction we can later point at PostHog/GA without touching components.
+1. **Previews are clipped.** Tiles render the 1080×1080 card scaled by a fixed `0.27`, but the actual tile width at the current viewport is ~210px. The scaled card is ~291px so the right/top edges get cut off ("…4.21", "issues" half-shown, "R" cropped, Editorial overflowing).
+2. **The label chip overlaps the card.** "Bold" / "Minimal" / "Data" / "Editorial" sit on top of the artwork instead of below it.
+3. **No real app icon.** Three templates show a placeholder "P" tile or just the word "Pulse"; the project ships a real icon at `public/icon-512.png` that should be used.
 
-### 1. New file: `src/lib/analytics.ts`
-- Export `trackEvent(name: string, props?: Record<string, unknown>)`.
-- Implementation: push to `window.dataLayer` if present (GA/GTM-friendly), call `window.posthog?.capture` if present, and always `console.debug('[analytics]', name, props)` in dev. Safe no-op otherwise.
-- Define a `ShareEvent` union of names so call sites stay consistent:
-  - `share_modal_opened`
-  - `share_template_selected`
-  - `share_caption_edited` (fired once per modal session when user first edits)
-  - `share_hashtags_toggled`
-  - `share_action` (action: `copy_caption | copy_image | download | native | open_intent`, destination: `twitter | facebook | linkedin | native | clipboard | file`)
+## Fix
 
-### 2. Wire events in `src/components/share/ShareCardModal.tsx`
-- On `open` transition to true → `share_modal_opened` with `{ surface: caption.surface, templateDefault: 'bold' }`.
-  - Add an optional `surface` field to `CaptionInput` (e.g. `'quiz_results' | 'candidate_profile'`) passed by the two existing call sites (`QuizResults.tsx`, `CandidateProfile.tsx`).
-- When `setSelected` runs from a template tile click → `share_template_selected` with `{ template, surface }`.
-- First time `body` diverges from `defaultBody` in a session → `share_caption_edited` (guard with a ref so it fires once).
-- On hashtag switch → `share_hashtags_toggled` with `{ enabled }`.
-- Copy caption button → `share_action` `{ action: 'copy_caption', destination: 'clipboard', template, surface, includeHashtags, charCount, edited: isEdited }`.
-- Copy image button → `share_action` `{ action: 'copy_image', destination: 'clipboard', template, surface }`.
-- Download button → `share_action` `{ action: 'download', destination: 'file', template, surface }`.
-- Native share button → `share_action` `{ action: 'native', destination: 'native', template, surface }`.
-- Twitter / Facebook / LinkedIn buttons → `share_action` `{ action: 'open_intent', destination: 'twitter'|'facebook'|'linkedin', template, surface, includeHashtags, edited }`.
+### 1. Preview tiles in `ShareCardModal.tsx`
+- Replace the fixed `PREVIEW_SCALE = 0.27` with a fit-to-container approach: render the preview wrapper at a known square size (e.g. `220px`) and scale `1080 → 220` (`scale = 220/1080`), with `transformOrigin: 'top left'`. The wrapper sits in a `aspectRatio: 1/1` tile so it can never overflow.
+- Move the template label out of the card overlay. Layout becomes:
+  ```text
+  ┌─────────────┐
+  │   preview   │  ← square, no overlay
+  ├─────────────┤
+  │ Bold      ✓ │  ← caption row under the tile
+  └─────────────┘
+  ```
+  Selected state stays as the primary border + ring on the tile, plus the check icon inline with the label.
+- Add a subtle inner shadow / 1px ring on the preview so cards with white backgrounds (Minimal, Editorial-right) still read as a card.
 
-### 3. Surface tagging (small touch in two existing pages)
-- `src/pages/QuizResults.tsx`: pass `surface: 'quiz_results'` into the `caption` prop.
-- `src/pages/CandidateProfile.tsx`: pass `surface: 'candidate_profile'`.
+### 2. App icon
+- Add a shared `<PulseMark />` helper used by all four templates that renders `/icon-512.png` as an `<img>` (same-origin, safe for `html-to-image`) with a rounded-square frame. Falls back to the "P" glyph if the image fails to load.
+- Wire it into:
+  - **BoldCard** — replaces the white "P" tile next to the "Pulse" wordmark.
+  - **MinimalCard** — small icon left of the top "PULSE" eyebrow.
+  - **DataCard** — small icon left of the "PULSE · Voter Alignment" eyebrow.
+  - **EditorialCard** — small icon left of the "PULSE · …" eyebrow on the right column. Also overlay the icon as a small badge over the portrait band so the brand stays visible when a candidate photo fills it.
+
+### 3. Alignment polish (small)
+- Standardise eyebrow row across Minimal/Data/Editorial: same icon size (48px), same gap (16px), same letter-spacing.
+- Bold: tighten the bottom row so the "My position …" line and the brand host align to the same baseline.
+- Editorial: clamp the headline to `lineHeight: 1.05` and reduce font-size to `72` so long quotes (e.g. "My pulse: L4.21 — Left-Leaning.") don't wrap awkwardly.
+- Data: align the right-side score pill vertically to the candidate name (currently top-aligned with the eyebrow).
 
 ## Out of scope
-- Choosing/installing an analytics SDK (PostHog/GA/Mixpanel). The `trackEvent` shim makes it a one-line swap later.
-- Server-side logging or persistence.
-- Events outside the share flow.
+- No changes to caption text, analytics, or share intents.
+- No new template designs — just fixing fit, alignment, and branding of the four existing ones.
 
 ## Files touched
-- add `src/lib/analytics.ts`
-- edit `src/components/share/ShareCardModal.tsx`
-- edit `src/lib/shareCaptions.ts` (extend `CaptionInput` with optional `surface`)
-- edit `src/pages/QuizResults.tsx`, `src/pages/CandidateProfile.tsx` (pass `surface`)
+- edit `src/components/share/ShareCardModal.tsx` (tile layout + scaling)
+- add `src/components/share/templates/PulseMark.tsx`
+- edit all four templates: `BoldCard.tsx`, `MinimalCard.tsx`, `DataCard.tsx`, `EditorialCard.tsx`
