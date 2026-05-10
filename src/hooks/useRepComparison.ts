@@ -110,14 +110,16 @@ export function useGenerateRepComparison() {
 
       // Verify a valid session exists before invoking (avoids 401 after logout/refresh races)
       const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData?.session?.access_token) {
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
         throw new Error('No active session');
       }
 
       console.log(`[useGenerateRepComparison] Generating ${deepAnalysis ? 'deep' : 'summary'} for ${candidateName}`);
 
-      // Call edge function to generate comparison
+      // Call edge function to generate comparison — pass fresh token explicitly
       const { data, error } = await supabase.functions.invoke('generate-rep-comparison', {
+        headers: { Authorization: `Bearer ${accessToken}` },
         body: {
           candidateId,
           candidateName,
