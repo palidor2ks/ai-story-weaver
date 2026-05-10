@@ -37,6 +37,8 @@ export const QuizResults = () => {
   const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
   const [profileAnalysis, setProfileAnalysis] = useState<ProfileAnalysis | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [resultsShareOpen, setResultsShareOpen] = useState(false);
+  const [inviteShareOpen, setInviteShareOpen] = useState(false);
 
   const federalReps = repsData?.representatives ?? [];
   const allRepsLoading = repsLoading || civicLoading;
@@ -135,8 +137,7 @@ export const QuizResults = () => {
       ? window.location.host.replace(/^www\./, '')
       : 'polipulseapp.com';
 
-  const [resultsShareOpen, setResultsShareOpen] = useState(false);
-  const [inviteShareOpen, setInviteShareOpen] = useState(false);
+
 
   // Sort topic scores by weight (user's ranking) for the share card
   const topTopicsForShare = useMemo(() => {
