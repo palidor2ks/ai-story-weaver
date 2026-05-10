@@ -201,6 +201,11 @@ async function processBatchInBackground(params: {
       console.log(`\n=== BATCH ${batchNum}/${totalBatches} (${batch.length} candidates) ===`);
 
       for (const candidate of batch) {
+        if (await checkCancelled()) {
+          cancelled = true;
+          console.log('🛑 Cancellation requested — stopping batch.');
+          break outer;
+        }
         const previousCount = answerCounts?.[candidate.id] || 0;
         
         globalProgress.currentCandidate = `${candidate.name} (${candidate.id})`;
