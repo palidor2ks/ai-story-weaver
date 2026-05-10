@@ -150,7 +150,7 @@ async function processBatchInBackground(params: {
     const results: ProcessResult[] = [];
     const failures: { id: string; name: string; error: string }[] = [];
 
-    const writeProgress = async (status: 'running' | 'complete' | 'error', extra: Record<string, unknown> = {}) => {
+    const writeProgress = async (status: 'running' | 'complete' | 'error' | 'cancelled', extra: Record<string, unknown> = {}) => {
       try {
         await supabase.from('admin_stats_cache').upsert({
           stat_key: 'backfill_answers_progress',
