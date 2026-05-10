@@ -1,7 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Check, Copy, Download, Facebook, Linkedin, Loader2, Share2, Twitter } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Check, Copy, Download, Facebook, Linkedin, Loader2, RotateCcw, Share2, Twitter } from 'lucide-react';
 import { toast } from 'sonner';
 import { BoldCard } from './templates/BoldCard';
 import { MinimalCard } from './templates/MinimalCard';
@@ -11,8 +14,9 @@ import { CardData, CARD_SIZE } from './templates/types';
 import { copyNodeToClipboard, downloadNode, nodeToFile } from '@/lib/shareImage';
 import {
   CaptionInput,
-  generateLongCaption,
+  composeFinalText,
   generateShortCaption,
+  getDefaultHashtags,
 } from '@/lib/shareCaptions';
 import {
   facebookIntent,
