@@ -195,6 +195,7 @@ async function processBatchInBackground(params: {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              'x-internal-chain-secret': SUPABASE_SERVICE_ROLE_KEY,
             },
             body: JSON.stringify({
               candidateId: candidate.id,
