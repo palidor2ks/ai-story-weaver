@@ -19,7 +19,7 @@ import { Brain, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 type BackfillProgress = {
-  status: "running" | "complete" | "error";
+  status: "running" | "complete" | "error" | "cancelled";
   processed: number;
   total: number;
   successful: number;
