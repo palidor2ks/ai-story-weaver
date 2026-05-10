@@ -66,7 +66,8 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
   
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const response = await fetch(url, options);
+      // Per-request timeout to avoid hitting the 150s function idle limit on a single hung call
+      const response = await fetch(url, { ...options, signal: AbortSignal.timeout(20000) });
       
       if (response.status === 429) {
         // LONGER backoff specifically for rate limits
