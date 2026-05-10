@@ -10,7 +10,7 @@ interface FECTotals {
   coverage_end_date: string | null;
 }
 
-export const useFECTotals = (committeeId: string | null | undefined, cycle: string = '2024') => {
+export const useFECTotals = (committeeId: string | null | undefined, cycle: string = '2024', enabled: boolean = true) => {
   return useQuery({
     queryKey: ['fec-totals', committeeId, cycle],
     queryFn: async (): Promise<FECTotals | null> => {
