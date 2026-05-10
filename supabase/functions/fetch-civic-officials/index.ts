@@ -370,7 +370,9 @@ async function fetchOpenStatesOfficials(
 
     if (legislatorsUrl) {
       const legislatorsController = new AbortController();
-      const legislatorsTimeout = setTimeout(() => legislatorsController.abort(), 8000);
+      // Open States people.geo can be slow (>10s) for some coords — give it
+      // enough time so we don't drop a user's state legislators on a cold call.
+      const legislatorsTimeout = setTimeout(() => legislatorsController.abort(), 20000);
       let legislatorsResponse: Response;
       try {
         legislatorsResponse = await fetch(legislatorsUrl, { headers, signal: legislatorsController.signal });
