@@ -898,6 +898,9 @@ export const UserProfile = () => {
           </CardContent>
         </Card>
 
+        {/* Upcoming Elections */}
+        <UpcomingElectionsCard address={profile?.address} />
+
         {/* Priority Topics */}
         <Card className="shadow-elevated">
           <CardHeader>
