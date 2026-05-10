@@ -283,6 +283,53 @@ export const ShareCardModal = ({
           ))}
         </div>
 
+        {/* Caption editor */}
+        <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="share-caption" className="text-sm font-semibold">
+              Caption
+            </Label>
+            {isEdited && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleResetCaption}
+                className="h-7 gap-1 text-xs"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset to suggested
+              </Button>
+            )}
+          </div>
+          <Textarea
+            id="share-caption"
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            rows={4}
+            placeholder="Write a custom message…"
+            className="resize-y bg-background"
+          />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Switch
+                id="hashtags-toggle"
+                checked={includeHashtags}
+                onCheckedChange={setIncludeHashtags}
+              />
+              <Label htmlFor="hashtags-toggle" className="text-sm cursor-pointer">
+                Include suggested hashtags
+              </Label>
+              <span className="text-xs text-muted-foreground font-mono">
+                {defaultHashtags}
+              </span>
+            </div>
+            <span className={cn('text-xs tabular-nums', charClass)}>
+              {charCount} / {charLimit}
+            </span>
+          </div>
+        </div>
+
         {/* Actions */}
         <div className="flex flex-wrap gap-2 pt-2">
           <Button onClick={handleDownload} disabled={!!busy} className="gap-2">
@@ -310,7 +357,7 @@ export const ShareCardModal = ({
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            onClick={() => openIntent(twitterIntent(shortText, url))}
+            onClick={() => openIntent(twitterIntent(finalText, url))}
             className="gap-2"
           >
             <Twitter className="w-4 h-4" />
@@ -318,7 +365,7 @@ export const ShareCardModal = ({
           </Button>
           <Button
             variant="outline"
-            onClick={() => openIntent(facebookIntent(url, shortText))}
+            onClick={() => openIntent(facebookIntent(url, finalText))}
             className="gap-2"
           >
             <Facebook className="w-4 h-4" />
