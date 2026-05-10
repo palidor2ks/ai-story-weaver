@@ -19,7 +19,7 @@ import { Brain, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 type BackfillProgress = {
-  status: "running" | "complete" | "error";
+  status: "running" | "complete" | "error" | "cancelled";
   processed: number;
   total: number;
   successful: number;
@@ -68,31 +68,66 @@ export function BackfillAnswersControl() {
     }
   };
 
+  const cancelBackfill = async () => {
+    const { error } = await supabase.functions.invoke("batch-regenerate-answers", {
+      body: { action: "cancel" },
+    });
+    if (error) {
+      toast.error("Failed to cancel", { description: error.message });
+    } else {
+      toast.success("Cancellation requested", { description: "Job will stop after current candidate." });
+    }
+  };
+
   return (
     <div className="flex flex-col gap-2">
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button size="sm" variant="outline" disabled={isRunning}>
-            {isRunning ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Backfill running...</>
-            ) : (
-              <><Brain className="h-4 w-4 mr-2" />Backfill Answers (Visible States)</>
-            )}
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Backfill missing answers for visible states?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Iterates every politician whose state is NOT in hidden_states and fills any missing question answers (rep by rep, all topics covered per rep). Skips reps already at full coverage. Runs in background — may take hours.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={startBackfill}>Start Backfill</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <div className="flex items-center gap-2">
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" variant="outline" disabled={isRunning}>
+              {isRunning ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Backfill running...</>
+              ) : (
+                <><Brain className="h-4 w-4 mr-2" />Backfill Answers (Visible States)</>
+              )}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Backfill missing answers for visible states?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Iterates every politician whose state is NOT in hidden_states and fills any missing question answers (rep by rep, all topics covered per rep). Skips reps already at full coverage. Runs in background — may take hours.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={startBackfill}>Start Backfill</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {isRunning && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="destructive">
+                <XCircle className="h-4 w-4 mr-2" />Cancel
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Cancel running backfill?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  The job will stop after the current candidate finishes processing. Already-saved answers are kept.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Keep running</AlertDialogCancel>
+                <AlertDialogAction onClick={cancelBackfill}>Cancel backfill</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+      </div>
 
       {progress && (
         <div className="rounded-md border bg-card p-3 text-sm space-y-2 min-w-[320px]">
@@ -105,6 +140,8 @@ export function BackfillAnswersControl() {
                     ? "secondary"
                     : progress.status === "complete"
                     ? "default"
+                    : progress.status === "cancelled"
+                    ? "outline"
                     : "destructive"
                 }
               >

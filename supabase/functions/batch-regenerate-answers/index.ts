@@ -150,7 +150,7 @@ async function processBatchInBackground(params: {
     const results: ProcessResult[] = [];
     const failures: { id: string; name: string; error: string }[] = [];
 
-    const writeProgress = async (status: 'running' | 'complete' | 'error', extra: Record<string, unknown> = {}) => {
+    const writeProgress = async (status: 'running' | 'complete' | 'error' | 'cancelled', extra: Record<string, unknown> = {}) => {
       try {
         await supabase.from('admin_stats_cache').upsert({
           stat_key: 'backfill_answers_progress',
@@ -172,10 +172,28 @@ async function processBatchInBackground(params: {
       }
     };
 
+    // Clear any prior cancel flag
+    await supabase.from('admin_stats_cache').upsert({
+      stat_key: 'backfill_answers_cancel',
+      stat_value: { cancel: false },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'stat_key' });
+
+    const checkCancelled = async (): Promise<boolean> => {
+      const { data } = await supabase
+        .from('admin_stats_cache')
+        .select('stat_value')
+        .eq('stat_key', 'backfill_answers_cancel')
+        .maybeSingle();
+      return !!(data?.stat_value as { cancel?: boolean } | null)?.cancel;
+    };
+
     await writeProgress('running');
 
+    let cancelled = false;
+
     // Process in batches
-    for (let i = 0; i < candidatesToProcess.length; i += batchSize) {
+    outer: for (let i = 0; i < candidatesToProcess.length; i += batchSize) {
       const batch = candidatesToProcess.slice(i, i + batchSize);
       const batchNum = Math.floor(i / batchSize) + 1;
       const totalBatches = Math.ceil(candidatesToProcess.length / batchSize);
@@ -183,6 +201,11 @@ async function processBatchInBackground(params: {
       console.log(`\n=== BATCH ${batchNum}/${totalBatches} (${batch.length} candidates) ===`);
 
       for (const candidate of batch) {
+        if (await checkCancelled()) {
+          cancelled = true;
+          console.log('🛑 Cancellation requested — stopping batch.');
+          break outer;
+        }
         const previousCount = answerCounts?.[candidate.id] || 0;
         
         globalProgress.currentCandidate = `${candidate.name} (${candidate.id})`;
@@ -273,12 +296,17 @@ async function processBatchInBackground(params: {
     const elapsedTime = Date.now() - globalProgress.startTime;
     const elapsedMinutes = Math.round(elapsedTime / 60000 * 10) / 10;
 
-    console.log(`\n=== BATCH REGENERATION COMPLETE ===`);
+    if (cancelled) {
+      console.log(`\n=== BATCH REGENERATION CANCELLED ===`);
+      await writeProgress('cancelled', { elapsedMinutes, completedAt: new Date().toISOString() });
+    } else {
+      console.log(`\n=== BATCH REGENERATION COMPLETE ===`);
     console.log(`Total processed: ${globalProgress.processed}`);
     console.log(`Successful: ${globalProgress.successful}`);
     console.log(`Failed: ${globalProgress.failed}`);
     console.log(`Elapsed time: ${elapsedMinutes} minutes`);
     await writeProgress('complete', { elapsedMinutes, completedAt: new Date().toISOString() });
+    }
 
   } catch (error) {
     console.error('=== BATCH REGENERATION ERROR ===');
@@ -325,7 +353,20 @@ serve(async (req) => {
     }
 
     const params = await req.json().catch(() => ({}));
-    
+
+    // Cancel action
+    if (params.action === 'cancel') {
+      const adminDbClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await adminDbClient.from('admin_stats_cache').upsert({
+        stat_key: 'backfill_answers_cancel',
+        stat_value: { cancel: true, requestedBy: user.id, requestedAt: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'stat_key' });
+      return new Response(JSON.stringify({ success: true, message: 'Cancellation requested' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const config = {
       batchSize: params.batchSize || 5,
       delayBetweenCandidates: params.delayBetweenCandidates || 3000,
