@@ -1126,10 +1126,16 @@ serve(async (req) => {
         }
 
         // Name+office fallback for officials whose synthetic id (e.g.
-        // `federal_president`) doesn't match a DB id like `P80001571`.
-        // Mirrors useUnifiedCandidates so Profile/QuizResults stay in sync
-        // with Feed/Candidates.
-        const stillMissing = allOfficials.filter(o => !o.image_url);
+        // `federal_president`) doesn't match a DB id like `P80001571`,
+        // OR whose API-derived image points at a host we know is broken.
+        // bioguide.congress.gov currently returns 403 for executive photos
+        // (Trump/Vance), so we always try to replace those with a stored
+        // photo from `candidates` / `candidate_overrides`.
+        const isBrokenSyntheticUrl = (url?: string) =>
+          !!url && /(?:^|\/\/)bioguide\.congress\.gov\//i.test(url);
+        const stillMissing = allOfficials.filter(
+          o => !o.image_url || (o.level === 'federal_executive' && isBrokenSyntheticUrl(o.image_url))
+        );
         let nameFallbackHits = 0;
         if (stillMissing.length) {
           const norm = (s: string) =>
@@ -1167,8 +1173,19 @@ serve(async (req) => {
           }
         }
 
+        // Safety net: if a federal executive still points at the broken
+        // bioguide host, clear it so the frontend renders the initials
+        // avatar instead of a broken image.
+        let clearedBrokenUrls = 0;
+        for (const o of allOfficials) {
+          if (o.level === 'federal_executive' && isBrokenSyntheticUrl(o.image_url)) {
+            o.image_url = '';
+            clearedBrokenUrls++;
+          }
+        }
+
         console.log(
-          `[ImageResolver] Applied DB image_url: ${overrideImg.size} override-id + ${candImg.size} candidate-id + ${nameFallbackHits} name-fallback`
+          `[ImageResolver] Applied DB image_url: ${overrideImg.size} override-id + ${candImg.size} candidate-id + ${nameFallbackHits} name-fallback; cleared ${clearedBrokenUrls} broken bioguide exec URLs`
         );
       }
     } catch (e) {
