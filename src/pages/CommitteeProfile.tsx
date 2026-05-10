@@ -39,9 +39,19 @@ export const CommitteeProfile = () => {
   const isAdmin = adminData?.isAdmin ?? false;
   const isLoading = committeeLoading || donorsLoading;
 
+  const availableCycles = useMemo(() => {
+    const baseYear = new Date().getFullYear();
+    const baseline = baseYear % 2 === 0 ? baseYear : baseYear + 1;
+    const set = new Set<string>([String(baseline), String(baseline - 2)]);
+    (committee?.cycles ?? []).forEach((c) => c && set.add(String(c)));
+    return Array.from(set).sort((a, b) => Number(b) - Number(a));
+  }, [committee?.cycles]);
+  const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
+  const effectiveCycle = selectedCycle ?? availableCycles[0];
+
   const handleSyncDonors = () => {
     if (!committee?.fecCommitteeId) return;
-    fetchDonorsMutation.mutate({ committeeId: committee.fecCommitteeId, cycle: '2024' });
+    fetchDonorsMutation.mutate({ committeeId: committee.fecCommitteeId, cycle: effectiveCycle ?? '2024' });
   };
 
   return (
