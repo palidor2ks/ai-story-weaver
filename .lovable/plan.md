@@ -1,48 +1,55 @@
-## Problem
+## What's happening
 
-For Iowa, the user saw every state legislator instead of just the two (one State Senator + one State Representative) covering their address.
+For your address (Missoula, MT), the Feed is correctly fetching:
 
-## Root Cause
+- President + VP (federal executives)
+- Senator Daines + your House rep (federal legislators)
 
-In `supabase/functions/fetch-civic-officials/index.ts` (`fetchOpenStatesOfficials`):
+…but the state/local sections come back nearly empty. After hitting the live edge functions with your exact address, here's what actually returns:
 
-```ts
-if (lat && lng) {
-  legislatorsUrl = `https://v3.openstates.org/people.geo?lat=...&lng=...`;
-} else {
-  legislatorsUrl = `https://v3.openstates.org/people?jurisdiction=${state}&per_page=50`;
-}
-```
+| Bucket | Returned for MT | Expected |
+|---|---|---|
+| State Executive | **Lt. Governor only** | Governor + Lt. Governor |
+| State Legislative | **0** | 1 State Senator + 1 State Rep for your district |
+| Local | **0** | Mayor / city council / county officials |
 
-- `people.geo` returns **only the user's district reps** (correct).
-- The fallback `people?jurisdiction=...` returns **all legislators in the state** (wrong — this is what produced the Iowa flood). Per project memory, Open States caps `per_page` at 50, which happens to cover much of Iowa's lower chamber, making the bug very visible there.
+So the federal side is fine; the state and local sides are broken or empty. Three independent root causes:
 
-When geocoding fails (or `lat`/`lng` aren't passed in), we silently fall back to the jurisdiction-wide list.
+### 1. Governor missing from Open States executive query
 
-## Fix
+`fetchOpenStatesOfficials` (in `fetch-civic-officials`) queries `?org_classification=executive&per_page=10` and then filters to anything whose `current_role.title` contains "governor". For MT this is returning the Lt. Gov but not Governor Gianforte — most likely because his record either has no `current_role` populated or the title casing isn't matching. The filter is too brittle.
 
-1. **Edge function — remove the jurisdiction-wide fallback for state legislators.**
-   - In `fetchOpenStatesOfficials`, if `lat`/`lng` are missing, log a warning and return `{ legislators: [], governors }` for the legislators portion. Do not fetch jurisdiction-wide.
-   - Governor/executive fetch (which is intentionally state-wide) stays as-is.
+### 2. State legislators returning 0
 
-2. **Edge function — try harder to obtain coordinates before giving up.**
-   - In the main handler, if `coords` is still null after the hint + `geocodeAddress` attempt, attempt one more lookup using a normalized address (already partially done in `geocodeAddress`); if still null, skip the legislators fetch as above.
+The `people.geo` Open States call for `lat=46.87, lng=-113.99` returns 0 results for MT. Earlier work (per memory) intentionally restricted state legislator lookup to `people.geo` only (no jurisdiction-wide fallback) to avoid the Iowa "all legislators" bug. That guard is correct, but for MT the geo call is silently failing/empty, so users get nothing.
 
-3. **Defensive frontend filter (belt-and-suspenders).**
-   - In `useCivicOfficials.ts`, after receiving `stateLegislative`, if `geocode.district` is known, optionally filter legislators whose `district` doesn't match. This is secondary — the edge-function fix is the real cure — and only added if it doesn't risk hiding a correct match (Open States districts are formatted as `${STATE}-${district}` whereas civic geocode districts may differ; we will only filter if formats match).
+### 3. Local officials table only has NJ
 
-## Files Touched
+`fetchLocalOfficialsFromDB` reads `static_officials` filtered by state. The whole table currently has only 18 rows, all `state = 'NJ'`. So every non-NJ user sees an empty Local section.
 
-- `supabase/functions/fetch-civic-officials/index.ts` — change the fallback branch in `fetchOpenStatesOfficials`.
-- (optional) `src/hooks/useCivicOfficials.ts` — add a guarded district filter once we confirm format compatibility.
+## Fix plan
+
+### A. Make the governor filter robust (`supabase/functions/fetch-civic-officials/index.ts`)
+
+In `fetchOpenStatesOfficials`, replace the title-only check with a check that also looks at `current_role.title`, `current_role.org_classification`, and the person's `roles[]` array. Also log every executive person returned so we can see what Open States is actually sending for MT. Keep the Lt-Gov detection as-is.
+
+### B. Add a safe fallback for state legislators
+
+Keep `people.geo` as the primary lookup, but when it returns 0 results, fall back to a **district-scoped** jurisdiction query: `?jurisdiction={state}&org_classification=legislature&district={district}` if we have a district, else log and return empty (do **not** revert to the old jurisdiction-wide fetch — that was the Iowa bug). For MT we can also try OpenStates' `/people` endpoint with `latitude`/`longitude` query params as a secondary, since `.geo` data coverage is uneven.
+
+### C. Surface the gap to the user instead of silently hiding the section
+
+In `Feed.tsx`, when `stateLegislative.length === 0` and `local.length === 0` for a user with an address, render a small inline notice under the section header ("We don't have state/local officials for your area yet — help us add them"). This avoids the impression that "only federal exists".
+
+### D. (Out of scope for this fix, flag only) Local data
+
+`static_officials` is empty for MT and 48 other states. Real fix is a separate ingestion task. For now, the notice in step C covers it.
+
+## Files to touch
+
+- `supabase/functions/fetch-civic-officials/index.ts` — steps A and B
+- `src/pages/Feed.tsx` — step C (inline notice when sections are empty)
 
 ## Verification
 
-- Open the Feed with an Iowa address. Confirm only one State Senator and one State Representative appear.
-- Test with an address that fails to geocode (e.g., a malformed entry) — confirm zero state legislators appear instead of 50.
-- Test a NJ/CA address still returns the user's two state legislators via the geo endpoint.
-
-## Out of Scope
-
-- Changes to local/federal/governor fetchers.
-- Changes to scoring or display.
+After deploy, re-run the curl against `/fetch-civic-officials` with the MT lat/lng and confirm `stateExecutive` contains Gianforte and `stateLegislative` contains the user's MT House + Senate district reps.

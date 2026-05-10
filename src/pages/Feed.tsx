@@ -450,10 +450,16 @@ export const Feed = () => {
             else groups[1].items.push(c);
           }
 
+          // When the user has an address, render every group — including
+          // empty ones — so it's clear that "State Legislature" or "Local
+          // Officials" weren't found, instead of looking like the Feed only
+          // covers federal seats.
+          const showEmpty = hasAddress;
           return (
             <div className="space-y-8">
-              {groups.filter(g => g.items.length > 0).map(g => {
+              {groups.filter(g => showEmpty || g.items.length > 0).map(g => {
                 const Icon = g.icon;
+                const empty = g.items.length === 0;
                 return (
                   <section key={g.key}>
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
@@ -461,11 +467,19 @@ export const Feed = () => {
                       {g.title}
                       <span className="text-xs font-normal text-muted-foreground/70">({g.items.length})</span>
                     </h2>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {g.items.map((candidate, index) => (
-                        <CandidateCard key={candidate.id} candidate={candidate} index={index} />
-                      ))}
-                    </div>
+                    {empty ? (
+                      <div className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
+                        We don't have {g.title.toLowerCase()} for your area yet.
+                        {g.key === 'local' && ' Local data is being added state-by-state.'}
+                        {g.key === 'state-leg' && ' Try refreshing — the state legislator lookup occasionally times out.'}
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {g.items.map((candidate, index) => (
+                          <CandidateCard key={candidate.id} candidate={candidate} index={index} />
+                        ))}
+                      </div>
+                    )}
                   </section>
                 );
               })}
