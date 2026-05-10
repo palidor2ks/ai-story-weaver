@@ -58,8 +58,7 @@ async function processBatchInBackground(params: {
 }) {
   const { batchSize, delayBetweenCandidates, delayBetweenBatches, maxCandidates, startFromId, visibleStatesOnly, states } = params;
   
-  globalProgress.startTime = Date.now();
-  
+  globalProgress = { processed: 0, successful: 0, failed: 0, total: 0, currentCandidate: '', startTime: Date.now() };
   console.log(`=== BACKGROUND BATCH REGENERATION STARTED ===`);
   console.log(`Parameters: batchSize=${batchSize}, maxCandidates=${maxCandidates || 'unlimited'}`);
 
