@@ -13,6 +13,7 @@ import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { useUpcomingElections } from '@/hooks/useUpcomingElections';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 import { unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
+import { formatRunningForOffice } from '@/lib/officeLabel';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
@@ -571,7 +572,7 @@ export const QuizResults = () => {
                                 confidence: (c.confidence as any) || 'low',
                               };
                               const levelLabel = level === 'federal' ? 'Federal' : level === 'state' ? 'State' : 'Local';
-                              const officeLabel = `${c.office}${c.district ? ` — District ${c.district}` : c.state ? ` (${c.state})` : ''}`;
+                              const officeLabel = formatRunningForOffice(c.office, c.state, c.district);
                               return (
                                 <div key={c.candidate_id} className="space-y-1.5">
                                   <div className="flex flex-wrap items-center gap-2 text-xs">
