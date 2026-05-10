@@ -560,7 +560,7 @@ export const QuizResults = () => {
                                 id: c.candidate_id,
                                 name: c.name,
                                 office: c.office,
-                                party: c.party,
+                                party: (c.party as any) || 'Other',
                                 image_url: c.image_url || '',
                                 overall_score: c.overall_score ?? 0,
                                 level: (level === 'federal' ? 'federal' : level === 'state' ? 'state' : 'local') as OfficeLevelType,
