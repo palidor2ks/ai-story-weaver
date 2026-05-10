@@ -129,85 +129,34 @@ export const QuizResults = () => {
   };
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
-  const shareText = `I just discovered my political profile! My score: ${formatScore(profile?.overall_score)} (${getScoreLabel(profile?.overall_score)}). Find out where you stand on the issues.`;
-
   const inviteUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const inviteText = `I just took the Pulse political alignment quiz — it shows where you really stand on the issues. Take it and see your results:`;
+  const brandHost =
+    typeof window !== 'undefined'
+      ? window.location.host.replace(/^www\./, '')
+      : 'polipulseapp.com';
 
-  const handleCopyLink = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      toast({
-        title: 'Link copied!',
-        description: 'Share it with friends and family.',
-      });
-    } catch (err) {
-      toast({
-        title: 'Failed to copy',
-        description: 'Please copy the URL manually.',
-        variant: 'destructive',
-      });
-    }
-  };
+  const [resultsShareOpen, setResultsShareOpen] = useState(false);
+  const [inviteShareOpen, setInviteShareOpen] = useState(false);
 
-  const handleShareTwitter = (text: string, url: string) => {
-    const shareLink = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
-    window.open(shareLink, '_blank', 'noopener,noreferrer');
-  };
-
-  const handleShareFacebook = (text: string, url: string) => {
-    const shareLink = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`;
-    window.open(shareLink, '_blank', 'noopener,noreferrer');
-  };
-
-  const handleShareLinkedIn = (url: string) => {
-    const shareLink = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`;
-    window.open(shareLink, '_blank', 'noopener,noreferrer');
-  };
-
-  const handleNativeShare = async (title: string, text: string, url: string) => {
-    if (navigator.share) {
-      try {
-        await navigator.share({ title, text, url });
-      } catch (err) {
-        // User cancelled or error
-      }
-    }
-  };
-
-  const supportsNativeShare = typeof navigator !== 'undefined' && 'share' in navigator;
-
-  const renderShareOptions = (text: string, url: string, title: string) => (
-    <>
-      <DropdownMenuItem onClick={() => handleCopyLink(url)} className="cursor-pointer">
-        <Copy className="w-4 h-4 mr-2" />
-        Copy Link
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => handleShareTwitter(text, url)} className="cursor-pointer">
-        <Twitter className="w-4 h-4 mr-2" />
-        Share on X
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => handleShareFacebook(text, url)} className="cursor-pointer">
-        <Facebook className="w-4 h-4 mr-2" />
-        Share on Facebook
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => handleShareLinkedIn(url)} className="cursor-pointer">
-        <Linkedin className="w-4 h-4 mr-2" />
-        Share on LinkedIn
-      </DropdownMenuItem>
-      {supportsNativeShare && (
-        <DropdownMenuItem onClick={() => handleNativeShare(title, text, url)} className="cursor-pointer">
-          <Share2 className="w-4 h-4 mr-2" />
-          More Options...
-        </DropdownMenuItem>
-      )}
-    </>
-  );
+  // Sort topic scores by weight (user's ranking) for the share card
+  const topTopicsForShare = useMemo(() => {
+    return [...userTopicScores]
+      .sort((a, b) => {
+        const aw = userTopics.find(ut => ut.topic_id === a.topic_id)?.weight || 0;
+        const bw = userTopics.find(ut => ut.topic_id === b.topic_id)?.weight || 0;
+        return bw - aw;
+      })
+      .slice(0, 4)
+      .map(ts => ({
+        topicName: ts.topics?.name || ts.topic_id,
+        score: ts.score,
+      }));
+  }, [userTopicScores, userTopics]);
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <main className="container py-8 px-4 max-w-3xl mx-auto">
         {/* Hero Section */}
         <div className="text-center mb-8 animate-fade-in">
@@ -217,38 +166,58 @@ export const QuizResults = () => {
           <p className="text-muted-foreground mb-4">
             Based on your quiz responses and topic priorities
           </p>
-          
-          {/* Share Button */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Share2 className="w-4 h-4" />
-                Share Results
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" className="w-64">
-              <DropdownMenuLabel>What would you like to share?</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-pointer">
-                  <Share2 className="w-4 h-4 mr-2" />
-                  Share my results
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-56">
-                  {renderShareOptions(shareText, shareUrl, 'My Political Profile')}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-pointer">
-                  <Users className="w-4 h-4 mr-2" />
-                  Invite others to take it
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-56">
-                  {renderShareOptions(inviteText, inviteUrl, 'Take the Pulse Quiz')}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            </DropdownMenuContent>
-          </DropdownMenu>
+
+          {/* Share Buttons */}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setResultsShareOpen(true)}
+            >
+              <Share2 className="w-4 h-4" />
+              Share my results
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setInviteShareOpen(true)}
+            >
+              <Users className="w-4 h-4" />
+              Invite others
+            </Button>
+          </div>
+
+          <ShareCardModal
+            open={resultsShareOpen}
+            onOpenChange={setResultsShareOpen}
+            url={shareUrl}
+            data={{
+              kind: 'user-profile',
+              brandHost,
+              userName: profile?.name,
+              userScore: profile?.overall_score ?? null,
+              topTopics: topTopicsForShare,
+            }}
+            caption={{
+              kind: 'user-profile',
+              userName: profile?.name,
+              userScore: profile?.overall_score ?? null,
+              topTopics: topTopicsForShare,
+              url: shareUrl,
+            }}
+          />
+          <ShareCardModal
+            open={inviteShareOpen}
+            onOpenChange={setInviteShareOpen}
+            url={inviteUrl}
+            data={{
+              kind: 'invite',
+              brandHost,
+            }}
+            caption={{ kind: 'invite', url: inviteUrl }}
+          />
         </div>
 
         {/* Overall Score Card */}
