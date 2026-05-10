@@ -570,12 +570,22 @@ export const QuizResults = () => {
                                 coverage_tier: (c.coverage_tier as any) || 'tier_3',
                                 confidence: (c.confidence as any) || 'low',
                               };
+                              const levelLabel = level === 'federal' ? 'Federal' : level === 'state' ? 'State' : 'Local';
+                              const officeLabel = `${c.office}${c.district ? ` — District ${c.district}` : c.state ? ` (${c.state})` : ''}`;
                               return (
-                                <RepresentativeComparisonCard
-                                  key={c.candidate_id}
-                                  official={official}
-                                  resolvedScore={getResolvedScore(c.candidate_id, c.overall_score)}
-                                />
+                                <div key={c.candidate_id} className="space-y-1.5">
+                                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    <Badge variant="secondary" className="gap-1">
+                                      <Vote className="w-3 h-3" />
+                                      Running for {officeLabel}
+                                    </Badge>
+                                    <Badge variant="outline">{levelLabel}</Badge>
+                                  </div>
+                                  <RepresentativeComparisonCard
+                                    official={official}
+                                    resolvedScore={getResolvedScore(c.candidate_id, c.overall_score)}
+                                  />
+                                </div>
                               );
                             })}
                           </div>
