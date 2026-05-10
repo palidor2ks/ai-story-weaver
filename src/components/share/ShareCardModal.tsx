@@ -47,8 +47,44 @@ interface ShareCardModalProps {
   triggerLabel?: string;
 }
 
-// Preview scale: each card is 1080px; show at ~280-300px in grid
-const PREVIEW_SCALE = 0.27;
+/**
+ * Renders a 1080×1080 card scaled to fit its parent (a square container).
+ * Uses ResizeObserver so the preview always fills the tile cleanly without
+ * clipping or empty borders.
+ */
+const CardThumb = ({ children }: { children: React.ReactNode }) => {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.2);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const e of entries) {
+        const w = e.contentRect.width;
+        if (w > 0) setScale(w / CARD_SIZE);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={wrapRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+      <div
+        style={{
+          width: CARD_SIZE,
+          height: CARD_SIZE,
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
+
 
 export const ShareCardModal = ({
   open,
