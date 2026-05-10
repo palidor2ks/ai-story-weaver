@@ -7,9 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Check, Copy, Download, Facebook, Linkedin, Loader2, RotateCcw, Share2, Twitter } from 'lucide-react';
 import { toast } from 'sonner';
 import { BoldCard } from './templates/BoldCard';
-import { MinimalCard } from './templates/MinimalCard';
 import { DataCard } from './templates/DataCard';
-import { EditorialCard } from './templates/EditorialCard';
 import { CardData, CARD_SIZE } from './templates/types';
 import { copyNodeToClipboard, downloadNode, nodeToFile } from '@/lib/shareImage';
 import {
@@ -31,9 +29,7 @@ import { trackEvent } from '@/lib/analytics';
 
 const TEMPLATES = [
   { id: 'bold', label: 'Bold', Component: BoldCard },
-  { id: 'minimal', label: 'Minimal', Component: MinimalCard },
   { id: 'data', label: 'Data', Component: DataCard },
-  { id: 'editorial', label: 'Editorial', Component: EditorialCard },
 ] as const;
 
 type TemplateId = typeof TEMPLATES[number]['id'];
@@ -97,9 +93,7 @@ export const ShareCardModal = ({
   const [busy, setBusy] = useState<null | 'download' | 'copy' | 'native'>(null);
   const refs = useRef<Record<TemplateId, HTMLDivElement | null>>({
     bold: null,
-    minimal: null,
     data: null,
-    editorial: null,
   });
 
   const defaultBody = useMemo(() => generateShortCaption(caption), [caption]);
