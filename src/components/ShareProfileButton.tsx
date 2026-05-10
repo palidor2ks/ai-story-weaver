@@ -61,6 +61,7 @@ export const ShareProfileButton = ({
           disagreements,
         }}
         caption={{
+          surface: 'candidate_profile',
           kind: 'candidate-alignment',
           candidateName,
           candidateOffice,
