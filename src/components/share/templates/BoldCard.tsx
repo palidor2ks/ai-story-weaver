@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { CardData, CARD_SIZE, formatScoreSafe, labelSafe } from './types';
+import { PulseMark } from './PulseMark';
 
 interface Props {
   data: CardData;
@@ -68,23 +69,8 @@ export const BoldCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
 
       {/* Top: brand */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative' }}>
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 16,
-            background: 'rgba(255,255,255,0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 800,
-            fontSize: 32,
-            letterSpacing: -1,
-          }}
-        >
-          P
-        </div>
-        <div style={{ fontWeight: 700, fontSize: 28, letterSpacing: -0.5 }}>Pulse</div>
+        <PulseMark size={72} framed frameColor="rgba(255,255,255,0.18)" />
+        <div style={{ fontWeight: 700, fontSize: 32, letterSpacing: -0.5 }}>Pulse</div>
       </div>
 
       {/* Center: huge glyph */}
