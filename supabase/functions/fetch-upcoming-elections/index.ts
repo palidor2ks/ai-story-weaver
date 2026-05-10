@@ -467,6 +467,23 @@ async function persistCandidates(
   newCandidateMeta: Map<string, CandidatePayload>,
 ) {
   for (const c of candidates) {
+    // If c.id looks like an FEC candidate id (e.g. S4NJ00185, H8NJ04036, P00012345)
+    // and we already have a canonical row (bioguide-id keyed) with that fec_candidate_id,
+    // re-point to the canonical id to avoid creating a duplicate candidate row.
+    const looksLikeFecId = /^[HSP]\d[A-Z]{2}\d+$/.test(c.id);
+    const fecLookup = c.fec_candidate_id || (looksLikeFecId ? c.id : null);
+    if (fecLookup) {
+      const { data: byFec } = await supabase
+        .from('candidates')
+        .select('id')
+        .eq('fec_candidate_id', fecLookup)
+        .maybeSingle();
+      if (byFec && byFec.id !== c.id) {
+        console.log(`[persist] collapsing FEC id ${c.id} → existing canonical ${byFec.id}`);
+        c.id = byFec.id;
+      }
+    }
+
     // Check if candidate exists.
     const { data: existing } = await supabase
       .from('candidates')
