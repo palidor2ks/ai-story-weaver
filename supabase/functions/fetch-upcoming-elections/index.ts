@@ -466,10 +466,33 @@ async function persistCandidates(
   newCandidateIds: string[],
   newCandidateMeta: Map<string, CandidatePayload>,
 ) {
+  // Normalization helpers — mirror the Postgres `_candidate_*` functions.
+  const nameKey = (s: string) =>
+    (s || '')
+      .toLowerCase()
+      .replace(/[,.]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' ')
+      .filter((t) => t && !['jr', 'sr', 'ii', 'iii', 'iv', 'mr', 'mrs', 'ms', 'dr'].includes(t))
+      .sort()
+      .join(' ');
+  const officeClass = (o: string) => {
+    const x = (o || '').toLowerCase();
+    if (/senator|u\.s\. senate|us senate/.test(x)) return 'senate';
+    if (/representative|u\.s\. house|us house|congress/.test(x)) return 'house';
+    if (/president/.test(x)) return 'president';
+    if (/governor/.test(x)) return 'governor';
+    return x || 'other';
+  };
+  const districtKey = (d?: string | null) => {
+    if (!d) return null;
+    const t = String(d).replace(/^0+/, '');
+    return t || '0';
+  };
+
   for (const c of candidates) {
-    // If c.id looks like an FEC candidate id (e.g. S4NJ00185, H8NJ04036, P00012345)
-    // and we already have a canonical row (bioguide-id keyed) with that fec_candidate_id,
-    // re-point to the canonical id to avoid creating a duplicate candidate row.
+    // 1) Try collapsing by FEC candidate id.
     const looksLikeFecId = /^[HSP]\d[A-Z]{2}\d+$/.test(c.id);
     const fecLookup = c.fec_candidate_id || (looksLikeFecId ? c.id : null);
     if (fecLookup) {
@@ -479,12 +502,35 @@ async function persistCandidates(
         .eq('fec_candidate_id', fecLookup)
         .maybeSingle();
       if (byFec && byFec.id !== c.id) {
-        console.log(`[persist] collapsing FEC id ${c.id} → existing canonical ${byFec.id}`);
+        console.log(`[persist] collapsing FEC id ${c.id} → canonical ${byFec.id}`);
         c.id = byFec.id;
       }
     }
 
-    // Check if candidate exists.
+    // 2) Fallback: collapse by normalized (name, state, office class, district).
+    {
+      const targetKey = nameKey(c.name);
+      const targetClass = officeClass(c.office);
+      const targetDist = districtKey(c.district);
+      const { data: candidatesInState } = await supabase
+        .from('candidates')
+        .select('id, name, office, district')
+        .eq('state', c.state || 'US');
+      const match = (candidatesInState || []).find((row: any) => {
+        if (row.id === c.id) return false;
+        if (nameKey(row.name) !== targetKey) return false;
+        if (officeClass(row.office) !== targetClass) return false;
+        const rd = districtKey(row.district);
+        if (rd && targetDist && rd !== targetDist) return false;
+        return true;
+      });
+      if (match) {
+        console.log(`[persist] collapsing ${c.id} → existing ${match.id} by name+state+office`);
+        c.id = match.id;
+      }
+    }
+
+    // 3) Check if candidate exists.
     const { data: existing } = await supabase
       .from('candidates')
       .select('id, answers_source')
@@ -510,7 +556,9 @@ async function persistCandidates(
       };
       const { error: insErr } = await supabase.from('candidates').insert(insertRow);
       if (insErr) {
-        console.warn('[persist] candidate insert failed', c.id, insErr.message);
+        // The DB-level prevent_duplicate_candidate trigger will block name/state/office
+        // collisions even if the lookup above missed them — log and skip.
+        console.warn('[persist] candidate insert blocked/failed', c.id, insErr.message);
       } else {
         newCandidateIds.push(c.id);
         newCandidateMeta.set(c.id, c);
