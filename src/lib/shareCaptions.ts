@@ -31,10 +31,16 @@ export interface InviteCaptionInput {
   url: string;
 }
 
-export type CaptionInput =
+export type ShareSurface =
+  | 'quiz_results'
+  | 'quiz_results_invite'
+  | 'candidate_profile';
+
+export type CaptionInput = (
   | CandidateAlignmentCaptionInput
   | UserProfileCaptionInput
-  | InviteCaptionInput;
+  | InviteCaptionInput
+) & { surface?: ShareSurface };
 
 export function getDefaultHashtags(input: CaptionInput): string {
   if (input.kind === 'invite') return '#Pulse';
