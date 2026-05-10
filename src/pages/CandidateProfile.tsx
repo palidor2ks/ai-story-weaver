@@ -46,7 +46,10 @@ export const CandidateProfile = () => {
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
   const { data: scoreMap } = useCandidateScoreMap(id ? [id] : undefined);
-  const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id);
+  const { data: cycleInfo } = useAvailableCycles(id);
+  const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
+  const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
+  const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
   const { data: votes = [] } = useCandidateVotes(id);
   const { data: representativeDetails } = useRepresentativeDetails(id);
   const { data: adminData } = useAdminRole();
@@ -56,9 +59,9 @@ export const CandidateProfile = () => {
   
   // Get FEC committee ID from first donor record or we'll pass null
   const committeeId = donors[0]?.recipient_committee_id ?? null;
-  const { data: fecTotals } = useFECTotals(committeeId);
-  const { data: financeReconciliation } = useFinanceReconciliation(id);
-  const { data: committeeRollups = [] } = useCommitteeRollups(id);
+  const { data: fecTotals } = useFECTotals(committeeId, effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : '2024');
+  const { data: financeReconciliation } = useFinanceReconciliation(id, effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : undefined);
+  const { data: committeeRollups = [] } = useCommitteeRollups(id, effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : undefined);
   
   // Fetch bills sponsored/cosponsored by this legislator
   const { data: sponsoredBills = [], isLoading: billsLoading } = useBillSponsors(id);
