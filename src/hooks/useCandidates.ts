@@ -343,17 +343,21 @@ export interface DonorWithCanonical extends Donor {
   name_variations?: string[];
 }
 
-export const useCandidateDonors = (candidateId: string | undefined) => {
+export const useCandidateDonors = (candidateId: string | undefined, cycle?: string) => {
   return useQuery({
-    queryKey: ['donors', candidateId],
+    queryKey: ['donors', candidateId, cycle ?? 'all'],
     queryFn: async () => {
       if (!candidateId) return [];
       
       // First get raw donors
-      const { data: rawDonors, error: donorError } = await supabase
+      let donorsQuery = supabase
         .from('donors')
         .select('*')
-        .eq('candidate_id', candidateId)
+        .eq('candidate_id', candidateId);
+      if (cycle && cycle !== 'all') {
+        donorsQuery = donorsQuery.eq('cycle', cycle);
+      }
+      const { data: rawDonors, error: donorError } = await donorsQuery
         .order('amount', { ascending: false })
         .limit(10000);
       
