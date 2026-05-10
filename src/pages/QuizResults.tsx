@@ -13,11 +13,10 @@ import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { useUpcomingElections } from '@/hooks/useUpcomingElections';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 import { unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
-import { Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
-import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Building2, MapPin } from 'lucide-react';
+import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Building2, MapPin, Calendar, Vote } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ProfileAnalysis {
