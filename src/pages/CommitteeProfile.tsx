@@ -115,20 +115,31 @@ export const CommitteeProfile = () => {
                 
                 {/* Admin Sync Button */}
                 {isAdmin && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSyncDonors}
-                    disabled={fetchDonorsMutation.isPending}
-                    className="ml-2"
-                  >
-                    {fetchDonorsMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                    )}
-                    Sync Donors
-                  </Button>
+                  <div className="ml-2 flex items-center gap-2">
+                    <Select value={effectiveCycle ?? ''} onValueChange={setSelectedCycle}>
+                      <SelectTrigger className="h-8 w-[130px]">
+                        <SelectValue placeholder="Cycle" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCycles.map((cy) => (
+                          <SelectItem key={cy} value={cy}>{cy} Cycle</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSyncDonors}
+                      disabled={fetchDonorsMutation.isPending}
+                    >
+                      {fetchDonorsMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                      )}
+                      Sync Donors
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
