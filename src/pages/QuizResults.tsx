@@ -201,6 +201,7 @@ export const QuizResults = () => {
               topTopics: topTopicsForShare,
             }}
             caption={{
+              surface: 'quiz_results',
               kind: 'user-profile',
               userName: profile?.name,
               userScore: profile?.overall_score ?? null,
@@ -216,7 +217,7 @@ export const QuizResults = () => {
               kind: 'invite',
               brandHost,
             }}
-            caption={{ kind: 'invite', url: inviteUrl }}
+            caption={{ kind: 'invite', url: inviteUrl, surface: 'quiz_results_invite' }}
           />
         </div>
 

@@ -27,6 +27,7 @@ import {
   twitterIntent,
 } from '@/lib/shareIntents';
 import { cn } from '@/lib/utils';
+import { trackEvent } from '@/lib/analytics';
 
 const TEMPLATES = [
   { id: 'bold', label: 'Bold', Component: BoldCard },
@@ -70,14 +71,33 @@ export const ShareCardModal = ({
 
   const [body, setBody] = useState(defaultBody);
   const [includeHashtags, setIncludeHashtags] = useState(true);
+  const editedFiredRef = useRef(false);
+  const surface = caption.surface;
 
   // Reset when the modal opens with new content
   useEffect(() => {
     if (open) {
       setBody(defaultBody);
       setIncludeHashtags(true);
+      editedFiredRef.current = false;
+      trackEvent('share_modal_opened', {
+        surface,
+        kind: caption.kind,
+        templateDefault: 'bold',
+      });
     }
-  }, [open, defaultBody]);
+  }, [open, defaultBody, surface, caption.kind]);
+
+  // Fire once per session when caption first diverges from the suggestion
+  useEffect(() => {
+    if (!open || editedFiredRef.current) return;
+    if (body.trim() !== defaultBody.trim()) {
+      editedFiredRef.current = true;
+      trackEvent('share_caption_edited', { surface, kind: caption.kind, template: selected });
+    }
+    // selected intentionally omitted from deps — we only watch body changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [body, defaultBody, open]);
 
   const finalText = useMemo(
     () => composeFinalText(body, defaultHashtags, includeHashtags),
@@ -111,10 +131,20 @@ export const ShareCardModal = ({
 
   const getNode = () => refs.current[selected];
 
+  const baseProps = () => ({
+    surface,
+    kind: caption.kind,
+    template: selected,
+    includeHashtags,
+    edited: isEdited,
+    charCount,
+  });
+
   const handleDownload = async () => {
     const node = getNode();
     if (!node) return;
     setBusy('download');
+    trackEvent('share_action', { ...baseProps(), action: 'download', destination: 'file' });
     try {
       await downloadNode(node, filename);
       toast.success('Image downloaded — attach it to your post.');
@@ -130,6 +160,7 @@ export const ShareCardModal = ({
     const node = getNode();
     if (!node) return;
     setBusy('copy');
+    trackEvent('share_action', { ...baseProps(), action: 'copy_image', destination: 'clipboard' });
     try {
       const ok = await copyNodeToClipboard(node);
       if (ok) {
@@ -147,6 +178,7 @@ export const ShareCardModal = ({
   };
 
   const handleCopyCaption = async () => {
+    trackEvent('share_action', { ...baseProps(), action: 'copy_caption', destination: 'clipboard' });
     try {
       await navigator.clipboard.writeText(finalText);
       toast.success('Caption copied to clipboard.');
@@ -159,6 +191,7 @@ export const ShareCardModal = ({
     const node = getNode();
     if (!node) return;
     setBusy('native');
+    trackEvent('share_action', { ...baseProps(), action: 'native', destination: 'native' });
     try {
       let files: File[] | undefined;
       try {
@@ -178,6 +211,14 @@ export const ShareCardModal = ({
     }
   };
 
+  const handleOpenIntent = (destination: 'twitter' | 'facebook' | 'linkedin', href: string) => {
+    trackEvent('share_action', {
+      ...baseProps(),
+      action: 'open_intent',
+      destination,
+    });
+    openIntent(href);
+  };
   const SelectedComponent = TEMPLATES.find(t => t.id === selected)!.Component;
 
   return (
@@ -196,7 +237,17 @@ export const ShareCardModal = ({
             <button
               key={id}
               type="button"
-              onClick={() => setSelected(id)}
+              onClick={() => {
+                setSelected(id);
+                if (id !== selected) {
+                  trackEvent('share_template_selected', {
+                    surface,
+                    kind: caption.kind,
+                    template: id,
+                    previous: selected,
+                  });
+                }
+              }}
               className={cn(
                 'group relative rounded-xl overflow-hidden border-2 transition-all bg-muted',
                 selected === id
@@ -315,7 +366,15 @@ export const ShareCardModal = ({
               <Switch
                 id="hashtags-toggle"
                 checked={includeHashtags}
-                onCheckedChange={setIncludeHashtags}
+                onCheckedChange={(v) => {
+                  setIncludeHashtags(v);
+                  trackEvent('share_hashtags_toggled', {
+                    surface,
+                    kind: caption.kind,
+                    template: selected,
+                    enabled: v,
+                  });
+                }}
               />
               <Label htmlFor="hashtags-toggle" className="text-sm cursor-pointer">
                 Include suggested hashtags
@@ -357,7 +416,7 @@ export const ShareCardModal = ({
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            onClick={() => openIntent(twitterIntent(finalText, url))}
+            onClick={() => handleOpenIntent('twitter', twitterIntent(finalText, url))}
             className="gap-2"
           >
             <Twitter className="w-4 h-4" />
@@ -365,7 +424,7 @@ export const ShareCardModal = ({
           </Button>
           <Button
             variant="outline"
-            onClick={() => openIntent(facebookIntent(url, finalText))}
+            onClick={() => handleOpenIntent('facebook', facebookIntent(url, finalText))}
             className="gap-2"
           >
             <Facebook className="w-4 h-4" />
@@ -373,7 +432,7 @@ export const ShareCardModal = ({
           </Button>
           <Button
             variant="outline"
-            onClick={() => openIntent(linkedinIntent(url))}
+            onClick={() => handleOpenIntent('linkedin', linkedinIntent(url))}
             className="gap-2"
           >
             <Linkedin className="w-4 h-4" />

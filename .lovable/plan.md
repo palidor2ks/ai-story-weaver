@@ -1,29 +1,42 @@
-## Why Trump's photo is missing
+## Goal
+Emit lightweight analytics events from the share flow so you can measure which templates, actions, and social destinations drive shares.
 
-On the Results page, Trump appears under **Federal Executive**, which is built by the `fetch-civic-officials` edge function from the GitHub `unitedstates/congress-legislators` dataset.
+## Approach
+No analytics provider is wired up yet, so add a tiny abstraction we can later point at PostHog/GA without touching components.
 
-Two things combine to break the image:
+### 1. New file: `src/lib/analytics.ts`
+- Export `trackEvent(name: string, props?: Record<string, unknown>)`.
+- Implementation: push to `window.dataLayer` if present (GA/GTM-friendly), call `window.posthog?.capture` if present, and always `console.debug('[analytics]', name, props)` in dev. Safe no-op otherwise.
+- Define a `ShareEvent` union of names so call sites stay consistent:
+  - `share_modal_opened`
+  - `share_template_selected`
+  - `share_caption_edited` (fired once per modal session when user first edits)
+  - `share_hashtags_toggled`
+  - `share_action` (action: `copy_caption | copy_image | download | native | open_intent`, destination: `twitter | facebook | linkedin | native | clipboard | file`)
 
-1. In `fetchFederalExecutiveFromGitHub` (lines ~210–235), Trump has a `bioguide` id, so `image_url` is set to:
-   `https://bioguide.congress.gov/bioguide/photo/T/T000457.jpg`
-   That URL now returns **HTTP 403** (verified just now). Same for VP `V000137`.
-2. The unified DB image-url resolver later in the function tries to override this with the real photo we store in `candidates` / `candidate_overrides` (`https://www.whitehouse.gov/.../President-Donald-Trump-Official-Presidential-Portrait...jpg`, which loads fine, 200). But it matches by **id**, and the GitHub feed returns Trump as `T000457` while the DB row is FEC id `P80001571` — so no match. The name-based fallback only runs for officials whose `image_url` is empty, and Trump's isn't empty (it's the broken bioguide URL), so the fallback skips him too.
+### 2. Wire events in `src/components/share/ShareCardModal.tsx`
+- On `open` transition to true → `share_modal_opened` with `{ surface: caption.surface, templateDefault: 'bold' }`.
+  - Add an optional `surface` field to `CaptionInput` (e.g. `'quiz_results' | 'candidate_profile'`) passed by the two existing call sites (`QuizResults.tsx`, `CandidateProfile.tsx`).
+- When `setSelected` runs from a template tile click → `share_template_selected` with `{ template, surface }`.
+- First time `body` diverges from `defaultBody` in a session → `share_caption_edited` (guard with a ref so it fires once).
+- On hashtag switch → `share_hashtags_toggled` with `{ enabled }`.
+- Copy caption button → `share_action` `{ action: 'copy_caption', destination: 'clipboard', template, surface, includeHashtags, charCount, edited: isEdited }`.
+- Copy image button → `share_action` `{ action: 'copy_image', destination: 'clipboard', template, surface }`.
+- Download button → `share_action` `{ action: 'download', destination: 'file', template, surface }`.
+- Native share button → `share_action` `{ action: 'native', destination: 'native', template, surface }`.
+- Twitter / Facebook / LinkedIn buttons → `share_action` `{ action: 'open_intent', destination: 'twitter'|'facebook'|'linkedin', template, surface, includeHashtags, edited }`.
 
-Result: the President/VP cards on Results render with the broken 403 URL and fall back to the colored initials avatar.
-
-The single-candidate `/candidate/P80001571` page is unaffected (it pulls directly from `candidates`/`candidate_overrides`, which still has the working White House URL).
-
-## Plan
-
-Edit `supabase/functions/fetch-civic-officials/index.ts` in the unified image-url resolver only (no DB changes, no client changes):
-
-1. **Always run the name+office fallback for federal executives**, not only when `image_url` is empty. Concretely, change the "stillMissing" filter so it also includes officials with `level === 'federal_executive'` whose current `image_url` points to `bioguide.congress.gov` (since that host is returning 403). For those, look up `candidates`/`candidate_overrides` by normalized name + office and replace with the stored URL.
-2. As a small safety net, if after both passes a `federal_executive` still has a `bioguide.congress.gov` URL, clear it to empty string so the frontend's `OfficialAvatar` renders the party-colored initials fallback instead of a broken image.
-
-That is enough to restore Trump's official White House portrait on `/results` (and on `/profile`, which uses the same data path) the next time the function's cached response expires (1-hour staleTime).
+### 3. Surface tagging (small touch in two existing pages)
+- `src/pages/QuizResults.tsx`: pass `surface: 'quiz_results'` into the `caption` prop.
+- `src/pages/CandidateProfile.tsx`: pass `surface: 'candidate_profile'`.
 
 ## Out of scope
+- Choosing/installing an analytics SDK (PostHog/GA/Mixpanel). The `trackEvent` shim makes it a one-line swap later.
+- Server-side logging or persistence.
+- Events outside the share flow.
 
-- Updating the photo on the standalone `/candidate/...` page (already correct).
-- Reworking the share-card flow.
-- Refreshing photo URLs in the database.
+## Files touched
+- add `src/lib/analytics.ts`
+- edit `src/components/share/ShareCardModal.tsx`
+- edit `src/lib/shareCaptions.ts` (extend `CaptionInput` with optional `surface`)
+- edit `src/pages/QuizResults.tsx`, `src/pages/CandidateProfile.tsx` (pass `surface`)
