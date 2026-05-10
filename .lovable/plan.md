@@ -1,19 +1,7 @@
-## Refresh Elections Button
+Root cause found: the edge function is querying the wrong FEC base URL (`api.data.gov/fec/...`), which returns 404. The code catches that failure and silently converts it to an empty result, so refresh says it ran but persists nothing. Google Civic also often returns no ballot contests until close to an election, so FEC is the important source for midterms.
 
-Add a refresh button to the `UpcomingElectionsCard` header that re-runs the upcoming-elections fetch and bypasses the 24h server cache.
-
-### Changes
-
-1. **Edge function `fetch-upcoming-elections`** — accept optional `force: boolean` in the request body. When `true`, skip the `cached`/`CACHE_TTL_HOURS` check and always re-fetch from FEC + Google Civic, then upsert.
-
-2. **Hook `useUpcomingElections`** — expose a `refresh()` helper that:
-   - Invokes the function with `{ force: true }` (single ad-hoc invoke, not via React Query's `queryFn`).
-   - On success, calls `queryClient.invalidateQueries(['upcoming-elections', ...])` so the UI re-reads fresh data and resumes its normal polling.
-   - Tracks an `isRefreshing` boolean for the button spinner.
-
-3. **`UpcomingElectionsCard`** — add a small ghost icon button (`RefreshCw` from lucide) in the `CardHeader` next to the title. Disabled while `isRefreshing` or `isLoading`; spins while refreshing. Shows a toast (success/error) using the existing `useToast` hook.
-
-### Out of scope
-
-- Admin-wide cron pre-warm button (separate `sync-upcoming-elections` function already exists).
-- Changing the 24h TTL itself.
+Plan:
+1. Update `fetch-upcoming-elections` to use the working FEC API endpoint: `https://api.open.fec.gov/v1/candidates/search/`.
+2. Add explicit FEC response logging for non-OK responses so future 404/401/rate-limit/API-key issues are visible in edge logs instead of silently becoming `0` rows.
+3. Keep the existing Refresh button and `force: true` behavior unchanged.
+4. Validate by calling `fetch-upcoming-elections` for NJ-06 with `force: true` and confirming rows are persisted into `elections` / `election_candidates`.

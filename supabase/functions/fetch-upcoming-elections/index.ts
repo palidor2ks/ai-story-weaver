@@ -107,30 +107,37 @@ async function fetchFEC(state: string, district: string | null): Promise<Electio
   for (const cycle of cycles) {
     // House (only if we know district), Senate, President in parallel.
     const calls: Array<Promise<{ office: string; data: any }>> = [];
-    const base = 'https://api.data.gov/fec/v1/candidates/search';
-    const common = `api_key=${FEC_API_KEY}&candidate_status=C&per_page=100&cycle=${cycle}`;
+    const base = 'https://api.open.fec.gov/v1/candidates/search/';
+    const common = `api_key=${FEC_API_KEY}&candidate_status=C&per_page=100&election_year=${cycle}`;
+
+    const fecFetch = async (office: string, url: string) => {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) {
+          const body = await r.text().catch(() => '');
+          console.warn('[FEC] non-OK', { office, cycle, status: r.status, body: body.slice(0, 300) });
+          return { office, data: { results: [] } };
+        }
+        const data = await r.json();
+        return { office, data };
+      } catch (e) {
+        console.warn('[FEC] fetch error', { office, cycle, error: String(e) });
+        return { office, data: { results: [] } };
+      }
+    };
 
     if (district) {
       const dist = district.replace(/^\D+/, '').padStart(2, '0');
-      calls.push(
-        fetch(`${base}?${common}&office=H&state=${state}&district=${dist}`)
-          .then(r => r.json()).then(data => ({ office: 'H', data })).catch(() => ({ office: 'H', data: { results: [] } })),
-      );
+      calls.push(fecFetch('H', `${base}?${common}&office=H&state=${state}&district=${dist}`));
     }
-    calls.push(
-      fetch(`${base}?${common}&office=S&state=${state}`)
-        .then(r => r.json()).then(data => ({ office: 'S', data })).catch(() => ({ office: 'S', data: { results: [] } })),
-    );
-    calls.push(
-      fetch(`${base}?${common}&office=P`)
-        .then(r => r.json()).then(data => ({ office: 'P', data })).catch(() => ({ office: 'P', data: { results: [] } })),
-    );
+    calls.push(fecFetch('S', `${base}?${common}&office=S&state=${state}`));
+    calls.push(fecFetch('P', `${base}?${common}&office=P`));
 
     const settled = await Promise.all(calls);
 
     // Group into a single "general" + "primary" placeholder; FEC doesn't give us exact dates.
     // Use Nov first Tuesday of cycle year for general.
-    const generalDate = firstTuesdayAfterFirstMonday(parseInt(cycle), 10); // Nov
+    const generalDate = firstTuesdayAfterFirstMonday(parseInt(cycle), 11); // November
 
     for (const { office, data } of settled) {
       const officeLabel = office === 'H' ? `U.S. House ${state}-${district ?? ''}` : office === 'S' ? `U.S. Senate (${state})` : 'President of the United States';
@@ -383,40 +390,42 @@ async function persistAll(supabase: any, rows: ElectionPayload[]) {
   const newCandidateMeta = new Map<string, CandidatePayload>();
 
   for (const row of rows) {
-    // Upsert election.
-    const { data: el, error: elErr } = await supabase
+    // Manual upsert (the unique index uses COALESCE expressions, which PostgREST
+    // onConflict cannot target). Look up by canonical keys; insert if missing.
+    let electionId: string | null = null;
+    const lookup = await supabase
       .from('elections')
-      .upsert({
-        election_date: row.election_date,
-        election_type: row.election_type,
-        level: row.level,
-        state: row.state,
-        jurisdiction: row.jurisdiction,
-        name: row.name,
-        source: row.source,
-        source_ref: row.source_ref ?? null,
-      }, { onConflict: 'source,source_ref,election_date,jurisdiction,state', ignoreDuplicates: false })
       .select('id')
+      .eq('source', row.source)
+      .eq('election_date', row.election_date)
+      .eq('source_ref', row.source_ref ?? '')
       .maybeSingle();
 
-    if (elErr || !el) {
-      // Conflict-without-returning workaround: re-select.
-      const { data: existing } = await supabase
+    if (lookup.data?.id) {
+      electionId = lookup.data.id;
+    } else {
+      const { data: inserted, error: insErr } = await supabase
         .from('elections')
+        .insert({
+          election_date: row.election_date,
+          election_type: row.election_type,
+          level: row.level,
+          state: row.state,
+          jurisdiction: row.jurisdiction,
+          name: row.name,
+          source: row.source,
+          source_ref: row.source_ref ?? null,
+        })
         .select('id')
-        .eq('source', row.source)
-        .eq('election_date', row.election_date)
-        .eq('source_ref', row.source_ref ?? '')
         .maybeSingle();
-      if (!existing) {
-        console.warn('[persist] failed to upsert election', elErr);
+      if (insErr || !inserted) {
+        console.warn('[persist] failed to insert election', row.source, row.source_ref, insErr?.message);
         continue;
       }
-      await persistCandidates(supabase, existing.id, row.candidates, newCandidateIds, newCandidateMeta);
-      continue;
+      electionId = inserted.id;
     }
 
-    await persistCandidates(supabase, el.id, row.candidates, newCandidateIds, newCandidateMeta);
+    await persistCandidates(supabase, electionId, row.candidates, newCandidateIds, newCandidateMeta);
   }
 
   // Kick off background research for up to MAX_RESEARCH_PER_RUN new candidates.
