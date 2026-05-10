@@ -5,7 +5,7 @@ import { ScoreText } from '@/components/ScoreText';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { useProfile, useUserTopicScores, useUserTopics } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial, OfficeLevelType } from '@/hooks/useCivicOfficials';
@@ -14,7 +14,7 @@ import { RepresentativeComparisonCard } from '@/components/RepresentativeCompari
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
-import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Copy, Twitter, Facebook, Linkedin, Building2, MapPin } from 'lucide-react';
+import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Building2, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ProfileAnalysis {
