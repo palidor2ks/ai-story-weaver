@@ -53,6 +53,7 @@ import { FinanceCategoryBreakdown } from "@/components/admin/FinanceCategoryBrea
 import { CandidateHealthBadge } from "@/components/admin/CandidateHealthBadge";
 import { CandidateEditDialog } from "@/components/admin/CandidateEditDialog";
 import { CandidateAnswersDialog } from "@/components/admin/CandidateAnswersDialog";
+import { BackfillAnswersControl } from "@/components/admin/BackfillAnswersControl";
 import { ColumnHeaderFilter } from "@/components/admin/ColumnHeaderFilter";
 import { ProcessingStatusIndicator } from "@/components/admin/ProcessingStatusIndicator";
 import { ScoreTextInline } from "@/components/ScoreText";
