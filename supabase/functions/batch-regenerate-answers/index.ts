@@ -296,7 +296,11 @@ async function processBatchInBackground(params: {
     const elapsedTime = Date.now() - globalProgress.startTime;
     const elapsedMinutes = Math.round(elapsedTime / 60000 * 10) / 10;
 
-    console.log(`\n=== BATCH REGENERATION COMPLETE ===`);
+    if (cancelled) {
+      console.log(`\n=== BATCH REGENERATION CANCELLED ===`);
+      await writeProgress('cancelled', { elapsedMinutes, completedAt: new Date().toISOString() });
+    } else {
+      console.log(`\n=== BATCH REGENERATION COMPLETE ===`);
     console.log(`Total processed: ${globalProgress.processed}`);
     console.log(`Successful: ${globalProgress.successful}`);
     console.log(`Failed: ${globalProgress.failed}`);
