@@ -1,60 +1,34 @@
-# Add Election Cycle Filter
+## Problem
 
-The "2024 Cycle" label on the candidate profile is hardcoded and there's no way to view 2026, 2022, or other cycles. Several hooks default to `'2024'` even though donor + committee data already exist for multiple cycles. This plan adds a cycle picker everywhere it matters and threads the selection through the data layer.
+On `/candidate/:id`, switching the cycle dropdown does change the donors list, but the **FEC Total Receipts** card and the **FEC Contribution Breakdown** don't reliably change. Two bugs:
 
-## Where the picker should appear
+1. `useFinanceReconciliation`, `useFECTotals`, and `useCommitteeRollups` are called with `effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : undefined`. When the user picks **"All cycles"**, that resolves to `undefined`, and each hook then silently falls back to its hard-coded `'2024'` default. So "All cycles" actually shows 2024 numbers — confusing and wrong.
+2. On first paint, `effectiveCycle` is `undefined` until `useAvailableCycles` resolves, so the very first reconciliation/totals fetch goes out for `2024` even when the default cycle will end up being `2026`. The donors list later refetches for `2026`, but a stale 2024 reconciliation row can stick in the UI until the second fetch lands (and on candidates with no 2024 row, the breakdown disappears entirely).
 
-1. **Candidate profile → Campaign Contributions card** (replaces the static "2024 Cycle" label, `src/pages/CandidateProfile.tsx:443`). Picker also drives:
-   - Donor list (`useCandidateDonors`)
-   - Finance summary card (`FinanceSummaryCard` / `useFinanceReconciliation`)
-   - Committee rollups (`useCommitteeRollups`)
-   - Refresh Donors button (currently fixed to 2024 in `useFECIntegration.fetchFECDonorsComplete`)
-2. **Committee profile** (`src/pages/CommitteeProfile.tsx:42`, `:100`) — picker next to "Refresh Donors", defaulting to most recent cycle the committee participated in.
-3. Pages that already have one (`Donors`, `Committees`, `DonorProfile`) — leave behavior, but make sure the default cycle list comes from the same shared helper so the most recent cycle (2026) is selected by default instead of 2024.
+## Fix
 
-## Cycle source of truth
+Frontend-only. No DB or edge-function changes.
 
-Add a small helper hook `useAvailableCycles(candidateId)` that returns the union of:
-- distinct `cycle` values in `donors` for the candidate
-- entries in `candidate_committees.cycles[]`
-- a baseline of the current + previous federal cycle (2026, 2024) so the picker is never empty for new candidates
+### `src/pages/CandidateProfile.tsx`
 
-Sorted desc, plus an `"all"` entry. Default selection = highest available cycle (so a 2026 House candidate like the one in the screenshot lands on 2026, not 2024).
+- Don't fire the finance hooks until `cycleInfo` is loaded — gate them on `effectiveCycle` being defined.
+- For the **"All cycles"** case, fetch the reconciliation/rollup rows for *every* cycle in `cycleInfo.cycles` and sum the FEC fields client-side (fec_total_receipts, fec_itemized, fec_unitemized, fec_pac_contributions, fec_party_contributions, fec_loans, fec_transfers, fec_candidate_contribution, fec_other_receipts, local_*). For the single-cycle case, behavior stays the same.
+- Remove the silent `'2024'` fallback when calling `useFECTotals` — pass the actual selected cycle, and skip the live FEC fallback when "All cycles" is selected (it can't be aggregated cleanly via the FEC API in one call).
+- `handleFetchDonors` keeps its existing `effectiveCycle ?? defaultCycle` behavior (sync needs a concrete cycle).
 
-For the global pages, reuse the existing `filterOptions.cycles` from `useDonorsPaginated` but apply the same "default to newest" rule.
+### `src/hooks/useFinanceReconciliation.ts`
 
-## Data-layer changes
+- Add an overload (or sibling hook) `useFinanceReconciliationAll(candidateId, cycles[])` that fetches all rows for the candidate where `cycle = ANY(cycles)` and returns them as an array. The page component does the summing so the existing single-row hook signature stays untouched for other callers.
+- Same pattern for `useCommitteeRollups`.
 
-- `useCandidateDonors(candidateId, cycle?)` — accept optional cycle, filter `donors.cycle` server-side; `'all'` means no filter. Update query key.
-- `useFinanceReconciliation`, `useCommitteeRollups`, `useAllFinanceReconciliations`, `useCandidatesWithSyncStatus` — keep signatures but stop hardcoding 2024 defaults; require caller to pass cycle (default to newest helper) and include cycle in query key.
-- `useFECIntegration` — `fetchFECDonorsComplete`, `triggerReconciliation`, `forceResyncFECDonors`, `runBatchReconciliation` already accept `cycle`; just plumb the picker value from the UI instead of relying on the `'2024'` fallback.
-- `CommitteeProfile` `handleFetchDonors` — pass selected cycle.
+### `src/hooks/useFECTotals.ts`
 
-## UI shape
+- Accept `enabled` flag so the page can disable it when `effectiveCycle === 'all'` (no aggregation across cycles via the FEC API).
 
-Reuse the existing `Select` pattern from `src/pages/Committees.tsx:111`:
+### Acceptance
 
-```text
-[ Refresh Donors ]  [ Cycle: 2026 ▾ ]
-                       2026
-                       2024
-                       2022
-                       All cycles
-```
+- Picking **2024** on John Hsu shows FEC Total Receipts = $6,183 and Itemized = $2,550.
+- Picking **2026** shows $96,855 / $54,448.
+- Picking **All cycles** shows the *sum* of every reconciliation row (≈ $103,038 here), not the 2024 fallback.
+- No flash of 2024 data on initial page load when the default cycle is 2026.
 
-On the candidate profile, place the Select where the static "2024 Cycle" label is. State lives in `CandidateProfile` and is passed to the donors tab plus `FinanceSummaryCard` so a single change updates both totals and the donor list.
-
-## Out of scope
-
-- No edge-function changes; existing FEC sync functions already accept `cycle`.
-- No DB migration; `donors.cycle` and `candidate_committees.cycles` already store this.
-- No changes to score logic, voting record, or legislation tabs.
-
-## Files touched
-
-- `src/pages/CandidateProfile.tsx` (cycle state + picker + prop wiring)
-- `src/pages/CommitteeProfile.tsx` (cycle picker for refresh)
-- `src/hooks/useCandidates.ts` (`useCandidateDonors` accepts cycle)
-- `src/hooks/useFinanceReconciliation.ts` (newest-cycle default)
-- `src/hooks/useFECIntegration.ts` (no behavioral change, just verify cycle pass-through)
-- New `src/hooks/useAvailableCycles.ts`
