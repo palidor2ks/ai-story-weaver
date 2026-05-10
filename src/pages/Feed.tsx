@@ -149,7 +149,7 @@ export const Feed = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, candidatesWithScores, profile, isHidden]);
+  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, transformedCandidates, profile, isHidden]);
 
   const userTopicsList = userTopics.map(ut => ({
     id: ut.topics?.id || ut.topic_id,
@@ -159,12 +159,12 @@ export const Feed = () => {
   }));
 
   const bestMatch = useMemo(() => {
-    if (candidatesWithScores.length === 0) return 0;
-    const matches = candidatesWithScores.map(c => 
+    if (transformedCandidates.length === 0) return 0;
+    const matches = transformedCandidates.map(c =>
       c.matchScore ?? calculateMatchScore(profile?.overall_score ?? 0, c.overallScore)
     );
     return Math.max(...matches);
-  }, [candidatesWithScores, profile?.overall_score]);
+  }, [transformedCandidates, profile?.overall_score]);
 
   const isLoading = profileLoading || unified.isLoading;
 
@@ -211,15 +211,6 @@ export const Feed = () => {
               <Button asChild variant="outline" size="sm">
                 <Link to="/profile">Update Profile</Link>
               </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {representativesError && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Failed to load representatives. Showing cached data.
             </AlertDescription>
           </Alert>
         )}
