@@ -290,6 +290,8 @@ serve(async (req) => {
       delayBetweenBatches: params.delayBetweenBatches || 5000,
       maxCandidates: params.maxCandidates || 0, // 0 = no limit
       startFromId: params.startFromId || null,
+      visibleStatesOnly: params.visibleStatesOnly !== false, // default true
+      states: Array.isArray(params.states) ? params.states : null,
     };
 
     console.log('Received batch regeneration request with config:', config);
