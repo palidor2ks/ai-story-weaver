@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { CardData, CARD_SIZE, formatScoreSafe } from './types';
+import { PulseMark } from './PulseMark';
 
 interface Props {
   data: CardData;
@@ -123,19 +124,24 @@ export const DataCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: 40,
+          gap: 24,
         }}
       >
-        <div>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
               fontSize: 24,
               letterSpacing: 4,
               textTransform: 'uppercase',
               color: 'hsl(var(--muted-foreground))',
-              marginBottom: 8,
+              marginBottom: 12,
             }}
           >
-            Pulse · {isCandidate ? 'Voter Alignment' : 'My Profile'}
+            <PulseMark size={48} />
+            <span>Pulse · {isCandidate ? 'Voter Alignment' : 'My Profile'}</span>
           </div>
           <div style={{ fontSize: 56, fontWeight: 800, letterSpacing: -1.5 }}>
             {isCandidate ? data.candidateName : 'Top Issues'}
@@ -155,6 +161,8 @@ export const DataCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
             fontSize: 56,
             fontWeight: 800,
             letterSpacing: -1,
+            alignSelf: 'center',
+            flexShrink: 0,
           }}
         >
           {isCandidate ? `${data.matchScore}%` : formatScoreSafe(data.userScore)}

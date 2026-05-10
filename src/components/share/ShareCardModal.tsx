@@ -47,8 +47,44 @@ interface ShareCardModalProps {
   triggerLabel?: string;
 }
 
-// Preview scale: each card is 1080px; show at ~280-300px in grid
-const PREVIEW_SCALE = 0.27;
+/**
+ * Renders a 1080×1080 card scaled to fit its parent (a square container).
+ * Uses ResizeObserver so the preview always fills the tile cleanly without
+ * clipping or empty borders.
+ */
+const CardThumb = ({ children }: { children: React.ReactNode }) => {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.2);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const e of entries) {
+        const w = e.contentRect.width;
+        if (w > 0) setScale(w / CARD_SIZE);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={wrapRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+      <div
+        style={{
+          width: CARD_SIZE,
+          height: CARD_SIZE,
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
+
 
 export const ShareCardModal = ({
   open,
@@ -249,41 +285,33 @@ export const ShareCardModal = ({
                 }
               }}
               className={cn(
-                'group relative rounded-xl overflow-hidden border-2 transition-all bg-muted',
-                selected === id
-                  ? 'border-primary ring-2 ring-primary/30'
-                  : 'border-border hover:border-primary/50',
+                'group flex flex-col gap-2 rounded-xl text-left transition-all',
               )}
               aria-pressed={selected === id}
-              style={{
-                aspectRatio: '1 / 1',
-              }}
             >
               <div
-                style={{
-                  width: CARD_SIZE * PREVIEW_SCALE,
-                  height: CARD_SIZE * PREVIEW_SCALE,
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  pointerEvents: 'none',
-                }}
+                className={cn(
+                  'relative w-full overflow-hidden rounded-xl border-2 bg-muted shadow-sm',
+                  selected === id
+                    ? 'border-primary ring-2 ring-primary/30'
+                    : 'border-border group-hover:border-primary/50',
+                )}
+                style={{ aspectRatio: '1 / 1' }}
               >
-                <div
-                  style={{
-                    width: CARD_SIZE,
-                    height: CARD_SIZE,
-                    transform: `scale(${PREVIEW_SCALE})`,
-                    transformOrigin: 'top left',
-                  }}
-                >
+                <CardThumb>
                   <Component data={data} />
-                </div>
+                </CardThumb>
               </div>
-              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between bg-background/80 backdrop-blur-sm rounded-md px-2 py-1 text-xs font-medium">
-                <span>{label}</span>
-                {selected === id && <Check className="w-3 h-3 text-primary" />}
+              <div className="flex items-center justify-between px-1">
+                <span
+                  className={cn(
+                    'text-xs font-medium',
+                    selected === id ? 'text-primary' : 'text-foreground',
+                  )}
+                >
+                  {label}
+                </span>
+                {selected === id && <Check className="w-3.5 h-3.5 text-primary" />}
               </div>
             </button>
           ))}
@@ -292,22 +320,12 @@ export const ShareCardModal = ({
         {/* Big preview of selected */}
         <div className="rounded-xl bg-muted/40 p-4 flex items-center justify-center overflow-hidden">
           <div
-            style={{
-              width: 'min(420px, 100%)',
-              aspectRatio: '1 / 1',
-              position: 'relative',
-            }}
+            className="relative w-full max-w-[420px] overflow-hidden rounded-lg border border-border bg-background shadow-sm"
+            style={{ aspectRatio: '1 / 1' }}
           >
-            <div
-              style={{
-                width: CARD_SIZE,
-                height: CARD_SIZE,
-                transform: 'scale(0.389)',
-                transformOrigin: 'top left',
-              }}
-            >
+            <CardThumb>
               <SelectedComponent data={data} />
-            </div>
+            </CardThumb>
           </div>
         </div>
 

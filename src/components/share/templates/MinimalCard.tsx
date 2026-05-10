@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { CardData, CARD_SIZE, formatScoreSafe, labelSafe } from './types';
+import { PulseMark } from './PulseMark';
 
 interface Props {
   data: CardData;
@@ -52,7 +53,10 @@ export const MinimalCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) => 
           color: 'hsl(var(--muted-foreground))',
         }}
       >
-        <span>Pulse</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <PulseMark size={48} />
+          <span>Pulse</span>
+        </div>
         <span>{isCandidate ? 'Voter Match' : isInvite ? 'Invitation' : 'Profile'}</span>
       </div>
 
