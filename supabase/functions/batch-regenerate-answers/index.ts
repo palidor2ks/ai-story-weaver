@@ -149,6 +149,31 @@ async function processBatchInBackground(params: {
     console.log(`Will process: ${candidatesToProcess.length} candidates`);
 
     const results: ProcessResult[] = [];
+    const failures: { id: string; name: string; error: string }[] = [];
+
+    const writeProgress = async (status: 'running' | 'complete' | 'error', extra: Record<string, unknown> = {}) => {
+      try {
+        await supabase.from('admin_stats_cache').upsert({
+          stat_key: 'backfill_answers_progress',
+          stat_value: {
+            status,
+            processed: globalProgress.processed,
+            total: globalProgress.total,
+            successful: globalProgress.successful,
+            failed: globalProgress.failed,
+            currentCandidate: globalProgress.currentCandidate,
+            startedAt: new Date(globalProgress.startTime).toISOString(),
+            failures: failures.slice(-20),
+            ...extra,
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'stat_key' });
+      } catch (e) {
+        console.warn('Failed to write progress:', e);
+      }
+    };
+
+    await writeProgress('running');
 
     // Process in batches
     for (let i = 0; i < candidatesToProcess.length; i += batchSize) {
