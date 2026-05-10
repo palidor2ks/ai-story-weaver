@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Vote, Calendar, MapPin, ChevronRight } from 'lucide-react';
+import { Vote, Calendar, MapPin, ChevronRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useUpcomingElections, type UpcomingCandidate, type UpcomingElection } from '@/hooks/useUpcomingElections';
 import { ScoreText } from '@/components/ScoreText';
 import { ElectionDetailsDialog } from './ElectionDetailsDialog';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface Props {
   address: string | null | undefined;
@@ -95,7 +97,7 @@ function ElectionGroup({ election, onOpen }: { election: UpcomingElection; onOpe
 }
 
 export function UpcomingElectionsCard({ address }: Props) {
-  const { data, isLoading } = useUpcomingElections(address);
+  const { data, isLoading, refresh, isRefreshing } = useUpcomingElections(address);
   const [openElection, setOpenElection] = useState<UpcomingElection | null>(null);
 
   const total =
@@ -103,14 +105,36 @@ export function UpcomingElectionsCard({ address }: Props) {
     (data?.state.length ?? 0) +
     (data?.local.length ?? 0);
 
+  const handleRefresh = async () => {
+    const result = await refresh();
+    if (result.ok) {
+      toast.success('Elections refreshed');
+    } else {
+      toast.error(result.error ?? 'Failed to refresh elections');
+    }
+  };
+
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Vote className="w-5 h-5" />
-            Upcoming Elections on Your Ballot
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2">
+              <Vote className="w-5 h-5" />
+              Upcoming Elections on Your Ballot
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={!address || isRefreshing || isLoading}
+              className="h-8 gap-1.5"
+              title="Re-fetch from FEC and Google Civic"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="text-xs">Refresh</span>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {!address ? (

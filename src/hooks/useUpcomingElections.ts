@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useGeocode } from './useGeocode';
 
@@ -41,9 +42,13 @@ const EMPTY: UpcomingElectionsResult = { federal: [], state: [], local: [] };
 export function useUpcomingElections(address: string | null | undefined) {
   const geocodeQuery = useGeocode(address);
   const geocode = geocodeQuery.data;
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  return useQuery({
-    queryKey: ['upcoming-elections', geocode?.state, geocode?.district, 'v1'],
+  const queryKey = ['upcoming-elections', geocode?.state, geocode?.district, 'v1'];
+
+  const query = useQuery({
+    queryKey,
     queryFn: async (): Promise<UpcomingElectionsResult> => {
       if (!address || !geocode?.state) return EMPTY;
       const { data, error } = await supabase.functions.invoke<UpcomingElectionsResult>(
@@ -67,7 +72,6 @@ export function useUpcomingElections(address: string | null | undefined) {
     enabled: !!address && !!geocode?.state && !geocodeQuery.isLoading,
     staleTime: 1000 * 60 * 60, // 1h
     refetchInterval: (query) => {
-      // Poll every 60s while any candidate is still being researched, so badges fill in live.
       const data = query.state.data as UpcomingElectionsResult | undefined;
       if (!data) return false;
       const all = [...data.federal, ...data.state, ...data.local];
@@ -76,4 +80,33 @@ export function useUpcomingElections(address: string | null | undefined) {
     },
     retry: 1,
   });
+
+  const refresh = async (): Promise<{ ok: boolean; error?: string }> => {
+    if (!address || !geocode?.state) {
+      return { ok: false, error: 'Address not set' };
+    }
+    setIsRefreshing(true);
+    try {
+      const { error } = await supabase.functions.invoke('fetch-upcoming-elections', {
+        body: {
+          address,
+          state: geocode.state,
+          district: geocode.district ?? null,
+          lat: geocode.lat ?? undefined,
+          lng: geocode.lng ?? undefined,
+          force: true,
+        },
+      });
+      if (error) {
+        console.error('[useUpcomingElections.refresh]', error);
+        return { ok: false, error: error.message ?? 'Refresh failed' };
+      }
+      await queryClient.invalidateQueries({ queryKey });
+      return { ok: true };
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  return { ...query, refresh, isRefreshing };
 }

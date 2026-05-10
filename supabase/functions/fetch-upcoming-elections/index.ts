@@ -265,6 +265,7 @@ Deno.serve(async (req) => {
     const address: string | undefined = body.address;
     const state: string | undefined = body.state;
     const district: string | null = body.district ?? null;
+    const force: boolean = body.force === true;
 
     if (!state) {
       return new Response(JSON.stringify({ error: 'state is required' }), {
@@ -274,22 +275,27 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Cache check: any election rows newer than CACHE_TTL_HOURS for this state+district?
-    const cacheCutoff = new Date(Date.now() - CACHE_TTL_HOURS * 3600 * 1000).toISOString();
-    const { data: cached } = await supabase
-      .from('elections')
-      .select('id, updated_at')
-      .eq('state', state)
-      .gte('election_date', new Date().toISOString().slice(0, 10))
-      .gte('updated_at', cacheCutoff)
-      .limit(1);
+    let shouldFetch = force;
+    if (!force) {
+      // Cache check: any election rows newer than CACHE_TTL_HOURS for this state+district?
+      const cacheCutoff = new Date(Date.now() - CACHE_TTL_HOURS * 3600 * 1000).toISOString();
+      const { data: cached } = await supabase
+        .from('elections')
+        .select('id, updated_at')
+        .eq('state', state)
+        .gte('election_date', new Date().toISOString().slice(0, 10))
+        .gte('updated_at', cacheCutoff)
+        .limit(1);
+      shouldFetch = !cached || cached.length === 0;
+    }
 
-    if (!cached || cached.length === 0) {
-      // Fetch fresh from sources in parallel.
+    if (shouldFetch) {
+      console.log('[fetch-upcoming-elections] fetching fresh', { state, district, force });
       const [fecRows, civicRows] = await Promise.all([
         fetchFEC(state, district),
         fetchGoogleCivic(address ?? ''),
       ]);
+      console.log('[fetch-upcoming-elections] fetched rows', { fec: fecRows.length, civic: civicRows.length });
       await persistAll(supabase, [...fecRows, ...civicRows]);
     }
 
