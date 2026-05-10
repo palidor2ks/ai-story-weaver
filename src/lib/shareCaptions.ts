@@ -36,6 +36,11 @@ export type CaptionInput =
   | UserProfileCaptionInput
   | InviteCaptionInput;
 
+export function getDefaultHashtags(input: CaptionInput): string {
+  if (input.kind === 'invite') return '#Pulse';
+  return '#Pulse #VoterMatch';
+}
+
 export function generateLongCaption(input: CaptionInput): string {
   if (input.kind === 'candidate-alignment') {
     const lines: string[] = [];
@@ -56,7 +61,6 @@ export function generateLongCaption(input: CaptionInput): string {
     lines.push(`My position: ${formatScore(input.userScore)} | Their position: ${formatScore(input.candidateScore)}`);
     lines.push('');
     lines.push(`Discover your alignment at ${input.url}`);
-    lines.push('#Pulse #VoterMatch');
     return lines.join('\n');
   }
   if (input.kind === 'user-profile') {
@@ -65,13 +69,11 @@ export function generateLongCaption(input: CaptionInput): string {
       `My score: ${formatScore(input.userScore)} (${getScoreLabel(input.userScore)})`,
       '',
       `Find out where you stand: ${input.url}`,
-      '#Pulse #VoterMatch',
     ].join('\n');
   }
   return [
     `I just took the Pulse political alignment quiz — it shows where you really stand on the issues.`,
     `Take it and see your results: ${input.url}`,
-    '#Pulse',
   ].join('\n');
 }
 
@@ -84,3 +86,11 @@ export function generateShortCaption(input: CaptionInput): string {
   }
   return `Take the Pulse quiz and see where you really stand on the issues.`;
 }
+
+export function composeFinalText(body: string, hashtags: string, includeHashtags: boolean): string {
+  const trimmed = body.trim();
+  if (!includeHashtags || !hashtags) return trimmed;
+  if (!trimmed) return hashtags;
+  return `${trimmed}\n\n${hashtags}`;
+}
+
