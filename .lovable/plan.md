@@ -1,34 +1,57 @@
 ## Goal
 
-When a user enters an address during onboarding in a state that admins have hidden (not yet supported), show a friendly notice — but let them complete onboarding and use the rest of the app normally (national executives, local candidate flow, quiz, etc.).
+Ensure every quiz question has a "Not important to me" skip option. A database audit found **220 questions** missing this option (covering civil-rights, economy, education, and other topics).
 
-## Behavior
+## Approach
 
-1. In the demographics step of onboarding, after the user picks/validates an address:
-   - Extract the state code from `AddressAutocomplete`'s validation result (it already returns `state`).
-   - Compare against `useHiddenStates().isHidden(state)`.
-   - If hidden, render an inline informational banner under the address field:
-     > "{StateName} isn't fully supported yet. You can still complete the quiz, see national candidates (President, etc.), and your local candidate requests will be saved for when we launch in your state."
-   - The banner is non-blocking — the form remains submittable and onboarding proceeds normally.
+Add a single Supabase migration that inserts a skip option for every question that doesn't already have one.
 
-2. No changes to Feed/Candidates filters. They already filter on `isHidden(c.state)`, which naturally:
-   - Hides hidden-state officials/candidates from the lists.
-   - Leaves national executives (President, with state `US`/null) visible.
-   - Leaves the local candidate request/upcoming-elections process working as-is.
+For each missing question, insert one `question_options` row:
 
-3. No gating added anywhere. The user retains full access to onboarding quiz, national content, parties, and local candidate workflows.
+- `id`: `{question_id}-opt-skip`
+- `question_id`: the question's id
+- `text`: `Not important to me`
+- `value`: `0`
+- `display_order`: `6` (consistent with existing skip options)
+- `is_skip_option`: `true`
 
-## Technical Notes
+## SQL
 
-- Files to touch:
-  - `src/components/DemographicsForm.tsx` — accept the validated address state code from `AddressAutocomplete.onAddressSelect` (already passed via `details`), store it in local component state, and render the banner using `useHiddenStates`.
-  - Optionally lift state code into the submitted payload only if needed; for now this is purely a UI notice (no schema change).
-- Use existing `useHiddenStates` hook; no new queries.
-- Style: use a `bg-muted/50 border border-border` rounded card with an `Info` icon from lucide-react, semantic tokens only (no hardcoded colors).
-- No backend or business-logic changes.
+```sql
+INSERT INTO public.question_options
+  (id, question_id, text, value, display_order, is_skip_option)
+SELECT
+  q.id || '-opt-skip',
+  q.id,
+  'Not important to me',
+  0,
+  6,
+  true
+FROM public.questions q
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM public.question_options o
+  WHERE o.question_id = q.id
+    AND o.is_skip_option = true
+);
+```
+
+This is idempotent — re-running it inserts nothing once every question has a skip option.
+
+## Verification
+
+After the migration, run:
+
+```sql
+SELECT COUNT(*) FROM questions q
+WHERE NOT EXISTS (
+  SELECT 1 FROM question_options o
+  WHERE o.question_id = q.id AND o.is_skip_option = true
+);
+-- expected: 0
+```
 
 ## Out of Scope
 
-- Persisting a "supported state" flag on the profile.
-- Changing how Feed/Candidates filter hidden states.
-- Email capture / waitlist for unsupported states (can be a follow-up).
+- No frontend changes — `Onboarding.tsx`, `Quiz.tsx`, and `QuizQuestion.tsx` already render skip options when present.
+- No changes to scoring, since the skip flow is already implemented.
