@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Vote, Calendar, MapPin } from 'lucide-react';
+import { Vote, Calendar, MapPin, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useUpcomingElections, type UpcomingCandidate, type UpcomingElection } from '@/hooks/useUpcomingElections';
 import { ScoreText } from '@/components/ScoreText';
+import { ElectionDetailsDialog } from './ElectionDetailsDialog';
 
 interface Props {
   address: string | null | undefined;
@@ -60,7 +62,7 @@ function CandidateRow({ c }: { c: UpcomingCandidate }) {
   );
 }
 
-function ElectionGroup({ election }: { election: UpcomingElection }) {
+function ElectionGroup({ election, onOpen }: { election: UpcomingElection; onOpen: (e: UpcomingElection) => void }) {
   // Group candidates by office within this election.
   const byOffice = new Map<string, UpcomingCandidate[]>();
   for (const c of election.candidates) {
@@ -70,11 +72,16 @@ function ElectionGroup({ election }: { election: UpcomingElection }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+      <button
+        type="button"
+        onClick={() => onOpen(election)}
+        className="w-full flex items-center gap-2 text-sm font-semibold text-foreground text-left rounded-md px-2 py-1 -mx-2 hover:bg-accent/40 transition-colors group"
+      >
         <Calendar className="w-4 h-4 text-muted-foreground" />
         <span>{formatDate(election.election_date)}</span>
         <span className="text-muted-foreground font-normal">— {election.name}</span>
-      </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto group-hover:translate-x-0.5 transition-transform" />
+      </button>
       {Array.from(byOffice.entries()).map(([office, cands]) => (
         <div key={office} className="space-y-1.5 pl-6">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{office}</div>
@@ -89,6 +96,7 @@ function ElectionGroup({ election }: { election: UpcomingElection }) {
 
 export function UpcomingElectionsCard({ address }: Props) {
   const { data, isLoading } = useUpcomingElections(address);
+  const [openElection, setOpenElection] = useState<UpcomingElection | null>(null);
 
   const total =
     (data?.federal.length ?? 0) +
@@ -96,55 +104,62 @@ export function UpcomingElectionsCard({ address }: Props) {
     (data?.local.length ?? 0);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Vote className="w-5 h-5" />
-          Upcoming Elections on Your Ballot
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {!address ? (
-          <p className="text-muted-foreground text-sm">Add your address to see upcoming elections.</p>
-        ) : isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-5 w-2/3" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        ) : total === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No upcoming elections found for your address yet. Check back closer to election day.
-          </p>
-        ) : (
-          <div className="space-y-6">
-            {data?.federal.length ? (
-              <section className="space-y-4">
-                <h4 className="text-sm font-semibold text-muted-foreground">Federal</h4>
-                {data.federal.map(e => <ElectionGroup key={e.id} election={e} />)}
-              </section>
-            ) : null}
-            {data?.state.length ? (
-              <section className="space-y-4">
-                <h4 className="text-sm font-semibold text-muted-foreground">State</h4>
-                {data.state.map(e => <ElectionGroup key={e.id} election={e} />)}
-              </section>
-            ) : null}
-            {data?.local.length ? (
-              <section className="space-y-4">
-                <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5" /> Local
-                </h4>
-                {data.local.map(e => <ElectionGroup key={e.id} election={e} />)}
-              </section>
-            ) : (
-              <p className="text-xs text-muted-foreground italic">
-                Local race coverage is limited — typically only available in the weeks leading up to an election.
-              </p>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Vote className="w-5 h-5" />
+            Upcoming Elections on Your Ballot
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!address ? (
+            <p className="text-muted-foreground text-sm">Add your address to see upcoming elections.</p>
+          ) : isLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-5 w-2/3" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : total === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No upcoming elections found for your address yet. Check back closer to election day.
+            </p>
+          ) : (
+            <div className="space-y-6">
+              {data?.federal.length ? (
+                <section className="space-y-4">
+                  <h4 className="text-sm font-semibold text-muted-foreground">Federal</h4>
+                  {data.federal.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} />)}
+                </section>
+              ) : null}
+              {data?.state.length ? (
+                <section className="space-y-4">
+                  <h4 className="text-sm font-semibold text-muted-foreground">State</h4>
+                  {data.state.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} />)}
+                </section>
+              ) : null}
+              {data?.local.length ? (
+                <section className="space-y-4">
+                  <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5" /> Local
+                  </h4>
+                  {data.local.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} />)}
+                </section>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  Local race coverage is limited — typically only available in the weeks leading up to an election.
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      <ElectionDetailsDialog
+        election={openElection}
+        open={!!openElection}
+        onOpenChange={(o) => { if (!o) setOpenElection(null); }}
+      />
+    </>
   );
 }
