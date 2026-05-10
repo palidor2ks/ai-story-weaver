@@ -1921,6 +1921,39 @@ export type Database = {
           },
         ]
       }
+      share_cards: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          image_path: string
+          og_description: string
+          og_title: string
+          target_url: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id: string
+          image_path: string
+          og_description?: string
+          og_title: string
+          target_url: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          image_path?: string
+          og_description?: string
+          og_title?: string
+          target_url?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       static_officials: {
         Row: {
           bio: string | null

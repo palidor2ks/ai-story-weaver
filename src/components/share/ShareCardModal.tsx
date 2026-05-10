@@ -9,7 +9,8 @@ import { toast } from 'sonner';
 import { BoldCard } from './templates/BoldCard';
 import { DataCard } from './templates/DataCard';
 import { CardData, CARD_SIZE } from './templates/types';
-import { copyNodeToClipboard, downloadNode, nodeToFile } from '@/lib/shareImage';
+import { copyNodeToClipboard, downloadNode, nodeToBlob, nodeToFile } from '@/lib/shareImage';
+import { uploadShareCard } from '@/lib/shareUpload';
 import {
   CaptionInput,
   composeFinalText,
@@ -217,6 +218,38 @@ export const ShareCardModal = ({
     }
   };
 
+  // Cache uploaded share URL per template id, keyed inside this open session
+  const shareUrlCache = useRef<Partial<Record<TemplateId, string>>>({});
+
+  // Reset cache when modal reopens or caption surface changes meaningfully
+  useEffect(() => {
+    if (open) shareUrlCache.current = {};
+  }, [open, defaultBody]);
+
+  const ogTitle = useMemo(() => {
+    if (caption.kind === 'candidate-alignment' && caption.candidateName) {
+      return `My match with ${caption.candidateName} on Pulse`;
+    }
+    if (caption.kind === 'user-profile') return 'My political profile on Pulse';
+    return 'Pulse — Know Your Vote';
+  }, [caption]);
+
+  const prepareShareUrl = async (): Promise<string> => {
+    const cached = shareUrlCache.current[selected];
+    if (cached) return cached;
+    const node = getNode();
+    if (!node) return url;
+    const blob = await nodeToBlob(node);
+    const { shareUrl } = await uploadShareCard({
+      blob,
+      targetUrl: url,
+      ogTitle,
+      ogDescription: body.slice(0, 280),
+    });
+    shareUrlCache.current[selected] = shareUrl;
+    return shareUrl;
+  };
+
   const handleNative = async () => {
     const node = getNode();
     if (!node) return;
@@ -229,10 +262,16 @@ export const ShareCardModal = ({
       } catch {
         files = undefined;
       }
+      let shareUrl = url;
+      try {
+        shareUrl = await prepareShareUrl();
+      } catch (e) {
+        console.warn('share url upload failed, using fallback', e);
+      }
       const ok = await nativeShare({
         title: 'Pulse',
         text: finalText,
-        url,
+        url: shareUrl,
         files,
       });
       if (!ok) toast.error('Share failed.');
@@ -241,13 +280,24 @@ export const ShareCardModal = ({
     }
   };
 
-  const handleOpenIntent = (destination: 'twitter' | 'facebook' | 'linkedin', href: string) => {
-    trackEvent('share_action', {
-      ...baseProps(),
-      action: 'open_intent',
-      destination,
-    });
-    openIntent(href);
+  const handleSocialIntent = async (
+    destination: 'twitter' | 'facebook' | 'linkedin',
+    build: (shareUrl: string) => string,
+  ) => {
+    setBusy('native');
+    trackEvent('share_action', { ...baseProps(), action: 'open_intent', destination });
+    try {
+      let shareUrl = url;
+      try {
+        shareUrl = await prepareShareUrl();
+      } catch (e) {
+        console.warn('share url upload failed, using fallback', e);
+        toast.message('Sharing without preview image — couldn\'t upload card.');
+      }
+      openIntent(build(shareUrl));
+    } finally {
+      setBusy(null);
+    }
   };
   const SelectedComponent = TEMPLATES.find(t => t.id === selected)!.Component;
 
@@ -428,7 +478,8 @@ export const ShareCardModal = ({
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            onClick={() => handleOpenIntent('twitter', twitterIntent(finalText, url))}
+            disabled={!!busy}
+            onClick={() => handleSocialIntent('twitter', (s) => twitterIntent(finalText, s))}
             className="gap-2"
           >
             <Twitter className="w-4 h-4" />
@@ -436,7 +487,8 @@ export const ShareCardModal = ({
           </Button>
           <Button
             variant="outline"
-            onClick={() => handleOpenIntent('facebook', facebookIntent(url, finalText))}
+            disabled={!!busy}
+            onClick={() => handleSocialIntent('facebook', (s) => facebookIntent(s, finalText))}
             className="gap-2"
           >
             <Facebook className="w-4 h-4" />
@@ -444,7 +496,8 @@ export const ShareCardModal = ({
           </Button>
           <Button
             variant="outline"
-            onClick={() => handleOpenIntent('linkedin', linkedinIntent(url))}
+            disabled={!!busy}
+            onClick={() => handleSocialIntent('linkedin', (s) => linkedinIntent(s))}
             className="gap-2"
           >
             <Linkedin className="w-4 h-4" />
@@ -463,8 +516,8 @@ export const ShareCardModal = ({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Tip: X, Facebook and LinkedIn don't accept images via direct links — copy or
-          download the image first, then paste/attach it in the composer.
+          Tip: when you share on X, Facebook or LinkedIn, your card is uploaded and shown
+          automatically as the link preview — no copy/paste needed.
         </p>
       </DialogContent>
     </Dialog>
