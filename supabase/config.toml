@@ -176,3 +176,6 @@ verify_jwt = false
 
 [functions.scan-evidence-relevance]
 verify_jwt = false
+
+[functions.fetch-upcoming-elections]
+verify_jwt = false
