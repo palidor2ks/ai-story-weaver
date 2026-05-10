@@ -461,61 +461,44 @@ export default function Admin() {
 
         <AnswerCoveragePanel />
 
+        {(() => null)()}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="officials" className="gap-2">
-              <Users className="h-4 w-4" />
-              Static Officials
-            </TabsTrigger>
-            <TabsTrigger value="overrides" className="gap-2">
-              <FileEdit className="h-4 w-4" />
-              Overrides ({overrides?.length || 0})
-            </TabsTrigger>
-            <TabsTrigger value="claims" className="gap-2">
-              <UserCheck className="h-4 w-4" />
-              Claims
-            </TabsTrigger>
-            <TabsTrigger value="parties" className="gap-2">
-              <Building2 className="h-4 w-4" />
-              Party Answers
-            </TabsTrigger>
-            <TabsTrigger value="scores" className="gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Score Fixes
-            </TabsTrigger>
-            <TabsTrigger value="donor-aliases" className="gap-2">
-              <DollarSign className="h-4 w-4" />
-              Donor Aliases
-            </TabsTrigger>
-            <TabsTrigger value="questions" className="gap-2">
-              <HelpCircle className="h-4 w-4" />
-              Questions
-            </TabsTrigger>
-            <TabsTrigger value="evidence" className="gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              Evidence Review
-            </TabsTrigger>
-            <TabsTrigger value="voting-records" className="gap-2">
-              <FileText className="h-4 w-4" />
-              Voting Records
-            </TabsTrigger>
-            <TabsTrigger value="topic-review" className="gap-2">
-              <Tags className="h-4 w-4" />
-              Topic Review
-            </TabsTrigger>
-            <TabsTrigger value="bulk-validation" className="gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Bulk Validation
-            </TabsTrigger>
-            <TabsTrigger value="donor-import" className="gap-2">
-              <Upload className="h-4 w-4" />
-              Donor Import
-            </TabsTrigger>
-            <TabsTrigger value="visible-states" className="gap-2">
-              <Shield className="h-4 w-4" />
-              Visible States
-            </TabsTrigger>
-          </TabsList>
+          {(() => {
+            const ADMIN_TABS = [
+              { value: "officials", label: "Static Officials", Icon: Users },
+              { value: "overrides", label: `Overrides (${overrides?.length || 0})`, Icon: FileEdit },
+              { value: "claims", label: "Claims", Icon: UserCheck },
+              { value: "parties", label: "Party Answers", Icon: Building2 },
+              { value: "scores", label: "Score Fixes", Icon: BarChart3 },
+              { value: "donor-aliases", label: "Donor Aliases", Icon: DollarSign },
+              { value: "questions", label: "Questions", Icon: HelpCircle },
+              { value: "evidence", label: "Evidence Review", Icon: AlertTriangle },
+              { value: "voting-records", label: "Voting Records", Icon: FileText },
+              { value: "topic-review", label: "Topic Review", Icon: Tags },
+              { value: "bulk-validation", label: "Bulk Validation", Icon: CheckCircle2 },
+              { value: "donor-import", label: "Donor Import", Icon: Upload },
+              { value: "visible-states", label: "Visible States", Icon: Shield },
+            ];
+            return (
+              <div className="mb-6 max-w-xs">
+                <Select value={activeTab} onValueChange={setActiveTab}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a section" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ADMIN_TABS.map(({ value, label, Icon }) => (
+                      <SelectItem key={value} value={value}>
+                        <span className="flex items-center gap-2">
+                          <Icon className="h-4 w-4" />
+                          {label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            );
+          })()}
 
           <TabsContent value="visible-states">
             <HiddenStatesPanel />
