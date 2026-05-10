@@ -140,6 +140,8 @@ export function BackfillAnswersControl() {
                     ? "secondary"
                     : progress.status === "complete"
                     ? "default"
+                    : progress.status === "cancelled"
+                    ? "outline"
                     : "destructive"
                 }
               >
