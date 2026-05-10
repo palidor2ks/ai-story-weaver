@@ -9,7 +9,8 @@ import { toast } from 'sonner';
 import { BoldCard } from './templates/BoldCard';
 import { DataCard } from './templates/DataCard';
 import { CardData, CARD_SIZE } from './templates/types';
-import { copyNodeToClipboard, downloadNode, nodeToFile } from '@/lib/shareImage';
+import { copyNodeToClipboard, downloadNode, nodeToBlob, nodeToFile } from '@/lib/shareImage';
+import { uploadShareCard } from '@/lib/shareUpload';
 import {
   CaptionInput,
   composeFinalText,
