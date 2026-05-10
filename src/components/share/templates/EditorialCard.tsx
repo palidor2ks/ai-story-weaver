@@ -60,6 +60,67 @@ export const EditorialCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
               objectFit: 'cover',
             }}
           />
+        ) : data.kind === 'user-profile' ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 18,
+              padding: 24,
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 22,
+                letterSpacing: 6,
+                textTransform: 'uppercase',
+                opacity: 0.85,
+              }}
+            >
+              My Pulse
+            </div>
+            <div
+              style={{
+                fontSize: 140,
+                fontWeight: 800,
+                letterSpacing: -4,
+                lineHeight: 1,
+              }}
+            >
+              {formatScoreSafe(data.userScore)}
+            </div>
+            <div
+              style={{
+                fontSize: 28,
+                fontWeight: 600,
+                opacity: 0.95,
+              }}
+            >
+              {labelSafe(data.userScore)}
+            </div>
+          </div>
+        ) : data.kind === 'invite' ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 24,
+            }}
+          >
+            <PulseMark size={200} framed frameColor="rgba(255,255,255,0.18)" />
+            <div
+              style={{
+                fontSize: 56,
+                fontWeight: 800,
+                letterSpacing: -2,
+              }}
+            >
+              Pulse
+            </div>
+          </div>
         ) : (
           <div
             style={{
