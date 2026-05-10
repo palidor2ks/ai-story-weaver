@@ -522,6 +522,73 @@ export const QuizResults = () => {
           </CardContent>
         </Card>
 
+        {/* Candidates on Your Ballot — upcoming elections */}
+        {profile.address && (upcomingLoading || (upcomingElections && [...upcomingElections.federal, ...upcomingElections.state, ...upcomingElections.local].length > 0)) && (
+          <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '175ms' }}>
+            <CardHeader>
+              <CardTitle className="font-display flex items-center gap-2">
+                <Vote className="w-5 h-5 text-primary" />
+                Candidates on Your Ballot
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {upcomingLoading ? (
+                <div className="flex items-center gap-3 text-muted-foreground py-4">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Finding upcoming elections...</span>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {(['federal', 'state', 'local'] as const).flatMap(level =>
+                    (upcomingElections?.[level] ?? []).map(election => {
+                      const newCandidates = election.candidates.filter(
+                        c => !repNameKeys.has(unifiedCandidateNameKey(c.name, c.office)),
+                      );
+                      if (newCandidates.length === 0) return null;
+                      const dateStr = new Date(election.election_date).toLocaleDateString(undefined, {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                      });
+                      return (
+                        <div key={election.id}>
+                          <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                            <Calendar className="w-4 h-4" />
+                            {election.name} — {dateStr}
+                          </h4>
+                          <div className="space-y-3">
+                            {newCandidates.map(c => {
+                              const official: CivicOfficial = {
+                                id: c.candidate_id,
+                                name: c.name,
+                                office: c.office,
+                                party: c.party,
+                                image_url: c.image_url || '',
+                                overall_score: c.overall_score ?? 0,
+                                level: (level === 'federal' ? 'federal' : level === 'state' ? 'state' : 'local') as OfficeLevelType,
+                                state: c.state,
+                                district: c.district || undefined,
+                                is_incumbent: c.is_incumbent,
+                                coverage_tier: (c.coverage_tier as any) || 'tier_3',
+                                confidence: (c.confidence as any) || 'low',
+                              };
+                              return (
+                                <RepresentativeComparisonCard
+                                  key={c.candidate_id}
+                                  official={official}
+                                  resolvedScore={getResolvedScore(c.candidate_id, c.overall_score)}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }),
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Topic Breakdown Card */}
         <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '200ms' }}>
           <CardHeader>
