@@ -278,10 +278,25 @@ async function processBatchInBackground(params: {
     console.log(`Successful: ${globalProgress.successful}`);
     console.log(`Failed: ${globalProgress.failed}`);
     console.log(`Elapsed time: ${elapsedMinutes} minutes`);
+    await writeProgress('complete', { elapsedMinutes, completedAt: new Date().toISOString() });
 
   } catch (error) {
     console.error('=== BATCH REGENERATION ERROR ===');
     console.error(error instanceof Error ? error.message : 'Unknown error');
+    try {
+      await supabase.from('admin_stats_cache').upsert({
+        stat_key: 'backfill_answers_progress',
+        stat_value: {
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          processed: globalProgress.processed,
+          total: globalProgress.total,
+          successful: globalProgress.successful,
+          failed: globalProgress.failed,
+        },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'stat_key' });
+    } catch (_e) { /* ignore */ }
   }
 }
 
