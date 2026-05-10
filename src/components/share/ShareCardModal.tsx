@@ -516,8 +516,8 @@ export const ShareCardModal = ({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Tip: X, Facebook and LinkedIn don't accept images via direct links — copy or
-          download the image first, then paste/attach it in the composer.
+          Tip: when you share on X, Facebook or LinkedIn, your card is uploaded and shown
+          automatically as the link preview — no copy/paste needed.
         </p>
       </DialogContent>
     </Dialog>
