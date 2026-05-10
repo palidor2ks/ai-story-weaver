@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScoreText } from '@/components/ScoreText';
-import { Search, SlidersHorizontal, TrendingUp, MapPin, AlertCircle, Sparkles, Building2 } from 'lucide-react';
+import { Search, SlidersHorizontal, TrendingUp, MapPin, Sparkles, Building2 } from 'lucide-react';
 import { Candidate, GovernmentLevel } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Link } from 'react-router-dom';
@@ -24,8 +24,6 @@ export const Feed = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
   const unified = useUnifiedCandidates({ address: profile?.address });
-
-  const representativesError = null;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('match');
@@ -69,13 +67,10 @@ export const Feed = () => {
     }
   }, [aiAnswersGenerated, queryClient]);
 
-  const candidatesWithScores = transformedCandidates;
-
   const { isHidden } = useHiddenStates();
 
-
   const filteredAndSortedCandidates = useMemo(() => {
-    let result = candidatesWithScores.filter(c => !isHidden(c.state));
+    let result = transformedCandidates.filter(c => !isHidden(c.state));
 
     // Filter by search query
     if (searchQuery) {
@@ -154,7 +149,7 @@ export const Feed = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, candidatesWithScores, profile, isHidden]);
+  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, transformedCandidates, profile, isHidden]);
 
   const userTopicsList = userTopics.map(ut => ({
     id: ut.topics?.id || ut.topic_id,
@@ -164,12 +159,12 @@ export const Feed = () => {
   }));
 
   const bestMatch = useMemo(() => {
-    if (candidatesWithScores.length === 0) return 0;
-    const matches = candidatesWithScores.map(c => 
+    if (transformedCandidates.length === 0) return 0;
+    const matches = transformedCandidates.map(c =>
       c.matchScore ?? calculateMatchScore(profile?.overall_score ?? 0, c.overallScore)
     );
     return Math.max(...matches);
-  }, [candidatesWithScores, profile?.overall_score]);
+  }, [transformedCandidates, profile?.overall_score]);
 
   const isLoading = profileLoading || unified.isLoading;
 
@@ -216,15 +211,6 @@ export const Feed = () => {
               <Button asChild variant="outline" size="sm">
                 <Link to="/profile">Update Profile</Link>
               </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {representativesError && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Failed to load representatives. Showing cached data.
             </AlertDescription>
           </Alert>
         )}
