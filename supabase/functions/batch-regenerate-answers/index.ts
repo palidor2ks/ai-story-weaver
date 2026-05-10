@@ -243,9 +243,11 @@ async function processBatchInBackground(params: {
           });
 
           globalProgress.failed++;
+          failures.push({ id: candidate.id, name: candidate.name, error: errorMessage });
         }
 
         globalProgress.processed++;
+        await writeProgress('running');
 
         // Log progress every 10 candidates
         if (globalProgress.processed % 10 === 0) {
