@@ -25,6 +25,7 @@ import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 import { PartyComparisonCard } from '@/components/PartyComparisonCard';
 import { VerificationBadges } from '@/components/VerificationBadges';
+import { UpcomingElectionsCard } from '@/components/profile/UpcomingElectionsCard';
 
 interface ProfileAnalysis {
   summary: string;
