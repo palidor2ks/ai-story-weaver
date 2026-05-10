@@ -53,8 +53,10 @@ async function processBatchInBackground(params: {
   delayBetweenBatches: number;
   maxCandidates: number;
   startFromId: string | null;
+  visibleStatesOnly?: boolean;
+  states?: string[] | null;
 }) {
-  const { batchSize, delayBetweenCandidates, delayBetweenBatches, maxCandidates, startFromId } = params;
+  const { batchSize, delayBetweenCandidates, delayBetweenBatches, maxCandidates, startFromId, visibleStatesOnly, states } = params;
   
   globalProgress.startTime = Date.now();
   
@@ -71,6 +73,20 @@ async function processBatchInBackground(params: {
 
     console.log(`Total questions in system: ${totalQuestions}`);
 
+    // Resolve allowed states (visible = not in hidden_states)
+    let allowedStates: string[] | null = null;
+    if (visibleStatesOnly !== false) {
+      const { data: hiddenRows } = await supabase.from('hidden_states').select('state_code');
+      const hidden = new Set((hiddenRows || []).map((r: { state_code: string }) => r.state_code));
+      // Will filter in JS after fetch since `not in` requires inline list
+      allowedStates = null; // use hidden set below
+      (globalThis as Record<string, unknown>).__hiddenStates = hidden;
+    }
+    if (states && states.length > 0) {
+      allowedStates = states.map(s => s.toUpperCase());
+    }
+    console.log(`State filter: visibleStatesOnly=${visibleStatesOnly !== false}, explicitStates=${allowedStates ? allowedStates.join(',') : 'none'}`);
+
     // Get all candidates
     let candidatesQuery = supabase
       .from('candidates')
@@ -80,14 +96,22 @@ async function processBatchInBackground(params: {
     if (startFromId) {
       candidatesQuery = candidatesQuery.gte('id', startFromId);
     }
+    if (allowedStates) {
+      candidatesQuery = candidatesQuery.in('state', allowedStates);
+    }
 
-    const { data: candidates, error: candidatesError } = await candidatesQuery;
+    const { data: candidatesRaw, error: candidatesError } = await candidatesQuery;
 
     if (candidatesError) {
       throw new Error(`Failed to fetch candidates: ${candidatesError.message}`);
     }
 
-    console.log(`Found ${candidates?.length || 0} candidates`);
+    const hiddenSet = (globalThis as Record<string, unknown>).__hiddenStates as Set<string> | undefined;
+    const candidates = (candidatesRaw || []).filter(c =>
+      !hiddenSet || !hiddenSet.has(c.state)
+    );
+
+    console.log(`Found ${candidates.length} candidates after state filter (raw=${candidatesRaw?.length || 0})`);
 
     // Get answer counts for all candidates
     const { data: answerCounts, error: countError } = await supabase
@@ -266,6 +290,8 @@ serve(async (req) => {
       delayBetweenBatches: params.delayBetweenBatches || 5000,
       maxCandidates: params.maxCandidates || 0, // 0 = no limit
       startFromId: params.startFromId || null,
+      visibleStatesOnly: params.visibleStatesOnly !== false, // default true
+      states: Array.isArray(params.states) ? params.states : null,
     };
 
     console.log('Received batch regeneration request with config:', config);

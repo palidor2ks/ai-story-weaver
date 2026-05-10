@@ -1,55 +1,56 @@
-## What's happening
+## Goal
 
-For your address (Missoula, MT), the Feed is correctly fetching:
+Run a batch job that walks every politician in **visible states** (states not in `hidden_states`) and fills in any missing question answers, rep by rep. Each rep's run already covers all 340 questions across every topic via `get-candidate-answers`, so "topic by topic" is covered implicitly.
 
-- President + VP (federal executives)
-- Senator Daines + your House rep (federal legislators)
+## Current state
 
-…but the state/local sections come back nearly empty. After hitting the live edge functions with your exact address, here's what actually returns:
+- **Visible states**: FL, NJ, OH, PA, US (98 candidates total).
+- **Coverage gap** (out of 340 questions per candidate):
+  - FL: 30 pols, ~23/340 avg → very sparse
+  - NJ: 22 pols, ~201/340 avg
+  - OH: 17 pols, ~184/340 avg
+  - PA: 19 pols, ~108/340 avg
+  - US: 10 pols, ~67/340 avg
+- `batch-regenerate-answers` already exists: runs in background via `EdgeRuntime.waitUntil`, iterates candidates, calls `get-candidate-answers` per candidate with `forceRegenerate:false` (only fills missing), batches with delays, logs progress every 10 reps.
+- Today it runs against ALL candidates; it has no state filter.
 
-| Bucket | Returned for MT | Expected |
-|---|---|---|
-| State Executive | **Lt. Governor only** | Governor + Lt. Governor |
-| State Legislative | **0** | 1 State Senator + 1 State Rep for your district |
-| Local | **0** | Mayor / city council / county officials |
+## Plan
 
-So the federal side is fine; the state and local sides are broken or empty. Three independent root causes:
+### 1. Add visible-states filter to `batch-regenerate-answers`
 
-### 1. Governor missing from Open States executive query
+In `supabase/functions/batch-regenerate-answers/index.ts`:
+- Accept a new param `visibleStatesOnly: boolean` (default `true` for safety) and an optional explicit `states: string[]`.
+- Before fetching candidates, query `hidden_states`. Compute the visible set as `candidates.state NOT IN hidden_states` (and intersect with `states` if provided).
+- Apply `.not('state', 'in', '(${hiddenList})')` to the candidates query.
+- Log the resolved state list at start.
 
-`fetchOpenStatesOfficials` (in `fetch-civic-officials`) queries `?org_classification=executive&per_page=10` and then filters to anything whose `current_role.title` contains "governor". For MT this is returning the Lt. Gov but not Governor Gianforte — most likely because his record either has no `current_role` populated or the title casing isn't matching. The filter is too brittle.
+No other logic changes — existing per-rep loop already iterates all questions (and therefore all topics) for that rep, with delays and progress logs.
 
-### 2. State legislators returning 0
+### 2. Add an admin trigger button
 
-The `people.geo` Open States call for `lat=46.87, lng=-113.99` returns 0 results for MT. Earlier work (per memory) intentionally restricted state legislator lookup to `people.geo` only (no jurisdiction-wide fallback) to avoid the Iowa "all legislators" bug. That guard is correct, but for MT the geo call is silently failing/empty, so users get nothing.
+In `src/components/admin/CandidateAnswersDialog.tsx` or the existing answers admin tab (whichever houses `batch-populate-answers` controls — confirm during build), add a "Backfill answers (visible states)" button that calls:
 
-### 3. Local officials table only has NJ
+```ts
+supabase.functions.invoke('batch-regenerate-answers', {
+  body: { visibleStatesOnly: true, batchSize: 5, delayBetweenCandidates: 3000 }
+})
+```
 
-`fetchLocalOfficialsFromDB` reads `static_officials` filtered by state. The whole table currently has only 18 rows, all `state = 'NJ'`. So every non-NJ user sees an empty Local section.
+Show a toast pointing to the Edge Function logs (job runs in background, ~minutes).
 
-## Fix plan
+### 3. Verify
 
-### A. Make the governor filter robust (`supabase/functions/fetch-civic-officials/index.ts`)
+- Trigger with `maxCandidates: 2` first as a smoke test.
+- Tail logs at https://supabase.com/dashboard/project/ornnzinjrcyigazecctf/functions/batch-regenerate-answers/logs to confirm it skips hidden states and processes only FL/NJ/OH/PA/US.
+- Re-query `candidate_answers` count per candidate to confirm it climbs toward 340.
 
-In `fetchOpenStatesOfficials`, replace the title-only check with a check that also looks at `current_role.title`, `current_role.org_classification`, and the person's `roles[]` array. Also log every executive person returned so we can see what Open States is actually sending for MT. Keep the Lt-Gov detection as-is.
+## Out of scope
 
-### B. Add a safe fallback for state legislators
+- Strict topic-by-topic ordering (each rep's run already covers all topics).
+- Re-generating already-answered questions (uses `forceRegenerate:false`).
+- Changing the AI prompt or scoring logic.
 
-Keep `people.geo` as the primary lookup, but when it returns 0 results, fall back to a **district-scoped** jurisdiction query: `?jurisdiction={state}&org_classification=legislature&district={district}` if we have a district, else log and return empty (do **not** revert to the old jurisdiction-wide fetch — that was the Iowa bug). For MT we can also try OpenStates' `/people` endpoint with `latitude`/`longitude` query params as a secondary, since `.geo` data coverage is uneven.
+## Open questions
 
-### C. Surface the gap to the user instead of silently hiding the section
-
-In `Feed.tsx`, when `stateLegislative.length === 0` and `local.length === 0` for a user with an address, render a small inline notice under the section header ("We don't have state/local officials for your area yet — help us add them"). This avoids the impression that "only federal exists".
-
-### D. (Out of scope for this fix, flag only) Local data
-
-`static_officials` is empty for MT and 48 other states. Real fix is a separate ingestion task. For now, the notice in step C covers it.
-
-## Files to touch
-
-- `supabase/functions/fetch-civic-officials/index.ts` — steps A and B
-- `src/pages/Feed.tsx` — step C (inline notice when sections are empty)
-
-## Verification
-
-After deploy, re-run the curl against `/fetch-civic-officials` with the MT lat/lng and confirm `stateExecutive` contains Gianforte and `stateLegislative` contains the user's MT House + Senate district reps.
+1. Should the backfill skip candidates already at 100% coverage automatically? (Current behavior: yes — `candidatesWithMissing` filter already does this.)
+2. Run for all visible states in one go (~98 reps × ~250 missing answers ≈ multi-hour job), or cap with `maxCandidates` and run in chunks?
