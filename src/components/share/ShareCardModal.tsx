@@ -478,7 +478,8 @@ export const ShareCardModal = ({
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            onClick={() => handleOpenIntent('twitter', twitterIntent(finalText, url))}
+            disabled={!!busy}
+            onClick={() => handleSocialIntent('twitter', (s) => twitterIntent(finalText, s))}
             className="gap-2"
           >
             <Twitter className="w-4 h-4" />
@@ -486,7 +487,8 @@ export const ShareCardModal = ({
           </Button>
           <Button
             variant="outline"
-            onClick={() => handleOpenIntent('facebook', facebookIntent(url, finalText))}
+            disabled={!!busy}
+            onClick={() => handleSocialIntent('facebook', (s) => facebookIntent(s, finalText))}
             className="gap-2"
           >
             <Facebook className="w-4 h-4" />
@@ -494,7 +496,8 @@ export const ShareCardModal = ({
           </Button>
           <Button
             variant="outline"
-            onClick={() => handleOpenIntent('linkedin', linkedinIntent(url))}
+            disabled={!!busy}
+            onClick={() => handleSocialIntent('linkedin', (s) => linkedinIntent(s))}
             className="gap-2"
           >
             <Linkedin className="w-4 h-4" />
