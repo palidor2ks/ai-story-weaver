@@ -33,10 +33,36 @@ export const Feed = () => {
   const [levelFilter, setLevelFilter] = useState<GovernmentLevel>('all');
   const [incumbentFilter, setIncumbentFilter] = useState<string>('all');
 
+  // Build a robust dedup key that handles "Last, First Jr" vs "First Last, Jr."
+  // and varied office strings (e.g. "Representative" vs "U.S. House NJ-06").
+  const SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv']);
+  const personKey = (name: string): string => {
+    const tokens = (name || '')
+      .toLowerCase()
+      .replace(/[.,]/g, ' ')
+      .split(/\s+/)
+      .map(t => t.replace(/[^a-z0-9]/g, ''))
+      .filter(t => t && t.length > 1 && !SUFFIXES.has(t));
+    return Array.from(new Set(tokens)).sort().join(' ');
+  };
+  const chamberOf = (office: string): string => {
+    const o = (office || '').toLowerCase();
+    if (/senate|senator/.test(o)) return 'senate';
+    if (/house|representative|congress/.test(o)) return 'house';
+    if (/president/.test(o)) return 'president';
+    if (/governor/.test(o)) return 'governor';
+    return o.replace(/[^a-z0-9]+/g, ' ').trim();
+  };
+  const dedupKey = (name: string, office: string, state?: string | null, district?: string | null) => {
+    const ch = chamberOf(office);
+    const districtPart = ch === 'house' ? (district || '').toString().replace(/\D/g, '') : '';
+    return `${personKey(name)}|${(state || '').toLowerCase()}|${ch}|${districtPart}`;
+  };
+
   // Address-scoped officials only (Feed only shows the user's reps + civic, not all of Congress)
   const transformedCandidates: Candidate[] = useMemo(() => {
     const seen = new Set<string>();
-    const seenNames = new Set<string>();
+    const seenKeys = new Set<string>();
     const out: Candidate[] = [];
     for (const c of [
       ...unified.myReps,
@@ -47,7 +73,7 @@ export const Feed = () => {
     ]) {
       if (seen.has(c.id)) continue;
       seen.add(c.id);
-      seenNames.add(unifiedCandidateNameKey(c.name, c.office));
+      seenKeys.add(dedupKey(c.name, c.office, c.state, c.district));
       out.push(c);
     }
 
@@ -58,10 +84,10 @@ export const Feed = () => {
         for (const election of upcomingElections[level] ?? []) {
           for (const c of election.candidates) {
             if (seen.has(c.candidate_id)) continue;
-            const nameKey = unifiedCandidateNameKey(c.name, c.office);
-            if (seenNames.has(nameKey)) continue;
+            const key = dedupKey(c.name, c.office, c.state, c.district);
+            if (seenKeys.has(key)) continue;
             seen.add(c.candidate_id);
-            seenNames.add(nameKey);
+            seenKeys.add(key);
             const partyVal = (c.party as Candidate['party']) || 'Other';
             out.push({
               id: c.candidate_id,
