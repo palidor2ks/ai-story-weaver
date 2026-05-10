@@ -353,7 +353,20 @@ serve(async (req) => {
     }
 
     const params = await req.json().catch(() => ({}));
-    
+
+    // Cancel action
+    if (params.action === 'cancel') {
+      const adminDbClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await adminDbClient.from('admin_stats_cache').upsert({
+        stat_key: 'backfill_answers_cancel',
+        stat_value: { cancel: true, requestedBy: user.id, requestedAt: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'stat_key' });
+      return new Response(JSON.stringify({ success: true, message: 'Cancellation requested' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const config = {
       batchSize: params.batchSize || 5,
       delayBetweenCandidates: params.delayBetweenCandidates || 3000,
