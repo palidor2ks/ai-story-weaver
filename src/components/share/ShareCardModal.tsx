@@ -131,10 +131,20 @@ export const ShareCardModal = ({
 
   const getNode = () => refs.current[selected];
 
+  const baseProps = () => ({
+    surface,
+    kind: caption.kind,
+    template: selected,
+    includeHashtags,
+    edited: isEdited,
+    charCount,
+  });
+
   const handleDownload = async () => {
     const node = getNode();
     if (!node) return;
     setBusy('download');
+    trackEvent('share_action', { ...baseProps(), action: 'download', destination: 'file' });
     try {
       await downloadNode(node, filename);
       toast.success('Image downloaded — attach it to your post.');
@@ -150,6 +160,7 @@ export const ShareCardModal = ({
     const node = getNode();
     if (!node) return;
     setBusy('copy');
+    trackEvent('share_action', { ...baseProps(), action: 'copy_image', destination: 'clipboard' });
     try {
       const ok = await copyNodeToClipboard(node);
       if (ok) {
@@ -164,6 +175,49 @@ export const ShareCardModal = ({
     } finally {
       setBusy(null);
     }
+  };
+
+  const handleCopyCaption = async () => {
+    trackEvent('share_action', { ...baseProps(), action: 'copy_caption', destination: 'clipboard' });
+    try {
+      await navigator.clipboard.writeText(finalText);
+      toast.success('Caption copied to clipboard.');
+    } catch {
+      toast.error('Could not copy caption.');
+    }
+  };
+
+  const handleNative = async () => {
+    const node = getNode();
+    if (!node) return;
+    setBusy('native');
+    trackEvent('share_action', { ...baseProps(), action: 'native', destination: 'native' });
+    try {
+      let files: File[] | undefined;
+      try {
+        files = [await nodeToFile(node, filename)];
+      } catch {
+        files = undefined;
+      }
+      const ok = await nativeShare({
+        title: 'Pulse',
+        text: finalText,
+        url,
+        files,
+      });
+      if (!ok) toast.error('Share failed.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleOpenIntent = (destination: 'twitter' | 'facebook' | 'linkedin', href: string) => {
+    trackEvent('share_action', {
+      ...baseProps(),
+      action: 'open_intent',
+      destination,
+    });
+    openIntent(href);
   };
 
   const handleCopyCaption = async () => {
