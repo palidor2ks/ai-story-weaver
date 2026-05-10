@@ -12,8 +12,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RELIGION_GROUPS } from '@/data/religionOptions';
-import { ArrowRight, ArrowLeft, User } from 'lucide-react';
+import { ArrowRight, ArrowLeft, User, Info } from 'lucide-react';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { useHiddenStates } from '@/hooks/useHiddenStates';
 
 export interface DemographicsData {
   address: string;
