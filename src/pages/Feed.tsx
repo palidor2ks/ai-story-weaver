@@ -5,7 +5,8 @@ import { CandidateCard } from '@/components/CandidateCard';
 import { QuestionUpdateAlert } from '@/components/QuestionUpdateAlert';
 import { calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile, useUserTopics } from '@/hooks/useProfile';
-import { useUnifiedCandidates } from '@/hooks/useUnifiedCandidates';
+import { useUnifiedCandidates, unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
+import { useUpcomingElections } from '@/hooks/useUpcomingElections';
 import { useHiddenStates } from '@/hooks/useHiddenStates';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +25,7 @@ export const Feed = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
   const unified = useUnifiedCandidates({ address: profile?.address });
+  const { data: upcomingElections } = useUpcomingElections(profile?.address);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('match');
@@ -34,6 +36,7 @@ export const Feed = () => {
   // Address-scoped officials only (Feed only shows the user's reps + civic, not all of Congress)
   const transformedCandidates: Candidate[] = useMemo(() => {
     const seen = new Set<string>();
+    const seenNames = new Set<string>();
     const out: Candidate[] = [];
     for (const c of [
       ...unified.myReps,
@@ -44,10 +47,46 @@ export const Feed = () => {
     ]) {
       if (seen.has(c.id)) continue;
       seen.add(c.id);
+      seenNames.add(unifiedCandidateNameKey(c.name, c.office));
       out.push(c);
     }
+
+    // Merge in upcoming-election candidates on the user's ballot
+    if (upcomingElections) {
+      const levels: Array<'federal' | 'state' | 'local'> = ['federal', 'state', 'local'];
+      for (const level of levels) {
+        for (const election of upcomingElections[level] ?? []) {
+          for (const c of election.candidates) {
+            if (seen.has(c.candidate_id)) continue;
+            const nameKey = unifiedCandidateNameKey(c.name, c.office);
+            if (seenNames.has(nameKey)) continue;
+            seen.add(c.candidate_id);
+            seenNames.add(nameKey);
+            const partyVal = (c.party as Candidate['party']) || 'Other';
+            out.push({
+              id: c.candidate_id,
+              name: c.name,
+              party: partyVal,
+              office: c.office,
+              state: c.state,
+              district: c.district || undefined,
+              imageUrl: c.image_url || undefined,
+              overallScore: c.overall_score ?? 0,
+              topicScores: [],
+              lastUpdated: new Date(),
+              coverageTier: (c.coverage_tier as any) || 'tier_3',
+              confidence: (c.confidence as any) || 'low',
+              isIncumbent: c.is_incumbent,
+              transitionStatus: 'candidate',
+              level,
+            });
+          }
+        }
+      }
+    }
+
     return out;
-  }, [unified.myReps, unified.federalExec, unified.stateExec, unified.stateLeg, unified.local]);
+  }, [unified.myReps, unified.federalExec, unified.stateExec, unified.stateLeg, unified.local, upcomingElections]);
 
   // Track if we've shown the toast this session to avoid duplicates
   const toastShownRef = useRef(false);
