@@ -946,6 +946,8 @@ serve(async (req) => {
 
   try {
     // No auth required — public civic data lookup, cached server-side.
+    // Forward caller's auth header (if any) to internal function calls; empty string is fine.
+    const authHeader = req.headers.get('Authorization') ?? '';
 
     const body = await req.json();
     const { address, includeFederalLegislative = false } = body;
