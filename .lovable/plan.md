@@ -1,27 +1,48 @@
-## Fix: Backfill 401 Unauthorized
+## Problem
 
-**Where it's failing:** Every call from `batch-regenerate-answers` → `get-candidate-answers` returns 401. The batch sends `Authorization: Bearer <SERVICE_ROLE_KEY>`, but `get-candidate-answers` runs `supabase.auth.getUser(token)` / `getClaims(token)` against it. Service role JWTs aren't user session tokens, so auth rejects them and 0/98 candidates succeed.
+Two `candidates` rows exist for Cory Booker (NJ Senate):
 
-## Change
+| id | name | source |
+|---|---|---|
+| `B001288` | Cory A. Booker | Congress / bioguide (canonical) — has FEC ID `S4NJ00185`, lis_member_id, all finance + voting data |
+| `S4NJ00185` | BOOKER, CORY A. | Created by `fetch-upcoming-elections` from FEC search results |
 
-**`supabase/functions/get-candidate-answers/index.ts`** — Add a service-role bypass at the top of the auth block:
+Both rows independently accumulated 240 `candidate_answers` and 7 `candidate_committees`. `S4NJ00185` is also linked to 2 `election_candidates` rows. All finance (donors, contributions, rollups, reconciliation) lives only on `B001288`.
 
-1. Read the bearer token from `Authorization`.
-2. If `token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')`, skip the user auth check and treat the call as trusted server-to-server (set an internal `isServiceCall = true` flag).
-3. Otherwise, run the existing user JWT validation unchanged.
-4. Anywhere downstream that uses `userId` for RLS-scoped reads, fall back to the service-role client (already used for writes) when `isServiceCall` is true.
+## Fix — two parts
 
-No changes to `batch-regenerate-answers` or the admin UI.
+### 1. One-time data merge (migration)
 
-## Verification
+Keep `B001288`. For `S4NJ00185`:
 
-1. Deploy `get-candidate-answers`.
-2. Re-trigger the backfill from Admin → Answer Coverage with a small test (`maxCandidates: 2`) via curl_edge_functions.
-3. Tail `get-candidate-answers` logs — confirm no `[Auth] User auth failed` errors.
-4. Tail `batch-regenerate-answers` logs — confirm `✓ <name>: X → Y answers` lines instead of `✗ HTTP 401`.
-5. Spot-check `candidate_answers` count for one processed candidate climbs.
+- `election_candidates`: re-point its 2 rows to `B001288` (skip on conflict with existing election link).
+- `candidate_answers` (240) and `candidate_committees` (7): delete — `B001288` already has equivalent rows.
+- `candidate_overrides`, `candidate_votes`, `candidate_topic_scores`, `candidate_fec_ids`, `donors`, `contributions`, `committee_finance_rollups`, `finance_reconciliation`, `pac_*`, `external_committee_finance`: nothing to migrate (S4NJ00185 has 0 rows in each).
+- Delete the `candidates` row `S4NJ00185`.
+
+### 2. Prevent recurrence in `fetch-upcoming-elections`
+
+In `persistCandidates()` (lines 469-501), before inserting a new candidate using the FEC candidate id as `id`, look up an existing canonical row by `fec_candidate_id`:
+
+```
+const { data: byFec } = await supabase
+  .from('candidates')
+  .select('id')
+  .eq('fec_candidate_id', c.fec_candidate_id)
+  .maybeSingle();
+if (byFec) { c.id = byFec.id; /* use canonical id, skip insert */ }
+```
+
+Also reuse the same lookup when `c.id` itself looks like an FEC id (`^[HSP]\d[A-Z]{2}\d+`) so future imports collapse onto the bioguide row.
 
 ## Out of scope
 
-- No changes to scoring, prompts, or which questions are asked.
-- No change to user-initiated calls from the frontend (still authenticated as user).
+- No changes to other duplicate detection (name-key collapse already happens client-side in `useUnifiedCandidates`, but the duplicate appeared because both rows have different `fec_candidate_id`/name spellings and survive client dedup separately).
+- No UI changes.
+
+## Deliverables
+
+1. Supabase migration that merges Booker and deletes the duplicate row.
+2. Edit to `supabase/functions/fetch-upcoming-elections/index.ts` adding the FEC-id lookup before insert.
+
+After approval I'll run the migration first, then push the edge function fix.
