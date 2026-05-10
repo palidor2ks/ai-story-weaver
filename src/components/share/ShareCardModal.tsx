@@ -7,9 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Check, Copy, Download, Facebook, Linkedin, Loader2, RotateCcw, Share2, Twitter } from 'lucide-react';
 import { toast } from 'sonner';
 import { BoldCard } from './templates/BoldCard';
-import { MinimalCard } from './templates/MinimalCard';
 import { DataCard } from './templates/DataCard';
-import { EditorialCard } from './templates/EditorialCard';
 import { CardData, CARD_SIZE } from './templates/types';
 import { copyNodeToClipboard, downloadNode, nodeToFile } from '@/lib/shareImage';
 import {
