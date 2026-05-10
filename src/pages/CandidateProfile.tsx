@@ -446,7 +446,21 @@ export const CandidateProfile = () => {
                         Refresh Donors
                       </Button>
                     )}
-                    <span className="text-sm text-muted-foreground">2024 Cycle</span>
+                    <Select
+                      value={effectiveCycle ?? ''}
+                      onValueChange={(v) => setSelectedCycle(v)}
+                      disabled={!cycleInfo}
+                    >
+                      <SelectTrigger className="h-8 w-[140px]">
+                        <SelectValue placeholder="Cycle" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(cycleInfo?.cycles ?? []).map((cy) => (
+                          <SelectItem key={cy} value={cy}>{cy} Cycle</SelectItem>
+                        ))}
+                        <SelectItem value="all">All cycles</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 {candidate.last_donor_sync && (
