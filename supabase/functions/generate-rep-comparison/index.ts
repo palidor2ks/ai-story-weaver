@@ -64,6 +64,7 @@ serve(async (req) => {
   const accessToken = authHeader.replace(/^Bearer\s+/i, '');
   const { data: { user }, error: authError } = await userClient.auth.getUser(accessToken);
   if (authError || !user) {
+    console.warn('[generate-rep-comparison] Unauthorized request:', authError?.message || 'no user returned');
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
