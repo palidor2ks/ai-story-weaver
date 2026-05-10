@@ -108,6 +108,12 @@ export function useGenerateRepComparison() {
     }) => {
       if (!user?.id) throw new Error('Not authenticated');
 
+      // Verify a valid session exists before invoking (avoids 401 after logout/refresh races)
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        throw new Error('No active session');
+      }
+
       console.log(`[useGenerateRepComparison] Generating ${deepAnalysis ? 'deep' : 'summary'} for ${candidateName}`);
 
       // Call edge function to generate comparison
