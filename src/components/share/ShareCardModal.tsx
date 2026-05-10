@@ -1,7 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Check, Copy, Download, Facebook, Linkedin, Loader2, Share2, Twitter } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Check, Copy, Download, Facebook, Linkedin, Loader2, RotateCcw, Share2, Twitter } from 'lucide-react';
 import { toast } from 'sonner';
 import { BoldCard } from './templates/BoldCard';
 import { MinimalCard } from './templates/MinimalCard';
@@ -11,8 +14,9 @@ import { CardData, CARD_SIZE } from './templates/types';
 import { copyNodeToClipboard, downloadNode, nodeToFile } from '@/lib/shareImage';
 import {
   CaptionInput,
-  generateLongCaption,
+  composeFinalText,
   generateShortCaption,
+  getDefaultHashtags,
 } from '@/lib/shareCaptions';
 import {
   facebookIntent,
@@ -61,8 +65,39 @@ export const ShareCardModal = ({
     editorial: null,
   });
 
-  const longText = useMemo(() => generateLongCaption(caption), [caption]);
-  const shortText = useMemo(() => generateShortCaption(caption), [caption]);
+  const defaultBody = useMemo(() => generateShortCaption(caption), [caption]);
+  const defaultHashtags = useMemo(() => getDefaultHashtags(caption), [caption]);
+
+  const [body, setBody] = useState(defaultBody);
+  const [includeHashtags, setIncludeHashtags] = useState(true);
+
+  // Reset when the modal opens with new content
+  useEffect(() => {
+    if (open) {
+      setBody(defaultBody);
+      setIncludeHashtags(true);
+    }
+  }, [open, defaultBody]);
+
+  const finalText = useMemo(
+    () => composeFinalText(body, defaultHashtags, includeHashtags),
+    [body, defaultHashtags, includeHashtags],
+  );
+
+  const isEdited = body.trim() !== defaultBody.trim() || !includeHashtags;
+  const charCount = finalText.length;
+  const charLimit = 280;
+  const charClass =
+    charCount > charLimit
+      ? 'text-destructive'
+      : charCount > charLimit - 40
+      ? 'text-amber-600 dark:text-amber-500'
+      : 'text-muted-foreground';
+
+  const handleResetCaption = () => {
+    setBody(defaultBody);
+    setIncludeHashtags(true);
+  };
 
   const filename = useMemo(() => {
     const base =
@@ -100,7 +135,6 @@ export const ShareCardModal = ({
       if (ok) {
         toast.success('Image copied — paste it into your post.');
       } else {
-        // Fallback: download
         await downloadNode(node, filename);
         toast.message('Clipboard not supported — image was downloaded instead.');
       }
@@ -114,7 +148,7 @@ export const ShareCardModal = ({
 
   const handleCopyCaption = async () => {
     try {
-      await navigator.clipboard.writeText(longText);
+      await navigator.clipboard.writeText(finalText);
       toast.success('Caption copied to clipboard.');
     } catch {
       toast.error('Could not copy caption.');
@@ -134,7 +168,7 @@ export const ShareCardModal = ({
       }
       const ok = await nativeShare({
         title: 'Pulse',
-        text: shortText,
+        text: finalText,
         url,
         files,
       });
@@ -249,6 +283,53 @@ export const ShareCardModal = ({
           ))}
         </div>
 
+        {/* Caption editor */}
+        <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="share-caption" className="text-sm font-semibold">
+              Caption
+            </Label>
+            {isEdited && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleResetCaption}
+                className="h-7 gap-1 text-xs"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset to suggested
+              </Button>
+            )}
+          </div>
+          <Textarea
+            id="share-caption"
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            rows={4}
+            placeholder="Write a custom message…"
+            className="resize-y bg-background"
+          />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Switch
+                id="hashtags-toggle"
+                checked={includeHashtags}
+                onCheckedChange={setIncludeHashtags}
+              />
+              <Label htmlFor="hashtags-toggle" className="text-sm cursor-pointer">
+                Include suggested hashtags
+              </Label>
+              <span className="text-xs text-muted-foreground font-mono">
+                {defaultHashtags}
+              </span>
+            </div>
+            <span className={cn('text-xs tabular-nums', charClass)}>
+              {charCount} / {charLimit}
+            </span>
+          </div>
+        </div>
+
         {/* Actions */}
         <div className="flex flex-wrap gap-2 pt-2">
           <Button onClick={handleDownload} disabled={!!busy} className="gap-2">
@@ -276,7 +357,7 @@ export const ShareCardModal = ({
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            onClick={() => openIntent(twitterIntent(shortText, url))}
+            onClick={() => openIntent(twitterIntent(finalText, url))}
             className="gap-2"
           >
             <Twitter className="w-4 h-4" />
@@ -284,7 +365,7 @@ export const ShareCardModal = ({
           </Button>
           <Button
             variant="outline"
-            onClick={() => openIntent(facebookIntent(url, shortText))}
+            onClick={() => openIntent(facebookIntent(url, finalText))}
             className="gap-2"
           >
             <Facebook className="w-4 h-4" />
