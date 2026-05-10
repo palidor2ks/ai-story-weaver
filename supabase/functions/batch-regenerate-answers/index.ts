@@ -58,8 +58,7 @@ async function processBatchInBackground(params: {
 }) {
   const { batchSize, delayBetweenCandidates, delayBetweenBatches, maxCandidates, startFromId, visibleStatesOnly, states } = params;
   
-  globalProgress.startTime = Date.now();
-  
+  globalProgress = { processed: 0, successful: 0, failed: 0, total: 0, currentCandidate: '', startTime: Date.now() };
   console.log(`=== BACKGROUND BATCH REGENERATION STARTED ===`);
   console.log(`Parameters: batchSize=${batchSize}, maxCandidates=${maxCandidates || 'unlimited'}`);
 
@@ -149,6 +148,31 @@ async function processBatchInBackground(params: {
     console.log(`Will process: ${candidatesToProcess.length} candidates`);
 
     const results: ProcessResult[] = [];
+    const failures: { id: string; name: string; error: string }[] = [];
+
+    const writeProgress = async (status: 'running' | 'complete' | 'error', extra: Record<string, unknown> = {}) => {
+      try {
+        await supabase.from('admin_stats_cache').upsert({
+          stat_key: 'backfill_answers_progress',
+          stat_value: {
+            status,
+            processed: globalProgress.processed,
+            total: globalProgress.total,
+            successful: globalProgress.successful,
+            failed: globalProgress.failed,
+            currentCandidate: globalProgress.currentCandidate,
+            startedAt: new Date(globalProgress.startTime).toISOString(),
+            failures: failures.slice(-20),
+            ...extra,
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'stat_key' });
+      } catch (e) {
+        console.warn('Failed to write progress:', e);
+      }
+    };
+
+    await writeProgress('running');
 
     // Process in batches
     for (let i = 0; i < candidatesToProcess.length; i += batchSize) {
@@ -218,9 +242,11 @@ async function processBatchInBackground(params: {
           });
 
           globalProgress.failed++;
+          failures.push({ id: candidate.id, name: candidate.name, error: errorMessage });
         }
 
         globalProgress.processed++;
+        await writeProgress('running');
 
         // Log progress every 10 candidates
         if (globalProgress.processed % 10 === 0) {
@@ -251,10 +277,25 @@ async function processBatchInBackground(params: {
     console.log(`Successful: ${globalProgress.successful}`);
     console.log(`Failed: ${globalProgress.failed}`);
     console.log(`Elapsed time: ${elapsedMinutes} minutes`);
+    await writeProgress('complete', { elapsedMinutes, completedAt: new Date().toISOString() });
 
   } catch (error) {
     console.error('=== BATCH REGENERATION ERROR ===');
     console.error(error instanceof Error ? error.message : 'Unknown error');
+    try {
+      await supabase.from('admin_stats_cache').upsert({
+        stat_key: 'backfill_answers_progress',
+        stat_value: {
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          processed: globalProgress.processed,
+          total: globalProgress.total,
+          successful: globalProgress.successful,
+          failed: globalProgress.failed,
+        },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'stat_key' });
+    } catch (_e) { /* ignore */ }
   }
 }
 

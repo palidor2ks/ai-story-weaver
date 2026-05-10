@@ -53,6 +53,7 @@ import { FinanceCategoryBreakdown } from "@/components/admin/FinanceCategoryBrea
 import { CandidateHealthBadge } from "@/components/admin/CandidateHealthBadge";
 import { CandidateEditDialog } from "@/components/admin/CandidateEditDialog";
 import { CandidateAnswersDialog } from "@/components/admin/CandidateAnswersDialog";
+import { BackfillAnswersControl } from "@/components/admin/BackfillAnswersControl";
 import { ColumnHeaderFilter } from "@/components/admin/ColumnHeaderFilter";
 import { ProcessingStatusIndicator } from "@/components/admin/ProcessingStatusIndicator";
 import { ScoreTextInline } from "@/components/ScoreText";
@@ -1281,39 +1282,7 @@ export function AnswerCoveragePanel() {
               </AlertDialog>
 
               {/* Backfill Answers for Visible States */}
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button size="sm" variant="outline">
-                    <Brain className="h-4 w-4 mr-2" />
-                    Backfill Answers (Visible States)
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Backfill missing answers for visible states?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Iterates every politician whose state is NOT in hidden_states and fills any missing question answers (rep by rep, all topics covered per rep). Skips reps already at full coverage. Runs in background — may take hours.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={async () => {
-                      const { supabase } = await import('@/integrations/supabase/client');
-                      const { data, error } = await supabase.functions.invoke('batch-regenerate-answers', {
-                        body: { visibleStatesOnly: true, batchSize: 5, delayBetweenCandidates: 3000 }
-                      });
-                      if (error) {
-                        toast.error('Failed to start backfill', { description: error.message });
-                      } else {
-                        toast.success('Backfill started', { description: 'Check edge function logs for progress.' });
-                        console.log('batch-regenerate-answers started', data);
-                      }
-                    }}>
-                      Start Backfill
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <BackfillAnswersControl />
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
