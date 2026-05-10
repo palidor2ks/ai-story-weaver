@@ -437,8 +437,11 @@ async function fetchOpenStatesOfficials(
       }
     }
 
-    // Fetch governors - use jurisdiction search for executive officials
-    const governorsUrl = `https://v3.openstates.org/people?jurisdiction=${state.toLowerCase()}&org_classification=executive&per_page=10`;
+    // Fetch governors. Open States doesn't reliably classify the actual
+    // Governor under `org_classification=executive` for every state (e.g. MT
+    // returns Lt. Gov + AG only, missing the Governor). Drop the org filter
+    // and search the whole jurisdiction, then identify Gov / Lt Gov by title.
+    const governorsUrl = `https://v3.openstates.org/people?jurisdiction=${state.toLowerCase()}&per_page=50`;
     console.log(`[Open States] Fetching governors: ${governorsUrl}`);
 
     const governorsResponse = await fetch(governorsUrl, { headers });
@@ -447,22 +450,33 @@ async function fetchOpenStatesOfficials(
     if (governorsResponse.ok) {
       const data = await governorsResponse.json();
       const results = data.results || [];
-      console.log(`[Open States] Found ${results.length} executive officials`);
+      console.log(`[Open States] Found ${results.length} jurisdiction officials (filtering for governor titles)`);
 
+      const seenGovIds = new Set<string>();
       for (const person of results) {
-        if (!person.current_role) continue;
-
-        const role = person.current_role;
-        const title = (role.title || '').toLowerCase();
-        
-        // Only include governors and lieutenant governors
-        if (!title.includes('governor')) {
-          console.log(`[Open States] SKIPPING executive "${person.name}" — title "${role.title}" does not contain "governor"`);
-          continue;
+        // Title can live on current_role, or on any of the person's roles.
+        const titles: string[] = [];
+        if (person.current_role?.title) titles.push(String(person.current_role.title));
+        if (Array.isArray(person.roles)) {
+          for (const r of person.roles) {
+            if (r?.title) titles.push(String(r.title));
+          }
         }
+        const titleStr = titles.join(' | ').toLowerCase();
 
-        const isLtGov = title.includes('lieutenant') || title.includes('lt.') || title.includes('lt_') || /\blt\b/.test(title);
-        
+        if (!titleStr.includes('governor')) continue;
+
+        const isLtGov =
+          titleStr.includes('lieutenant') ||
+          titleStr.includes('lt.') ||
+          titleStr.includes('lt_') ||
+          /\blt\b/.test(titleStr);
+
+        if (seenGovIds.has(person.id)) continue;
+        seenGovIds.add(person.id);
+
+        console.log(`[Open States] Including executive "${person.name}" as ${isLtGov ? 'Lt Gov' : 'Governor'} (titles: ${titles.join(' | ')})`);
+
         const official: OfficialInfo = {
           id: `openstates_${person.id.replace(/\//g, '_')}`,
           name: person.name,
