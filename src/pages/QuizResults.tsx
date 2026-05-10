@@ -10,7 +10,10 @@ import { useProfile, useUserTopicScores, useUserTopics } from '@/hooks/useProfil
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial, OfficeLevelType } from '@/hooks/useCivicOfficials';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
+import { useUpcomingElections } from '@/hooks/useUpcomingElections';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
+import { unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
+import { Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
