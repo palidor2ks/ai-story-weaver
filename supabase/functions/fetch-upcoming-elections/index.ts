@@ -107,24 +107,31 @@ async function fetchFEC(state: string, district: string | null): Promise<Electio
   for (const cycle of cycles) {
     // House (only if we know district), Senate, President in parallel.
     const calls: Array<Promise<{ office: string; data: any }>> = [];
-    const base = 'https://api.data.gov/fec/v1/candidates/search';
-    const common = `api_key=${FEC_API_KEY}&candidate_status=C&per_page=100&cycle=${cycle}`;
+    const base = 'https://api.open.fec.gov/v1/candidates/search/';
+    const common = `api_key=${FEC_API_KEY}&candidate_status=C&per_page=100&election_year=${cycle}`;
+
+    const fecFetch = async (office: string, url: string) => {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) {
+          const body = await r.text().catch(() => '');
+          console.warn('[FEC] non-OK', { office, cycle, status: r.status, body: body.slice(0, 300) });
+          return { office, data: { results: [] } };
+        }
+        const data = await r.json();
+        return { office, data };
+      } catch (e) {
+        console.warn('[FEC] fetch error', { office, cycle, error: String(e) });
+        return { office, data: { results: [] } };
+      }
+    };
 
     if (district) {
       const dist = district.replace(/^\D+/, '').padStart(2, '0');
-      calls.push(
-        fetch(`${base}?${common}&office=H&state=${state}&district=${dist}`)
-          .then(r => r.json()).then(data => ({ office: 'H', data })).catch(() => ({ office: 'H', data: { results: [] } })),
-      );
+      calls.push(fecFetch('H', `${base}?${common}&office=H&state=${state}&district=${dist}`));
     }
-    calls.push(
-      fetch(`${base}?${common}&office=S&state=${state}`)
-        .then(r => r.json()).then(data => ({ office: 'S', data })).catch(() => ({ office: 'S', data: { results: [] } })),
-    );
-    calls.push(
-      fetch(`${base}?${common}&office=P`)
-        .then(r => r.json()).then(data => ({ office: 'P', data })).catch(() => ({ office: 'P', data: { results: [] } })),
-    );
+    calls.push(fecFetch('S', `${base}?${common}&office=S&state=${state}`));
+    calls.push(fecFetch('P', `${base}?${common}&office=P`));
 
     const settled = await Promise.all(calls);
 
