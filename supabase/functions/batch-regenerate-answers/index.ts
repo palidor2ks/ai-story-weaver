@@ -53,8 +53,10 @@ async function processBatchInBackground(params: {
   delayBetweenBatches: number;
   maxCandidates: number;
   startFromId: string | null;
+  visibleStatesOnly?: boolean;
+  states?: string[] | null;
 }) {
-  const { batchSize, delayBetweenCandidates, delayBetweenBatches, maxCandidates, startFromId } = params;
+  const { batchSize, delayBetweenCandidates, delayBetweenBatches, maxCandidates, startFromId, visibleStatesOnly, states } = params;
   
   globalProgress.startTime = Date.now();
   
