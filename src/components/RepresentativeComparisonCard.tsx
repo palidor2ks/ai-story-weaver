@@ -104,10 +104,10 @@ export function RepresentativeComparisonCard({ official, resolvedScore }: Repres
 
   // Auto-generate comparison on mount if we don't have one and have the data
   useEffect(() => {
-    if (!comparison && canGenerate && !comparisonLoading && !generateMutation.isPending) {
+    if (user?.id && !comparison && canGenerate && !comparisonLoading && !generateMutation.isPending) {
       handleGenerateComparison(false);
     }
-  }, [comparison, canGenerate, comparisonLoading]);
+  }, [user?.id, comparison, canGenerate, comparisonLoading]);
 
   const handleGenerateComparison = useCallback(async (deep: boolean) => {
     if (!canGenerate) return;
