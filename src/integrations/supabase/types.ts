@@ -2546,6 +2546,13 @@ export type Database = {
       }
     }
     Functions: {
+      _candidate_district_key: { Args: { p_district: string }; Returns: string }
+      _candidate_name_key: { Args: { p_name: string }; Returns: string }
+      _candidate_office_class: { Args: { p_office: string }; Returns: string }
+      _merge_candidate: {
+        Args: { p_loser: string; p_winner: string }
+        Returns: undefined
+      }
       backfill_candidate_scores: {
         Args: never
         Returns: {
