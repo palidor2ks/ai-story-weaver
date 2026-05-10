@@ -137,8 +137,7 @@ export const QuizResults = () => {
       ? window.location.host.replace(/^www\./, '')
       : 'polipulseapp.com';
 
-  const [resultsShareOpen, setResultsShareOpen] = useState(false);
-  const [inviteShareOpen, setInviteShareOpen] = useState(false);
+
 
   // Sort topic scores by weight (user's ranking) for the share card
   const topTopicsForShare = useMemo(() => {
