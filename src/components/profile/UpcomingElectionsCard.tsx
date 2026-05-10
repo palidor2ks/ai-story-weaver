@@ -62,7 +62,7 @@ function CandidateRow({ c }: { c: UpcomingCandidate }) {
   );
 }
 
-function ElectionGroup({ election }: { election: UpcomingElection }) {
+function ElectionGroup({ election, onOpen }: { election: UpcomingElection; onOpen: (e: UpcomingElection) => void }) {
   // Group candidates by office within this election.
   const byOffice = new Map<string, UpcomingCandidate[]>();
   for (const c of election.candidates) {
@@ -72,11 +72,16 @@ function ElectionGroup({ election }: { election: UpcomingElection }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+      <button
+        type="button"
+        onClick={() => onOpen(election)}
+        className="w-full flex items-center gap-2 text-sm font-semibold text-foreground text-left rounded-md px-2 py-1 -mx-2 hover:bg-accent/40 transition-colors group"
+      >
         <Calendar className="w-4 h-4 text-muted-foreground" />
         <span>{formatDate(election.election_date)}</span>
         <span className="text-muted-foreground font-normal">— {election.name}</span>
-      </div>
+        <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto group-hover:translate-x-0.5 transition-transform" />
+      </button>
       {Array.from(byOffice.entries()).map(([office, cands]) => (
         <div key={office} className="space-y-1.5 pl-6">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{office}</div>
