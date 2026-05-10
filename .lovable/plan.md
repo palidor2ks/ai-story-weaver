@@ -1,57 +1,48 @@
-## Goal
+## Problem
 
-Ensure every quiz question has a "Not important to me" skip option. A database audit found **220 questions** missing this option (covering civil-rights, economy, education, and other topics).
+For Iowa, the user saw every state legislator instead of just the two (one State Senator + one State Representative) covering their address.
 
-## Approach
+## Root Cause
 
-Add a single Supabase migration that inserts a skip option for every question that doesn't already have one.
+In `supabase/functions/fetch-civic-officials/index.ts` (`fetchOpenStatesOfficials`):
 
-For each missing question, insert one `question_options` row:
-
-- `id`: `{question_id}-opt-skip`
-- `question_id`: the question's id
-- `text`: `Not important to me`
-- `value`: `0`
-- `display_order`: `6` (consistent with existing skip options)
-- `is_skip_option`: `true`
-
-## SQL
-
-```sql
-INSERT INTO public.question_options
-  (id, question_id, text, value, display_order, is_skip_option)
-SELECT
-  q.id || '-opt-skip',
-  q.id,
-  'Not important to me',
-  0,
-  6,
-  true
-FROM public.questions q
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM public.question_options o
-  WHERE o.question_id = q.id
-    AND o.is_skip_option = true
-);
+```ts
+if (lat && lng) {
+  legislatorsUrl = `https://v3.openstates.org/people.geo?lat=...&lng=...`;
+} else {
+  legislatorsUrl = `https://v3.openstates.org/people?jurisdiction=${state}&per_page=50`;
+}
 ```
 
-This is idempotent — re-running it inserts nothing once every question has a skip option.
+- `people.geo` returns **only the user's district reps** (correct).
+- The fallback `people?jurisdiction=...` returns **all legislators in the state** (wrong — this is what produced the Iowa flood). Per project memory, Open States caps `per_page` at 50, which happens to cover much of Iowa's lower chamber, making the bug very visible there.
+
+When geocoding fails (or `lat`/`lng` aren't passed in), we silently fall back to the jurisdiction-wide list.
+
+## Fix
+
+1. **Edge function — remove the jurisdiction-wide fallback for state legislators.**
+   - In `fetchOpenStatesOfficials`, if `lat`/`lng` are missing, log a warning and return `{ legislators: [], governors }` for the legislators portion. Do not fetch jurisdiction-wide.
+   - Governor/executive fetch (which is intentionally state-wide) stays as-is.
+
+2. **Edge function — try harder to obtain coordinates before giving up.**
+   - In the main handler, if `coords` is still null after the hint + `geocodeAddress` attempt, attempt one more lookup using a normalized address (already partially done in `geocodeAddress`); if still null, skip the legislators fetch as above.
+
+3. **Defensive frontend filter (belt-and-suspenders).**
+   - In `useCivicOfficials.ts`, after receiving `stateLegislative`, if `geocode.district` is known, optionally filter legislators whose `district` doesn't match. This is secondary — the edge-function fix is the real cure — and only added if it doesn't risk hiding a correct match (Open States districts are formatted as `${STATE}-${district}` whereas civic geocode districts may differ; we will only filter if formats match).
+
+## Files Touched
+
+- `supabase/functions/fetch-civic-officials/index.ts` — change the fallback branch in `fetchOpenStatesOfficials`.
+- (optional) `src/hooks/useCivicOfficials.ts` — add a guarded district filter once we confirm format compatibility.
 
 ## Verification
 
-After the migration, run:
-
-```sql
-SELECT COUNT(*) FROM questions q
-WHERE NOT EXISTS (
-  SELECT 1 FROM question_options o
-  WHERE o.question_id = q.id AND o.is_skip_option = true
-);
--- expected: 0
-```
+- Open the Feed with an Iowa address. Confirm only one State Senator and one State Representative appear.
+- Test with an address that fails to geocode (e.g., a malformed entry) — confirm zero state legislators appear instead of 50.
+- Test a NJ/CA address still returns the user's two state legislators via the geo endpoint.
 
 ## Out of Scope
 
-- No frontend changes — `Onboarding.tsx`, `Quiz.tsx`, and `QuizQuestion.tsx` already render skip options when present.
-- No changes to scoring, since the skip flow is already implemented.
+- Changes to local/federal/governor fetchers.
+- Changes to scoring or display.

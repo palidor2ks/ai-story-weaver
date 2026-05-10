@@ -355,14 +355,17 @@ async function fetchOpenStatesOfficials(
   const governors: OfficialInfo[] = [];
 
   try {
-    // Fetch legislators - use geo endpoint if we have coordinates
-    let legislatorsUrl: string;
+    // Fetch legislators - REQUIRES lat/lng to scope to user's district.
+    // Without coords we MUST NOT fall back to a jurisdiction-wide query
+    // because that returns every state legislator (not just the user's reps).
+    if (!lat || !lng) {
+      console.warn('[Open States] No lat/lng available — skipping state legislator fetch to avoid returning all legislators in the state.');
+      // Still attempt governor fetch below.
+    }
+    let legislatorsUrl: string | null = null;
     if (lat && lng) {
       legislatorsUrl = `https://v3.openstates.org/people.geo?lat=${lat}&lng=${lng}`;
       console.log(`[Open States] Using geo endpoint: ${legislatorsUrl}`);
-    } else {
-      legislatorsUrl = `https://v3.openstates.org/people?jurisdiction=${state.toLowerCase()}&per_page=50`;
-      console.log(`[Open States] Using jurisdiction endpoint: ${legislatorsUrl}`);
     }
 
     const legislatorsController = new AbortController();
