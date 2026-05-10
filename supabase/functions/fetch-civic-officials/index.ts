@@ -368,68 +368,71 @@ async function fetchOpenStatesOfficials(
       console.log(`[Open States] Using geo endpoint: ${legislatorsUrl}`);
     }
 
-    const legislatorsController = new AbortController();
-    const legislatorsTimeout = setTimeout(() => legislatorsController.abort(), 8000);
-    let legislatorsResponse: Response;
-    try {
-      legislatorsResponse = await fetch(legislatorsUrl, { headers, signal: legislatorsController.signal });
-    } catch (e) {
-      console.error('[Open States] Legislators fetch aborted/failed:', e);
-      clearTimeout(legislatorsTimeout);
-      return { legislators: [], governors: [] };
-    }
-    clearTimeout(legislatorsTimeout);
-    console.log(`[Open States] Legislators response status: ${legislatorsResponse.status}`);
-
-    if (legislatorsResponse.ok) {
-      const data = await legislatorsResponse.json();
-      const results = data.results || [];
-      console.log(`[Open States] Found ${results.length} legislators from API`);
-
-      for (const person of results) {
-        if (!person.current_role) continue;
-
-        // Check if this person's name matches any federal legislator keys
-        const personMatchKeys = generateNameMatchKeys(person.name);
-        const matchingKey = personMatchKeys.find(key => federalLegislatorNames?.has(key));
-        if (matchingKey) {
-          console.log(`[Open States] EXCLUDING ${person.name} - matches federal legislator key: "${matchingKey}"`);
-          continue;
-        }
-
-        const role = person.current_role;
-        let office = 'State Legislator';
-        
-        if (role.org_classification === 'upper') {
-          office = 'State Senator';
-        } else if (role.org_classification === 'lower') {
-          office = 'State Representative';
-        }
-
-        const official: OfficialInfo = {
-          id: `openstates_${person.id.replace(/\//g, '_')}`,
-          name: person.name,
-          party: mapParty(person.party),
-          office,
-          level: 'state_legislative',
-          state: state.toUpperCase(),
-          district: role.district ? `${state.toUpperCase()}-${role.district}` : undefined,
-          image_url: person.image || '',
-          urls: person.links?.map((l: { url: string }) => l.url) || [],
-          emails: person.email ? [person.email] : [],
-          is_incumbent: true,
-          overall_score: null,
-          coverage_tier: 'tier_3',
-          confidence: 'low',
-        };
-
-        legislators.push(official);
+    if (legislatorsUrl) {
+      const legislatorsController = new AbortController();
+      const legislatorsTimeout = setTimeout(() => legislatorsController.abort(), 8000);
+      let legislatorsResponse: Response;
+      try {
+        legislatorsResponse = await fetch(legislatorsUrl, { headers, signal: legislatorsController.signal });
+      } catch (e) {
+        console.error('[Open States] Legislators fetch aborted/failed:', e);
+        clearTimeout(legislatorsTimeout);
+        // Continue to governor fetch instead of returning early
+        legislatorsResponse = new Response(null, { status: 599 });
       }
-      
-      console.log(`[Open States] After filtering: ${legislators.length} state legislators`);
-    } else {
-      const errorText = await legislatorsResponse.text();
-      console.error(`[Open States] Legislators API error: ${legislatorsResponse.status} - ${errorText}`);
+      clearTimeout(legislatorsTimeout);
+      console.log(`[Open States] Legislators response status: ${legislatorsResponse.status}`);
+
+      if (legislatorsResponse.ok) {
+        const data = await legislatorsResponse.json();
+        const results = data.results || [];
+        console.log(`[Open States] Found ${results.length} legislators from API`);
+
+        for (const person of results) {
+          if (!person.current_role) continue;
+
+          // Check if this person's name matches any federal legislator keys
+          const personMatchKeys = generateNameMatchKeys(person.name);
+          const matchingKey = personMatchKeys.find(key => federalLegislatorNames?.has(key));
+          if (matchingKey) {
+            console.log(`[Open States] EXCLUDING ${person.name} - matches federal legislator key: "${matchingKey}"`);
+            continue;
+          }
+
+          const role = person.current_role;
+          let office = 'State Legislator';
+
+          if (role.org_classification === 'upper') {
+            office = 'State Senator';
+          } else if (role.org_classification === 'lower') {
+            office = 'State Representative';
+          }
+
+          const official: OfficialInfo = {
+            id: `openstates_${person.id.replace(/\//g, '_')}`,
+            name: person.name,
+            party: mapParty(person.party),
+            office,
+            level: 'state_legislative',
+            state: state.toUpperCase(),
+            district: role.district ? `${state.toUpperCase()}-${role.district}` : undefined,
+            image_url: person.image || '',
+            urls: person.links?.map((l: { url: string }) => l.url) || [],
+            emails: person.email ? [person.email] : [],
+            is_incumbent: true,
+            overall_score: null,
+            coverage_tier: 'tier_3',
+            confidence: 'low',
+          };
+
+          legislators.push(official);
+        }
+
+        console.log(`[Open States] After filtering: ${legislators.length} state legislators`);
+      } else if (legislatorsResponse.status !== 599) {
+        const errorText = await legislatorsResponse.text();
+        console.error(`[Open States] Legislators API error: ${legislatorsResponse.status} - ${errorText}`);
+      }
     }
 
     // Fetch governors - use jurisdiction search for executive officials
