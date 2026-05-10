@@ -571,7 +571,7 @@ export const QuizResults = () => {
                                 confidence: (c.confidence as any) || 'low',
                               };
                               const levelLabel = level === 'federal' ? 'Federal' : level === 'state' ? 'State' : 'Local';
-                              const officeLabel = `${c.office}${c.district ? ` — District ${c.district}` : c.state ? ` (${c.state})` : ''}`;
+                              const officeLabel = formatRunningForOffice(c.office, c.state, c.district);
                               return (
                                 <div key={c.candidate_id} className="space-y-1.5">
                                   <div className="flex flex-wrap items-center gap-2 text-xs">
