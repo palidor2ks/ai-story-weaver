@@ -125,6 +125,7 @@ export function RepresentativeComparisonCard({ official, resolvedScore }: Repres
         deepAnalysis: deep,
       });
     } catch (error) {
+      // Swallow auth/session errors quietly so the page doesn't blank out
       console.error('Error generating comparison:', error);
     } finally {
       setIsGeneratingDeep(false);
