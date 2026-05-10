@@ -27,6 +27,7 @@ import {
   twitterIntent,
 } from '@/lib/shareIntents';
 import { cn } from '@/lib/utils';
+import { trackEvent } from '@/lib/analytics';
 
 const TEMPLATES = [
   { id: 'bold', label: 'Bold', Component: BoldCard },
@@ -70,14 +71,33 @@ export const ShareCardModal = ({
 
   const [body, setBody] = useState(defaultBody);
   const [includeHashtags, setIncludeHashtags] = useState(true);
+  const editedFiredRef = useRef(false);
+  const surface = caption.surface;
 
   // Reset when the modal opens with new content
   useEffect(() => {
     if (open) {
       setBody(defaultBody);
       setIncludeHashtags(true);
+      editedFiredRef.current = false;
+      trackEvent('share_modal_opened', {
+        surface,
+        kind: caption.kind,
+        templateDefault: 'bold',
+      });
     }
-  }, [open, defaultBody]);
+  }, [open, defaultBody, surface, caption.kind]);
+
+  // Fire once per session when caption first diverges from the suggestion
+  useEffect(() => {
+    if (!open || editedFiredRef.current) return;
+    if (body.trim() !== defaultBody.trim()) {
+      editedFiredRef.current = true;
+      trackEvent('share_caption_edited', { surface, kind: caption.kind, template: selected });
+    }
+    // selected intentionally omitted from deps — we only watch body changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [body, defaultBody, open]);
 
   const finalText = useMemo(
     () => composeFinalText(body, defaultHashtags, includeHashtags),
