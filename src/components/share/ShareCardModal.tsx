@@ -237,7 +237,17 @@ export const ShareCardModal = ({
             <button
               key={id}
               type="button"
-              onClick={() => setSelected(id)}
+              onClick={() => {
+                setSelected(id);
+                if (id !== selected) {
+                  trackEvent('share_template_selected', {
+                    surface,
+                    kind: caption.kind,
+                    template: id,
+                    previous: selected,
+                  });
+                }
+              }}
               className={cn(
                 'group relative rounded-xl overflow-hidden border-2 transition-all bg-muted',
                 selected === id
@@ -356,7 +366,15 @@ export const ShareCardModal = ({
               <Switch
                 id="hashtags-toggle"
                 checked={includeHashtags}
-                onCheckedChange={setIncludeHashtags}
+                onCheckedChange={(v) => {
+                  setIncludeHashtags(v);
+                  trackEvent('share_hashtags_toggled', {
+                    surface,
+                    kind: caption.kind,
+                    template: selected,
+                    enabled: v,
+                  });
+                }}
               />
               <Label htmlFor="hashtags-toggle" className="text-sm cursor-pointer">
                 Include suggested hashtags
@@ -398,7 +416,7 @@ export const ShareCardModal = ({
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            onClick={() => openIntent(twitterIntent(finalText, url))}
+            onClick={() => handleOpenIntent('twitter', twitterIntent(finalText, url))}
             className="gap-2"
           >
             <Twitter className="w-4 h-4" />
@@ -406,7 +424,7 @@ export const ShareCardModal = ({
           </Button>
           <Button
             variant="outline"
-            onClick={() => openIntent(facebookIntent(url, finalText))}
+            onClick={() => handleOpenIntent('facebook', facebookIntent(url, finalText))}
             className="gap-2"
           >
             <Facebook className="w-4 h-4" />
@@ -414,7 +432,7 @@ export const ShareCardModal = ({
           </Button>
           <Button
             variant="outline"
-            onClick={() => openIntent(linkedinIntent(url))}
+            onClick={() => handleOpenIntent('linkedin', linkedinIntent(url))}
             className="gap-2"
           >
             <Linkedin className="w-4 h-4" />
