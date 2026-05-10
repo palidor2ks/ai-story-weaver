@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScoreText } from '@/components/ScoreText';
-import { Search, SlidersHorizontal, TrendingUp, MapPin, AlertCircle, Sparkles, Building2 } from 'lucide-react';
+import { Search, SlidersHorizontal, TrendingUp, MapPin, Sparkles, Building2 } from 'lucide-react';
 import { Candidate, GovernmentLevel } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Link } from 'react-router-dom';
@@ -24,8 +24,6 @@ export const Feed = () => {
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
   const unified = useUnifiedCandidates({ address: profile?.address });
-
-  const representativesError = null;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('match');
@@ -69,13 +67,10 @@ export const Feed = () => {
     }
   }, [aiAnswersGenerated, queryClient]);
 
-  const candidatesWithScores = transformedCandidates;
-
   const { isHidden } = useHiddenStates();
 
-
   const filteredAndSortedCandidates = useMemo(() => {
-    let result = candidatesWithScores.filter(c => !isHidden(c.state));
+    let result = transformedCandidates.filter(c => !isHidden(c.state));
 
     // Filter by search query
     if (searchQuery) {

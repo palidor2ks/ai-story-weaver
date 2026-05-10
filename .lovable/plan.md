@@ -1,54 +1,26 @@
-## Root causes
+## Cleanup pass
 
-I traced both bugs end-to-end. They are independent.
+I read both files end-to-end. They're mostly clean (the previous refactor already swapped fragmented data sources for `useUnifiedCandidates`), but a few leftover stubs remain in `Feed.tsx`. `Candidates.tsx` has no dead imports/hooks/variables.
 
-### 1. Vance — broken image URL in DB
+### `src/pages/Feed.tsx`
 
-`candidates.image_url` for `V000137` is:
-```
-https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/JD_Vance_Vice_Presidential_Portrait.jpg/600px-JD_Vance_Vice_Presidential_Portrait.jpg
-```
-A direct request returns **HTTP 400** from Wikimedia (the file path no longer exists / hot‑link rejected). Every page now correctly pulls the DB image, so the broken URL surfaces everywhere — Feed, Candidates, Profile.
+1. **`const representativesError = null;` (line 28)** — leftover from when Feed called `useRepresentatives()` directly and read its `error` field. It is now hard-coded to `null`, so the dependent `<Alert>` block at lines 223‑230 is unreachable dead code.
+   - Remove the variable.
+   - Remove the `{representativesError && (...)}` alert block.
+   - Remove the now-unused `AlertCircle` icon import (line 15) if no other usage remains (it isn't used elsewhere).
 
-### 2. Trump — ID mismatch on Profile page
+2. **`const candidatesWithScores = transformedCandidates;` (line 72)** — pointless alias left over from a prior version that derived scores separately. Replace the three downstream references (`candidatesWithScores`) with `transformedCandidates` and delete the alias.
 
-- `candidates` row uses Trump's FEC id `P80001571` (he has no bioguide).
-- `fetch-civic-officials` builds the President from the unitedstates/congress-legislators executive YAML, where `id.bioguide` is missing, so it falls back to the synthetic id `federal_president` (line 213‑225).
-- The unified DB image resolver added at line 1090 looks up `candidates.id IN (...)` using those synthetic ids → no match for Trump → his `image_url` stays empty.
-- Feed / Candidates pages still show his photo because `useUnifiedCandidates` does a secondary `name+office` fallback against the DB. Profile uses `useRepresentatives` + `useCivicOfficials` directly with no DB merge, so it only sees what the edge function returned — i.e. nothing.
+### `src/pages/Candidates.tsx`
 
-Vance is not affected by #2 because his civic id IS his real bioguide `V000137`, which matches the DB row. He's only broken because of #1.
+No leftover imports, hooks, or variables found. Every import is referenced, every `useCallback`/`useMemo` is used, and there are no aliasing wrappers around the unified hook output. No changes.
 
-## Fix plan
+### Why this prevents conditional-hook issues
 
-### A. Replace Vance's image URL in DB
-Migration to update `candidates.image_url` (and `candidate_overrides` if a row exists) for `V000137` to a stable, hot‑link‑safe official portrait. Two acceptable sources:
-- White House VP portrait: `https://www.whitehouse.gov/wp-content/uploads/2025/01/47-Vice-President-JD-Vance.jpg` (verify 200 before committing)
-- Senate historical bioguide: `https://bioguide.congress.gov/bioguide/photo/V/V000137.jpg`
+Eliminating dead variables that look like the result of an old hook (e.g. `representativesError`) removes the temptation in future edits to "wire it back up" inside a conditional branch. With nothing left to wire up, all hook calls stay at the top level unconditionally.
 
-I'll curl both, pick the one returning 200 with a real image, and write a single migration. No code changes needed — the unified resolver and edge function already pull from the DB.
+### Verification
 
-### B. Make the edge-function image resolver match Trump
-In `supabase/functions/fetch-civic-officials/index.ts` extend the resolver block (lines 1090‑1133) so it also matches by `name + office` for officials whose id didn't hit (just like `useUnifiedCandidates` does on the client):
-
-```text
-1. Build candidate-id lookup as today.
-2. For officials still missing image_url after step 1, batch-fetch
-   candidates by name (case-insensitive) and apply if office matches.
-3. Same fallback against candidate_overrides.
-```
-
-This keeps Profile / QuizResults aligned with Feed / Candidates without having to refactor those pages onto `useUnifiedCandidates` right now.
-
-### C. Bump cache key
-Bump `useCivicOfficials` query key `'v8' → 'v9'` so clients refetch immediately.
-
-### Out of scope
-- No DB schema changes.
-- No refactor of Profile / QuizResults onto `useUnifiedCandidates` (separate, larger task we already noted).
-- No changes to Trump's DB row — his image is correct and reachable (verified HTTP 200).
-
-## Verification after build
-1. `curl -I` the new Vance URL → expect 200.
-2. Reload Feed, Candidates, and Profile in the preview — both Trump and Vance photos render on all three.
-3. Edge function logs show `[ImageResolver] Applied DB image_url for N overrides + M candidates` with a Trump match in the count.
+- TypeScript build passes with no unused-variable warnings on these two files.
+- Feed page still renders identically (the removed alert was unreachable).
+- No behavior change on Candidates.
