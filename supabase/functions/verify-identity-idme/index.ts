@@ -50,6 +50,22 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, code, redirect_uri } = body;
 
+    // Allowlist redirect_uris to prevent OAuth authorization code theft.
+    const ALLOWED_REDIRECT_URIS = new Set<string>([
+      'https://polipulse.lovable.app/auth/idme-callback',
+      'https://polipulseapp.com/auth/idme-callback',
+      'https://www.polipulseapp.com/auth/idme-callback',
+      'https://id-preview--b4a499eb-c11a-4320-8adc-dfe50259459a.lovable.app/auth/idme-callback',
+      'http://localhost:5173/auth/idme-callback',
+      'http://localhost:8080/auth/idme-callback',
+    ]);
+    if (typeof redirect_uri !== 'string' || !ALLOWED_REDIRECT_URIS.has(redirect_uri)) {
+      return new Response(JSON.stringify({ error: 'Invalid redirect_uri' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Action: get_auth_url - Generate the ID.me OAuth URL
     if (action === 'get_auth_url') {
       if (!IDME_CLIENT_ID) {
