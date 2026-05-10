@@ -10,11 +10,13 @@ import { useProfile, useUserTopicScores, useUserTopics } from '@/hooks/useProfil
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial, OfficeLevelType } from '@/hooks/useCivicOfficials';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
+import { useUpcomingElections } from '@/hooks/useUpcomingElections';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
+import { unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
-import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Building2, MapPin } from 'lucide-react';
+import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Building2, MapPin, Calendar, Vote } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ProfileAnalysis {
@@ -35,6 +37,7 @@ export const QuizResults = () => {
   const { data: userTopics = [] } = useUserTopics();
   const { data: repsData, isLoading: repsLoading } = useRepresentatives(profile?.address);
   const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
+  const { data: upcomingElections, isLoading: upcomingLoading } = useUpcomingElections(profile?.address);
   const [profileAnalysis, setProfileAnalysis] = useState<ProfileAnalysis | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [resultsShareOpen, setResultsShareOpen] = useState(false);
@@ -42,6 +45,17 @@ export const QuizResults = () => {
 
   const federalReps = repsData?.representatives ?? [];
   const allRepsLoading = repsLoading || civicLoading;
+
+  // Build set of name keys already shown in Representatives so we can dedupe
+  const repNameKeys = useMemo(() => {
+    const set = new Set<string>();
+    federalReps.forEach(r => set.add(unifiedCandidateNameKey(r.name, r.office)));
+    if (civicData) {
+      [...civicData.federalExecutive, ...civicData.stateExecutive, ...civicData.stateLegislative, ...civicData.local]
+        .forEach(o => set.add(unifiedCandidateNameKey(o.name, o.office)));
+    }
+    return set;
+  }, [federalReps, civicData]);
 
   // Collect all official IDs for score resolution
   const allOfficialIds = useMemo(() => {
@@ -53,8 +67,12 @@ export const QuizResults = () => {
       civicData.stateLegislative.forEach(o => ids.push(o.id));
       civicData.local.forEach(o => ids.push(o.id));
     }
+    if (upcomingElections) {
+      [...upcomingElections.federal, ...upcomingElections.state, ...upcomingElections.local]
+        .forEach(e => e.candidates.forEach(c => ids.push(c.candidate_id)));
+    }
     return ids.filter(Boolean);
-  }, [federalReps, civicData]);
+  }, [federalReps, civicData, upcomingElections]);
 
   const { data: scoreMap } = useCandidateScoreMap(allOfficialIds);
 
@@ -503,6 +521,73 @@ export const QuizResults = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Candidates on Your Ballot — upcoming elections */}
+        {profile.address && (upcomingLoading || (upcomingElections && [...upcomingElections.federal, ...upcomingElections.state, ...upcomingElections.local].length > 0)) && (
+          <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '175ms' }}>
+            <CardHeader>
+              <CardTitle className="font-display flex items-center gap-2">
+                <Vote className="w-5 h-5 text-primary" />
+                Candidates on Your Ballot
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {upcomingLoading ? (
+                <div className="flex items-center gap-3 text-muted-foreground py-4">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Finding upcoming elections...</span>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {(['federal', 'state', 'local'] as const).flatMap(level =>
+                    (upcomingElections?.[level] ?? []).map(election => {
+                      const newCandidates = election.candidates.filter(
+                        c => !repNameKeys.has(unifiedCandidateNameKey(c.name, c.office)),
+                      );
+                      if (newCandidates.length === 0) return null;
+                      const dateStr = new Date(election.election_date).toLocaleDateString(undefined, {
+                        month: 'short', day: 'numeric', year: 'numeric',
+                      });
+                      return (
+                        <div key={election.id}>
+                          <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                            <Calendar className="w-4 h-4" />
+                            {election.name} — {dateStr}
+                          </h4>
+                          <div className="space-y-3">
+                            {newCandidates.map(c => {
+                              const official: CivicOfficial = {
+                                id: c.candidate_id,
+                                name: c.name,
+                                office: c.office,
+                                party: (c.party as any) || 'Other',
+                                image_url: c.image_url || '',
+                                overall_score: c.overall_score ?? 0,
+                                level: (level === 'federal' ? 'federal' : level === 'state' ? 'state' : 'local') as OfficeLevelType,
+                                state: c.state,
+                                district: c.district || undefined,
+                                is_incumbent: c.is_incumbent,
+                                coverage_tier: (c.coverage_tier as any) || 'tier_3',
+                                confidence: (c.confidence as any) || 'low',
+                              };
+                              return (
+                                <RepresentativeComparisonCard
+                                  key={c.candidate_id}
+                                  official={official}
+                                  resolvedScore={getResolvedScore(c.candidate_id, c.overall_score)}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }),
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Topic Breakdown Card */}
         <Card className="mb-8 shadow-elevated animate-slide-up" style={{ animationDelay: '200ms' }}>
