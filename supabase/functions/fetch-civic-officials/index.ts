@@ -439,65 +439,75 @@ async function fetchOpenStatesOfficials(
 
     // Fetch governors. Open States doesn't reliably classify the actual
     // Governor under `org_classification=executive` for every state (e.g. MT
-    // returns Lt. Gov + AG only, missing the Governor). Drop the org filter
-    // and search the whole jurisdiction, then identify Gov / Lt Gov by title.
-    const governorsUrl = `https://v3.openstates.org/people?jurisdiction=${state.toLowerCase()}&per_page=50`;
-    console.log(`[Open States] Fetching governors: ${governorsUrl}`);
+    // returns Lt. Gov + AG only, missing Gianforte). Query BOTH endpoints
+    // (executive + name search) and union the results by person id.
+    const seenGovIds = new Set<string>();
 
-    const governorsResponse = await fetch(governorsUrl, { headers });
-    console.log(`[Open States] Governors response status: ${governorsResponse.status}`);
-
-    if (governorsResponse.ok) {
-      const data = await governorsResponse.json();
-      const results = data.results || [];
-      console.log(`[Open States] Found ${results.length} jurisdiction officials (filtering for governor titles)`);
-
-      const seenGovIds = new Set<string>();
-      for (const person of results) {
-        // Title can live on current_role, or on any of the person's roles.
-        const titles: string[] = [];
-        if (person.current_role?.title) titles.push(String(person.current_role.title));
-        if (Array.isArray(person.roles)) {
-          for (const r of person.roles) {
-            if (r?.title) titles.push(String(r.title));
-          }
+    const tryAddPerson = (person: any, sourceTag: string) => {
+      const titles: string[] = [];
+      if (person?.current_role?.title) titles.push(String(person.current_role.title));
+      if (Array.isArray(person?.roles)) {
+        for (const r of person.roles) {
+          if (r?.title) titles.push(String(r.title));
         }
-        const titleStr = titles.join(' | ').toLowerCase();
-
-        if (!titleStr.includes('governor')) continue;
-
-        const isLtGov =
-          titleStr.includes('lieutenant') ||
-          titleStr.includes('lt.') ||
-          titleStr.includes('lt_') ||
-          /\blt\b/.test(titleStr);
-
-        if (seenGovIds.has(person.id)) continue;
-        seenGovIds.add(person.id);
-
-        console.log(`[Open States] Including executive "${person.name}" as ${isLtGov ? 'Lt Gov' : 'Governor'} (titles: ${titles.join(' | ')})`);
-
-        const official: OfficialInfo = {
-          id: `openstates_${person.id.replace(/\//g, '_')}`,
-          name: person.name,
-          party: mapParty(person.party),
-          office: isLtGov ? 'Lieutenant Governor' : 'Governor',
-          level: 'state_executive',
-          state: state.toUpperCase(),
-          image_url: person.image || '',
-          urls: person.links?.map((l: { url: string }) => l.url) || [],
-          emails: person.email ? [person.email] : [],
-          is_incumbent: true,
-          overall_score: null,
-          coverage_tier: 'tier_3',
-          confidence: 'low',
-        };
-
-        governors.push(official);
       }
-    } else {
-      const errorText = await governorsResponse.text();
-      console.error(`[Open States] Governors API error: ${governorsResponse.status} - ${errorText}`);
+      // Also fall back to person.name when title metadata is empty (Open
+      // States sometimes returns a Governor record with no current_role).
+      const haystack = (titles.join(' | ') + ' ' + (person?.name || '')).toLowerCase();
+
+      if (!haystack.includes('governor')) return;
+      if (seenGovIds.has(person.id)) return;
+      seenGovIds.add(person.id);
+
+      const isLtGov =
+        haystack.includes('lieutenant') ||
+        haystack.includes('lt.') ||
+        haystack.includes('lt_') ||
+        /\blt\b/.test(haystack);
+
+      console.log(`[Open States] Including executive "${person.name}" as ${isLtGov ? 'Lt Gov' : 'Governor'} via ${sourceTag} (titles: ${titles.join(' | ') || '<none>'})`);
+
+      governors.push({
+        id: `openstates_${person.id.replace(/\//g, '_')}`,
+        name: person.name,
+        party: mapParty(person.party),
+        office: isLtGov ? 'Lieutenant Governor' : 'Governor',
+        level: 'state_executive',
+        state: state.toUpperCase(),
+        image_url: person.image || '',
+        urls: person.links?.map((l: { url: string }) => l.url) || [],
+        emails: person.email ? [person.email] : [],
+        is_incumbent: true,
+        overall_score: null,
+        coverage_tier: 'tier_3',
+        confidence: 'low',
+      });
+    };
+
+    const govEndpoints = [
+      // Open States' "executive" classification — usually returns Lt Gov / AG.
+      `https://v3.openstates.org/people?jurisdiction=${state.toLowerCase()}&org_classification=executive&per_page=50`,
+      // Direct name search — usually finds the actual Governor when the
+      // executive classification doesn't include them.
+      `https://v3.openstates.org/people?jurisdiction=${state.toLowerCase()}&name=Governor&per_page=50`,
+    ];
+
+    for (const url of govEndpoints) {
+      console.log(`[Open States] Fetching governors: ${url}`);
+      try {
+        const resp = await fetch(url, { headers });
+        console.log(`[Open States] Governors response status: ${resp.status}`);
+        if (!resp.ok) {
+          console.error(`[Open States] Governors API error: ${resp.status} - ${await resp.text()}`);
+          continue;
+        }
+        const data = await resp.json();
+        const results = data.results || [];
+        console.log(`[Open States] Found ${results.length} candidates from ${url.includes('name=') ? 'name search' : 'executive classification'}`);
+        for (const person of results) tryAddPerson(person, url.includes('name=') ? 'name-search' : 'exec-class');
+      } catch (e) {
+        console.error('[Open States] Governor endpoint failed:', e);
+      }
     }
 
   } catch (error) {
