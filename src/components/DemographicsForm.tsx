@@ -78,6 +78,10 @@ export const DemographicsForm = ({
     religion: initialData?.religion || '',
   });
 
+  const [addressState, setAddressState] = useState<{ code: string; name: string } | null>(null);
+  const { isHidden } = useHiddenStates();
+  const stateNotSupported = addressState ? isHidden(addressState.code) : false;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
