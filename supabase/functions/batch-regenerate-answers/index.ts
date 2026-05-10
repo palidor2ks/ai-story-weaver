@@ -306,6 +306,7 @@ async function processBatchInBackground(params: {
     console.log(`Failed: ${globalProgress.failed}`);
     console.log(`Elapsed time: ${elapsedMinutes} minutes`);
     await writeProgress('complete', { elapsedMinutes, completedAt: new Date().toISOString() });
+    }
 
   } catch (error) {
     console.error('=== BATCH REGENERATION ERROR ===');
