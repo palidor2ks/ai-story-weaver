@@ -1,35 +1,17 @@
-## Goal
+The duplicate is still happening because the current Feed dedup compares `name + office/state/district`, but the two records do not normalize to the same seat:
 
-On the Quiz Results page, after the existing "Your Representatives" section, also show the **candidates running in the user's upcoming elections** with the same match-comparison card UI used for sitting representatives.
+- Existing profile: `Frank Pallone, Jr.` / `Representative` / `NJ` / likely no district
+- Upcoming candidate: `PALLONE, FRANK JR` / `U.S. House NJ-06` / `NJ` / possibly `06`
 
-## What exists today
+So one key becomes roughly `pallone + house|nj|` and the other becomes `pallone + house|nj|06`. Since the existing representative record has no district value, the dedup does not treat them as the same person/seat.
 
-- `useUpcomingElections(address)` already returns `{ federal, state, local }` arrays of `UpcomingElection`, each with a `candidates: UpcomingCandidate[]` list (name, party, office, score, etc.).
-- `RepresentativeComparisonCard` accepts a `CivicOfficial` shape and a resolved score, and renders the per-user match summary.
-- `QuizResults.tsx` uses `useCandidateScoreMap(allOfficialIds)` to resolve user-personalized scores.
+Plan:
+1. Update Feed dedup normalization so congressional districts can be extracted from either the `district` field or the office label (`U.S. House NJ-06`, `NJ-06`, `District 6`, etc.).
+2. Add a fallback match for the same normalized person + chamber + state when one side is missing a district, so incumbents like Frank Pallone merge instead of duplicating.
+3. Keep the safer district-specific comparison when both sides have districts, so different House candidates in different districts do not collapse incorrectly.
+4. Remove the unused `unifiedCandidateNameKey` import if it is no longer needed.
 
-## Changes (frontend only)
-
-### 1. `src/pages/QuizResults.tsx`
-- Import `useUpcomingElections` and call it with `profile?.address`.
-- Flatten all upcoming-election candidates and add their IDs to `allOfficialIds` so `useCandidateScoreMap` resolves their personalized scores too.
-- Add a new section **"Candidates on Your Ballot"** directly under the "Your Representatives" card, grouped by federal / state / local:
-  - For each upcoming election, render a small heading (`"{election.name} — {formatted date}"`).
-  - Underneath, render one `RepresentativeComparisonCard` per candidate.
-  - Map each `UpcomingCandidate` into the `CivicOfficial` shape the card expects (id, name, office, party, image_url, overall_score, level, state, is_incumbent, coverage_tier, confidence).
-  - Skip a candidate if they're already shown in the "Your Representatives" block above (dedupe by id and by `name::office` key, reusing the same normalization as `useUnifiedCandidates.unifiedCandidateNameKey`).
-- If no upcoming elections, render nothing (no empty state needed — Representatives section already covers the address-missing case).
-- Show the same "Finding candidates…" loader pattern while the hook is loading.
-
-### 2. No backend, no schema, no edge function changes
-- Data already comes from the existing `fetch-upcoming-elections` flow.
-
-## Validation
-- For a user with address in NJ-06 (current state): after taking the quiz, `/quiz-results` should show:
-  - Existing reps (Booker, Kim, Pallone, etc.)
-  - New "Candidates on Your Ballot" section listing the 2026 NJ Senate race candidates and the 2026 NJ-06 House race candidates (Pallone deduped because already in Reps).
-- For a user without an address, the new section is hidden (Representatives card already prompts them to add one).
-
-## Out of scope
-- Listing opponents on the candidate profile page (separate plan).
-- Changing how/when elections are fetched.
+Technical notes:
+- This stays frontend-only in `src/pages/Feed.tsx`.
+- No database/schema changes are needed.
+- The displayed card should keep the existing representative profile as the canonical one and suppress the duplicate upcoming candidate card.
