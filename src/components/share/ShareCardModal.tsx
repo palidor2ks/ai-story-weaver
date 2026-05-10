@@ -65,8 +65,39 @@ export const ShareCardModal = ({
     editorial: null,
   });
 
-  const longText = useMemo(() => generateLongCaption(caption), [caption]);
-  const shortText = useMemo(() => generateShortCaption(caption), [caption]);
+  const defaultBody = useMemo(() => generateShortCaption(caption), [caption]);
+  const defaultHashtags = useMemo(() => getDefaultHashtags(caption), [caption]);
+
+  const [body, setBody] = useState(defaultBody);
+  const [includeHashtags, setIncludeHashtags] = useState(true);
+
+  // Reset when the modal opens with new content
+  useEffect(() => {
+    if (open) {
+      setBody(defaultBody);
+      setIncludeHashtags(true);
+    }
+  }, [open, defaultBody]);
+
+  const finalText = useMemo(
+    () => composeFinalText(body, defaultHashtags, includeHashtags),
+    [body, defaultHashtags, includeHashtags],
+  );
+
+  const isEdited = body.trim() !== defaultBody.trim() || !includeHashtags;
+  const charCount = finalText.length;
+  const charLimit = 280;
+  const charClass =
+    charCount > charLimit
+      ? 'text-destructive'
+      : charCount > charLimit - 40
+      ? 'text-amber-600 dark:text-amber-500'
+      : 'text-muted-foreground';
+
+  const handleResetCaption = () => {
+    setBody(defaultBody);
+    setIncludeHashtags(true);
+  };
 
   const filename = useMemo(() => {
     const base =
@@ -104,7 +135,6 @@ export const ShareCardModal = ({
       if (ok) {
         toast.success('Image copied — paste it into your post.');
       } else {
-        // Fallback: download
         await downloadNode(node, filename);
         toast.message('Clipboard not supported — image was downloaded instead.');
       }
@@ -118,7 +148,7 @@ export const ShareCardModal = ({
 
   const handleCopyCaption = async () => {
     try {
-      await navigator.clipboard.writeText(longText);
+      await navigator.clipboard.writeText(finalText);
       toast.success('Caption copied to clipboard.');
     } catch {
       toast.error('Could not copy caption.');
@@ -138,7 +168,7 @@ export const ShareCardModal = ({
       }
       const ok = await nativeShare({
         title: 'Pulse',
-        text: shortText,
+        text: finalText,
         url,
         files,
       });
