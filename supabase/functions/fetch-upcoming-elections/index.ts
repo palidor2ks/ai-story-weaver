@@ -390,40 +390,42 @@ async function persistAll(supabase: any, rows: ElectionPayload[]) {
   const newCandidateMeta = new Map<string, CandidatePayload>();
 
   for (const row of rows) {
-    // Upsert election.
-    const { data: el, error: elErr } = await supabase
+    // Manual upsert (the unique index uses COALESCE expressions, which PostgREST
+    // onConflict cannot target). Look up by canonical keys; insert if missing.
+    let electionId: string | null = null;
+    const lookup = await supabase
       .from('elections')
-      .upsert({
-        election_date: row.election_date,
-        election_type: row.election_type,
-        level: row.level,
-        state: row.state,
-        jurisdiction: row.jurisdiction,
-        name: row.name,
-        source: row.source,
-        source_ref: row.source_ref ?? null,
-      }, { onConflict: 'source,source_ref,election_date,jurisdiction,state', ignoreDuplicates: false })
       .select('id')
+      .eq('source', row.source)
+      .eq('election_date', row.election_date)
+      .eq('source_ref', row.source_ref ?? '')
       .maybeSingle();
 
-    if (elErr || !el) {
-      // Conflict-without-returning workaround: re-select.
-      const { data: existing } = await supabase
+    if (lookup.data?.id) {
+      electionId = lookup.data.id;
+    } else {
+      const { data: inserted, error: insErr } = await supabase
         .from('elections')
+        .insert({
+          election_date: row.election_date,
+          election_type: row.election_type,
+          level: row.level,
+          state: row.state,
+          jurisdiction: row.jurisdiction,
+          name: row.name,
+          source: row.source,
+          source_ref: row.source_ref ?? null,
+        })
         .select('id')
-        .eq('source', row.source)
-        .eq('election_date', row.election_date)
-        .eq('source_ref', row.source_ref ?? '')
         .maybeSingle();
-      if (!existing) {
-        console.warn('[persist] failed to upsert election', elErr);
+      if (insErr || !inserted) {
+        console.warn('[persist] failed to insert election', row.source, row.source_ref, insErr?.message);
         continue;
       }
-      await persistCandidates(supabase, existing.id, row.candidates, newCandidateIds, newCandidateMeta);
-      continue;
+      electionId = inserted.id;
     }
 
-    await persistCandidates(supabase, el.id, row.candidates, newCandidateIds, newCandidateMeta);
+    await persistCandidates(supabase, electionId, row.candidates, newCandidateIds, newCandidateMeta);
   }
 
   // Kick off background research for up to MAX_RESEARCH_PER_RUN new candidates.
