@@ -13,6 +13,7 @@ import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { useUpcomingElections } from '@/hooks/useUpcomingElections';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 import { unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
+import { formatRunningForOffice } from '@/lib/officeLabel';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
