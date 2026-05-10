@@ -13,6 +13,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useFECIntegration } from '@/hooks/useFECIntegration';
 import { useFECTotals } from '@/hooks/useFECTotals';
 import { useFinanceReconciliation, useCommitteeRollups } from '@/hooks/useFinanceReconciliation';
+import { useAvailableCycles } from '@/hooks/useAvailableCycles';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBillSponsors } from '@/hooks/useBillSponsors';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
@@ -44,7 +46,10 @@ export const CandidateProfile = () => {
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
   const { data: scoreMap } = useCandidateScoreMap(id ? [id] : undefined);
-  const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id);
+  const { data: cycleInfo } = useAvailableCycles(id);
+  const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
+  const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
+  const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
   const { data: votes = [] } = useCandidateVotes(id);
   const { data: representativeDetails } = useRepresentativeDetails(id);
   const { data: adminData } = useAdminRole();
@@ -54,9 +59,9 @@ export const CandidateProfile = () => {
   
   // Get FEC committee ID from first donor record or we'll pass null
   const committeeId = donors[0]?.recipient_committee_id ?? null;
-  const { data: fecTotals } = useFECTotals(committeeId);
-  const { data: financeReconciliation } = useFinanceReconciliation(id);
-  const { data: committeeRollups = [] } = useCommitteeRollups(id);
+  const { data: fecTotals } = useFECTotals(committeeId, effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : '2024');
+  const { data: financeReconciliation } = useFinanceReconciliation(id, effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : undefined);
+  const { data: committeeRollups = [] } = useCommitteeRollups(id, effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : undefined);
   
   // Fetch bills sponsored/cosponsored by this legislator
   const { data: sponsoredBills = [], isLoading: billsLoading } = useBillSponsors(id);
@@ -82,7 +87,8 @@ export const CandidateProfile = () => {
   const handleFetchDonors = async () => {
     if (!candidate?.fec_candidate_id || !id) return;
     
-    const result = await fetchFECDonors(id, candidate.fec_candidate_id);
+    const cycleForSync = effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : (cycleInfo?.defaultCycle ?? '2024');
+    const result = await fetchFECDonors(id, candidate.fec_candidate_id, cycleForSync);
     if (result.success) {
       toast.success(`Imported ${result.imported} donors totaling $${(result.totalRaised || 0).toLocaleString()}`);
       refetchDonors();
@@ -440,7 +446,21 @@ export const CandidateProfile = () => {
                         Refresh Donors
                       </Button>
                     )}
-                    <span className="text-sm text-muted-foreground">2024 Cycle</span>
+                    <Select
+                      value={effectiveCycle ?? ''}
+                      onValueChange={(v) => setSelectedCycle(v)}
+                      disabled={!cycleInfo}
+                    >
+                      <SelectTrigger className="h-8 w-[140px]">
+                        <SelectValue placeholder="Cycle" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(cycleInfo?.cycles ?? []).map((cy) => (
+                          <SelectItem key={cy} value={cy}>{cy} Cycle</SelectItem>
+                        ))}
+                        <SelectItem value="all">All cycles</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 {candidate.last_donor_sync && (

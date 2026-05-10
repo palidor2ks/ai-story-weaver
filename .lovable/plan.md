@@ -1,48 +1,60 @@
-## Problem
+# Add Election Cycle Filter
 
-Two `candidates` rows exist for Cory Booker (NJ Senate):
+The "2024 Cycle" label on the candidate profile is hardcoded and there's no way to view 2026, 2022, or other cycles. Several hooks default to `'2024'` even though donor + committee data already exist for multiple cycles. This plan adds a cycle picker everywhere it matters and threads the selection through the data layer.
 
-| id | name | source |
-|---|---|---|
-| `B001288` | Cory A. Booker | Congress / bioguide (canonical) — has FEC ID `S4NJ00185`, lis_member_id, all finance + voting data |
-| `S4NJ00185` | BOOKER, CORY A. | Created by `fetch-upcoming-elections` from FEC search results |
+## Where the picker should appear
 
-Both rows independently accumulated 240 `candidate_answers` and 7 `candidate_committees`. `S4NJ00185` is also linked to 2 `election_candidates` rows. All finance (donors, contributions, rollups, reconciliation) lives only on `B001288`.
+1. **Candidate profile → Campaign Contributions card** (replaces the static "2024 Cycle" label, `src/pages/CandidateProfile.tsx:443`). Picker also drives:
+   - Donor list (`useCandidateDonors`)
+   - Finance summary card (`FinanceSummaryCard` / `useFinanceReconciliation`)
+   - Committee rollups (`useCommitteeRollups`)
+   - Refresh Donors button (currently fixed to 2024 in `useFECIntegration.fetchFECDonorsComplete`)
+2. **Committee profile** (`src/pages/CommitteeProfile.tsx:42`, `:100`) — picker next to "Refresh Donors", defaulting to most recent cycle the committee participated in.
+3. Pages that already have one (`Donors`, `Committees`, `DonorProfile`) — leave behavior, but make sure the default cycle list comes from the same shared helper so the most recent cycle (2026) is selected by default instead of 2024.
 
-## Fix — two parts
+## Cycle source of truth
 
-### 1. One-time data merge (migration)
+Add a small helper hook `useAvailableCycles(candidateId)` that returns the union of:
+- distinct `cycle` values in `donors` for the candidate
+- entries in `candidate_committees.cycles[]`
+- a baseline of the current + previous federal cycle (2026, 2024) so the picker is never empty for new candidates
 
-Keep `B001288`. For `S4NJ00185`:
+Sorted desc, plus an `"all"` entry. Default selection = highest available cycle (so a 2026 House candidate like the one in the screenshot lands on 2026, not 2024).
 
-- `election_candidates`: re-point its 2 rows to `B001288` (skip on conflict with existing election link).
-- `candidate_answers` (240) and `candidate_committees` (7): delete — `B001288` already has equivalent rows.
-- `candidate_overrides`, `candidate_votes`, `candidate_topic_scores`, `candidate_fec_ids`, `donors`, `contributions`, `committee_finance_rollups`, `finance_reconciliation`, `pac_*`, `external_committee_finance`: nothing to migrate (S4NJ00185 has 0 rows in each).
-- Delete the `candidates` row `S4NJ00185`.
+For the global pages, reuse the existing `filterOptions.cycles` from `useDonorsPaginated` but apply the same "default to newest" rule.
 
-### 2. Prevent recurrence in `fetch-upcoming-elections`
+## Data-layer changes
 
-In `persistCandidates()` (lines 469-501), before inserting a new candidate using the FEC candidate id as `id`, look up an existing canonical row by `fec_candidate_id`:
+- `useCandidateDonors(candidateId, cycle?)` — accept optional cycle, filter `donors.cycle` server-side; `'all'` means no filter. Update query key.
+- `useFinanceReconciliation`, `useCommitteeRollups`, `useAllFinanceReconciliations`, `useCandidatesWithSyncStatus` — keep signatures but stop hardcoding 2024 defaults; require caller to pass cycle (default to newest helper) and include cycle in query key.
+- `useFECIntegration` — `fetchFECDonorsComplete`, `triggerReconciliation`, `forceResyncFECDonors`, `runBatchReconciliation` already accept `cycle`; just plumb the picker value from the UI instead of relying on the `'2024'` fallback.
+- `CommitteeProfile` `handleFetchDonors` — pass selected cycle.
 
+## UI shape
+
+Reuse the existing `Select` pattern from `src/pages/Committees.tsx:111`:
+
+```text
+[ Refresh Donors ]  [ Cycle: 2026 ▾ ]
+                       2026
+                       2024
+                       2022
+                       All cycles
 ```
-const { data: byFec } = await supabase
-  .from('candidates')
-  .select('id')
-  .eq('fec_candidate_id', c.fec_candidate_id)
-  .maybeSingle();
-if (byFec) { c.id = byFec.id; /* use canonical id, skip insert */ }
-```
 
-Also reuse the same lookup when `c.id` itself looks like an FEC id (`^[HSP]\d[A-Z]{2}\d+`) so future imports collapse onto the bioguide row.
+On the candidate profile, place the Select where the static "2024 Cycle" label is. State lives in `CandidateProfile` and is passed to the donors tab plus `FinanceSummaryCard` so a single change updates both totals and the donor list.
 
 ## Out of scope
 
-- No changes to other duplicate detection (name-key collapse already happens client-side in `useUnifiedCandidates`, but the duplicate appeared because both rows have different `fec_candidate_id`/name spellings and survive client dedup separately).
-- No UI changes.
+- No edge-function changes; existing FEC sync functions already accept `cycle`.
+- No DB migration; `donors.cycle` and `candidate_committees.cycles` already store this.
+- No changes to score logic, voting record, or legislation tabs.
 
-## Deliverables
+## Files touched
 
-1. Supabase migration that merges Booker and deletes the duplicate row.
-2. Edit to `supabase/functions/fetch-upcoming-elections/index.ts` adding the FEC-id lookup before insert.
-
-After approval I'll run the migration first, then push the edge function fix.
+- `src/pages/CandidateProfile.tsx` (cycle state + picker + prop wiring)
+- `src/pages/CommitteeProfile.tsx` (cycle picker for refresh)
+- `src/hooks/useCandidates.ts` (`useCandidateDonors` accepts cycle)
+- `src/hooks/useFinanceReconciliation.ts` (newest-cycle default)
+- `src/hooks/useFECIntegration.ts` (no behavioral change, just verify cycle pass-through)
+- New `src/hooks/useAvailableCycles.ts`

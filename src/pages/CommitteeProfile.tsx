@@ -1,9 +1,11 @@
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowLeft, DollarSign, Users, Landmark, MapPin, Calendar, RefreshCw, TrendingUp } from 'lucide-react';
 import { useCommittee, useCommitteeDonors } from '@/hooks/useCommittees';
 import { useFetchCommitteeDonors } from '@/hooks/useImportExternalCommittee';
@@ -37,9 +39,19 @@ export const CommitteeProfile = () => {
   const isAdmin = adminData?.isAdmin ?? false;
   const isLoading = committeeLoading || donorsLoading;
 
+  const availableCycles = useMemo(() => {
+    const baseYear = new Date().getFullYear();
+    const baseline = baseYear % 2 === 0 ? baseYear : baseYear + 1;
+    const set = new Set<string>([String(baseline), String(baseline - 2)]);
+    (committee?.cycles ?? []).forEach((c) => c && set.add(String(c)));
+    return Array.from(set).sort((a, b) => Number(b) - Number(a));
+  }, [committee?.cycles]);
+  const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
+  const effectiveCycle = selectedCycle ?? availableCycles[0];
+
   const handleSyncDonors = () => {
     if (!committee?.fecCommitteeId) return;
-    fetchDonorsMutation.mutate({ committeeId: committee.fecCommitteeId, cycle: '2024' });
+    fetchDonorsMutation.mutate({ committeeId: committee.fecCommitteeId, cycle: effectiveCycle ?? '2024' });
   };
 
   return (
@@ -103,20 +115,31 @@ export const CommitteeProfile = () => {
                 
                 {/* Admin Sync Button */}
                 {isAdmin && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSyncDonors}
-                    disabled={fetchDonorsMutation.isPending}
-                    className="ml-2"
-                  >
-                    {fetchDonorsMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                    )}
-                    Sync Donors
-                  </Button>
+                  <div className="ml-2 flex items-center gap-2">
+                    <Select value={effectiveCycle ?? ''} onValueChange={setSelectedCycle}>
+                      <SelectTrigger className="h-8 w-[130px]">
+                        <SelectValue placeholder="Cycle" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCycles.map((cy) => (
+                          <SelectItem key={cy} value={cy}>{cy} Cycle</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSyncDonors}
+                      disabled={fetchDonorsMutation.isPending}
+                    >
+                      {fetchDonorsMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                      )}
+                      Sync Donors
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
