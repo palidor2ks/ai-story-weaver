@@ -218,6 +218,38 @@ export const ShareCardModal = ({
     }
   };
 
+  // Cache uploaded share URL per template id, keyed inside this open session
+  const shareUrlCache = useRef<Partial<Record<TemplateId, string>>>({});
+
+  // Reset cache when modal reopens or caption surface changes meaningfully
+  useEffect(() => {
+    if (open) shareUrlCache.current = {};
+  }, [open, defaultBody]);
+
+  const ogTitle = useMemo(() => {
+    if (caption.kind === 'candidate-alignment' && caption.candidateName) {
+      return `My match with ${caption.candidateName} on Pulse`;
+    }
+    if (caption.kind === 'user-profile') return 'My political profile on Pulse';
+    return 'Pulse — Know Your Vote';
+  }, [caption]);
+
+  const prepareShareUrl = async (): Promise<string> => {
+    const cached = shareUrlCache.current[selected];
+    if (cached) return cached;
+    const node = getNode();
+    if (!node) return url;
+    const blob = await nodeToBlob(node);
+    const { shareUrl } = await uploadShareCard({
+      blob,
+      targetUrl: url,
+      ogTitle,
+      ogDescription: body.slice(0, 280),
+    });
+    shareUrlCache.current[selected] = shareUrl;
+    return shareUrl;
+  };
+
   const handleNative = async () => {
     const node = getNode();
     if (!node) return;
@@ -230,10 +262,16 @@ export const ShareCardModal = ({
       } catch {
         files = undefined;
       }
+      let shareUrl = url;
+      try {
+        shareUrl = await prepareShareUrl();
+      } catch (e) {
+        console.warn('share url upload failed, using fallback', e);
+      }
       const ok = await nativeShare({
         title: 'Pulse',
         text: finalText,
-        url,
+        url: shareUrl,
         files,
       });
       if (!ok) toast.error('Share failed.');
@@ -242,13 +280,24 @@ export const ShareCardModal = ({
     }
   };
 
-  const handleOpenIntent = (destination: 'twitter' | 'facebook' | 'linkedin', href: string) => {
-    trackEvent('share_action', {
-      ...baseProps(),
-      action: 'open_intent',
-      destination,
-    });
-    openIntent(href);
+  const handleSocialIntent = async (
+    destination: 'twitter' | 'facebook' | 'linkedin',
+    build: (shareUrl: string) => string,
+  ) => {
+    setBusy('native');
+    trackEvent('share_action', { ...baseProps(), action: 'open_intent', destination });
+    try {
+      let shareUrl = url;
+      try {
+        shareUrl = await prepareShareUrl();
+      } catch (e) {
+        console.warn('share url upload failed, using fallback', e);
+        toast.message('Sharing without preview image — couldn\'t upload card.');
+      }
+      openIntent(build(shareUrl));
+    } finally {
+      setBusy(null);
+    }
   };
   const SelectedComponent = TEMPLATES.find(t => t.id === selected)!.Component;
 
