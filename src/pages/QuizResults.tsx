@@ -37,6 +37,7 @@ export const QuizResults = () => {
   const { data: userTopics = [] } = useUserTopics();
   const { data: repsData, isLoading: repsLoading } = useRepresentatives(profile?.address);
   const { data: civicData, isLoading: civicLoading } = useCivicOfficials(profile?.address);
+  const { data: upcomingElections, isLoading: upcomingLoading } = useUpcomingElections(profile?.address);
   const [profileAnalysis, setProfileAnalysis] = useState<ProfileAnalysis | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [resultsShareOpen, setResultsShareOpen] = useState(false);
@@ -44,6 +45,17 @@ export const QuizResults = () => {
 
   const federalReps = repsData?.representatives ?? [];
   const allRepsLoading = repsLoading || civicLoading;
+
+  // Build set of name keys already shown in Representatives so we can dedupe
+  const repNameKeys = useMemo(() => {
+    const set = new Set<string>();
+    federalReps.forEach(r => set.add(unifiedCandidateNameKey(r.name, r.office)));
+    if (civicData) {
+      [...civicData.federalExecutive, ...civicData.stateExecutive, ...civicData.stateLegislative, ...civicData.local]
+        .forEach(o => set.add(unifiedCandidateNameKey(o.name, o.office)));
+    }
+    return set;
+  }, [federalReps, civicData]);
 
   // Collect all official IDs for score resolution
   const allOfficialIds = useMemo(() => {
@@ -55,8 +67,12 @@ export const QuizResults = () => {
       civicData.stateLegislative.forEach(o => ids.push(o.id));
       civicData.local.forEach(o => ids.push(o.id));
     }
+    if (upcomingElections) {
+      [...upcomingElections.federal, ...upcomingElections.state, ...upcomingElections.local]
+        .forEach(e => e.candidates.forEach(c => ids.push(c.candidate_id)));
+    }
     return ids.filter(Boolean);
-  }, [federalReps, civicData]);
+  }, [federalReps, civicData, upcomingElections]);
 
   const { data: scoreMap } = useCandidateScoreMap(allOfficialIds);
 
