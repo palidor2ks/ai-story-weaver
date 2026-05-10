@@ -13,6 +13,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useFECIntegration } from '@/hooks/useFECIntegration';
 import { useFECTotals } from '@/hooks/useFECTotals';
 import { useFinanceReconciliation, useCommitteeRollups } from '@/hooks/useFinanceReconciliation';
+import { useAvailableCycles } from '@/hooks/useAvailableCycles';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBillSponsors } from '@/hooks/useBillSponsors';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
