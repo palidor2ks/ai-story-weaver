@@ -137,7 +137,7 @@ async function fetchFEC(state: string, district: string | null): Promise<Electio
 
     // Group into a single "general" + "primary" placeholder; FEC doesn't give us exact dates.
     // Use Nov first Tuesday of cycle year for general.
-    const generalDate = firstTuesdayAfterFirstMonday(parseInt(cycle), 10); // Nov
+    const generalDate = firstTuesdayAfterFirstMonday(parseInt(cycle), 11); // November
 
     for (const { office, data } of settled) {
       const officeLabel = office === 'H' ? `U.S. House ${state}-${district ?? ''}` : office === 'S' ? `U.S. Senate (${state})` : 'President of the United States';
