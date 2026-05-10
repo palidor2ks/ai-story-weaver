@@ -172,6 +172,22 @@ async function processBatchInBackground(params: {
       }
     };
 
+    // Clear any prior cancel flag
+    await supabase.from('admin_stats_cache').upsert({
+      stat_key: 'backfill_answers_cancel',
+      stat_value: { cancel: false },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'stat_key' });
+
+    const checkCancelled = async (): Promise<boolean> => {
+      const { data } = await supabase
+        .from('admin_stats_cache')
+        .select('stat_value')
+        .eq('stat_key', 'backfill_answers_cancel')
+        .maybeSingle();
+      return !!(data?.stat_value as { cancel?: boolean } | null)?.cancel;
+    };
+
     await writeProgress('running');
 
     // Process in batches
