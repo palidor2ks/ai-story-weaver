@@ -311,6 +311,7 @@ export const CandidateProfile = () => {
                   candidateOffice={candidate.office}
                   candidateParty={candidate.party}
                   candidateScore={resolvedScore}
+                  candidateImage={representativeDetails?.image_url || candidate.image_url}
                   userScore={userScore}
                   matchScore={matchScore}
                   agreements={agreements}
