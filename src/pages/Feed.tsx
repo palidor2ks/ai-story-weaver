@@ -68,32 +68,63 @@ export const Feed = () => {
     if (/mayor/.test(o)) return 'mayor';
     return o.replace(/[^a-z0-9]+/g, ' ').trim();
   };
+  // Pull a district number from the explicit field OR the office string
+  // (e.g. "U.S. House NJ-06", "NJ-6", "District 6", "06").
+  const districtNumber = (office: string, district?: string | null): string => {
+    const fromField = (district || '').toString().replace(/\D/g, '');
+    if (fromField) return String(parseInt(fromField, 10));
+    const o = (office || '');
+    const m =
+      o.match(/[A-Za-z]{2}[-\s]?(\d{1,2})\b/) ||
+      o.match(/district\s+(\d{1,2})\b/i) ||
+      o.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+district\b/i);
+    if (m) return String(parseInt(m[1], 10));
+    return '';
+  };
+  const seatBase = (office: string, state?: string | null) =>
+    `${chamberOf(office)}|${(state || '').toLowerCase()}`;
   const seatKey = (office: string, state?: string | null, district?: string | null) => {
     const ch = chamberOf(office);
-    const districtPart = ch === 'house' ? (district || '').toString().replace(/\D/g, '') : '';
-    return `${ch}|${(state || '').toLowerCase()}|${districtPart}`;
+    const d = ch === 'house' ? districtNumber(office, district) : '';
+    return `${seatBase(office, state)}|${d}`;
   };
-  // Two parallel keys for fuzzy-but-consistent matching:
+  // Loose seat key WITHOUT district — used as a fallback so an incumbent
+  // record with no district collapses with an upcoming-candidate record
+  // that does specify the district (same chamber + same state).
+  const seatKeyLoose = (office: string, state?: string | null) => seatBase(office, state);
+
+  // Parallel keys for fuzzy-but-consistent matching:
   //   nameSeatKey  = full normalized name + seat (chamber+state+district)
   //   lastSeatKey  = last name + seat — catches "First Last" vs "LAST, FIRST"
+  //   *Loose       = same, but ignores district (chamber+state only)
   const nameSeatKey = (name: string, office: string, state?: string | null, district?: string | null) =>
     `${personKey(name)}::${seatKey(office, state, district)}`;
   const lastSeatKey = (name: string, office: string, state?: string | null, district?: string | null) =>
     `${lastNameOf(name)}::${seatKey(office, state, district)}`;
+  const nameSeatKeyLoose = (name: string, office: string, state?: string | null) =>
+    `${personKey(name)}::${seatKeyLoose(office, state)}`;
+  const lastSeatKeyLoose = (name: string, office: string, state?: string | null) =>
+    `${lastNameOf(name)}::${seatKeyLoose(office, state)}`;
 
   // Address-scoped officials only (Feed only shows the user's reps + civic, not all of Congress)
   const transformedCandidates: Candidate[] = useMemo(() => {
     const seenIds = new Set<string>();
     const seenNameSeat = new Set<string>();
     const seenLastSeat = new Set<string>();
+    const seenNameSeatLoose = new Set<string>();
+    const seenLastSeatLoose = new Set<string>();
     const out: Candidate[] = [];
     const register = (name: string, office: string, state?: string | null, district?: string | null) => {
       seenNameSeat.add(nameSeatKey(name, office, state, district));
       seenLastSeat.add(lastSeatKey(name, office, state, district));
+      seenNameSeatLoose.add(nameSeatKeyLoose(name, office, state));
+      seenLastSeatLoose.add(lastSeatKeyLoose(name, office, state));
     };
     const isDuplicate = (name: string, office: string, state?: string | null, district?: string | null) =>
       seenNameSeat.has(nameSeatKey(name, office, state, district)) ||
-      seenLastSeat.has(lastSeatKey(name, office, state, district));
+      seenLastSeat.has(lastSeatKey(name, office, state, district)) ||
+      seenNameSeatLoose.has(nameSeatKeyLoose(name, office, state)) ||
+      seenLastSeatLoose.has(lastSeatKeyLoose(name, office, state));
 
     for (const c of [
       ...unified.myReps,
