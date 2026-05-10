@@ -190,8 +190,10 @@ async function processBatchInBackground(params: {
 
     await writeProgress('running');
 
+    let cancelled = false;
+
     // Process in batches
-    for (let i = 0; i < candidatesToProcess.length; i += batchSize) {
+    outer: for (let i = 0; i < candidatesToProcess.length; i += batchSize) {
       const batch = candidatesToProcess.slice(i, i + batchSize);
       const batchNum = Math.floor(i / batchSize) + 1;
       const totalBatches = Math.ceil(candidatesToProcess.length / batchSize);
