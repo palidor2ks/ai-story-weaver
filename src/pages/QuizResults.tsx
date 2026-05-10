@@ -58,6 +58,21 @@ export const QuizResults = () => {
 
   const { data: scoreMap } = useCandidateScoreMap(allOfficialIds);
 
+  // Sort topic scores by weight (user's ranking) for the share card
+  const topTopicsForShare = useMemo(() => {
+    return [...userTopicScores]
+      .sort((a, b) => {
+        const aw = userTopics.find(ut => ut.topic_id === a.topic_id)?.weight || 0;
+        const bw = userTopics.find(ut => ut.topic_id === b.topic_id)?.weight || 0;
+        return bw - aw;
+      })
+      .slice(0, 4)
+      .map(ts => ({
+        topicName: ts.topics?.name || ts.topic_id,
+        score: ts.score,
+      }));
+  }, [userTopicScores, userTopics]);
+
   const getResolvedScore = (id: string, fallbackScore: number | null): number | null => {
     if (scoreMap?.has(id)) {
       return scoreMap.get(id) ?? null;
