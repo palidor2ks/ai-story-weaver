@@ -46,7 +46,7 @@ export const useFECTotals = (committeeId: string | null | undefined, cycle: stri
         return null;
       }
     },
-    enabled: !!committeeId,
+    enabled: !!committeeId && enabled,
     staleTime: 1000 * 60 * 60, // Cache for 1 hour
     retry: 1,
   });
