@@ -245,6 +245,53 @@ export const useCandidate = (id: string | undefined) => {
         return mergedOfficial;
       }
 
+      // Synthetic federal-executive IDs from civic-officials → resolve to real candidate row by office
+      if (id === 'federal_president' || id === 'federal_vice_president') {
+        const officeName = id === 'federal_president' ? 'President' : 'Vice President';
+        const { data: execCandidate } = await supabase
+          .from('candidates')
+          .select('*')
+          .eq('office', officeName)
+          .eq('is_incumbent', true)
+          .order('last_updated', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (execCandidate) {
+          const [execOverrideRes, execTopicsRes] = await Promise.all([
+            supabase.from('candidate_overrides').select('*').eq('candidate_id', execCandidate.id).eq('is_active', true).maybeSingle(),
+            supabase.from('candidate_topic_scores').select('topic_id, score, topics(name, icon)').eq('candidate_id', execCandidate.id),
+          ]);
+          const execOverride = execOverrideRes.data;
+          const execTopics = execTopicsRes.data || [];
+
+          const merged: CandidateWithOverride = {
+            ...execCandidate,
+            name: execOverride?.name ?? execCandidate.name,
+            party: (execOverride?.party as Candidate['party']) ?? execCandidate.party,
+            office: execOverride?.office ?? execCandidate.office,
+            state: execOverride?.state ?? execCandidate.state,
+            district: execOverride?.district ?? execCandidate.district,
+            image_url: execOverride?.image_url ?? execCandidate.image_url,
+            overall_score: execOverride?.overall_score ?? execCandidate.overall_score,
+            coverage_tier: (execOverride?.coverage_tier as CoverageTier) ?? execCandidate.coverage_tier ?? 'tier_3',
+            confidence: (execOverride?.confidence as ConfidenceLevel) ?? execCandidate.confidence ?? 'medium',
+            is_incumbent: execCandidate.is_incumbent ?? true,
+            score_version: execCandidate.score_version || 'v1.0',
+            fec_candidate_id: execCandidate.fec_candidate_id,
+            last_donor_sync: execCandidate.last_donor_sync,
+            topicScores: execTopics.map(ts => ({
+              topic_id: ts.topic_id,
+              score: ts.score,
+              topics: ts.topics,
+            })),
+            hasOverride: !!execOverride,
+            priorOffices: (execOverride?.prior_offices as unknown as PriorOffice[]) || [],
+          };
+          return merged;
+        }
+      }
+
       // Check if this is a non-Congress ID pattern - skip Congress API
       const isNonCongressId = id.startsWith('exec_') || 
                                id.startsWith('gov_') || 
