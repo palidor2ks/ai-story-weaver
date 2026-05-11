@@ -24,6 +24,7 @@ import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, 
 import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScoreText } from '@/components/ScoreText';
+import { CandidateScoreCard } from '@/components/CandidateScoreCard';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
 
@@ -341,9 +342,7 @@ export const CandidateProfile = () => {
               </div>
 
               {/* Score Display */}
-              <div className="mb-3">
-                <ScoreText score={resolvedScore} size="lg" showLabel />
-              </div>
+              <CandidateScoreCard score={resolvedScore} matchScore={matchScore} className="mb-4" />
 
               {/* Badges */}
               <div className="flex flex-wrap items-center gap-2 mb-3">
