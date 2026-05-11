@@ -1,38 +1,44 @@
-## Fix: Trump card link broken on Feed
+## Goal
+Elevate the score area on the candidate/rep profile page (currently a plain `L6.44 / Left-Leaning` text snippet) into a prominent, visually appealing score card.
 
-**Root cause:** `fetchFederalExecutiveFromGitHub` in `supabase/functions/fetch-civic-officials/index.ts` emits Trump with his bioguide id `T000338`, but the `candidates` table stores him under FEC id `P80001571`. So `/candidate/T000338` finds no match. JD Vance happens to share his bioguide id with the candidates row (`V000137`), which is why his card works.
+## Changes
 
-### Change
+### 1. New component: `src/components/CandidateScoreCard.tsx`
+A presentational card built with semantic design tokens:
+- Large display-weight score (e.g. `L6.44`) — `text-5xl font-extrabold tracking-tight`, color from existing left/center/right palette.
+- Subtitle: leaning label (`Left-Leaning`, `Center`, `Right-Leaning`) in uppercase muted small caps.
+- A horizontal **Left ↔ Right spectrum bar** with:
+  - Gradient track (blue → muted → red) using HSL semantic tokens.
+  - A pill marker positioned at `((score + 10) / 20) * 100%` showing the score value.
+  - End labels `L10` and `R10`, plus a faint center tick `C`.
+- Subtle bordered rounded-2xl card with a soft gradient background and shadow (`shadow-elegant` token if available, otherwise create one in `index.css`).
+- Optional small comparison line: "Match with you: NN%" if `matchScore` is provided.
+- Props: `score: number`, `matchScore?: number`, `className?: string`.
+- Fully responsive: stacks nicely on mobile, sits inline on desktop.
 
-In `supabase/functions/fetch-civic-officials/index.ts`, after both calls to `fetchFederalExecutiveFromGitHub()` (around lines 1009 and 1033), remap the synthetic ids to the existing DB ids:
-
-```ts
-// Re-key federal executives to existing candidates rows so the Feed link
-// matches the canonical id (e.g. Trump -> P80001571 instead of T000338).
-const execNames = federalExecutive.map(e => e.name);
-if (execNames.length) {
-  const { data: dbExecs } = await sb
-    .from('candidates')
-    .select('id, name, office')
-    .in('name', execNames)
-    .in('office', ['President', 'Vice President']);
-  const norm = (s: string) =>
-    (s || '').toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
-  const byKey = new Map<string, string>();
-  for (const r of dbExecs || []) {
-    byKey.set(`${norm(r.name)}::${(r.office || '').toLowerCase()}`, r.id);
-  }
-  for (const e of federalExecutive) {
-    const id = byKey.get(`${norm(e.name)}::${e.office.toLowerCase()}`);
-    if (id) e.id = id;
-  }
-}
+### 2. Wire it into `src/pages/CandidateProfile.tsx`
+Replace the current block (lines 343–346):
 ```
+{/* Score Display */}
+<div className="mb-3">
+  <ScoreText score={resolvedScore} size="lg" showLabel />
+</div>
+```
+with:
+```
+<CandidateScoreCard score={resolvedScore} matchScore={matchScore} className="mb-4" />
+```
+Position remains the same area in the header (right-of-avatar column on desktop, below name/badges on mobile).
 
-This avoids creating a duplicate Trump record (respects the no-duplicates rule) and keeps Vance unchanged.
+### 3. Design tokens
+- Reuse existing left/right colors. If a gradient token doesn't exist, add `--gradient-spectrum` to `src/index.css` and a `bg-gradient-spectrum` utility in `tailwind.config.ts`.
+- No raw hex/`text-blue-600` style colors in the new component — use semantic tokens (`text-primary`, custom `--score-left`, `--score-right`, `--score-center` if needed; otherwise extend tokens).
 
-### Verification
+## Out of scope
+- No changes to scoring logic, data fetching, or `ScoreText` usages elsewhere.
+- No backend/edge function changes.
 
-1. Hard reload `/feed`, click Trump → lands on `/candidate/P80001571` and shows the existing Trump profile (R6.09, Republican).
-2. Click JD Vance → still works (`/candidate/V000137`).
-3. No new rows created in `candidates` or `candidate_overrides`.
+## Verification
+- Open a rep profile (e.g. Cory Booker). Score area shows the new prominent card with spectrum bar and marker at the correct position.
+- Test with negative, zero, and positive scores; with `NA`/null score (renders muted "Not Available" state).
+- Check mobile width — card wraps cleanly.
