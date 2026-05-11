@@ -15,6 +15,7 @@ import { RepresentativeComparisonCard } from '@/components/RepresentativeCompari
 import { unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
 import { formatRunningForOffice } from '@/lib/officeLabel';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Building2, MapPin, Calendar, Vote } from 'lucide-react';
