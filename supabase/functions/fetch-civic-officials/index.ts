@@ -1068,6 +1068,40 @@ serve(async (req) => {
     console.log(`Transitions: ${transitions.length} (from DB)`);
     console.log(`Manual Overrides: ${manualOverrides.length} (from candidate_overrides)`);
 
+    // Re-key federal executives to existing candidates rows so the Feed
+    // link matches the canonical id (e.g. Trump -> P80001571 instead of
+    // his bioguide id T000338, which has no candidates row).
+    try {
+      const execNames = federalExecutive.map((e) => e.name).filter(Boolean);
+      if (execNames.length) {
+        const sbRemap = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const { data: dbExecs } = await sbRemap
+          .from('candidates')
+          .select('id, name, office')
+          .in('name', execNames)
+          .in('office', ['President', 'Vice President']);
+        const norm = (s: string) =>
+          (s || '').toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
+        const byKey = new Map<string, string>();
+        for (const r of dbExecs || []) {
+          if (r?.id && r?.name && r?.office) {
+            byKey.set(`${norm(r.name)}::${r.office.toLowerCase()}`, r.id);
+          }
+        }
+        let remapped = 0;
+        for (const e of federalExecutive) {
+          const id = byKey.get(`${norm(e.name)}::${(e.office || '').toLowerCase()}`);
+          if (id && id !== e.id) {
+            e.id = id;
+            remapped++;
+          }
+        }
+        if (remapped) console.log(`[ExecRemap] Re-keyed ${remapped} federal executives to candidates ids`);
+      }
+    } catch (e) {
+      console.error('[ExecRemap] Failed to remap federal executive ids:', e);
+    }
+
     // Combine all officials
     let allOfficials = [
       ...federalExecutive,
