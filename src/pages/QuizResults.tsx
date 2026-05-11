@@ -34,6 +34,7 @@ interface ProfileAnalysis {
 export const QuizResults = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { session } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: userTopics = [] } = useUserTopics();
