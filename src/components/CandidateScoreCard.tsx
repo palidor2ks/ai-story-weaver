@@ -32,13 +32,16 @@ export function CandidateScoreCard({ score, matchScore, userScore, className }: 
   const colorClass = getScoreColor(score);
   const label = isNA ? 'Not Available' : getScoreLabel(score as number);
 
-  // Marker position: -10 -> 0%, +10 -> 100%
-  const clamped = isNA ? 0 : Math.max(-10, Math.min(10, score as number));
-  const markerPct = ((clamped + 10) / 20) * 100;
+  // Marker position: -10 -> 0%, +10 -> 100%, clamped to keep dot within the bar
+  const toPct = (v: number) => {
+    const c = Math.max(-10, Math.min(10, v));
+    const pct = ((c + 10) / 20) * 100;
+    return Math.max(2, Math.min(98, pct));
+  };
+  const markerPct = isNA ? 50 : toPct(score as number);
 
   const hasUser = userScore !== null && userScore !== undefined;
-  const userClamped = hasUser ? Math.max(-10, Math.min(10, userScore as number)) : 0;
-  const userPct = ((userClamped + 10) / 20) * 100;
+  const userPct = hasUser ? toPct(userScore as number) : 50;
   const markersClose = hasUser && Math.abs(userPct - markerPct) < 6;
 
   return (
