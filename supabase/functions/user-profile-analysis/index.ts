@@ -107,12 +107,42 @@ serve(async (req) => {
   }
 
   try {
-    // No auth required — analysis is generated from client-supplied scores; no DB read/write of user data.
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    // Require authentication — this endpoint calls a paid AI gateway.
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { overallScore, topicScores, userName } = await req.json();
+    const body = await req.json();
+    let { overallScore, topicScores, userName } = body ?? {};
+
+    // Validate & clamp inputs to limit prompt-injection / abuse surface.
+    if (typeof overallScore !== 'number' || !isFinite(overallScore)) overallScore = 0;
+    overallScore = Math.max(-10, Math.min(10, overallScore));
+    if (!Array.isArray(topicScores)) topicScores = [];
+    topicScores = topicScores.slice(0, 50).map((ts: any) => ({
+      topicId: String(ts?.topicId ?? '').slice(0, 100),
+      topicName: String(ts?.topicName ?? '').slice(0, 100),
+      score: Math.max(-10, Math.min(10, Number(ts?.score) || 0)),
+    }));
+    userName = typeof userName === 'string' ? userName.replace(/[\r\n]+/g, ' ').slice(0, 80) : '';
     
     console.log(`Generating comprehensive profile summary for user: ${userName || 'Anonymous'}`);
 
