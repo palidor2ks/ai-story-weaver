@@ -29,6 +29,7 @@ import { useHasCompletedOnboarding } from "./hooks/useProfile";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { Committees } from "./pages/Committees";
 import { CommitteeProfile } from "./pages/CommitteeProfile";
+import Blog from "./pages/Blog";
 
 const queryClient = new QueryClient();
 
@@ -166,6 +167,11 @@ const AppRoutes = () => {
       <Route path="/politician" element={
         <RouteGuard requireAuth requireOnboarding>
           <PoliticianDashboard />
+        </RouteGuard>
+      } />
+      <Route path="/blog" element={
+        <RouteGuard requireAuth requireOnboarding>
+          <Blog />
         </RouteGuard>
       } />
       <Route path="*" element={<NotFound />} />
