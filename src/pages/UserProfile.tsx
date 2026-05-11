@@ -111,7 +111,7 @@ export const UserProfile = () => {
       if (error) throw error;
       return data as ProfileAnalysis;
     },
-    enabled: !!profile && topicScoresList.length > 0,
+    enabled: !!session && !!profile && topicScoresList.length > 0,
     staleTime: 1000 * 60 * 10, // Cache for 10 minutes
   });
 
