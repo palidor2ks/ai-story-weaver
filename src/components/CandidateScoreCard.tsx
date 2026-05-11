@@ -26,7 +26,7 @@ function getScoreColor(s: number | null | undefined): string {
   return 'text-purple-600 dark:text-purple-400';
 }
 
-export function CandidateScoreCard({ score, matchScore, className }: CandidateScoreCardProps) {
+export function CandidateScoreCard({ score, matchScore, userScore, className }: CandidateScoreCardProps) {
   const isNA = score === null || score === undefined;
   const scoreText = formatScoreText(score);
   const colorClass = getScoreColor(score);
@@ -35,6 +35,11 @@ export function CandidateScoreCard({ score, matchScore, className }: CandidateSc
   // Marker position: -10 -> 0%, +10 -> 100%
   const clamped = isNA ? 0 : Math.max(-10, Math.min(10, score as number));
   const markerPct = ((clamped + 10) / 20) * 100;
+
+  const hasUser = userScore !== null && userScore !== undefined;
+  const userClamped = hasUser ? Math.max(-10, Math.min(10, userScore as number)) : 0;
+  const userPct = ((userClamped + 10) / 20) * 100;
+  const markersClose = hasUser && Math.abs(userPct - markerPct) < 6;
 
   return (
     <div
