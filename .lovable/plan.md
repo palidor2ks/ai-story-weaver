@@ -1,36 +1,38 @@
-## Two fixes to implement
+## Fix: Trump card link broken on Feed
 
-### 1. Hide admin-only UI from non-admins on candidate profile
-File: `src/pages/CandidateProfile.tsx` (line 290-294)
+**Root cause:** `fetchFederalExecutiveFromGitHub` in `supabase/functions/fetch-civic-officials/index.ts` emits Trump with his bioguide id `T000338`, but the `candidates` table stores him under FEC id `P80001571`. So `/candidate/T000338` finds no match. JD Vance happens to share his bioguide id with the candidates row (`V000137`), which is why his card works.
 
-Wrap the "Overridden" badge with `isAdmin`:
-```tsx
-{candidate.hasOverride && isAdmin && (
-  <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/30">
-    Overridden
-  </Badge>
-)}
-```
-The "Edit" button is already gated by `canEdit = isAdmin || isPoliticianOwner`, so no change there.
+### Change
 
-### 2. Dark initials on light avatar fallback
-File: `src/components/OfficialAvatar.tsx`
+In `supabase/functions/fetch-civic-officials/index.ts`, after both calls to `fetchFederalExecutiveFromGitHub()` (around lines 1009 and 1033), remap the synthetic ids to the existing DB ids:
 
-Add a text-color helper mirroring `getPartyBgColor`:
-```tsx
-const getPartyTextColor = (party: string) => {
-  switch (party) {
-    case 'Democrat':
-    case 'Republican':
-    case 'Independent':
-      return 'text-white';
-    default:
-      return 'text-foreground'; // dark on light bg-muted
+```ts
+// Re-key federal executives to existing candidates rows so the Feed link
+// matches the canonical id (e.g. Trump -> P80001571 instead of T000338).
+const execNames = federalExecutive.map(e => e.name);
+if (execNames.length) {
+  const { data: dbExecs } = await sb
+    .from('candidates')
+    .select('id, name, office')
+    .in('name', execNames)
+    .in('office', ['President', 'Vice President']);
+  const norm = (s: string) =>
+    (s || '').toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
+  const byKey = new Map<string, string>();
+  for (const r of dbExecs || []) {
+    byKey.set(`${norm(r.name)}::${(r.office || '').toLowerCase()}`, r.id);
   }
-};
+  for (const e of federalExecutive) {
+    const id = byKey.get(`${norm(e.name)}::${e.office.toLowerCase()}`);
+    if (id) e.id = id;
+  }
+}
 ```
-Replace `text-white` on line 88 with `getPartyTextColor(party)`.
+
+This avoids creating a duplicate Trump record (respects the no-duplicates rule) and keeps Vance unchanged.
 
 ### Verification
-- Visit `/candidate/mayor_nj_piscataway` logged out → no "Overridden" badge, no "Edit" button. As admin → both visible.
-- Visit `/feed` → "SARE, DIANE" and other unknown-party avatars show dark initials on the light gray circle; party-colored avatars (blue/red/purple) keep white initials.
+
+1. Hard reload `/feed`, click Trump → lands on `/candidate/P80001571` and shows the existing Trump profile (R6.09, Republican).
+2. Click JD Vance → still works (`/candidate/V000137`).
+3. No new rows created in `candidates` or `candidate_overrides`.
