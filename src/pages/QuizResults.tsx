@@ -137,7 +137,7 @@ export const QuizResults = () => {
     };
 
     fetchProfileAnalysis();
-  }, [profile, userTopicScores, toast]);
+  }, [session, profile, userTopicScores, toast]);
 
   if (profileLoading) {
     return (
