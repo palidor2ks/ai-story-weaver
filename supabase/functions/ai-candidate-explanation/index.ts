@@ -43,6 +43,36 @@ serve(async (req) => {
 
     const { candidateId, candidateName, topicScores, userTopicScores, matchScore } = await req.json();
 
+    // Look up authoritative candidate context (office/state/district/party) so the AI
+    // does not hallucinate a different person who shares the same name.
+    let candidateContext = {
+      name: candidateName as string,
+      office: '' as string,
+      state: '' as string,
+      district: '' as string,
+      party: '' as string,
+    };
+    if (candidateId) {
+      const { data: cRow } = await supabase
+        .from('candidates')
+        .select('name, office, state, district, party')
+        .eq('id', candidateId)
+        .maybeSingle();
+      const { data: oRow } = await supabase
+        .from('candidate_overrides')
+        .select('name, office, state, district, party')
+        .eq('candidate_id', candidateId)
+        .eq('is_active', true)
+        .maybeSingle();
+      candidateContext = {
+        name: oRow?.name || cRow?.name || candidateName,
+        office: oRow?.office || cRow?.office || '',
+        state: oRow?.state || cRow?.state || '',
+        district: oRow?.district || cRow?.district || '',
+        party: oRow?.party || cRow?.party || '',
+      };
+    }
+
     if (!candidateName || !topicScores) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),

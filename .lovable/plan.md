@@ -1,64 +1,50 @@
 ## Problem
 
-`candidates` has duplicate rows for the same person — same name + state, but two ids: a bioguide id (e.g. `P000034`) and an FEC-style id (e.g. `H8NJ03073`). Confirmed duplicates today:
+The "Deep Analysis" panel on Brian Wahler's profile says he's mayor of St. Charles, Illinois. The database is correct (Piscataway, NJ) — the bug is that the `ai-candidate-explanation` edge function never tells the AI **who** the candidate is beyond their name. With only a name + abstract topic scores, Gemini picked the wrong "Brian Wahler" and invented a biography.
 
-| Person | Bioguide row | FEC-id row |
-|---|---|---|
-| Frank Pallone (NJ) | `P000034` | `H8NJ03073` |
-| Steve Daines (MT) | `D000618` | `S2MT00096` |
-| Ryan Zinke (MT) | `Z000018` | `H4MT01041` |
-| Ashley Hinson (IA) | `H0IA01174` | `S6IA00314` |
-
-Two import paths create candidate rows and don't fully cross-check:
-
-1. `import-legislators` upserts canonical rows keyed by **bioguide id** (`P000034`).
-2. `fetch-upcoming-elections` inserts candidates from upcoming-election sources using whatever id the source provided — usually an **FEC candidate id** (`H8NJ03073`). It does try to collapse onto an existing canonical row by looking up `fec_candidate_id`, but only when the canonical row already has the matching FEC id stored (e.g. Pallone's bioguide row has the wrong FEC id `S6NJ00263`, so the collapse fails) — and it never falls back to a name+state+office match.
-
-Both rows then accumulate independent answers, votes, donors, committees, etc., so they show up as two profiles on the site.
+Any candidate with a common name (especially mayors and state-level officials) is at risk of the same hallucination.
 
 ## Fix
 
-Two parts: clean up the existing duplicates, and harden the insert path so new ones can't appear.
+### 1. Pass real candidate context to the AI
 
-### 1. Audit + merge existing duplicates (DB migration)
+In `supabase/functions/ai-candidate-explanation/index.ts`:
 
-Add a one-shot SQL helper to find duplicate pairs across `candidates` using a token-sorted name key (drops `Jr/Sr/II/III`, sorts tokens, lowercases) plus `state`, then for each pair:
+- After auth, look up the candidate from `candidates` (falling back to `candidate_overrides` for mayor/local rows whose canonical record lives only in the override table — like `mayor_nj_piscataway`).
+- Read: `name`, `office`, `state`, `district`, `party`.
+- Inject those into both the system prompt and user prompt, and add a hard "do not write about any other person with this name" guardrail.
 
-- Pick the **bioguide-style id** as the canonical (5–7 chars, leading letter + digits, e.g. `P000034`) — that's what the rest of the app already keys on. Fall back to the older `last_updated` if neither id matches the bioguide pattern.
-- Repoint all child rows from the duplicate id → canonical id, in a single transaction:
-  - `candidate_answers`, `candidate_votes`, `candidate_committees`, `candidate_fec_ids`, `candidate_overrides`, `candidate_topic_scores`, `donors`, `committee_finance_rollups`, `finance_reconciliation`, `external_committee_finance`, `pac_candidate_totals`, `pac_expenditures`, `election_candidates`, `profile_claims`, `mayor_fetch_queue.resulting_candidate_id`.
-  - For tables with a unique key on (candidate_id, …) — e.g. `candidate_answers (candidate_id, question_id)` — first delete duplicates that would collide, keeping the row on the canonical id; then update the rest.
-- Copy any non-null fields from the duplicate that are null on the canonical (e.g. `fec_candidate_id`, `image_url`, `lis_member_id`).
-- Delete the duplicate `candidates` row.
-- Trigger `recalculate_candidate_coverage(canonical_id)` once at the end.
+New user-prompt header (example):
+```
+Candidate: Brian Wahler
+Office: Mayor of Piscataway
+State: NJ
+District: (none)
+Party: Democrat
 
-Then verify with the same audit query and report 0 duplicate groups.
+CRITICAL DISAMBIGUATION: Only analyze THIS specific person — the {office} of {state}.
+If you are not confident the documented record you are recalling belongs to this exact
+person/office/state, say the position is undocumented instead of guessing. Do NOT
+write about any other public figure who shares this name.
+```
 
-The four pairs above are the full current set — confirmed by querying every candidate with the token-sort key. The migration applies the merge to each.
+Also tighten the system prompt: "If you cannot verify the candidate's identity from office + state, refuse to invent biography. Never name a different city, state, or office than the one provided."
 
-### 2. Prevent new duplicates (insert hardening)
+### 2. Bust the cached wrong analysis
 
-**a. Add a Postgres safety net.** A `BEFORE INSERT` trigger on `candidates` that, for each new row:
+The component caches the analysis in component state only (no DB cache), so once deployed the next open will regenerate. No migration needed.
 
-1. Builds the same normalized name key (lowercase, strip punctuation, drop suffixes, sort tokens).
-2. Looks for an existing candidate with the same name key + state (and, if both have a district, same district).
-3. If a match is found, raise a clear `EXCEPTION` (`duplicate_candidate: <existing_id>`) — never silently insert a second profile. Edge functions / admin tools then have to either reuse the existing id or explicitly merge.
+### 3. (Optional, same edit) Frontend: pass office/state too
 
-This is the real guarantee — every write path goes through Postgres, so no future code change can bypass it.
+`src/components/AIExplanation.tsx` already has `candidateId`, so the edge function can fetch context server-side — no frontend change required. Keep frontend untouched.
 
-**b. Tighten `fetch-upcoming-elections.persistCandidates`** so the trigger never has to fire in the common case:
+## Files touched
 
-- Before insert, look up by **(normalized name, state, office-class)** in addition to the existing FEC-id lookup. If found, repoint `c.id` to that canonical id and skip the insert.
-- Office-class = "house" / "senate" / "exec" / "other" derived from `office` so a Senate row never collapses onto a House row.
-- Keep the existing FEC-id path; just stop relying on it as the only check.
+- `supabase/functions/ai-candidate-explanation/index.ts` — add candidate lookup + disambiguation in prompts.
 
-**c. Backfill `candidates.fec_candidate_id`** for any canonical rows that are missing it (or have the wrong one, like Pallone's `S6NJ00263`) by joining on `candidate_fec_ids` where `is_primary = true`. This makes the existing FEC-id collapse path work for future cycles too.
+No DB migration. No frontend change.
 
-No UI changes — this is all DB + edge function. After the migration, the duplicate Pallone (and the other three) will disappear from every page that lists candidates, and the trigger blocks regressions.
+## Verification
 
-## Technical notes
-
-- All SQL goes through `supabase--migration` so the user approves it.
-- The merge uses `INSERT … ON CONFLICT DO NOTHING` + `DELETE` of the loser rows in the unique-keyed child tables to keep canonical answers/votes/etc. without losing data the canonical didn't already have.
-- The `BEFORE INSERT` trigger uses `SECURITY DEFINER` and is exempted only when `auth.role() = 'service_role'` AND a `current_setting('app.allow_duplicate_candidate', true) = 'on'` is set — so admin merges can override it deliberately, but normal imports cannot.
-- After deploy, re-run the audit query in the migration's `RAISE NOTICE` to confirm 0 duplicate groups.
+1. Re-open Brian Wahler → click Deep Analysis → confirm it now says Piscataway, NJ (or admits no documented record if the model can't verify).
+2. Spot-check one common-name federal official (e.g. a Smith / Johnson) to confirm the disambiguation guard doesn't break the federal flow.
