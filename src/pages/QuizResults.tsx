@@ -15,6 +15,7 @@ import { RepresentativeComparisonCard } from '@/components/RepresentativeCompari
 import { unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
 import { formatRunningForOffice } from '@/lib/officeLabel';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Building2, MapPin, Calendar, Vote } from 'lucide-react';
@@ -33,6 +34,7 @@ interface ProfileAnalysis {
 export const QuizResults = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { session } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: userTopics = [] } = useUserTopics();
@@ -102,7 +104,7 @@ export const QuizResults = () => {
   // Fetch AI profile analysis on mount
   useEffect(() => {
     const fetchProfileAnalysis = async () => {
-      if (!profile || userTopicScores.length === 0) return;
+      if (!session || !profile || userTopicScores.length === 0) return;
       
       setIsLoadingAI(true);
       try {
@@ -135,7 +137,7 @@ export const QuizResults = () => {
     };
 
     fetchProfileAnalysis();
-  }, [profile, userTopicScores, toast]);
+  }, [session, profile, userTopicScores, toast]);
 
   if (profileLoading) {
     return (

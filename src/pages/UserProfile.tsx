@@ -43,7 +43,7 @@ interface ProfileAnalysis {
 export const UserProfile = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { signOut } = useAuth();
+  const { signOut, session } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
   const { data: userTopicScores = [] } = useUserTopicScores();
@@ -111,7 +111,7 @@ export const UserProfile = () => {
       if (error) throw error;
       return data as ProfileAnalysis;
     },
-    enabled: !!profile && topicScoresList.length > 0,
+    enabled: !!session && !!profile && topicScoresList.length > 0,
     staleTime: 1000 * 60 * 10, // Cache for 10 minutes
   });
 
