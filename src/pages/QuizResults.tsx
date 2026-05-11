@@ -104,7 +104,7 @@ export const QuizResults = () => {
   // Fetch AI profile analysis on mount
   useEffect(() => {
     const fetchProfileAnalysis = async () => {
-      if (!profile || userTopicScores.length === 0) return;
+      if (!session || !profile || userTopicScores.length === 0) return;
       
       setIsLoadingAI(true);
       try {
