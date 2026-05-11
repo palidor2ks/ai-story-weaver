@@ -150,7 +150,23 @@ You must respond in valid JSON format with the following structure:
 
 For sources, include reputable news outlets, government records, or official statements. Only cite sources you have evidence for.`;
 
-    const userPrompt = `Analyze the political positions of ${candidateName} based on these topic scores (scale: -10 = Far Left to +10 = Far Right):
+    const identityBlock = `
+EXACT CANDIDATE IDENTITY (do not confuse with anyone else who shares this name):
+- Name: ${candidateContext.name}
+- Office: ${candidateContext.office || 'unknown'}
+- State: ${candidateContext.state || 'unknown'}
+- District: ${candidateContext.district || '(none)'}
+- Party: ${candidateContext.party || 'unknown'}
+
+CRITICAL DISAMBIGUATION RULES:
+- Only analyze THIS specific person — the ${candidateContext.office || 'official'}${candidateContext.state ? ' of ' + candidateContext.state : ''}.
+- NEVER mention a different city, state, district, or office than the ones listed above.
+- If you are not confident the documented record you are recalling belongs to THIS exact person/office/state, write "position is undocumented" instead of guessing.
+- Do NOT write about any other public figure who happens to share this name.
+`;
+
+    const userPrompt = `${identityBlock}
+Analyze the political positions of ${candidateContext.name} (${candidateContext.office}${candidateContext.state ? ', ' + candidateContext.state : ''}) based on these topic scores (scale: -10 = Far Left to +10 = Far Right):
 
 ${formattedCandidateScores}
 ${userComparisonSection}
@@ -160,7 +176,7 @@ Provide:
 ${userTopicScores ? '3. A personalized comparison showing specific agreements and disagreements with the user' : ''}
 4. Relevant sources
 
-Remember to be objective and non-partisan.${personalizedInstructions}`;
+Remember: be objective, non-partisan, and analyze ONLY the person identified in the EXACT CANDIDATE IDENTITY block above.${personalizedInstructions}`;
 
     console.log('Calling AI with personalized comparison:', !!userTopicScores);
 
