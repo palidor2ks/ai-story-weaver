@@ -24,6 +24,7 @@ import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, 
 import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScoreText } from '@/components/ScoreText';
+import { CandidateScoreCard } from '@/components/CandidateScoreCard';
 import { CoverageTierBadge, ConfidenceBadge, IncumbentBadge } from '@/components/CoverageTierBadge';
 import { AIExplanation } from '@/components/AIExplanation';
 
