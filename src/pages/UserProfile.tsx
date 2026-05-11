@@ -43,7 +43,7 @@ interface ProfileAnalysis {
 export const UserProfile = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { signOut } = useAuth();
+  const { signOut, session } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
   const { data: userTopicScores = [] } = useUserTopicScores();
