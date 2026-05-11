@@ -91,16 +91,56 @@ export function CandidateScoreCard({ score, matchScore, userScore, className }: 
           <div
             className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all"
             style={{ left: `${markerPct}%` }}
+            aria-label="Representative position"
           >
             <div className="rounded-full border-2 border-background bg-foreground shadow-md h-5 w-5" />
+            <div
+              className={cn(
+                'absolute left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider text-foreground whitespace-nowrap',
+                markersClose ? '-top-5' : 'top-6'
+              )}
+            >
+              Rep
+            </div>
           </div>
         )}
 
-        <div className="mt-2 flex justify-between text-[10px] font-medium text-muted-foreground">
+        {hasUser && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all"
+            style={{ left: `${userPct}%` }}
+            aria-label="Your position"
+          >
+            <div className="rounded-full border-2 border-primary bg-background shadow-md h-5 w-5 ring-2 ring-background" />
+            <div
+              className={cn(
+                'absolute left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider text-primary whitespace-nowrap',
+                markersClose ? 'top-6' : '-top-5'
+              )}
+            >
+              You
+            </div>
+          </div>
+        )}
+
+        <div className="mt-7 flex justify-between text-[10px] font-medium text-muted-foreground">
           <span>L10</span>
           <span>C</span>
           <span>R10</span>
         </div>
+
+        {hasUser && (
+          <div className="mt-3 flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-full border-2 border-background bg-foreground shadow" />
+              <span className="font-medium">Rep</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-full border-2 border-primary bg-background shadow" />
+              <span className="font-medium">You</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
