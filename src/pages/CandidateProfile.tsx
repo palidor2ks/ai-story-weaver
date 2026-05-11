@@ -341,9 +341,7 @@ export const CandidateProfile = () => {
               </div>
 
               {/* Score Display */}
-              <div className="mb-3">
-                <ScoreText score={resolvedScore} size="lg" showLabel />
-              </div>
+              <CandidateScoreCard score={resolvedScore} matchScore={matchScore} className="mb-4" />
 
               {/* Badges */}
               <div className="flex flex-wrap items-center gap-2 mb-3">
