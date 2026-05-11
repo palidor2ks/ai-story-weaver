@@ -1,36 +1,26 @@
-## Why Trump's profile shows "Candidate not found"
+## Goal
+On the candidate profile spectrum bar (CandidateScoreCard), show two markers — the candidate (rep) and the logged-in user — and label which is which.
 
-The Feed card for the President uses the synthetic id `federal_president` (created by `fetch-civic-officials` so the same ID matches `static_officials`). Clicking it routes to `/candidate/federal_president`.
+## Changes
 
-`useCandidate(id)` then runs this lookup chain:
-1. `candidates` table by id → no row (Trump is stored as `P80001571`)
-2. `static_officials` table by id → no row (table is empty for federal exec)
-3. `id` starts with `federal_` → treated as "non-Congress", returns `null` unless an override exists
-4. Result: `candidate` is null → "Candidate not found" page
+**`src/components/CandidateScoreCard.tsx`**
+- Add optional prop `userScore?: number | null`.
+- Compute a second marker position using the same `(score + 10) / 20 * 100` formula.
+- Render two distinct markers above the gradient bar:
+  - **Rep marker**: filled circle in candidate's score color (existing dark dot style), labeled with the candidate's first name or "Rep" pill above/below it.
+  - **You marker**: outlined circle (e.g. accent/primary ring with white fill, slightly smaller or diamond-shaped) labeled "You".
+- If both markers are within ~6% of each other, stack the labels vertically so they don't overlap.
+- Add a small legend row under the L10 / C / R10 axis: a colored dot + "Rep" and an outlined dot + "You", only shown when `userScore` is provided.
+- If `userScore` is null/undefined (logged-out or no quiz taken), behave exactly like today (single marker, no legend).
 
-So the synthetic civic ID never resolves to the real candidate row.
+**`src/pages/CandidateProfile.tsx`**
+- Pass `userScore={profile?.overall_score ?? null}` (only when the user actually has a score; otherwise undefined) into `<CandidateScoreCard ... />` at line 345.
 
-## Fix
+## Out of scope
+- No changes to score math, match calculation, data fetching, or other cards.
+- No changes for non-logged-in users beyond hiding the user marker.
 
-Add a federal-executive resolution step inside `useCandidate` (in `src/hooks/useCandidates.ts`) so `federal_president` and `federal_vice_president` map to the active candidate row by office name.
-
-### Steps
-
-1. **`src/hooks/useCandidates.ts` — `useCandidate` hook**
-   - Before the existing "isNonCongressId → return override-or-null" branch, add a special case:
-     - If `id === 'federal_president'` or `id === 'federal_vice_president'`, query `candidates` for `office = 'President'` (or `'Vice President'`), ordered by `last_updated desc`, `maybeSingle()`.
-     - Also fetch that candidate's `candidate_topic_scores` and any `candidate_overrides` keyed by the real candidate id.
-     - Build the same `mergedCandidate` object as the normal DB path and return it.
-   - Keep the existing `static_officials` and override fallbacks intact for other synthetic IDs.
-
-2. **No route or Feed changes** — the Feed keeps using `federal_president` as the click target (so static_officials linkage and image resolution continue to work). Only the profile-page resolver gets smarter.
-
-### Out of scope
-- Changing how civic-officials assigns IDs (would ripple through static_officials, image resolution, and override keys).
-- Backfilling `static_officials` rows for federal executive (separate data task).
-- VP/President-elect / transition handling beyond the current `is_incumbent` row.
-
-### Verification
-- Click Trump's card on `/feed` → `/candidate/federal_president` loads the Donald J. Trump profile (name, party, office "President").
-- Click VP card → loads VP profile if a row exists; otherwise still falls through to the existing override/null path (no regression).
-- Other civic IDs (`exec_*`, `state_*`, `local_*`, `nj_*`, etc.) still hit the existing non-Congress branch unchanged.
+## Verification
+- Logged-in user with a quiz score on `/candidate/B001288`: spectrum shows two distinct markers with "Rep" and "You" labels and a legend.
+- Logged-out user or user without a quiz score: spectrum looks identical to current (single rep marker).
+- When the two scores are close, labels remain readable (no overlap).

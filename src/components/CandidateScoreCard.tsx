@@ -4,6 +4,7 @@ import { getScoreLabel } from '@/lib/scoreFormat';
 interface CandidateScoreCardProps {
   score: number | null | undefined;
   matchScore?: number;
+  userScore?: number | null;
   className?: string;
 }
 
