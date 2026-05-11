@@ -38,21 +38,28 @@ Deno.serve(async (req) => {
     if (file.size > 3 * 1024 * 1024) return json({ error: 'file too large' }, 400);
     if (!/^https?:\/\//i.test(targetUrl)) return json({ error: 'invalid targetUrl' }, 400);
 
-    // Optional auth — capture user_id if a JWT is present
+    // Require authentication to prevent storage abuse by anonymous callers
     const authHeader = req.headers.get('Authorization') ?? '';
     const supaUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
+    if (!authHeader.startsWith('Bearer ')) {
+      return json({ error: 'Authentication required' }, 401);
+    }
+
     let userId: string | null = null;
-    if (authHeader.startsWith('Bearer ')) {
-      try {
-        const userClient = createClient(supaUrl, anonKey, {
-          global: { headers: { Authorization: authHeader } },
-        });
-        const { data } = await userClient.auth.getUser();
-        userId = data.user?.id ?? null;
-      } catch { /* anon ok */ }
+    try {
+      const userClient = createClient(supaUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data, error } = await userClient.auth.getUser();
+      if (error || !data.user?.id) {
+        return json({ error: 'Invalid or expired session' }, 401);
+      }
+      userId = data.user.id;
+    } catch {
+      return json({ error: 'Invalid session' }, 401);
     }
 
     const admin = createClient(supaUrl, serviceKey);
