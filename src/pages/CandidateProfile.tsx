@@ -287,7 +287,7 @@ export const CandidateProfile = () => {
                     Verified
                   </Badge>
                 )}
-                {candidate.hasOverride && (
+                {candidate.hasOverride && isAdmin && (
                   <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/30">
                     Overridden
                   </Badge>
