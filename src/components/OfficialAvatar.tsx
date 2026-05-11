@@ -28,6 +28,17 @@ const getPartyBgColor = (party: string) => {
   }
 };
 
+const getPartyTextColor = (party: string) => {
+  switch (party) {
+    case 'Democrat':
+    case 'Republican':
+    case 'Independent':
+      return 'text-white';
+    default:
+      return 'text-foreground';
+  }
+};
+
 const getInitials = (name: string) => {
   const parts = name.split(' ').filter(Boolean);
   if (parts.length >= 2) {
@@ -85,7 +96,7 @@ export const OfficialAvatar = ({
             getPartyBgColor(party)
           )}
         >
-          <span className={cn('text-white font-bold', textSizeClasses[size])}>
+          <span className={cn('font-bold', getPartyTextColor(party), textSizeClasses[size])}>
             {getInitials(name)}
           </span>
         </div>

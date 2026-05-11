@@ -1,50 +1,36 @@
-## Problem
+## Two fixes to implement
 
-The "Deep Analysis" panel on Brian Wahler's profile says he's mayor of St. Charles, Illinois. The database is correct (Piscataway, NJ) — the bug is that the `ai-candidate-explanation` edge function never tells the AI **who** the candidate is beyond their name. With only a name + abstract topic scores, Gemini picked the wrong "Brian Wahler" and invented a biography.
+### 1. Hide admin-only UI from non-admins on candidate profile
+File: `src/pages/CandidateProfile.tsx` (line 290-294)
 
-Any candidate with a common name (especially mayors and state-level officials) is at risk of the same hallucination.
-
-## Fix
-
-### 1. Pass real candidate context to the AI
-
-In `supabase/functions/ai-candidate-explanation/index.ts`:
-
-- After auth, look up the candidate from `candidates` (falling back to `candidate_overrides` for mayor/local rows whose canonical record lives only in the override table — like `mayor_nj_piscataway`).
-- Read: `name`, `office`, `state`, `district`, `party`.
-- Inject those into both the system prompt and user prompt, and add a hard "do not write about any other person with this name" guardrail.
-
-New user-prompt header (example):
+Wrap the "Overridden" badge with `isAdmin`:
+```tsx
+{candidate.hasOverride && isAdmin && (
+  <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/30">
+    Overridden
+  </Badge>
+)}
 ```
-Candidate: Brian Wahler
-Office: Mayor of Piscataway
-State: NJ
-District: (none)
-Party: Democrat
+The "Edit" button is already gated by `canEdit = isAdmin || isPoliticianOwner`, so no change there.
 
-CRITICAL DISAMBIGUATION: Only analyze THIS specific person — the {office} of {state}.
-If you are not confident the documented record you are recalling belongs to this exact
-person/office/state, say the position is undocumented instead of guessing. Do NOT
-write about any other public figure who shares this name.
+### 2. Dark initials on light avatar fallback
+File: `src/components/OfficialAvatar.tsx`
+
+Add a text-color helper mirroring `getPartyBgColor`:
+```tsx
+const getPartyTextColor = (party: string) => {
+  switch (party) {
+    case 'Democrat':
+    case 'Republican':
+    case 'Independent':
+      return 'text-white';
+    default:
+      return 'text-foreground'; // dark on light bg-muted
+  }
+};
 ```
+Replace `text-white` on line 88 with `getPartyTextColor(party)`.
 
-Also tighten the system prompt: "If you cannot verify the candidate's identity from office + state, refuse to invent biography. Never name a different city, state, or office than the one provided."
-
-### 2. Bust the cached wrong analysis
-
-The component caches the analysis in component state only (no DB cache), so once deployed the next open will regenerate. No migration needed.
-
-### 3. (Optional, same edit) Frontend: pass office/state too
-
-`src/components/AIExplanation.tsx` already has `candidateId`, so the edge function can fetch context server-side — no frontend change required. Keep frontend untouched.
-
-## Files touched
-
-- `supabase/functions/ai-candidate-explanation/index.ts` — add candidate lookup + disambiguation in prompts.
-
-No DB migration. No frontend change.
-
-## Verification
-
-1. Re-open Brian Wahler → click Deep Analysis → confirm it now says Piscataway, NJ (or admits no documented record if the model can't verify).
-2. Spot-check one common-name federal official (e.g. a Smith / Johnson) to confirm the disambiguation guard doesn't break the federal flow.
+### Verification
+- Visit `/candidate/mayor_nj_piscataway` logged out → no "Overridden" badge, no "Edit" button. As admin → both visible.
+- Visit `/feed` → "SARE, DIANE" and other unknown-party avatars show dark initials on the light gray circle; party-colored avatars (blue/red/purple) keep white initials.
