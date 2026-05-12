@@ -1,0 +1,2 @@
+UPDATE public.candidates SET is_incumbent = true, last_updated = now() WHERE id = 'P80001571';
+UPDATE public.candidates SET is_incumbent = false, last_updated = now() WHERE id IN ('P80000722', 'P00009423');
