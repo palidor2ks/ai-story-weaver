@@ -1,37 +1,27 @@
-## Problem
+## Why this happens
 
-Clicking the Trump card opens Joe Biden's profile.
+The question `defense-q2` (and ~hundreds of others) has **two options that both store value `0`**:
 
-The Trump card from the civic-officials list uses the synthetic id `federal_president`. In `useCandidate` (`src/hooks/useCandidates.ts` ~lines 248-258), that id resolves by querying:
+1. `"Not important to me"` (value 0)
+2. `"Neutral—reduce where appropriate, retain critical bases."` (value 0)
 
-```
-candidates where office='President' AND is_incumbent=true ORDER BY last_updated DESC LIMIT 1
-```
+The AI inferred Houlahan as **neutral** with a score of `0` (Center → "C" badge). But `CandidateAnswersDialog.getOptionTextForScore` (`src/components/admin/CandidateAnswersDialog.tsx:46-54`) does `options.find(o => o.value === value)` and returns the **first** match — which is "Not important to me". That's why the position label is wrong even though the underlying score and AI explanation are correct.
 
-In the DB today:
-- `P80000722` Joseph R. Biden Jr — `is_incumbent=true`
-- `P80001571` Donald J. Trump — `is_incumbent=false`
-- `P00009423` Kamala Harris — `is_incumbent=false`
+The AI explanation itself even quotes the right option: *"...suggests a 'Neutral—reduce where appropriate, retain critical bases' stance."*
 
-So the resolver returns Biden, regardless of which card was clicked. (VP side is fine: JD Vance is the only `is_incumbent=true` for "Vice President".)
+## Plan
 
-## Fix
+Frontend-only fix in `src/components/admin/CandidateAnswersDialog.tsx`:
 
-Two-part fix:
+1. Change `getOptionTextForScore` to prefer the substantive neutral option over the generic "Not important to me" sentinel when both share value `0`. Concretely: when multiple options match the value, skip ones whose text matches `/^not important to me$/i` and return the next match. If only "Not important to me" exists at that value, keep current behavior.
 
-1. **Data correction (migration).** The current incumbent President is Trump, not Biden.
-   - `candidates`: set `is_incumbent=true` where id `P80001571` (Trump); set `is_incumbent=false` where id `P80000722` (Biden) and `P00009423` (Harris).
-   - This makes the existing synthetic resolver return the correct row.
-
-2. **Resolver hardening** in `src/hooks/useCandidates.ts` (`federal_president` / `federal_vice_president` branch). To prevent a recurrence if `is_incumbent` flags drift, fall back deterministically: if zero or more than one incumbent matches, pick the row whose id matches the current `static_officials` / civic-officials entry for that office (the same source the card was rendered from). Concretely: look up `static_officials` where `level='federal_executive'` and `office` matches, then resolve to its linked candidate id; only fall back to the `is_incumbent` query if no static official exists.
+2. No DB changes, no scoring logic changes, no edge-function changes. The score (`0` → "C") and AI explanation remain identical; only the human-readable Position label updates from "Not important to me" → "Neutral—reduce where appropriate, retain critical bases."
 
 ## Out of scope
 
-- No UI changes to the card itself.
-- No changes to scoring or finance logic.
+- Restructuring the `question_options` schema to give "Not important to me" a separate sentinel value (e.g. `null` or a dedicated flag). That's a larger data migration affecting quiz scoring, party answers, and import flows — happy to plan it as a follow-up if you want.
+- Changing how the AI picks/labels positions in the edge functions.
 
 ## Verification
 
-- On `/admin` (or anywhere the Trump card appears), clicking Trump routes to Trump's profile (`P80001571`), and clicking Biden (if shown) routes to Biden.
-- VP card still routes to JD Vance.
-- Quick `select id, name, is_incumbent from candidates where office='President'` confirms only Trump is flagged incumbent.
+Reopen the Houlahan answers dialog → defense-q2 should now read `Position: Neutral—reduce where appropriate, retain critical bases.` Spot-check one other duplicate-zero question (e.g. `civil-rights-q1`, `economy-q1`) for an inferred score of 0 to confirm the label is the substantive neutral, not "Not important to me".
