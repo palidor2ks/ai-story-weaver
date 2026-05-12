@@ -1,22 +1,37 @@
-## Goal
-Clean up the spectrum bar markers on `CandidateScoreCard`.
+## Problem
 
-## Changes to `src/components/CandidateScoreCard.tsx`
+Clicking the Trump card opens Joe Biden's profile.
 
-1. **Remove the bottom legend** (the "Rep / You" row under the L10–C–R10 axis).
-2. **Position both marker dots directly on the gradient bar** — vertically centered on the bar (current top math should be `top-1/2 -translate-y-1/2` relative to the bar element, not offset above/below). Verify both Rep and You dots sit on the bar line.
-3. **Label placement**:
-   - "YOU" label always **above** the user's dot.
-   - "Rep" label always **below** the rep's dot.
-   - Drop the close-marker swap logic (no longer needed since they're on opposite sides vertically).
-4. **Cleaner styling**:
-   - Smaller dots (h-4 w-4) for less visual weight.
-   - Labels: `text-[10px] font-semibold uppercase tracking-wider`, muted color for "Rep", primary color for "You".
-   - Ensure axis labels (L10/C/R10) have enough top margin to clear the "Rep" label below the bar.
+The Trump card from the civic-officials list uses the synthetic id `federal_president`. In `useCandidate` (`src/hooks/useCandidates.ts` ~lines 248-258), that id resolves by querying:
+
+```
+candidates where office='President' AND is_incumbent=true ORDER BY last_updated DESC LIMIT 1
+```
+
+In the DB today:
+- `P80000722` Joseph R. Biden Jr — `is_incumbent=true`
+- `P80001571` Donald J. Trump — `is_incumbent=false`
+- `P00009423` Kamala Harris — `is_incumbent=false`
+
+So the resolver returns Biden, regardless of which card was clicked. (VP side is fine: JD Vance is the only `is_incumbent=true` for "Vice President".)
+
+## Fix
+
+Two-part fix:
+
+1. **Data correction (migration).** The current incumbent President is Trump, not Biden.
+   - `candidates`: set `is_incumbent=true` where id `P80001571` (Trump); set `is_incumbent=false` where id `P80000722` (Biden) and `P00009423` (Harris).
+   - This makes the existing synthetic resolver return the correct row.
+
+2. **Resolver hardening** in `src/hooks/useCandidates.ts` (`federal_president` / `federal_vice_president` branch). To prevent a recurrence if `is_incumbent` flags drift, fall back deterministically: if zero or more than one incumbent matches, pick the row whose id matches the current `static_officials` / civic-officials entry for that office (the same source the card was rendered from). Concretely: look up `static_officials` where `level='federal_executive'` and `office` matches, then resolve to its linked candidate id; only fall back to the `is_incumbent` query if no static official exists.
 
 ## Out of scope
-- No changes to score math, props, or `CandidateProfile.tsx`.
-- No color palette changes beyond what's needed for label contrast.
+
+- No UI changes to the card itself.
+- No changes to scoring or finance logic.
 
 ## Verification
-On `/candidate/B001288`: both dots sit centered on the gradient bar, "YOU" sits above the user dot, "Rep" sits below the rep dot, no legend at the bottom, and L10/C/R10 axis remains readable.
+
+- On `/admin` (or anywhere the Trump card appears), clicking Trump routes to Trump's profile (`P80001571`), and clicking Biden (if shown) routes to Biden.
+- VP card still routes to JD Vance.
+- Quick `select id, name, is_incumbent from candidates where office='President'` confirms only Trump is flagged incumbent.
