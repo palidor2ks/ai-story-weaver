@@ -1,0 +1,1 @@
+GRANT SELECT (claimed_by_user_id, claimed_at) ON public.candidates TO anon;
