@@ -49,8 +49,12 @@ function getOptionTextForScore(
   value: number | null
 ): string | null {
   if (value === null || !options) return null;
-  const match = options.find(o => o.value === value);
-  return match?.text || null;
+  const matches = options.filter(o => o.value === value);
+  if (matches.length === 0) return null;
+  // When multiple options share the same value, prefer the substantive one
+  // over the generic "Not important to me" sentinel.
+  const substantive = matches.find(o => !/^\s*not important to me\s*$/i.test(o.text));
+  return (substantive ?? matches[0]).text || null;
 }
 
 function getScoreBadge(value: number | null) {
