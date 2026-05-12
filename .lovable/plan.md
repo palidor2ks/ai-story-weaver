@@ -1,27 +1,26 @@
-## Why this happens
+# Fix: Admin access denied (has_role permission)
 
-The question `defense-q2` (and ~hundreds of others) has **two options that both store value `0`**:
+## Root cause
+`public.has_role(uuid, app_role)` currently has EXECUTE granted only to `postgres` and `service_role`. RLS policies across the project (including `user_roles`, candidates-related tables, etc.) call `public.has_role(auth.uid(), 'admin')`. When a logged-in user runs any query whose RLS calls this function, Postgres throws `permission denied for function has_role`, so:
 
-1. `"Not important to me"` (value 0)
-2. `"Neutral—reduce where appropriate, retain critical bases."` (value 0)
+- `useAdminRole` returns `{ isAdmin: false }` → `/admin` blocked
+- `usePoliticianRole` fails the same way
+- Many other authenticated reads will silently fail RLS too
 
-The AI inferred Houlahan as **neutral** with a score of `0` (Center → "C" badge). But `CandidateAnswersDialog.getOptionTextForScore` (`src/components/admin/CandidateAnswersDialog.tsx:46-54`) does `options.find(o => o.value === value)` and returns the **first** match — which is "Not important to me". That's why the position label is wrong even though the underlying score and AI explanation are correct.
+## Fix
+One small migration to grant EXECUTE back to the standard Supabase roles. The function is already `SECURITY DEFINER STABLE` and only reads `user_roles`, so it's safe to expose.
 
-The AI explanation itself even quotes the right option: *"...suggests a 'Neutral—reduce where appropriate, retain critical bases' stance."*
+```sql
+GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role)
+  TO authenticated, anon;
+```
 
-## Plan
-
-Frontend-only fix in `src/components/admin/CandidateAnswersDialog.tsx`:
-
-1. Change `getOptionTextForScore` to prefer the substantive neutral option over the generic "Not important to me" sentinel when both share value `0`. Concretely: when multiple options match the value, skip ones whose text matches `/^not important to me$/i` and return the next match. If only "Not important to me" exists at that value, keep current behavior.
-
-2. No DB changes, no scoring logic changes, no edge-function changes. The score (`0` → "C") and AI explanation remain identical; only the human-readable Position label updates from "Not important to me" → "Neutral—reduce where appropriate, retain critical bases."
-
-## Out of scope
-
-- Restructuring the `question_options` schema to give "Not important to me" a separate sentinel value (e.g. `null` or a dedicated flag). That's a larger data migration affecting quiz scoring, party answers, and import flows — happy to plan it as a follow-up if you want.
-- Changing how the AI picks/labels positions in the edge functions.
+(Optionally also `TO public` to match Postgres defaults, but `authenticated, anon` is sufficient for our app.)
 
 ## Verification
+1. Reload `/admin` while signed in as `reltemawi@gmail.com` — page should load.
+2. Console: no more `permission denied for function has_role` errors.
+3. `useAdminRole` query returns `{ isAdmin: true }` for that user (confirmed they have `admin` row in `user_roles`).
 
-Reopen the Houlahan answers dialog → defense-q2 should now read `Position: Neutral—reduce where appropriate, retain critical bases.` Spot-check one other duplicate-zero question (e.g. `civil-rights-q1`, `economy-q1`) for an inferred score of 0 to confirm the label is the substantive neutral, not "Not important to me".
+## Out of scope
+- No changes to RLS policies, the function body, or any other security artifacts. The earlier security migrations (share_cards / candidates column REVOKEs) stay as-is.
