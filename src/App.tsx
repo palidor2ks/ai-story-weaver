@@ -84,6 +84,7 @@ const AppRoutes = () => {
       <Route path="/auth" element={<Auth />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/data-deletion" element={<DataDeletion />} />
       <Route path="/unsubscribe" element={<Unsubscribe />} />
       <Route path="/p/:slug" element={<Poll />} />
       <Route path="/p/:slug/results" element={<PollResultsPage />} />
