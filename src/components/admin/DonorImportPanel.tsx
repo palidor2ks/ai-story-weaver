@@ -500,6 +500,7 @@ export function DonorImportPanel() {
     setCommitteeId('');
     setLastDebugInfo(null);
     setFileHealthWarning(null);
+    setCommitteePreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
