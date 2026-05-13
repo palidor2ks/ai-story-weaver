@@ -210,12 +210,13 @@ export function AdminUsersPanel() {
                     <TableHead>Verified</TableHead>
                     <TableHead>Score</TableHead>
                     <TableHead>Joined</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pageRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                         No users match these filters.
                       </TableCell>
                     </TableRow>
@@ -260,6 +261,28 @@ export function AdminUsersPanel() {
                           <TableCell>{p.overall_score?.toFixed?.(2) ?? "—"}</TableCell>
                           <TableCell className="text-muted-foreground text-xs">
                             {new Date(p.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {p.id === user?.id ? (
+                              <span className="text-xs text-muted-foreground">You</span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant={isAdmin ? "outline" : "default"}
+                                disabled={pendingUserId === p.id}
+                                onClick={() => toggleAdmin.mutate({ userId: p.id, makeAdmin: !isAdmin })}
+                                className="gap-1"
+                              >
+                                {pendingUserId === p.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : isAdmin ? (
+                                  <ShieldOff className="h-3 w-3" />
+                                ) : (
+                                  <ShieldPlus className="h-3 w-3" />
+                                )}
+                                {isAdmin ? "Demote" : "Promote"}
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
