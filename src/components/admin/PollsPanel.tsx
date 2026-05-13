@@ -218,6 +218,41 @@ export const PollsPanel = () => {
               <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} />
             </div>
 
+            <Card className="p-3 space-y-3 bg-muted/30">
+              <div className="flex items-center justify-between">
+                <Label className="text-base">Share to social</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="auto-post" className="text-sm font-normal">Auto-post on publish</Label>
+                  <Switch id="auto-post" checked={autoPost} onCheckedChange={setAutoPost} />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {PLATFORMS.map(pl => {
+                  const active = sharePlatforms.includes(pl.id);
+                  return (
+                    <Button
+                      key={pl.id}
+                      type="button"
+                      size="sm"
+                      variant={active ? 'default' : 'outline'}
+                      onClick={() => togglePlatform(pl.id)}
+                    >
+                      {pl.label}{pl.note && !active && <span className="ml-1 text-xs opacity-60">· {pl.note}</span>}
+                    </Button>
+                  );
+                })}
+              </div>
+              <div>
+                <Label className="text-sm">Custom caption (optional)</Label>
+                <Textarea
+                  rows={2}
+                  placeholder="Defaults to: {title} — Take the poll: {url}"
+                  value={shareCaption}
+                  onChange={e => setShareCaption(e.target.value)}
+                />
+              </div>
+            </Card>
+
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label>Questions</Label>
