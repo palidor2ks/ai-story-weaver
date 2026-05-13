@@ -399,14 +399,54 @@ Deno.serve(async (req) => {
     const rowsWithDonorIds = await Promise.all(donorIdPromises);
     const donorIdTime = Date.now() - startTime - hashTime;
 
+    // Multi-committee mode: build committee_id -> candidate_id map from candidate_committees
+    const committeeToCandidate = new Map<string, string | null>();
+    const unmappedCommittees = new Set<string>();
+    if (multiCommittee) {
+      const distinctCommittees = Array.from(
+        new Set(rowsWithDonorIds.map(rd => rd.recipientCommitteeId).filter(Boolean))
+      );
+      if (distinctCommittees.length > 0) {
+        const { data: mappings, error: mapErr } = await supabase
+          .from('candidate_committees')
+          .select('fec_committee_id, candidate_id')
+          .in('fec_committee_id', distinctCommittees);
+        if (mapErr) {
+          console.error('[CSV-IMPORT] candidate_committees lookup failed:', mapErr.message);
+        } else if (mappings) {
+          for (const m of mappings) {
+            if (m.candidate_id) committeeToCandidate.set(m.fec_committee_id, m.candidate_id);
+          }
+        }
+        for (const cid of distinctCommittees) {
+          if (!committeeToCandidate.has(cid)) unmappedCommittees.add(cid);
+        }
+      }
+      console.log(`[CSV-IMPORT] multi-committee: ${distinctCommittees.length} committees, ${committeeToCandidate.size} mapped, ${unmappedCommittees.size} unmapped`);
+    }
+
+    const resolveCandidateId = (rowCommitteeId: string): string | null => {
+      if (multiCommittee) return committeeToCandidate.get(rowCommitteeId) || null;
+      return candidateId || null;
+    };
+
     // Build contributions array and aggregate donors
     const contributions: any[] = [];
     const donorAggregates = new Map<string, any>();
+    const committeeBreakdown = new Map<string, { rows: number; candidate_id: string | null }>();
 
     for (const rd of rowsWithDonorIds) {
       const identityHash = hashMap.get(rd.index)!;
       const lineClass = classifyLineNumber(rd.lineNumber);
       const earmarkInfo = parseEarmarkInfo(rd.memoText);
+      const rowCandidateId = resolveCandidateId(rd.recipientCommitteeId);
+
+      // Track per-committee row counts for the response
+      if (rd.recipientCommitteeId) {
+        const existing = committeeBreakdown.get(rd.recipientCommitteeId);
+        if (existing) existing.rows++;
+        else committeeBreakdown.set(rd.recipientCommitteeId, { rows: 1, candidate_id: rowCandidateId });
+      }
 
       // CRITICAL: Line 12 Individual records are attribution records showing WHO contributed through a JFC
       // They should have memo_code='X' to be excluded from reconciliation totals (FEC excludes them)
