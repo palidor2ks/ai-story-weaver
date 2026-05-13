@@ -165,6 +165,11 @@ const AppRoutes = () => {
           <Admin />
         </RouteGuard>
       } />
+      <Route path="/admin/users/:userId" element={
+        <RouteGuard requireAuth requireOnboarding>
+          <AdminUserProfileView />
+        </RouteGuard>
+      } />
       <Route path="/politician" element={
         <RouteGuard requireAuth requireOnboarding>
           <PoliticianDashboard />
