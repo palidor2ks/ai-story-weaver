@@ -99,7 +99,7 @@ export function DonorImportPanel() {
       
       Papa.parse(text, {
         header: true,
-        preview: 500, // Check first 500 rows for health
+        preview: 2000, // Check first 2000 rows for health + multi-committee preview
         complete: async (results) => {
           if (results.data.length > 0) {
             const rows = results.data as any[];
