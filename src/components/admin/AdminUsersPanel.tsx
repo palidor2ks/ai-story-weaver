@@ -30,6 +30,7 @@ const PAGE_SIZE = 50;
 
 export function AdminUsersPanel() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [partyFilter, setPartyFilter] = useState<string>("all");
@@ -37,7 +38,6 @@ export function AdminUsersPanel() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [page, setPage] = useState(0);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
-  const [detailUserId, setDetailUserId] = useState<string | null>(null);
 
   const toggleAdmin = useMutation({
     mutationFn: async ({ userId, makeAdmin }: { userId: string; makeAdmin: boolean }) => {
