@@ -78,7 +78,9 @@ export const Committees = () => {
   });
 
   const committees = useMemo(
-    () => data?.pages.flatMap((page) => page.committees) ?? [],
+    () => (data?.pages.flatMap((page) => page.committees) ?? [])
+      .slice()
+      .sort((a, b) => b.totalRaised - a.totalRaised),
     [data],
   );
 
