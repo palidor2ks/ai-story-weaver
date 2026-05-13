@@ -263,8 +263,9 @@ export function DonorImportPanel() {
                   body: {
                     rows: batch,
                     cycle,
-                    candidateId: candidateId || null,
-                    committeeId: committeeId || null
+                    candidateId: multiCommittee ? null : (candidateId || null),
+                    committeeId: multiCommittee ? null : (committeeId || null),
+                    multiCommittee
                   }
                 });
 
