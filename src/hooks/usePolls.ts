@@ -118,7 +118,10 @@ export const useCreatePoll = () => {
           status: input.status,
           published_at: input.status === 'published' ? now : null,
           created_by: user.id,
-        })
+          share_platforms: input.share_platforms || [],
+          auto_post: input.auto_post ?? true,
+          share_caption: input.share_caption || null,
+        } as any)
         .select()
         .single();
       if (pollErr) throw pollErr;
