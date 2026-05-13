@@ -479,6 +479,7 @@ export default function Admin() {
               { value: "topic-review", label: "Topic Review", Icon: Tags },
               { value: "bulk-validation", label: "Bulk Validation", Icon: CheckCircle2 },
               { value: "donor-import", label: "Donor Import", Icon: Upload },
+              { value: "polls", label: "Polls", Icon: Sparkles },
               { value: "visible-states", label: "Visible States", Icon: Shield },
               { value: "users", label: "Users", Icon: Users },
             ];
