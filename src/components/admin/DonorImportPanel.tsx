@@ -803,7 +803,7 @@ export function DonorImportPanel() {
         <div className="flex gap-2">
           <Button
             onClick={handleImport}
-            disabled={!file || isImporting || !candidateId}
+            disabled={!file || isImporting || (!multiCommittee && !candidateId)}
             className="flex-1"
           >
             {isImporting ? (
@@ -816,7 +816,7 @@ export function DonorImportPanel() {
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 Complete
               </>
-            ) : !candidateId && file ? (
+            ) : !multiCommittee && !candidateId && file ? (
               <>
                 <AlertCircle className="mr-2 h-4 w-4" />
                 Candidate ID Required
