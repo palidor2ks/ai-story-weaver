@@ -230,7 +230,7 @@ export function AdminUsersPanel() {
                         <TableRow
                           key={p.id}
                           className="cursor-pointer"
-                          onClick={() => setDetailUserId(p.id)}
+                          onClick={() => navigate(`/admin/users/${p.id}`)}
                         >
                           <TableCell className="font-medium">{p.name || "—"}</TableCell>
                           <TableCell className="text-muted-foreground">{p.email || "—"}</TableCell>
