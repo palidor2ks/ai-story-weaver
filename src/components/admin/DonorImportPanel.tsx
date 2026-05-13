@@ -203,7 +203,9 @@ export function DonorImportPanel() {
       corruptedSubIds: 0,
       uniqueHashes: 0,
       currentBatch: 0,
-      totalBatches: 0
+      totalBatches: 0,
+      committeeBreakdown: {},
+      unmappedCommittees: []
     });
 
     console.log(`[DonorImport] Starting session ${sessionId}`);
