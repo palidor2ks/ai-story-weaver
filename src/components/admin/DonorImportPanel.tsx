@@ -51,6 +51,8 @@ export function DonorImportPanel() {
   const [cycle, setCycle] = useState('2024');
   const [candidateId, setCandidateId] = useState('');
   const [committeeId, setCommitteeId] = useState('');
+  const [multiCommittee, setMultiCommittee] = useState(false);
+  const [committeePreview, setCommitteePreview] = useState<CommitteePreview[] | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [stats, setStats] = useState<ImportStats | null>(null);
