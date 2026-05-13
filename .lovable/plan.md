@@ -1,37 +1,38 @@
-## What's already wired
+# Mass-import donations across multiple candidates
 
-Good news — the signup confirmation email is **already wired automatically**. No new code is needed to trigger it:
+Let one CSV upload hold rows for many committees. Each row is routed to its candidate based on its own `committee_id`, using the existing `candidate_committees` mapping. Unmapped rows are imported as orphans (`candidate_id = null`) and reported back so they can be mapped later.
 
-- `signUp()` in `src/context/AuthContext.tsx` calls `supabase.auth.signUp({ email, password, options: { emailRedirectTo, data: { name } } })`
-- Supabase Auth automatically routes the confirmation email through the deployed `auth-email-hook`, which renders `supabase/functions/_shared/email-templates/signup.tsx`
-- A `/verify-email` page already exists with a "Resend" button using `supabase.auth.resend({ type: 'signup' })`
+## UI changes — `src/components/admin/DonorImportPanel.tsx`
 
-So whenever a user signs up, they'll get a confirmation email — as soon as DNS for `notify.www.polipulseapp.com` finishes verifying.
+1. Add a **"Multi-committee mode"** toggle (Switch) at the top of the panel.
+2. When ON:
+   - Hide the single `committeeId` / `candidateId` inputs and the "detected committee" panel.
+   - On file select, scan the first ~2000 rows, collect distinct `committee_id` values, look them up in `candidate_committees`, and show a small preview table: committee_id → candidate name (or "Unmapped — will import as orphan").
+   - Show a count of mapped vs unmapped committees.
+3. When sending each batch to the edge function, pass `multiCommittee: true` and omit top-level `committeeId` / `candidateId`.
+4. Extend the result stats to show: contributions per committee, and a list of unmapped committee_ids encountered.
 
-## What needs polish
+## Edge function changes — `supabase/functions/import-fec-receipts-csv/index.ts`
 
-The current `signup.tsx` template is the unbranded scaffold (black button, generic "Verify Email" copy). I'll brand it to match PoliPulse.
+1. Accept new body field `multiCommittee: boolean`.
+2. When `multiCommittee` is true:
+   - Ignore top-level `candidateId` / `committeeId`.
+   - Collect distinct `committee_id` values from the batch's rows.
+   - One `candidate_committees` query: `select fec_committee_id, candidate_id where fec_committee_id in (...)`. Build an in-memory map. Cache per invocation.
+   - For each row, resolve `recipient_committee_id` from the row, then `candidate_id` from the map (or `null` if unmapped).
+3. Return new fields in the response:
+   - `committeeBreakdown`: `{ [committeeId]: { rows, inserted, candidate_id|null } }`
+   - `unmappedCommittees`: string[]
+4. Single-committee mode keeps current behavior unchanged.
 
-## Plan
+## Aggregation in the panel
 
-1. **Rewrite `signup.tsx`** with PoliPulse branding:
-   - Primary color `hsl(233, 69%, 30%)` (#171a3a) for the button and accents
-   - Friendlier copy: "Welcome to PoliPulse — confirm your email to get started"
-   - CTA: "Confirm email"
-   - White background, rounded button matching app's `--radius`
-   - Mention next step ("Then take the quiz to see where you stand")
+Accumulate `committeeBreakdown` and `unmappedCommittees` across batches and render after import:
+- Per-committee inserted-contributions table.
+- Collapsible "Unmapped committee_ids" list with copy-to-clipboard, so the admin can add `candidate_committees` rows and re-run.
 
-2. **Redeploy `auth-email-hook`** so the new template renders.
+## Out of scope
 
-3. **Verify Supabase Auth has email confirmation enabled** (Auth → Providers → Email → "Confirm email"). If it's off, no email gets sent regardless of templates. I'll check and call it out.
-
-4. **No changes to signup logic** — it's already correct.
-
-## Out of scope (ask if you want them)
-
-- Sending the separate transactional `welcome` email *after* the user confirms their address (would fire on the first authenticated session). Right now the confirmation email itself acts as the welcome.
-- Changing the confirm-link redirect target (currently `/`).
-
-## Note on delivery
-
-Emails will only actually arrive once `notify.www.polipulseapp.com` finishes DNS verification. You can monitor in **Cloud → Emails**. Until then, Supabase falls back to its default plain confirmation email.
+- No schema changes (everything fits existing tables).
+- No multi-file queueing (single CSV with mixed committees).
+- Reconciliation / rollup recalculation is unchanged — it already keys off `candidate_id` and `committee_id`, so newly imported rows flow through normally.
