@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Loader2, ShieldCheck, CheckCircle2, ShieldOff, ShieldPlus } from "lucide-react";
+import { AdminUserDetailDialog } from "./AdminUserDetailDialog";
 
 interface ProfileRow {
   id: string;
@@ -36,6 +37,7 @@ export function AdminUsersPanel() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [page, setPage] = useState(0);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [detailUserId, setDetailUserId] = useState<string | null>(null);
 
   const toggleAdmin = useMutation({
     mutationFn: async ({ userId, makeAdmin }: { userId: string; makeAdmin: boolean }) => {
@@ -225,7 +227,11 @@ export function AdminUsersPanel() {
                       const userRoles = roleMap.get(p.id) || [];
                       const isAdmin = userRoles.includes("admin");
                       return (
-                        <TableRow key={p.id}>
+                        <TableRow
+                          key={p.id}
+                          className="cursor-pointer"
+                          onClick={() => setDetailUserId(p.id)}
+                        >
                           <TableCell className="font-medium">{p.name || "—"}</TableCell>
                           <TableCell className="text-muted-foreground">{p.email || "—"}</TableCell>
                           <TableCell>{p.location || "—"}</TableCell>
@@ -262,7 +268,7 @@ export function AdminUsersPanel() {
                           <TableCell className="text-muted-foreground text-xs">
                             {new Date(p.created_at).toLocaleDateString()}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             {p.id === user?.id ? (
                               <span className="text-xs text-muted-foreground">You</span>
                             ) : (
@@ -320,6 +326,11 @@ export function AdminUsersPanel() {
           </>
         )}
       </CardContent>
+      <AdminUserDetailDialog
+        userId={detailUserId}
+        open={!!detailUserId}
+        onOpenChange={(o) => !o && setDetailUserId(null)}
+      />
     </Card>
   );
 }
