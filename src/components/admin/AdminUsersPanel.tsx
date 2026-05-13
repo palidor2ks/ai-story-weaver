@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { Loader2, ShieldCheck, CheckCircle2, ShieldOff, ShieldPlus } from "lucide-react";
 
 interface ProfileRow {
   id: string;
@@ -26,11 +28,41 @@ interface ProfileRow {
 const PAGE_SIZE = 50;
 
 export function AdminUsersPanel() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [partyFilter, setPartyFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [page, setPage] = useState(0);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+
+  const toggleAdmin = useMutation({
+    mutationFn: async ({ userId, makeAdmin }: { userId: string; makeAdmin: boolean }) => {
+      if (makeAdmin) {
+        const { error } = await supabase
+          .from("user_roles")
+          .insert({ user_id: userId, role: "admin" });
+        if (error && !error.message.includes("duplicate")) throw error;
+      } else {
+        const { error } = await supabase
+          .from("user_roles")
+          .delete()
+          .eq("user_id", userId)
+          .eq("role", "admin");
+        if (error) throw error;
+      }
+    },
+    onMutate: ({ userId }) => setPendingUserId(userId),
+    onSettled: () => setPendingUserId(null),
+    onSuccess: (_d, vars) => {
+      toast.success(vars.makeAdmin ? "Promoted to admin" : "Removed admin role");
+      queryClient.invalidateQueries({ queryKey: ["admin", "user_roles_all"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-role"] });
+    },
+    onError: (e: Error) => toast.error(`Failed: ${e.message}`),
+  });
+
 
   const { data: profiles, isLoading, error } = useQuery({
     queryKey: ["admin", "profiles"],
@@ -178,12 +210,13 @@ export function AdminUsersPanel() {
                     <TableHead>Verified</TableHead>
                     <TableHead>Score</TableHead>
                     <TableHead>Joined</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pageRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                         No users match these filters.
                       </TableCell>
                     </TableRow>
@@ -228,6 +261,28 @@ export function AdminUsersPanel() {
                           <TableCell>{p.overall_score?.toFixed?.(2) ?? "—"}</TableCell>
                           <TableCell className="text-muted-foreground text-xs">
                             {new Date(p.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {p.id === user?.id ? (
+                              <span className="text-xs text-muted-foreground">You</span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant={isAdmin ? "outline" : "default"}
+                                disabled={pendingUserId === p.id}
+                                onClick={() => toggleAdmin.mutate({ userId: p.id, makeAdmin: !isAdmin })}
+                                className="gap-1"
+                              >
+                                {pendingUserId === p.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : isAdmin ? (
+                                  <ShieldOff className="h-3 w-3" />
+                                ) : (
+                                  <ShieldPlus className="h-3 w-3" />
+                                )}
+                                {isAdmin ? "Demote" : "Promote"}
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
