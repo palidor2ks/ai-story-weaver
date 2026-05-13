@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -10,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Loader2, ShieldCheck, CheckCircle2, ShieldOff, ShieldPlus } from "lucide-react";
-import { AdminUserDetailDialog } from "./AdminUserDetailDialog";
 
 interface ProfileRow {
   id: string;
@@ -30,6 +30,7 @@ const PAGE_SIZE = 50;
 
 export function AdminUsersPanel() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [partyFilter, setPartyFilter] = useState<string>("all");
@@ -37,7 +38,6 @@ export function AdminUsersPanel() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [page, setPage] = useState(0);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
-  const [detailUserId, setDetailUserId] = useState<string | null>(null);
 
   const toggleAdmin = useMutation({
     mutationFn: async ({ userId, makeAdmin }: { userId: string; makeAdmin: boolean }) => {
@@ -230,7 +230,7 @@ export function AdminUsersPanel() {
                         <TableRow
                           key={p.id}
                           className="cursor-pointer"
-                          onClick={() => setDetailUserId(p.id)}
+                          onClick={() => navigate(`/admin/users/${p.id}`)}
                         >
                           <TableCell className="font-medium">{p.name || "—"}</TableCell>
                           <TableCell className="text-muted-foreground">{p.email || "—"}</TableCell>
@@ -326,11 +326,6 @@ export function AdminUsersPanel() {
           </>
         )}
       </CardContent>
-      <AdminUserDetailDialog
-        userId={detailUserId}
-        open={!!detailUserId}
-        onOpenChange={(o) => !o && setDetailUserId(null)}
-      />
     </Card>
   );
 }

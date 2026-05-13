@@ -1,0 +1,3 @@
+CREATE POLICY "Admins can view all user topics" ON public.user_topics FOR SELECT TO authenticated USING (has_role(auth.uid(), 'admin'::app_role));
+CREATE POLICY "Admins can view all user topic scores" ON public.user_topic_scores FOR SELECT TO authenticated USING (has_role(auth.uid(), 'admin'::app_role));
+CREATE POLICY "Admins can view all quiz answers" ON public.quiz_answers FOR SELECT TO authenticated USING (has_role(auth.uid(), 'admin'::app_role));

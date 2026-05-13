@@ -20,6 +20,7 @@ import DonorProfile from "./pages/DonorProfile";
 import { QuizLibrary } from "./pages/QuizLibrary";
 import { HowScoringWorks } from "./pages/HowScoringWorks";
 import Admin from "./pages/Admin";
+import AdminUserProfileView from "./pages/AdminUserProfileView";
 import PoliticianDashboard from "./pages/PoliticianDashboard";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
@@ -162,6 +163,11 @@ const AppRoutes = () => {
       <Route path="/admin" element={
         <RouteGuard requireAuth requireOnboarding>
           <Admin />
+        </RouteGuard>
+      } />
+      <Route path="/admin/users/:userId" element={
+        <RouteGuard requireAuth requireOnboarding>
+          <AdminUserProfileView />
         </RouteGuard>
       } />
       <Route path="/politician" element={

@@ -88,34 +88,36 @@ const handleMutationError = (error: unknown, context: string) => {
 
 // ============= Query Hooks =============
 
-export const useProfile = () => {
+export const useProfile = (overrideUserId?: string) => {
   const { user } = useAuth();
+  const targetId = overrideUserId ?? user?.id;
 
   return useQuery({
-    queryKey: ['profile', user?.id],
+    queryKey: ['profile', targetId],
     queryFn: async () => {
-      if (!user) return null;
+      if (!targetId) return null;
       
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', targetId)
         .maybeSingle();
       
       if (error) throw error;
       return data as Profile | null;
     },
-    enabled: !!user,
+    enabled: !!targetId,
   });
 };
 
-export const useUserTopicScores = () => {
+export const useUserTopicScores = (overrideUserId?: string) => {
   const { user } = useAuth();
+  const targetId = overrideUserId ?? user?.id;
 
   return useQuery({
-    queryKey: ['user_topic_scores', user?.id],
+    queryKey: ['user_topic_scores', targetId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!targetId) return [];
       
       const { data, error } = await supabase
         .from('user_topic_scores')
@@ -124,22 +126,23 @@ export const useUserTopicScores = () => {
           score,
           topics (name, icon)
         `)
-        .eq('user_id', user.id);
+        .eq('user_id', targetId);
       
       if (error) throw error;
       return data as TopicScore[];
     },
-    enabled: !!user,
+    enabled: !!targetId,
   });
 };
 
-export const useUserTopics = () => {
+export const useUserTopics = (overrideUserId?: string) => {
   const { user } = useAuth();
+  const targetId = overrideUserId ?? user?.id;
 
   return useQuery({
-    queryKey: ['user_topics', user?.id],
+    queryKey: ['user_topics', targetId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!targetId) return [];
       
       const { data, error } = await supabase
         .from('user_topics')
@@ -148,13 +151,13 @@ export const useUserTopics = () => {
           weight,
           topics (id, name, icon)
         `)
-        .eq('user_id', user.id)
+        .eq('user_id', targetId)
         .order('weight', { ascending: false });
       
       if (error) throw error;
       return data as UserTopic[];
     },
-    enabled: !!user,
+    enabled: !!targetId,
   });
 };
 

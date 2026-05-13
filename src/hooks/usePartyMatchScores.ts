@@ -20,19 +20,23 @@ interface PartyScores {
  * 
  * This ensures party scores are comparable to user scores (both use same weighting).
  */
-export function usePartyMatchScores() {
+export function usePartyMatchScores(overrideUserId?: string) {
   const { user } = useAuth();
+  const targetId = overrideUserId ?? user?.id;
 
   return useQuery<PartyScores>({
-    queryKey: ['party-scores-user-weighted', user?.id],
+    queryKey: ['party-scores-user-weighted', targetId],
     queryFn: async () => {
+      if (!targetId) return { democrat: null, republican: null, green: null, libertarian: null };
+
       // Fetch user's answered questions with their topics
       const { data: userAnswers, error: userError } = await supabase
         .from('quiz_answers')
         .select(`
           question_id,
           questions!inner(topic_id)
-        `);
+        `)
+        .eq('user_id', targetId);
 
       if (userError) throw userError;
       
@@ -56,6 +60,7 @@ export function usePartyMatchScores() {
       const { data: userTopics, error: topicsError } = await supabase
         .from('user_topics')
         .select('topic_id, weight')
+        .eq('user_id', targetId)
         .order('weight', { ascending: false });
 
       if (topicsError) throw topicsError;
@@ -107,7 +112,7 @@ export function usePartyMatchScores() {
         libertarian: calculateScore('libertarian'),
       };
     },
-    enabled: !!user,
+    enabled: !!targetId,
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
 }
