@@ -24,6 +24,8 @@ interface ImportStats {
   uniqueHashes: number;           // For collision detection
   currentBatch: number;           // Current batch number
   totalBatches: number;           // Total batch count
+  committeeBreakdown: Record<string, { rows: number; inserted: number; candidate_id: string | null }>;
+  unmappedCommittees: string[];
 }
 
 interface DebugInfo {
@@ -35,6 +37,13 @@ interface DebugInfo {
   timestamp: string;
   cycle: string;
   committeeId: string;
+}
+
+interface CommitteePreview {
+  committee_id: string;
+  candidate_id: string | null;
+  candidate_name: string | null;
+  row_count: number;
 }
 
 export function DonorImportPanel() {
