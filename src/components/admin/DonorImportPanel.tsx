@@ -766,6 +766,78 @@ export function DonorImportPanel() {
               </div>
             )}
 
+            {/* Per-committee breakdown (multi-committee mode) */}
+            {stats && Object.keys(stats.committeeBreakdown).length > 0 && (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Users className="h-4 w-4" />
+                  Per-committee breakdown ({Object.keys(stats.committeeBreakdown).length})
+                </div>
+                <div className="max-h-56 overflow-y-auto border rounded">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted sticky top-0">
+                      <tr>
+                        <th className="text-left p-2">Committee</th>
+                        <th className="text-left p-2">Candidate</th>
+                        <th className="text-right p-2">Rows</th>
+                        <th className="text-right p-2">Inserted ~</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(stats.committeeBreakdown)
+                        .sort((a, b) => b[1].rows - a[1].rows)
+                        .map(([cid, info]) => (
+                          <tr key={cid} className="border-t">
+                            <td className="p-2 font-mono">{cid}</td>
+                            <td className="p-2">
+                              {info.candidate_id || (
+                                <Badge variant="outline" className="text-amber-600 border-amber-500/50">
+                                  orphan
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="p-2 text-right">{info.rows.toLocaleString()}</td>
+                            <td className="p-2 text-right">{info.inserted.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Unmapped committees list */}
+            {stats && stats.unmappedCommittees.length > 0 && (
+              <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+                    <AlertCircle className="h-4 w-4" />
+                    Unmapped committees ({stats.unmappedCommittees.length})
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(stats.unmappedCommittees.join('\n'));
+                      toast.success('Copied unmapped committee IDs');
+                    }}
+                  >
+                    <Copy className="h-3 w-3 mr-1" />
+                    Copy
+                  </Button>
+                </div>
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  These committees aren't linked to a candidate in <code>candidate_committees</code>.
+                  Their contributions were imported with <code>candidate_id = null</code>. Add mappings and re-run to attribute them.
+                </p>
+                <div className="max-h-32 overflow-y-auto font-mono text-xs bg-background/50 rounded p-2">
+                  {stats.unmappedCommittees.map(cid => (
+                    <div key={cid}>{cid}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {stats?.errors && stats.errors.length > 0 && (
               <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
                 <div className="flex items-center justify-between mb-2">
