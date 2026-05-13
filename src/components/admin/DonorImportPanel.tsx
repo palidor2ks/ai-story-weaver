@@ -324,6 +324,25 @@ export function DonorImportPanel() {
                   skippedRows += data.skippedRows || 0;
                   corruptedSubIds += data.corruptedSubIds || 0;
                   uniqueHashes += data.uniqueHashes || 0;
+
+                  // Aggregate per-committee breakdown across batches
+                  if (data.committeeBreakdown) {
+                    for (const [cid, info] of Object.entries(data.committeeBreakdown as Record<string, { rows: number; candidate_id: string | null }>)) {
+                      const inserted = Math.round(
+                        ((info.rows || 0) / Math.max(1, data.processed || batch.length)) * (data.insertedContributions || 0)
+                      );
+                      const existing = committeeBreakdown[cid];
+                      if (existing) {
+                        existing.rows += info.rows || 0;
+                        existing.inserted += inserted;
+                      } else {
+                        committeeBreakdown[cid] = { rows: info.rows || 0, inserted, candidate_id: info.candidate_id };
+                      }
+                    }
+                  }
+                  if (Array.isArray(data.unmappedCommittees)) {
+                    for (const cid of data.unmappedCommittees) unmappedCommitteesSet.add(cid);
+                  }
                   
                   if (data.timing) {
                     console.log(`[DonorImport] Batch ${batchNum}/${totalBatches} timing:`, data.timing);
