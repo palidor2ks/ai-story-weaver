@@ -28,11 +28,41 @@ interface ProfileRow {
 const PAGE_SIZE = 50;
 
 export function AdminUsersPanel() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [partyFilter, setPartyFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [page, setPage] = useState(0);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+
+  const toggleAdmin = useMutation({
+    mutationFn: async ({ userId, makeAdmin }: { userId: string; makeAdmin: boolean }) => {
+      if (makeAdmin) {
+        const { error } = await supabase
+          .from("user_roles")
+          .insert({ user_id: userId, role: "admin" });
+        if (error && !error.message.includes("duplicate")) throw error;
+      } else {
+        const { error } = await supabase
+          .from("user_roles")
+          .delete()
+          .eq("user_id", userId)
+          .eq("role", "admin");
+        if (error) throw error;
+      }
+    },
+    onMutate: ({ userId }) => setPendingUserId(userId),
+    onSettled: () => setPendingUserId(null),
+    onSuccess: (_d, vars) => {
+      toast.success(vars.makeAdmin ? "Promoted to admin" : "Removed admin role");
+      queryClient.invalidateQueries({ queryKey: ["admin", "user_roles_all"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-role"] });
+    },
+    onError: (e: Error) => toast.error(`Failed: ${e.message}`),
+  });
+
 
   const { data: profiles, isLoading, error } = useQuery({
     queryKey: ["admin", "profiles"],
