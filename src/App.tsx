@@ -32,6 +32,7 @@ import { Committees } from "./pages/Committees";
 import { CommitteeProfile } from "./pages/CommitteeProfile";
 import Blog from "./pages/Blog";
 import Unsubscribe from "./pages/Unsubscribe";
+import Poll from "./pages/Poll";
 
 const queryClient = new QueryClient();
 
