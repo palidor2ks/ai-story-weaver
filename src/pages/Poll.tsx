@@ -10,6 +10,7 @@ import { Seo } from '@/components/Seo';
 import { toast } from 'sonner';
 import { twitterIntent, facebookIntent, linkedinIntent, openIntent } from '@/lib/shareIntents';
 import { cn } from '@/lib/utils';
+import { PollResults } from '@/components/poll/PollResults';
 
 const ANON_KEY = 'polipulse_anon_session_id';
 
@@ -136,10 +137,9 @@ export default function Poll() {
             {poll.description && <CardDescription>{poll.description}</CardDescription>}
           </CardHeader>
           <CardContent className="space-y-6">
-            {questions.map((pq: any, idx: number) => {
+            {!submitted && questions.map((pq: any, idx: number) => {
               const q = pq.questions;
-              const opts = (q.question_options || []).sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
-              const totalForQ = tally.filter(t => t.question_id === q.id).reduce((s, t) => s + Number(t.count), 0);
+              const opts = (q.question_options || []).slice().sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
               return (
                 <div key={pq.id}>
                   <p className="font-medium mb-3">
@@ -149,32 +149,19 @@ export default function Poll() {
                   <div className="space-y-2">
                     {opts.map((o: any) => {
                       const selected = answers[q.id] === o.id;
-                      const count = Number(tally.find(t => t.question_id === q.id && t.selected_option_id === o.id)?.count || 0);
-                      const pct = submitted && totalForQ > 0 ? Math.round((count / totalForQ) * 100) : 0;
                       return (
                         <button
                           key={o.id}
-                          disabled={submitted}
                           onClick={() => setAnswers(a => ({ ...a, [q.id]: o.id }))}
                           className={cn(
-                            'w-full text-left rounded-lg border p-3 transition relative overflow-hidden',
-                            selected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50',
-                            submitted && 'cursor-default'
+                            'w-full text-left rounded-lg border p-3 transition',
+                            selected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
                           )}
                         >
-                          {submitted && (
-                            <div
-                              className={cn('absolute inset-y-0 left-0 bg-primary/10 transition-all', selected && 'bg-primary/20')}
-                              style={{ width: `${pct}%` }}
-                            />
-                          )}
-                          <div className="relative flex items-center justify-between">
-                            <span className="flex items-center gap-2">
-                              {selected && <CheckCircle2 className="w-4 h-4 text-primary" />}
-                              {o.text}
-                            </span>
-                            {submitted && <span className="text-sm text-muted-foreground">{pct}% · {count}</span>}
-                          </div>
+                          <span className="flex items-center gap-2">
+                            {selected && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                            {o.text}
+                          </span>
                         </button>
                       );
                     })}
@@ -184,10 +171,21 @@ export default function Poll() {
             })}
 
             {!submitted && (
-              <Button className="w-full" size="lg" onClick={handleSubmit} disabled={!allAnswered || submitting}>
-                {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Submit
-              </Button>
+              <>
+                <Button className="w-full" size="lg" onClick={handleSubmit} disabled={!allAnswered || submitting}>
+                  {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Submit
+                </Button>
+                <div className="text-center">
+                  <Link to={`/p/${poll.slug}/results`} className="text-sm text-muted-foreground hover:text-primary underline-offset-4 hover:underline">
+                    View results without voting →
+                  </Link>
+                </div>
+              </>
+            )}
+
+            {submitted && (
+              <PollResults poll={poll} questions={questions} tally={tally} userAnswers={answers} />
             )}
           </CardContent>
         </Card>
