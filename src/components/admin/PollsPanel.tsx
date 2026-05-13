@@ -8,13 +8,21 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Sparkles, Plus, Copy, ExternalLink, Trash2, Share2 } from 'lucide-react';
+import { Loader2, Sparkles, Plus, Copy, ExternalLink, Trash2, Share2, Send } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useTopics } from '@/hooks/useCandidates';
 import {
   usePolls, useCreatePoll, useUpdatePollStatus, useDeletePoll,
-  useGeneratePollQuestions, type PollDraftQuestion,
+  useGeneratePollQuestions, useRepostPoll, type PollDraftQuestion, type SharePlatform,
 } from '@/hooks/usePolls';
+
+const PLATFORMS: { id: SharePlatform; label: string; note?: string }[] = [
+  { id: 'twitter', label: 'X (Twitter)' },
+  { id: 'facebook', label: 'Facebook Page', note: 'Connect required' },
+  { id: 'linkedin', label: 'LinkedIn', note: 'Connect required' },
+  { id: 'instagram', label: 'Instagram', note: 'Connect required' },
+];
 
 const TYPE_LABEL: Record<string, string> = {
   mc: 'Multiple choice',
@@ -29,6 +37,7 @@ export const PollsPanel = () => {
   const updateStatus = useUpdatePollStatus();
   const deletePoll = useDeletePoll();
   const generate = useGeneratePollQuestions();
+  const repost = useRepostPoll();
 
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<'mc' | 'scored' | 'mini_quiz'>('mc');
@@ -37,9 +46,17 @@ export const PollsPanel = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<PollDraftQuestion[]>([]);
+  const [sharePlatforms, setSharePlatforms] = useState<SharePlatform[]>(['twitter']);
+  const [autoPost, setAutoPost] = useState(true);
+  const [shareCaption, setShareCaption] = useState('');
 
   const reset = () => {
     setType('mc'); setTopicId(''); setPrompt(''); setTitle(''); setDescription(''); setQuestions([]);
+    setSharePlatforms(['twitter']); setAutoPost(true); setShareCaption('');
+  };
+
+  const togglePlatform = (p: SharePlatform) => {
+    setSharePlatforms(s => s.includes(p) ? s.filter(x => x !== p) : [...s, p]);
   };
 
   const onGenerate = async () => {
@@ -56,6 +73,7 @@ export const PollsPanel = () => {
     if (!questions.length) return toast.error('Generate or add questions first');
     await createPoll.mutateAsync({
       title, description, type, topic_id: topicId || null, questions, status,
+      share_platforms: sharePlatforms, auto_post: autoPost, share_caption: shareCaption || null,
     });
     setOpen(false); reset();
   };
@@ -133,6 +151,17 @@ export const PollsPanel = () => {
                         <Button size="sm" variant="ghost" asChild>
                           <a href={`/p/${p.slug}`} target="_blank" rel="noreferrer"><ExternalLink className="w-4 h-4" /></a>
                         </Button>
+                        {(p.share_platforms?.length ?? 0) > 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={repost.isPending}
+                            onClick={() => repost.mutate({ pollId: p.id, platforms: (p.share_platforms || []) as SharePlatform[] })}
+                            title={`Repost to ${(p.share_platforms || []).join(', ')}`}
+                          >
+                            {repost.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: p.id, status: 'closed' })}>
                           Close
                         </Button>
@@ -199,6 +228,41 @@ export const PollsPanel = () => {
               <Label>Description</Label>
               <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} />
             </div>
+
+            <Card className="p-3 space-y-3 bg-muted/30">
+              <div className="flex items-center justify-between">
+                <Label className="text-base">Share to social</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="auto-post" className="text-sm font-normal">Auto-post on publish</Label>
+                  <Switch id="auto-post" checked={autoPost} onCheckedChange={setAutoPost} />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {PLATFORMS.map(pl => {
+                  const active = sharePlatforms.includes(pl.id);
+                  return (
+                    <Button
+                      key={pl.id}
+                      type="button"
+                      size="sm"
+                      variant={active ? 'default' : 'outline'}
+                      onClick={() => togglePlatform(pl.id)}
+                    >
+                      {pl.label}{pl.note && !active && <span className="ml-1 text-xs opacity-60">· {pl.note}</span>}
+                    </Button>
+                  );
+                })}
+              </div>
+              <div>
+                <Label className="text-sm">Custom caption (optional)</Label>
+                <Textarea
+                  rows={2}
+                  placeholder="Defaults to: {title} — Take the poll: {url}"
+                  value={shareCaption}
+                  onChange={e => setShareCaption(e.target.value)}
+                />
+              </div>
+            </Card>
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">

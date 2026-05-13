@@ -15,7 +15,12 @@ export interface Poll {
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  share_platforms?: string[] | null;
+  auto_post?: boolean | null;
+  share_caption?: string | null;
 }
+
+export type SharePlatform = 'twitter' | 'facebook' | 'linkedin' | 'instagram';
 
 export interface PollDraftQuestion {
   text: string;
@@ -80,6 +85,9 @@ interface CreatePollInput {
   topic_id?: string | null;
   questions: PollDraftQuestion[];
   status: 'draft' | 'published';
+  share_platforms?: SharePlatform[];
+  auto_post?: boolean;
+  share_caption?: string | null;
 }
 
 function slugify(s: string) {
@@ -110,7 +118,10 @@ export const useCreatePoll = () => {
           status: input.status,
           published_at: input.status === 'published' ? now : null,
           created_by: user.id,
-        })
+          share_platforms: input.share_platforms || [],
+          auto_post: input.auto_post ?? true,
+          share_caption: input.share_caption || null,
+        } as any)
         .select()
         .single();
       if (pollErr) throw pollErr;
@@ -147,11 +158,44 @@ export const useCreatePoll = () => {
         if (pqErr) throw pqErr;
       }
 
+      // Auto-post on publish if requested
+      if (input.status === 'published' && input.auto_post !== false && (input.share_platforms?.length ?? 0) > 0) {
+        try {
+          await supabase.functions.invoke('post-poll-to-social', {
+            body: { pollId: pollRow.id, platforms: input.share_platforms },
+          });
+        } catch (e) {
+          console.warn('auto-post failed', e);
+        }
+      }
+
       return pollRow as Poll;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['polls'] });
       toast.success('Poll created');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+};
+
+export const useRepostPoll = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pollId, platforms }: { pollId: string; platforms: SharePlatform[] }) => {
+      const { data, error } = await supabase.functions.invoke('post-poll-to-social', {
+        body: { pollId, platforms },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as { results: { platform: string; status: string; url?: string; error?: string }[] };
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['polls'] });
+      const ok = data.results.filter(r => r.status === 'success').map(r => r.platform);
+      const fail = data.results.filter(r => r.status === 'failed');
+      if (ok.length) toast.success(`Posted to ${ok.join(', ')}`);
+      fail.forEach(f => toast.error(`${f.platform}: ${f.error}`));
     },
     onError: (e: Error) => toast.error(e.message),
   });
