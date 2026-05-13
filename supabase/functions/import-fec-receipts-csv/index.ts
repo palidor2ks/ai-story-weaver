@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { rows, cycle, candidateId, committeeId } = body;
+    const { rows, cycle, candidateId, committeeId, multiCommittee } = body;
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       return new Response(
