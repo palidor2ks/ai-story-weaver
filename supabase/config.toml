@@ -1,181 +1,125 @@
 project_id = "ornnzinjrcyigazecctf"
 
-[functions.ai-candidate-explanation]
-verify_jwt = true
-
-[functions.ai-profile-summary]
-verify_jwt = true
-
-[functions.fetch-representatives]
-verify_jwt = false
-
-[functions.fetch-member]
-verify_jwt = false
-
-[functions.fetch-member-votes]
-verify_jwt = false
-
-[functions.user-profile-analysis]
-verify_jwt = false
-
-[functions.geocode-address]
-verify_jwt = false
-
-[functions.google-places-autocomplete]
-verify_jwt = false
-
-[functions.google-places-details]
-verify_jwt = false
-
-[functions.validate-address]
-verify_jwt = false
-
-[functions.fetch-civic-officials]
-verify_jwt = false
-
-[functions.update-election-results]
-verify_jwt = false
-
-[functions.populate-candidate-answers]
-verify_jwt = false
-
-[functions.import-legislators]
-verify_jwt = false
-
-[functions.batch-populate-answers]
-verify_jwt = false
-
-[functions.send-claim-notification]
-verify_jwt = false
-
-[functions.populate-party-answers]
-verify_jwt = false
-
-[functions.get-candidate-answers]
-verify_jwt = false
-
-[functions.batch-regenerate-answers]
-verify_jwt = false
-
-[functions.fetch-fec-candidate-id]
-verify_jwt = false
-
-[functions.fetch-fec-donors]
-verify_jwt = false
-
-[functions.sync-all-donors]
-verify_jwt = false
-
-[functions.nightly-finance-reconciliation]
-verify_jwt = false
-
-[functions.fetch-fec-committees]
-verify_jwt = false
-
-[functions.cleanup-donor-aggregations]
-verify_jwt = false
-
-[functions.refresh-donor-display-names]
-verify_jwt = false
-
-[functions.allocate-committee]
-verify_jwt = false
-
-[functions.import-external-committee]
-verify_jwt = false
-
-[functions.fetch-committee-donors]
-verify_jwt = false
-
-[functions.refresh-fec-totals]
-verify_jwt = false
-
-[functions.generate-rep-comparison]
-verify_jwt = true
-
-[functions.generate-party-comparison]
-verify_jwt = true
-
-[functions.verify-identity-idme]
-verify_jwt = true
-
-[functions.verify-voter-registration]
-verify_jwt = true
-
-[functions.generate-quiz-question]
-verify_jwt = true
-
-[functions.backfill-conduit-committees]
-verify_jwt = false
-
-[functions.enrich-party-sources]
-verify_jwt = false
-
-[functions.enrich-candidate-sources]
-verify_jwt = false
-
-[functions.sync-voting-records]
-verify_jwt = false
-
-[functions.fetch-floor-votes]
-verify_jwt = false
-
-[functions.sync-lis-member-ids]
-verify_jwt = false
-
-[functions.backfill-bill-summaries]
-verify_jwt = false
-
-[functions.backfill-vote-congress-numbers]
-verify_jwt = false
-
-[functions.refresh-admin-stats]
-verify_jwt = false
-
-[functions.generate-ai-bill-summaries]
-verify_jwt = false
-
-[functions.refresh-bill-summary-stats]
-verify_jwt = false
-
-[functions.backfill-vote-chambers]
-verify_jwt = false
-
-[functions.scan-bill-topics]
-verify_jwt = false
-
-[functions.import-fec-receipts-csv]
-verify_jwt = false
-
-[functions.fetch-all-bills]
-verify_jwt = false
-
-[functions.fetch-bill-actions]
-verify_jwt = false
-
-[functions.fetch-bill-sponsors]
-verify_jwt = false
-
-[functions.fetch-bioguide-ids]
-verify_jwt = false
-
-[functions.import-bills-excel]
-verify_jwt = false
-
-[functions.import-new-questions]
-verify_jwt = false
-
-[functions.nightly-bill-sync]
-verify_jwt = false
-
-[functions.backfill-bill-topics]
-verify_jwt = false
-
-[functions.clear-congress-bills]
-verify_jwt = false
-
-[functions.scan-evidence-relevance]
-verify_jwt = false
-
-[functions.fetch-upcoming-elections]
-verify_jwt = false
+[functions]
+  [functions.ai-candidate-explanation]
+    verify_jwt = true
+  [functions.ai-profile-summary]
+    verify_jwt = true
+  [functions.allocate-committee]
+    verify_jwt = false
+  [functions.auth-email-hook]
+    verify_jwt = false
+  [functions.backfill-bill-summaries]
+    verify_jwt = false
+  [functions.backfill-bill-topics]
+    verify_jwt = false
+  [functions.backfill-conduit-committees]
+    verify_jwt = false
+  [functions.backfill-vote-chambers]
+    verify_jwt = false
+  [functions.backfill-vote-congress-numbers]
+    verify_jwt = false
+  [functions.batch-populate-answers]
+    verify_jwt = false
+  [functions.batch-regenerate-answers]
+    verify_jwt = false
+  [functions.cleanup-donor-aggregations]
+    verify_jwt = false
+  [functions.clear-congress-bills]
+    verify_jwt = false
+  [functions.enrich-candidate-sources]
+    verify_jwt = false
+  [functions.enrich-party-sources]
+    verify_jwt = false
+  [functions.fetch-all-bills]
+    verify_jwt = false
+  [functions.fetch-bill-actions]
+    verify_jwt = false
+  [functions.fetch-bill-sponsors]
+    verify_jwt = false
+  [functions.fetch-bioguide-ids]
+    verify_jwt = false
+  [functions.fetch-civic-officials]
+    verify_jwt = false
+  [functions.fetch-committee-donors]
+    verify_jwt = false
+  [functions.fetch-fec-candidate-id]
+    verify_jwt = false
+  [functions.fetch-fec-committees]
+    verify_jwt = false
+  [functions.fetch-fec-donors]
+    verify_jwt = false
+  [functions.fetch-floor-votes]
+    verify_jwt = false
+  [functions.fetch-member]
+    verify_jwt = false
+  [functions.fetch-member-votes]
+    verify_jwt = false
+  [functions.fetch-representatives]
+    verify_jwt = false
+  [functions.fetch-upcoming-elections]
+    verify_jwt = false
+  [functions.generate-ai-bill-summaries]
+    verify_jwt = false
+  [functions.generate-party-comparison]
+    verify_jwt = true
+  [functions.generate-quiz-question]
+    verify_jwt = true
+  [functions.generate-rep-comparison]
+    verify_jwt = true
+  [functions.geocode-address]
+    verify_jwt = false
+  [functions.get-candidate-answers]
+    verify_jwt = false
+  [functions.google-places-autocomplete]
+    verify_jwt = false
+  [functions.google-places-details]
+    verify_jwt = false
+  [functions.import-bills-excel]
+    verify_jwt = false
+  [functions.import-external-committee]
+    verify_jwt = false
+  [functions.import-fec-receipts-csv]
+    verify_jwt = false
+  [functions.import-legislators]
+    verify_jwt = false
+  [functions.import-new-questions]
+    verify_jwt = false
+  [functions.nightly-bill-sync]
+    verify_jwt = false
+  [functions.nightly-finance-reconciliation]
+    verify_jwt = false
+  [functions.populate-candidate-answers]
+    verify_jwt = false
+  [functions.populate-party-answers]
+    verify_jwt = false
+  [functions.refresh-admin-stats]
+    verify_jwt = false
+  [functions.refresh-bill-summary-stats]
+    verify_jwt = false
+  [functions.refresh-donor-display-names]
+    verify_jwt = false
+  [functions.refresh-fec-totals]
+    verify_jwt = false
+  [functions.scan-bill-topics]
+    verify_jwt = false
+  [functions.scan-evidence-relevance]
+    verify_jwt = false
+  [functions.send-claim-notification]
+    verify_jwt = false
+  [functions.sync-all-donors]
+    verify_jwt = false
+  [functions.sync-lis-member-ids]
+    verify_jwt = false
+  [functions.sync-voting-records]
+    verify_jwt = false
+  [functions.update-election-results]
+    verify_jwt = false
+  [functions.user-profile-analysis]
+    verify_jwt = false
+  [functions.validate-address]
+    verify_jwt = false
+  [functions.verify-identity-idme]
+    verify_jwt = true
+  [functions.verify-voter-registration]
+    verify_jwt = true
