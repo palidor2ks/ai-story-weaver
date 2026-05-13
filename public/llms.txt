@@ -1,0 +1,14 @@
+# Pulse
+
+> Pulse helps voters discover where they stand on political issues and find candidates, parties, and elected representatives that match their values. Data is aggregated from Congress.gov, the FEC, OpenStates, and official campaign materials, then analyzed to produce alignment scores and side-by-side comparisons.
+
+## Pages
+
+- [Home](/): Sign in or take the quiz to find your political alignment.
+- [Sign in / Sign up](/auth): Create a Pulse account to take the quiz and save results.
+- [Terms of Service](/terms): Terms governing use of the Pulse service.
+- [Privacy Policy](/privacy): How Pulse collects, uses, and protects user data.
+
+## Optional
+
+- [Blog](/blog): Updates and articles from Pulse (account required).

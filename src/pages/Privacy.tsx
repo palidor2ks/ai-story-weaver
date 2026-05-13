@@ -1,9 +1,15 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { Seo } from '@/components/Seo';
 
 export default function Privacy() {
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title="Privacy Policy — Pulse"
+        description="How Pulse collects, uses, stores, and protects your personal information and quiz responses."
+        path="/privacy"
+      />
       <div className="container max-w-3xl py-10">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
           <ArrowLeft className="w-4 h-4" /> Back
