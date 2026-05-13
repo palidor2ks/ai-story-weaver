@@ -227,7 +227,11 @@ export function AdminUsersPanel() {
                       const userRoles = roleMap.get(p.id) || [];
                       const isAdmin = userRoles.includes("admin");
                       return (
-                        <TableRow key={p.id}>
+                        <TableRow
+                          key={p.id}
+                          className="cursor-pointer"
+                          onClick={() => setDetailUserId(p.id)}
+                        >
                           <TableCell className="font-medium">{p.name || "—"}</TableCell>
                           <TableCell className="text-muted-foreground">{p.email || "—"}</TableCell>
                           <TableCell>{p.location || "—"}</TableCell>
