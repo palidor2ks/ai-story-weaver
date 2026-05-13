@@ -85,6 +85,9 @@ interface CreatePollInput {
   topic_id?: string | null;
   questions: PollDraftQuestion[];
   status: 'draft' | 'published';
+  share_platforms?: SharePlatform[];
+  auto_post?: boolean;
+  share_caption?: string | null;
 }
 
 function slugify(s: string) {
