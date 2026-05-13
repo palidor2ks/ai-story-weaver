@@ -297,13 +297,22 @@ Deno.serve(async (req) => {
     }
 
     if (shouldFetch) {
-      console.log('[fetch-upcoming-elections] fetching fresh', { state, district, force });
-      const [fecRows, civicRows] = await Promise.all([
-        fetchFEC(state, district),
-        fetchGoogleCivic(address ?? ''),
-      ]);
-      console.log('[fetch-upcoming-elections] fetched rows', { fec: fecRows.length, civic: civicRows.length });
-      await persistAll(supabase, [...fecRows, ...civicRows]);
+      console.log('[fetch-upcoming-elections] queueing background fetch', { state, district, force });
+      // Run fetch+persist in background to avoid 150s idle timeout.
+      // Client polls and re-fetches; cached rows are returned immediately below.
+      EdgeRuntime.waitUntil((async () => {
+        try {
+          const [fecRows, civicRows] = await Promise.all([
+            fetchFEC(state, district),
+            fetchGoogleCivic(address ?? ''),
+          ]);
+          console.log('[fetch-upcoming-elections] fetched rows', { fec: fecRows.length, civic: civicRows.length });
+          await persistAll(supabase, [...fecRows, ...civicRows]);
+          console.log('[fetch-upcoming-elections] background persist complete');
+        } catch (e) {
+          console.error('[fetch-upcoming-elections] background error', e);
+        }
+      })());
     }
 
     // Read back the joined response.
