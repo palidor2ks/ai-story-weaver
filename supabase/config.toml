@@ -131,3 +131,5 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.handle-email-suppression]
     verify_jwt = false
+  [functions.generate-poll-questions]
+    verify_jwt = true

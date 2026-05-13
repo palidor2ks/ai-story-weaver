@@ -32,6 +32,7 @@ import { Committees } from "./pages/Committees";
 import { CommitteeProfile } from "./pages/CommitteeProfile";
 import Blog from "./pages/Blog";
 import Unsubscribe from "./pages/Unsubscribe";
+import Poll from "./pages/Poll";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +83,7 @@ const AppRoutes = () => {
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/unsubscribe" element={<Unsubscribe />} />
+      <Route path="/p/:slug" element={<Poll />} />
       <Route path="/verify-email" element={
         <RouteGuard requireAuth requireVerifiedEmail={false}>
           <VerifyEmail />

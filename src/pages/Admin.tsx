@@ -36,6 +36,7 @@ import TopicReviewPanel from "@/components/admin/TopicReviewPanel";
 import { DonorImportPanel } from "@/components/admin/DonorImportPanel";
 import { BulkAnswerValidation } from "@/components/admin/BulkAnswerValidation";
 import { AdminUsersPanel } from "@/components/admin/AdminUsersPanel";
+import { PollsPanel } from "@/components/admin/PollsPanel";
 
 
 // Only levels that require manual entry (no API available)
@@ -478,6 +479,7 @@ export default function Admin() {
               { value: "topic-review", label: "Topic Review", Icon: Tags },
               { value: "bulk-validation", label: "Bulk Validation", Icon: CheckCircle2 },
               { value: "donor-import", label: "Donor Import", Icon: Upload },
+              { value: "polls", label: "Polls", Icon: Sparkles },
               { value: "visible-states", label: "Visible States", Icon: Shield },
               { value: "users", label: "Users", Icon: Users },
             ];
@@ -753,6 +755,10 @@ export default function Admin() {
 
           <TabsContent value="donor-import">
             <DonorImportPanel />
+          </TabsContent>
+
+          <TabsContent value="polls">
+            <PollsPanel />
           </TabsContent>
 
         </Tabs>

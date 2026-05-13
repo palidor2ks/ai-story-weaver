@@ -116,6 +116,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else if (event === 'SIGNED_OUT') {
           lastKnownSession.current = null;
           setIsReconnecting(false);
+        } else if (event === 'SIGNED_IN' && newSession?.user) {
+          // Claim pending anonymous poll responses (defer to avoid blocking auth)
+          const pendingClaim = localStorage.getItem('polipulse_pending_claim');
+          if (pendingClaim) {
+            setTimeout(async () => {
+              try {
+                await supabase.rpc('claim_anon_poll_responses', { p_anon_session_id: pendingClaim });
+                localStorage.removeItem('polipulse_pending_claim');
+              } catch (err) {
+                console.warn('[Auth] claim_anon_poll_responses failed', err);
+              }
+            }, 0);
+          }
         }
       }
     );
