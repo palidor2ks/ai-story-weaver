@@ -1,37 +1,35 @@
-## Add interactive results & vote totals to public Poll page
+## Wire up X (Twitter) + Facebook Page posting
 
-Enhance `src/pages/Poll.tsx` (and tally hook) to show richer charts and total response counts after submission, plus a public "Results" view.
+### What you'll do (one-time setup)
 
-### Changes
+**X (Twitter)** — at https://developer.x.com/en/portal/dashboard
+1. Create Project + App (Free tier is fine).
+2. App settings → User authentication settings → permissions = **Read and Write** → save.
+3. Keys & tokens → generate **Consumer Keys** (API Key/Secret) and **Access Token + Secret** for the brand account.
+4. After I trigger the secrets prompt, paste the 4 values.
 
-**1. `usePolls.ts` — `usePollTally`**
-- Also fetch total response count from `poll_responses` (`select count`) for the poll.
-- Return `{ rows, totalResponses }`.
-- Make hook usable without `submitted` gate when `enabled` flag passed (for results view).
+**Facebook Page** — at https://developers.facebook.com
+1. Create App (type: Business) and link your brand Facebook Page.
+2. In Graph API Explorer (or via Business Settings), generate a **Page Access Token** with `pages_manage_posts` + `pages_read_engagement` scopes. Convert to a long-lived token via `/oauth/access_token?grant_type=fb_exchange_token`.
+3. Get the Page ID (Page → About → Page ID).
+4. After I trigger the secrets prompt, paste the 2 values.
+   - Note: Posting to your own Page works in Dev Mode without App Review. Posting to other Pages requires App Review.
 
-**2. `src/pages/Poll.tsx` (post-submit results section)**
-- Add a stats header card: **Total responses**, **Questions answered**, **Last updated** (animated count-up via simple state).
-- Replace inline % bars with a richer per-question results card:
-  - For each question, render a horizontal bar chart using `recharts` `BarChart` (already a shadcn dep) with option text on Y axis and vote count on X axis.
-  - Highlight the user's selected option bar in `--primary`; others in `--muted-foreground/40`.
-  - Show count + % label at the end of each bar.
-  - For `scored` / `mini_quiz` polls, also show a small score-distribution strip: a horizontal line from -10 → +10 with a marker per option sized by vote share, so users can see the ideological spread of responses.
-- Keep the existing tap-to-vote buttons but collapse them once submitted; results card takes their place.
-- Add subtle Framer Motion fade/slide-in for results.
+### What I'll build
 
-**3. Public results route (no vote required)**
-- Add link "View results without voting →" under the Submit button.
-- New route `/p/:slug/results` rendering the same results card stack + share card, reusing the new `<PollResults />` component extracted from Poll.tsx.
-- Wire route in `src/App.tsx`.
+**1. Edge function `post-poll-to-social/index.ts`** (already scaffolded for X — extend it)
+- Replace the Facebook stub with a real implementation:
+  - `POST https://graph.facebook.com/v21.0/{FACEBOOK_PAGE_ID}/feed` with `message` + `link` (the poll URL) using `FACEBOOK_PAGE_ACCESS_TOKEN`.
+  - For polls with an `og_image_url`, switch to `/photos` endpoint with `url` + `caption` so the OG image is the post image.
+  - Parse response → log `remote_post_id` (the returned `id`) and build `remote_post_url` = `https://facebook.com/{id}`.
+  - On error, write `status='failed'` + error message into `poll_social_posts`.
+- Return the same `{ results: [{ platform, status, url?, error? }] }` shape so the existing UI works.
 
-**4. New file: `src/components/poll/PollResults.tsx`**
-- Props: `poll`, `questions`, `tally`, `totalResponses`, `userAnswers?`.
-- Owns the chart rendering so both `/p/:slug` (post-submit) and `/p/:slug/results` use it.
-
-### Technical notes
-- Uses existing `recharts` (shadcn `chart.tsx`).
-- No DB migration; `get_poll_tally` already returns counts. Total responses = `select count from poll_responses where poll_id = ...` (RLS already permits public read of aggregates via the existing tally RPC; if `poll_responses` isn't publicly readable, add a tiny `get_poll_response_count` RPC — will confirm during implementation and add migration only if needed).
-- All colors via semantic tokens (`hsl(var(--primary))`, `hsl(var(--muted))`).
+**2. Secrets** — I'll request these via the secrets tool:
+- `TWITTER_CONSUMER_KEY`, `TWITTER_CONSUMER_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`
+- `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_ACCESS_TOKEN`
 
 ### Out of scope
-- Per-demographic breakdowns, time-series charts, CSV export, admin analytics dashboard.
+- LinkedIn and Instagram (kept as `not_configured` stubs).
+- Per-admin OAuth flows / token refresh UI.
+- App Review submissions (you handle on Meta side if you want to post to Pages you don't own).
