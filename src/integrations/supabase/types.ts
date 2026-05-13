@@ -1817,14 +1817,61 @@ export type Database = {
           },
         ]
       }
+      poll_social_posts: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          platform: string
+          poll_id: string
+          posted_at: string | null
+          remote_post_id: string | null
+          remote_post_url: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          platform: string
+          poll_id: string
+          posted_at?: string | null
+          remote_post_id?: string | null
+          remote_post_url?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          platform?: string
+          poll_id?: string
+          posted_at?: string | null
+          remote_post_id?: string | null
+          remote_post_url?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_social_posts_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "polls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       polls: {
         Row: {
+          auto_post: boolean | null
           created_at: string
           created_by: string | null
           description: string | null
           id: string
           og_image_url: string | null
           published_at: string | null
+          share_caption: string | null
+          share_platforms: string[] | null
           slug: string
           status: string
           title: string
@@ -1833,12 +1880,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_post?: boolean | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           id?: string
           og_image_url?: string | null
           published_at?: string | null
+          share_caption?: string | null
+          share_platforms?: string[] | null
           slug: string
           status?: string
           title: string
@@ -1847,12 +1897,15 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_post?: boolean | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           id?: string
           og_image_url?: string | null
           published_at?: string | null
+          share_caption?: string | null
+          share_platforms?: string[] | null
           slug?: string
           status?: string
           title?: string

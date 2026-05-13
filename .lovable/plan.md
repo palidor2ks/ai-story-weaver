@@ -1,66 +1,95 @@
-# Shareable Polls Feature
 
-## Goal
-Let admins generate polls (with AI assist), share them on social media, drive traffic to a public poll page, capture anonymous answers, then prompt the respondent to create an account (carrying social profile data when possible).
+# Auto-Post Polls to Social Media
 
-## Poll Types
-Admin can create any of three formats:
-1. **Single multiple-choice** (Twitter-style, 2–5 options, no scoring impact)
-2. **Single scored question** (-10..+10, snaps to discrete values, integrates with quiz scoring)
-3. **Mini-quiz** (3–5 scored questions, results page at the end)
+## Overview
+When a poll is published, it can post itself to selected social platforms from a single brand account. Admin picks platforms in the editor; auto-posts on publish; can re-share manually anytime.
 
-## User Flow
-1. Admin opens new **Polls** tab in Admin → clicks "New Poll"
-2. Picks poll type + topic (optional) → enters prompt → AI drafts question(s) + options → admin edits → publishes
-3. System returns shareable URL (`/poll/:slug`) with auto-generated OG image (question + branding)
-4. Admin clicks share buttons (X, Facebook, LinkedIn, Copy link) — uses existing `shareIntents.ts`
-5. Visitor lands on `/poll/:slug` → answers question(s) anonymously (stored against an anon session id in localStorage)
-6. After submit: results screen shows live tally + their score (for scored polls) → CTA "Create your political profile" with Google / Facebook / X / Email buttons
-7. On signup, anonymous answers are merged into their account (and into `quiz_answers` for scored questions, so they count toward their profile)
+## Scope (this iteration)
+- **X (Twitter)** — fully wired (post tweet with poll link + OG card image)
+- **Facebook Page**, **LinkedIn**, **Instagram** — selectable in UI, edge function scaffolded with TODO; posting disabled until OAuth/page creds added
+- Single brand account: credentials stored as Supabase secrets, not per-user
 
-## Quiz Library Integration
-- Scored poll questions are saved to the questions table with a `source = 'poll'` flag and `include_in_politician_quiz = false`
-- They appear in the Quiz Library so logged-in users can revisit them
-- They are **excluded** from the bulk question list politicians/candidates need to answer
+## UX Changes
+1. **Poll Editor** (`PollsPanel.tsx`)
+   - New "Share to" multi-select chips: X, Facebook Page, LinkedIn, Instagram (latter three show "Connect required" until secrets exist)
+   - Toggle "Auto-post on publish" (default ON)
+   - Custom caption field (optional, defaults to `{title} — Take the poll: {url}`)
+2. **Poll Row Actions**
+   - "Post to X / FB / LinkedIn / IG" buttons (manual re-share)
+   - Last-posted indicator + link to the social post URL when returned
+3. **Image**
+   - Generated once on publish via existing share-card pattern; stored in new `poll-og` bucket; referenced in OG meta + attached to tweet
 
-## Technical Section
+## Database
 
-### Database (new tables)
-- `polls`: id, slug (unique), type ('mc' | 'scored' | 'mini_quiz'), title, description, topic_id (nullable), created_by, status ('draft'|'published'|'closed'), og_image_url, published_at, created_at
-- `poll_questions`: id, poll_id, question_id (FK to existing `questions` for scored types) OR inline text+options for MC type, order_index
-- `poll_responses`: id, poll_id, anon_session_id (nullable), user_id (nullable), submitted_at, source (utm/referrer)
-- `poll_response_answers`: id, response_id, poll_question_id, selected_option_id, value
-- Add to `questions`: `source TEXT DEFAULT 'standard'`, `include_in_politician_quiz BOOLEAN DEFAULT true` — backfill existing rows to `true`
-- RLS: polls readable when `status='published'`; responses insertable by anyone (anon allowed); admins manage everything via `has_role`
+```sql
+-- Add to polls
+ALTER TABLE polls ADD COLUMN share_platforms text[] DEFAULT '{}';
+ALTER TABLE polls ADD COLUMN auto_post boolean DEFAULT true;
+ALTER TABLE polls ADD COLUMN share_caption text;
+ALTER TABLE polls ADD COLUMN og_image_url text; -- if not already
 
-### Edge Functions
-- `generate-poll-questions` — calls Lovable AI Gateway (gemini-2.5-flash) with structured JSON output to draft question + options matching selected type/topic
-- `generate-poll-og-image` — renders branded PNG via existing share-image infrastructure on first publish, stored in `poll-og` storage bucket
-- `claim-anon-poll-responses` — on signup, takes anon_session_id, attaches user_id, copies scored answers into `quiz_answers`
+-- New table: track each post attempt
+CREATE TABLE poll_social_posts (
+  id uuid PK,
+  poll_id uuid FK,
+  platform text,           -- 'twitter' | 'facebook' | 'linkedin' | 'instagram'
+  status text,             -- 'pending' | 'success' | 'failed'
+  remote_post_id text,
+  remote_post_url text,
+  error text,
+  posted_at timestamptz,
+  created_at timestamptz default now()
+);
+-- RLS: admins manage; published rows readable
+```
 
-### Frontend
-- `src/pages/admin/tabs/PollsTab.tsx` — list, create, edit, publish, copy-link, view results
-- `src/components/admin/PollEditor.tsx` — type picker, AI prompt box, editable question/options, preview
-- `src/pages/Poll.tsx` (`/poll/:slug`) — public page, SEO meta + OG, renders poll, submits anonymously
-- `src/pages/PollResults.tsx` — tally + signup CTA
-- `src/components/poll/PollSignupPrompt.tsx` — Google/FB/X/Email auth buttons, passes anon_session_id
+## Edge Functions
 
-### Social Login
-- Google enabled now via Supabase Auth (user must add OAuth credentials in Supabase dashboard)
-- Facebook + X / Twitter listed as "Coming soon" buttons until user adds OAuth credentials in Supabase (each requires dev-console setup)
-- On OAuth callback: pull `user_metadata.full_name`, `avatar_url`, `email` and prefill profile
+### `generate-poll-og-image` (new)
+- Calls Lovable AI Gateway image model with poll title + branding prompt
+- Uploads PNG to `poll-og` storage bucket
+- Returns public URL; updates `polls.og_image_url`
 
-### Anonymous → User Merge
-- Anon session id = `crypto.randomUUID()` stored in `localStorage` on first poll visit
-- On signup completion in `AuthContext`, if a pending anon_session_id exists, call `claim-anon-poll-responses`
+### `post-poll-to-social` (new)
+- Input: `{ pollId, platforms: string[] }`
+- Auth: admin only (`has_role`)
+- For each platform:
+  - **twitter**: OAuth 1.0a signed POST to `https://api.x.com/2/tweets` with text + media (uploaded via v1.1 media/upload)
+  - **facebook/linkedin/instagram**: stubbed with clear `not_configured` error until creds added
+- Inserts a `poll_social_posts` row per platform with result
 
-## Out of Scope (this plan)
-- Geographic targeting of polls
-- Comment threads on poll results
-- Embeddable poll widget for external sites
-- Real-time updating tallies (will refresh on page load only)
+### `usePolls.ts` hook
+- `useUpdatePollStatus` — when transitioning to `published` AND `auto_post=true`, invoke `generate-poll-og-image` then `post-poll-to-social` with `share_platforms`
+- New `useRepostPoll(pollId, platform)` for manual buttons
 
-## Confirmation Needed
-After you approve, I'll also need you to:
-1. Enable Google provider in Supabase Auth (dashboard) — I'll provide the redirect URL
-2. Optionally set up Facebook + X OAuth apps later if you want those too
+## Secrets Required (X first)
+Will request via secrets tool after plan approval:
+- `TWITTER_CONSUMER_KEY`
+- `TWITTER_CONSUMER_SECRET`
+- `TWITTER_ACCESS_TOKEN`
+- `TWITTER_ACCESS_TOKEN_SECRET`
+
+User must:
+1. Create an X developer app at developer.x.com (Free tier supports posting)
+2. Set app permissions to **Read and Write**
+3. Generate Access Token + Secret under that app
+4. Paste all four when prompted
+
+For Facebook/LinkedIn/Instagram later, we'll add their creds in a follow-up.
+
+## Files Touched
+- `supabase/migrations/<new>.sql` — schema above
+- `supabase/functions/post-poll-to-social/index.ts` — new
+- `supabase/functions/generate-poll-og-image/index.ts` — new
+- `supabase/config.toml` — register both
+- `src/hooks/usePolls.ts` — add publish-flow chaining + repost mutation
+- `src/components/admin/PollsPanel.tsx` — platform picker, auto-post toggle, caption field, repost buttons, last-posted indicator
+- `src/integrations/supabase/types.ts` — regenerated after migration
+
+## Out of Scope
+- Per-admin social accounts
+- Scheduling future posts
+- Reading engagement metrics back (likes/retweets)
+- Threaded posts / multi-tweet polls
+- IG without Facebook Business linkage
