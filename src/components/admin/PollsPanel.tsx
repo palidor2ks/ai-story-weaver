@@ -151,6 +151,17 @@ export const PollsPanel = () => {
                         <Button size="sm" variant="ghost" asChild>
                           <a href={`/p/${p.slug}`} target="_blank" rel="noreferrer"><ExternalLink className="w-4 h-4" /></a>
                         </Button>
+                        {(p.share_platforms?.length ?? 0) > 0 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={repost.isPending}
+                            onClick={() => repost.mutate({ pollId: p.id, platforms: (p.share_platforms || []) as SharePlatform[] })}
+                            title={`Repost to ${(p.share_platforms || []).join(', ')}`}
+                          >
+                            {repost.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ id: p.id, status: 'closed' })}>
                           Close
                         </Button>
