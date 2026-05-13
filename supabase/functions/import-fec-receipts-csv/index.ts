@@ -487,7 +487,7 @@ Deno.serve(async (req) => {
         is_contribution: lineClass.isContribution,
         is_transfer: lineClass.isTransfer,
         is_earmarked: earmarkInfo.isEarmarked,
-        candidate_id: candidateId || null
+        candidate_id: rowCandidateId
       });
 
       // Aggregate for donors table
