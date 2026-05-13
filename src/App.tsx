@@ -83,6 +83,7 @@ const AppRoutes = () => {
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/unsubscribe" element={<Unsubscribe />} />
+      <Route path="/p/:slug" element={<Poll />} />
       <Route path="/verify-email" element={
         <RouteGuard requireAuth requireVerifiedEmail={false}>
           <VerifyEmail />
