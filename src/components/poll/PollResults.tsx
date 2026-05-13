@@ -1,5 +1,4 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, LabelList } from 'recharts';
 import { Users, BarChart3, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -23,12 +22,7 @@ export function PollResults({ poll, questions, tally, userAnswers = {} }: Props)
   }, 0);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
-      className="space-y-4"
-    >
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <Card>
         <CardContent className="pt-6 grid grid-cols-3 gap-4">
           <Stat icon={<Users className="w-4 h-4" />} label="Responses" value={totalResponses.toLocaleString()} />
