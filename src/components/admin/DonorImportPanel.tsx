@@ -572,8 +572,8 @@ export function DonorImportPanel() {
           )}
         </div>
 
-        {/* Detected Committee Info */}
-        {detectedCommittee && (
+        {/* Detected Committee Info (single-mode) */}
+        {!multiCommittee && detectedCommittee && (
           <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline">Detected</Badge>
@@ -587,6 +587,58 @@ export function DonorImportPanel() {
                 </span>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Multi-committee preview */}
+        {multiCommittee && committeePreview && (
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Users className="h-4 w-4" />
+                Detected committees in preview ({committeePreview.length})
+              </div>
+              <div className="text-xs text-muted-foreground">
+                <span className="text-green-600 font-medium">
+                  {committeePreview.filter(p => p.candidate_id).length} mapped
+                </span>
+                {' / '}
+                <span className="text-amber-600 font-medium">
+                  {committeePreview.filter(p => !p.candidate_id).length} unmapped
+                </span>
+              </div>
+            </div>
+            <div className="max-h-64 overflow-y-auto border rounded">
+              <table className="w-full text-xs">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    <th className="text-left p-2">Committee ID</th>
+                    <th className="text-left p-2">Candidate</th>
+                    <th className="text-right p-2">Rows (preview)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {committeePreview.map(p => (
+                    <tr key={p.committee_id} className="border-t">
+                      <td className="p-2 font-mono">{p.committee_id}</td>
+                      <td className="p-2">
+                        {p.candidate_name ? (
+                          <span>{p.candidate_name} <span className="text-muted-foreground">({p.candidate_id})</span></span>
+                        ) : (
+                          <Badge variant="outline" className="text-amber-600 border-amber-500/50">
+                            Unmapped — will import as orphan
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="p-2 text-right">{p.row_count.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Preview based on the first 2,000 rows. Full file may contain additional committees.
+            </p>
           </div>
         )}
 
