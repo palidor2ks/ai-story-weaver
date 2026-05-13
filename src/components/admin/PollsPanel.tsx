@@ -37,6 +37,7 @@ export const PollsPanel = () => {
   const updateStatus = useUpdatePollStatus();
   const deletePoll = useDeletePoll();
   const generate = useGeneratePollQuestions();
+  const repost = useRepostPoll();
 
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<'mc' | 'scored' | 'mini_quiz'>('mc');
@@ -45,9 +46,17 @@ export const PollsPanel = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<PollDraftQuestion[]>([]);
+  const [sharePlatforms, setSharePlatforms] = useState<SharePlatform[]>(['twitter']);
+  const [autoPost, setAutoPost] = useState(true);
+  const [shareCaption, setShareCaption] = useState('');
 
   const reset = () => {
     setType('mc'); setTopicId(''); setPrompt(''); setTitle(''); setDescription(''); setQuestions([]);
+    setSharePlatforms(['twitter']); setAutoPost(true); setShareCaption('');
+  };
+
+  const togglePlatform = (p: SharePlatform) => {
+    setSharePlatforms(s => s.includes(p) ? s.filter(x => x !== p) : [...s, p]);
   };
 
   const onGenerate = async () => {
