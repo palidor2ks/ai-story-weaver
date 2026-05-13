@@ -25,6 +25,7 @@ import PoliticianDashboard from "./pages/PoliticianDashboard";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
+import DataDeletion from "./pages/DataDeletion";
 import VerifyEmail from "./pages/VerifyEmail";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
 import { LoadingScreen } from "./components/LoadingScreen";
@@ -83,6 +84,7 @@ const AppRoutes = () => {
       <Route path="/auth" element={<Auth />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/data-deletion" element={<DataDeletion />} />
       <Route path="/unsubscribe" element={<Unsubscribe />} />
       <Route path="/p/:slug" element={<Poll />} />
       <Route path="/p/:slug/results" element={<PollResultsPage />} />
