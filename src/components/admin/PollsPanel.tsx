@@ -73,6 +73,7 @@ export const PollsPanel = () => {
     if (!questions.length) return toast.error('Generate or add questions first');
     await createPoll.mutateAsync({
       title, description, type, topic_id: topicId || null, questions, status,
+      share_platforms: sharePlatforms, auto_post: autoPost, share_caption: shareCaption || null,
     });
     setOpen(false); reset();
   };
