@@ -135,16 +135,51 @@ export function DonorImportPanel() {
               setFileHealthWarning(null);
             }
             
-            if (detectedId) {
+            if (multiCommittee) {
+              // Build distinct committee list from preview
+              const counts = new Map<string, number>();
+              for (const r of rows) {
+                const cid = r.committee_id || r.COMMITTEE_ID;
+                if (cid) counts.set(cid, (counts.get(cid) || 0) + 1);
+              }
+              const distinctIds = Array.from(counts.keys());
+              if (distinctIds.length > 0) {
+                const { data: mappings } = await supabase
+                  .from('candidate_committees')
+                  .select('fec_committee_id, candidate_id, candidates:candidate_id(name)')
+                  .in('fec_committee_id', distinctIds);
+                const mapByCid = new Map<string, { candidate_id: string; name: string | null }>();
+                for (const m of (mappings || []) as any[]) {
+                  if (m.candidate_id) {
+                    mapByCid.set(m.fec_committee_id, {
+                      candidate_id: m.candidate_id,
+                      name: m.candidates?.name || null
+                    });
+                  }
+                }
+                const preview: CommitteePreview[] = distinctIds.map(cid => {
+                  const m = mapByCid.get(cid);
+                  return {
+                    committee_id: cid,
+                    candidate_id: m?.candidate_id || null,
+                    candidate_name: m?.name || null,
+                    row_count: counts.get(cid) || 0
+                  };
+                }).sort((a, b) => b.row_count - a.row_count);
+                setCommitteePreview(preview);
+              } else {
+                setCommitteePreview([]);
+              }
+            } else if (detectedId) {
               setCommitteeId(detectedId);
               setDetectedCommittee(detectedName || detectedId);
-              
+
               // Check existing contributions for this committee
               const { count } = await supabase
                 .from('contributions')
                 .select('*', { count: 'exact', head: true })
                 .eq('recipient_committee_id', detectedId);
-              
+
               setExistingCount(count || 0);
 
               // Try to find candidate_id from committee
@@ -153,7 +188,7 @@ export function DonorImportPanel() {
                 .select('candidate_id')
                 .eq('fec_committee_id', detectedId)
                 .single();
-              
+
               if (committee?.candidate_id) {
                 setCandidateId(committee.candidate_id);
               }
