@@ -523,7 +523,7 @@ Deno.serve(async (req) => {
           isTransfer: classifyLineNumber(rd.lineNumber).isTransfer,
           recipientCommitteeId: rd.recipientCommitteeId,
           recipientCommitteeName: rd.recipientCommitteeName,
-          candidateId: candidateId || null
+          candidateId: rowCandidateId
         });
       }
     }
