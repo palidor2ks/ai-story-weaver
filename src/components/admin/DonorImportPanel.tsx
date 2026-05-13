@@ -90,6 +90,7 @@ export function DonorImportPanel() {
     setExistingCount(null);
     setFileHealthWarning(null);
     setLastDebugInfo(null);
+    setCommitteePreview(null);
 
     // Parse first 500 rows to detect committee and check file health
     const reader = new FileReader();
