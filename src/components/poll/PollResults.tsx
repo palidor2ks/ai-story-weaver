@@ -130,7 +130,7 @@ export function PollResults({ poll, questions, tally, userAnswers = {} }: Props)
           </Card>
         );
       })}
-    </motion.div>
+    </div>
   );
 }
 
