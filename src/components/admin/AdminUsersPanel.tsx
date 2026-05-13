@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Loader2, ShieldCheck, CheckCircle2, ShieldOff, ShieldPlus } from "lucide-react";
+import { AdminUserDetailDialog } from "./AdminUserDetailDialog";
 
 interface ProfileRow {
   id: string;
@@ -36,6 +37,7 @@ export function AdminUsersPanel() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [page, setPage] = useState(0);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [detailUserId, setDetailUserId] = useState<string | null>(null);
 
   const toggleAdmin = useMutation({
     mutationFn: async ({ userId, makeAdmin }: { userId: string; makeAdmin: boolean }) => {
