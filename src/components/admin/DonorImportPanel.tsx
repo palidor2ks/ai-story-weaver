@@ -518,6 +518,34 @@ export function DonorImportPanel() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Multi-committee toggle */}
+        <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="multi-committee" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Multi-committee mode
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Import a CSV containing rows for many committees. Each row is auto-routed to its candidate.
+            </p>
+          </div>
+          <Switch
+            id="multi-committee"
+            checked={multiCommittee}
+            disabled={isImporting}
+            onCheckedChange={(checked) => {
+              setMultiCommittee(checked);
+              setCommitteePreview(null);
+              setDetectedCommittee(null);
+              setExistingCount(null);
+              if (checked) {
+                setCandidateId('');
+                setCommitteeId('');
+              }
+            }}
+          />
+        </div>
+
         {/* File Selection */}
         <div className="space-y-2">
           <Label htmlFor="csv-file">CSV File</Label>
