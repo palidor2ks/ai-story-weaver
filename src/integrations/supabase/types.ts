@@ -1691,6 +1691,185 @@ export type Database = {
         }
         Relationships: []
       }
+      poll_questions: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          poll_id: string
+          question_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          poll_id: string
+          question_id: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          poll_id?: string
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_questions_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "polls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poll_response_answers: {
+        Row: {
+          created_at: string
+          id: string
+          question_id: string
+          response_id: string
+          selected_option_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          question_id: string
+          response_id: string
+          selected_option_id: string
+          value?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          question_id?: string
+          response_id?: string
+          selected_option_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_response_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_response_answers_response_id_fkey"
+            columns: ["response_id"]
+            isOneToOne: false
+            referencedRelation: "poll_responses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poll_response_answers_selected_option_id_fkey"
+            columns: ["selected_option_id"]
+            isOneToOne: false
+            referencedRelation: "question_options"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poll_responses: {
+        Row: {
+          anon_session_id: string | null
+          id: string
+          poll_id: string
+          referrer: string | null
+          submitted_at: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          anon_session_id?: string | null
+          id?: string
+          poll_id: string
+          referrer?: string | null
+          submitted_at?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          anon_session_id?: string | null
+          id?: string
+          poll_id?: string
+          referrer?: string | null
+          submitted_at?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poll_responses_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "polls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      polls: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          og_image_url: string | null
+          published_at: string | null
+          slug: string
+          status: string
+          title: string
+          topic_id: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          og_image_url?: string | null
+          published_at?: string | null
+          slug: string
+          status?: string
+          title: string
+          topic_id?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          og_image_url?: string | null
+          published_at?: string | null
+          slug?: string
+          status?: string
+          title?: string
+          topic_id?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "polls_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_access_log: {
         Row: {
           accessed_at: string | null
@@ -1930,24 +2109,30 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          include_in_politician_quiz: boolean
           is_onboarding_canonical: boolean | null
           onboarding_slot: number | null
+          source: string
           text: string
           topic_id: string
         }
         Insert: {
           created_at?: string | null
           id: string
+          include_in_politician_quiz?: boolean
           is_onboarding_canonical?: boolean | null
           onboarding_slot?: number | null
+          source?: string
           text: string
           topic_id: string
         }
         Update: {
           created_at?: string | null
           id?: string
+          include_in_politician_quiz?: boolean
           is_onboarding_canonical?: boolean | null
           onboarding_slot?: number | null
+          source?: string
           text?: string
           topic_id?: string
         }
@@ -2567,6 +2752,10 @@ export type Database = {
           coverage_tier: Database["public"]["Enums"]["coverage_tier"]
         }[]
       }
+      claim_anon_poll_responses: {
+        Args: { p_anon_session_id: string }
+        Returns: number
+      }
       count_donors_matching_patterns: {
         Args: { p_donor_types: string[]; patterns: string[] }
         Returns: number
@@ -2615,6 +2804,14 @@ export type Database = {
         Args: never
         Returns: {
           state_code: string
+        }[]
+      }
+      get_poll_tally: {
+        Args: { p_poll_id: string }
+        Returns: {
+          count: number
+          question_id: string
+          selected_option_id: string
         }[]
       }
       has_role: {
