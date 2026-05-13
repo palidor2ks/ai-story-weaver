@@ -25,6 +25,7 @@ import PoliticianDashboard from "./pages/PoliticianDashboard";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
+import DataDeletion from "./pages/DataDeletion";
 import VerifyEmail from "./pages/VerifyEmail";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
 import { LoadingScreen } from "./components/LoadingScreen";
