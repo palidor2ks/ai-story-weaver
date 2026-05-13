@@ -1,38 +1,48 @@
 ## Goal
-Let admins browse and filter every user profile from the Admin page.
+Let admins open another user's profile in a read-only view that mirrors the real `/profile` page (not just a summary dialog).
 
-## Plan
+## Approach
+Add a new admin-only route `/admin/users/:userId` that renders a read-only version of `UserProfile`. It reuses the existing layout and child components but sources data by `userId` (the target user) instead of the logged-in `auth.uid()`. No impersonation, no editing.
 
-### 1. Database — allow admins to read profiles
-Currently `profiles` only allows users to view their own row. Add a new RLS SELECT policy:
+## Steps
 
-- Policy: `Admins can view all profiles` on `public.profiles`, `FOR SELECT TO authenticated`, `USING (has_role(auth.uid(), 'admin'))`.
+### 1. Database (RLS)
+Audit and, where missing, add admin SELECT policies on the tables `UserProfile` reads:
+- `profiles` — already has "Admins can view all profiles" ✅
+- `user_topics`, `user_topic_scores`, `quiz_answers` — add `FOR SELECT TO authenticated USING (has_role(auth.uid(),'admin'))` if not present
+- No write policies added.
 
-This is additive — regular users still only see their own profile; admins can read all rows. (PII access by admins is logged via the existing `profile_access_log` table if we want to extend later — out of scope unless requested.)
+### 2. Hook refactor (small, additive)
+Add an optional `userId?: string` arg to:
+- `useProfile(userId?)`
+- `useUserTopics(userId?)`
+- `useUserTopicScores(userId?)`
+- `usePartyMatchScores(userId?)`
 
-### 2. New admin component — `AdminUsersPanel.tsx`
-Location: `src/components/admin/AdminUsersPanel.tsx`.
+When omitted, behavior is unchanged (uses `auth.uid()` from `useAuth`). When provided, the hook queries that id and skips the `auth.uid` filter. Query keys include the resolved id so caches don't collide.
 
-Features:
-- Fetches all profiles via `supabase.from('profiles').select(...)` (admin RLS allows it).
-- Joins user_roles to show role badges (admin/user).
-- Search input: filters by name / email / location (client-side, case-insensitive).
-- Column filters via existing `ColumnHeaderFilter` for: party, state, role, verification status.
-- Table columns: Name, Email, Location, State, Party, Age, Role, Verified (identity/voter badges), Joined date, Overall score.
-- Pagination (50/page) using react-query.
-- Loading + empty states.
+`useRepresentatives` / `useCivicOfficials` already take `address` as a param — no change needed; we pass the target user's `profile.address`.
 
-### 3. Wire into Admin page
-In `src/pages/Admin.tsx`:
-- Add `<TabsTrigger value="users">Users</TabsTrigger>` to the tabs list (and the mobile `Select` mirror).
-- Add `<TabsContent value="users"><AdminUsersPanel /></TabsContent>`.
+### 3. New page `src/pages/AdminUserProfileView.tsx`
+- Reads `:userId` from the URL.
+- Guards with `useUserRole()` — redirects non-admins.
+- Renders the same visual sections as `UserProfile`:
+  - Header card (name, avatar, badges, address, joined)
+  - Topic scores + top topics
+  - Party comparison
+  - Representatives + civic officials list with scores
+  - Upcoming elections
+  - AI analysis (read-only, no "regenerate" buttons)
+- Removes/hides all mutation UI: Edit profile, Change password, Avatar upload, Address edit, Reset onboarding, Sign out, refresh buttons. Adds a top "Viewing as admin — read only" banner with a Back link to `/admin`.
 
-### Technical notes
-- Reuse existing `useAdminRole` gate that already protects the Admin page.
-- Use `@tanstack/react-query` for caching, keyed by `['admin','profiles']`.
-- Keep the panel read-only for now (no edit/delete) — can add later if desired.
+### 4. Wire up navigation
+- In `AdminUsersPanel.tsx`, change row click from opening the dialog to `navigate('/admin/users/' + p.id)`.
+- Keep or remove `AdminUserDetailDialog` (recommend remove — replaced by full page).
 
-## Out of scope
-- Editing/deleting user profiles from admin
-- Exporting CSV
-- Audit logging of admin profile views
+### 5. Route
+Add `<Route path="/admin/users/:userId" element={<AdminUserProfileView />} />` in `src/App.tsx`.
+
+## Technical notes
+- No changes to `UserProfile.tsx` itself — admin view is a separate component to keep edit logic isolated and avoid accidental writes.
+- All admin reads rely on `has_role(auth.uid(),'admin')` RLS policies — no service role, no impersonation tokens.
+- Query cache keys become `['profile', targetUserId]` etc., so admin views don't pollute the logged-in user's cache.
