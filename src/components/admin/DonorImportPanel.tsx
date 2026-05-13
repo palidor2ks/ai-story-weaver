@@ -655,7 +655,7 @@ export function DonorImportPanel() {
         )}
 
         {/* Configuration */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className={multiCommittee ? 'space-y-2' : 'grid grid-cols-2 gap-4'}>
           <div className="space-y-2">
             <Label htmlFor="cycle">Election Cycle</Label>
             <Select value={cycle} onValueChange={setCycle} disabled={isImporting}>
@@ -670,24 +670,26 @@ export function DonorImportPanel() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="candidate-id">
-              Candidate ID <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="candidate-id"
-              value={candidateId}
-              onChange={(e) => setCandidateId(e.target.value)}
-              placeholder="e.g., G000574"
-              disabled={isImporting}
-              className={!candidateId && file ? 'border-amber-500' : ''}
-            />
-            {!candidateId && file && (
-              <p className="text-xs text-amber-600">
-                ⚠️ Required for reconciliation. Auto-detected from committee if linked.
-              </p>
-            )}
-          </div>
+          {!multiCommittee && (
+            <div className="space-y-2">
+              <Label htmlFor="candidate-id">
+                Candidate ID <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="candidate-id"
+                value={candidateId}
+                onChange={(e) => setCandidateId(e.target.value)}
+                placeholder="e.g., G000574"
+                disabled={isImporting}
+                className={!candidateId && file ? 'border-amber-500' : ''}
+              />
+              {!candidateId && file && (
+                <p className="text-xs text-amber-600">
+                  ⚠️ Required for reconciliation. Auto-detected from committee if linked.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Progress */}
