@@ -409,7 +409,9 @@ export function DonorImportPanel() {
                 corruptedSubIds,
                 uniqueHashes,
                 currentBatch: batchNum,
-                totalBatches
+                totalBatches,
+                committeeBreakdown: { ...committeeBreakdown },
+                unmappedCommittees: Array.from(unmappedCommitteesSet)
               });
             }
 
