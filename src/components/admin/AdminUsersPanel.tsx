@@ -326,6 +326,11 @@ export function AdminUsersPanel() {
           </>
         )}
       </CardContent>
+      <AdminUserDetailDialog
+        userId={detailUserId}
+        open={!!detailUserId}
+        onOpenChange={(o) => !o && setDetailUserId(null)}
+      />
     </Card>
   );
 }
