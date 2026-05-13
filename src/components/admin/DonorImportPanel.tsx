@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, ExternalLink, XCircle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, ExternalLink, XCircle, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -23,6 +24,8 @@ interface ImportStats {
   uniqueHashes: number;           // For collision detection
   currentBatch: number;           // Current batch number
   totalBatches: number;           // Total batch count
+  committeeBreakdown: Record<string, { rows: number; inserted: number; candidate_id: string | null }>;
+  unmappedCommittees: string[];
 }
 
 interface DebugInfo {
@@ -36,11 +39,20 @@ interface DebugInfo {
   committeeId: string;
 }
 
+interface CommitteePreview {
+  committee_id: string;
+  candidate_id: string | null;
+  candidate_name: string | null;
+  row_count: number;
+}
+
 export function DonorImportPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [cycle, setCycle] = useState('2024');
   const [candidateId, setCandidateId] = useState('');
   const [committeeId, setCommitteeId] = useState('');
+  const [multiCommittee, setMultiCommittee] = useState(false);
+  const [committeePreview, setCommitteePreview] = useState<CommitteePreview[] | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [stats, setStats] = useState<ImportStats | null>(null);
@@ -78,6 +90,7 @@ export function DonorImportPanel() {
     setExistingCount(null);
     setFileHealthWarning(null);
     setLastDebugInfo(null);
+    setCommitteePreview(null);
 
     // Parse first 500 rows to detect committee and check file health
     const reader = new FileReader();
@@ -86,7 +99,7 @@ export function DonorImportPanel() {
       
       Papa.parse(text, {
         header: true,
-        preview: 500, // Check first 500 rows for health
+        preview: 2000, // Check first 2000 rows for health + multi-committee preview
         complete: async (results) => {
           if (results.data.length > 0) {
             const rows = results.data as any[];
@@ -122,16 +135,51 @@ export function DonorImportPanel() {
               setFileHealthWarning(null);
             }
             
-            if (detectedId) {
+            if (multiCommittee) {
+              // Build distinct committee list from preview
+              const counts = new Map<string, number>();
+              for (const r of rows) {
+                const cid = r.committee_id || r.COMMITTEE_ID;
+                if (cid) counts.set(cid, (counts.get(cid) || 0) + 1);
+              }
+              const distinctIds = Array.from(counts.keys());
+              if (distinctIds.length > 0) {
+                const { data: mappings } = await supabase
+                  .from('candidate_committees')
+                  .select('fec_committee_id, candidate_id, candidates:candidate_id(name)')
+                  .in('fec_committee_id', distinctIds);
+                const mapByCid = new Map<string, { candidate_id: string; name: string | null }>();
+                for (const m of (mappings || []) as any[]) {
+                  if (m.candidate_id) {
+                    mapByCid.set(m.fec_committee_id, {
+                      candidate_id: m.candidate_id,
+                      name: m.candidates?.name || null
+                    });
+                  }
+                }
+                const preview: CommitteePreview[] = distinctIds.map(cid => {
+                  const m = mapByCid.get(cid);
+                  return {
+                    committee_id: cid,
+                    candidate_id: m?.candidate_id || null,
+                    candidate_name: m?.name || null,
+                    row_count: counts.get(cid) || 0
+                  };
+                }).sort((a, b) => b.row_count - a.row_count);
+                setCommitteePreview(preview);
+              } else {
+                setCommitteePreview([]);
+              }
+            } else if (detectedId) {
               setCommitteeId(detectedId);
               setDetectedCommittee(detectedName || detectedId);
-              
+
               // Check existing contributions for this committee
               const { count } = await supabase
                 .from('contributions')
                 .select('*', { count: 'exact', head: true })
                 .eq('recipient_committee_id', detectedId);
-              
+
               setExistingCount(count || 0);
 
               // Try to find candidate_id from committee
@@ -140,7 +188,7 @@ export function DonorImportPanel() {
                 .select('candidate_id')
                 .eq('fec_committee_id', detectedId)
                 .single();
-              
+
               if (committee?.candidate_id) {
                 setCandidateId(committee.candidate_id);
               }
@@ -191,7 +239,9 @@ export function DonorImportPanel() {
       corruptedSubIds: 0,
       uniqueHashes: 0,
       currentBatch: 0,
-      totalBatches: 0
+      totalBatches: 0,
+      committeeBreakdown: {},
+      unmappedCommittees: []
     });
 
     console.log(`[DonorImport] Starting session ${sessionId}`);
@@ -226,6 +276,8 @@ export function DonorImportPanel() {
           let corruptedSubIds = 0;
           let uniqueHashes = 0;
           const errors: string[] = [];
+          const committeeBreakdown: Record<string, { rows: number; inserted: number; candidate_id: string | null }> = {};
+          const unmappedCommitteesSet = new Set<string>();
 
           // Process in batches with retry logic
           for (let i = 0; i < totalRows; i += BATCH_SIZE) {
@@ -247,8 +299,9 @@ export function DonorImportPanel() {
                   body: {
                     rows: batch,
                     cycle,
-                    candidateId: candidateId || null,
-                    committeeId: committeeId || null
+                    candidateId: multiCommittee ? null : (candidateId || null),
+                    committeeId: multiCommittee ? null : (committeeId || null),
+                    multiCommittee
                   }
                 });
 
@@ -307,6 +360,25 @@ export function DonorImportPanel() {
                   skippedRows += data.skippedRows || 0;
                   corruptedSubIds += data.corruptedSubIds || 0;
                   uniqueHashes += data.uniqueHashes || 0;
+
+                  // Aggregate per-committee breakdown across batches
+                  if (data.committeeBreakdown) {
+                    for (const [cid, info] of Object.entries(data.committeeBreakdown as Record<string, { rows: number; candidate_id: string | null }>)) {
+                      const inserted = Math.round(
+                        ((info.rows || 0) / Math.max(1, data.processed || batch.length)) * (data.insertedContributions || 0)
+                      );
+                      const existing = committeeBreakdown[cid];
+                      if (existing) {
+                        existing.rows += info.rows || 0;
+                        existing.inserted += inserted;
+                      } else {
+                        committeeBreakdown[cid] = { rows: info.rows || 0, inserted, candidate_id: info.candidate_id };
+                      }
+                    }
+                  }
+                  if (Array.isArray(data.unmappedCommittees)) {
+                    for (const cid of data.unmappedCommittees) unmappedCommitteesSet.add(cid);
+                  }
                   
                   if (data.timing) {
                     console.log(`[DonorImport] Batch ${batchNum}/${totalBatches} timing:`, data.timing);
@@ -373,7 +445,9 @@ export function DonorImportPanel() {
                 corruptedSubIds,
                 uniqueHashes,
                 currentBatch: batchNum,
-                totalBatches
+                totalBatches,
+                committeeBreakdown: { ...committeeBreakdown },
+                unmappedCommittees: Array.from(unmappedCommitteesSet)
               });
             }
 
@@ -426,6 +500,7 @@ export function DonorImportPanel() {
     setCommitteeId('');
     setLastDebugInfo(null);
     setFileHealthWarning(null);
+    setCommitteePreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -443,6 +518,34 @@ export function DonorImportPanel() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Multi-committee toggle */}
+        <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="multi-committee" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Multi-committee mode
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Import a CSV containing rows for many committees. Each row is auto-routed to its candidate.
+            </p>
+          </div>
+          <Switch
+            id="multi-committee"
+            checked={multiCommittee}
+            disabled={isImporting}
+            onCheckedChange={(checked) => {
+              setMultiCommittee(checked);
+              setCommitteePreview(null);
+              setDetectedCommittee(null);
+              setExistingCount(null);
+              if (checked) {
+                setCandidateId('');
+                setCommitteeId('');
+              }
+            }}
+          />
+        </div>
+
         {/* File Selection */}
         <div className="space-y-2">
           <Label htmlFor="csv-file">CSV File</Label>
@@ -469,8 +572,8 @@ export function DonorImportPanel() {
           )}
         </div>
 
-        {/* Detected Committee Info */}
-        {detectedCommittee && (
+        {/* Detected Committee Info (single-mode) */}
+        {!multiCommittee && detectedCommittee && (
           <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline">Detected</Badge>
@@ -487,6 +590,58 @@ export function DonorImportPanel() {
           </div>
         )}
 
+        {/* Multi-committee preview */}
+        {multiCommittee && committeePreview && (
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Users className="h-4 w-4" />
+                Detected committees in preview ({committeePreview.length})
+              </div>
+              <div className="text-xs text-muted-foreground">
+                <span className="text-green-600 font-medium">
+                  {committeePreview.filter(p => p.candidate_id).length} mapped
+                </span>
+                {' / '}
+                <span className="text-amber-600 font-medium">
+                  {committeePreview.filter(p => !p.candidate_id).length} unmapped
+                </span>
+              </div>
+            </div>
+            <div className="max-h-64 overflow-y-auto border rounded">
+              <table className="w-full text-xs">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    <th className="text-left p-2">Committee ID</th>
+                    <th className="text-left p-2">Candidate</th>
+                    <th className="text-right p-2">Rows (preview)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {committeePreview.map(p => (
+                    <tr key={p.committee_id} className="border-t">
+                      <td className="p-2 font-mono">{p.committee_id}</td>
+                      <td className="p-2">
+                        {p.candidate_name ? (
+                          <span>{p.candidate_name} <span className="text-muted-foreground">({p.candidate_id})</span></span>
+                        ) : (
+                          <Badge variant="outline" className="text-amber-600 border-amber-500/50">
+                            Unmapped — will import as orphan
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="p-2 text-right">{p.row_count.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Preview based on the first 2,000 rows. Full file may contain additional committees.
+            </p>
+          </div>
+        )}
+
         {/* File Health Warning */}
         {fileHealthWarning && (
           <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
@@ -500,7 +655,7 @@ export function DonorImportPanel() {
         )}
 
         {/* Configuration */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className={multiCommittee ? 'space-y-2' : 'grid grid-cols-2 gap-4'}>
           <div className="space-y-2">
             <Label htmlFor="cycle">Election Cycle</Label>
             <Select value={cycle} onValueChange={setCycle} disabled={isImporting}>
@@ -515,24 +670,26 @@ export function DonorImportPanel() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="candidate-id">
-              Candidate ID <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="candidate-id"
-              value={candidateId}
-              onChange={(e) => setCandidateId(e.target.value)}
-              placeholder="e.g., G000574"
-              disabled={isImporting}
-              className={!candidateId && file ? 'border-amber-500' : ''}
-            />
-            {!candidateId && file && (
-              <p className="text-xs text-amber-600">
-                ⚠️ Required for reconciliation. Auto-detected from committee if linked.
-              </p>
-            )}
-          </div>
+          {!multiCommittee && (
+            <div className="space-y-2">
+              <Label htmlFor="candidate-id">
+                Candidate ID <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="candidate-id"
+                value={candidateId}
+                onChange={(e) => setCandidateId(e.target.value)}
+                placeholder="e.g., G000574"
+                disabled={isImporting}
+                className={!candidateId && file ? 'border-amber-500' : ''}
+              />
+              {!candidateId && file && (
+                <p className="text-xs text-amber-600">
+                  ⚠️ Required for reconciliation. Auto-detected from committee if linked.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Progress */}
@@ -609,6 +766,78 @@ export function DonorImportPanel() {
               </div>
             )}
 
+            {/* Per-committee breakdown (multi-committee mode) */}
+            {stats && Object.keys(stats.committeeBreakdown).length > 0 && (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Users className="h-4 w-4" />
+                  Per-committee breakdown ({Object.keys(stats.committeeBreakdown).length})
+                </div>
+                <div className="max-h-56 overflow-y-auto border rounded">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted sticky top-0">
+                      <tr>
+                        <th className="text-left p-2">Committee</th>
+                        <th className="text-left p-2">Candidate</th>
+                        <th className="text-right p-2">Rows</th>
+                        <th className="text-right p-2">Inserted ~</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(stats.committeeBreakdown)
+                        .sort((a, b) => b[1].rows - a[1].rows)
+                        .map(([cid, info]) => (
+                          <tr key={cid} className="border-t">
+                            <td className="p-2 font-mono">{cid}</td>
+                            <td className="p-2">
+                              {info.candidate_id || (
+                                <Badge variant="outline" className="text-amber-600 border-amber-500/50">
+                                  orphan
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="p-2 text-right">{info.rows.toLocaleString()}</td>
+                            <td className="p-2 text-right">{info.inserted.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Unmapped committees list */}
+            {stats && stats.unmappedCommittees.length > 0 && (
+              <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+                    <AlertCircle className="h-4 w-4" />
+                    Unmapped committees ({stats.unmappedCommittees.length})
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(stats.unmappedCommittees.join('\n'));
+                      toast.success('Copied unmapped committee IDs');
+                    }}
+                  >
+                    <Copy className="h-3 w-3 mr-1" />
+                    Copy
+                  </Button>
+                </div>
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  These committees aren't linked to a candidate in <code>candidate_committees</code>.
+                  Their contributions were imported with <code>candidate_id = null</code>. Add mappings and re-run to attribute them.
+                </p>
+                <div className="max-h-32 overflow-y-auto font-mono text-xs bg-background/50 rounded p-2">
+                  {stats.unmappedCommittees.map(cid => (
+                    <div key={cid}>{cid}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {stats?.errors && stats.errors.length > 0 && (
               <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
                 <div className="flex items-center justify-between mb-2">
@@ -646,7 +875,7 @@ export function DonorImportPanel() {
         <div className="flex gap-2">
           <Button
             onClick={handleImport}
-            disabled={!file || isImporting || !candidateId}
+            disabled={!file || isImporting || (!multiCommittee && !candidateId)}
             className="flex-1"
           >
             {isImporting ? (
@@ -659,7 +888,7 @@ export function DonorImportPanel() {
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 Complete
               </>
-            ) : !candidateId && file ? (
+            ) : !multiCommittee && !candidateId && file ? (
               <>
                 <AlertCircle className="mr-2 h-4 w-4" />
                 Candidate ID Required
