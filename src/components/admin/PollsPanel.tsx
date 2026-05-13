@@ -8,13 +8,21 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Sparkles, Plus, Copy, ExternalLink, Trash2, Share2 } from 'lucide-react';
+import { Loader2, Sparkles, Plus, Copy, ExternalLink, Trash2, Share2, Send } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useTopics } from '@/hooks/useCandidates';
 import {
   usePolls, useCreatePoll, useUpdatePollStatus, useDeletePoll,
-  useGeneratePollQuestions, type PollDraftQuestion,
+  useGeneratePollQuestions, useRepostPoll, type PollDraftQuestion, type SharePlatform,
 } from '@/hooks/usePolls';
+
+const PLATFORMS: { id: SharePlatform; label: string; note?: string }[] = [
+  { id: 'twitter', label: 'X (Twitter)' },
+  { id: 'facebook', label: 'Facebook Page', note: 'Connect required' },
+  { id: 'linkedin', label: 'LinkedIn', note: 'Connect required' },
+  { id: 'instagram', label: 'Instagram', note: 'Connect required' },
+];
 
 const TYPE_LABEL: Record<string, string> = {
   mc: 'Multiple choice',
