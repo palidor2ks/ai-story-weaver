@@ -117,7 +117,7 @@ export default function Poll() {
       <Seo
         title={`${poll.title} — PoliPulse Poll`}
         description={poll.description || 'Take this PoliPulse poll'}
-        canonical={shareUrl}
+        path={`/p/${poll.slug}`}
       />
 
       <header className="border-b">
