@@ -31,6 +31,7 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { Committees } from "./pages/Committees";
 import { CommitteeProfile } from "./pages/CommitteeProfile";
 import Blog from "./pages/Blog";
+import Unsubscribe from "./pages/Unsubscribe";
 
 const queryClient = new QueryClient();
 
@@ -80,6 +81,7 @@ const AppRoutes = () => {
       <Route path="/auth" element={<Auth />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/unsubscribe" element={<Unsubscribe />} />
       <Route path="/verify-email" element={
         <RouteGuard requireAuth requireVerifiedEmail={false}>
           <VerifyEmail />
