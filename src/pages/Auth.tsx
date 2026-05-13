@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Sparkles, Mail, Lock, User, ArrowRight } from 'lucide-react';
 import { z } from 'zod';
+import { Seo } from '@/components/Seo';
 
 const emailSchema = z.string().email('Please enter a valid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
@@ -122,6 +123,11 @@ export const Auth = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Seo
+        title="Sign in or sign up — Pulse"
+        description="Create a Pulse account or sign in to take the political alignment quiz and compare your views with candidates."
+        path="/auth"
+      />
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
