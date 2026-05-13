@@ -757,6 +757,10 @@ export default function Admin() {
             <DonorImportPanel />
           </TabsContent>
 
+          <TabsContent value="polls">
+            <PollsPanel />
+          </TabsContent>
+
         </Tabs>
       </main>
     </div>
