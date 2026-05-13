@@ -35,6 +35,7 @@ import { EvidenceReviewPanel } from "@/components/admin/EvidenceReviewPanel";
 import TopicReviewPanel from "@/components/admin/TopicReviewPanel";
 import { DonorImportPanel } from "@/components/admin/DonorImportPanel";
 import { BulkAnswerValidation } from "@/components/admin/BulkAnswerValidation";
+import { AdminUsersPanel } from "@/components/admin/AdminUsersPanel";
 
 
 // Only levels that require manual entry (no API available)
@@ -478,6 +479,7 @@ export default function Admin() {
               { value: "bulk-validation", label: "Bulk Validation", Icon: CheckCircle2 },
               { value: "donor-import", label: "Donor Import", Icon: Upload },
               { value: "visible-states", label: "Visible States", Icon: Shield },
+              { value: "users", label: "Users", Icon: Users },
             ];
             return (
               <div className="mb-6 max-w-xs">
@@ -502,6 +504,10 @@ export default function Admin() {
 
           <TabsContent value="visible-states">
             <HiddenStatesPanel />
+          </TabsContent>
+
+          <TabsContent value="users">
+            <AdminUsersPanel />
           </TabsContent>
 
           <TabsContent value="officials">

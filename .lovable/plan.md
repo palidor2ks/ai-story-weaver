@@ -1,45 +1,38 @@
-# Fix: Hidden states no longer filtered (all states visible)
+## Goal
+Let admins browse and filter every user profile from the Admin page.
 
-## Root cause
-`useHiddenStates` calls `supabase.rpc('get_hidden_state_codes')`. That function currently has EXECUTE granted only to `postgres` and `service_role` — same fallout as the `has_role` issue from the recent security migrations. For every signed-in user the RPC errors with `permission denied for function get_hidden_state_codes`, the hook falls back to an empty Set, and `isHidden(state)` returns false for all states → every state renders.
+## Plan
 
-This function is intentionally callable by all users (it just returns a list of state codes flagged as hidden, no PII), so restoring EXECUTE is the correct fix.
+### 1. Database — allow admins to read profiles
+Currently `profiles` only allows users to view their own row. Add a new RLS SELECT policy:
 
-## Fix
-One small migration:
+- Policy: `Admins can view all profiles` on `public.profiles`, `FOR SELECT TO authenticated`, `USING (has_role(auth.uid(), 'admin'))`.
 
-```sql
-GRANT EXECUTE ON FUNCTION public.get_hidden_state_codes()
-  TO authenticated, anon;
-```
+This is additive — regular users still only see their own profile; admins can read all rows. (PII access by admins is logged via the existing `profile_access_log` table if we want to extend later — out of scope unless requested.)
 
-## Audit other RPCs called from the client
-While we're at it, sweep `public.*` SECURITY DEFINER functions that the frontend calls and re-grant where needed. From the codebase the client invokes at least:
-- `has_role` (already fixed last turn)
-- `get_hidden_state_codes` (this fix)
-- `save_quiz_results`, `save_user_topics` (called from quiz flow — both already self-validate `auth.uid() = p_user_id`)
-- `get_contribution_totals`, `get_contribution_totals_by_committee` (finance pages)
-- `count_donors_matching_patterns`, `resolve_donor_display_name` (donor pages)
-- `recalculate_candidate_coverage`, `recalculate_all_coverage_tiers`, `backfill_candidate_scores` (admin only — keep restricted)
+### 2. New admin component — `AdminUsersPanel.tsx`
+Location: `src/components/admin/AdminUsersPanel.tsx`.
 
-Plan: grant EXECUTE to `authenticated` (+ `anon` where genuinely public) on the user-facing RPCs only. Leave admin/maintenance RPCs (`recalculate_*`, `backfill_*`, `refresh_donor_display_names`, `_merge_candidate`) without public execute so only service-role / admins can call them.
+Features:
+- Fetches all profiles via `supabase.from('profiles').select(...)` (admin RLS allows it).
+- Joins user_roles to show role badges (admin/user).
+- Search input: filters by name / email / location (client-side, case-insensitive).
+- Column filters via existing `ColumnHeaderFilter` for: party, state, role, verification status.
+- Table columns: Name, Email, Location, State, Party, Age, Role, Verified (identity/voter badges), Joined date, Overall score.
+- Pagination (50/page) using react-query.
+- Loading + empty states.
 
-```sql
-GRANT EXECUTE ON FUNCTION public.get_hidden_state_codes() TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.save_quiz_results(uuid, numeric, jsonb, jsonb) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.save_user_topics(uuid, jsonb) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_contribution_totals(text, text) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.get_contribution_totals_by_committee(text, text) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.count_donors_matching_patterns(text[], text[]) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.resolve_donor_display_name(text, text) TO authenticated, anon;
-```
+### 3. Wire into Admin page
+In `src/pages/Admin.tsx`:
+- Add `<TabsTrigger value="users">Users</TabsTrigger>` to the tabs list (and the mobile `Select` mirror).
+- Add `<TabsContent value="users"><AdminUsersPanel /></TabsContent>`.
 
-(If any signature differs slightly we'll match it from `pg_proc` before running.)
-
-## Verification
-1. Reload `/candidates` (or wherever the hidden-state filter applies) signed in — hidden states (52 currently in `hidden_states`) should disappear from listings.
-2. Console: no more `permission denied for function get_hidden_state_codes` errors.
-3. Quiz save still works for signed-in users; finance/donor pages still load contribution totals.
+### Technical notes
+- Reuse existing `useAdminRole` gate that already protects the Admin page.
+- Use `@tanstack/react-query` for caching, keyed by `['admin','profiles']`.
+- Keep the panel read-only for now (no edit/delete) — can add later if desired.
 
 ## Out of scope
-- No RLS policy changes, no function body changes. Admin-only maintenance RPCs stay restricted.
+- Editing/deleting user profiles from admin
+- Exporting CSV
+- Audit logging of admin profile views
