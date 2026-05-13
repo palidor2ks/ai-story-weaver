@@ -97,7 +97,7 @@ export default function Poll() {
           selected_option_id: r.selected_option_id,
           value: r.value,
         }));
-        await supabase.from('quiz_answers').upsert(quizRows, { onConflict: 'user_id,question_id' });
+        await supabase.from('quiz_answers').insert(quizRows);
       }
 
       setSubmitted(true);
