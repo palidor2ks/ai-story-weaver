@@ -661,6 +661,8 @@ Deno.serve(async (req) => {
         uniqueHashes: uniqueHashes.size,        // For debugging collision issues
         corruptedSubIds: corruptedSubIdCount,   // For file health warning
         errors: errors.slice(0, 10),
+        committeeBreakdown: Object.fromEntries(committeeBreakdown),
+        unmappedCommittees: Array.from(unmappedCommittees),
         timing: {
           prep_ms: prepTime,
           contrib_upsert_ms: contribTime,
