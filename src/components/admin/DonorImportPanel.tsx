@@ -240,6 +240,8 @@ export function DonorImportPanel() {
           let corruptedSubIds = 0;
           let uniqueHashes = 0;
           const errors: string[] = [];
+          const committeeBreakdown: Record<string, { rows: number; inserted: number; candidate_id: string | null }> = {};
+          const unmappedCommitteesSet = new Set<string>();
 
           // Process in batches with retry logic
           for (let i = 0; i < totalRows; i += BATCH_SIZE) {
