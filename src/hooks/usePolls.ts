@@ -15,7 +15,12 @@ export interface Poll {
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  share_platforms?: string[] | null;
+  auto_post?: boolean | null;
+  share_caption?: string | null;
 }
+
+export type SharePlatform = 'twitter' | 'facebook' | 'linkedin' | 'instagram';
 
 export interface PollDraftQuestion {
   text: string;
