@@ -136,6 +136,7 @@ const DonorProfile = () => {
   const [showAllDonations, setShowAllDonations] = useState(false);
   const [committeeFilter, setCommitteeFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
+  const [showAllRecipients, setShowAllRecipients] = useState(false);
 
   // Fetch the specific donor record
   const { data: donor, isLoading: donorLoading } = useQuery({
@@ -269,6 +270,34 @@ const DonorProfile = () => {
     },
     enabled: !!donor?.name,
   });
+
+
+  // Recipient summary cards (grouped by candidate)
+  const topRecipients = useMemo(() => {
+    const grouped = new Map<string, {
+      candidate_id: string | null;
+      amount: number;
+      cycle: string;
+      candidates?: DonorRecord['candidates'];
+    }>();
+
+    donorRecords.forEach((record) => {
+      const key = record.candidate_id || `unknown-${record.id}`;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.amount += record.amount;
+      } else {
+        grouped.set(key, {
+          candidate_id: record.candidate_id,
+          amount: record.amount,
+          cycle: record.cycle,
+          candidates: record.candidates,
+        });
+      }
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => b.amount - a.amount);
+  }, [donorRecords]);
 
   // Get unique cycles for filter
   const availableCycles = useMemo(() => {
@@ -495,9 +524,9 @@ const DonorProfile = () => {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {donorRecords.slice(0, 6).map((record) => (
+            {(showAllRecipients ? topRecipients : topRecipients.slice(0, 6)).map((record, index) => (
               <Link
-                key={record.id}
+                key={`${record.candidate_id || 'unknown'}-${record.cycle}-${index}`}
                 to={`/candidate/${record.candidate_id}`}
                 className="block group"
               >
@@ -527,6 +556,18 @@ const DonorProfile = () => {
               </Link>
             ))}
           </div>
+
+          {topRecipients.length > 6 && (
+            <div className="mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAllRecipients(!showAllRecipients)}
+              >
+                {showAllRecipients ? 'Show Top 6' : `View All Recipients (${topRecipients.length})`}
+              </Button>
+            </div>
+          )}
 
           {donorRecords.length === 0 && (
             <Card>
