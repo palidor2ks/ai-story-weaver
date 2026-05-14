@@ -18,6 +18,7 @@ import { Candidate, GovernmentLevel } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { RelevantNewsFeed } from '@/components/RelevantNewsFeed';
 
 export const Feed = () => {
   const queryClient = useQueryClient();
@@ -305,6 +306,20 @@ export const Feed = () => {
     );
   }
 
+
+  const topicNames = useMemo(
+    () => userTopics
+      .map((t: any) => t?.topic_name || t?.name || t?.topics?.name || '')
+      .filter(Boolean)
+      .slice(0, 8),
+    [userTopics],
+  );
+
+  const newsPeople = useMemo(
+    () => transformedCandidates.map(c => c.name).filter(Boolean).slice(0, 12),
+    [transformedCandidates],
+  );
+
   const hasAddress = !!profile?.address;
 
   return (
@@ -364,6 +379,18 @@ export const Feed = () => {
             <div className="text-2xl font-bold text-foreground">{userTopicsList.length}</div>
           </div>
         </div>
+
+
+        {hasAddress && newsPeople.length > 0 && (
+          <RelevantNewsFeed
+            title="News for Your Representatives & Candidates"
+            people={newsPeople}
+            topics={topicNames}
+            district={transformedCandidates[0]?.district || null}
+            state={transformedCandidates[0]?.state || null}
+            className="mb-6"
+          />
+        )}
 
         {/* Government Level Tabs */}
         <Tabs value={levelFilter} onValueChange={(v) => setLevelFilter(v as GovernmentLevel)} className="mb-6">

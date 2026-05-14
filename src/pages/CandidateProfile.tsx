@@ -41,6 +41,7 @@ import { ShareProfileButton } from '@/components/ShareProfileButton';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { RelevantNewsFeed } from '@/components/RelevantNewsFeed';
 
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
@@ -92,6 +93,15 @@ export const CandidateProfile = () => {
   const isPoliticianOwner = !!user && candidate?.claimed_by_user_id === user.id;
   const canEdit = isAdmin || isPoliticianOwner;
   const isClaimed = !!candidate?.claimed_by_user_id;
+
+
+  const topicNames = useMemo(
+    () => userTopicScores
+      .slice(0, 8)
+      .map((t) => t.topics?.name || t.topic_id)
+      .filter(Boolean),
+    [userTopicScores],
+  );
 
   // Must be before early returns to maintain consistent hook order
   const resolvedScore = useMemo(() => {
@@ -360,6 +370,15 @@ export const CandidateProfile = () => {
 
               {/* Score Display */}
               <CandidateScoreCard score={resolvedScore} matchScore={matchScore} userScore={profile?.overall_score ?? null} className="mb-4" />
+
+              <RelevantNewsFeed
+                title={`News about ${candidate.name}`}
+                people={[candidate.name]}
+                topics={topicNames}
+                district={candidate.district}
+                state={candidate.state}
+                className="mb-4"
+              />
 
               {/* Badges */}
               <div className="flex flex-wrap items-center gap-2 mb-3">
