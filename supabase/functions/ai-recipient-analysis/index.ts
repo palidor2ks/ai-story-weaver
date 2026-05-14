@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const perplexityKey = Deno.env.get("PERPLEXITY_API_KEY");
+    const jinaKey = Deno.env.get("JINA_API_KEY");
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -63,8 +63,8 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData?.user) return json({ error: "Unauthorized" }, 401);
 
-    if (!perplexityKey) {
-      return json({ error: "PERPLEXITY_API_KEY is not configured" }, 500);
+    if (!jinaKey) {
+      return json({ error: "JINA_API_KEY is not configured" }, 500);
     }
 
     let body: RequestBody;
