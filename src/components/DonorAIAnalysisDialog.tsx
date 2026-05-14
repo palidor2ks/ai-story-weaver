@@ -18,7 +18,12 @@ export interface DonorAnalysis {
   analysis: string;
   party_support: { party: string; amount: number; share: number }[];
   causes: string[];
-  motivation_hypotheses: string[];
+  motivation_hypotheses?: string[];
+  positions?: { topic: string; stance: string }[];
+  goals?: string[];
+  key_people?: string[];
+  notable_recipients?: string[];
+  controversies?: string[];
   finance_claims?: string[];
   public_context_claims?: string[];
   insufficient_information: boolean;
