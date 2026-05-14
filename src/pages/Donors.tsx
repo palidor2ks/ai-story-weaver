@@ -28,7 +28,12 @@ export const Donors = () => {
   });
 
   const effectiveCycle = filters.cycle || filterOptions?.cycles[0] || '';
-  const effectiveFilters = { ...filters, cycle: effectiveCycle };
+  const effectiveFilters = {
+    ...filters,
+    cycle: effectiveCycle,
+    sortBy: filters.sortBy ?? 'amount',
+    sortOrder: filters.sortOrder ?? 'desc',
+  };
 
   const { data, isLoading, error } = useDonorsPaginated(effectiveFilters);
 
