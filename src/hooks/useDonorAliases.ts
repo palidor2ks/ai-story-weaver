@@ -112,14 +112,20 @@ export const useUpdateDonorAlias = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: async () => {
-      // Refresh donor display_names to apply updated alias
-      await supabase.rpc('refresh_donor_display_names');
+    onSuccess: async (alias) => {
+      toast.info('Applying alias to matching donors…');
+      const { data: result, error: applyErr } = await supabase.functions.invoke('apply-donor-alias', {
+        body: { alias_id: (alias as { id: string }).id },
+      });
       queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
       queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
       queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
       queryClient.invalidateQueries({ queryKey: ['candidate-donors'] });
-      toast.success('Donor alias updated and applied');
+      if (applyErr) {
+        toast.error(`Alias updated but apply failed: ${applyErr.message}`);
+      } else {
+        toast.success(`Alias updated — applied to ${result?.updated_count ?? 0} donors`);
+      }
     },
     onError: (error) => {
       toast.error(`Failed to update alias: ${error.message}`);
