@@ -8,6 +8,7 @@ import { Check, Copy, Download, Facebook, Linkedin, Loader2, RotateCcw, Share2, 
 import { toast } from 'sonner';
 import { BoldCard } from './templates/BoldCard';
 import { DataCard } from './templates/DataCard';
+import { DonorStatsCard } from './templates/DonorStatsCard';
 import { CardData, CARD_SIZE } from './templates/types';
 import { copyNodeToClipboard, downloadNode, nodeToBlob, nodeToFile } from '@/lib/shareImage';
 import { uploadShareCard } from '@/lib/shareUpload';
@@ -31,6 +32,7 @@ import { trackEvent } from '@/lib/analytics';
 const TEMPLATES = [
   { id: 'bold', label: 'Bold', Component: BoldCard },
   { id: 'data', label: 'Data', Component: DataCard },
+  { id: 'donor', label: 'Donor', Component: DonorStatsCard },
 ] as const;
 
 type TemplateId = typeof TEMPLATES[number]['id'];
@@ -90,11 +92,14 @@ export const ShareCardModal = ({
   data,
   caption,
 }: ShareCardModalProps) => {
-  const [selected, setSelected] = useState<TemplateId>('bold');
+  const [selected, setSelected] = useState<TemplateId>(
+    data.kind === 'donor-stats' ? 'donor' : 'bold',
+  );
   const [busy, setBusy] = useState<null | 'download' | 'copy' | 'native'>(null);
   const refs = useRef<Record<TemplateId, HTMLDivElement | null>>({
     bold: null,
     data: null,
+    donor: null,
   });
 
   const defaultBody = useMemo(() => generateShortCaption(caption), [caption]);
@@ -156,6 +161,8 @@ export const ShareCardModal = ({
         ? `pulse-${caption.candidateName?.replace(/\s+/g, '-').toLowerCase()}`
         : caption.kind === 'user-profile'
         ? 'pulse-my-profile'
+        : caption.kind === 'donor-stats'
+        ? `pulse-donor-${caption.donorName?.replace(/\s+/g, '-').toLowerCase()}`
         : 'pulse-invite';
     return `${base}-${selected}.png`;
   }, [selected, caption]);
@@ -231,6 +238,7 @@ export const ShareCardModal = ({
       return `My match with ${caption.candidateName} on Pulse`;
     }
     if (caption.kind === 'user-profile') return 'My political profile on Pulse';
+    if (caption.kind === 'donor-stats') return `${caption.donorName} — Donor profile on Pulse`;
     return 'Pulse — Know Your Vote';
   }, [caption]);
 
