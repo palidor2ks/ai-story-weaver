@@ -1,30 +1,34 @@
-## Change
+# Fix: "Top Contributors to this PAC" returns 0 for Organizations/PACs
 
-Rebuild `private.donor_consolidated_all_mv` to group by `display_name` only (drop `type` from the GROUP BY). One AIPAC row → ~$36M, 280 recipients, types chip = `Organization, PAC`.
+## Root cause
 
-## Migration
+On the donor profile (e.g. COINBASE), the `pacContributors` query in `src/pages/DonorProfile.tsx` (lines ~295-349) builds a filter from:
 
-Drop and recreate the MV:
+- `committeeIds` = recipient committee IDs taken from this donor's **outgoing** records (i.e., committees this donor *gave to*, not the donor's own committee), and
+- `committeeNames` = exact-equal match on `donor.name` / `display_name` / alias variations.
 
-- `sums` CTE: `SUM(total_amount)`, `SUM(total_transactions)`, `SUM(recipient_count)`, `bool_or(is_consolidated) OR count(*)>1`, `string_agg(DISTINCT search_text)` — `GROUP BY display_name`.
-- `primary_ids`: `DISTINCT ON (display_name)` ordered by `total_amount DESC` — picks the dominant primary id and its type as the row's `type` (used by sort/legacy callers).
-- `names`: distinct unnest of `name_variations` grouped by `display_name`.
-- `types_agg`: distinct unnest of `types` grouped by `display_name` → `types` array.
-- Final SELECT joins on `display_name`.
+For COINBASE, neither hits the actual receiving committee, which is stored as `"COINBASE, INC. INNOVATION PAC (COINBASE INNOVATION PAC)"` (FEC ID `C00804179`). Result: 0 contributors, even though 30 contributions / $184K exist.
 
-Indexes:
-- `UNIQUE INDEX ... (display_name)` (was `(display_name, type)`).
-- `INDEX ... (total_amount DESC NULLS LAST)`.
+The same bug affects any donor whose canonical name doesn't exactly equal the FEC committee name string.
 
-Re-grant `SELECT` to `anon, authenticated, service_role`.
+## Fix
 
-## Verification
+In `src/pages/DonorProfile.tsx`, change the `pacContributors` query to:
 
-After refresh:
-- AIPAC: single row, ~$36M, 280 recipients, types includes Organization + PAC.
-- Spot-check Musk and a few others remain correct.
+1. **Resolve the donor's own FEC committee IDs first** by looking up `public.committees` where the committee name starts with the donor's canonical name (or one of its alias variations). Use those IDs as the primary join key.
+   - `supabase.from('committees').select('committee_id, name').ilike('name', `${displayName}%`)` (and per alias variation).
+2. **Fall back to fuzzy name match** with `ilike` against `recipient_committee_name` (e.g. `recipient_committee_name.ilike.${displayName}%`) when no committee IDs resolve.
+3. Keep the existing aggregation/grouping logic; only the filter clause changes.
+4. Hide the entire "Top Contributors to this PAC" section when both lookups produce zero candidate committees AND zero rows (so we don't show a misleading empty card for pure corporations like Coinbase that have no receiving committee at all).
 
 ## Out of scope
 
-- Per-cycle MV (`donor_consolidated_mv`) — still grouped by type per cycle.
-- Frontend formatting and the donor alias system (option 2).
+- No DB schema changes.
+- No changes to donor consolidation MV.
+- No changes to "Top Recipients" logic.
+
+## Verification
+
+- COINBASE profile shows contributors from `COINBASE, INC. INNOVATION PAC` (~$184K, 30 records).
+- AIPAC, FAIRSHAKE, and other true PACs continue to render correctly.
+- A donor with no receiving committee (pure corporation with no PAC) hides the section instead of showing "0 total".
