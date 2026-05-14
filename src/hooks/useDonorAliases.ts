@@ -138,16 +138,33 @@ export const useDeleteDonorAlias = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // Capture patterns/types/canonical BEFORE delete so we can unapply
+      const { data: existing } = await supabase
+        .from('donor_aliases')
+        .select('canonical_name, alias_pattern, alias_patterns, donor_types')
+        .eq('id', id)
+        .single();
+
       const { error } = await supabase
         .from('donor_aliases')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
+      return existing;
     },
-    onSuccess: async () => {
-      // Refresh donor display_names to remove alias
-      await supabase.rpc('refresh_donor_display_names');
+    onSuccess: async (existing) => {
+      const patterns = (existing?.alias_patterns?.length ? existing.alias_patterns : [existing?.alias_pattern]).filter(Boolean) as string[];
+      const donor_types = (existing?.donor_types || []) as string[];
+      const canonical_name = existing?.canonical_name;
+
+      if (patterns.length && donor_types.length) {
+        toast.info('Reverting affected donors…');
+        const { error: unErr } = await supabase.functions.invoke('unapply-donor-alias', {
+          body: { patterns, donor_types, canonical_name },
+        });
+        if (unErr) toast.error(`Delete saved but revert failed: ${unErr.message}`);
+      }
       queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
       queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
       queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
