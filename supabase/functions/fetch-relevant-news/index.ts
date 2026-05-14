@@ -303,8 +303,11 @@ async function fetchGdeltNews(people: Person[], limit: number): Promise<ParsedIt
     timespan: '1month',
     sourcelang: 'English',
   });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4500);
   try {
     const res = await fetch(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, {
+      signal: ctrl.signal,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)' },
     });
     const text = await res.text();
@@ -323,6 +326,8 @@ async function fetchGdeltNews(people: Person[], limit: number): Promise<ParsedIt
   } catch (e) {
     console.error('gdelt fetch failed', e);
     return [];
+  } finally {
+    clearTimeout(timer);
   }
 }
 
