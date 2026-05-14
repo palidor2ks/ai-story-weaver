@@ -36,6 +36,8 @@ interface DonorRecord {
   contributor_city?: string | null;
   contributor_state?: string | null;
   transaction_count?: number | null;
+  recipient_committee_id?: string | null;
+  recipient_committee_name?: string | null;
   candidates?: {
     id: string;
     name: string;
@@ -495,22 +497,22 @@ const DonorProfile = () => {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {donorRecords.slice(0, 6).map((record) => (
-              <Link
-                key={record.id}
-                to={`/candidate/${record.candidate_id}`}
-                className="block group"
-              >
+            {donorRecords.slice(0, 6).map((record) => {
+              const recipientName = record.candidates?.name || record.recipient_committee_name || 'Unknown';
+              const recipientMeta = record.candidates
+                ? `${record.candidates.office} • ${record.candidates.state}`
+                : record.recipient_committee_id
+                  ? `Committee • ${record.recipient_committee_id}`
+                  : 'Committee';
+              const card = (
                 <Card className="h-full transition-all hover:shadow-md hover:border-primary/30">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-                          {record.candidates?.name || 'Unknown'}
+                          {recipientName}
                         </p>
-                        <p className="text-sm text-muted-foreground">
-                          {record.candidates?.office} • {record.candidates?.state}
-                        </p>
+                        <p className="text-sm text-muted-foreground">{recipientMeta}</p>
                       </div>
                       {record.candidates?.party && (
                         <Badge variant="outline" className={getPartyColor(record.candidates.party)}>
@@ -524,8 +526,18 @@ const DonorProfile = () => {
                     </div>
                   </CardContent>
                 </Card>
-              </Link>
-            ))}
+              );
+
+              return record.candidates?.id ? (
+                <Link key={record.id} to={`/candidate/${record.candidates.id}`} className="block group">
+                  {card}
+                </Link>
+              ) : (
+                <div key={record.id} className="group">
+                  {card}
+                </div>
+              );
+            })}
           </div>
 
           {donorRecords.length === 0 && (
