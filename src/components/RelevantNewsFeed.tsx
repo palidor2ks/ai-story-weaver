@@ -80,52 +80,57 @@ export const RelevantNewsFeed = ({
         ) : items.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">{emptyMessage(win)}</p>
         ) : (
-          items.map(item => (
-            <a
-              key={item.id}
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block rounded-md border p-3 hover:bg-accent/40 transition-colors group"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    {item.isTopTopicHit && (
-                      <Badge variant="default" className="gap-1 text-xs">
-                        <Sparkles className="w-3 h-3" />
-                        Top Topic
-                      </Badge>
+          items.map(item => {
+            const hasUrl = !!item.url;
+            const Wrapper: any = hasUrl ? 'a' : 'div';
+            const wrapperProps = hasUrl
+              ? { href: item.url, target: '_blank', rel: 'noopener noreferrer' }
+              : {};
+            return (
+              <Wrapper
+                key={item.id}
+                {...wrapperProps}
+                className={`block rounded-md border p-3 transition-colors group ${hasUrl ? 'hover:bg-accent/40 cursor-pointer' : ''}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      {item.isTopTopicHit && (
+                        <Badge variant="default" className="gap-1 text-xs">
+                          <Sparkles className="w-3 h-3" />
+                          Top Topic
+                        </Badge>
+                      )}
+                      {item.isNew && (
+                        <Badge variant="secondary" className="text-xs">New</Badge>
+                      )}
+                      {item.matchedTopics.slice(0, 3).map(t => (
+                        <Badge key={t} variant="outline" className="text-xs capitalize">{t}</Badge>
+                      ))}
+                    </div>
+                    <h3 className={`font-medium text-sm leading-snug ${hasUrl ? 'group-hover:text-primary' : ''}`}>
+                      {item.title}
+                    </h3>
+                    {item.snippet && !item.snippet.startsWith('<') && !item.snippet.startsWith('http') && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.snippet}</p>
                     )}
-                    {item.isNew && (
-                      <Badge variant="secondary" className="text-xs">New</Badge>
-                    )}
-                    {item.matchedTopics.slice(0, 3).map(t => (
-                      <Badge key={t} variant="outline" className="text-xs capitalize">{t}</Badge>
-                    ))}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+                      <span className="font-medium">{item.source}</span>
+                      <span>·</span>
+                      <span>{timeAgo(item.publishedAt)}</span>
+                      {item.matchedPeople.length > 0 && (
+                        <>
+                          <span>·</span>
+                          <span className="truncate">{item.matchedPeople.slice(0, 2).join(', ')}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <h3 className="font-medium text-sm leading-snug group-hover:text-primary">
-                    {item.title}
-                  </h3>
-                  {item.snippet && !item.snippet.startsWith('<') && !item.snippet.startsWith('http') && (
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.snippet}</p>
-                  )}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
-                    <span className="font-medium">{item.source}</span>
-                    <span>·</span>
-                    <span>{timeAgo(item.publishedAt)}</span>
-                    {item.matchedPeople.length > 0 && (
-                      <>
-                        <span>·</span>
-                        <span className="truncate">{item.matchedPeople.slice(0, 2).join(', ')}</span>
-                      </>
-                    )}
-                  </div>
+                  {hasUrl && <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />}
                 </div>
-                <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
-              </div>
-            </a>
-          ))
+              </Wrapper>
+            );
+          })
         )}
       </CardContent>
     </Card>
