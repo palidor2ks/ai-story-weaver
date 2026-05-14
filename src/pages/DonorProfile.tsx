@@ -32,6 +32,7 @@ interface DonorRecord {
   amount: number;
   cycle: string;
   candidate_id: string;
+  recipient_committee_name?: string | null;
   employer?: string | null;
   occupation?: string | null;
   contributor_city?: string | null;
@@ -282,6 +283,7 @@ const DonorProfile = () => {
       amount: number;
       cycle: string;
       candidates?: DonorRecord['candidates'];
+      recipient_committee_name?: string | null;
     }>();
 
     donorRecords.forEach((record) => {
@@ -295,6 +297,7 @@ const DonorProfile = () => {
           amount: record.amount,
           cycle: record.cycle,
           candidates: record.candidates,
+          recipient_committee_name: record.recipient_committee_name,
         });
       }
     });
@@ -530,15 +533,15 @@ const DonorProfile = () => {
             {(showAllRecipients ? topRecipients : topRecipients.slice(0, 6)).map((record, index) => (
               <Link
                 key={`${record.candidate_id || 'unknown'}-${record.cycle}-${index}`}
-                to={`/candidate/${record.candidate_id}`}
-                className="block group"
+                to={record.candidate_id ? `/candidate/${record.candidate_id}` : '#'}
+                className={`block group ${record.candidate_id ? '' : 'pointer-events-none'}`}
               >
                 <Card className="h-full transition-all hover:shadow-md hover:border-primary/30">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-                          {record.candidates?.name || 'Unknown'}
+                          {record.candidates?.name || record.recipient_committee_name || 'Unknown'}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {record.candidates?.office} • {record.candidates?.state}
