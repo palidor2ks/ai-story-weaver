@@ -304,7 +304,7 @@ function parseRss(xml: string): ParsedItem[] {
       title: pickRaw('title'),
       link: cleanText(pickRaw('link')),
       pubDate: cleanText(pickRaw('pubDate')),
-      source: cleanText(pickRaw('source')) || 'Google News',
+      source: cleanText(pickRaw('source') || pickRaw('News:Source')) || 'News',
       description: pickRaw('description'),
     });
   }
