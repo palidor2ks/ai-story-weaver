@@ -1,35 +1,24 @@
-## Wire up X (Twitter) + Facebook Page posting
+## Problem
 
-### What you'll do (one-time setup)
+The `/donors` page cycle dropdown only shows **2026** even though the database has **2024** (~1.09M rows) and **2026** (~8.5K rows).
 
-**X (Twitter)** — at https://developer.x.com/en/portal/dashboard
-1. Create Project + App (Free tier is fine).
-2. App settings → User authentication settings → permissions = **Read and Write** → save.
-3. Keys & tokens → generate **Consumer Keys** (API Key/Secret) and **Access Token + Secret** for the brand account.
-4. After I trigger the secrets prompt, paste the 4 values.
+## Root cause
 
-**Facebook Page** — at https://developers.facebook.com
-1. Create App (type: Business) and link your brand Facebook Page.
-2. In Graph API Explorer (or via Business Settings), generate a **Page Access Token** with `pages_manage_posts` + `pages_read_engagement` scopes. Convert to a long-lived token via `/oauth/access_token?grant_type=fb_exchange_token`.
-3. Get the Page ID (Page → About → Page ID).
-4. After I trigger the secrets prompt, paste the 2 values.
-   - Note: Posting to your own Page works in Dev Mode without App Review. Posting to other Pages requires App Review.
+In `src/hooks/useDonorsPaginated.ts` (`useAvailableDonorFilters`), distinct cycles are derived by:
 
-### What I'll build
+```ts
+.from('donors').select('cycle').order('cycle', { ascending: false }).limit(1000)
+```
 
-**1. Edge function `post-poll-to-social/index.ts`** (already scaffolded for X — extend it)
-- Replace the Facebook stub with a real implementation:
-  - `POST https://graph.facebook.com/v21.0/{FACEBOOK_PAGE_ID}/feed` with `message` + `link` (the poll URL) using `FACEBOOK_PAGE_ACCESS_TOKEN`.
-  - For polls with an `og_image_url`, switch to `/photos` endpoint with `url` + `caption` so the OG image is the post image.
-  - Parse response → log `remote_post_id` (the returned `id`) and build `remote_post_url` = `https://facebook.com/{id}`.
-  - On error, write `status='failed'` + error message into `poll_social_posts`.
-- Return the same `{ results: [{ platform, status, url?, error? }] }` shape so the existing UI works.
+Because 2026 has thousands of rows, the first 1000 ordered rows are all 2026, so `new Set(...)` only contains `2026`. 2024 never appears.
 
-**2. Secrets** — I'll request these via the secrets tool:
-- `TWITTER_CONSUMER_KEY`, `TWITTER_CONSUMER_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`
-- `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_ACCESS_TOKEN`
+## Fix
 
-### Out of scope
-- LinkedIn and Instagram (kept as `not_configured` stubs).
-- Per-admin OAuth flows / token refresh UI.
-- App Review submissions (you handle on Meta side if you want to post to Pages you don't own).
+Replace the single capped scan with a tiny Postgres RPC that returns truly distinct cycles, so every cycle present in `donors` shows up regardless of row counts.
+
+### Steps
+
+1. **Migration**: add a SECURITY DEFINER function `public.get_donor_cycles()` returning `text[]` (or `setof text`) via `SELECT DISTINCT cycle FROM donors WHERE cycle IS NOT NULL ORDER BY cycle DESC`. Grant execute to `anon, authenticated`.
+2. **Hook**: in `useAvailableDonorFilters`, replace the cycles query with `supabase.rpc('get_donor_cycles')` and map the result into the existing `cycles` array. Keep the states logic as-is.
+
+No UI changes needed — the dropdown already renders whatever cycles the hook returns.
