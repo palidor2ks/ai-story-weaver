@@ -7,6 +7,7 @@ import { calculateMatchScore } from '@/hooks/useCandidates';
 import { useProfile, useUserTopics } from '@/hooks/useProfile';
 import { useUnifiedCandidates, unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
 import { useUpcomingElections } from '@/hooks/useUpcomingElections';
+import { RelevantNewsFeed } from '@/components/RelevantNewsFeed';
 import { useHiddenStates } from '@/hooks/useHiddenStates';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -421,6 +422,25 @@ export const Feed = () => {
             </Select>
           </div>
         </div>
+
+        {/* Relevant News Feed */}
+        {unified.myReps.length > 0 && (
+          <div className="mb-6">
+            <RelevantNewsFeed
+              people={unified.myReps.map(r => ({
+                name: r.name,
+                office: r.office,
+                state: r.state,
+                district: r.district,
+              }))}
+              topics={userTopics.map(t => (t as any).topic_id || (t as any).name).filter(Boolean)}
+              state={unified.myReps[0]?.state}
+              district={unified.myReps.find(r => r.district)?.district}
+              title="Relevant News for Your Representatives"
+              maxItems={10}
+            />
+          </div>
+        )}
 
         {/* Results Count */}
         <p className="text-sm text-muted-foreground mb-4">
