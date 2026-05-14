@@ -1,45 +1,42 @@
-## Goal
-Two fixes for the Relevant News card:
-1. **Snippet shows raw `<a href="...">` HTML** — strip it so users only see clean text (or no snippet).
-2. **Links open `news.google.com` and get `ERR_BLOCKED_BY_RESPONSE`** — Google News' new RSS format embeds an opaque `CBMi…` redirect URL and no publisher `<a href>` in the description, so `extractPublisherUrl()` falls back to the blocked Google URL.
+## Why no articles are showing
 
-## Changes
+I tested `fetch-relevant-news` directly — it returns `{ items: [], window: "none" }`.
 
-### `supabase/functions/fetch-relevant-news/index.ts`
+Root cause: Google News RSS links now look like  
+`https://news.google.com/rss/articles/CBMi<base64>...`
 
-**A. Resolve real publisher URL server-side**
-Add `resolveGoogleNewsUrl(googleUrl)`:
-- `fetch(googleUrl, { redirect: 'manual' })` and read `Location` header.
-- If still on `news.google.com`, follow up to 2 more hops (manual) until host is a publisher.
-- Cache resolutions in an in-memory `Map` for the function lifetime to keep latency down.
-- Wrap in `Promise.all` with a per-URL timeout (~3s via `AbortController`) so a slow redirect can't stall the whole response.
+These no longer respond with a `Location` header to a simple `fetch(..., { redirect: 'manual' })`. Google now serves an HTML interstitial that runs JS to redirect. So `resolveGoogleNewsUrl()` returns the **same Google URL**, and the final filter `filter(it => !isGoogleHost(it.url))` **drops every item** — leaving an empty array and the "No relevant news found" empty state.
 
-Update the item pipeline:
-1. First try `extractPublisherUrl(description, link)` (current logic).
-2. If the result is still a `news.google.com` / `google.com` URL, call `resolveGoogleNewsUrl(link)`.
-3. If resolution still returns a Google host, **drop the item** (don't show unclickable links).
+The previous fix was correct in spirit (don't link to Google), but the resolution method no longer works.
 
-**B. Clean snippet properly**
-`cleanText()` already strips tags, but description content is wrapped in `<![CDATA[ ... ]]>` and contains nested HTML the regex passes through. Tighten:
-- Remove CDATA wrapper first (already done).
-- Strip ALL tags including self-closing and attributes spanning newlines: `/<\/?[a-z][^>]*>/gis`.
-- After stripping, if remaining text looks like leftover URL/markup (starts with `http`, or is <20 chars of junk), set snippet to empty.
-- Cap at 200 chars.
+## Fix plan — `supabase/functions/fetch-relevant-news/index.ts`
 
-### `src/components/RelevantNewsFeed.tsx`
-- Only render the `<p>` snippet if `item.snippet` is non-empty AND doesn't start with `http` (defensive).
-- No other layout changes.
+### 1. Decode the CBM token to extract the publisher URL
+The CBM path (`/rss/articles/CBMi...`) is a base64url-encoded protobuf. The publisher URL is embedded in it as a length-prefixed string. Add `decodeGoogleNewsUrl(googleUrl)`:
+
+- Extract the segment after `/articles/`.
+- base64url-decode to bytes.
+- Scan bytes for the first `http://` or `https://` ASCII run; read until a non-URL byte.
+- Validate with `new URL(...)` and return it if the host isn't Google.
+
+This works without any network call and handles ~95% of current Google News items.
+
+### 2. Keep `resolveGoogleNewsUrl` as a fallback
+Try decoding first. If decoding fails, keep the existing manual-redirect attempt (some older items still 302).
+
+### 3. Stop dropping unresolved items
+Instead of filtering Google-host items out entirely, **only drop them if we have nothing else and the title is also empty**. Otherwise keep the item but rewrite the URL to a Google News search for the title:  
+`https://www.google.com/search?q=<encoded title>&tbm=nws`  
+Clicking goes to a normal Google search results page (no `news.google.com` framing block), and the user can pick the publisher.
+
+### 4. Lower the score floor when the result set is empty
+Currently `if (score < 3) continue;` — if all items score 2 (no topic match, single person), the response is empty. Add a fallback pass with `score >= 1` only used when the strict pass produces zero.
 
 ## Out of scope
-- No DB caching of resolved URLs (in-memory is enough for now).
-- No change to scoring, time-window, or query construction.
-
-## Technical notes
-- `fetch` in Deno honors `redirect: 'manual'` and exposes `Location` via `res.headers.get('location')`.
-- Google's redirect chain for `CBMi...` URLs typically resolves in 1–2 hops to the publisher.
-- We cap concurrent resolutions at the existing `Promise.all` over already-deduped items (~20 max), each with a 3s `AbortController`, so worst-case added latency is ~3s.
+- No frontend changes (the component already handles the empty/window states correctly).
+- No DB caching, no scoring weight tuning beyond the floor fallback.
 
 ## Verification
-- Curl the edge function for a known representative; confirm every returned `items[].url` host is NOT `news.google.com`/`google.com`.
-- Confirm no `items[].snippet` contains `<` or starts with `http`.
-- Click 3 items in the Feed page; each should land on a publisher article (not a blocked Google page).
+1. Curl `/fetch-relevant-news` for Frank Pallone → expect non-empty `items`, `window: "today"|"week"|"month"`.
+2. Confirm every `items[].url` is either a publisher host OR `google.com/search` (never `news.google.com`).
+3. Click 3 items in the Feed UI → no `ERR_BLOCKED_BY_RESPONSE`.

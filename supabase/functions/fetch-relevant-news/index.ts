@@ -71,10 +71,41 @@ const isGoogleHost = (u: string): boolean => {
   } catch { return false; }
 };
 
+const googleNewsSearchUrl = (title: string): string =>
+  `https://www.google.com/search?q=${encodeURIComponent(title)}&tbm=nws`;
+
+const decodeGoogleNewsUrl = (googleUrl: string): string | null => {
+  try {
+    const url = new URL(googleUrl);
+    if (!isGoogleHost(url.toString())) return null;
+    const token = url.pathname.match(/\/(?:rss\/)?articles\/([^/?#]+)/)?.[1];
+    if (!token) return null;
+
+    const normalized = token.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    const decoded = new TextDecoder().decode(bytes);
+    const matches = decoded.match(/https?:\/\/[^\u0000-\u001f\u007f\s<>"'\\]+/gi) || [];
+
+    for (const candidate of matches) {
+      const cleaned = candidate.replace(/[),.;]+$/g, '');
+      const parsed = new URL(cleaned);
+      if (!isGoogleHost(parsed.toString())) return parsed.toString();
+    }
+  } catch { /* ignore malformed Google News tokens */ }
+  return null;
+};
+
 const resolveCache = new Map<string, string>();
 
 async function resolveGoogleNewsUrl(googleUrl: string): Promise<string> {
   if (resolveCache.has(googleUrl)) return resolveCache.get(googleUrl)!;
+  const decoded = decodeGoogleNewsUrl(googleUrl);
+  if (decoded) {
+    resolveCache.set(googleUrl, decoded);
+    return decoded;
+  }
   let current = googleUrl;
   for (let i = 0; i < 3; i++) {
     if (!isGoogleHost(current)) break;
@@ -185,6 +216,14 @@ interface ParsedItem {
   description: string;
 }
 
+interface GdeltArticle {
+  title?: string;
+  url?: string;
+  seendate?: string;
+  domain?: string;
+  sourceCommonName?: string;
+}
+
 function parseRss(xml: string): ParsedItem[] {
   const items: ParsedItem[] = [];
   const itemRegex = /<item>([\s\S]*?)<\/item>/g;
@@ -211,17 +250,84 @@ async function fetchRss(query: string): Promise<ParsedItem[]> {
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0)' },
+      headers: {
+        'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)',
+      },
     });
     if (!res.ok) {
-      await res.text();
+      const errorText = await res.text();
+      console.warn('rss fetch non-ok', { query, status: res.status, preview: errorText.slice(0, 200) });
       return [];
     }
     const xml = await res.text();
-    return parseRss(xml);
+    const parsed = parseRss(xml);
+    if (parsed.length === 0) console.warn('rss returned no items', { query, status: res.status, preview: xml.slice(0, 200) });
+    return parsed;
   } catch (e) {
     console.error('rss fetch failed', query, e);
     return [];
+  }
+}
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function fetchRssSequentially(queries: string[], limit: number): Promise<ParsedItem[]> {
+  const items: ParsedItem[] = [];
+  for (const query of queries) {
+    if (items.length >= limit * 8) break;
+    const parsed = await fetchRss(query);
+    items.push(...parsed);
+    if (query !== queries[queries.length - 1]) await delay(450);
+  }
+  return items;
+}
+
+const parseGdeltDate = (raw?: string): string => {
+  if (!raw) return new Date().toUTCString();
+  const m = raw.match(/^(\d{4})(\d{2})(\d{2})T?(\d{2})(\d{2})(\d{2})Z?$/);
+  if (!m) return new Date(raw).toUTCString();
+  return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`).toUTCString();
+};
+
+async function fetchGdeltNews(people: Person[], limit: number): Promise<ParsedItem[]> {
+  const primaryName = fullNameOf(people[0]?.name || '').trim();
+  if (!primaryName) return [];
+  const params = new URLSearchParams({
+    query: `"${primaryName}"`,
+    mode: 'ArtList',
+    format: 'json',
+    maxrecords: String(Math.min(Math.max(limit * 4, 10), 50)),
+    sort: 'DateDesc',
+    timespan: '1month',
+    sourcelang: 'English',
+  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const res = await fetch(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, {
+      signal: ctrl.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)' },
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      console.warn('gdelt fetch non-ok', { status: res.status, preview: text.slice(0, 120) });
+      return [];
+    }
+    const json = JSON.parse(text) as { articles?: GdeltArticle[] };
+    return (json.articles || []).map(a => ({
+      title: a.title || '',
+      link: a.url || '',
+      pubDate: parseGdeltDate(a.seendate),
+      source: a.sourceCommonName || a.domain || 'News',
+      description: '',
+    })).filter(a => a.title && a.link);
+  } catch (e) {
+    console.error('gdelt fetch failed', e);
+    return [];
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -256,11 +362,13 @@ Deno.serve(async (req: Request) => {
     }
 
     const queries = buildQueries(people, body.state, body.district);
-    const results = await Promise.all(queries.map(fetchRss));
-    const allItems = results.flat();
+    let allItems = await fetchRssSequentially(queries, limit);
+    if (allItems.length === 0) allItems = await fetchGdeltNews(people, limit);
+    console.info('relevant-news rss results', { queries: queries.length, allItems: allItems.length });
 
     const now = Date.now();
     const dedup = new Map<string, FeedNewsItem & { ageHours: number }>();
+    const fallbackDedup = new Map<string, FeedNewsItem & { ageHours: number }>();
 
     for (const it of allItems) {
       if (!it.link || !it.title) continue;
@@ -299,9 +407,6 @@ Deno.serve(async (req: Request) => {
       if (ageHours <= 24) score += 2;
       else if (ageHours <= 72) score += 1;
 
-      if (matchedPeople.length === 0) continue;
-      if (score < 3) continue;
-
       const item: FeedNewsItem & { ageHours: number } = {
         id: hashId(key),
         title: cleanedTitle,
@@ -316,13 +421,25 @@ Deno.serve(async (req: Request) => {
         isNew: ageHours <= 48,
         ageHours,
       };
+
+      if (matchedPeople.length === 0) continue;
+      if (score < 3) {
+        if (score >= 1) {
+          const existingFallback = fallbackDedup.get(key);
+          if (!existingFallback || existingFallback.relevanceScore < score) fallbackDedup.set(key, item);
+        }
+        continue;
+      }
+
       const existing = dedup.get(key);
       if (!existing || existing.relevanceScore < score) dedup.set(key, item);
     }
 
-    const all = Array.from(dedup.values()).sort(
+    const sourceMap = dedup.size > 0 ? dedup : fallbackDedup;
+    const all = Array.from(sourceMap.values()).sort(
       (a, b) => b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt),
     );
+    console.info('relevant-news filtered results', { strict: dedup.size, fallback: fallbackDedup.size, candidates: all.length });
 
     const today = all.filter(i => i.ageHours <= 24);
     const week = all.filter(i => i.ageHours <= 24 * 7);
@@ -340,10 +457,11 @@ Deno.serve(async (req: Request) => {
       if (isGoogleHost(it.url)) {
         const resolved = await resolveGoogleNewsUrl(it.url);
         if (!isGoogleHost(resolved)) it.url = resolved;
+        else if (it.title) it.url = googleNewsSearchUrl(it.title);
       }
     }));
     const items = sliced
-      .filter(it => !isGoogleHost(it.url))
+      .filter(it => it.title || !isGoogleHost(it.url))
       .map(({ ageHours: _a, ...rest }) => rest);
 
     return new Response(JSON.stringify({ items, window: windowLabel }), {
