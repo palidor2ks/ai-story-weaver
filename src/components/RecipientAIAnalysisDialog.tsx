@@ -72,7 +72,7 @@ export const RecipientAIAnalysisDialog = ({
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('ai-recipient-analysis', {
+      const invokePromise = supabase.functions.invoke('ai-recipient-analysis', {
         body: {
           entity_kind: entityKind,
           entity_id: entityId,
@@ -84,6 +84,10 @@ export const RecipientAIAnalysisDialog = ({
           cycle: cycle ?? null,
         },
       });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout: AI analysis took too long. Please try again.')), 110_000),
+      );
+      const { data, error: fnError } = await Promise.race([invokePromise, timeoutPromise]);
       if (fnError) throw new Error(normalizeInvokeError(fnError));
       if ((data as { error?: string } | undefined)?.error) {
         throw new Error(String((data as { error: string }).error));
