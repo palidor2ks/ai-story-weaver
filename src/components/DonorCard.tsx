@@ -26,21 +26,6 @@ interface DonorCardProps {
   cycle?: string;
 }
 
-interface DonorAnalysis {
-  summary: string;
-  analysis: string;
-  party_support: { party: string; amount: number; share: number }[];
-  causes: string[];
-  motivation_hypotheses: string[];
-  insufficient_information: boolean;
-  sources: { title: string; url: string }[];
-  finance_context?: {
-    total_amount: number;
-    total_transactions: number;
-    party_breakdown: { party: string; amount: number; share: number }[];
-    top_recipients: { name: string; party: string; amount: number }[];
-  };
-}
 
 const formatAmount = (amount: number) => {
   if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
