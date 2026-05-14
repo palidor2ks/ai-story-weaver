@@ -107,7 +107,7 @@ export const RelevantNewsFeed = ({
                   <h3 className="font-medium text-sm leading-snug group-hover:text-primary">
                     {item.title}
                   </h3>
-                  {item.snippet && (
+                  {item.snippet && !item.snippet.startsWith('<') && !item.snippet.startsWith('http') && (
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.snippet}</p>
                   )}
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">

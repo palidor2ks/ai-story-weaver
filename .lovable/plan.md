@@ -1,47 +1,45 @@
 ## Goal
-Fix three issues with the Relevant News feed:
-1. Article links don't open the actual article (Google News RSS uses redirect URLs).
-2. Titles are dirty (trailing " - Source Name", leftover HTML entities).
-3. No time-window logic — should show **today** first, then fall back to **this week**, then **this month**, else show "No relevant news".
+Two fixes for the Relevant News card:
+1. **Snippet shows raw `<a href="...">` HTML** — strip it so users only see clean text (or no snippet).
+2. **Links open `news.google.com` and get `ERR_BLOCKED_BY_RESPONSE`** — Google News' new RSS format embeds an opaque `CBMi…` redirect URL and no publisher `<a href>` in the description, so `extractPublisherUrl()` falls back to the blocked Google URL.
 
 ## Changes
 
 ### `supabase/functions/fetch-relevant-news/index.ts`
 
-**1. Resolve real article URLs**
-Google News RSS `<link>` is `https://news.google.com/rss/articles/...` which redirects. Two-step fix:
-- Prefer the publisher URL embedded in `<description>` (Google News descriptions contain `<a href="https://realsite.com/...">` to the real article). Parse the first `href` from the description HTML and use it as the canonical URL when present.
-- Fallback: keep the Google News link (still works, just redirects).
+**A. Resolve real publisher URL server-side**
+Add `resolveGoogleNewsUrl(googleUrl)`:
+- `fetch(googleUrl, { redirect: 'manual' })` and read `Location` header.
+- If still on `news.google.com`, follow up to 2 more hops (manual) until host is a publisher.
+- Cache resolutions in an in-memory `Map` for the function lifetime to keep latency down.
+- Wrap in `Promise.all` with a per-URL timeout (~3s via `AbortController`) so a slow redirect can't stall the whole response.
 
-**2. Clean titles**
-- Strip trailing ` - <Source>` suffix that Google News appends (e.g. `"Headline - The New York Times"` → `"Headline"`). Use the `<source>` value to trim, plus a generic ` - [^-]+$` fallback when source missing.
-- Re-run entity decode after stripping (already have `decodeEntities`).
-- Clean snippet: strip all HTML, decode entities, collapse whitespace, cap at 240 chars.
+Update the item pipeline:
+1. First try `extractPublisherUrl(description, link)` (current logic).
+2. If the result is still a `news.google.com` / `google.com` URL, call `resolveGoogleNewsUrl(link)`.
+3. If resolution still returns a Google host, **drop the item** (don't show unclickable links).
 
-**3. Tiered time window**
-Replace single threshold with cascading buckets. After scoring/dedupe:
-```text
-today    = items with ageHours <= 24
-week     = items with ageHours <= 24*7
-month    = items with ageHours <= 24*30
-```
-Pick the **first non-empty bucket** in that order. Return `{ items, window: 'today'|'week'|'month'|'none' }`.
-
-Keep the `score >= 3` + person-match requirement inside each bucket.
-
-### `src/hooks/useRelevantNews.ts`
-Update return type to `{ items: FeedNewsItem[]; window: 'today'|'week'|'month'|'none' }`. Keep query options the same.
+**B. Clean snippet properly**
+`cleanText()` already strips tags, but description content is wrapped in `<![CDATA[ ... ]]>` and contains nested HTML the regex passes through. Tighten:
+- Remove CDATA wrapper first (already done).
+- Strip ALL tags including self-closing and attributes spanning newlines: `/<\/?[a-z][^>]*>/gis`.
+- After stripping, if remaining text looks like leftover URL/markup (starts with `http`, or is <20 chars of junk), set snippet to empty.
+- Cap at 200 chars.
 
 ### `src/components/RelevantNewsFeed.tsx`
-- Consume `{ items, window }`.
-- Show a small label in the card header: "Today", "This week", "This month", or hide when none.
-- Empty state: "No relevant news this month."
-- Add `target="_blank" rel="noopener noreferrer"` (already there) — no change needed; just confirm link uses cleaned `url`.
+- Only render the `<p>` snippet if `item.snippet` is non-empty AND doesn't start with `http` (defensive).
+- No other layout changes.
 
 ## Out of scope
-- No DB writes; no follow-redirect server call (avoids latency + bot blocks). Description-href extraction handles the vast majority of articles.
-- No change to scoring weights or query construction.
+- No DB caching of resolved URLs (in-memory is enough for now).
+- No change to scoring, time-window, or query construction.
+
+## Technical notes
+- `fetch` in Deno honors `redirect: 'manual'` and exposes `Location` via `res.headers.get('location')`.
+- Google's redirect chain for `CBMi...` URLs typically resolves in 1–2 hops to the publisher.
+- We cap concurrent resolutions at the existing `Promise.all` over already-deduped items (~20 max), each with a 3s `AbortController`, so worst-case added latency is ~3s.
 
 ## Verification
-- Curl edge function for a known rep; confirm `items[].url` points to the publisher domain (not `news.google.com`) for most items, titles have no ` - Source` suffix, `window` field present.
-- Open Feed page; click 2-3 items, verify they land on the article.
+- Curl the edge function for a known representative; confirm every returned `items[].url` host is NOT `news.google.com`/`google.com`.
+- Confirm no `items[].snippet` contains `<` or starts with `http`.
+- Click 3 items in the Feed page; each should land on a publisher article (not a blocked Google page).

@@ -50,10 +50,60 @@ const decodeEntities = (s: string) =>
    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)));
 
-const stripTags = (s: string) => s.replace(/<[^>]*>/g, '').trim();
+const stripTags = (s: string) => s.replace(/<\/?[a-z][^>]*>/gis, '').replace(/<[^>]*>/g, '').trim();
 
 const cleanText = (s: string) =>
   decodeEntities(stripTags(s.replace(/<!\[CDATA\[|\]\]>/g, ''))).replace(/\s+/g, ' ').trim();
+
+const cleanSnippet = (s: string): string => {
+  let t = cleanText(s);
+  // Strip leftover URLs / href fragments
+  t = t.replace(/https?:\/\/\S+/g, '').replace(/href\s*=\s*["'][^"']*["']/gi, '').trim();
+  if (t.length < 20) return '';
+  if (t.startsWith('<') || t.startsWith('http')) return '';
+  return t.slice(0, 200);
+};
+
+const isGoogleHost = (u: string): boolean => {
+  try {
+    const h = new URL(u).hostname.toLowerCase();
+    return h === 'news.google.com' || h.endsWith('.google.com') || h === 'google.com';
+  } catch { return false; }
+};
+
+const resolveCache = new Map<string, string>();
+
+async function resolveGoogleNewsUrl(googleUrl: string): Promise<string> {
+  if (resolveCache.has(googleUrl)) return resolveCache.get(googleUrl)!;
+  let current = googleUrl;
+  for (let i = 0; i < 3; i++) {
+    if (!isGoogleHost(current)) break;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    try {
+      const res = await fetch(current, {
+        method: 'GET',
+        redirect: 'manual',
+        signal: ctrl.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0)' },
+      });
+      await res.body?.cancel();
+      const loc = res.headers.get('location');
+      if (loc) {
+        current = new URL(loc, current).toString();
+        continue;
+      }
+      // Try parsing HTML for a meta refresh / canonical link as last resort
+      break;
+    } catch {
+      break;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  resolveCache.set(googleUrl, current);
+  return current;
+}
 
 const cleanTitle = (raw: string, source: string) => {
   let t = cleanText(raw);
@@ -215,7 +265,7 @@ Deno.serve(async (req: Request) => {
     for (const it of allItems) {
       if (!it.link || !it.title) continue;
       const cleanedTitle = cleanTitle(it.title, it.source);
-      const cleanedSnippet = cleanText(it.description).slice(0, 240);
+      const cleanedSnippet = cleanSnippet(it.description);
       const finalUrl = extractPublisherUrl(it.description, it.link);
       const key = urlKey(finalUrl);
       const text = `${cleanedTitle} ${cleanedSnippet}`.toLowerCase();
@@ -284,7 +334,17 @@ Deno.serve(async (req: Request) => {
     else if (week.length > 0) { chosen = week; windowLabel = 'week'; }
     else if (month.length > 0) { chosen = month; windowLabel = 'month'; }
 
-    const items = chosen.slice(0, limit).map(({ ageHours: _a, ...rest }) => rest);
+    // Resolve Google News redirect URLs to publisher URLs (only for chosen items)
+    const sliced = chosen.slice(0, limit);
+    await Promise.all(sliced.map(async (it) => {
+      if (isGoogleHost(it.url)) {
+        const resolved = await resolveGoogleNewsUrl(it.url);
+        if (!isGoogleHost(resolved)) it.url = resolved;
+      }
+    }));
+    const items = sliced
+      .filter(it => !isGoogleHost(it.url))
+      .map(({ ageHours: _a, ...rest }) => rest);
 
     return new Response(JSON.stringify({ items, window: windowLabel }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
