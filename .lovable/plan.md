@@ -1,36 +1,45 @@
-## Diagnosis
+## Goal
 
-Her card on `/donors` shows **$179.2M / 7 recipients** (aggregated from `donor_consolidated_mv`). Her profile at `/donor/fec-00718aecbb0dba76777a534b5a5f5d2c` shows **$0 / 0 / 0** because the profile's `donorRecords` query in `src/pages/DonorProfile.tsx` returns nothing for any name containing a comma.
+When Perplexity returns an auth/quota/rate-limit/server error (the "AI analysis temporarily unavailable" toast you saw on the Preserve America PAC card), automatically fall back to Lovable AI Gateway (`google/gemini-2.5-pro`) so users still get an analysis instead of an error message.
 
-The query (line 235–238) uses PostgREST's `.or()` filter:
+## Scope
 
-```ts
-query.or(`name.eq.${donor.name},display_name.eq.${donor.name}`)
-// becomes: name.eq.ADELSON, MIRIAM,display_name.eq.ADELSON, MIRIAM
-```
+Two edge functions, same change in each:
+- `supabase/functions/ai-donor-analysis/index.ts`
+- `supabase/functions/ai-recipient-analysis/index.ts`
 
-PostgREST treats every comma in `.or()` as a clause separator, so this is parsed as four broken clauses and matches 0 rows. With `donorRecords.length === 0`, the contributions query is gated off (`enabled: !!donor?.name && donorRecords.length > 0`) and every downstream stat renders as 0.
+No frontend, DB, or RPC changes. Response shape stays identical so existing UI just renders.
 
-This bug predates the all-cycles aggregation; it has always affected donors whose names contain commas (i.e. nearly every "LAST, FIRST" individual donor). It's just more visible now because the aggregated card is the natural entry point.
+## Implementation
 
-## Fix
+1. **Extract a `callPerplexity()` helper** in each file that performs the existing Perplexity call and returns `{ ok, content, citations, status }`.
 
-In `src/pages/DonorProfile.tsx`, escape values passed to `.or()` by wrapping them in double quotes (PostgREST's quoting syntax). One small helper, applied to both branches that use `.or()`:
+2. **Add `callGeminiFallback()` helper** that hits the Lovable AI Gateway:
+   - URL: `https://ai.gateway.lovable.dev/v1/chat/completions`
+   - Auth: `Bearer ${LOVABLE_API_KEY}` (already provisioned in edge functions)
+   - Model: `google/gemini-2.5-pro`
+   - Same `messages` array as Perplexity (system + user search prompt)
+   - Adjusted system prompt note: "You do not have live web search. Ground claims in the FEC/finance context provided in the user prompt and well-known public knowledge. If you cannot identify the entity confidently, set insufficient_information=true and cap confidence at 30. Output strict JSON only."
+   - Returns `{ ok, content, citations: [] }` (Gemini has no citations)
 
-```ts
-const q = (v: string) => `"${v.replace(/"/g, '\\"')}"`;
+3. **Replace the current `if (!ppxResp.ok)` early-return** with fallback logic:
+   - On Perplexity failure (any non-2xx, including 401/402/403/429/5xx) → call Gemini fallback
+   - If Gemini also fails → return the existing Perplexity error message + `code` (preserves current UX)
+   - If Gemini succeeds → continue through the existing parse/source/return path with `citations = []`
+   - Add a `provider: "perplexity" | "gemini"` field to the response so the UI can optionally show a "Generated without live web search" note (UI change out of scope; field is additive)
 
-if (aliasInfo?.canonical_name) {
-  query = query.or(`name.eq.${q(donor.name)},display_name.eq.${q(aliasInfo.canonical_name)}`);
-} else {
-  query = query.or(`name.eq.${q(donor.name)},display_name.eq.${q(donor.name)}`);
-}
-```
+4. **Source-count guard already handles Gemini's empty citations**: existing code sets `insufficient_information=true` and caps `confidence` at 20 when `sources.length === 0`. We loosen this slightly when `provider === "gemini"`: skip the auto-insufficient flag (keep the confidence cap) so the analysis renders as best-effort instead of a hard "unidentified" banner.
 
-That's the only change. Once `donorRecords` populates, the existing contributions query (which uses `.in('contributor_name', donorNames)` and already handles commas correctly) will hydrate Top Recipients, Contribution History, and the four header stat tiles.
+5. **Handle Lovable AI's own 402/429** — surface the same friendly toast keyed to `LOVABLE_AI_RATE_LIMIT` / `LOVABLE_AI_PAYMENT` so credits-exhausted is distinguishable from Perplexity quota.
 
 ## Out of scope
 
-- No DB / RPC changes
-- No changes to the alias-pattern path (uses `.ilike`, not `.or`)
-- No changes to the donors list page
+- No changes to other Perplexity-using functions (`fetch-mayor`, `populate-*`, `enrich-*`, etc.) — those are research/ingestion jobs, not user-facing analysis cards. We can repeat the pattern later if you want.
+- No UI changes. The `provider` field is added but not displayed yet.
+- No retry logic on transient Perplexity 5xx (fallback fires immediately on any failure).
+
+## Acceptance
+
+- Trigger the Preserve America PAC card with Perplexity broken → analysis renders from Gemini instead of the red error box.
+- Perplexity working → behavior unchanged (still uses Perplexity, sources populated).
+- Both Perplexity and Lovable AI broken → existing error toast shown.

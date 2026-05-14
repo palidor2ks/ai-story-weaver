@@ -54,6 +54,7 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const perplexityKey = Deno.env.get("PERPLEXITY_API_KEY");
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -63,8 +64,8 @@ Deno.serve(async (req) => {
       return json({ error: "Unauthorized" }, 401);
     }
 
-    if (!perplexityKey) {
-      return json({ error: "PERPLEXITY_API_KEY is not configured" }, 500);
+    if (!perplexityKey && !lovableKey) {
+      return json({ error: "No AI provider configured (PERPLEXITY_API_KEY or LOVABLE_API_KEY)" }, 500);
     }
 
     let body: RequestBody;
@@ -208,52 +209,103 @@ Output ONLY a JSON object, no prose. Use this exact schema:
   "confidence_rationale": string
 }`;
 
-    const ppxResp = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${perplexityKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar-pro",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a nonpartisan campaign-finance analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, founders, or quotes. If the search results describe a different entity than the one anchored by the user, set insufficient_information=true and cap confidence at 20. Output strict JSON only.",
-          },
-          { role: "user", content: searchPrompt },
-        ],
-        temperature: 0.2,
-        search_domain_filter: [
-          "fec.gov", "opensecrets.org", "propublica.org",
-          "followthemoney.org", "nytimes.com", "washingtonpost.com",
-          "politico.com", "reuters.com", "apnews.com", "wsj.com",
-        ],
-      }),
-    });
+    const systemPrompt =
+      "You are a nonpartisan campaign-finance analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, founders, or quotes. If the search results describe a different entity than the one anchored by the user, set insufficient_information=true and cap confidence at 20. Output strict JSON only.";
+    const geminiSystemPrompt =
+      "You are a nonpartisan campaign-finance analyst. You do not have live web search — ground every claim in the FEC/finance context provided in the user prompt and well-known public knowledge. Never invent dollar figures, FEC IDs, founders, or quotes. If you cannot confidently identify the entity, set insufficient_information=true and cap confidence at 30. Output strict JSON only.";
 
-    if (!ppxResp.ok) {
-      const t = await ppxResp.text();
-      console.error("Perplexity error", ppxResp.status, t);
-      const isAuth = ppxResp.status === 401 || ppxResp.status === 402 || ppxResp.status === 403;
-      const isRate = ppxResp.status === 429;
-      const message = isAuth
-        ? "AI analysis is temporarily unavailable: the Perplexity API key is invalid or out of quota. Please update billing or rotate the key."
-        : isRate
-        ? "Perplexity rate limit reached. Try again shortly."
-        : `Perplexity service error (${ppxResp.status}). Try again later.`;
-      // Return 200 so the client SDK surfaces the structured message instead of a blank 500.
-      return json({ error: message, code: isAuth ? "PERPLEXITY_AUTH" : isRate ? "PERPLEXITY_RATE_LIMIT" : "PERPLEXITY_ERROR", fallback: true }, 200);
+    let provider: "perplexity" | "gemini" | null = null;
+    let content = "";
+    let citations: string[] = [];
+    let lastError: { status: number; code: string; message: string } | null = null;
+
+    if (perplexityKey) {
+      const ppxResp = await fetch("https://api.perplexity.ai/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${perplexityKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "sonar-pro",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: searchPrompt },
+          ],
+          temperature: 0.2,
+          search_domain_filter: [
+            "fec.gov", "opensecrets.org", "propublica.org",
+            "followthemoney.org", "nytimes.com", "washingtonpost.com",
+            "politico.com", "reuters.com", "apnews.com", "wsj.com",
+          ],
+        }),
+      });
+
+      if (ppxResp.ok) {
+        const ppxJson = await ppxResp.json();
+        content = ppxJson?.choices?.[0]?.message?.content ?? "";
+        citations = Array.isArray(ppxJson?.citations) ? ppxJson.citations : [];
+        provider = "perplexity";
+      } else {
+        const t = await ppxResp.text();
+        console.error("Perplexity error", ppxResp.status, t);
+        const isAuth = ppxResp.status === 401 || ppxResp.status === 402 || ppxResp.status === 403;
+        const isRate = ppxResp.status === 429;
+        lastError = {
+          status: ppxResp.status,
+          code: isAuth ? "PERPLEXITY_AUTH" : isRate ? "PERPLEXITY_RATE_LIMIT" : "PERPLEXITY_ERROR",
+          message: isAuth
+            ? "AI analysis is temporarily unavailable: the Perplexity API key is invalid or out of quota. Please update billing or rotate the key."
+            : isRate
+            ? "Perplexity rate limit reached. Try again shortly."
+            : `Perplexity service error (${ppxResp.status}). Try again later.`,
+        };
+      }
     }
 
-    const ppxJson = await ppxResp.json();
-    const content: string = ppxJson?.choices?.[0]?.message?.content ?? "";
-    const citations: string[] = Array.isArray(ppxJson?.citations) ? ppxJson.citations : [];
+    if (!provider && lovableKey) {
+      console.log("Falling back to Lovable AI Gateway (Gemini)");
+      const gemResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-pro",
+          messages: [
+            { role: "system", content: geminiSystemPrompt },
+            { role: "user", content: searchPrompt },
+          ],
+        }),
+      });
+
+      if (gemResp.ok) {
+        const gJson = await gemResp.json();
+        content = gJson?.choices?.[0]?.message?.content ?? "";
+        citations = [];
+        provider = "gemini";
+      } else {
+        const gt = await gemResp.text();
+        console.error("Lovable AI fallback error", gemResp.status, gt);
+        if (gemResp.status === 402) {
+          lastError = { status: 402, code: "LOVABLE_AI_PAYMENT", message: "AI fallback unavailable: Lovable AI credits exhausted. Add credits in Settings → Workspace → Usage." };
+        } else if (gemResp.status === 429) {
+          lastError = { status: 429, code: "LOVABLE_AI_RATE_LIMIT", message: "AI fallback rate-limited. Try again shortly." };
+        } else if (!lastError) {
+          lastError = { status: gemResp.status, code: "LOVABLE_AI_ERROR", message: `AI fallback error (${gemResp.status}).` };
+        }
+      }
+    }
+
+    if (!provider) {
+      const err = lastError ?? { code: "NO_PROVIDER", message: "No AI provider available." };
+      return json({ error: err.message, code: err.code, fallback: true }, 200);
+    }
 
     const parsed = extractJson(content);
     if (!parsed) {
-      console.error("Could not parse Perplexity output", content.slice(0, 500));
+      console.error(`Could not parse ${provider} output`, content.slice(0, 500));
       return json({ error: "Could not parse AI response. Please regenerate." }, 500);
     }
 
@@ -271,15 +323,18 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     });
     const sources = Array.from(sourceMap.values());
 
-    // Hard guard: zero citations → mark unidentified.
+    // Hard guard: zero citations → mark unidentified (Perplexity only; Gemini has no citations).
     let confidence = Math.max(0, Math.min(100, Number(parsed.confidence ?? 0)));
     let insufficient = Boolean(parsed.insufficient_information);
-    if (sources.length === 0) {
+    if (sources.length === 0 && provider === "perplexity") {
       insufficient = true;
       confidence = Math.min(confidence, 20);
+    } else if (provider === "gemini") {
+      confidence = Math.min(confidence, 30);
     }
 
     return json({
+      provider,
       summary: String(parsed.summary ?? ""),
       analysis: String(parsed.analysis ?? ""),
       positions: Array.isArray(parsed.positions) ? parsed.positions : [],
