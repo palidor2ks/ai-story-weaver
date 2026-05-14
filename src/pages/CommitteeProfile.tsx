@@ -113,6 +113,20 @@ export const CommitteeProfile = () => {
                 {committee.cycles && committee.cycles.length > 0 && (
                   <Badge variant="outline">Cycles: {committee.cycles.join(', ')}</Badge>
                 )}
+
+                <RecipientAIAnalysisDialog
+                  entityKind="committee"
+                  entityId={committee.id ?? committee.fecCommitteeId ?? ''}
+                  entityName={committee.name || 'Unknown Committee'}
+                  fecId={committee.fecCommitteeId ?? null}
+                  cycle={effectiveCycle ?? null}
+                  trigger={
+                    <Button variant="outline" size="sm" className="gap-2 ml-1">
+                      <Sparkles className="h-4 w-4" />
+                      AI Analysis
+                    </Button>
+                  }
+                />
                 
                 {/* Admin Sync Button */}
                 {isAdmin && (
