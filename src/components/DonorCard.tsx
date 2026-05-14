@@ -1,8 +1,17 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building2, User as UserIcon, Users, TrendingUp, Layers } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Building2, User as UserIcon, Users, TrendingUp, Layers, Sparkles } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 interface DonorCardProps {
   id: string;
@@ -65,11 +74,19 @@ export const DonorCard = ({
 }: DonorCardProps) => {
   const hasMultipleVariations = nameVariations && nameVariations.length > 1;
   const hasMultipleTypes = types && types.length > 1;
+  const hasEnoughDataForPoliticalInference = Boolean(recipientCount && recipientCount > 0);
+
+  const analysisSummary = [
+    `This donor is categorized as ${type}${hasMultipleTypes ? ` (${types.join(', ')})` : ''}.`,
+    `They contributed an estimated ${formatAmount(amount)} across ${recipientCount ? `${recipientCount.toLocaleString()} recipients` : `${transactionCount.toLocaleString()} donations`}.`,
+    hasMultipleVariations
+      ? `This record combines ${nameVariations.length} similar donor names to reduce duplicates.`
+      : 'This record appears to represent a single donor naming pattern.',
+  ];
   
   return (
-    <Link to={`/donor/${id}`} className="block group">
-      <Card className="h-full transition-all duration-200 hover:shadow-lg hover:border-primary/30 group-hover:scale-[1.01]">
-        <CardContent className="p-5">
+    <Card className="h-full transition-all duration-200 hover:shadow-lg hover:border-primary/30 group hover:scale-[1.01]">
+      <CardContent className="p-5">
           {/* Header with type icon and badge */}
           <div className="flex items-start justify-between mb-4">
             <div className={`p-2.5 rounded-lg ${getTypeBadgeStyle(type)}`}>
@@ -116,9 +133,11 @@ export const DonorCard = ({
           </div>
 
           {/* Donor name - clickable */}
-          <h3 className="font-semibold text-foreground mb-4 line-clamp-2 group-hover:text-primary transition-colors">
-            {name}
-          </h3>
+          <Link to={`/donor/${id}`} className="block">
+            <h3 className="font-semibold text-foreground mb-4 line-clamp-2 group-hover:text-primary transition-colors">
+              {name}
+            </h3>
+          </Link>
 
           {/* Stats */}
           <div className="flex items-end justify-between gap-4">
@@ -142,8 +161,54 @@ export const DonorCard = ({
               </p>
             </div>
           </div>
+
+          <div className="mt-4 flex items-center justify-between gap-2">
+            <Link to={`/donor/${id}`}>
+              <Button variant="ghost" size="sm" className="px-2">View details</Button>
+            </Link>
+
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI Analysis
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{name}</DialogTitle>
+                  <DialogDescription>
+                    AI-generated donor context based on currently available campaign finance data.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  <ul className="list-disc pl-5 space-y-2">
+                    {analysisSummary.map((item, index) => (
+                      <li key={index}>{item}</li>
+                    ))}
+                  </ul>
+
+                  {hasEnoughDataForPoliticalInference ? (
+                    <p>
+                      Party and cause alignment may be inferred from recipient-level data on the donor profile page,
+                      but this card does not include enough recipient detail to attribute intent with high confidence.
+                    </p>
+                  ) : (
+                    <p>
+                      There isn&apos;t enough information in this card to reliably determine party support, issue priorities,
+                      or specific motivations for donating.
+                    </p>
+                  )}
+
+                  <Link to={`/donor/${id}`} className="inline-block">
+                    <Button size="sm">Open full donor profile</Button>
+                  </Link>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardContent>
       </Card>
-    </Link>
   );
 };
