@@ -22,6 +22,13 @@ export interface FeedNewsItem {
   isNew: boolean;
 }
 
+export type NewsWindow = 'today' | 'week' | 'month' | 'none';
+
+export interface RelevantNewsResult {
+  items: FeedNewsItem[];
+  window: NewsWindow;
+}
+
 interface Args {
   people: NewsPerson[];
   topics?: string[];
@@ -40,12 +47,15 @@ export const useRelevantNews = ({ people, topics = [], state, district, limit = 
     enabled: enabled && people.length > 0,
     staleTime: 15 * 60 * 1000,
     refetchInterval: 30 * 60 * 1000,
-    queryFn: async (): Promise<FeedNewsItem[]> => {
+    queryFn: async (): Promise<RelevantNewsResult> => {
       const { data, error } = await supabase.functions.invoke('fetch-relevant-news', {
         body: { people, topics, state, district, limit },
       });
       if (error) throw error;
-      return (data?.items || []) as FeedNewsItem[];
+      return {
+        items: (data?.items || []) as FeedNewsItem[],
+        window: (data?.window || 'none') as NewsWindow,
+      };
     },
   });
 };

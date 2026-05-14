@@ -1,4 +1,4 @@
-import { useRelevantNews, NewsPerson } from '@/hooks/useRelevantNews';
+import { useRelevantNews, NewsPerson, NewsWindow } from '@/hooks/useRelevantNews';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,7 +11,6 @@ interface Props {
   district?: string;
   title?: string;
   maxItems?: number;
-  emptyMessage?: string;
 }
 
 const timeAgo = (iso: string) => {
@@ -24,6 +23,18 @@ const timeAgo = (iso: string) => {
   return new Date(iso).toLocaleDateString();
 };
 
+const windowLabel = (w: NewsWindow): string | null => {
+  if (w === 'today') return 'Today';
+  if (w === 'week') return 'This week';
+  if (w === 'month') return 'This month';
+  return null;
+};
+
+const emptyMessage = (w: NewsWindow): string => {
+  if (w === 'none') return 'No relevant news found in the past month.';
+  return 'No relevant news yet — check back soon.';
+};
+
 export const RelevantNewsFeed = ({
   people,
   topics = [],
@@ -31,15 +42,18 @@ export const RelevantNewsFeed = ({
   district,
   title = 'Relevant News',
   maxItems = 10,
-  emptyMessage = 'No relevant news yet — check back soon.',
 }: Props) => {
-  const { data: items = [], isLoading } = useRelevantNews({
+  const { data, isLoading } = useRelevantNews({
     people,
     topics,
     state,
     district,
     limit: maxItems,
   });
+
+  const items = data?.items ?? [];
+  const win: NewsWindow = data?.window ?? 'none';
+  const label = windowLabel(win);
 
   if (people.length === 0) return null;
 
@@ -49,6 +63,11 @@ export const RelevantNewsFeed = ({
         <CardTitle className="flex items-center gap-2 text-lg">
           <Newspaper className="w-5 h-5 text-primary" />
           {title}
+          {label && (
+            <Badge variant="secondary" className="ml-auto text-xs font-normal">
+              {label}
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -59,7 +78,7 @@ export const RelevantNewsFeed = ({
             <Skeleton className="h-20 w-full" />
           </>
         ) : items.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">{emptyMessage}</p>
+          <p className="text-sm text-muted-foreground py-4 text-center">{emptyMessage(win)}</p>
         ) : (
           items.map(item => (
             <a
