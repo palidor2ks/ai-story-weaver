@@ -156,7 +156,7 @@ export const Committees = () => {
                 size="icon"
                 onClick={() => {
                   setSearch('');
-                  setCycle(availableCycles[0] || '2024');
+                  setCycle(availableCycles[0] || 'all');
                   setDesignation('all');
                   setCandidateId('all');
                 }}
