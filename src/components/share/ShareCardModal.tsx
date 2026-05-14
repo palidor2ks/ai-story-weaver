@@ -225,6 +225,22 @@ export const ShareCardModal = ({
     }
   };
 
+  const handleCopyLink = async () => {
+    trackEvent('share_action', { ...baseProps(), action: 'copy_link', destination: 'clipboard' });
+    try {
+      let shareUrl = url;
+      try {
+        shareUrl = await prepareShareUrl();
+      } catch (e) {
+        console.warn('share url upload failed, using fallback', e);
+      }
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Share link copied to clipboard.');
+    } catch {
+      toast.error('Could not copy link.');
+    }
+  };
+
   // Cache uploaded share URL per template id, keyed inside this open session
   const shareUrlCache = useRef<Partial<Record<TemplateId, string>>>({});
 
@@ -480,6 +496,10 @@ export const ShareCardModal = ({
           <Button onClick={handleCopyCaption} variant="ghost" className="gap-2">
             <Copy className="w-4 h-4" />
             Copy caption
+          </Button>
+          <Button onClick={handleCopyLink} variant="ghost" disabled={!!busy} className="gap-2">
+            <Copy className="w-4 h-4" />
+            Copy link
           </Button>
         </div>
 

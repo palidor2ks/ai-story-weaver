@@ -11,6 +11,7 @@ export type ShareEventName =
 
 export type ShareActionKind =
   | 'copy_caption'
+  | 'copy_link'
   | 'copy_image'
   | 'download'
   | 'native'
