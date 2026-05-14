@@ -115,15 +115,14 @@ export const CommitteeProfile = () => {
                 )}
 
                 <RecipientAIAnalysisDialog
-                  entityKind="committee"
-                  entityId={committee.id ?? committee.fecCommitteeId ?? ''}
-                  entityName={committee.name || 'Unknown Committee'}
-                  fecId={committee.fecCommitteeId ?? null}
-                  cycle={effectiveCycle ?? null}
+                  entityType="committee"
+                  entityId={committee.fecCommitteeId}
+                  displayName={committee.name || 'Unknown Committee'}
+                  cycle={effectiveCycle ?? undefined}
                   trigger={
-                    <Button variant="outline" size="sm" className="gap-2 ml-1">
-                      <Sparkles className="h-4 w-4" />
-                      AI Analysis
+                    <Button size="sm" variant="outline" className="gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      AI analysis
                     </Button>
                   }
                 />

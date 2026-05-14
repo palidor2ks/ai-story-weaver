@@ -21,7 +21,6 @@ import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCar
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp, ScrollText, Briefcase } from 'lucide-react';
-import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialog';
 import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScoreText } from '@/components/ScoreText';
@@ -38,6 +37,7 @@ import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
 import { OfficialAvatar } from '@/components/OfficialAvatar';
 import { VotingRecordSection } from '@/components/VotingRecordSection';
 import { ShareProfileButton } from '@/components/ShareProfileButton';
+import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialog';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -328,22 +328,6 @@ export const CandidateProfile = () => {
                 />
                 
                 {/* Share Profile Button */}
-                <RecipientAIAnalysisDialog
-                  entityKind="candidate"
-                  entityId={candidate.id}
-                  entityName={candidate.name}
-                  fecId={candidate.fec_candidate_id ?? null}
-                  party={candidate.party}
-                  office={candidate.office}
-                  state={candidate.state}
-                  trigger={
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <Sparkles className="h-4 w-4" />
-                      AI Analysis
-                    </Button>
-                  }
-                />
-
                 <ShareProfileButton
                   candidateName={candidate.name}
                   candidateOffice={candidate.office}
@@ -355,6 +339,19 @@ export const CandidateProfile = () => {
                   agreements={agreements}
                   disagreements={disagreements}
                   profileUrl={window.location.href}
+                />
+
+                {/* AI Analysis */}
+                <RecipientAIAnalysisDialog
+                  entityType="candidate"
+                  entityId={candidate.id}
+                  displayName={candidate.name}
+                  trigger={
+                    <Button size="sm" variant="outline" className="gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      AI analysis
+                    </Button>
+                  }
                 />
               </div>
 

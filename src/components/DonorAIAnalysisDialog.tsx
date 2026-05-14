@@ -18,12 +18,7 @@ export interface DonorAnalysis {
   analysis: string;
   party_support: { party: string; amount: number; share: number }[];
   causes: string[];
-  motivation_hypotheses?: string[];
-  positions?: { topic: string; stance: string }[];
-  goals?: string[];
-  key_people?: string[];
-  notable_recipients?: string[];
-  controversies?: string[];
+  motivation_hypotheses: string[];
   finance_claims?: string[];
   public_context_claims?: string[];
   insufficient_information: boolean;
@@ -31,6 +26,8 @@ export interface DonorAnalysis {
   confidence_rationale?: string;
   data_coverage?: 'none' | 'sparse' | 'moderate' | 'rich';
   sources: { title: string; url: string }[];
+  provider?: 'perplexity' | 'gemini';
+  provider_fallback?: { reason: string | null } | null;
 }
 
 interface Props {
@@ -180,6 +177,19 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
 
         {analysis && !isLoading && (
           <div className="space-y-5 text-sm">
+            {analysis.provider && (
+              <div className="flex items-center gap-2 text-xs">
+                <Badge variant={analysis.provider === 'perplexity' ? 'default' : 'secondary'} className="gap-1">
+                  <Globe className="h-3 w-3" />
+                  {analysis.provider === 'perplexity' ? 'Web-grounded (Perplexity)' : 'AI fallback (Gemini)'}
+                </Badge>
+                {analysis.provider === 'gemini' && analysis.provider_fallback?.reason && (
+                  <span className="text-muted-foreground italic truncate" title={analysis.provider_fallback.reason}>
+                    Web search unavailable — using model knowledge
+                  </span>
+                )}
+              </div>
+            )}
             {analysis.insufficient_information && (
               <div className="flex items-start gap-2 p-3 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -255,29 +265,6 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
               </div>
             )}
 
-            {analysis.positions && analysis.positions.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Positions</h4>
-                <ul className="space-y-1.5">
-                  {analysis.positions.map((p, i) => (
-                    <li key={i} className="text-sm">
-                      <span className="font-medium text-foreground">{p.topic}:</span>{' '}
-                      <span className="text-muted-foreground">{p.stance}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {analysis.goals && analysis.goals.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">What they're trying to achieve</h4>
-                <ul className="list-disc pl-5 space-y-1 text-foreground">
-                  {analysis.goals.map((g, i) => <li key={i}>{g}</li>)}
-                </ul>
-              </div>
-            )}
-
             {analysis.causes?.length > 0 && (
               <div className="space-y-2">
                 <h4 className="font-semibold text-foreground">Likely causes</h4>
@@ -289,34 +276,7 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
               </div>
             )}
 
-            {analysis.notable_recipients && analysis.notable_recipients.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Notable recipients</h4>
-                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                  {analysis.notable_recipients.map((r, i) => <li key={i}>{r}</li>)}
-                </ul>
-              </div>
-            )}
-
-            {analysis.key_people && analysis.key_people.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Key people</h4>
-                <div className="flex flex-wrap gap-1.5">
-                  {analysis.key_people.map((p, i) => <Badge key={i} variant="outline">{p}</Badge>)}
-                </div>
-              </div>
-            )}
-
-            {analysis.controversies && analysis.controversies.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Controversies</h4>
-                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                  {analysis.controversies.map((c, i) => <li key={i}>{c}</li>)}
-                </ul>
-              </div>
-            )}
-
-            {analysis.motivation_hypotheses && analysis.motivation_hypotheses.length > 0 && (
+            {analysis.motivation_hypotheses?.length > 0 && (
               <div className="space-y-2">
                 <h4 className="font-semibold text-foreground">Possible motivations</h4>
                 <ul className="list-disc pl-5 space-y-1 text-muted-foreground">

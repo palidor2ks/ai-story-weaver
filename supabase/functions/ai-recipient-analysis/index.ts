@@ -1,4 +1,4 @@
-// AI-powered analysis of donation recipients (candidates and committees) via Perplexity web search
+// AI-powered recipient (candidate or committee) analysis: Perplexity primary, Lovable AI Gemini fallback.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -9,13 +9,8 @@ const corsHeaders = {
 };
 
 interface RequestBody {
-  entity_kind: "candidate" | "committee";
+  entity_type: "candidate" | "committee";
   entity_id: string;
-  entity_name: string;
-  fec_id?: string | null;
-  party?: string | null;
-  office?: string | null;
-  state?: string | null;
   cycle?: string | null;
 }
 
@@ -28,34 +23,149 @@ function json(body: unknown, status = 200) {
 
 function extractJson(raw: string): any | null {
   if (!raw) return null;
-  const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-  const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidates = [
-    fence?.[1]?.trim(),
-    cleaned,
-    cleaned.slice(cleaned.indexOf("{"), cleaned.lastIndexOf("}") + 1),
-  ].filter(Boolean) as string[];
-  for (const c of candidates) {
-    try { return JSON.parse(c); } catch { /* try next */ }
+  try { return JSON.parse(raw); } catch { /* try fenced */ }
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) { try { return JSON.parse(fence[1]); } catch { /* keep going */ } }
+  const first = raw.indexOf("{"); const last = raw.lastIndexOf("}");
+  if (first >= 0 && last > first) {
+    try { return JSON.parse(raw.slice(first, last + 1)); } catch { /* fail */ }
   }
   return null;
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+const RECIPIENT_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: { type: "string" },
+    analysis: { type: "string" },
+    positions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          topic: { type: "string" },
+          stance: { type: "string" },
+          evidence: { type: "string" },
+        },
+        required: ["topic", "stance"],
+      },
+    },
+    policy_priorities: { type: "array", items: { type: "string" } },
+    goals: { type: "array", items: { type: "string" } },
+    top_donor_categories: { type: "array", items: { type: "string" } },
+    coalition_signals: { type: "array", items: { type: "string" } },
+    finance_claims: { type: "array", items: { type: "string" } },
+    public_context_claims: { type: "array", items: { type: "string" } },
+    controversies: { type: "array", items: { type: "string" } },
+    insufficient_information: { type: "boolean" },
+    confidence: { type: "integer", minimum: 0, maximum: 100 },
+    confidence_rationale: { type: "string" },
+    sources: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { title: { type: "string" }, url: { type: "string" } },
+        required: ["title", "url"],
+      },
+    },
+  },
+  required: [
+    "summary", "analysis", "positions", "policy_priorities", "goals",
+    "top_donor_categories", "coalition_signals", "finance_claims",
+    "public_context_claims", "controversies", "insufficient_information",
+    "confidence", "confidence_rationale", "sources",
+  ],
+  additionalProperties: false,
+};
+
+function buildSystemPrompt(): string {
+  return `You are a nonpartisan political analyst. You will receive structured signals about a campaign-finance recipient (a candidate or a committee/PAC) and must produce an analysis of their positions, priorities, and what they appear to be trying to achieve.
+
+CORE PRINCIPLE — DISAMBIGUATION FIRST:
+- Names are often ambiguous; verify identity using the provided FEC ID, office, state, party, and committee type before relying on background knowledge.
+- If the signals do not uniquely identify a real-world entity, set "insufficient_information" to true, cap confidence ≤ 20, and leave "public_context_claims" empty. Do not invent facts.
+
+REQUIREMENTS:
+- Treat numeric finance signals as ground truth; never invent figures, votes, or quotes.
+- "positions": specific policy stances grounded in voting record, public statements, or platform — each with topic, stance, and (when available) brief evidence.
+- "finance_claims": derived strictly from signals (totals, top donor categories, expenditures).
+- "public_context_claims": from background/web; cite sources by 1-based index, e.g. "Endorsed by X [2]".
+- "sources": real reachable URLs (fec.gov, opensecrets.org, ballotpedia, official campaign sites, major news). Empty rather than fabricated.
+- "confidence" 0-100: 0-20 unidentified; 21-40 thin; 41-60 mixed; 61-80 good; 81-100 rich+well-documented.
+- Stay neutral. Output STRICT JSON matching the schema. No markdown.`;
+}
+
+async function callPerplexity(apiKey: string, system: string, user: string): Promise<{ parsed: any; citations: string[] }> {
+  const resp = await fetch("https://api.perplexity.ai/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "sonar-pro",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "recipient_analysis", schema: RECIPIENT_SCHEMA },
+      },
+    }),
+  });
+  if (!resp.ok) {
+    const t = await resp.text();
+    throw new Error(`perplexity_${resp.status}:${t.slice(0, 200)}`);
   }
+  const j = await resp.json();
+  const content: string = j?.choices?.[0]?.message?.content ?? "";
+  const citations: string[] = Array.isArray(j?.citations) ? j.citations : [];
+  const parsed = extractJson(content);
+  if (!parsed) throw new Error("perplexity_unparseable");
+  return { parsed, citations };
+}
+
+async function callGemini(apiKey: string, system: string, user: string): Promise<any> {
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-pro",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      tools: [{
+        type: "function",
+        function: {
+          name: "recipient_analysis",
+          description: "Structured recipient analysis output.",
+          parameters: RECIPIENT_SCHEMA,
+        },
+      }],
+      tool_choice: { type: "function", function: { name: "recipient_analysis" } },
+    }),
+  });
+  if (!resp.ok) {
+    const t = await resp.text();
+    throw new Error(`gemini_${resp.status}:${t.slice(0, 200)}`);
+  }
+  const j = await resp.json();
+  const args = j?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+  if (!args) throw new Error("gemini_no_tool_args");
+  try { return JSON.parse(args); } catch { throw new Error("gemini_unparseable"); }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return json({ error: "Unauthorized" }, 401);
-    }
+    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const perplexityKey = Deno.env.get("PERPLEXITY_API_KEY");
+    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+    const perplexityApiKey = Deno.env.get("PERPLEXITY_API_KEY");
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -63,193 +173,156 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData?.user) return json({ error: "Unauthorized" }, 401);
 
-    if (!perplexityKey) {
-      return json({ error: "PERPLEXITY_API_KEY is not configured" }, 500);
-    }
-
     let body: RequestBody;
     try { body = await req.json(); } catch { return json({ error: "Invalid JSON body" }, 400); }
 
-    const entity_kind = body.entity_kind;
+    const entity_type = body.entity_type === "committee" ? "committee" : "candidate";
     const entity_id = String(body.entity_id ?? "").trim();
-    const entity_name = String(body.entity_name ?? "").trim();
-    const fec_id = body.fec_id ? String(body.fec_id).trim() : null;
-    const party = body.party ? String(body.party).trim() : null;
-    const office = body.office ? String(body.office).trim() : null;
-    const state = body.state ? String(body.state).trim() : null;
-
-    if (!entity_kind || !entity_id || !entity_name) {
-      return json({ error: "entity_kind, entity_id and entity_name are required" }, 400);
-    }
+    const cycle = body.cycle && String(body.cycle).trim() && body.cycle !== "all"
+      ? String(body.cycle).trim() : null;
+    if (!entity_id) return json({ error: "entity_id is required" }, 400);
 
     const admin = createClient(supabaseUrl, serviceKey);
 
-    // Pull aggregate finance signals for the recipient as anchors.
-    let totalReceived = 0;
-    let donorCount = 0;
-    const topDonors: { name: string; amount: number }[] = [];
+    // Build entity signals
+    let signals: any = { entity_type, cycle: cycle ?? "all" };
+    let displayName = "";
 
-    if (entity_kind === "candidate") {
-      const { data: dRows } = await admin
-        .from("donors")
-        .select("display_name, amount")
+    if (entity_type === "candidate") {
+      const { data: c } = await admin
+        .from("candidates")
+        .select("id, name, party, office, state, district, fec_candidate_id, fec_committee_id, lis_member_id, overall_score")
+        .eq("id", entity_id).maybeSingle();
+      if (!c) return json({ error: "Candidate not found" }, 404);
+      displayName = c.name;
+
+      // Top donor categories from contributions of authorized committees
+      const { data: comms } = await admin
+        .from("candidate_committees")
+        .select("fec_committee_id")
         .eq("candidate_id", entity_id)
-        .limit(2000);
-      const byDonor: Record<string, number> = {};
-      for (const r of (dRows ?? []) as any[]) {
-        totalReceived += Number(r.amount ?? 0);
-        const k = String(r.display_name ?? "Unknown");
-        byDonor[k] = (byDonor[k] ?? 0) + Number(r.amount ?? 0);
+        .eq("active", true)
+        .in("designation", ["P", "A"]);
+      const commIds = (comms ?? []).map((x: any) => x.fec_committee_id).filter(Boolean);
+
+      let categoryTotals: Record<string, number> = {};
+      let totalReceipts = 0;
+      if (commIds.length > 0) {
+        let q = admin.from("contributions")
+          .select("amount, contributor_type, line_number")
+          .in("recipient_committee_id", commIds)
+          .eq("is_contribution", true)
+          .neq("memo_code", "X")
+          .limit(5000);
+        if (cycle) q = q.eq("cycle", cycle);
+        const { data: contribs } = await q;
+        for (const r of (contribs ?? []) as any[]) {
+          const amt = Number(r.amount ?? 0);
+          if (!Number.isFinite(amt)) continue;
+          totalReceipts += amt;
+          const key = String(r.contributor_type ?? "Unknown");
+          categoryTotals[key] = (categoryTotals[key] ?? 0) + amt;
+        }
       }
-      donorCount = Object.keys(byDonor).length;
-      topDonors.push(
-        ...Object.entries(byDonor)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 8)
-          .map(([name, amount]) => ({ name, amount })),
-      );
+      const top_donor_categories = Object.entries(categoryTotals)
+        .sort((a, b) => b[1] - a[1]).slice(0, 6)
+        .map(([category, amount]) => ({ category, amount: Math.round(amount) }));
+
+      signals.candidate = {
+        name: c.name, party: c.party, office: c.office, state: c.state,
+        district: c.district, fec_candidate_id: c.fec_candidate_id,
+        fec_committee_id: c.fec_committee_id, lis_member_id: c.lis_member_id,
+        overall_score: c.overall_score,
+      };
+      signals.finance = {
+        authorized_committees: commIds,
+        total_receipts: Math.round(totalReceipts),
+        top_donor_categories,
+      };
+    } else {
+      // Committee
+      const { data: comm } = await admin
+        .from("committee_finance_rollups")
+        .select("committee_id, committee_name, committee_type, designation, party_affiliation, candidate_id, cycle, total_receipts, total_disbursements")
+        .eq("committee_id", entity_id)
+        .order("cycle", { ascending: false })
+        .limit(20);
+      const rows = comm ?? [];
+      if (rows.length === 0) return json({ error: "Committee not found" }, 404);
+      const head = rows[0];
+      displayName = head.committee_name;
+      signals.committee = {
+        committee_id: head.committee_id,
+        name: head.committee_name,
+        type: head.committee_type,
+        designation: head.designation,
+        party: head.party_affiliation,
+        cycles: rows.map((r: any) => ({
+          cycle: r.cycle,
+          receipts: Number(r.total_receipts ?? 0),
+          disbursements: Number(r.total_disbursements ?? 0),
+        })),
+      };
+      // Linked candidates this committee supports/opposes
+      const { data: pacExp } = await admin
+        .from("pac_expenditures")
+        .select("candidate_id, support_oppose, amount, cycle")
+        .eq("committee_id", entity_id)
+        .limit(200);
+      signals.expenditures = (pacExp ?? []).slice(0, 50);
     }
 
-    const data_coverage: "none" | "sparse" | "moderate" | "rich" =
-      totalReceived === 0 ? "none"
-        : totalReceived < 50_000 ? "sparse"
-        : totalReceived < 1_000_000 ? "moderate"
-        : "rich";
+    const systemPrompt = buildSystemPrompt();
+    const userPrompt = `Recipient signals (JSON):\n${JSON.stringify(signals, null, 2)}\n\nUse live web search to identify and characterize this ${entity_type}. Anchor on FEC ID and office/state. Cap confidence at 20 if you cannot disambiguate.\n\nProduce the analysis now as STRICT JSON matching the schema.`;
 
-    const anchorBits = [
-      fec_id ? `FEC ID ${fec_id}` : null,
-      party ? `${party} party` : null,
-      office ? `running for ${office}` : null,
-      state ? `in ${state}` : null,
-      topDonors.length ? `top donors include ${topDonors.slice(0, 4).map(d => d.name).join(", ")}` : null,
-    ].filter(Boolean).join(", ");
+    let parsed: any = null;
+    let provider: "perplexity" | "gemini" = "perplexity";
+    let citations: string[] = [];
+    let providerError: string | null = null;
 
-    const kindLabel = entity_kind === "candidate" ? "political candidate" : "political committee/PAC";
-
-    const searchPrompt = `Research the ${kindLabel} "${entity_name}"${anchorBits ? ` (${anchorBits})` : ""}.
-
-Use FEC.gov, OpenSecrets, ProPublica, FollowTheMoney, Ballotpedia, Vote Smart, the entity's official site, and major news outlets. Confirm you're looking at the SAME entity by matching the FEC ID, office, state, and donor profile above. If results describe a different same-named entity, say so and stop.
-
-Produce a structured analysis covering:
-- summary: 2-3 sentences identifying who they are
-- positions: list of issue positions (each {topic, stance})
-- goals: bullet list of what they're trying to achieve politically (policy outcomes, legislative agenda, electoral strategy)
-- key_people: ${entity_kind === "candidate" ? "campaign leadership, key endorsers" : "founders, treasurer, leadership, affiliated lawmakers"}
-- notable_recipients: ${entity_kind === "candidate" ? "key endorsements RECEIVED or coalitions joined" : "candidates and causes this committee SPENDS ON, with brief rationale"}
-- controversies: documented controversies, FEC complaints, ethics issues (with [n] cites)
-- finance_claims: factual claims from FEC/finance signals above
-- public_context_claims: claims from your web search, each ending with [n] citation
-- insufficient_information: true if you can't confidently identify the entity
-- confidence: 0-100
-- confidence_rationale: one sentence
-
-Output ONLY a JSON object, no prose:
-{
-  "summary": string,
-  "analysis": string (1-3 paragraphs),
-  "positions": [{"topic": string, "stance": string}],
-  "goals": [string],
-  "key_people": [string],
-  "notable_recipients": [string],
-  "controversies": [string],
-  "causes": [string],
-  "finance_claims": [string],
-  "public_context_claims": [string],
-  "insufficient_information": boolean,
-  "confidence": integer 0-100,
-  "confidence_rationale": string
-}`;
-
-    const ppxResp = await fetch("https://api.perplexity.ai/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${perplexityKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "sonar-pro",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a nonpartisan campaign-finance and politics analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, or quotes. If results describe a different entity than anchored, set insufficient_information=true and cap confidence at 20. Output strict JSON only.",
-          },
-          { role: "user", content: searchPrompt },
-        ],
-        temperature: 0.2,
-        search_domain_filter: [
-          "fec.gov", "opensecrets.org", "propublica.org", "ballotpedia.org",
-          "votesmart.org", "followthemoney.org", "nytimes.com",
-          "washingtonpost.com", "politico.com", "reuters.com", "apnews.com", "wsj.com",
-        ],
-      }),
-    });
-
-    if (!ppxResp.ok) {
-      const t = await ppxResp.text();
-      console.error("Perplexity error", ppxResp.status, t);
-      const isAuth = ppxResp.status === 401 || ppxResp.status === 402 || ppxResp.status === 403;
-      const isRate = ppxResp.status === 429;
-      const message = isAuth
-        ? "AI analysis is temporarily unavailable: the Perplexity API key is invalid or out of quota. Please update billing or rotate the key."
-        : isRate
-        ? "Perplexity rate limit reached. Try again shortly."
-        : `Perplexity service error (${ppxResp.status}). Try again later.`;
-      return json({ error: message, code: isAuth ? "PERPLEXITY_AUTH" : isRate ? "PERPLEXITY_RATE_LIMIT" : "PERPLEXITY_ERROR", fallback: true }, 200);
-    }
-
-    const ppxJson = await ppxResp.json();
-    const content: string = ppxJson?.choices?.[0]?.message?.content ?? "";
-    const citations: string[] = Array.isArray(ppxJson?.citations) ? ppxJson.citations : [];
-
-    const parsed = extractJson(content);
-    if (!parsed) {
-      console.error("Could not parse Perplexity output", content.slice(0, 500));
-      return json({ error: "Could not parse AI response. Please regenerate." }, 500);
-    }
-
-    const ppxSources = citations.map((url, i) => {
+    if (perplexityApiKey) {
       try {
-        const host = new URL(url).hostname.replace(/^www\./, "");
-        return { title: `${host} [${i + 1}]`, url };
-      } catch { return { title: url, url }; }
-    });
-    const modelSources = Array.isArray(parsed.sources) ? parsed.sources : [];
-    const sourceMap = new Map<string, { title: string; url: string }>();
-    [...ppxSources, ...modelSources].forEach((s: any) => {
-      if (s?.url && !sourceMap.has(s.url)) sourceMap.set(s.url, { title: s.title || s.url, url: s.url });
-    });
-    const sources = Array.from(sourceMap.values());
+        const r = await callPerplexity(perplexityApiKey, systemPrompt, userPrompt);
+        parsed = r.parsed; citations = r.citations;
+      } catch (e) {
+        providerError = e instanceof Error ? e.message : String(e);
+        console.warn("Perplexity failed, falling back to Gemini:", providerError);
+      }
+    } else {
+      providerError = "PERPLEXITY_API_KEY not configured";
+    }
 
-    let confidence = Math.max(0, Math.min(100, Number(parsed.confidence ?? 0)));
-    let insufficient = Boolean(parsed.insufficient_information);
-    if (sources.length === 0) {
-      insufficient = true;
-      confidence = Math.min(confidence, 20);
+    if (!parsed) {
+      if (!lovableApiKey) {
+        return json({ error: "Both Perplexity and Lovable AI are unavailable.", details: providerError }, 503);
+      }
+      try {
+        parsed = await callGemini(lovableApiKey, systemPrompt, userPrompt);
+        provider = "gemini";
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("Gemini fallback also failed:", msg);
+        if (/gemini_429/.test(msg)) return json({ error: "AI rate limit reached. Please try again shortly." }, 200);
+        if (/gemini_402/.test(msg)) return json({ error: "AI credits exhausted. Add credits in workspace settings." }, 200);
+        return json({ error: "AI analysis is temporarily unavailable.", details: msg, perplexity_error: providerError }, 200);
+      }
+    }
+
+    if (provider === "perplexity" && (!Array.isArray(parsed.sources) || parsed.sources.length === 0) && citations.length > 0) {
+      parsed.sources = citations.slice(0, 10).map((url, i) => ({
+        title: (() => { try { return new URL(url).hostname; } catch { return `Source ${i + 1}`; } })(),
+        url,
+      }));
     }
 
     return json({
-      summary: String(parsed.summary ?? ""),
-      analysis: String(parsed.analysis ?? ""),
-      positions: Array.isArray(parsed.positions) ? parsed.positions : [],
-      goals: Array.isArray(parsed.goals) ? parsed.goals : [],
-      key_people: Array.isArray(parsed.key_people) ? parsed.key_people : [],
-      notable_recipients: Array.isArray(parsed.notable_recipients) ? parsed.notable_recipients : [],
-      controversies: Array.isArray(parsed.controversies) ? parsed.controversies : [],
-      causes: Array.isArray(parsed.causes) ? parsed.causes : [],
-      finance_claims: Array.isArray(parsed.finance_claims) ? parsed.finance_claims : [],
-      public_context_claims: Array.isArray(parsed.public_context_claims) ? parsed.public_context_claims : [],
-      insufficient_information: insufficient,
-      confidence,
-      confidence_rationale: String(parsed.confidence_rationale ?? ""),
-      data_coverage,
-      sources,
-      finance_context: {
-        total_received: Math.round(totalReceived),
-        donor_count: donorCount,
-        top_donors: topDonors,
-        fec_id,
-      },
+      ...parsed,
+      entity_type,
+      entity_id,
+      display_name: displayName,
+      provider,
+      provider_fallback: provider === "gemini" ? { reason: providerError } : null,
+      finance_context: signals,
     });
   } catch (e) {
     console.error("ai-recipient-analysis error", e);
