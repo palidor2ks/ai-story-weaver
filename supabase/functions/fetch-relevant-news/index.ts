@@ -71,10 +71,41 @@ const isGoogleHost = (u: string): boolean => {
   } catch { return false; }
 };
 
+const googleNewsSearchUrl = (title: string): string =>
+  `https://www.google.com/search?q=${encodeURIComponent(title)}&tbm=nws`;
+
+const decodeGoogleNewsUrl = (googleUrl: string): string | null => {
+  try {
+    const url = new URL(googleUrl);
+    if (!isGoogleHost(url.toString())) return null;
+    const token = url.pathname.match(/\/(?:rss\/)?articles\/([^/?#]+)/)?.[1];
+    if (!token) return null;
+
+    const normalized = token.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    const decoded = new TextDecoder().decode(bytes);
+    const matches = decoded.match(/https?:\/\/[^\u0000-\u001f\u007f\s<>"'\\]+/gi) || [];
+
+    for (const candidate of matches) {
+      const cleaned = candidate.replace(/[),.;]+$/g, '');
+      const parsed = new URL(cleaned);
+      if (!isGoogleHost(parsed.toString())) return parsed.toString();
+    }
+  } catch { /* ignore malformed Google News tokens */ }
+  return null;
+};
+
 const resolveCache = new Map<string, string>();
 
 async function resolveGoogleNewsUrl(googleUrl: string): Promise<string> {
   if (resolveCache.has(googleUrl)) return resolveCache.get(googleUrl)!;
+  const decoded = decodeGoogleNewsUrl(googleUrl);
+  if (decoded) {
+    resolveCache.set(googleUrl, decoded);
+    return decoded;
+  }
   let current = googleUrl;
   for (let i = 0; i < 3; i++) {
     if (!isGoogleHost(current)) break;
