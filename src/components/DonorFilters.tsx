@@ -44,7 +44,7 @@ export const DonorFilters = ({
       pageSize: 24,
       sortBy: 'amount',
       sortOrder: 'desc',
-      cycle: availableCycles[0] || '',
+      cycle: 'all',
       type: 'all',
       search: '',
       state: 'all',
@@ -91,7 +91,7 @@ export const DonorFilters = ({
         <div className="flex flex-wrap items-center gap-2">
           {/* Cycle */}
           <Select 
-            value={filters.cycle || ''} 
+            value={filters.cycle || 'all'} 
             onValueChange={(v) => updateFilter('cycle', v)}
             disabled={isLoading}
           >

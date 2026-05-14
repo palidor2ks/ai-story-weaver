@@ -15,7 +15,7 @@ export const Donors = () => {
     pageSize: 50,
     sortBy: 'amount',
     sortOrder: 'desc',
-    cycle: '',
+    cycle: 'all',
     type: 'all',
     search: '',
     state: 'all',
@@ -27,7 +27,7 @@ export const Donors = () => {
     party: 'all',
   });
 
-  const effectiveCycle = filters.cycle || filterOptions?.cycles[0] || '';
+  const effectiveCycle = filters.cycle || 'all';
   const effectiveFilters = {
     ...filters,
     cycle: effectiveCycle,
