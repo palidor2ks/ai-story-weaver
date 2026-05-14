@@ -456,9 +456,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const queries = buildQueries(people, body.state, body.district);
-    const rssItems = await fetchRssSequentially(queries, limit);
     const bingItems = await fetchBingRssSequentially(queries, limit);
     const gdeltItems = await fetchGdeltNews(people, limit);
+    const rssItems: ParsedItem[] = [];
     const allItems = [...rssItems, ...bingItems, ...gdeltItems];
     console.info('relevant-news rss results', { queries: queries.length, googleItems: rssItems.length, bingItems: bingItems.length, gdeltItems: gdeltItems.length, allItems: allItems.length });
 
