@@ -216,6 +216,14 @@ interface ParsedItem {
   description: string;
 }
 
+interface GdeltArticle {
+  title?: string;
+  url?: string;
+  seendate?: string;
+  domain?: string;
+  sourceCommonName?: string;
+}
+
 function parseRss(xml: string): ParsedItem[] {
   const items: ParsedItem[] = [];
   const itemRegex = /<item>([\s\S]*?)<\/item>/g;
