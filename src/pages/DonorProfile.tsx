@@ -148,9 +148,6 @@ const DonorProfile = () => {
   const [committeeFilter, setCommitteeFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [showAllRecipients, setShowAllRecipients] = useState(false);
-  const [recipientAnalysis, setRecipientAnalysis] = useState<Record<string, RecipientAnalysis>>({});
-  const [activeRecipientKey, setActiveRecipientKey] = useState<string | null>(null);
-  const [recipientLoadingKey, setRecipientLoadingKey] = useState<string | null>(null);
 
   // Fetch the specific donor record
   const { data: donor, isLoading: donorLoading } = useQuery({
