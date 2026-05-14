@@ -214,6 +214,16 @@ REQUIREMENTS:
                     },
                     causes: { type: "array", items: { type: "string" } },
                     motivation_hypotheses: { type: "array", items: { type: "string" } },
+                    finance_claims: {
+                      type: "array",
+                      description: "Bullet statements derived strictly from the provided finance signals.",
+                      items: { type: "string" },
+                    },
+                    public_context_claims: {
+                      type: "array",
+                      description: "Bullet statements drawn from background public knowledge. May include [n] source citations.",
+                      items: { type: "string" },
+                    },
                     insufficient_information: { type: "boolean" },
                     sources: {
                       type: "array",
@@ -233,6 +243,8 @@ REQUIREMENTS:
                     "party_support",
                     "causes",
                     "motivation_hypotheses",
+                    "finance_claims",
+                    "public_context_claims",
                     "insufficient_information",
                     "sources",
                   ],
