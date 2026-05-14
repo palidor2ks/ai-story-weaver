@@ -116,9 +116,13 @@ export const Committees = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Select value={cycle} onValueChange={setCycle} disabled={isLoading || filtersLoading}>
+              <Select
+                value={cycle}
+                onValueChange={setCycle}
+                disabled={isLoading || filtersLoading || !hasCycleData}
+              >
                 <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="Cycle" />
+                  <SelectValue placeholder={hasCycleData ? 'Cycle' : 'All cycles'} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableCycles.map((c) => (
