@@ -303,13 +303,9 @@ Output ONLY a JSON object, no prose. Use this exact schema:
       return json({ error: err.message, code: err.code, fallback: true }, 200);
     }
 
-    const ppxJson = await ppxResp.json();
-    const content: string = ppxJson?.choices?.[0]?.message?.content ?? "";
-    const citations: string[] = Array.isArray(ppxJson?.citations) ? ppxJson.citations : [];
-
     const parsed = extractJson(content);
     if (!parsed) {
-      console.error("Could not parse Perplexity output", content.slice(0, 500));
+      console.error(`Could not parse ${provider} output`, content.slice(0, 500));
       return json({ error: "Could not parse AI response. Please regenerate." }, 500);
     }
 
