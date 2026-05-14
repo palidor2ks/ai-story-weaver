@@ -31,6 +31,7 @@ import { AIExplanation } from '@/components/AIExplanation';
 
 import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
 import { ContactInfoCard } from '@/components/ContactInfoCard';
+import { RelevantNewsFeed } from '@/components/RelevantNewsFeed';
 import { CandidatePositions } from '@/components/CandidatePositions';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
@@ -438,6 +439,25 @@ export const CandidateProfile = () => {
         {representativeDetails && (
           <div className="mb-8">
             <ContactInfoCard representative={representativeDetails} />
+          </div>
+        )}
+
+        {/* Latest News Section */}
+        {candidate && (
+          <div className="mb-8">
+            <RelevantNewsFeed
+              people={[{
+                name: candidate.name,
+                office: candidate.office,
+                state: candidate.state,
+                district: candidate.district,
+              }]}
+              topics={userTopicScores.map(uts => (uts as any).topic_id).filter(Boolean)}
+              state={candidate.state}
+              district={candidate.district}
+              title={`Latest News about ${candidate.name}`}
+              maxItems={8}
+            />
           </div>
         )}
 
