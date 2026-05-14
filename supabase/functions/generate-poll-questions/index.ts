@@ -1,5 +1,6 @@
 // AI-drafts poll questions + options using Lovable AI Gateway
 // Returns JSON: { title, description, questions: [{text, options: [{text, value}]}] }
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
