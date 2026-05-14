@@ -289,6 +289,7 @@ Deno.serve(async (req: Request) => {
     const queries = buildQueries(people, body.state, body.district);
     const results = await Promise.all(queries.map(fetchRss));
     const allItems = results.flat();
+    console.info('relevant-news rss results', { queries: queries.length, allItems: allItems.length });
 
     const now = Date.now();
     const dedup = new Map<string, FeedNewsItem & { ageHours: number }>();
@@ -363,6 +364,7 @@ Deno.serve(async (req: Request) => {
     const all = Array.from(sourceMap.values()).sort(
       (a, b) => b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt),
     );
+    console.info('relevant-news filtered results', { strict: dedup.size, fallback: fallbackDedup.size, candidates: all.length });
 
     const today = all.filter(i => i.ageHours <= 24);
     const week = all.filter(i => i.ageHours <= 24 * 7);
