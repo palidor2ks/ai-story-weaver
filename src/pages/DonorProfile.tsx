@@ -27,6 +27,7 @@ import {
 interface DonorRecord {
   id: string;
   name: string;
+  display_name?: string | null;
   type: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
   amount: number;
   cycle: string;
@@ -243,21 +244,23 @@ const DonorProfile = () => {
 
   // Fetch individual contributions for detailed history (across all types)
   const { data: contributions = [], isLoading: contributionsLoading } = useQuery({
-    queryKey: ['donor-contributions', displayName, aliasInfo?.alias_pattern, showAllDonations],
+    queryKey: ['donor-contributions', displayName, aliasInfo?.alias_pattern, showAllDonations, donorRecords.length],
     queryFn: async () => {
-      if (!donor?.name) return [] as ContributionRecord[];
-      
+      if (!donor?.name || donorRecords.length === 0) return [] as ContributionRecord[];
+
+      const donorNames = [...new Set(donorRecords.map(r => r.name).filter(Boolean))];
+
       let query = supabase
         .from('contributions')
         .select(`*, candidates (id, name, party, office, state)`)
         .order('receipt_date', { ascending: false })
         .limit(showAllDonations ? 5000 : 500);
-      
+
       // If there's an alias, get all contributions matching the pattern
       if (aliasInfo?.alias_pattern) {
         query = query.ilike('contributor_name', aliasInfo.alias_pattern);
       } else {
-        query = query.ilike('contributor_name', donor.name);
+        query = query.in('contributor_name', donorNames);
       }
       
       const { data, error } = await query;
@@ -267,7 +270,7 @@ const DonorProfile = () => {
         candidates: (row as any).candidates,
       })) as ContributionRecord[];
     },
-    enabled: !!donor?.name,
+    enabled: !!donor?.name && donorRecords.length > 0,
   });
 
   // Get unique cycles for filter
