@@ -67,6 +67,8 @@ export const Donors = () => {
 
   const { data, isLoading, error } = useDonorsPaginated(effectiveFilters);
 
+  const effectiveCycle = effectiveFilters.cycle || 'all';
+
   const donors = data?.donors || [];
   const totalCount = data?.totalCount || 0;
   const pageSize = filters.pageSize || 24;
