@@ -1,40 +1,30 @@
-## Problem
+## Change
 
-The `/donors` "All Cycles" view shows inflated totals (e.g., Musk $4.54B / 1,248 txns vs. true ~$447M / 112 txns — exactly ~10× off).
+Rebuild `private.donor_consolidated_all_mv` to group by `display_name` only (drop `type` from the GROUP BY). One AIPAC row → ~$36M, 280 recipients, types chip = `Organization, PAC`.
 
-## Root cause
+## Migration
 
-In `private.donor_consolidated_all_mv` (migration `20260514164838_…`), the aggregation does:
+Drop and recreate the MV:
 
-```sql
-FROM base b
-LEFT JOIN LATERAL unnest(b.name_variations) AS nv ON true
-LEFT JOIN LATERAL unnest(b.types::text[])   AS t  ON true
-GROUP BY b.display_name, b.type
-```
+- `sums` CTE: `SUM(total_amount)`, `SUM(total_transactions)`, `SUM(recipient_count)`, `bool_or(is_consolidated) OR count(*)>1`, `string_agg(DISTINCT search_text)` — `GROUP BY display_name`.
+- `primary_ids`: `DISTINCT ON (display_name)` ordered by `total_amount DESC` — picks the dominant primary id and its type as the row's `type` (used by sort/legacy callers).
+- `names`: distinct unnest of `name_variations` grouped by `display_name`.
+- `types_agg`: distinct unnest of `types` grouped by `display_name` → `types` array.
+- Final SELECT joins on `display_name`.
 
-The two `LEFT JOIN LATERAL unnest(...)` calls multiply each per-cycle row by `len(name_variations) × len(types)`, so `SUM(total_amount)`, `SUM(total_transactions)`, and `SUM(recipient_count)` are all inflated by that factor. Musk has 2 cycles × ~5 name variants × 1 type ≈ 10× — matches the observed inflation exactly.
+Indexes:
+- `UNIQUE INDEX ... (display_name)` (was `(display_name, type)`).
+- `INDEX ... (total_amount DESC NULLS LAST)`.
 
-## Fix
+Re-grant `SELECT` to `anon, authenticated, service_role`.
 
-Rebuild `donor_consolidated_all_mv` so the numeric SUMs and the array aggregations don't share a FROM clause. Aggregate sums in one CTE (no unnests), and collect distinct `name_variations` / `types` in separate CTEs, then join on `(display_name, type)`.
+## Verification
 
-```text
-sums      = SUM over donor_consolidated_mv GROUP BY display_name, type
-names     = DISTINCT unnest(name_variations) GROUP BY display_name, type
-typesagg  = DISTINCT unnest(types) GROUP BY display_name, type
-primary   = first primary_id ordered by total_amount desc
-result    = sums JOIN names JOIN typesagg JOIN primary
-```
-
-Then refresh the MV. No other code/RPC/frontend changes needed — `get_donors_paginated` already reads from this MV correctly.
-
-## Steps
-
-1. Migration: `DROP` and recreate `private.donor_consolidated_all_mv` with the corrected CTE structure; recreate the unique index `(display_name, type)` and the `total_amount` index; re-grant `SELECT` to `anon, authenticated, service_role`.
-2. `REFRESH MATERIALIZED VIEW private.donor_consolidated_all_mv`.
-3. Verify Musk row is ~$447M / 112 txns / 40 recipients and spot-check 2–3 others.
+After refresh:
+- AIPAC: single row, ~$36M, 280 recipients, types includes Organization + PAC.
+- Spot-check Musk and a few others remain correct.
 
 ## Out of scope
 
-Per-cycle view (uses `donor_consolidated_mv` directly and is unaffected). Frontend formatting.
+- Per-cycle MV (`donor_consolidated_mv`) — still grouped by type per cycle.
+- Frontend formatting and the donor alias system (option 2).
