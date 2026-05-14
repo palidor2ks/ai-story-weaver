@@ -569,71 +569,65 @@ const DonorProfile = () => {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {(showAllRecipients ? topRecipients : topRecipients.slice(0, 6)).map((record, index) => (
-              <Link
-                key={`${record.candidate_id || 'unknown'}-${record.cycle}-${index}`}
-                to={record.candidate_id ? `/candidate/${record.candidate_id}` : '#'}
-                className={`block group ${record.candidate_id ? '' : 'pointer-events-none'}`}
-              >
-                <Card className="h-full transition-all hover:shadow-md hover:border-primary/30">
+            {(showAllRecipients ? topRecipients : topRecipients.slice(0, 6)).map((record, index) => {
+              const recipientName = record.candidates?.name || record.recipient_committee_name || 'Unknown';
+              const recipientKey = `recipient:${recipientName}:${record.cycle}`;
+              return (
+                <Card
+                  key={`${record.candidate_id || 'unknown'}-${record.cycle}-${index}`}
+                  className="h-full transition-all hover:shadow-md hover:border-primary/30 group"
+                >
                   <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-                          {record.candidates?.name || record.recipient_committee_name || 'Unknown'}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {record.candidates?.office} • {record.candidates?.state}
-                        </p>
+                    <Link
+                      to={record.candidate_id ? `/candidate/${record.candidate_id}` : '#'}
+                      className={`block ${record.candidate_id ? '' : 'pointer-events-none'}`}
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                            {recipientName}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {record.candidates?.office} • {record.candidates?.state}
+                          </p>
+                        </div>
+                        {record.candidates?.party && (
+                          <Badge variant="outline" className={getPartyColor(record.candidates.party)}>
+                            {record.candidates.party.slice(0, 1)}
+                          </Badge>
+                        )}
                       </div>
-                      {record.candidates?.party && (
-                        <Badge variant="outline" className={getPartyColor(record.candidates.party)}>
-                          {record.candidates.party.slice(0, 1)}
-                        </Badge>
-                      )}
-                    </div>
+                    </Link>
                     <div className="flex items-center justify-between pt-2 border-t border-border">
                       <Badge variant="secondary" className="text-xs">{record.cycle}</Badge>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-agree">{formatAmount(record.amount)}</span>
-                        <Dialog>
-                          <DialogTrigger asChild>
+                        <DonorAIAnalysisDialog
+                          id={recipientKey}
+                          name={recipientName}
+                          type="Organization"
+                          cycle={record.cycle}
+                          profileHref={record.candidate_id ? `/candidate/${record.candidate_id}` : undefined}
+                          trigger={
                             <Button
                               type="button"
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-2 text-primary hover:text-primary" aria-label="Open AI analysis" title="Open AI analysis"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                const recipientName = record.candidates?.name || record.recipient_committee_name || 'Unknown';
-                                const recipientKey = `recipient:${recipientName}:${record.cycle}`;
-                                void fetchRecipientAnalysis(recipientKey, recipientName, record.cycle);
-                              }}
+                              className="h-7 px-2 text-primary hover:text-primary"
+                              aria-label="Open AI analysis"
+                              title="Open AI analysis"
                             >
-                              {recipientLoadingKey === `recipient:${record.candidates?.name || record.recipient_committee_name || 'Unknown'}:${record.cycle}` ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <div className="flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /><span className="text-xs font-semibold">AI</span></div>
-                              )}
+                              <Sparkles className="h-3.5 w-3.5" />
+                              <span className="ml-1 text-xs font-semibold">AI</span>
                             </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>AI Analysis</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-3 text-sm">
-                              <p>{(activeRecipientKey && recipientAnalysis[activeRecipientKey]?.summary) || 'Generating analysis...'}</p>
-                              <p className="text-muted-foreground">{(activeRecipientKey && recipientAnalysis[activeRecipientKey]?.analysis) || ''}</p>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
+                          }
+                        />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-              </Link>
-            ))}
+              );
+            })}
           </div>
 
           {topRecipients.length > 6 && (
