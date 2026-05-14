@@ -1,24 +1,15 @@
-## Problem
+## Confirm donor sort by amount
 
-The `/donors` page cycle dropdown only shows **2026** even though the database has **2024** (~1.09M rows) and **2026** (~8.5K rows).
+The donor list on `/donors` is already configured to sort by total dollar amount, descending, by default.
 
-## Root cause
+**Where this lives:**
+- `src/pages/Donors.tsx` — initial state sets `sortBy: 'amount'`, `sortOrder: 'desc'`
+- `src/hooks/useDonorsPaginated.ts` — query orders by `total_amount` descending when `sortBy === 'amount'`
 
-In `src/hooks/useDonorsPaginated.ts` (`useAvailableDonorFilters`), distinct cycles are derived by:
+**Proposed change (small hardening):**
+1. In `useDonorsPaginated.ts`, add a deterministic tiebreaker so equal-amount donors keep a stable order: `.order('total_amount', { ascending: false }).order('display_name', { ascending: true })`.
+2. In `Donors.tsx`, guarantee the default cannot be silently overridden — if `filters.sortBy` is undefined, force `'amount' / 'desc'` before passing to the hook (defensive, in case future filter resets drop the field).
 
-```ts
-.from('donors').select('cycle').order('cycle', { ascending: false }).limit(1000)
-```
+No UI/visual changes. No backend schema changes.
 
-Because 2026 has thousands of rows, the first 1000 ordered rows are all 2026, so `new Set(...)` only contains `2026`. 2024 never appears.
-
-## Fix
-
-Replace the single capped scan with a tiny Postgres RPC that returns truly distinct cycles, so every cycle present in `donors` shows up regardless of row counts.
-
-### Steps
-
-1. **Migration**: add a SECURITY DEFINER function `public.get_donor_cycles()` returning `text[]` (or `setof text`) via `SELECT DISTINCT cycle FROM donors WHERE cycle IS NOT NULL ORDER BY cycle DESC`. Grant execute to `anon, authenticated`.
-2. **Hook**: in `useAvailableDonorFilters`, replace the cycles query with `supabase.rpc('get_donor_cycles')` and map the result into the existing `cycles` array. Keep the states logic as-is.
-
-No UI changes needed — the dropdown already renders whatever cycles the hook returns.
+If you instead want me to **lock** the sort to amount-desc and remove the user's ability to change it, say the word and I'll strip the sort controls from `DonorFilters`.

@@ -136,11 +136,15 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
         query = query.gte('total_amount', minAmount);
       }
 
-      // Apply sorting
+      // Apply sorting (always include a stable tiebreaker)
       if (sortBy === 'amount') {
-        query = query.order('total_amount', { ascending: sortOrder === 'asc' });
+        query = query
+          .order('total_amount', { ascending: sortOrder === 'asc', nullsFirst: false })
+          .order('display_name', { ascending: true });
       } else {
-        query = query.order('display_name', { ascending: sortOrder === 'asc' });
+        query = query
+          .order('display_name', { ascending: sortOrder === 'asc' })
+          .order('total_amount', { ascending: false, nullsFirst: false });
       }
 
       // Apply pagination
