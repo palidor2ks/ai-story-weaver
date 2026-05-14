@@ -135,6 +135,14 @@ async function resolveGoogleNewsUrl(googleUrl: string): Promise<string> {
     resolveCache.set(googleUrl, decoded);
     return decoded;
   }
+  const token = googleNewsToken(googleUrl);
+  if (token) {
+    const batchDecoded = await decodeGoogleNewsWithBatch(token);
+    if (batchDecoded) {
+      resolveCache.set(googleUrl, batchDecoded);
+      return batchDecoded;
+    }
+  }
   let current = googleUrl;
   for (let i = 0; i < 3; i++) {
     if (!isGoogleHost(current)) break;
