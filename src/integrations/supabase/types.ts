@@ -2767,23 +2767,6 @@ export type Database = {
         }
         Relationships: []
       }
-      donor_consolidated_mv: {
-        Row: {
-          cycle: string | null
-          display_name: string | null
-          is_consolidated: boolean | null
-          name_variations: string[] | null
-          primary_id: string | null
-          recipient_count: number | null
-          row_id: string | null
-          search_text: string | null
-          total_amount: number | null
-          total_transactions: number | null
-          type: Database["public"]["Enums"]["donor_type"] | null
-          types: Database["public"]["Enums"]["donor_type"][] | null
-        }
-        Relationships: []
-      }
       topic_answer_counts: {
         Row: {
           answer_count: number | null
