@@ -245,7 +245,8 @@ async function fetchRss(query: string): Promise<ParsedItem[]> {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0)' },
     });
     if (!res.ok) {
-      await res.text();
+      const errorText = await res.text();
+      console.warn('rss fetch non-ok', { query, status: res.status, preview: errorText.slice(0, 200) });
       return [];
     }
     const xml = await res.text();
