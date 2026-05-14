@@ -174,6 +174,7 @@ export const Donors = () => {
                 isConsolidated={donor.is_consolidated}
                 nameVariations={donor.name_variations}
                 recipientCount={donor.recipient_count}
+                cycle={effectiveCycle}
               />
             ))}
           </div>
