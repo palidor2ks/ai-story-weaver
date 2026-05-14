@@ -367,6 +367,17 @@ async function fetchRssSequentially(queries: string[], limit: number): Promise<P
   return items;
 }
 
+async function fetchBingRssSequentially(queries: string[], limit: number): Promise<ParsedItem[]> {
+  const items: ParsedItem[] = [];
+  for (const query of queries.slice(0, 4)) {
+    if (items.length >= limit * 4) break;
+    const parsed = await fetchBingRss(query);
+    items.push(...parsed);
+    if (query !== queries[queries.length - 1]) await delay(300);
+  }
+  return items;
+}
+
 const parseGdeltDate = (raw?: string): string => {
   if (!raw) return new Date().toUTCString();
   const m = raw.match(/^(\d{4})(\d{2})(\d{2})T?(\d{2})(\d{2})(\d{2})Z?$/);
