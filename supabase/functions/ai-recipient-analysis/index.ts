@@ -28,17 +28,48 @@ function json(body: unknown, status = 200) {
 
 function extractJson(raw: string): any | null {
   if (!raw) return null;
-  const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const cleaned = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/```json\s*/gi, "```")
+    .trim();
   const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
   const candidates = [
     fence?.[1]?.trim(),
     cleaned,
-    cleaned.slice(cleaned.indexOf("{"), cleaned.lastIndexOf("}") + 1),
+    firstBrace >= 0 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : null,
   ].filter(Boolean) as string[];
   for (const c of candidates) {
     try { return JSON.parse(c); } catch { /* try next */ }
+    try {
+      return JSON.parse(c.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]").replace(/[\x00-\x1F\x7F]/g, ""));
+    } catch { /* try next */ }
   }
   return null;
+}
+
+function narrativeFallback(content: string, citations: string[]): any {
+  const analysis = content.trim();
+  const sentences = analysis.match(/[^.!?]+[.!?]+/g) ?? [];
+  const summary = sentences.slice(0, 2).join(" ").trim() || analysis.slice(0, 500);
+  return {
+    summary,
+    analysis,
+    positions: [],
+    goals: [],
+    key_people: [],
+    notable_recipients: [],
+    controversies: [],
+    causes: [],
+    finance_claims: [],
+    public_context_claims: analysis ? [analysis.slice(0, 1000)] : [],
+    insufficient_information: citations.length === 0 || analysis.length < 80,
+    confidence: citations.length ? 45 : 20,
+    confidence_rationale: citations.length
+      ? "Jina returned grounded narrative text but not structured JSON, so the analysis was preserved with limited field extraction."
+      : "Jina returned unstructured text without extractable source URLs.",
+  };
 }
 
 Deno.serve(async (req) => {
@@ -213,9 +244,9 @@ Output ONLY a JSON object, no prose:
       const lovableKey = Deno.env.get("LOVABLE_API_KEY");
       if (!lovableKey) {
         console.error("Could not parse Jina output and no LOVABLE_API_KEY", content.slice(0, 500));
-        return json({ error: "Could not parse AI response. Please regenerate." }, 500);
-      }
-      const structurePrompt = `Convert the following research narrative into the exact JSON schema. Use only facts from the narrative — do not invent. Citation indices [n] correspond to the URL list provided.
+        parsed = narrativeFallback(content, citations);
+      } else {
+        const structurePrompt = `Convert the following research narrative into the exact JSON schema. Use only facts from the narrative — do not invent. Citation indices [n] correspond to the URL list provided.
 
 NARRATIVE:
 ${content}
@@ -225,29 +256,59 @@ ${citations.map((u, i) => `[${i + 1}] ${u}`).join("\n")}
 
 Return ONLY a JSON object with these keys: summary (string), analysis (string), positions (array of {topic, stance}), goals (string[]), key_people (string[]), notable_recipients (string[]), controversies (string[]), causes (string[]), finance_claims (string[]), public_context_claims (string[]), insufficient_information (boolean), confidence (0-100 integer), confidence_rationale (string).`;
 
-      const gemResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "You are a JSON converter. Output strict JSON only, no prose, no markdown fences." },
-            { role: "user", content: structurePrompt },
-          ],
-          response_format: { type: "json_object" },
-        }),
-      });
-      if (!gemResp.ok) {
-        const t = await gemResp.text();
-        console.error("Gemini structuring failed", gemResp.status, t.slice(0, 300));
-        return json({ error: "Could not parse AI response. Please regenerate." }, 500);
-      }
-      const gemJson = await gemResp.json();
-      const gemContent: string = gemJson?.choices?.[0]?.message?.content ?? "";
-      parsed = extractJson(gemContent);
-      if (!parsed) {
-        console.error("Gemini structuring returned unparseable output", gemContent.slice(0, 500));
-        return json({ error: "Could not parse AI response. Please regenerate." }, 500);
+        const gemResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "google/gemini-3-flash-preview",
+            messages: [
+              { role: "system", content: "You are a JSON converter. Use the required tool with only facts present in the user-provided narrative." },
+              { role: "user", content: structurePrompt },
+            ],
+            tools: [{
+              type: "function",
+              function: {
+                name: "return_recipient_analysis",
+                description: "Return structured recipient analysis extracted from a grounded research narrative.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    summary: { type: "string" },
+                    analysis: { type: "string" },
+                    positions: { type: "array", items: { type: "object", properties: { topic: { type: "string" }, stance: { type: "string" } }, required: ["topic", "stance"] } },
+                    goals: { type: "array", items: { type: "string" } },
+                    key_people: { type: "array", items: { type: "string" } },
+                    notable_recipients: { type: "array", items: { type: "string" } },
+                    controversies: { type: "array", items: { type: "string" } },
+                    causes: { type: "array", items: { type: "string" } },
+                    finance_claims: { type: "array", items: { type: "string" } },
+                    public_context_claims: { type: "array", items: { type: "string" } },
+                    insufficient_information: { type: "boolean" },
+                    confidence: { type: "integer", minimum: 0, maximum: 100 },
+                    confidence_rationale: { type: "string" },
+                  },
+                  required: ["summary", "analysis", "positions", "goals", "key_people", "notable_recipients", "controversies", "causes", "finance_claims", "public_context_claims", "insufficient_information", "confidence", "confidence_rationale"],
+                  additionalProperties: false,
+                },
+              },
+            }],
+            tool_choice: { type: "function", function: { name: "return_recipient_analysis" } },
+          }),
+        });
+        if (!gemResp.ok) {
+          const t = await gemResp.text();
+          console.error("Gemini structuring failed", gemResp.status, t.slice(0, 300));
+          parsed = narrativeFallback(content, citations);
+        } else {
+          const gemJson = await gemResp.json();
+          const toolArgs: string | undefined = gemJson?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+          const gemContent: string = toolArgs ?? gemJson?.choices?.[0]?.message?.content ?? "";
+          parsed = extractJson(gemContent);
+          if (!parsed) {
+            console.error("Gemini structuring returned unparseable output", gemContent.slice(0, 500));
+            parsed = narrativeFallback(content, citations);
+          }
+        }
       }
     }
 
