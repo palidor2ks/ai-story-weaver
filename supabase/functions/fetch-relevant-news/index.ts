@@ -457,9 +457,10 @@ Deno.serve(async (req: Request) => {
 
     const queries = buildQueries(people, body.state, body.district);
     const rssItems = await fetchRssSequentially(queries, limit);
+    const bingItems = await fetchBingRssSequentially(queries, limit);
     const gdeltItems = await fetchGdeltNews(people, limit);
-    const allItems = [...rssItems, ...gdeltItems];
-    console.info('relevant-news rss results', { queries: queries.length, allItems: allItems.length });
+    const allItems = [...rssItems, ...bingItems, ...gdeltItems];
+    console.info('relevant-news rss results', { queries: queries.length, googleItems: rssItems.length, bingItems: bingItems.length, gdeltItems: gdeltItems.length, allItems: allItems.length });
 
     const now = Date.now();
     const dedup = new Map<string, FeedNewsItem & { ageHours: number }>();
