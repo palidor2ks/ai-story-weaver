@@ -292,6 +292,7 @@ Deno.serve(async (req: Request) => {
 
     const now = Date.now();
     const dedup = new Map<string, FeedNewsItem & { ageHours: number }>();
+    const fallbackDedup = new Map<string, FeedNewsItem & { ageHours: number }>();
 
     for (const it of allItems) {
       if (!it.link || !it.title) continue;
@@ -330,9 +331,6 @@ Deno.serve(async (req: Request) => {
       if (ageHours <= 24) score += 2;
       else if (ageHours <= 72) score += 1;
 
-      if (matchedPeople.length === 0) continue;
-      if (score < 3) continue;
-
       const item: FeedNewsItem & { ageHours: number } = {
         id: hashId(key),
         title: cleanedTitle,
@@ -347,11 +345,22 @@ Deno.serve(async (req: Request) => {
         isNew: ageHours <= 48,
         ageHours,
       };
+
+      if (matchedPeople.length === 0) continue;
+      if (score < 3) {
+        if (score >= 1) {
+          const existingFallback = fallbackDedup.get(key);
+          if (!existingFallback || existingFallback.relevanceScore < score) fallbackDedup.set(key, item);
+        }
+        continue;
+      }
+
       const existing = dedup.get(key);
       if (!existing || existing.relevanceScore < score) dedup.set(key, item);
     }
 
-    const all = Array.from(dedup.values()).sort(
+    const sourceMap = dedup.size > 0 ? dedup : fallbackDedup;
+    const all = Array.from(sourceMap.values()).sort(
       (a, b) => b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt),
     );
 
@@ -371,10 +380,11 @@ Deno.serve(async (req: Request) => {
       if (isGoogleHost(it.url)) {
         const resolved = await resolveGoogleNewsUrl(it.url);
         if (!isGoogleHost(resolved)) it.url = resolved;
+        else if (it.title) it.url = googleNewsSearchUrl(it.title);
       }
     }));
     const items = sliced
-      .filter(it => !isGoogleHost(it.url))
+      .filter(it => it.title || !isGoogleHost(it.url))
       .map(({ ageHours: _a, ...rest }) => rest);
 
     return new Response(JSON.stringify({ items, window: windowLabel }), {
