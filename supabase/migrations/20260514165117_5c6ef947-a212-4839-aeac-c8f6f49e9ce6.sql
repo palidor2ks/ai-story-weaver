@@ -1,0 +1,1 @@
+GRANT SELECT ON private.donor_consolidated_all_mv TO anon, authenticated, service_role;
