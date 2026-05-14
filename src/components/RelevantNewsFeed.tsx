@@ -81,13 +81,13 @@ export const RelevantNewsFeed = ({
           <p className="text-sm text-muted-foreground py-4 text-center">{emptyMessage(win)}</p>
         ) : (
           items.map(item => (
-              <a
-                key={item.id}
-                href={item.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block rounded-md border p-3 transition-colors group hover:bg-accent/40 cursor-pointer"
-              >
+            <a
+              key={item.id}
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-md border p-3 transition-colors group hover:bg-accent/40 cursor-pointer"
+            >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -124,8 +124,8 @@ export const RelevantNewsFeed = ({
                   </div>
                   <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
                 </div>
-              </a>
-            ))
+            </a>
+          ))
         )}
       </CardContent>
     </Card>
