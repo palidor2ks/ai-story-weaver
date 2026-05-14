@@ -139,7 +139,7 @@ const buildCommitteeSummaries = (
   });
 };
 
-async function fetchCommittees(cycle: string = '2024', committeeId?: string) {
+async function fetchCommittees(cycle: string = 'all', committeeId?: string) {
   let query = supabase
     .from('candidate_committees')
     .select(`
@@ -196,7 +196,7 @@ async function fetchCommittees(cycle: string = '2024', committeeId?: string) {
   return buildCommitteeSummaries(committees, rollups, cycle);
 }
 
-export const useCommittees = (cycle = '2024') => {
+export const useCommittees = (cycle = 'all') => {
   return useQuery({
     queryKey: ['committees', cycle],
     queryFn: () => fetchCommittees(cycle),
@@ -231,7 +231,7 @@ const fetchCommitteePage = async (
 ): Promise<CommitteePageResult> => {
   const {
     search = '',
-    cycle = '2024',
+    cycle = 'all',
     designation,
     candidateId,
     pageSize = PAGE_SIZE_DEFAULT,
@@ -333,7 +333,7 @@ export const useCommitteesPaginated = (filters: CommitteeFilters) => {
 const fetchCommitteeFilterOptions = async (): Promise<CommitteeFilterOptions> => {
   // Limit scans for faster load
   const [cyclesResult, designationResult, candidatesResult] = await Promise.all([
-    supabase.from('committee_finance_rollups').select('cycle').limit(100),
+    supabase.rpc('get_committee_cycles'),
     supabase.from('candidate_committees').select('designation').limit(500),
     supabase.from('candidates').select('id, name, party').not('fec_committee_id', 'is', null).order('name').limit(200),
   ]);
@@ -343,9 +343,7 @@ const fetchCommitteeFilterOptions = async (): Promise<CommitteeFilterOptions> =>
   if (candidatesResult.error) throw candidatesResult.error;
 
   const cycleSet = new Set<string>(
-    (cyclesResult.data || [])
-      .map((row) => row.cycle)
-      .filter((cycle): cycle is string => !!cycle),
+    ((cyclesResult.data as string[] | null) || []).filter((cycle): cycle is string => !!cycle),
   );
 
   const designationSet = new Set<string>(
@@ -375,7 +373,7 @@ export const useCommitteeFilterOptions = () => {
   });
 };
 
-export const useCommittee = (committeeId: string | undefined, cycle = '2024') => {
+export const useCommittee = (committeeId: string | undefined, cycle = 'all') => {
   return useQuery({
     queryKey: ['committee', committeeId, cycle],
     queryFn: async () => {
@@ -387,7 +385,7 @@ export const useCommittee = (committeeId: string | undefined, cycle = '2024') =>
   });
 };
 
-export const useCommitteeDonors = (committeeId: string | undefined, cycle = '2024') => {
+export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all') => {
   return useQuery({
     queryKey: ['committee-donors', committeeId, cycle],
     queryFn: async () => {

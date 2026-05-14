@@ -30,7 +30,7 @@ const formatDate = (value: string | null) => {
 
 export const Committees = () => {
   const [search, setSearch] = useState('');
-  const [cycle, setCycle] = useState<string>('2024');
+  const [cycle, setCycle] = useState<string>('all');
   const [designation, setDesignation] = useState<string>('all');
   const [candidateId, setCandidateId] = useState<string>('all');
 
@@ -38,7 +38,7 @@ export const Committees = () => {
 
   const availableCycles = useMemo(
     () => {
-      const cycles = filterOptions?.cycles ?? ['2024'];
+      const cycles = filterOptions?.cycles ?? [];
       const unique = Array.from(new Set(['all', ...cycles]));
       return unique;
     },
@@ -156,7 +156,7 @@ export const Committees = () => {
                 size="icon"
                 onClick={() => {
                   setSearch('');
-                  setCycle(availableCycles[0] || '2024');
+                  setCycle(availableCycles[0] || 'all');
                   setDesignation('all');
                   setCandidateId('all');
                 }}
