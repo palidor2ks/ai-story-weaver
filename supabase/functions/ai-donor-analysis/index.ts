@@ -247,6 +247,16 @@ REQUIREMENTS:
                       items: { type: "string" },
                     },
                     insufficient_information: { type: "boolean" },
+                    confidence: {
+                      type: "integer",
+                      minimum: 0,
+                      maximum: 100,
+                      description: "0-100 trustworthiness score for the overall analysis.",
+                    },
+                    confidence_rationale: {
+                      type: "string",
+                      description: "One sentence explaining the confidence score.",
+                    },
                     sources: {
                       type: "array",
                       items: {
@@ -268,6 +278,8 @@ REQUIREMENTS:
                     "finance_claims",
                     "public_context_claims",
                     "insufficient_information",
+                    "confidence",
+                    "confidence_rationale",
                     "sources",
                   ],
                   additionalProperties: false,
