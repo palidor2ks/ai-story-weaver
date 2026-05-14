@@ -65,14 +65,17 @@ export const useCreateDonorAlias = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: async () => {
-      // Refresh donor display_names to apply new alias
-      await supabase.rpc('refresh_donor_display_names');
+    onSuccess: async (data) => {
+      toast.info('Applying alias to matching donors…');
+      const { data: applyData, error: applyError } = await supabase.functions.invoke('apply-donor-alias', {
+        body: { alias_id: data.id },
+      });
+      if (applyError) throw applyError;
       queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
       queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
       queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
       queryClient.invalidateQueries({ queryKey: ['candidate-donors'] });
-      toast.success('Donor alias created and applied');
+      toast.success(`Applied to ${applyData?.updated ?? 0} donors`);
     },
     onError: (error) => {
       toast.error(`Failed to create alias: ${error.message}`);
@@ -106,14 +109,17 @@ export const useUpdateDonorAlias = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: async () => {
-      // Refresh donor display_names to apply updated alias
-      await supabase.rpc('refresh_donor_display_names');
+    onSuccess: async (data) => {
+      toast.info('Applying alias to matching donors…');
+      const { data: applyData, error: applyError } = await supabase.functions.invoke('apply-donor-alias', {
+        body: { alias_id: data.id },
+      });
+      if (applyError) throw applyError;
       queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
       queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
       queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
       queryClient.invalidateQueries({ queryKey: ['candidate-donors'] });
-      toast.success('Donor alias updated and applied');
+      toast.success(`Applied to ${applyData?.updated ?? 0} donors`);
     },
     onError: (error) => {
       toast.error(`Failed to update alias: ${error.message}`);
@@ -126,21 +132,34 @@ export const useDeleteDonorAlias = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: alias, error: fetchError } = await supabase
+        .from('donor_aliases')
+        .select('alias_pattern, alias_patterns, donor_types')
+        .eq('id', id)
+        .single();
+      if (fetchError) throw fetchError;
+
+      const patterns = alias.alias_patterns?.length ? alias.alias_patterns : [alias.alias_pattern].filter(Boolean);
+
       const { error } = await supabase
         .from('donor_aliases')
         .delete()
         .eq('id', id);
-
       if (error) throw error;
+
+      return { patterns, donor_types: alias.donor_types || [] };
     },
-    onSuccess: async () => {
-      // Refresh donor display_names to remove alias
-      await supabase.rpc('refresh_donor_display_names');
+    onSuccess: async (payload) => {
+      toast.info('Applying alias removal to matching donors…');
+      const { data: unapplyData, error: unapplyError } = await supabase.functions.invoke('unapply-donor-alias', {
+        body: payload,
+      });
+      if (unapplyError) throw unapplyError;
       queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
       queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
       queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
       queryClient.invalidateQueries({ queryKey: ['candidate-donors'] });
-      toast.success('Donor alias deleted');
+      toast.success(`Recomputed ${unapplyData?.updated ?? 0} donors after alias removal`);
     },
     onError: (error) => {
       toast.error(`Failed to delete alias: ${error.message}`);
