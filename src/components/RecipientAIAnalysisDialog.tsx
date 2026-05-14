@@ -1,5 +1,4 @@
 import { ReactNode, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,17 +12,15 @@ import {
 import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
-export interface DonorAnalysis {
+export interface RecipientAnalysis {
   summary: string;
   analysis: string;
-  party_support: { party: string; amount: number; share: number }[];
-  causes: string[];
-  motivation_hypotheses?: string[];
   positions?: { topic: string; stance: string }[];
   goals?: string[];
   key_people?: string[];
   notable_recipients?: string[];
   controversies?: string[];
+  causes?: string[];
   finance_claims?: string[];
   public_context_claims?: string[];
   insufficient_information: boolean;
@@ -34,29 +31,16 @@ export interface DonorAnalysis {
 }
 
 interface Props {
-  id: string;
-  name: string;
-  type: 'Individual' | 'PAC' | 'Organization' | 'Unknown' | string;
-  cycle?: string;
-  /** Optional link to a full profile page rendered at the bottom of the dialog. */
-  profileHref?: string;
-  /** Custom trigger element. Must be a single React node (rendered via DialogTrigger asChild). */
+  entityKind: 'candidate' | 'committee';
+  entityId: string;
+  entityName: string;
+  fecId?: string | null;
+  party?: string | null;
+  office?: string | null;
+  state?: string | null;
+  cycle?: string | null;
   trigger: ReactNode;
 }
-
-const formatAmount = (amount: number) => {
-  if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
-  if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
-  return `$${amount}`;
-};
-
-const partyColor = (party: string) => {
-  const p = party.toLowerCase();
-  if (p.startsWith('dem')) return 'bg-blue-500';
-  if (p.startsWith('rep')) return 'bg-red-500';
-  if (p.startsWith('ind')) return 'bg-purple-500';
-  return 'bg-muted-foreground';
-};
 
 const normalizeInvokeError = (raw: unknown): string => {
   const message = typeof raw === 'string'
@@ -64,7 +48,6 @@ const normalizeInvokeError = (raw: unknown): string => {
     : (typeof raw === 'object' && raw !== null && 'message' in raw && typeof (raw as { message?: unknown }).message === 'string')
       ? (raw as { message: string }).message
       : 'Failed to load analysis';
-
   const jsonMatch = message.match(/\{[\s\S]*\}$/);
   if (jsonMatch) {
     try {
@@ -72,54 +55,42 @@ const normalizeInvokeError = (raw: unknown): string => {
       if (parsed?.error && typeof parsed.error === 'string') return parsed.error;
     } catch { /* ignore */ }
   }
-
   if (/failed to send a request to the edge function|failed to fetch|fetch failed|networkerror|load failed|timeout/i.test(message)) {
     return 'Could not reach the AI service. Please check your connection and try again.';
   }
   return message;
 };
 
-export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trigger }: Props) => {
-  const [analysis, setAnalysis] = useState<DonorAnalysis | null>(null);
+export const RecipientAIAnalysisDialog = ({
+  entityKind, entityId, entityName, fecId, party, office, state, cycle, trigger,
+}: Props) => {
+  const [analysis, setAnalysis] = useState<RecipientAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchAnalysis = async () => {
     setIsLoading(true);
     setError(null);
-
-    const invokeOnce = () => supabase.functions.invoke('ai-donor-analysis', {
-      body: { donor_id: id, donor_name: name, donor_type: type, cycle },
-    });
-
     try {
-      let data: unknown;
-      let fnError: unknown;
-
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        const result = await invokeOnce();
-        data = result.data;
-        fnError = result.error;
-        if (!fnError) break;
-
-        const isRetryable = /failed to send a request to the edge function|failed to fetch|fetch failed|networkerror|load failed|timeout/i.test(
-          normalizeInvokeError(fnError),
-        );
-        if (attempt < 3 && isRetryable) {
-          const delayMs = attempt === 1 ? 1200 : 2500;
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-          continue;
-        }
-        break;
-      }
-
+      const { data, error: fnError } = await supabase.functions.invoke('ai-recipient-analysis', {
+        body: {
+          entity_kind: entityKind,
+          entity_id: entityId,
+          entity_name: entityName,
+          fec_id: fecId ?? null,
+          party: party ?? null,
+          office: office ?? null,
+          state: state ?? null,
+          cycle: cycle ?? null,
+        },
+      });
       if (fnError) throw new Error(normalizeInvokeError(fnError));
       if ((data as { error?: string } | undefined)?.error) {
         throw new Error(String((data as { error: string }).error));
       }
-      setAnalysis(data as DonorAnalysis);
+      setAnalysis(data as RecipientAnalysis);
     } catch (e) {
-      console.error('Donor analysis failed', e);
+      console.error('Recipient analysis failed', e);
       setError(normalizeInvokeError(e));
     } finally {
       setIsLoading(false);
@@ -127,9 +98,7 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
   };
 
   const handleOpenChange = (open: boolean) => {
-    if (open && !analysis && !isLoading) {
-      fetchAnalysis();
-    }
+    if (open && !analysis && !isLoading) fetchAnalysis();
   };
 
   return (
@@ -141,19 +110,14 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
             <div className="space-y-1.5 min-w-0">
               <DialogTitle className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
-                {name}
+                {entityName}
               </DialogTitle>
               <DialogDescription>
-                AI-generated donor analysis grounded in campaign-finance data and broader public context.
+                AI-generated analysis of this {entityKind}'s positions, goals, and political activity — grounded in live web search.
               </DialogDescription>
             </div>
             {analysis && !isLoading && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={fetchAnalysis}
-                className="shrink-0"
-              >
+              <Button size="sm" variant="outline" onClick={fetchAnalysis} className="shrink-0">
                 <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                 Regenerate
               </Button>
@@ -164,7 +128,7 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
         {isLoading && (
           <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Generating analysis…</span>
+            <span>Searching the web and generating analysis…</span>
           </div>
         )}
 
@@ -183,7 +147,7 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
             {analysis.insufficient_information && (
               <div className="flex items-start gap-2 p-3 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>Insufficient public information available for a confident profile. Treat the analysis below as tentative.</span>
+                <span>Insufficient public information to confidently identify this entity. Treat the analysis below as tentative.</span>
               </div>
             )}
 
@@ -192,10 +156,10 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   {analysis.data_coverage && (() => {
                     const cfg = {
-                      none:     { label: 'No filings',      tone: 'bg-destructive/15 text-destructive border-destructive/30' },
-                      sparse:   { label: 'Sparse filings',  tone: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' },
-                      moderate: { label: 'Moderate filings',tone: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30' },
-                      rich:     { label: 'Rich filings',    tone: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
+                      none: { label: 'No filings', tone: 'bg-destructive/15 text-destructive border-destructive/30' },
+                      sparse: { label: 'Sparse filings', tone: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' },
+                      moderate: { label: 'Moderate filings', tone: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30' },
+                      rich: { label: 'Rich filings', tone: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
                     }[analysis.data_coverage];
                     return (
                       <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md border ${cfg.tone}`}>
@@ -210,9 +174,7 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
                     const label = c >= 70 ? 'High' : c >= 40 ? 'Medium' : 'Low';
                     return (
                       <div className="flex items-center gap-2 min-w-[200px] flex-1">
-                        <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                          Confidence
-                        </span>
+                        <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Confidence</span>
                         <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                           <div className={`h-full ${tone}`} style={{ width: `${c}%` }} />
                         </div>
@@ -222,38 +184,12 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
                   })()}
                 </div>
                 {analysis.confidence_rationale && (
-                  <p className="text-xs text-muted-foreground italic">
-                    {analysis.confidence_rationale}
-                  </p>
+                  <p className="text-xs text-muted-foreground italic">{analysis.confidence_rationale}</p>
                 )}
               </div>
             )}
 
             <p className="text-foreground leading-relaxed">{analysis.summary}</p>
-
-            {analysis.party_support?.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Party support</h4>
-                <div className="space-y-1.5">
-                  {analysis.party_support.map((p) => (
-                    <div key={p.party} className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="font-medium">{p.party}</span>
-                        <span className="text-muted-foreground">
-                          {formatAmount(p.amount)} · {(p.share * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={`h-full ${partyColor(p.party)}`}
-                          style={{ width: `${Math.min(100, p.share * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {analysis.positions && analysis.positions.length > 0 && (
               <div className="space-y-2">
@@ -278,20 +214,20 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
               </div>
             )}
 
-            {analysis.causes?.length > 0 && (
+            {analysis.causes && analysis.causes.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Likely causes</h4>
+                <h4 className="font-semibold text-foreground">Causes</h4>
                 <div className="flex flex-wrap gap-1.5">
-                  {analysis.causes.map((c, i) => (
-                    <Badge key={i} variant="secondary">{c}</Badge>
-                  ))}
+                  {analysis.causes.map((c, i) => <Badge key={i} variant="secondary">{c}</Badge>)}
                 </div>
               </div>
             )}
 
             {analysis.notable_recipients && analysis.notable_recipients.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Notable recipients</h4>
+                <h4 className="font-semibold text-foreground">
+                  {entityKind === 'committee' ? 'Notable spending / recipients' : 'Notable endorsements & coalitions'}
+                </h4>
                 <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
                   {analysis.notable_recipients.map((r, i) => <li key={i}>{r}</li>)}
                 </ul>
@@ -316,17 +252,6 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
               </div>
             )}
 
-            {analysis.motivation_hypotheses && analysis.motivation_hypotheses.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Possible motivations</h4>
-                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                  {analysis.motivation_hypotheses.map((m, i) => (
-                    <li key={i}>{m}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
             {analysis.finance_claims && analysis.finance_claims.length > 0 && (
               <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
                 <h4 className="font-semibold text-foreground flex items-center gap-1.5 text-xs uppercase tracking-wide">
@@ -334,9 +259,7 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
                   From finance signals
                 </h4>
                 <ul className="list-disc pl-5 space-y-1 text-foreground">
-                  {analysis.finance_claims.map((c, i) => (
-                    <li key={i}>{c}</li>
-                  ))}
+                  {analysis.finance_claims.map((c, i) => <li key={i}>{c}</li>)}
                 </ul>
               </div>
             )}
@@ -348,9 +271,7 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
                   From public context
                 </h4>
                 <ul className="list-disc pl-5 space-y-1 text-foreground">
-                  {analysis.public_context_claims.map((c, i) => (
-                    <li key={i}>{c}</li>
-                  ))}
+                  {analysis.public_context_claims.map((c, i) => <li key={i}>{c}</li>)}
                 </ul>
                 <p className="text-[11px] text-muted-foreground italic">
                   Numbers in brackets [n] reference the Sources list below.
@@ -388,18 +309,10 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
                 </ol>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
-                  No external sources cited. Public-context claims reflect the model's background knowledge and should be independently verified.
+                  No external sources cited. Treat this analysis as tentative.
                 </p>
               )}
             </div>
-
-            {profileHref && (
-              <div className="pt-2">
-                <Link to={profileHref}>
-                  <Button size="sm">Open full profile</Button>
-                </Link>
-              </div>
-            )}
 
             <p className="text-xs text-muted-foreground">
               AI-generated. May be incomplete or include errors. Verify with linked sources.
