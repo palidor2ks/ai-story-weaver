@@ -334,7 +334,17 @@ Deno.serve(async (req: Request) => {
     else if (week.length > 0) { chosen = week; windowLabel = 'week'; }
     else if (month.length > 0) { chosen = month; windowLabel = 'month'; }
 
-    const items = chosen.slice(0, limit).map(({ ageHours: _a, ...rest }) => rest);
+    // Resolve Google News redirect URLs to publisher URLs (only for chosen items)
+    const sliced = chosen.slice(0, limit);
+    await Promise.all(sliced.map(async (it) => {
+      if (isGoogleHost(it.url)) {
+        const resolved = await resolveGoogleNewsUrl(it.url);
+        if (!isGoogleHost(resolved)) it.url = resolved;
+      }
+    }));
+    const items = sliced
+      .filter(it => !isGoogleHost(it.url))
+      .map(({ ageHours: _a, ...rest }) => rest);
 
     return new Response(JSON.stringify({ items, window: windowLabel }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
