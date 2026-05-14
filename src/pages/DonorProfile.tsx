@@ -276,7 +276,7 @@ const DonorProfile = () => {
   });
 
 
-  // Recipient summary cards (grouped by candidate)
+  // Recipient summary cards (prefer contribution-level recipient IDs, fallback to donor rows)
   const topRecipients = useMemo(() => {
     const grouped = new Map<string, {
       candidate_id: string | null;
@@ -286,24 +286,42 @@ const DonorProfile = () => {
       recipient_committee_name?: string | null;
     }>();
 
-    donorRecords.forEach((record) => {
-      const key = record.candidate_id || `unknown-${record.id}`;
-      const existing = grouped.get(key);
-      if (existing) {
-        existing.amount += record.amount;
-      } else {
-        grouped.set(key, {
-          candidate_id: record.candidate_id,
-          amount: record.amount,
-          cycle: record.cycle,
-          candidates: record.candidates,
-          recipient_committee_name: record.recipient_committee_name,
-        });
-      }
-    });
+    if (contributions.length > 0) {
+      contributions.forEach((contribution) => {
+        const key = contribution.candidate_id || contribution.recipient_committee_id || contribution.recipient_committee_name || `unknown-${contribution.id}`;
+        const existing = grouped.get(key);
+        if (existing) {
+          existing.amount += contribution.amount;
+        } else {
+          grouped.set(key, {
+            candidate_id: contribution.candidate_id,
+            amount: contribution.amount,
+            cycle: contribution.cycle,
+            candidates: contribution.candidates || undefined,
+            recipient_committee_name: contribution.recipient_committee_name,
+          });
+        }
+      });
+    } else {
+      donorRecords.forEach((record) => {
+        const key = record.candidate_id || record.recipient_committee_name || `unknown-${record.id}`;
+        const existing = grouped.get(key);
+        if (existing) {
+          existing.amount += record.amount;
+        } else {
+          grouped.set(key, {
+            candidate_id: record.candidate_id,
+            amount: record.amount,
+            cycle: record.cycle,
+            candidates: record.candidates,
+            recipient_committee_name: record.recipient_committee_name,
+          });
+        }
+      });
+    }
 
     return Array.from(grouped.values()).sort((a, b) => b.amount - a.amount);
-  }, [donorRecords]);
+  }, [contributions, donorRecords]);
 
   // Get unique cycles for filter
   const availableCycles = useMemo(() => {
@@ -366,7 +384,19 @@ const DonorProfile = () => {
   const stats = useMemo(() => {
     const totalAmount = donorRecords.reduce((sum, r) => sum + r.amount, 0);
     const totalTransactions = donorRecords.reduce((sum, r) => sum + (r.transaction_count || 1), 0);
-    const uniqueRecipients = new Set(donorRecords.map(r => r.candidate_id)).size;
+    const contributionRecipients = new Set(
+      contributions
+        .map(c => c.candidate_id || c.recipient_committee_id || c.recipient_committee_name)
+        .filter((v): v is string => Boolean(v))
+    ).size;
+
+    const donorRecipients = new Set(
+      donorRecords
+        .map(r => r.candidate_id || r.recipient_committee_name)
+        .filter((v): v is string => Boolean(v))
+    ).size;
+
+    const uniqueRecipients = contributionRecipients || donorRecipients;
     const uniqueCycles = new Set(donorRecords.map(r => r.cycle)).size;
     const uniqueTypes = [...new Set(donorRecords.map(r => r.type))];
     
@@ -377,7 +407,7 @@ const DonorProfile = () => {
     })).sort((a, b) => b.amount - a.amount);
     
     return { totalAmount, totalTransactions, uniqueRecipients, uniqueCycles, uniqueTypes, byType };
-  }, [donorRecords]);
+  }, [contributions, donorRecords]);
 
   const isLoading = donorLoading || recordsLoading || contributionsLoading;
 
