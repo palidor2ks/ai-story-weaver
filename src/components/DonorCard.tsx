@@ -72,72 +72,72 @@ export const DonorCard = ({
   return (
     <Card className="h-full transition-all duration-200 hover:shadow-lg hover:border-primary/30 group hover:scale-[1.01]">
       <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-4">
-          <div className={`p-2.5 rounded-lg ${getTypeBadgeStyle(type)}`}>
-            {getTypeIcon(type)}
-          </div>
-          <div className="flex items-center gap-2">
-            {hasMultipleVariations && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="secondary" className="text-xs gap-1">
-                      <Layers className="h-3 w-3" />
-                      {nameVariations!.length} merged
+        <Link to={`/donor/${id}`} className="block rounded-md -m-2 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+          <div className="flex items-start justify-between mb-4">
+            <div className={`p-2.5 rounded-lg ${getTypeBadgeStyle(type)}`}>
+              {getTypeIcon(type)}
+            </div>
+            <div className="flex items-center gap-2">
+              {hasMultipleVariations && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="secondary" className="text-xs gap-1">
+                        <Layers className="h-3 w-3" />
+                        {nameVariations!.length} merged
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p className="font-medium mb-1">Merged donor names:</p>
+                      <ul className="text-xs space-y-0.5">
+                        {nameVariations!.slice(0, 5).map((v, i) => (
+                          <li key={i} className="text-muted-foreground">• {v}</li>
+                        ))}
+                        {nameVariations!.length > 5 && (
+                          <li className="text-muted-foreground">... and {nameVariations!.length - 5} more</li>
+                        )}
+                      </ul>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {hasMultipleTypes ? (
+                <div className="flex gap-1">
+                  {types!.map(t => (
+                    <Badge key={t} variant="outline" className={`shrink-0 text-xs ${getTypeBadgeStyle(t)}`}>
+                      {t === 'Organization' ? 'Org' : t}
                     </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p className="font-medium mb-1">Merged donor names:</p>
-                    <ul className="text-xs space-y-0.5">
-                      {nameVariations!.slice(0, 5).map((v, i) => (
-                        <li key={i} className="text-muted-foreground">• {v}</li>
-                      ))}
-                      {nameVariations!.length > 5 && (
-                        <li className="text-muted-foreground">... and {nameVariations!.length - 5} more</li>
-                      )}
-                    </ul>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            {hasMultipleTypes ? (
-              <div className="flex gap-1">
-                {types!.map(t => (
-                  <Badge key={t} variant="outline" className={`shrink-0 text-xs ${getTypeBadgeStyle(t)}`}>
-                    {t === 'Organization' ? 'Org' : t}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <Badge variant="outline" className={`shrink-0 ${getTypeBadgeStyle(type)}`}>
-                {type}
-              </Badge>
-            )}
+                  ))}
+                </div>
+              ) : (
+                <Badge variant="outline" className={`shrink-0 ${getTypeBadgeStyle(type)}`}>
+                  {type}
+                </Badge>
+              )}
+            </div>
           </div>
-        </div>
 
-        <Link to={`/donor/${id}`} className="block">
           <h3 className="font-semibold text-foreground mb-4 line-clamp-2 group-hover:text-primary transition-colors">
             {name}
           </h3>
-        </Link>
 
-        <div className="flex items-end justify-between gap-4">
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
-              {recipientCount ? 'Recipients' : 'Donations'}
-            </p>
-            <p className="text-xl font-bold text-foreground">
-              {recipientCount
-                ? recipientCount.toLocaleString()
-                : transactionCount.toLocaleString()}
-            </p>
+          <div className="flex items-end justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
+                {recipientCount ? 'Recipients' : 'Donations'}
+              </p>
+              <p className="text-xl font-bold text-foreground">
+                {recipientCount
+                  ? recipientCount.toLocaleString()
+                  : transactionCount.toLocaleString()}
+              </p>
+            </div>
+            <div className="text-right space-y-1">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total</p>
+              <p className="text-2xl font-bold text-agree">{formatAmount(amount)}</p>
+            </div>
           </div>
-          <div className="text-right space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total</p>
-            <p className="text-2xl font-bold text-agree">{formatAmount(amount)}</p>
-          </div>
-        </div>
+        </Link>
 
         <div className="mt-4 flex items-center justify-between gap-2">
           <Link to={`/donor/${id}`}>
