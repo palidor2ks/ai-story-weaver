@@ -224,6 +224,24 @@ const extractPublisherUrl = (description: string, fallback: string): string => {
 };
 
 const lastNameOf = (name: string): string => {
+  const normalized = fullNameOf(name).replace(/[.,]/g, ' ').trim();
+  const parts = normalized.split(/\s+/).filter(p => !/^(jr|sr|ii|iii|iv)$/i.test(p));
+  return parts[parts.length - 1] || normalized;
+};
+
+const fullNameOf = (name: string): string => {
+  const raw = name.trim();
+  if (raw.includes(',')) {
+    const [beforeComma, afterComma = ''] = raw.split(',', 2).map(s => s.trim());
+    if (/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(afterComma)) return beforeComma;
+    return `${afterComma} ${beforeComma}`.replace(/\s+/g, ' ').trim();
+  }
+  const cleaned = raw.replace(/,?\s+(Jr\.?|Sr\.?|II|III|IV)$/i, '').trim();
+  return cleaned;
+};
+
+/*
+const lastNameOf = (name: string): string => {
   const cleaned = name.replace(/[.,]/g, ' ').trim();
   if (name.includes(',')) return cleaned.split(/\s+/)[0];
   const parts = cleaned.split(/\s+/).filter(p => !/^(jr|sr|ii|iii|iv)$/i.test(p));
@@ -237,6 +255,7 @@ const fullNameOf = (name: string): string => {
   }
   return name.trim();
 };
+*/
 
 const chamberKeyword = (office?: string): string | null => {
   const o = (office || '').toLowerCase();
