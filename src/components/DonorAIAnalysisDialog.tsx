@@ -177,6 +177,19 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
 
         {analysis && !isLoading && (
           <div className="space-y-5 text-sm">
+            {analysis.provider && (
+              <div className="flex items-center gap-2 text-xs">
+                <Badge variant={analysis.provider === 'perplexity' ? 'default' : 'secondary'} className="gap-1">
+                  <Globe className="h-3 w-3" />
+                  {analysis.provider === 'perplexity' ? 'Web-grounded (Perplexity)' : 'AI fallback (Gemini)'}
+                </Badge>
+                {analysis.provider === 'gemini' && analysis.provider_fallback?.reason && (
+                  <span className="text-muted-foreground italic truncate" title={analysis.provider_fallback.reason}>
+                    Web search unavailable — using model knowledge
+                  </span>
+                )}
+              </div>
+            )}
             {analysis.insufficient_information && (
               <div className="flex items-start gap-2 p-3 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
