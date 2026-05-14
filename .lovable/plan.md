@@ -1,32 +1,73 @@
-## Fix Committees directory showing only 2024
+## Speed up admin "Search Donors by Canonical Name"
 
-Two issues combine to lock the page to 2024:
+The current flow on every keystroke (after 2 chars):
+1. Hits `donor_consolidated` — a regular **view** that aggregates the entire ~1M-row `donors` table on demand (groups, builds `name_variations` arrays, sums totals).
+2. Filters with `ilike '%term%'` on the computed `search_text` field — a substring match on a view column has **no usable index**, so Postgres materializes the whole view, then filters and sorts.
+3. Sorts by `total_amount desc` and returns 50.
 
-1. **Cycle dropdown is missing older cycles.** `fetchCommitteeFilterOptions` in `src/hooks/useCommittees.ts` builds the cycle list from `supabase.from('committee_finance_rollups').select('cycle').limit(100)`. Postgres returns the first 100 rows in physical order, which are all 2024, so the resulting `Set` only contains `2024` (same root cause we just fixed for donors).
-2. **Default cycle is hardcoded to `'2024'`** in `src/pages/Committees.tsx` (`useState<string>('2024')`) and again as the fallback in `useCommittees`/`useCommitteesPaginated`.
+Each query takes seconds and runs on every character typed.
 
-### Fix
+### Fix (three layers)
 
-**Database migration** — add an RPC mirroring `get_donor_cycles`:
+**1. Client — debounce + raise minimum length** (`src/components/admin/DonorAliasesPanel.tsx`)
+- Debounce `donorSearch` by 300ms before passing it to `useSearchDonors`.
+- Raise minimum search length from 2 to 3 chars (`enabled` and the early-return in `useSearchDonors`).
+
+**2. Database — trigram index + dedicated RPC** (migration)
+
 ```sql
-create or replace function public.get_committee_cycles()
-returns text[]
-language sql stable security definer
-set search_path = public
-as $$
-  select coalesce(array_agg(distinct cycle order by cycle desc), '{}')
-  from public.committee_finance_rollups
-  where cycle is not null;
+create extension if not exists pg_trgm;
+
+create index if not exists idx_donors_display_name_trgm
+  on public.donors using gin (display_name gin_trgm_ops);
+
+create index if not exists idx_donors_name_trgm
+  on public.donors using gin (name gin_trgm_ops);
+
+create or replace function public.search_donors_by_name(
+  p_search text,
+  p_type   text default null,
+  p_limit  int  default 50
+)
+returns table (
+  display_name      text,
+  type              text,
+  total_amount      bigint,
+  name_variations   text[],
+  is_consolidated   boolean
+)
+language sql stable security definer set search_path = public as $$
+  with matches as (
+    select d.display_name, d.type::text as type, d.amount, d.name
+    from public.donors d
+    where (d.display_name ilike '%' || p_search || '%'
+           or d.name ilike '%' || p_search || '%')
+      and (p_type is null or p_type = 'all' or d.type::text = p_type)
+    limit 5000  -- cap raw rows before aggregation
+  )
+  select
+    coalesce(display_name, name)        as display_name,
+    type,
+    sum(amount)::bigint                 as total_amount,
+    array_agg(distinct name)            as name_variations,
+    (count(distinct name) > 1)          as is_consolidated
+  from matches
+  group by 1, 2
+  order by total_amount desc
+  limit p_limit;
 $$;
-grant execute on function public.get_committee_cycles() to anon, authenticated;
+
+grant execute on function public.search_donors_by_name(text, text, int)
+  to anon, authenticated;
 ```
 
-**`src/hooks/useCommittees.ts`**
-- In `fetchCommitteeFilterOptions`, replace the capped select with `supabase.rpc('get_committee_cycles')` and use the returned array directly.
-- Change the default `cycle` parameter on `fetchCommittees`, `useCommittees`, `useCommittee`, `useCommitteeDonors`, and `useCommitteesPaginated` from `'2024'` to `'all'` so unfiltered queries return every cycle.
+The trigram GIN index turns `ILIKE '%foo%'` into an indexed lookup. Capping the raw match set at 5,000 rows guarantees aggregation is cheap even for very generic queries like "american".
 
-**`src/pages/Committees.tsx`**
-- Initialize `useState<string>('all')` instead of `'2024'`.
-- Update the `availableCycles` fallback from `['2024']` to `[]` (the `'all'` entry is already prepended).
+**3. Hook — use the RPC** (`src/hooks/useDonorsPaginated.ts` → `useSearchDonors`)
+- Replace the `donor_consolidated` query with `supabase.rpc('search_donors_by_name', { p_search, p_type, p_limit: 50 })`.
+- Map the returned rows into the same shape the panel already expects (`name`, `type`, `totalAmount`, `count`, `isConsolidated`, `nameVariations`).
 
-No UI/visual changes; the existing "All cycles" option in the dropdown becomes the new default.
+### Expected outcome
+- "american" goes from multi-second view scans to <200ms indexed trigram lookups.
+- Typing fires at most one query per pause instead of one per keystroke.
+- No UI/visual changes; pure performance.
