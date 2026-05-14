@@ -56,6 +56,14 @@ export const Donors = () => {
     sortOrder: filters.sortOrder ?? 'desc',
   }), [filters, debouncedSearch, effectiveCycle]);
 
+  useEffect(() => {
+    if (!preferredCycle || preferredCycle === 'all') return;
+    setFilters((prev) => {
+      if (prev.cycle && prev.cycle !== 'all') return prev;
+      return { ...prev, cycle: preferredCycle };
+    });
+  }, [preferredCycle]);
+
   const { data, isLoading, error } = useDonorsPaginated(effectiveFilters);
 
   const donors = data?.donors || [];
