@@ -31,15 +31,27 @@ export interface InviteCaptionInput {
   url: string;
 }
 
+export interface DonorStatsCaptionInput {
+  kind: 'donor-stats';
+  donorName: string;
+  totalGiven: string;
+  donationCount: string;
+  recipientCount: string;
+  cycleCount: number;
+  url: string;
+}
+
 export type ShareSurface =
   | 'quiz_results'
   | 'quiz_results_invite'
-  | 'candidate_profile';
+  | 'candidate_profile'
+  | 'donor_profile';
 
 export type CaptionInput = (
   | CandidateAlignmentCaptionInput
   | UserProfileCaptionInput
   | InviteCaptionInput
+  | DonorStatsCaptionInput
 ) & { surface?: ShareSurface };
 
 export function getDefaultHashtags(input: CaptionInput): string {
