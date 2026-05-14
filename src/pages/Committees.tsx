@@ -30,7 +30,7 @@ const formatDate = (value: string | null) => {
 
 export const Committees = () => {
   const [search, setSearch] = useState('');
-  const [cycle, setCycle] = useState<string>('2024');
+  const [cycle, setCycle] = useState<string>('all');
   const [designation, setDesignation] = useState<string>('all');
   const [candidateId, setCandidateId] = useState<string>('all');
 
