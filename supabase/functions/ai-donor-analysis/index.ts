@@ -334,6 +334,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     }
 
     return json({
+      provider,
       summary: String(parsed.summary ?? ""),
       analysis: String(parsed.analysis ?? ""),
       positions: Array.isArray(parsed.positions) ? parsed.positions : [],
