@@ -28,17 +28,48 @@ function json(body: unknown, status = 200) {
 
 function extractJson(raw: string): any | null {
   if (!raw) return null;
-  const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const cleaned = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/```json\s*/gi, "```")
+    .trim();
   const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
   const candidates = [
     fence?.[1]?.trim(),
     cleaned,
-    cleaned.slice(cleaned.indexOf("{"), cleaned.lastIndexOf("}") + 1),
+    firstBrace >= 0 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : null,
   ].filter(Boolean) as string[];
   for (const c of candidates) {
     try { return JSON.parse(c); } catch { /* try next */ }
+    try {
+      return JSON.parse(c.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]").replace(/[\x00-\x1F\x7F]/g, ""));
+    } catch { /* try next */ }
   }
   return null;
+}
+
+function narrativeFallback(content: string, citations: string[]): any {
+  const analysis = content.trim();
+  const sentences = analysis.match(/[^.!?]+[.!?]+/g) ?? [];
+  const summary = sentences.slice(0, 2).join(" ").trim() || analysis.slice(0, 500);
+  return {
+    summary,
+    analysis,
+    positions: [],
+    goals: [],
+    key_people: [],
+    notable_recipients: [],
+    controversies: [],
+    causes: [],
+    finance_claims: [],
+    public_context_claims: analysis ? [analysis.slice(0, 1000)] : [],
+    insufficient_information: citations.length === 0 || analysis.length < 80,
+    confidence: citations.length ? 45 : 20,
+    confidence_rationale: citations.length
+      ? "Jina returned grounded narrative text but not structured JSON, so the analysis was preserved with limited field extraction."
+      : "Jina returned unstructured text without extractable source URLs.",
+  };
 }
 
 Deno.serve(async (req) => {
