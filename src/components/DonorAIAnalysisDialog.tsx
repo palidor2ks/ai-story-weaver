@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Sparkles, Loader2, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface DonorAnalysis {
@@ -19,6 +19,8 @@ export interface DonorAnalysis {
   party_support: { party: string; amount: number; share: number }[];
   causes: string[];
   motivation_hypotheses: string[];
+  finance_claims?: string[];
+  public_context_claims?: string[];
   insufficient_information: boolean;
   sources: { title: string; url: string }[];
 }
@@ -210,6 +212,37 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
               </div>
             )}
 
+            {analysis.finance_claims && analysis.finance_claims.length > 0 && (
+              <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                <h4 className="font-semibold text-foreground flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                  <Database className="h-3.5 w-3.5 text-primary" />
+                  From finance signals
+                </h4>
+                <ul className="list-disc pl-5 space-y-1 text-foreground">
+                  {analysis.finance_claims.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {analysis.public_context_claims && analysis.public_context_claims.length > 0 && (
+              <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                <h4 className="font-semibold text-foreground flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                  <Globe className="h-3.5 w-3.5 text-primary" />
+                  From public context
+                </h4>
+                <ul className="list-disc pl-5 space-y-1 text-foreground">
+                  {analysis.public_context_claims.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-muted-foreground italic">
+                  Numbers in brackets [n] reference the Sources list below.
+                </p>
+              </div>
+            )}
+
             {analysis.analysis && (
               <div className="space-y-2">
                 <h4 className="font-semibold text-foreground">Deeper analysis</h4>
@@ -217,10 +250,13 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
               </div>
             )}
 
-            {analysis.sources?.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-border">
-                <h4 className="font-semibold text-foreground">Sources</h4>
-                <ul className="space-y-1">
+            <div className="space-y-2 pt-2 border-t border-border">
+              <h4 className="font-semibold text-foreground flex items-center gap-1.5">
+                <BookOpen className="h-4 w-4 text-primary" />
+                Sources & citations
+              </h4>
+              {analysis.sources?.length > 0 ? (
+                <ol className="space-y-1 list-decimal pl-5">
                   {analysis.sources.map((s, i) => (
                     <li key={i}>
                       <a
@@ -234,9 +270,13 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
                       </a>
                     </li>
                   ))}
-                </ul>
-              </div>
-            )}
+                </ol>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  No external sources cited. Public-context claims reflect the model's background knowledge and should be independently verified.
+                </p>
+              )}
+            </div>
 
             {profileHref && (
               <div className="pt-2">
