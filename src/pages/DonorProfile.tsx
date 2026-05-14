@@ -638,7 +638,7 @@ const DonorProfile = () => {
                               type="button"
                               size="sm"
                               variant="ghost"
-                              className="h-7 px-2"
+                              className="h-7 px-2 text-primary hover:text-primary" aria-label="Open AI analysis" title="Open AI analysis"
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
@@ -650,7 +650,7 @@ const DonorProfile = () => {
                               {recipientLoadingKey === `recipient:${record.candidates?.name || record.recipient_committee_name || 'Unknown'}:${record.cycle}` ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <Sparkles className="h-3.5 w-3.5" />
+                                <div className="flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /><span className="text-xs font-semibold">AI</span></div>
                               )}
                             </Button>
                           </DialogTrigger>
