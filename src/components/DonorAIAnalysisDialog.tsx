@@ -88,30 +88,18 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
     setIsLoading(true);
     setError(null);
 
-    const invokeWithTimeout = (ms: number) => {
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout: AI analysis took too long. Please try again.')), ms),
-      );
-      return Promise.race([
-        supabase.functions.invoke('ai-donor-analysis', {
-          body: { donor_id: id, donor_name: name, donor_type: type, cycle },
-        }),
-        timeoutPromise,
-      ]);
-    };
+    const invokeOnce = () => supabase.functions.invoke('ai-donor-analysis', {
+      body: { donor_id: id, donor_name: name, donor_type: type, cycle },
+    });
 
     try {
       let data: unknown;
       let fnError: unknown;
 
       for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const result = await invokeWithTimeout(110_000);
-          data = result.data;
-          fnError = result.error;
-        } catch (timeoutErr) {
-          fnError = timeoutErr;
-        }
+        const result = await invokeOnce();
+        data = result.data;
+        fnError = result.error;
         if (!fnError) break;
 
         const isRetryable = /failed to send a request to the edge function|failed to fetch|fetch failed|networkerror|load failed|timeout/i.test(
