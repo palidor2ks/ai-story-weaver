@@ -103,7 +103,27 @@ const googleNewsToken = (googleUrl: string): string | null => {
 };
 
 async function decodeGoogleNewsWithBatch(token: string): Promise<string | null> {
-  const payload = '[[["Fbv4je","[\\"garturlreq\\",[[\\"en-US\\",\\"US\\",[\\"FINANCE_TOP_INDICES\\",\\"WEB_TEST_1_0_0\\"],null,null,1,1,\\"US:en\\",null,180,null,null,null,null,null,0,null,null,[1608992183,723341000]],\\"en-US\\",\\"US\\",1,[2,3,4,8],1,0,\\"655000234\\",0,0,null,0],\\"' + token + '\\"]",null,"generic"]]]';
+  const paramsCtrl = new AbortController();
+  const paramsTimer = setTimeout(() => paramsCtrl.abort(), 5000);
+  let signature = '';
+  let timestamp = '';
+  try {
+    const page = await fetch(`https://news.google.com/rss/articles/${token}`, {
+      signal: paramsCtrl.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)' },
+    });
+    const html = await page.text();
+    signature = html.match(/data-n-a-sg="([^"]+)"/)?.[1] || '';
+    timestamp = html.match(/data-n-a-ts="([^"]+)"/)?.[1] || '';
+  } catch { return null; }
+  finally { clearTimeout(paramsTimer); }
+
+  if (!signature || !timestamp) return null;
+
+  const payload = [[[
+    'Fbv4je',
+    `["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,null,null,null,null,null,0,1],"X","X",1,[1,1,1],1,1,null,0,0,null,0],"${token}",${timestamp},"${signature}"]`,
+  ]]];
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 5000);
   try {
@@ -115,12 +135,13 @@ async function decodeGoogleNewsWithBatch(token: string): Promise<string | null> 
         'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)',
         'Referer': 'https://news.google.com/',
       },
-      body: `f.req=${encodeURIComponent(payload)}`,
+      body: `f.req=${encodeURIComponent(JSON.stringify(payload))}`,
     });
     const text = await res.text();
-    const match = text.match(/\[\\"garturlres\\",\\"([^\\"]+)/);
-    if (!match) return null;
-    const decoded = match[1].replace(/\\u003d/g, '=').replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+    const parsed = JSON.parse(text.split('\n\n')[1] || '[]');
+    const responsePayload = JSON.parse(parsed?.[0]?.[2] || '[]');
+    const decoded = responsePayload?.[1];
+    if (!decoded || typeof decoded !== 'string') return null;
     return isGoogleHost(decoded) ? null : decoded;
   } catch { return null; }
   finally { clearTimeout(timer); }
