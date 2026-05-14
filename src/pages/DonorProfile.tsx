@@ -36,6 +36,7 @@ interface DonorRecord {
   cycle: string;
   candidate_id: string;
   recipient_committee_name?: string | null;
+  recipient_committee_id?: string | null;
   employer?: string | null;
   occupation?: string | null;
   contributor_city?: string | null;
@@ -299,15 +300,27 @@ const DonorProfile = () => {
       const committeeNames = aliasInfo?.alias_pattern
         ? nameVariations
         : [displayName, donor.name, ...nameVariations].filter(Boolean);
+      const committeeIds = [...new Set(donorRecords.map((row) => row.recipient_committee_id).filter(Boolean))] as string[];
 
       const uniqueCommitteeNames = [...new Set(committeeNames)];
-      if (uniqueCommitteeNames.length === 0) return [] as PACContributor[];
+      if (uniqueCommitteeNames.length === 0 && committeeIds.length === 0) return [] as PACContributor[];
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('contributions')
-        .select('contributor_name, amount, recipient_committee_name')
-        .in('recipient_committee_name', uniqueCommitteeNames)
+        .select('contributor_name, amount, recipient_committee_name, recipient_committee_id')
         .limit(10000);
+
+      if (committeeIds.length > 0 && uniqueCommitteeNames.length > 0) {
+        query = query.or(
+          `recipient_committee_id.in.(${committeeIds.join(',')}),recipient_committee_name.in.(${uniqueCommitteeNames.map((name) => `"${name.replace(/"/g, '\\"')}"`).join(',')})`
+        );
+      } else if (committeeIds.length > 0) {
+        query = query.in('recipient_committee_id', committeeIds);
+      } else {
+        query = query.in('recipient_committee_name', uniqueCommitteeNames);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
