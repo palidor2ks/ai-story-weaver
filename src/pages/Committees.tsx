@@ -39,11 +39,17 @@ export const Committees = () => {
   const availableCycles = useMemo(
     () => {
       const cycles = filterOptions?.cycles ?? [];
-      const unique = Array.from(new Set(['all', ...cycles]));
-      return unique;
+      // Always keep "all" so the page is usable even when the RPC returns no cycles
+      return Array.from(new Set(['all', ...cycles]));
     },
     [filterOptions],
   );
+
+  const hasCycleData = availableCycles.length > 1;
+  const hasAnyFilterOptions =
+    hasCycleData
+    || (filterOptions?.designations?.length ?? 0) > 0
+    || (filterOptions?.candidates?.length ?? 0) > 0;
 
   const availableDesignations = useMemo(
     () => filterOptions?.designations ?? [],
