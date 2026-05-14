@@ -1,58 +1,47 @@
 ## Goal
-Add a Google News–powered "Relevant News" feed to the Feed page (above the representatives list) and a per-representative version on the Candidate Profile page. News is filtered to the user's reps/candidates + district, with highlights for the user's top topics and "new in 48h" articles.
+Fix three issues with the Relevant News feed:
+1. Article links don't open the actual article (Google News RSS uses redirect URLs).
+2. Titles are dirty (trailing " - Source Name", leftover HTML entities).
+3. No time-window logic — should show **today** first, then fall back to **this week**, then **this month**, else show "No relevant news".
 
-## Architecture
+## Changes
 
+### `supabase/functions/fetch-relevant-news/index.ts`
+
+**1. Resolve real article URLs**
+Google News RSS `<link>` is `https://news.google.com/rss/articles/...` which redirects. Two-step fix:
+- Prefer the publisher URL embedded in `<description>` (Google News descriptions contain `<a href="https://realsite.com/...">` to the real article). Parse the first `href` from the description HTML and use it as the canonical URL when present.
+- Fallback: keep the Google News link (still works, just redirects).
+
+**2. Clean titles**
+- Strip trailing ` - <Source>` suffix that Google News appends (e.g. `"Headline - The New York Times"` → `"Headline"`). Use the `<source>` value to trim, plus a generic ` - [^-]+$` fallback when source missing.
+- Re-run entity decode after stripping (already have `decodeEntities`).
+- Clean snippet: strip all HTML, decode entities, collapse whitespace, cap at 240 chars.
+
+**3. Tiered time window**
+Replace single threshold with cascading buckets. After scoring/dedupe:
 ```text
-┌──────────────────────────────────────────────────────────┐
-│ Client                                                    │
-│  - useRelevantNews(hook) ──► supabase.functions.invoke   │
-│  - <RelevantNewsFeed/>  renders cards + badges           │
-└─────────────────────────┬────────────────────────────────┘
-                          │
-              ┌───────────▼────────────┐
-              │ Edge fn: fetch-relevant│
-              │ -news (Deno)           │
-              │  1. Build queries from │
-              │     people + district  │
-              │  2. Fetch Google News  │
-              │     RSS (multi-query)  │
-              │  3. Parse XML, dedupe  │
-              │     by URL+title       │
-              │  4. Score: person hit, │
-              │     topic hit, recency │
-              │  5. Flag isTopTopicHit │
-              │     + isNew (≤48h)     │
-              │  6. Return top N items │
-              └────────────────────────┘
+today    = items with ageHours <= 24
+week     = items with ageHours <= 24*7
+month    = items with ageHours <= 24*30
 ```
+Pick the **first non-empty bucket** in that order. Return `{ items, window: 'today'|'week'|'month'|'none' }`.
 
-## Files
+Keep the `score >= 3` + person-match requirement inside each bucket.
 
-### New
-- `supabase/functions/fetch-relevant-news/index.ts` — POST handler. Body: `{ people: {name, office, state, district?}[], topics: string[], district?, state?, limit? }`. CORS enabled, `verify_jwt = false` (no secrets needed; Google News RSS is public). Uses regex XML parsing (no extra deps). Returns `FeedNewsItem[]`.
-- `src/hooks/useRelevantNews.ts` — React Query hook. Stable key includes hashed people/topics/district. `staleTime: 15min`, `refetchInterval: 30min`.
-- `src/components/RelevantNewsFeed.tsx` — Reusable card list. Props: `people`, `topics`, `district?`, `state?`, `title?`, `maxItems?`. Renders title, source · relative time, snippet, "New" + "Top Topic Match" badges, matched-topic chips. Loading skeletons + empty state.
+### `src/hooks/useRelevantNews.ts`
+Update return type to `{ items: FeedNewsItem[]; window: 'today'|'week'|'month'|'none' }`. Keep query options the same.
 
-### Edited
-- `src/pages/Feed.tsx` — Insert `<RelevantNewsFeed>` above the representative list. Feed it the unified candidates already on screen (myReps + district candidates) and `userTopics`.
-- `src/pages/CandidateProfile.tsx` — Add a "Latest News" section in the profile (near the top, under header). Pass a single-person array `[{name, office, state, district}]` and `userTopicScores` topic names.
-
-## Scoring (edge function)
-- person match: full name +3, last name + chamber/office keyword +2
-- district mention (e.g., "NJ-06", "California 12th") +2
-- topic keyword hit +1 each (capped at +3)
-- recency: ≤24h +2, ≤72h +1
-- dedupe: lowercase host+path; keep highest score
-- `isTopTopicHit = matchedTopics.length > 0`
-- `isNew = publishedAt within 48h`
-- threshold: keep score ≥ 3, sort desc, slice `limit ?? 20`
+### `src/components/RelevantNewsFeed.tsx`
+- Consume `{ items, window }`.
+- Show a small label in the card header: "Today", "This week", "This month", or hide when none.
+- Empty state: "No relevant news this month."
+- Add `target="_blank" rel="noopener noreferrer"` (already there) — no change needed; just confirm link uses cleaned `url`.
 
 ## Out of scope
-- No DB writes, no "seen articles" persistence (the 48h window approximates "new").
-- No per-rep `rss_url` integration yet (Google News RSS only).
-- No paid news API; can swap in later behind same hook.
+- No DB writes; no follow-redirect server call (avoids latency + bot blocks). Description-href extraction handles the vast majority of articles.
+- No change to scoring weights or query construction.
 
 ## Verification
-- Edge function curl test with sample people/topics returns parsed items.
-- Feed page renders news section above reps; Candidate Profile shows scoped news; topic highlights visible.
+- Curl edge function for a known rep; confirm `items[].url` points to the publisher domain (not `news.google.com`) for most items, titles have no ` - Source` suffix, `window` field present.
+- Open Feed page; click 2-3 items, verify they land on the article.

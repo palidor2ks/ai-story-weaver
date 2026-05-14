@@ -46,15 +46,47 @@ const STATE_NAMES: Record<string, string> = {
 const decodeEntities = (s: string) =>
   s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
-   .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)));
+   .replace(/&nbsp;/g, ' ')
+   .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+   .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)));
 
 const stripTags = (s: string) => s.replace(/<[^>]*>/g, '').trim();
 
+const cleanText = (s: string) =>
+  decodeEntities(stripTags(s.replace(/<!\[CDATA\[|\]\]>/g, ''))).replace(/\s+/g, ' ').trim();
+
+const cleanTitle = (raw: string, source: string) => {
+  let t = cleanText(raw);
+  if (source) {
+    const src = source.trim();
+    // Remove trailing " - Source" (Google News pattern)
+    const re = new RegExp('\\s+[-–—]\\s+' + src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'i');
+    t = t.replace(re, '');
+  }
+  // Generic fallback: trailing " - Something" (only if dash present and tail is short-ish)
+  const m = t.match(/^(.*?)\s+[-–—]\s+([^-–—]{2,60})$/);
+  if (m && !source) t = m[1].trim();
+  return t;
+};
+
+const extractPublisherUrl = (description: string, fallback: string): string => {
+  // Google News descriptions embed <a href="https://publisher..."> to the article
+  const matches = [...description.matchAll(/href=["']([^"']+)["']/gi)];
+  for (const m of matches) {
+    const href = decodeEntities(m[1]);
+    try {
+      const u = new URL(href);
+      if (!/news\.google\.com$/i.test(u.hostname) && !/google\.com$/i.test(u.hostname)) {
+        return href;
+      }
+    } catch { /* ignore */ }
+  }
+  return fallback;
+};
+
 const lastNameOf = (name: string): string => {
   const cleaned = name.replace(/[.,]/g, ' ').trim();
-  if (name.includes(',')) {
-    return cleaned.split(/\s+/)[0];
-  }
+  if (name.includes(',')) return cleaned.split(/\s+/)[0];
   const parts = cleaned.split(/\s+/).filter(p => !/^(jr|sr|ii|iii|iv)$/i.test(p));
   return parts[parts.length - 1] || cleaned;
 };
@@ -82,11 +114,7 @@ function buildQueries(people: Person[], state?: string, district?: string): stri
   for (const p of people) {
     const full = fullNameOf(p.name);
     const ch = chamberKeyword(p.office);
-    if (ch) {
-      qs.add(`"${full}" ${ch}`);
-    } else {
-      qs.add(`"${full}"`);
-    }
+    qs.add(ch ? `"${full}" ${ch}` : `"${full}"`);
   }
   if (state && district) {
     const stName = STATE_NAMES[state.toUpperCase()] || state;
@@ -113,17 +141,17 @@ function parseRss(xml: string): ParsedItem[] {
   let m;
   while ((m = itemRegex.exec(xml)) !== null) {
     const block = m[1];
-    const pick = (tag: string) => {
+    const pickRaw = (tag: string) => {
       const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i');
       const r = block.match(re);
-      return r ? decodeEntities(stripTags(r[1].replace(/<!\[CDATA\[|\]\]>/g, ''))) : '';
+      return r ? r[1] : '';
     };
     items.push({
-      title: pick('title'),
-      link: pick('link'),
-      pubDate: pick('pubDate'),
-      source: pick('source') || 'Google News',
-      description: pick('description'),
+      title: pickRaw('title'),
+      link: cleanText(pickRaw('link')),
+      pubDate: cleanText(pickRaw('pubDate')),
+      source: cleanText(pickRaw('source')) || 'Google News',
+      description: pickRaw('description'),
     });
   }
   return items;
@@ -172,7 +200,7 @@ Deno.serve(async (req: Request) => {
     const limit = Math.min(Math.max(body.limit ?? 20, 1), 50);
 
     if (people.length === 0) {
-      return new Response(JSON.stringify({ items: [] }), {
+      return new Response(JSON.stringify({ items: [], window: 'none' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -182,14 +210,17 @@ Deno.serve(async (req: Request) => {
     const allItems = results.flat();
 
     const now = Date.now();
-    const dedup = new Map<string, FeedNewsItem>();
+    const dedup = new Map<string, FeedNewsItem & { ageHours: number }>();
 
     for (const it of allItems) {
       if (!it.link || !it.title) continue;
-      const key = urlKey(it.link);
-      const text = `${it.title} ${it.description}`.toLowerCase();
+      const cleanedTitle = cleanTitle(it.title, it.source);
+      const cleanedSnippet = cleanText(it.description).slice(0, 240);
+      const finalUrl = extractPublisherUrl(it.description, it.link);
+      const key = urlKey(finalUrl);
+      const text = `${cleanedTitle} ${cleanedSnippet}`.toLowerCase();
       const publishedMs = it.pubDate ? Date.parse(it.pubDate) : NaN;
-      const ageHours = isNaN(publishedMs) ? 999 : (now - publishedMs) / 36e5;
+      const ageHours = isNaN(publishedMs) ? 999999 : (now - publishedMs) / 36e5;
 
       const matchedPeople: string[] = [];
       for (const p of people) {
@@ -221,33 +252,46 @@ Deno.serve(async (req: Request) => {
       if (matchedPeople.length === 0) continue;
       if (score < 3) continue;
 
-      const item: FeedNewsItem = {
+      const item: FeedNewsItem & { ageHours: number } = {
         id: hashId(key),
-        title: it.title,
-        url: it.link,
+        title: cleanedTitle,
+        url: finalUrl,
         source: it.source,
         publishedAt: !isNaN(publishedMs) ? new Date(publishedMs).toISOString() : new Date().toISOString(),
-        snippet: it.description?.slice(0, 240),
+        snippet: cleanedSnippet,
         matchedPeople,
         matchedTopics,
         relevanceScore: score,
         isTopTopicHit: matchedTopics.length > 0,
         isNew: ageHours <= 48,
+        ageHours,
       };
       const existing = dedup.get(key);
       if (!existing || existing.relevanceScore < score) dedup.set(key, item);
     }
 
-    const items = Array.from(dedup.values())
-      .sort((a, b) => b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt))
-      .slice(0, limit);
+    const all = Array.from(dedup.values()).sort(
+      (a, b) => b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt),
+    );
 
-    return new Response(JSON.stringify({ items }), {
+    const today = all.filter(i => i.ageHours <= 24);
+    const week = all.filter(i => i.ageHours <= 24 * 7);
+    const month = all.filter(i => i.ageHours <= 24 * 30);
+
+    let chosen: typeof all = [];
+    let windowLabel: 'today' | 'week' | 'month' | 'none' = 'none';
+    if (today.length > 0) { chosen = today; windowLabel = 'today'; }
+    else if (week.length > 0) { chosen = week; windowLabel = 'week'; }
+    else if (month.length > 0) { chosen = month; windowLabel = 'month'; }
+
+    const items = chosen.slice(0, limit).map(({ ageHours: _a, ...rest }) => rest);
+
+    return new Response(JSON.stringify({ items, window: windowLabel }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {
     console.error(e);
-    return new Response(JSON.stringify({ error: (e as Error).message, items: [] }), {
+    return new Response(JSON.stringify({ error: (e as Error).message, items: [], window: 'none' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
