@@ -1,15 +1,19 @@
-## Confirm donor sort by amount
+## Fix donor list timeout
 
-The donor list on `/donors` is already configured to sort by total dollar amount, descending, by default.
+**Error:** `canceling statement due to statement timeout` on `/donors`.
 
-**Where this lives:**
-- `src/pages/Donors.tsx` — initial state sets `sortBy: 'amount'`, `sortOrder: 'desc'`
-- `src/hooks/useDonorsPaginated.ts` — query orders by `total_amount` descending when `sortBy === 'amount'`
+**Cause:** In the previous turn I added a secondary `.order('display_name')` tiebreaker to the `donor_consolidated` query. With ~1M+ rows and no composite index on `(total_amount, display_name)`, Postgres falls back to a full sort and exceeds the REST statement timeout.
 
-**Proposed change (small hardening):**
-1. In `useDonorsPaginated.ts`, add a deterministic tiebreaker so equal-amount donors keep a stable order: `.order('total_amount', { ascending: false }).order('display_name', { ascending: true })`.
-2. In `Donors.tsx`, guarantee the default cannot be silently overridden — if `filters.sortBy` is undefined, force `'amount' / 'desc'` before passing to the hook (defensive, in case future filter resets drop the field).
+**Fix:** Revert the sort in `src/hooks/useDonorsPaginated.ts` to a single column order — which is what the underlying index supports.
 
-No UI/visual changes. No backend schema changes.
+```ts
+if (sortBy === 'amount') {
+  query = query.order('total_amount', { ascending: sortOrder === 'asc', nullsFirst: false });
+} else {
+  query = query.order('display_name', { ascending: sortOrder === 'asc' });
+}
+```
 
-If you instead want me to **lock** the sort to amount-desc and remove the user's ability to change it, say the word and I'll strip the sort controls from `DonorFilters`.
+Leave the defensive default (`sortBy ?? 'amount'`, `sortOrder ?? 'desc'`) in `Donors.tsx` in place — that change is harmless and still ensures sort by dollar amount.
+
+No DB migration needed.
