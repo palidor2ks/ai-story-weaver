@@ -327,6 +327,22 @@ export const CandidateProfile = () => {
                 />
                 
                 {/* Share Profile Button */}
+                <RecipientAIAnalysisDialog
+                  entityKind="candidate"
+                  entityId={candidate.id}
+                  entityName={candidate.name}
+                  fecId={candidate.fec_candidate_id ?? null}
+                  party={candidate.party}
+                  office={candidate.office}
+                  state={candidate.state}
+                  trigger={
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Sparkles className="h-4 w-4" />
+                      AI Analysis
+                    </Button>
+                  }
+                />
+
                 <ShareProfileButton
                   candidateName={candidate.name}
                   candidateOffice={candidate.office}
