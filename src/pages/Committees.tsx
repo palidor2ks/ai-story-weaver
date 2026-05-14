@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCommitteesPaginated, useCommitteeFilterOptions } from '@/hooks/useCommittees';
-import { Loader2, Landmark, Users, DollarSign, ArrowRight, Search, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Landmark, Users, DollarSign, ArrowRight, Search, SlidersHorizontal, Inbox } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const formatCurrency = (value: number) =>
@@ -39,11 +39,17 @@ export const Committees = () => {
   const availableCycles = useMemo(
     () => {
       const cycles = filterOptions?.cycles ?? [];
-      const unique = Array.from(new Set(['all', ...cycles]));
-      return unique;
+      // Always keep "all" so the page is usable even when the RPC returns no cycles
+      return Array.from(new Set(['all', ...cycles]));
     },
     [filterOptions],
   );
+
+  const hasCycleData = availableCycles.length > 1;
+  const hasAnyFilterOptions =
+    hasCycleData
+    || (filterOptions?.designations?.length ?? 0) > 0
+    || (filterOptions?.candidates?.length ?? 0) > 0;
 
   const availableDesignations = useMemo(
     () => filterOptions?.designations ?? [],
@@ -110,9 +116,13 @@ export const Committees = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Select value={cycle} onValueChange={setCycle} disabled={isLoading || filtersLoading}>
+              <Select
+                value={cycle}
+                onValueChange={setCycle}
+                disabled={isLoading || filtersLoading || !hasCycleData}
+              >
                 <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="Cycle" />
+                  <SelectValue placeholder={hasCycleData ? 'Cycle' : 'All cycles'} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableCycles.map((c) => (
@@ -181,9 +191,33 @@ export const Committees = () => {
         )}
 
         {!isLoading && !isError && committees.length === 0 && (
-          <div className="text-center py-16 text-muted-foreground">
-            No committees found matching your search.
-          </div>
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center text-center py-16 px-6 gap-3">
+              <div className="w-12 h-12 rounded-full bg-muted text-muted-foreground flex items-center justify-center">
+                <Inbox className="w-6 h-6" />
+              </div>
+              <h3 className="font-semibold text-lg">No committees to show</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                {!hasAnyFilterOptions
+                  ? "We don't have any committee data loaded yet. Once committees are imported, they'll appear here."
+                  : 'No committees match your current filters. Try clearing the search or selecting a different cycle.'}
+              </p>
+              {hasAnyFilterOptions && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearch('');
+                    setCycle('all');
+                    setDesignation('all');
+                    setCandidateId('all');
+                  }}
+                >
+                  Clear filters
+                </Button>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
