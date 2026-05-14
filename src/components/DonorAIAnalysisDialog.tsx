@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen } from 'lucide-react';
+import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface DonorAnalysis {
@@ -132,13 +132,28 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            {name}
-          </DialogTitle>
-          <DialogDescription>
-            AI-generated donor analysis grounded in campaign-finance data and broader public context.
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1.5 min-w-0">
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                {name}
+              </DialogTitle>
+              <DialogDescription>
+                AI-generated donor analysis grounded in campaign-finance data and broader public context.
+              </DialogDescription>
+            </div>
+            {analysis && !isLoading && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={fetchAnalysis}
+                className="shrink-0"
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                Regenerate
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         {isLoading && (
