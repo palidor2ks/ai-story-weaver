@@ -249,7 +249,9 @@ async function fetchRss(query: string): Promise<ParsedItem[]> {
       return [];
     }
     const xml = await res.text();
-    return parseRss(xml);
+    const parsed = parseRss(xml);
+    if (parsed.length === 0) console.warn('rss returned no items', { query, status: res.status, preview: xml.slice(0, 200) });
+    return parsed;
   } catch (e) {
     console.error('rss fetch failed', query, e);
     return [];
