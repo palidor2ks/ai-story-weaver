@@ -71,9 +71,6 @@ const isGoogleHost = (u: string): boolean => {
   } catch { return false; }
 };
 
-const googleNewsSearchUrl = (title: string): string =>
-  `https://www.google.com/search?q=${encodeURIComponent(title)}&tbm=nws`;
-
 const decodeGoogleNewsUrl = (googleUrl: string): string | null => {
   try {
     const url = new URL(googleUrl);
@@ -97,6 +94,59 @@ const decodeGoogleNewsUrl = (googleUrl: string): string | null => {
   return null;
 };
 
+const googleNewsToken = (googleUrl: string): string | null => {
+  try {
+    const url = new URL(googleUrl);
+    if (!isGoogleHost(url.toString())) return null;
+    return url.pathname.match(/\/(?:rss\/)?articles\/([^/?#]+)/)?.[1] || null;
+  } catch { return null; }
+};
+
+async function decodeGoogleNewsWithBatch(token: string): Promise<string | null> {
+  const paramsCtrl = new AbortController();
+  const paramsTimer = setTimeout(() => paramsCtrl.abort(), 5000);
+  let signature = '';
+  let timestamp = '';
+  try {
+    const page = await fetch(`https://news.google.com/rss/articles/${token}`, {
+      signal: paramsCtrl.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)' },
+    });
+    const html = await page.text();
+    signature = html.match(/data-n-a-sg="([^"]+)"/)?.[1] || '';
+    timestamp = html.match(/data-n-a-ts="([^"]+)"/)?.[1] || '';
+  } catch { return null; }
+  finally { clearTimeout(paramsTimer); }
+
+  if (!signature || !timestamp) return null;
+
+  const payload = [[[
+    'Fbv4je',
+    `["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,null,null,null,null,null,0,1],"X","X",1,[1,1,1],1,1,null,0,0,null,0],"${token}",${timestamp},"${signature}"]`,
+  ]]];
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 5000);
+  try {
+    const res = await fetch('https://news.google.com/_/DotsSplashUi/data/batchexecute?rpcids=Fbv4je', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+        'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)',
+        'Referer': 'https://news.google.com/',
+      },
+      body: `f.req=${encodeURIComponent(JSON.stringify(payload))}`,
+    });
+    const text = await res.text();
+    const parsed = JSON.parse(text.split('\n\n')[1] || '[]');
+    const responsePayload = JSON.parse(parsed?.[0]?.[2] || '[]');
+    const decoded = responsePayload?.[1];
+    if (!decoded || typeof decoded !== 'string') return null;
+    return isGoogleHost(decoded) ? null : decoded;
+  } catch { return null; }
+  finally { clearTimeout(timer); }
+}
+
 const resolveCache = new Map<string, string>();
 
 async function resolveGoogleNewsUrl(googleUrl: string): Promise<string> {
@@ -105,6 +155,14 @@ async function resolveGoogleNewsUrl(googleUrl: string): Promise<string> {
   if (decoded) {
     resolveCache.set(googleUrl, decoded);
     return decoded;
+  }
+  const token = googleNewsToken(googleUrl);
+  if (token) {
+    const batchDecoded = await decodeGoogleNewsWithBatch(token);
+    if (batchDecoded) {
+      resolveCache.set(googleUrl, batchDecoded);
+      return batchDecoded;
+    }
   }
   let current = googleUrl;
   for (let i = 0; i < 3; i++) {
@@ -162,22 +220,29 @@ const extractPublisherUrl = (description: string, fallback: string): string => {
       }
     } catch { /* ignore */ }
   }
+  try {
+    const u = new URL(decodeEntities(fallback));
+    const publisher = u.searchParams.get('url');
+    if (/bing\.com$/i.test(u.hostname) && publisher) return publisher;
+  } catch { /* ignore */ }
   return fallback;
 };
 
 const lastNameOf = (name: string): string => {
-  const cleaned = name.replace(/[.,]/g, ' ').trim();
-  if (name.includes(',')) return cleaned.split(/\s+/)[0];
-  const parts = cleaned.split(/\s+/).filter(p => !/^(jr|sr|ii|iii|iv)$/i.test(p));
-  return parts[parts.length - 1] || cleaned;
+  const normalized = fullNameOf(name).replace(/[.,]/g, ' ').trim();
+  const parts = normalized.split(/\s+/).filter(p => !/^(jr|sr|ii|iii|iv)$/i.test(p));
+  return parts[parts.length - 1] || normalized;
 };
 
 const fullNameOf = (name: string): string => {
-  if (name.includes(',')) {
-    const [last, rest] = name.split(',');
-    return `${rest.trim()} ${last.trim()}`.replace(/\s+/g, ' ').trim();
+  const raw = name.trim();
+  if (raw.includes(',')) {
+    const [beforeComma, afterComma = ''] = raw.split(',', 2).map(s => s.trim());
+    if (/^(jr\.?|sr\.?|ii|iii|iv)$/i.test(afterComma)) return beforeComma;
+    return `${afterComma} ${beforeComma}`.replace(/\s+/g, ' ').trim();
   }
-  return name.trim();
+  const cleaned = raw.replace(/,?\s+(Jr\.?|Sr\.?|II|III|IV)$/i, '').trim();
+  return cleaned;
 };
 
 const chamberKeyword = (office?: string): string | null => {
@@ -239,7 +304,7 @@ function parseRss(xml: string): ParsedItem[] {
       title: pickRaw('title'),
       link: cleanText(pickRaw('link')),
       pubDate: cleanText(pickRaw('pubDate')),
-      source: cleanText(pickRaw('source')) || 'Google News',
+      source: cleanText(pickRaw('source') || pickRaw('News:Source')) || 'News',
       description: pickRaw('description'),
     });
   }
@@ -271,6 +336,24 @@ async function fetchRss(query: string): Promise<ParsedItem[]> {
   }
 }
 
+async function fetchBingRss(query: string): Promise<ParsedItem[]> {
+  const url = `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)',
+      },
+    });
+    if (!res.ok) return [];
+    return parseRss(await res.text());
+  } catch (e) {
+    console.error('bing rss fetch failed', query, e);
+    return [];
+  }
+}
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function fetchRssSequentially(queries: string[], limit: number): Promise<ParsedItem[]> {
@@ -280,6 +363,17 @@ async function fetchRssSequentially(queries: string[], limit: number): Promise<P
     const parsed = await fetchRss(query);
     items.push(...parsed);
     if (query !== queries[queries.length - 1]) await delay(450);
+  }
+  return items;
+}
+
+async function fetchBingRssSequentially(queries: string[], limit: number): Promise<ParsedItem[]> {
+  const items: ParsedItem[] = [];
+  for (const query of queries.slice(0, 4)) {
+    if (items.length >= limit * 4) break;
+    const parsed = await fetchBingRss(query);
+    items.push(...parsed);
+    if (query !== queries[queries.length - 1]) await delay(300);
   }
   return items;
 }
@@ -362,9 +456,11 @@ Deno.serve(async (req: Request) => {
     }
 
     const queries = buildQueries(people, body.state, body.district);
-    let allItems = await fetchRssSequentially(queries, limit);
-    if (allItems.length === 0) allItems = await fetchGdeltNews(people, limit);
-    console.info('relevant-news rss results', { queries: queries.length, allItems: allItems.length });
+    const bingItems = await fetchBingRssSequentially(queries, limit);
+    const gdeltItems = await fetchGdeltNews(people, limit);
+    const rssItems: ParsedItem[] = [];
+    const allItems = [...rssItems, ...bingItems, ...gdeltItems];
+    console.info('relevant-news rss results', { queries: queries.length, googleItems: rssItems.length, bingItems: bingItems.length, gdeltItems: gdeltItems.length, allItems: allItems.length });
 
     const now = Date.now();
     const dedup = new Map<string, FeedNewsItem & { ageHours: number }>();
@@ -461,7 +557,7 @@ Deno.serve(async (req: Request) => {
       }
     }));
     const items = sliced
-      .filter(it => !!it.title)
+      .filter(it => !!it.title && !!it.url && !isGoogleHost(it.url))
       .map(({ ageHours: _a, ...rest }) => rest);
 
     return new Response(JSON.stringify({ items, window: windowLabel }), {

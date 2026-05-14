@@ -80,18 +80,14 @@ export const RelevantNewsFeed = ({
         ) : items.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">{emptyMessage(win)}</p>
         ) : (
-          items.map(item => {
-            const hasUrl = !!item.url;
-            const Wrapper: any = hasUrl ? 'a' : 'div';
-            const wrapperProps = hasUrl
-              ? { href: item.url, target: '_blank', rel: 'noopener noreferrer' }
-              : {};
-            return (
-              <Wrapper
-                key={item.id}
-                {...wrapperProps}
-                className={`block rounded-md border p-3 transition-colors group ${hasUrl ? 'hover:bg-accent/40 cursor-pointer' : ''}`}
-              >
+          items.map(item => (
+            <a
+              key={item.id}
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-md border p-3 transition-colors group hover:bg-accent/40 cursor-pointer"
+            >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -108,7 +104,7 @@ export const RelevantNewsFeed = ({
                         <Badge key={t} variant="outline" className="text-xs capitalize">{t}</Badge>
                       ))}
                     </div>
-                    <h3 className={`font-medium text-sm leading-snug ${hasUrl ? 'group-hover:text-primary' : ''}`}>
+                    <h3 className="font-medium text-sm leading-snug group-hover:text-primary">
                       {item.title}
                     </h3>
                     {item.snippet && !item.snippet.startsWith('<') && !item.snippet.startsWith('http') && (
@@ -126,11 +122,10 @@ export const RelevantNewsFeed = ({
                       )}
                     </div>
                   </div>
-                  {hasUrl && <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />}
+                  <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
                 </div>
-              </Wrapper>
-            );
-          })
+            </a>
+          ))
         )}
       </CardContent>
     </Card>

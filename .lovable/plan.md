@@ -1,23 +1,26 @@
-Fix the remaining blocked Google links in the news feed.
+## Goal
+Show only news articles that have a real publisher URL, and fix the URL resolution so articles are clickable instead of becoming unclickable rows.
 
-What I found:
-- Some feed items still intentionally fall back to `https://www.google.com/search?...&tbm=nws` when the original publisher URL cannot be resolved.
-- Those Google search/news links can still be blocked when opened from the embedded preview or browser context.
+## Plan
+1. Update `supabase/functions/fetch-relevant-news/index.ts`
+   - Remove the old Google search fallback entirely.
+   - Improve Google News URL resolution by:
+     - decoding Google RSS article tokens when possible,
+     - following Google News redirects from the edge function when decoding fails,
+     - rejecting any final `google.com` / `news.google.com` URL.
+   - After resolution, filter out unresolved items before returning results.
+   - If Google RSS produces too few clickable items, merge in GDELT publisher URLs as a backup source instead of returning unclickable Google items.
 
-Plan:
-1. Update `supabase/functions/fetch-relevant-news/index.ts` so returned news items never use Google URLs as clickable article URLs.
-   - Keep decoded publisher URLs when available.
-   - Keep GDELT publisher URLs when available.
-   - If Google News cannot be resolved to a publisher URL, return the item with no URL or a non-clickable marker instead of `google.com/search`.
+2. Update `src/components/RelevantNewsFeed.tsx`
+   - Revert the non-clickable row behavior.
+   - Render every returned item as a normal clickable article link.
+   - Since the edge function will only return valid URLs, no unclickable articles will display.
 
-2. Update `src/hooks/useRelevantNews.ts` typing to allow a missing/empty URL for unresolved news items.
+3. Update `src/hooks/useRelevantNews.ts` if needed
+   - Keep the item type requiring `url: string`, matching the new guarantee that displayed news items are clickable.
 
-3. Update `src/components/RelevantNewsFeed.tsx` so:
-   - Items with publisher URLs remain clickable.
-   - Items without publisher URLs display normally but are not clickable and do not show the external-link affordance.
-   - No raw link text is shown.
-
-4. Deploy and test `fetch-relevant-news` with the current Feed data.
-   - Verify no returned `items[].url` contains `google.com` or `news.google.com`.
-   - Verify the feed still displays articles.
-   - Verify clickable articles open publisher sites, not blocked Google pages.
+4. Validate
+   - Deploy/test `fetch-relevant-news`.
+   - Confirm returned `items[]` all have non-empty URLs.
+   - Confirm no returned URL contains `google.com` or `news.google.com`.
+   - Confirm the feed still shows articles and all visible rows are clickable.
