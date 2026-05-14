@@ -333,7 +333,7 @@ export const useCommitteesPaginated = (filters: CommitteeFilters) => {
 const fetchCommitteeFilterOptions = async (): Promise<CommitteeFilterOptions> => {
   // Limit scans for faster load
   const [cyclesResult, designationResult, candidatesResult] = await Promise.all([
-    supabase.from('committee_finance_rollups').select('cycle').limit(100),
+    supabase.rpc('get_committee_cycles'),
     supabase.from('candidate_committees').select('designation').limit(500),
     supabase.from('candidates').select('id, name, party').not('fec_committee_id', 'is', null).order('name').limit(200),
   ]);
@@ -343,9 +343,7 @@ const fetchCommitteeFilterOptions = async (): Promise<CommitteeFilterOptions> =>
   if (candidatesResult.error) throw candidatesResult.error;
 
   const cycleSet = new Set<string>(
-    (cyclesResult.data || [])
-      .map((row) => row.cycle)
-      .filter((cycle): cycle is string => !!cycle),
+    ((cyclesResult.data as string[] | null) || []).filter((cycle): cycle is string => !!cycle),
   );
 
   const designationSet = new Set<string>(
