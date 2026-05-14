@@ -242,7 +242,11 @@ async function fetchRss(query: string): Promise<ParsedItem[]> {
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0)' },
+      headers: {
+        'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)',
+      },
     });
     if (!res.ok) {
       const errorText = await res.text();
@@ -257,6 +261,19 @@ async function fetchRss(query: string): Promise<ParsedItem[]> {
     console.error('rss fetch failed', query, e);
     return [];
   }
+}
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function fetchRssSequentially(queries: string[], limit: number): Promise<ParsedItem[]> {
+  const items: ParsedItem[] = [];
+  for (const query of queries) {
+    if (items.length >= limit * 8) break;
+    const parsed = await fetchRss(query);
+    items.push(...parsed);
+    if (query !== queries[queries.length - 1]) await delay(450);
+  }
+  return items;
 }
 
 function urlKey(u: string): string {
