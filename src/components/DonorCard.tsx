@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,20 +9,9 @@ import {
   TrendingUp,
   Layers,
   Sparkles,
-  Loader2,
-  ExternalLink,
-  AlertTriangle,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { supabase } from '@/integrations/supabase/client';
+import { DonorAIAnalysisDialog } from '@/components/DonorAIAnalysisDialog';
 
 interface DonorCardProps {
   id: string;
