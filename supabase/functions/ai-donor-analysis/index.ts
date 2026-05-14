@@ -63,8 +63,8 @@ Deno.serve(async (req) => {
       return json({ error: "Unauthorized" }, 401);
     }
 
-    if (!perplexityKey) {
-      return json({ error: "PERPLEXITY_API_KEY is not configured" }, 500);
+    if (!jinaKey) {
+      return json({ error: "JINA_API_KEY is not configured" }, 500);
     }
 
     let body: RequestBody;
