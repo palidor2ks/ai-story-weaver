@@ -474,9 +474,32 @@ export const Feed = () => {
                         {g.key === 'state-leg' && ' Try refreshing — the state legislator lookup occasionally times out.'}
                       </div>
                     ) : (
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {g.items.map((candidate, index) => (
-                          <CandidateCard key={candidate.id} candidate={candidate} index={index} />
+                      <div className="space-y-6">
+                        {[
+                          {
+                            key: 'incumbents',
+                            title: 'Incumbents',
+                            items: g.items.filter(candidate => candidate.isIncumbent),
+                          },
+                          {
+                            key: 'new-candidates',
+                            title: 'New Candidates',
+                            items: g.items.filter(candidate => !candidate.isIncumbent),
+                          },
+                        ].map(subgroup => (
+                          subgroup.items.length > 0 && (
+                            <div key={subgroup.key} className="space-y-3">
+                              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                {subgroup.title}
+                                <span className="ml-1 text-muted-foreground/70">({subgroup.items.length})</span>
+                              </h3>
+                              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                {subgroup.items.map((candidate, index) => (
+                                  <CandidateCard key={candidate.id} candidate={candidate} index={index} />
+                                ))}
+                              </div>
+                            </div>
+                          )
                         ))}
                       </div>
                     )}
