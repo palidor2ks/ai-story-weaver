@@ -284,6 +284,48 @@ async function fetchRssSequentially(queries: string[], limit: number): Promise<P
   return items;
 }
 
+const parseGdeltDate = (raw?: string): string => {
+  if (!raw) return new Date().toUTCString();
+  const m = raw.match(/^(\d{4})(\d{2})(\d{2})T?(\d{2})(\d{2})(\d{2})Z?$/);
+  if (!m) return new Date(raw).toUTCString();
+  return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`).toUTCString();
+};
+
+async function fetchGdeltNews(people: Person[], limit: number): Promise<ParsedItem[]> {
+  const primaryName = fullNameOf(people[0]?.name || '').trim();
+  if (!primaryName) return [];
+  const params = new URLSearchParams({
+    query: `"${primaryName}"`,
+    mode: 'ArtList',
+    format: 'json',
+    maxrecords: String(Math.min(Math.max(limit * 4, 10), 50)),
+    sort: 'DateDesc',
+    timespan: '1month',
+    sourcelang: 'English',
+  });
+  try {
+    const res = await fetch(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)' },
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      console.warn('gdelt fetch non-ok', { status: res.status, preview: text.slice(0, 120) });
+      return [];
+    }
+    const json = JSON.parse(text) as { articles?: GdeltArticle[] };
+    return (json.articles || []).map(a => ({
+      title: a.title || '',
+      link: a.url || '',
+      pubDate: parseGdeltDate(a.seendate),
+      source: a.sourceCommonName || a.domain || 'News',
+      description: '',
+    })).filter(a => a.title && a.link);
+  } catch (e) {
+    console.error('gdelt fetch failed', e);
+    return [];
+  }
+}
+
 function urlKey(u: string): string {
   try {
     const x = new URL(u);
