@@ -161,6 +161,8 @@ export const ShareCardModal = ({
         ? `pulse-${caption.candidateName?.replace(/\s+/g, '-').toLowerCase()}`
         : caption.kind === 'user-profile'
         ? 'pulse-my-profile'
+        : caption.kind === 'donor-stats'
+        ? `pulse-donor-${caption.donorName?.replace(/\s+/g, '-').toLowerCase()}`
         : 'pulse-invite';
     return `${base}-${selected}.png`;
   }, [selected, caption]);
