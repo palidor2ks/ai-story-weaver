@@ -37,6 +37,7 @@ import { ClaimProfileDialog } from '@/components/ClaimProfileDialog';
 import { OfficialAvatar } from '@/components/OfficialAvatar';
 import { VotingRecordSection } from '@/components/VotingRecordSection';
 import { ShareProfileButton } from '@/components/ShareProfileButton';
+import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialog';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
