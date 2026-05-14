@@ -457,11 +457,11 @@ Deno.serve(async (req: Request) => {
       if (isGoogleHost(it.url)) {
         const resolved = await resolveGoogleNewsUrl(it.url);
         if (!isGoogleHost(resolved)) it.url = resolved;
-        else if (it.title) it.url = googleNewsSearchUrl(it.title);
+        else it.url = '';
       }
     }));
     const items = sliced
-      .filter(it => it.title || !isGoogleHost(it.url))
+      .filter(it => !!it.title)
       .map(({ ageHours: _a, ...rest }) => rest);
 
     return new Response(JSON.stringify({ items, window: windowLabel }), {
