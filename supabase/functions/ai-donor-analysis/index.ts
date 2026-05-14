@@ -329,6 +329,7 @@ REQUIREMENTS:
 
     return json({
       ...parsed,
+      data_coverage,
       finance_context: {
         total_amount: signals.finance.total_amount,
         total_transactions: signals.finance.total_transactions,
