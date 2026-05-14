@@ -340,6 +340,19 @@ export const CandidateProfile = () => {
                   disagreements={disagreements}
                   profileUrl={window.location.href}
                 />
+
+                {/* AI Analysis */}
+                <RecipientAIAnalysisDialog
+                  entityType="candidate"
+                  entityId={candidate.id}
+                  displayName={candidate.name}
+                  trigger={
+                    <Button size="sm" variant="outline" className="gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      AI analysis
+                    </Button>
+                  }
+                />
               </div>
 
               {/* Score Display */}
