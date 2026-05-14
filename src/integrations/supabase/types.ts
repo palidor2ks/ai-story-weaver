@@ -2767,6 +2767,23 @@ export type Database = {
         }
         Relationships: []
       }
+      donor_consolidated_mv: {
+        Row: {
+          cycle: string | null
+          display_name: string | null
+          is_consolidated: boolean | null
+          name_variations: string[] | null
+          primary_id: string | null
+          recipient_count: number | null
+          row_id: string | null
+          search_text: string | null
+          total_amount: number | null
+          total_transactions: number | null
+          type: Database["public"]["Enums"]["donor_type"] | null
+          types: Database["public"]["Enums"]["donor_type"][] | null
+        }
+        Relationships: []
+      }
       topic_answer_counts: {
         Row: {
           answer_count: number | null
@@ -2858,6 +2875,31 @@ export type Database = {
         Args: never
         Returns: {
           cycle: string
+        }[]
+      }
+      get_donors_paginated: {
+        Args: {
+          p_cycle?: string
+          p_min_amount?: number
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_sort_by?: string
+          p_sort_order?: string
+          p_type?: string
+        }
+        Returns: {
+          cycle: string
+          display_name: string
+          is_consolidated: boolean
+          name_variations: string[]
+          primary_id: string
+          recipient_count: number
+          total_amount: number
+          total_count: number
+          total_transactions: number
+          type: string
+          types: string[]
         }[]
       }
       get_hidden_state_codes: {
