@@ -22,6 +22,9 @@ export interface DonorAnalysis {
   finance_claims?: string[];
   public_context_claims?: string[];
   insufficient_information: boolean;
+  confidence?: number;
+  confidence_rationale?: string;
+  data_coverage?: 'none' | 'sparse' | 'moderate' | 'rich';
   sources: { title: string; url: string }[];
 }
 
