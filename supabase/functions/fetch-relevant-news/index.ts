@@ -399,8 +399,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const queries = buildQueries(people, body.state, body.district);
-    let allItems = await fetchRssSequentially(queries, limit);
-    if (allItems.length === 0) allItems = await fetchGdeltNews(people, limit);
+    const rssItems = await fetchRssSequentially(queries, limit);
+    const gdeltItems = await fetchGdeltNews(people, limit);
+    const allItems = [...rssItems, ...gdeltItems];
     console.info('relevant-news rss results', { queries: queries.length, allItems: allItems.length });
 
     const now = Date.now();
@@ -498,7 +499,7 @@ Deno.serve(async (req: Request) => {
       }
     }));
     const items = sliced
-      .filter(it => !!it.title)
+      .filter(it => !!it.title && !!it.url && !isGoogleHost(it.url))
       .map(({ ageHours: _a, ...rest }) => rest);
 
     return new Response(JSON.stringify({ items, window: windowLabel }), {
