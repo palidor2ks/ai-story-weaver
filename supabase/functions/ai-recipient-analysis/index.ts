@@ -191,26 +191,44 @@ Output ONLY a JSON object, no prose:
   "confidence_rationale": string
 }`;
 
-    const jinaResp = await fetch("https://deepsearch.jina.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${jinaKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "jina-deepsearch-v2",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a nonpartisan campaign-finance and politics analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, or quotes. If results describe a different entity than anchored, set insufficient_information=true and cap confidence at 20. Output strict JSON only — no prose, no markdown fences.",
-          },
-          { role: "user", content: searchPrompt },
-        ],
-        stream: false,
-        reasoning_effort: "low",
-      }),
-    });
+    const jinaController = new AbortController();
+    const jinaTimeout = setTimeout(() => jinaController.abort(), 90_000);
+    let jinaResp: Response;
+    try {
+      jinaResp = await fetch("https://deepsearch.jina.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${jinaKey}`,
+          "Content-Type": "application/json",
+        },
+        signal: jinaController.signal,
+        body: JSON.stringify({
+          model: "jina-deepsearch-v2",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a nonpartisan campaign-finance and politics analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, or quotes. If results describe a different entity than anchored, set insufficient_information=true and cap confidence at 20. Output strict JSON only — no prose, no markdown fences.",
+            },
+            { role: "user", content: searchPrompt },
+          ],
+          stream: false,
+          reasoning_effort: "low",
+        }),
+      });
+    } catch (e) {
+      clearTimeout(jinaTimeout);
+      const aborted = (e as { name?: string })?.name === "AbortError";
+      console.error("Jina fetch failed", aborted ? "timeout" : e);
+      return json({
+        error: aborted
+          ? "AI research timed out while searching the web. Please try again."
+          : "Could not reach the AI research service. Please try again.",
+        code: aborted ? "JINA_TIMEOUT" : "JINA_NETWORK",
+        fallback: true,
+      }, 200);
+    }
+    clearTimeout(jinaTimeout);
 
     if (!jinaResp.ok) {
       const t = await jinaResp.text();
