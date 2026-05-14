@@ -220,6 +220,11 @@ const extractPublisherUrl = (description: string, fallback: string): string => {
       }
     } catch { /* ignore */ }
   }
+  try {
+    const u = new URL(decodeEntities(fallback));
+    const publisher = u.searchParams.get('url');
+    if (/bing\.com$/i.test(u.hostname) && publisher) return publisher;
+  } catch { /* ignore */ }
   return fallback;
 };
 
