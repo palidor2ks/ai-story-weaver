@@ -293,31 +293,57 @@ const DonorProfile = () => {
 
 
   const { data: pacContributors = [] } = useQuery({
-    queryKey: ['pac-contributors', id, donor?.name, aliasInfo?.alias_pattern],
+    queryKey: ['pac-contributors', id, donor?.name, displayName, aliasInfo?.alias_pattern, nameVariations.join('|')],
     queryFn: async () => {
       if (!donor?.name || (donor.type !== 'PAC' && donor.type !== 'Organization')) return [] as PACContributor[];
 
-      const committeeNames = aliasInfo?.alias_pattern
-        ? nameVariations
-        : [displayName, donor.name, ...nameVariations].filter(Boolean);
-      const committeeIds = [...new Set(donorRecords.map((row) => row.recipient_committee_id).filter(Boolean))] as string[];
+      const candidateNames = [
+        displayName,
+        donor.name,
+        ...(aliasInfo?.alias_pattern ? nameVariations : nameVariations),
+      ].filter(Boolean) as string[];
+      const uniqueCandidateNames = [...new Set(candidateNames)];
 
-      const uniqueCommitteeNames = [...new Set(committeeNames)];
-      if (uniqueCommitteeNames.length === 0 && committeeIds.length === 0) return [] as PACContributor[];
+      // Step 1: resolve this donor's own receiving committees by fuzzy-matching
+      // against contributions.recipient_committee_name (the donor itself is e.g.
+      // "COINBASE" but the actual receiving committee is stored as
+      // "COINBASE, INC. INNOVATION PAC (...)").
+      const resolvedCommitteeIds = new Set<string>();
+      const resolvedCommitteeNames = new Set<string>();
+      for (const name of uniqueCandidateNames) {
+        const trimmed = name.trim();
+        if (!trimmed) continue;
+        // Use a prefix ilike so "COINBASE" matches "COINBASE, INC. INNOVATION PAC..."
+        const { data: matches } = await supabase
+          .from('contributions')
+          .select('recipient_committee_id, recipient_committee_name')
+          .ilike('recipient_committee_name', `${trimmed}%`)
+          .limit(500);
+        (matches || []).forEach((m: any) => {
+          if (m.recipient_committee_id) resolvedCommitteeIds.add(m.recipient_committee_id);
+          if (m.recipient_committee_name) resolvedCommitteeNames.add(m.recipient_committee_name);
+        });
+      }
+
+      if (resolvedCommitteeIds.size === 0 && resolvedCommitteeNames.size === 0) {
+        return [] as PACContributor[];
+      }
 
       let query = supabase
         .from('contributions')
         .select('contributor_name, amount, recipient_committee_name, recipient_committee_id')
         .limit(10000);
 
-      if (committeeIds.length > 0 && uniqueCommitteeNames.length > 0) {
+      const idList = Array.from(resolvedCommitteeIds);
+      const nameList = Array.from(resolvedCommitteeNames);
+      if (idList.length > 0 && nameList.length > 0) {
         query = query.or(
-          `recipient_committee_id.in.(${committeeIds.join(',')}),recipient_committee_name.in.(${uniqueCommitteeNames.map((name) => `"${name.replace(/"/g, '\\"')}"`).join(',')})`
+          `recipient_committee_id.in.(${idList.join(',')}),recipient_committee_name.in.(${nameList.map((name) => `"${name.replace(/"/g, '\\"')}"`).join(',')})`
         );
-      } else if (committeeIds.length > 0) {
-        query = query.in('recipient_committee_id', committeeIds);
+      } else if (idList.length > 0) {
+        query = query.in('recipient_committee_id', idList);
       } else {
-        query = query.in('recipient_committee_name', uniqueCommitteeNames);
+        query = query.in('recipient_committee_name', nameList);
       }
 
       const { data, error } = await query;
