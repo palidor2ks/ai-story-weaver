@@ -7,6 +7,10 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = true
   [functions.allocate-committee]
     verify_jwt = false
+  [functions.apply-donor-alias]
+    verify_jwt = true
+  [functions.unapply-donor-alias]
+    verify_jwt = true
   [functions.auth-email-hook]
     verify_jwt = false
   [functions.backfill-bill-summaries]
