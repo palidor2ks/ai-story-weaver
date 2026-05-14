@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +22,8 @@ import {
   TrendingUp, 
   User as UserIcon, 
   Users,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 
 interface DonorRecord {
@@ -47,6 +49,12 @@ interface DonorRecord {
     district?: string;
     image_url?: string;
   };
+}
+
+
+interface RecipientAnalysis {
+  summary: string;
+  analysis: string;
 }
 
 interface ContributionRecord {
@@ -139,6 +147,9 @@ const DonorProfile = () => {
   const [committeeFilter, setCommitteeFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [showAllRecipients, setShowAllRecipients] = useState(false);
+  const [recipientAnalysis, setRecipientAnalysis] = useState<Record<string, RecipientAnalysis>>({});
+  const [activeRecipientKey, setActiveRecipientKey] = useState<string | null>(null);
+  const [recipientLoadingKey, setRecipientLoadingKey] = useState<string | null>(null);
 
   // Fetch the specific donor record
   const { data: donor, isLoading: donorLoading } = useQuery({
@@ -243,6 +254,40 @@ const DonorProfile = () => {
     },
     enabled: !!donor?.name,
   });
+
+  const fetchRecipientAnalysis = async (recipientKey: string, recipientName: string, cycle?: string) => {
+    if (recipientAnalysis[recipientKey]) {
+      setActiveRecipientKey(recipientKey);
+      return;
+    }
+
+    setRecipientLoadingKey(recipientKey);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-donor-analysis', {
+        body: {
+          donor_id: recipientKey,
+          donor_name: recipientName,
+          donor_type: 'Organization',
+          cycle,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setRecipientAnalysis((prev) => ({
+        ...prev,
+        [recipientKey]: {
+          summary: data.summary ?? 'No summary available.',
+          analysis: data.analysis ?? 'No analysis available.',
+        },
+      }));
+      setActiveRecipientKey(recipientKey);
+    } catch (err) {
+      console.error('Recipient AI analysis failed', err);
+    } finally {
+      setRecipientLoadingKey(null);
+    }
+  };
 
   // Fetch individual contributions for detailed history (across all types)
   const { data: contributions = [], isLoading: contributionsLoading } = useQuery({
@@ -585,7 +630,41 @@ const DonorProfile = () => {
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-border">
                       <Badge variant="secondary" className="text-xs">{record.cycle}</Badge>
-                      <span className="font-bold text-agree">{formatAmount(record.amount)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-agree">{formatAmount(record.amount)}</span>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const recipientName = record.candidates?.name || record.recipient_committee_name || 'Unknown';
+                                const recipientKey = `recipient:${recipientName}:${record.cycle}`;
+                                void fetchRecipientAnalysis(recipientKey, recipientName, record.cycle);
+                              }}
+                            >
+                              {recipientLoadingKey === `recipient:${record.candidates?.name || record.recipient_committee_name || 'Unknown'}:${record.cycle}` ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>AI Analysis</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-3 text-sm">
+                              <p>{(activeRecipientKey && recipientAnalysis[activeRecipientKey]?.summary) || 'Generating analysis...'}</p>
+                              <p className="text-muted-foreground">{(activeRecipientKey && recipientAnalysis[activeRecipientKey]?.analysis) || ''}</p>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
