@@ -107,6 +107,13 @@ interface ParsedItem {
   description: string;
 }
 
+function cleanText(s: string): string {
+  return decodeEntities(stripTags(s || ''))
+    .replace(/\s+/g, ' ')
+    .replace(/\s([,.;:!?])/g, '$1')
+    .trim();
+}
+
 function parseRss(xml: string): ParsedItem[] {
   const items: ParsedItem[] = [];
   const itemRegex = /<item>([\s\S]*?)<\/item>/g;
@@ -147,6 +154,48 @@ async function fetchRss(query: string): Promise<ParsedItem[]> {
   }
 }
 
+
+
+async function resolveArticleUrl(rawUrl: string): Promise<string> {
+  try {
+    const host = new URL(rawUrl).hostname.toLowerCase();
+    if (!host.includes('news.google.')) return rawUrl;
+    const res = await fetch(rawUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0)' },
+    });
+    return res.url || rawUrl;
+  } catch {
+    return rawUrl;
+  }
+}
+
+function daysAgoStart(days: number): number {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.getTime();
+}
+
+function applyRecencyFallback(items: FeedNewsItem[]): FeedNewsItem[] {
+  const now = Date.now();
+  const todayStart = daysAgoStart(0);
+  const weekStart = daysAgoStart(6);
+  const monthStart = daysAgoStart(29);
+
+  const dated = items.filter(i => !Number.isNaN(Date.parse(i.publishedAt)));
+  const today = dated.filter(i => Date.parse(i.publishedAt) >= todayStart);
+  if (today.length > 0) return today;
+
+  const week = dated.filter(i => Date.parse(i.publishedAt) >= weekStart && Date.parse(i.publishedAt) <= now);
+  if (week.length > 0) return week;
+
+  const month = dated.filter(i => Date.parse(i.publishedAt) >= monthStart && Date.parse(i.publishedAt) <= now);
+  if (month.length > 0) return month;
+
+  return [];
+}
 function urlKey(u: string): string {
   try {
     const x = new URL(u);
@@ -221,13 +270,14 @@ Deno.serve(async (req: Request) => {
       if (matchedPeople.length === 0) continue;
       if (score < 3) continue;
 
+      const resolvedUrl = await resolveArticleUrl(it.link);
       const item: FeedNewsItem = {
         id: hashId(key),
-        title: it.title,
-        url: it.link,
-        source: it.source,
+        title: cleanText(it.title),
+        url: resolvedUrl,
+        source: cleanText(it.source || "Google News"),
         publishedAt: !isNaN(publishedMs) ? new Date(publishedMs).toISOString() : new Date().toISOString(),
-        snippet: it.description?.slice(0, 240),
+        snippet: cleanText(it.description || "").slice(0, 240),
         matchedPeople,
         matchedTopics,
         relevanceScore: score,
@@ -238,9 +288,10 @@ Deno.serve(async (req: Request) => {
       if (!existing || existing.relevanceScore < score) dedup.set(key, item);
     }
 
-    const items = Array.from(dedup.values())
-      .sort((a, b) => b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt))
-      .slice(0, limit);
+    const scoredItems = Array.from(dedup.values())
+      .sort((a, b) => b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt));
+
+    const items = applyRecencyFallback(scoredItems).slice(0, limit);
 
     return new Response(JSON.stringify({ items }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
