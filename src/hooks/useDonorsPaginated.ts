@@ -74,14 +74,10 @@ export const useAvailableDonorFilters = () => {
   return useQuery({
     queryKey: ['donor-filter-options'],
     queryFn: async () => {
-      // Get distinct cycles - limit scan for faster load
-      const { data: cyclesData } = await supabase
-        .from('donors')
-        .select('cycle')
-        .order('cycle', { ascending: false })
-        .limit(1000);
-      
-      const cycles = [...new Set(cyclesData?.map(d => d.cycle) || [])];
+      // Get all distinct cycles via RPC (avoids 1000-row scan limit hiding older cycles)
+      const { data: cyclesData } = await supabase.rpc('get_donor_cycles');
+
+      const cycles = [...new Set((cyclesData || []).map((d: { cycle: string }) => d.cycle).filter(Boolean))] as string[];
       
       // Get distinct states - limit scan for faster load
       const { data: statesData } = await supabase
