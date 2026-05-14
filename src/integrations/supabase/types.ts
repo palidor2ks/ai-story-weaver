@@ -2922,6 +2922,7 @@ export type Database = {
         }[]
       }
       refresh_bill_summary_stats: { Args: never; Returns: undefined }
+      refresh_donor_consolidated_mv: { Args: never; Returns: undefined }
       refresh_donor_display_names: { Args: never; Returns: undefined }
       resolve_donor_display_name: {
         Args: { p_donor_name: string; p_donor_type: string }
