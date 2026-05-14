@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Sparkles, Loader2, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface DonorAnalysis {
@@ -19,6 +19,8 @@ export interface DonorAnalysis {
   party_support: { party: string; amount: number; share: number }[];
   causes: string[];
   motivation_hypotheses: string[];
+  finance_claims?: string[];
+  public_context_claims?: string[];
   insufficient_information: boolean;
   sources: { title: string; url: string }[];
 }
