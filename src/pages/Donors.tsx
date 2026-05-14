@@ -49,14 +49,21 @@ export const Donors = () => {
     return () => window.clearTimeout(timeout);
   }, [filters.search]);
 
-  const effectiveCycle = filters.cycle && filters.cycle !== 'all' ? filters.cycle : preferredCycle;
+  useEffect(() => {
+    if (!preferredCycle || preferredCycle === 'all') return;
+
+    setFilters((prev) => {
+      if (prev.cycle && prev.cycle !== 'all') return prev;
+      return { ...prev, cycle: preferredCycle };
+    });
+  }, [preferredCycle]);
+
   const effectiveFilters = useMemo(() => ({
     ...filters,
     search: debouncedSearch,
-    cycle: effectiveCycle,
     sortBy: filters.sortBy ?? 'amount',
     sortOrder: filters.sortOrder ?? 'desc',
-  }), [filters, debouncedSearch, effectiveCycle]);
+  }), [filters, debouncedSearch]);
 
   const { data, isLoading, error } = useDonorsPaginated(effectiveFilters);
 
