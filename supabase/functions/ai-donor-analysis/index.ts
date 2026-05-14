@@ -162,10 +162,12 @@ Deno.serve(async (req) => {
     const systemPrompt = `You are a nonpartisan campaign-finance analyst. You will receive structured FEC-style finance signals about a political donor and must produce an analysis.
 
 REQUIREMENTS:
-- Use the finance signals as ground truth.
-- You MAY incorporate broader publicly known context about this donor: news coverage, public statements, social media posts, official biographies, organizational affiliations, business interests. When you do, you MUST include source links in the "sources" array.
-- If signals are sparse and you cannot find broader public context, set "insufficient_information" to true and say so plainly. DO NOT fabricate.
-- Stay neutral. No partisan framing.
+- Treat the finance signals as ground truth for dollar amounts and recipients.
+- Finance signals may be sparse, zero, or limited to a single cycle. Sparse finance data DOES NOT mean the donor/organization is unknown — many well-known PACs, super PACs, corporations, unions, and individuals have extensive public records (news coverage, FEC filings in other cycles, founders, leadership, stated mission, affiliated figures, business interests) that you should draw on from your training knowledge.
+- ALWAYS attempt a substantive analysis using your knowledge of the entity (who runs it, who founded/funds it, its stated purpose, notable activity, controversies, affiliations). Reference cycles outside the provided window if relevant (e.g. a PAC's prior-cycle spending).
+- Include source links in "sources" whenever you can recall reputable URLs (FEC.gov, OpenSecrets, major news outlets, official sites). If you cannot recall exact URLs, still produce the analysis but leave sources empty rather than fabricating.
+- Only set "insufficient_information" to true if the entity is genuinely obscure AND finance signals are empty AND you have no reliable knowledge of it. For any reasonably notable PAC, candidate committee, corporation, union, or public figure, set it to false.
+- Stay neutral. No partisan framing. Do not invent specific dollar figures, dates, or quotes.
 - Output STRICT JSON matching the provided schema. No markdown, no commentary outside JSON.`;
 
     const userPrompt = `Donor finance signals (JSON):\n${JSON.stringify(signals, null, 2)}\n\nProduce the analysis now.`;
