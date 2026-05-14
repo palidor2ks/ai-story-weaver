@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
 import { DonorAIAnalysisDialog } from '@/components/DonorAIAnalysisDialog';
+import { ShareDonorButton } from '@/components/ShareDonorButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
