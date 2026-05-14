@@ -10,16 +10,6 @@ import { useDonorsPaginated, useAvailableDonorFilters, type DonorFilters as Dono
 export const Donors = () => {
   const { data: filterOptions, isLoading: optionsLoading } = useAvailableDonorFilters();
 
-  const preferredCycle = useMemo(() => {
-    const cycles = filterOptions?.cycles || [];
-    if (cycles.length === 0) return 'all';
-    const numericCycles = cycles
-      .map((c) => Number(c))
-      .filter((c) => Number.isFinite(c));
-    if (numericCycles.length === 0) return cycles[0];
-    return String(Math.max(...numericCycles));
-  }, [filterOptions?.cycles]);
-
   const [filters, setFilters] = useState<Partial<DonorFiltersType>>({
     page: 1,
     pageSize: 24,
