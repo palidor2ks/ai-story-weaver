@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCommitteesPaginated, useCommitteeFilterOptions } from '@/hooks/useCommittees';
-import { Loader2, Landmark, Users, DollarSign, ArrowRight, Search, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Landmark, Users, DollarSign, ArrowRight, Search, SlidersHorizontal, Inbox } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const formatCurrency = (value: number) =>
