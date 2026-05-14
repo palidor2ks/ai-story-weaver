@@ -191,9 +191,33 @@ export const Committees = () => {
         )}
 
         {!isLoading && !isError && committees.length === 0 && (
-          <div className="text-center py-16 text-muted-foreground">
-            No committees found matching your search.
-          </div>
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center text-center py-16 px-6 gap-3">
+              <div className="w-12 h-12 rounded-full bg-muted text-muted-foreground flex items-center justify-center">
+                <Inbox className="w-6 h-6" />
+              </div>
+              <h3 className="font-semibold text-lg">No committees to show</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                {!hasAnyFilterOptions
+                  ? "We don't have any committee data loaded yet. Once committees are imported, they'll appear here."
+                  : 'No committees match your current filters. Try clearing the search or selecting a different cycle.'}
+              </p>
+              {hasAnyFilterOptions && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearch('');
+                    setCycle('all');
+                    setDesignation('all');
+                    setCandidateId('all');
+                  }}
+                >
+                  Clear filters
+                </Button>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
