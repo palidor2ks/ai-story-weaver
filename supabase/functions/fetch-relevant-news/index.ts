@@ -304,7 +304,7 @@ async function fetchGdeltNews(people: Person[], limit: number): Promise<ParsedIt
     sourcelang: 'English',
   });
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 4500);
+  const timer = setTimeout(() => ctrl.abort(), 10000);
   try {
     const res = await fetch(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, {
       signal: ctrl.signal,
