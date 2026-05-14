@@ -55,14 +55,6 @@ const getTypeBadgeStyle = (type: string) => {
   }
 };
 
-const partyColor = (party: string) => {
-  const p = party.toLowerCase();
-  if (p.startsWith('dem')) return 'bg-blue-500';
-  if (p.startsWith('rep')) return 'bg-red-500';
-  if (p.startsWith('ind')) return 'bg-purple-500';
-  return 'bg-muted-foreground';
-};
-
 export const DonorCard = ({
   id,
   name,
