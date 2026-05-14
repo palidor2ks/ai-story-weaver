@@ -290,7 +290,6 @@ const DonorProfile = () => {
     const grouped = new Map<string, {
       candidate_id: string | null;
       amount: number;
-      cycle: string;
       candidates?: DonorRecord['candidates'];
       recipient_committee_name?: string | null;
     }>();
@@ -305,7 +304,6 @@ const DonorProfile = () => {
           grouped.set(key, {
             candidate_id: contribution.candidate_id,
             amount: contribution.amount,
-            cycle: contribution.cycle,
             candidates: contribution.candidates || undefined,
             recipient_committee_name: contribution.recipient_committee_name,
           });
@@ -321,7 +319,6 @@ const DonorProfile = () => {
           grouped.set(key, {
             candidate_id: record.candidate_id,
             amount: record.amount,
-            cycle: record.cycle,
             candidates: record.candidates,
             recipient_committee_name: record.recipient_committee_name,
           });
@@ -590,10 +587,10 @@ const DonorProfile = () => {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {(showAllRecipients ? topRecipients : topRecipients.slice(0, 6)).map((record, index) => {
               const recipientName = record.candidates?.name || record.recipient_committee_name || 'Unknown';
-              const recipientKey = `recipient:${recipientName}:${record.cycle}`;
+              const recipientKey = `recipient:${recipientName}`;
               return (
                 <Card
-                  key={`${record.candidate_id || 'unknown'}-${record.cycle}-${index}`}
+                  key={`${record.candidate_id || recipientName || 'unknown'}-${index}`}
                   className="h-full transition-all hover:shadow-md hover:border-primary/30 group"
                 >
                   <CardContent className="p-4">
@@ -617,15 +614,13 @@ const DonorProfile = () => {
                         )}
                       </div>
                     </Link>
-                    <div className="flex items-center justify-between pt-2 border-t border-border">
-                      <Badge variant="secondary" className="text-xs">{record.cycle}</Badge>
+                    <div className="flex items-center justify-end pt-2 border-t border-border">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-agree">{formatAmount(record.amount)}</span>
                         <DonorAIAnalysisDialog
                           id={recipientKey}
                           name={recipientName}
                           type="Organization"
-                          cycle={record.cycle}
                           profileHref={record.candidate_id ? `/candidate/${record.candidate_id}` : undefined}
                           trigger={
                             <Button
