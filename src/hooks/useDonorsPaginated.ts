@@ -113,42 +113,16 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
   return useQuery({
     queryKey: ['donors-paginated', mergedFilters],
     queryFn: async () => {
-      // Always use consolidated view - aliases are applied automatically
-      let query = supabase
-        .from('donor_consolidated')
-        .select('*', { count: 'exact' });
-
-      if (cycle && cycle !== 'all') {
-        query = query.eq('cycle', cycle);
-      }
-
-      if (type && type !== 'all') {
-        // Filter by types array using contains
-        query = query.contains('types', [type]);
-      }
-
-      if (search) {
-        // Search against search_text which includes display_name AND name_variations
-        query = query.ilike('search_text', `%${search}%`);
-      }
-
-      if (minAmount !== null) {
-        query = query.gte('total_amount', minAmount);
-      }
-
-      // Apply sorting (single column to leverage index and avoid statement timeouts)
-      if (sortBy === 'amount') {
-        query = query.order('total_amount', { ascending: sortOrder === 'asc', nullsFirst: false });
-      } else {
-        query = query.order('display_name', { ascending: sortOrder === 'asc' });
-      }
-
-      // Apply pagination
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-      query = query.range(from, to);
-
-      const { data, error, count } = await query;
+      const { data, error } = await (supabase as any).rpc('get_donors_paginated', {
+        p_page: page,
+        p_page_size: pageSize,
+        p_sort_by: sortBy,
+        p_sort_order: sortOrder,
+        p_cycle: cycle || null,
+        p_type: type && type !== 'all' ? type : null,
+        p_search: search || null,
+        p_min_amount: minAmount,
+      });
 
       if (error) throw error;
 
@@ -174,7 +148,7 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
 
       return {
         donors,
-        totalCount: count || 0,
+        totalCount: Number(data?.[0]?.total_count || 0),
       };
     },
     placeholderData: (prev) => prev,

@@ -2860,6 +2860,31 @@ export type Database = {
           cycle: string
         }[]
       }
+      get_donors_paginated: {
+        Args: {
+          p_cycle?: string
+          p_min_amount?: number
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_sort_by?: string
+          p_sort_order?: string
+          p_type?: string
+        }
+        Returns: {
+          cycle: string
+          display_name: string
+          is_consolidated: boolean
+          name_variations: string[]
+          primary_id: string
+          recipient_count: number
+          total_amount: number
+          total_count: number
+          total_transactions: number
+          type: string
+          types: string[]
+        }[]
+      }
       get_hidden_state_codes: {
         Args: never
         Returns: {
