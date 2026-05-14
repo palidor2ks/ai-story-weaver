@@ -71,9 +71,6 @@ const isGoogleHost = (u: string): boolean => {
   } catch { return false; }
 };
 
-const googleNewsSearchUrl = (title: string): string =>
-  `https://www.google.com/search?q=${encodeURIComponent(title)}&tbm=nws`;
-
 const decodeGoogleNewsUrl = (googleUrl: string): string | null => {
   try {
     const url = new URL(googleUrl);
@@ -96,6 +93,38 @@ const decodeGoogleNewsUrl = (googleUrl: string): string | null => {
   } catch { /* ignore malformed Google News tokens */ }
   return null;
 };
+
+const googleNewsToken = (googleUrl: string): string | null => {
+  try {
+    const url = new URL(googleUrl);
+    if (!isGoogleHost(url.toString())) return null;
+    return url.pathname.match(/\/(?:rss\/)?articles\/([^/?#]+)/)?.[1] || null;
+  } catch { return null; }
+};
+
+async function decodeGoogleNewsWithBatch(token: string): Promise<string | null> {
+  const payload = '[[["Fbv4je","[\\"garturlreq\\",[[\\"en-US\\",\\"US\\",[\\"FINANCE_TOP_INDICES\\",\\"WEB_TEST_1_0_0\\"],null,null,1,1,\\"US:en\\",null,180,null,null,null,null,null,0,null,null,[1608992183,723341000]],\\"en-US\\",\\"US\\",1,[2,3,4,8],1,0,\\"655000234\\",0,0,null,0],\\"' + token + '\\"]",null,"generic"]]]';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 5000);
+  try {
+    const res = await fetch('https://news.google.com/_/DotsSplashUi/data/batchexecute?rpcids=Fbv4je', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+        'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)',
+        'Referer': 'https://news.google.com/',
+      },
+      body: `f.req=${encodeURIComponent(payload)}`,
+    });
+    const text = await res.text();
+    const match = text.match(/\[\\"garturlres\\",\\"([^\\"]+)/);
+    if (!match) return null;
+    const decoded = match[1].replace(/\\u003d/g, '=').replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+    return isGoogleHost(decoded) ? null : decoded;
+  } catch { return null; }
+  finally { clearTimeout(timer); }
+}
 
 const resolveCache = new Map<string, string>();
 
