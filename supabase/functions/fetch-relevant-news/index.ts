@@ -307,8 +307,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const queries = buildQueries(people, body.state, body.district);
-    const results = await Promise.all(queries.map(fetchRss));
-    const allItems = results.flat();
+    const allItems = await fetchRssSequentially(queries, limit);
     console.info('relevant-news rss results', { queries: queries.length, allItems: allItems.length });
 
     const now = Date.now();
