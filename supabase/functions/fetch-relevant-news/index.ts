@@ -265,7 +265,7 @@ Deno.serve(async (req: Request) => {
     for (const it of allItems) {
       if (!it.link || !it.title) continue;
       const cleanedTitle = cleanTitle(it.title, it.source);
-      const cleanedSnippet = cleanText(it.description).slice(0, 240);
+      const cleanedSnippet = cleanSnippet(it.description);
       const finalUrl = extractPublisherUrl(it.description, it.link);
       const key = urlKey(finalUrl);
       const text = `${cleanedTitle} ${cleanedSnippet}`.toLowerCase();
