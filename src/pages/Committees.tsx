@@ -38,7 +38,7 @@ export const Committees = () => {
 
   const availableCycles = useMemo(
     () => {
-      const cycles = filterOptions?.cycles ?? ['2024'];
+      const cycles = filterOptions?.cycles ?? [];
       const unique = Array.from(new Set(['all', ...cycles]));
       return unique;
     },
