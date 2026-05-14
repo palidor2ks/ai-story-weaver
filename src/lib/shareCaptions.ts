@@ -56,6 +56,7 @@ export type CaptionInput = (
 
 export function getDefaultHashtags(input: CaptionInput): string {
   if (input.kind === 'invite') return '#Pulse';
+  if (input.kind === 'donor-stats') return '#Pulse #FollowTheMoney';
   return '#Pulse #VoterMatch';
 }
 
@@ -89,6 +90,15 @@ export function generateLongCaption(input: CaptionInput): string {
       `Find out where you stand: ${input.url}`,
     ].join('\n');
   }
+  if (input.kind === 'donor-stats') {
+    return [
+      `${input.donorName} on Pulse`,
+      '',
+      `${input.totalGiven} given across ${input.donationCount} donations to ${input.recipientCount} recipients over ${input.cycleCount} cycle${input.cycleCount === 1 ? '' : 's'}.`,
+      '',
+      `Follow the money: ${input.url}`,
+    ].join('\n');
+  }
   return [
     `I just took the Pulse political alignment quiz — it shows where you really stand on the issues.`,
     `Take it and see your results: ${input.url}`,
@@ -101,6 +111,9 @@ export function generateShortCaption(input: CaptionInput): string {
   }
   if (input.kind === 'user-profile') {
     return `My political profile: ${formatScore(input.userScore)} (${getScoreLabel(input.userScore)}). Find out where you stand on @PulseApp.`;
+  }
+  if (input.kind === 'donor-stats') {
+    return `${input.donorName}: ${input.totalGiven} across ${input.donationCount} donations to ${input.recipientCount} recipients. Follow the money on Pulse.`;
   }
   return `Take the Pulse quiz and see where you really stand on the issues.`;
 }
