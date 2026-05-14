@@ -52,10 +52,6 @@ interface DonorRecord {
 }
 
 
-interface RecipientAnalysis {
-  summary: string;
-  analysis: string;
-}
 
 interface ContributionRecord {
   id: string;
