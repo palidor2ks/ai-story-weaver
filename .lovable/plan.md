@@ -1,34 +1,35 @@
-# Fix: "Top Contributors to this PAC" returns 0 for Organizations/PACs
+# Show "Top Contributors to this PAC" for ActBlue and similar committees
 
-## Root cause
+## Why it's empty today
 
-On the donor profile (e.g. COINBASE), the `pacContributors` query in `src/pages/DonorProfile.tsx` (lines ~295-349) builds a filter from:
+The `pacContributors` query in `src/pages/DonorProfile.tsx` reads from `public.contributions`, which has RLS restricted to admins only. For ActBlue (and any non-admin viewer) it returns 0 rows, so my "hide on empty" guard removes the section entirely.
 
-- `committeeIds` = recipient committee IDs taken from this donor's **outgoing** records (i.e., committees this donor *gave to*, not the donor's own committee), and
-- `committeeNames` = exact-equal match on `donor.name` / `display_name` / alias variations.
-
-For COINBASE, neither hits the actual receiving committee, which is stored as `"COINBASE, INC. INNOVATION PAC (COINBASE INNOVATION PAC)"` (FEC ID `C00804179`). Result: 0 contributors, even though 30 contributions / $184K exist.
-
-The same bug affects any donor whose canonical name doesn't exactly equal the FEC committee name string.
+`public.donors` is readable by all authenticated users and already contains 16,258 rows / $133M of contributions whose `recipient_committee_id = C00401224` (ACTBLUE). We just need to query the right table.
 
 ## Fix
 
-In `src/pages/DonorProfile.tsx`, change the `pacContributors` query to:
+In `src/pages/DonorProfile.tsx`, change `pacContributors` to read from `donors` instead of `contributions`:
 
-1. **Resolve the donor's own FEC committee IDs first** by looking up `public.committees` where the committee name starts with the donor's canonical name (or one of its alias variations). Use those IDs as the primary join key.
-   - `supabase.from('committees').select('committee_id, name').ilike('name', `${displayName}%`)` (and per alias variation).
-2. **Fall back to fuzzy name match** with `ilike` against `recipient_committee_name` (e.g. `recipient_committee_name.ilike.${displayName}%`) when no committee IDs resolve.
-3. Keep the existing aggregation/grouping logic; only the filter clause changes.
-4. Hide the entire "Top Contributors to this PAC" section when both lookups produce zero candidate committees AND zero rows (so we don't show a misleading empty card for pure corporations like Coinbase that have no receiving committee at all).
+1. **Resolve the donor's own receiving committee IDs** by prefix-ilike on `donors.recipient_committee_name` against the donor's name + display_name + alias name variations. Collect distinct `recipient_committee_id` values.
+   - Optionally also use `donor_aliases.fec_committee_id` if `aliasInfo` exposes one (no extra query needed since aliasInfo is already loaded).
+2. **Aggregate contributors** with a single `donors` query: `select name, display_name, type, amount, transaction_count` where `recipient_committee_id in (...)`, then group in JS by `display_name || name`, summing `amount` and `transaction_count`.
+3. Sort by total amount desc, slice top 100 in the table (already does this).
+4. Keep the "hide section if zero contributors" behavior so true corporations with no receiving committee stay hidden.
+
+## Display
+
+- Section title stays "Top Contributors to this PAC".
+- Each row: contributor name (from `display_name`), contribution count, total amount — same columns as today.
+- Optionally make the contributor name a link to `/donor/{id}` if we can resolve a donor id; skip linking otherwise (out of scope to add a sub-lookup).
 
 ## Out of scope
 
 - No DB schema changes.
-- No changes to donor consolidation MV.
-- No changes to "Top Recipients" logic.
+- No conduit-exclusion logic change. Even though ActBlue is a conduit elsewhere in the app, this section is about *who gave money to this committee*, which is exactly what the user asked for.
+- No change to the "Top Recipients" section.
 
 ## Verification
 
-- COINBASE profile shows contributors from `COINBASE, INC. INNOVATION PAC` (~$184K, 30 records).
-- AIPAC, FAIRSHAKE, and other true PACs continue to render correctly.
-- A donor with no receiving committee (pure corporation with no PAC) hides the section instead of showing "0 total".
+- ActBlue donor profile shows top contributors (Biden For President $1.56M, Hale Robert $684K, Jacobs Irwin $336K, Diller Barry $220K, etc.).
+- COINBASE still resolves to its INNOVATION PAC contributors.
+- A pure organization with no receiving committee still hides the section.

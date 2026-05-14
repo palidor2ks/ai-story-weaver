@@ -304,67 +304,59 @@ const DonorProfile = () => {
       ].filter(Boolean) as string[];
       const uniqueCandidateNames = [...new Set(candidateNames)];
 
-      // Step 1: resolve this donor's own receiving committees by fuzzy-matching
-      // against contributions.recipient_committee_name (the donor itself is e.g.
-      // "COINBASE" but the actual receiving committee is stored as
-      // "COINBASE, INC. INNOVATION PAC (...)").
+      // Step 1: resolve this donor's own receiving committee IDs by
+      // fuzzy-matching against donors.recipient_committee_name (the donor
+      // itself may be "COINBASE" while the receiving committee is stored as
+      // "COINBASE, INC. INNOVATION PAC (...)"). We use the `donors` table
+      // because it's readable by all authenticated users (contributions is
+      // admin-only).
       const resolvedCommitteeIds = new Set<string>();
-      const resolvedCommitteeNames = new Set<string>();
+      if (aliasInfo?.fec_committee_id) resolvedCommitteeIds.add(aliasInfo.fec_committee_id);
+
       for (const name of uniqueCandidateNames) {
         const trimmed = name.trim();
         if (!trimmed) continue;
-        // Use a prefix ilike so "COINBASE" matches "COINBASE, INC. INNOVATION PAC..."
         const { data: matches } = await supabase
-          .from('contributions')
-          .select('recipient_committee_id, recipient_committee_name')
+          .from('donors')
+          .select('recipient_committee_id')
           .ilike('recipient_committee_name', `${trimmed}%`)
+          .not('recipient_committee_id', 'is', null)
           .limit(500);
         (matches || []).forEach((m: any) => {
           if (m.recipient_committee_id) resolvedCommitteeIds.add(m.recipient_committee_id);
-          if (m.recipient_committee_name) resolvedCommitteeNames.add(m.recipient_committee_name);
         });
       }
 
-      if (resolvedCommitteeIds.size === 0 && resolvedCommitteeNames.size === 0) {
+      if (resolvedCommitteeIds.size === 0) {
         return [] as PACContributor[];
       }
 
-      let query = supabase
-        .from('contributions')
-        .select('contributor_name, amount, recipient_committee_name, recipient_committee_id')
-        .limit(10000);
-
-      const idList = Array.from(resolvedCommitteeIds);
-      const nameList = Array.from(resolvedCommitteeNames);
-      if (idList.length > 0 && nameList.length > 0) {
-        query = query.or(
-          `recipient_committee_id.in.(${idList.join(',')}),recipient_committee_name.in.(${nameList.map((name) => `"${name.replace(/"/g, '\\"')}"`).join(',')})`
-        );
-      } else if (idList.length > 0) {
-        query = query.in('recipient_committee_id', idList);
-      } else {
-        query = query.in('recipient_committee_name', nameList);
-      }
-
-      const { data, error } = await query;
+      // Step 2: pull contributions to those committees from the donors table.
+      const { data, error } = await supabase
+        .from('donors')
+        .select('name, display_name, type, amount, transaction_count')
+        .in('recipient_committee_id', Array.from(resolvedCommitteeIds))
+        .order('amount', { ascending: false })
+        .limit(5000);
 
       if (error) throw error;
 
       const grouped = new Map<string, PACContributor>();
       (data || []).forEach((row: any) => {
-        const contributorName = row.contributor_name?.trim();
+        const contributorName = (row.display_name || row.name || '').trim();
         if (!contributorName) return;
         const amount = Number(row.amount || 0);
+        const txns = Number(row.transaction_count || 1);
 
         const existing = grouped.get(contributorName);
         if (existing) {
           existing.totalAmount += amount;
-          existing.contributionCount += 1;
+          existing.contributionCount += txns;
         } else {
           grouped.set(contributorName, {
             name: contributorName,
             totalAmount: amount,
-            contributionCount: 1,
+            contributionCount: txns,
           });
         }
       });
