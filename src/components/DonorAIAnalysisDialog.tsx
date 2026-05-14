@@ -26,6 +26,8 @@ export interface DonorAnalysis {
   confidence_rationale?: string;
   data_coverage?: 'none' | 'sparse' | 'moderate' | 'rich';
   sources: { title: string; url: string }[];
+  provider?: 'perplexity' | 'gemini';
+  provider_fallback?: { reason: string | null } | null;
 }
 
 interface Props {
