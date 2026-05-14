@@ -234,12 +234,17 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     });
 
     if (!ppxResp.ok) {
-      if (ppxResp.status === 429) {
-        return json({ error: "Perplexity rate limit reached. Try again shortly." }, 429);
-      }
       const t = await ppxResp.text();
       console.error("Perplexity error", ppxResp.status, t);
-      return json({ error: `Perplexity error (${ppxResp.status})` }, 500);
+      const isAuth = ppxResp.status === 401 || ppxResp.status === 402 || ppxResp.status === 403;
+      const isRate = ppxResp.status === 429;
+      const message = isAuth
+        ? "AI analysis is temporarily unavailable: the Perplexity API key is invalid or out of quota. Please update billing or rotate the key."
+        : isRate
+        ? "Perplexity rate limit reached. Try again shortly."
+        : `Perplexity service error (${ppxResp.status}). Try again later.`;
+      // Return 200 so the client SDK surfaces the structured message instead of a blank 500.
+      return json({ error: message, code: isAuth ? "PERPLEXITY_AUTH" : isRate ? "PERPLEXITY_RATE_LIMIT" : "PERPLEXITY_ERROR", fallback: true }, 200);
     }
 
     const ppxJson = await ppxResp.json();

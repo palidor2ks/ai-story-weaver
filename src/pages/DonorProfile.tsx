@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
 import { DonorAIAnalysisDialog } from '@/components/DonorAIAnalysisDialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -476,29 +475,10 @@ const DonorProfile = () => {
                     <Badge variant="outline">{donor.type}</Badge>
                   )}
                   {nameVariations.length > 1 && (
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-full border border-transparent bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        >
-                          <Layers className="h-3 w-3" />
-                          {nameVariations.length} name variations
-                        </button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Name variations</DialogTitle>
-                        </DialogHeader>
-                        <div className="flex flex-wrap gap-2">
-                          {nameVariations.map((name, i) => (
-                            <Badge key={i} variant="outline" className="text-xs font-normal">
-                              {name}
-                            </Badge>
-                          ))}
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                    <Badge variant="secondary" className="gap-1">
+                      <Layers className="h-3 w-3" />
+                      {nameVariations.length} name variations
+                    </Badge>
                   )}
                   {donor.contributor_city && donor.contributor_state && (
                     <span className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -511,6 +491,25 @@ const DonorProfile = () => {
                   <p className="text-sm text-muted-foreground">
                     {donor.occupation}{donor.occupation && donor.employer && ' at '}{donor.employer}
                   </p>
+                )}
+                
+                {/* Show name variations if there are multiple */}
+                {nameVariations.length > 1 && (
+                  <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Name variations included:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {nameVariations.slice(0, 8).map((name, i) => (
+                        <Badge key={i} variant="outline" className="text-xs font-normal">
+                          {name}
+                        </Badge>
+                      ))}
+                      {nameVariations.length > 8 && (
+                        <Badge variant="outline" className="text-xs font-normal">
+                          +{nameVariations.length - 8} more
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
