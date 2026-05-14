@@ -1,7 +1,15 @@
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 
 export interface CardData {
-  kind: 'candidate-alignment' | 'user-profile' | 'invite';
+  kind: 'candidate-alignment' | 'user-profile' | 'invite' | 'donor-stats';
+  // Donor stats
+  donorName?: string;
+  donorType?: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
+  donorLocation?: string | null;
+  totalGiven?: string;
+  donationCount?: string;
+  recipientCount?: string;
+  cycleCount?: number;
   // Header / branding
   brandHost: string; // e.g. polipulseapp.com
   // Candidate alignment
