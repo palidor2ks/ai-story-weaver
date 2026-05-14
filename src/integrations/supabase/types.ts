@@ -2853,6 +2853,12 @@ export type Database = {
           transfer_total: number
         }[]
       }
+      get_donor_cycles: {
+        Args: never
+        Returns: {
+          cycle: string
+        }[]
+      }
       get_hidden_state_codes: {
         Args: never
         Returns: {
