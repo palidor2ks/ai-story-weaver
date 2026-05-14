@@ -208,56 +208,61 @@ Output ONLY a JSON object, no prose. Use this exact schema:
   "confidence_rationale": string
 }`;
 
-    const ppxResp = await fetch("https://api.perplexity.ai/chat/completions", {
+    const jinaResp = await fetch("https://deepsearch.jina.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${perplexityKey}`,
+        Authorization: `Bearer ${jinaKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "sonar-pro",
+        model: "jina-deepsearch-v2",
         messages: [
           {
             role: "system",
             content:
-              "You are a nonpartisan campaign-finance analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, founders, or quotes. If the search results describe a different entity than the one anchored by the user, set insufficient_information=true and cap confidence at 20. Output strict JSON only.",
+              "You are a nonpartisan campaign-finance analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, founders, or quotes. If the search results describe a different entity than the one anchored by the user, set insufficient_information=true and cap confidence at 20. Output strict JSON only — no prose, no markdown fences.",
           },
           { role: "user", content: searchPrompt },
         ],
-        temperature: 0.2,
-        search_domain_filter: [
-          "fec.gov", "opensecrets.org", "propublica.org",
-          "followthemoney.org", "nytimes.com", "washingtonpost.com",
-          "politico.com", "reuters.com", "apnews.com", "wsj.com",
-        ],
+        stream: false,
+        reasoning_effort: "low",
       }),
     });
 
-    if (!ppxResp.ok) {
-      const t = await ppxResp.text();
-      console.error("Perplexity error", ppxResp.status, t);
-      const isAuth = ppxResp.status === 401 || ppxResp.status === 402 || ppxResp.status === 403;
-      const isRate = ppxResp.status === 429;
+    if (!jinaResp.ok) {
+      const t = await jinaResp.text();
+      console.error("Jina error", jinaResp.status, t);
+      const isAuth = jinaResp.status === 401 || jinaResp.status === 402 || jinaResp.status === 403;
+      const isRate = jinaResp.status === 429;
       const message = isAuth
-        ? "AI analysis is temporarily unavailable: the Perplexity API key is invalid or out of quota. Please update billing or rotate the key."
+        ? "AI analysis is temporarily unavailable: the Jina API key is invalid or out of quota."
         : isRate
-        ? "Perplexity rate limit reached. Try again shortly."
-        : `Perplexity service error (${ppxResp.status}). Try again later.`;
-      // Return 200 so the client SDK surfaces the structured message instead of a blank 500.
-      return json({ error: message, code: isAuth ? "PERPLEXITY_AUTH" : isRate ? "PERPLEXITY_RATE_LIMIT" : "PERPLEXITY_ERROR", fallback: true }, 200);
+        ? "Jina rate limit reached. Try again shortly."
+        : `Jina service error (${jinaResp.status}). Try again later.`;
+      return json({ error: message, code: isAuth ? "JINA_AUTH" : isRate ? "JINA_RATE_LIMIT" : "JINA_ERROR", fallback: true }, 200);
     }
 
-    const ppxJson = await ppxResp.json();
-    const content: string = ppxJson?.choices?.[0]?.message?.content ?? "";
-    const citations: string[] = Array.isArray(ppxJson?.citations) ? ppxJson.citations : [];
+    const jinaJson = await jinaResp.json();
+    const content: string = jinaJson?.choices?.[0]?.message?.content ?? "";
+    // Jina exposes visited URLs as annotations or visitedURLs.
+    const annotations: any[] = jinaJson?.choices?.[0]?.message?.annotations ?? [];
+    const visitedUrls: string[] = Array.isArray(jinaJson?.visitedURLs) ? jinaJson.visitedURLs
+      : Array.isArray(jinaJson?.choices?.[0]?.message?.visitedURLs) ? jinaJson.choices[0].message.visitedURLs
+      : [];
+    const citationUrls = new Set<string>();
+    for (const a of annotations) {
+      const u = a?.url_citation?.url ?? a?.url;
+      if (typeof u === "string") citationUrls.add(u);
+    }
+    for (const u of visitedUrls) if (typeof u === "string") citationUrls.add(u);
+    const citations = Array.from(citationUrls);
 
     const parsed = extractJson(content);
     if (!parsed) {
-      console.error("Could not parse Perplexity output", content.slice(0, 500));
+      console.error("Could not parse Jina output", content.slice(0, 500));
       return json({ error: "Could not parse AI response. Please regenerate." }, 500);
     }
 
-    // Build sources from Perplexity citations + any sources the model returned.
     const ppxSources = citations.map((url, i) => {
       try {
         const host = new URL(url).hostname.replace(/^www\./, "");
