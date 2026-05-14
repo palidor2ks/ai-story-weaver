@@ -208,10 +208,47 @@ Output ONLY a JSON object, no prose:
     for (const u of visitedUrls) if (typeof u === "string") citationUrls.add(u);
     const citations = Array.from(citationUrls);
 
-    const parsed = extractJson(content);
+    let parsed = extractJson(content);
     if (!parsed) {
-      console.error("Could not parse Jina output", content.slice(0, 500));
-      return json({ error: "Could not parse AI response. Please regenerate." }, 500);
+      const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+      if (!lovableKey) {
+        console.error("Could not parse Jina output and no LOVABLE_API_KEY", content.slice(0, 500));
+        return json({ error: "Could not parse AI response. Please regenerate." }, 500);
+      }
+      const structurePrompt = `Convert the following research narrative into the exact JSON schema. Use only facts from the narrative — do not invent. Citation indices [n] correspond to the URL list provided.
+
+NARRATIVE:
+${content}
+
+CITATION URLS (in order):
+${citations.map((u, i) => `[${i + 1}] ${u}`).join("\n")}
+
+Return ONLY a JSON object with these keys: summary (string), analysis (string), positions (array of {topic, stance}), goals (string[]), key_people (string[]), notable_recipients (string[]), controversies (string[]), causes (string[]), finance_claims (string[]), public_context_claims (string[]), insufficient_information (boolean), confidence (0-100 integer), confidence_rationale (string).`;
+
+      const gemResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${lovableKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: "You are a JSON converter. Output strict JSON only, no prose, no markdown fences." },
+            { role: "user", content: structurePrompt },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      });
+      if (!gemResp.ok) {
+        const t = await gemResp.text();
+        console.error("Gemini structuring failed", gemResp.status, t.slice(0, 300));
+        return json({ error: "Could not parse AI response. Please regenerate." }, 500);
+      }
+      const gemJson = await gemResp.json();
+      const gemContent: string = gemJson?.choices?.[0]?.message?.content ?? "";
+      parsed = extractJson(gemContent);
+      if (!parsed) {
+        console.error("Gemini structuring returned unparseable output", gemContent.slice(0, 500));
+        return json({ error: "Could not parse AI response. Please regenerate." }, 500);
+      }
     }
 
     const ppxSources = citations.map((url, i) => {
