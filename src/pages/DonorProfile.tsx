@@ -253,40 +253,6 @@ const DonorProfile = () => {
     enabled: !!donor?.name,
   });
 
-  const fetchRecipientAnalysis = async (recipientKey: string, recipientName: string, cycle?: string) => {
-    if (recipientAnalysis[recipientKey]) {
-      setActiveRecipientKey(recipientKey);
-      return;
-    }
-
-    setRecipientLoadingKey(recipientKey);
-    try {
-      const { data, error } = await supabase.functions.invoke('ai-donor-analysis', {
-        body: {
-          donor_id: recipientKey,
-          donor_name: recipientName,
-          donor_type: 'Organization',
-          cycle,
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      setRecipientAnalysis((prev) => ({
-        ...prev,
-        [recipientKey]: {
-          summary: data.summary ?? 'No summary available.',
-          analysis: data.analysis ?? 'No analysis available.',
-        },
-      }));
-      setActiveRecipientKey(recipientKey);
-    } catch (err) {
-      console.error('Recipient AI analysis failed', err);
-    } finally {
-      setRecipientLoadingKey(null);
-    }
-  };
-
   // Fetch individual contributions for detailed history (across all types)
   const { data: contributions = [], isLoading: contributionsLoading } = useQuery({
     queryKey: ['donor-contributions', displayName, aliasInfo?.alias_pattern, showAllDonations, donorRecords.length],
