@@ -236,6 +236,7 @@ export const ShareCardModal = ({
       return `My match with ${caption.candidateName} on Pulse`;
     }
     if (caption.kind === 'user-profile') return 'My political profile on Pulse';
+    if (caption.kind === 'donor-stats') return `${caption.donorName} — Donor profile on Pulse`;
     return 'Pulse — Know Your Vote';
   }, [caption]);
 
