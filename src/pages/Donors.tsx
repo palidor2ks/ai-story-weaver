@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ export const Donors = () => {
   
   const [filters, setFilters] = useState<Partial<DonorFiltersType>>({
     page: 1,
-    pageSize: 50,
+    pageSize: 24,
     sortBy: 'amount',
     sortOrder: 'desc',
     cycle: 'all',
@@ -27,13 +27,24 @@ export const Donors = () => {
     party: 'all',
   });
 
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search || '');
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(filters.search || '');
+    }, 300);
+
+    return () => window.clearTimeout(timeout);
+  }, [filters.search]);
+
   const effectiveCycle = filters.cycle || 'all';
-  const effectiveFilters = {
+  const effectiveFilters = useMemo(() => ({
     ...filters,
+    search: debouncedSearch,
     cycle: effectiveCycle,
     sortBy: filters.sortBy ?? 'amount',
     sortOrder: filters.sortOrder ?? 'desc',
-  };
+  }), [filters, debouncedSearch, effectiveCycle]);
 
   const { data, isLoading, error } = useDonorsPaginated(effectiveFilters);
 
