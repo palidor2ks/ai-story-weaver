@@ -227,15 +227,19 @@ const DonorProfile = () => {
         .select(`*, candidates (id, name, party, office, state, district, image_url)`)
         .order('amount', { ascending: false });
       
+      // PostgREST .or() treats commas as clause separators, so values that
+      // contain commas (e.g. "ADELSON, MIRIAM") must be wrapped in double quotes.
+      const q = (v: string) => `"${v.replace(/"/g, '\\"')}"`;
+
       // If there's an alias, get all donors matching the pattern (across all types)
       if (aliasInfo?.alias_pattern) {
         query = query.ilike('name', aliasInfo.alias_pattern);
       } else if (aliasInfo?.canonical_name) {
         // Match by display_name for consolidated donors
-        query = query.or(`name.eq.${donor.name},display_name.eq.${aliasInfo.canonical_name}`);
+        query = query.or(`name.eq.${q(donor.name)},display_name.eq.${q(aliasInfo.canonical_name)}`);
       } else {
         // Match by exact name OR display_name
-        query = query.or(`name.eq.${donor.name},display_name.eq.${donor.name}`);
+        query = query.or(`name.eq.${q(donor.name)},display_name.eq.${q(donor.name)}`);
       }
       
       const { data, error } = await query;

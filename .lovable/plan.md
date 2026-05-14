@@ -1,43 +1,36 @@
-## Goal
+## Diagnosis
 
-When the donor list is filtered to "All Cycles", show **one card per donor** (e.g. one "MUSK, ELON") instead of one card per donor-per-cycle. When a specific cycle is selected, behavior stays exactly the same.
+Her card on `/donors` shows **$179.2M / 7 recipients** (aggregated from `donor_consolidated_mv`). Her profile at `/donor/fec-00718aecbb0dba76777a534b5a5f5d2c` shows **$0 / 0 / 0** because the profile's `donorRecords` query in `src/pages/DonorProfile.tsx` returns nothing for any name containing a comma.
 
-## Approach
+The query (line 235–238) uses PostgREST's `.or()` filter:
 
-Modify the `get_donors_paginated` RPC so that when `p_cycle` is null/empty/"all", it aggregates the existing `private.donor_consolidated_mv` rows by `display_name + type` instead of returning each cycle row separately. No schema change, no MV change — pure SQL function rewrite.
+```ts
+query.or(`name.eq.${donor.name},display_name.eq.${donor.name}`)
+// becomes: name.eq.ADELSON, MIRIAM,display_name.eq.ADELSON, MIRIAM
+```
 
-## Changes
+PostgREST treats every comma in `.or()` as a clause separator, so this is parsed as four broken clauses and matches 0 rows. With `donorRecords.length === 0`, the contributions query is gated off (`enabled: !!donor?.name && donorRecords.length > 0`) and every downstream stat renders as 0.
 
-### 1. `get_donors_paginated` RPC (migration)
+This bug predates the all-cycles aggregation; it has always affected donors whose names contain commas (i.e. nearly every "LAST, FIRST" individual donor). It's just more visible now because the aggregated card is the natural entry point.
 
-Add a branch for the "all cycles" case that wraps the existing filtered CTE in a `GROUP BY display_name, type`:
+## Fix
 
-- `total_amount` → `SUM(total_amount)`
-- `total_transactions` → `SUM(total_transactions)`
-- `recipient_count` → `SUM(recipient_count)` (acceptable approximation — true distinct count would require re-querying base data)
-- `name_variations` → unioned & deduped via `array_agg(distinct unnest(...))`
-- `types` → unioned & deduped across cycles
-- `is_consolidated` → true if any underlying row was consolidated OR multiple cycles aggregated
-- `cycle` → literal `'all'`
-- `primary_id` → the `primary_id` of the cycle row with the largest `total_amount` (used for routing to the donor profile page)
-- Sorting (`amount`/`name`, asc/desc) and `total_count` work on the aggregated set
+In `src/pages/DonorProfile.tsx`, escape values passed to `.or()` by wrapping them in double quotes (PostgREST's quoting syntax). One small helper, applied to both branches that use `.or()`:
 
-When `p_cycle` is a real cycle, keep the current code paths untouched.
+```ts
+const q = (v: string) => `"${v.replace(/"/g, '\\"')}"`;
 
-### 2. Frontend
+if (aliasInfo?.canonical_name) {
+  query = query.or(`name.eq.${q(donor.name)},display_name.eq.${q(aliasInfo.canonical_name)}`);
+} else {
+  query = query.or(`name.eq.${q(donor.name)},display_name.eq.${q(donor.name)}`);
+}
+```
 
-No changes required. `useDonorsPaginated` already passes `p_cycle: cycle || null` and the card renders fine with `cycle: 'all'` and a merged `name_variations` array (the "N merged" badge will simply reflect the union across cycles).
-
-### 3. Donor profile routing
-
-`DonorCard` links to `/donors/:primary_id`. Since we return the largest-cycle's `primary_id`, clicking the aggregated card lands on the donor's biggest-cycle profile — same behavior as today when a user picks the top result. Acceptable; no profile-page changes.
+That's the only change. Once `donorRecords` populates, the existing contributions query (which uses `.in('contributor_name', donorNames)` and already handles commas correctly) will hydrate Top Recipients, Contribution History, and the four header stat tiles.
 
 ## Out of scope
 
-- Changes to `donor_consolidated_mv` itself
-- Changes to `search_donors_by_name` (separate RPC, used by autocomplete only)
-- Cross-cycle profile page (would be a larger follow-up)
-
-## Risk
-
-Low. Specific-cycle queries are untouched. Recipient counts across cycles will be slightly inflated when the same recipient appears in multiple cycles — call out in a code comment; can be made exact later with a second aggregation against `donors` if needed.
+- No DB / RPC changes
+- No changes to the alias-pattern path (uses `.ilike`, not `.or`)
+- No changes to the donors list page
