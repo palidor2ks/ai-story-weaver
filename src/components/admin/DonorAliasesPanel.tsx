@@ -93,10 +93,15 @@ export function DonorAliasesPanel() {
     is_active: true,
   });
 
-  // Donor search state
+  // Donor search state (debounced to avoid hammering the DB on every keystroke)
   const [donorSearch, setDonorSearch] = useState('');
+  const [debouncedDonorSearch, setDebouncedDonorSearch] = useState('');
   const [donorTypeFilter, setDonorTypeFilter] = useState('all');
-  const { data: searchResults = [], isLoading: searchLoading } = useSearchDonors(donorSearch, donorTypeFilter);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedDonorSearch(donorSearch), 300);
+    return () => clearTimeout(t);
+  }, [donorSearch]);
+  const { data: searchResults = [], isLoading: searchLoading } = useSearchDonors(debouncedDonorSearch, donorTypeFilter);
 
   const { data: matchCount } = useMatchingDonorsCount(
     formData.alias_patterns.filter(p => p.trim()),
