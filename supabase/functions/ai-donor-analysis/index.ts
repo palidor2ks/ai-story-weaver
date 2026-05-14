@@ -141,6 +141,19 @@ Deno.serve(async (req) => {
       .eq("canonical_name", donor_name)
       .maybeSingle();
 
+    // Deterministic data coverage classification (server-computed)
+    const coverageScore =
+      (totalTx >= 100 ? 3 : totalTx >= 20 ? 2 : totalTx >= 1 ? 1 : 0) +
+      (totalAmount >= 1_000_000 ? 3 : totalAmount >= 50_000 ? 2 : totalAmount >= 1 ? 1 : 0) +
+      (cycles.length >= 3 ? 2 : cycles.length >= 1 ? 1 : 0) +
+      (Object.keys(recipientTotals).length >= 10 ? 2 : Object.keys(recipientTotals).length >= 1 ? 1 : 0);
+    // 0..10 → bucket
+    const data_coverage: "none" | "sparse" | "moderate" | "rich" =
+      coverageScore === 0 ? "none"
+        : coverageScore <= 3 ? "sparse"
+        : coverageScore <= 6 ? "moderate"
+        : "rich";
+
     const signals = {
       donor: {
         display_name: donor_name,
@@ -156,6 +169,7 @@ Deno.serve(async (req) => {
         name_variations: nameVariations,
         party_breakdown: partyBreakdown,
         top_recipients: topRecipients,
+        data_coverage,
       },
     };
 
@@ -170,10 +184,18 @@ REQUIREMENTS:
   * "public_context_claims": short bullet statements drawn from your background knowledge of the entity (founders, leadership, stated mission, notable history, affiliations). Each item SHOULD reference a source by index in brackets, e.g. "Founded by Elon Musk in 2024 [1]".
 - Include source links in "sources" whenever you can recall reputable URLs (FEC.gov, OpenSecrets, major news outlets, official sites). Source indices in public_context_claims refer to the 1-based position in the sources array. If you cannot recall exact URLs, leave sources empty rather than fabricating, and omit the bracket citations.
 - Only set "insufficient_information" to true if the entity is genuinely obscure AND finance signals are empty AND you have no reliable knowledge of it.
+- You MUST output a "confidence" integer from 0 to 100 reflecting how trustworthy your overall analysis is. Calibrate using these anchors:
+  * 0-20: almost no signal, entity unknown, mostly speculative.
+  * 21-40: thin finance data AND limited background knowledge.
+  * 41-60: either decent finance data OR solid background knowledge, but not both.
+  * 61-80: good finance data AND reliable background knowledge of the entity.
+  * 81-100: rich filings, well-documented entity, high-quality recallable sources.
+  Penalize confidence when sources is empty. Penalize when data_coverage is "none" or "sparse" and the entity is not widely known.
+- Also output "confidence_rationale": one sentence explaining the score (what you had / what you lacked).
 - Stay neutral. No partisan framing. Do not invent specific dollar figures, dates, or quotes.
 - Output STRICT JSON matching the provided schema. No markdown, no commentary outside JSON.`;
 
-    const userPrompt = `Donor finance signals (JSON):\n${JSON.stringify(signals, null, 2)}\n\nProduce the analysis now.`;
+    const userPrompt = `Donor finance signals (JSON):\n${JSON.stringify(signals, null, 2)}\n\nNote: server-computed data_coverage = "${data_coverage}". Use this as one input to your confidence score.\n\nProduce the analysis now.`;
 
     const aiResp = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -225,6 +247,16 @@ REQUIREMENTS:
                       items: { type: "string" },
                     },
                     insufficient_information: { type: "boolean" },
+                    confidence: {
+                      type: "integer",
+                      minimum: 0,
+                      maximum: 100,
+                      description: "0-100 trustworthiness score for the overall analysis.",
+                    },
+                    confidence_rationale: {
+                      type: "string",
+                      description: "One sentence explaining the confidence score.",
+                    },
                     sources: {
                       type: "array",
                       items: {
@@ -246,6 +278,8 @@ REQUIREMENTS:
                     "finance_claims",
                     "public_context_claims",
                     "insufficient_information",
+                    "confidence",
+                    "confidence_rationale",
                     "sources",
                   ],
                   additionalProperties: false,
@@ -295,6 +329,7 @@ REQUIREMENTS:
 
     return json({
       ...parsed,
+      data_coverage,
       finance_context: {
         total_amount: signals.finance.total_amount,
         total_transactions: signals.finance.total_transactions,
