@@ -336,6 +336,24 @@ async function fetchRss(query: string): Promise<ParsedItem[]> {
   }
 }
 
+async function fetchBingRss(query: string): Promise<ParsedItem[]> {
+  const url = `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)',
+      },
+    });
+    if (!res.ok) return [];
+    return parseRss(await res.text());
+  } catch (e) {
+    console.error('bing rss fetch failed', query, e);
+    return [];
+  }
+}
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function fetchRssSequentially(queries: string[], limit: number): Promise<ParsedItem[]> {
