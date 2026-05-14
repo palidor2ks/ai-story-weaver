@@ -2813,6 +2813,7 @@ export type Database = {
         Args: { p_donor_types: string[]; patterns: string[] }
         Returns: number
       }
+      get_committee_cycles: { Args: never; Returns: string[] }
       get_contribution_totals: {
         Args: { p_candidate_id: string; p_cycle: string }
         Returns: {
