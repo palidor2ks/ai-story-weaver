@@ -1,51 +1,43 @@
 ## Goal
 
-Make the AI analysis on Donor cards (and add the equivalent on Recipient cards) actually search the web for the entity by name + FEC ID, then return a real, cited analysis of their political positions and what they're trying to achieve with their donations / spending.
+When the donor list is filtered to "All Cycles", show **one card per donor** (e.g. one "MUSK, ELON") instead of one card per donor-per-cycle. When a specific cycle is selected, behavior stays exactly the same.
 
-## Why the current version is weak
+## Approach
 
-The `ai-donor-analysis` edge function only feeds Gemini our internal finance signals plus a "use background knowledge" instruction. It never hits the web. When filings are sparse (e.g. America PAC with no recipients in our DB), the model has nothing to anchor on and either refuses or hallucinates. There is no real-time grounding and no real citations.
+Modify the `get_donors_paginated` RPC so that when `p_cycle` is null/empty/"all", it aggregates the existing `private.donor_consolidated_mv` rows by `display_name + type` instead of returning each cycle row separately. No schema change, no MV change — pure SQL function rewrite.
 
-## Fix: ground the analysis in live web search
+## Changes
 
-Switch the AI call to **Perplexity `sonar-reasoning-pro`** (already documented in this project) so every analysis is built from a fresh web search over reputable sources (FEC.gov, OpenSecrets, ProPublica, major news). The Lovable AI Gateway models don't do live search; Perplexity does, and returns a `citations[]` array we can show directly.
+### 1. `get_donors_paginated` RPC (migration)
 
-The edge function will:
+Add a branch for the "all cycles" case that wraps the existing filtered CTE in a `GROUP BY display_name, type`:
 
-1. Build a search query that combines: donor display name, FEC committee ID (when present), donor type, and the top recipients we already have on file (as disambiguators).
-2. Call Perplexity with `search_domain_filter` biased toward `fec.gov`, `opensecrets.org`, `propublica.org`, `followthemoney.org`, plus major news.
-3. Use Perplexity's `response_format: json_schema` to extract: `summary`, `positions` (issue stances), `goals` (what they're trying to achieve with donations/spending), `key_people`, `notable_recipients`, `controversies`, `confidence`, `confidence_rationale`, `insufficient_information`.
-4. Merge Perplexity's `citations[]` into the existing `sources[]` field so the dialog's Sources section is populated automatically.
-5. Keep the deterministic `data_coverage` and our local `finance_context` (totals, party split, top recipients) as a separate, server-computed block — not something the model invents.
-6. Hard rule: if Perplexity returns zero citations OR the search results clearly describe a different entity than our finance signals, set `insufficient_information=true` and cap `confidence` at 20. This kills the America-PAC-style hallucinations.
+- `total_amount` → `SUM(total_amount)`
+- `total_transactions` → `SUM(total_transactions)`
+- `recipient_count` → `SUM(recipient_count)` (acceptable approximation — true distinct count would require re-querying base data)
+- `name_variations` → unioned & deduped via `array_agg(distinct unnest(...))`
+- `types` → unioned & deduped across cycles
+- `is_consolidated` → true if any underlying row was consolidated OR multiple cycles aggregated
+- `cycle` → literal `'all'`
+- `primary_id` → the `primary_id` of the cycle row with the largest `total_amount` (used for routing to the donor profile page)
+- Sorting (`amount`/`name`, asc/desc) and `total_count` work on the aggregated set
 
-## Recipient card analysis
+When `p_cycle` is a real cycle, keep the current code paths untouched.
 
-Add a parallel `ai-recipient-analysis` edge function and a `RecipientAIAnalysisDialog` component that does the same thing for the receiving side:
+### 2. Frontend
 
-- For **candidates**: search by candidate name + FEC candidate ID + office/state. Return positions, policy priorities, top donor categories, and what their fundraising pattern suggests about their coalition.
-- For **committees** (PACs, party committees): search by committee name + FEC committee ID. Return mission, affiliated candidates, ideological lean, and spending strategy.
+No changes required. `useDonorsPaginated` already passes `p_cycle: cycle || null` and the card renders fine with `cycle: 'all'` and a merged `name_variations` array (the "N merged" badge will simply reflect the union across cycles).
 
-The dialog is a thin wrapper over the same UI used for donors (shared layout: confidence bar, data coverage chip, summary, positions, goals, finance context, sources). I'll extract the shared presentation into a single `EntityAIAnalysisDialog` so donor and recipient stay visually identical and easy to maintain.
+### 3. Donor profile routing
 
-Mount points:
-- Donor: already on `DonorCard` and `DonorProfile` — swap to the shared dialog.
-- Recipient: add a "✨ AI analysis" button to `CandidateCard` and to the candidate/committee profile pages, opening the new dialog.
+`DonorCard` links to `/donors/:primary_id`. Since we return the largest-cycle's `primary_id`, clicking the aggregated card lands on the donor's biggest-cycle profile — same behavior as today when a user picks the top result. Acceptable; no profile-page changes.
 
-## Secrets
+## Out of scope
 
-Requires `PERPLEXITY_API_KEY`. I'll request it via the secrets flow before deploying. `LOVABLE_API_KEY` stays as a fallback for the structured-extraction step if Perplexity ever fails.
+- Changes to `donor_consolidated_mv` itself
+- Changes to `search_donors_by_name` (separate RPC, used by autocomplete only)
+- Cross-cycle profile page (would be a larger follow-up)
 
-## Files
+## Risk
 
-- edit `supabase/functions/ai-donor-analysis/index.ts` — replace Gemini call with Perplexity grounded search + JSON schema; keep deterministic finance block.
-- new `supabase/functions/ai-recipient-analysis/index.ts` — same pattern, candidate/committee inputs.
-- new `src/components/EntityAIAnalysisDialog.tsx` — shared presentation (extracted from `DonorAIAnalysisDialog`).
-- edit `src/components/DonorAIAnalysisDialog.tsx` — becomes a thin wrapper.
-- new `src/components/RecipientAIAnalysisDialog.tsx` — wrapper for candidate/committee.
-- edit `src/components/CandidateCard.tsx` and the candidate/committee profile pages — add the trigger button.
-
-## Open questions before I build
-
-1. By "Recipient card" do you mean **candidate cards**, **committee cards**, or both? (I'm planning both unless you say otherwise.)
-2. OK to add `PERPLEXITY_API_KEY` as a project secret? Without it the web-search grounding can't work.
+Low. Specific-cycle queries are untouched. Recipient counts across cycles will be slightly inflated when the same recipient appears in multiple cycles — call out in a code comment; can be made exact later with a second aggregation against `donors` if needed.
