@@ -255,6 +255,29 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
               </div>
             )}
 
+            {analysis.positions && analysis.positions.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-foreground">Positions</h4>
+                <ul className="space-y-1.5">
+                  {analysis.positions.map((p, i) => (
+                    <li key={i} className="text-sm">
+                      <span className="font-medium text-foreground">{p.topic}:</span>{' '}
+                      <span className="text-muted-foreground">{p.stance}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {analysis.goals && analysis.goals.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-foreground">What they're trying to achieve</h4>
+                <ul className="list-disc pl-5 space-y-1 text-foreground">
+                  {analysis.goals.map((g, i) => <li key={i}>{g}</li>)}
+                </ul>
+              </div>
+            )}
+
             {analysis.causes?.length > 0 && (
               <div className="space-y-2">
                 <h4 className="font-semibold text-foreground">Likely causes</h4>
@@ -266,7 +289,34 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
               </div>
             )}
 
-            {analysis.motivation_hypotheses?.length > 0 && (
+            {analysis.notable_recipients && analysis.notable_recipients.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-foreground">Notable recipients</h4>
+                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                  {analysis.notable_recipients.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {analysis.key_people && analysis.key_people.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-foreground">Key people</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {analysis.key_people.map((p, i) => <Badge key={i} variant="outline">{p}</Badge>)}
+                </div>
+              </div>
+            )}
+
+            {analysis.controversies && analysis.controversies.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-foreground">Controversies</h4>
+                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                  {analysis.controversies.map((c, i) => <li key={i}>{c}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {analysis.motivation_hypotheses && analysis.motivation_hypotheses.length > 0 && (
               <div className="space-y-2">
                 <h4 className="font-semibold text-foreground">Possible motivations</h4>
                 <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
