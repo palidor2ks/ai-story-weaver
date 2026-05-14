@@ -2915,6 +2915,18 @@ export type Database = {
         Args: { p_topics: Json; p_user_id: string }
         Returns: undefined
       }
+      search_donors_by_name: {
+        Args: { p_limit?: number; p_search: string; p_type?: string }
+        Returns: {
+          display_name: string
+          is_consolidated: boolean
+          name_variations: string[]
+          total_amount: number
+          type: string
+        }[]
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "politician"
