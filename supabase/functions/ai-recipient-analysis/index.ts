@@ -276,12 +276,15 @@ Output ONLY a JSON object, no prose:
 
     let confidence = Math.max(0, Math.min(100, Number(parsed.confidence ?? 0)));
     let insufficient = Boolean(parsed.insufficient_information);
-    if (sources.length === 0) {
+    if (sources.length === 0 && provider === "perplexity") {
       insufficient = true;
       confidence = Math.min(confidence, 20);
+    } else if (provider === "gemini") {
+      confidence = Math.min(confidence, 30);
     }
 
     return json({
+      provider,
       summary: String(parsed.summary ?? ""),
       analysis: String(parsed.analysis ?? ""),
       positions: Array.isArray(parsed.positions) ? parsed.positions : [],
