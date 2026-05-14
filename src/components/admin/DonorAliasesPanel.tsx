@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Check, X, Search, Users, DollarSign, Link2, Layers, RefreshCw, Loader2, Building2, AlertTriangle, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -93,10 +93,15 @@ export function DonorAliasesPanel() {
     is_active: true,
   });
 
-  // Donor search state
+  // Donor search state (debounced to avoid hammering the DB on every keystroke)
   const [donorSearch, setDonorSearch] = useState('');
+  const [debouncedDonorSearch, setDebouncedDonorSearch] = useState('');
   const [donorTypeFilter, setDonorTypeFilter] = useState('all');
-  const { data: searchResults = [], isLoading: searchLoading } = useSearchDonors(donorSearch, donorTypeFilter);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedDonorSearch(donorSearch), 300);
+    return () => clearTimeout(t);
+  }, [donorSearch]);
+  const { data: searchResults = [], isLoading: searchLoading } = useSearchDonors(debouncedDonorSearch, donorTypeFilter);
 
   const { data: matchCount } = useMatchingDonorsCount(
     formData.alias_patterns.filter(p => p.trim()),

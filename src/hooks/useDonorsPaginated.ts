@@ -186,34 +186,25 @@ export const useSearchDonors = (searchTerm: string, donorType?: string) => {
   return useQuery({
     queryKey: ['donor-search', searchTerm, donorType],
     queryFn: async () => {
-      if (!searchTerm || searchTerm.length < 2) return [];
-      
-      // Search against search_text which includes display_name AND name_variations
-      let query = supabase
-        .from('donor_consolidated')
-        .select('*')
-        .ilike('search_text', `%${searchTerm}%`)
-        .order('total_amount', { ascending: false })
-        .limit(50);
-      
-      if (donorType && donorType !== 'all') {
-        query = query.eq('type', donorType as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
-      }
-      
-      const { data, error } = await query;
+      if (!searchTerm || searchTerm.length < 3) return [];
+
+      const { data, error } = await supabase.rpc('search_donors_by_name', {
+        p_search: searchTerm,
+        p_type: donorType && donorType !== 'all' ? donorType : null,
+        p_limit: 50,
+      });
       if (error) throw error;
-      
-      // Map to expected format
-      return (data || []).map(d => ({
+
+      return (data || []).map((d: any) => ({
         name: d.display_name,
         type: d.type,
-        totalAmount: d.total_amount,
+        totalAmount: Number(d.total_amount) || 0,
         count: d.name_variations?.length || 1,
         isConsolidated: d.is_consolidated,
         nameVariations: d.name_variations,
       }));
     },
-    enabled: searchTerm.length >= 2,
+    enabled: searchTerm.length >= 3,
   });
 };
 
