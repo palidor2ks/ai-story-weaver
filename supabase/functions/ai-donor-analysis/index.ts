@@ -323,12 +323,14 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     });
     const sources = Array.from(sourceMap.values());
 
-    // Hard guard: zero citations → mark unidentified.
+    // Hard guard: zero citations → mark unidentified (Perplexity only; Gemini has no citations).
     let confidence = Math.max(0, Math.min(100, Number(parsed.confidence ?? 0)));
     let insufficient = Boolean(parsed.insufficient_information);
-    if (sources.length === 0) {
+    if (sources.length === 0 && provider === "perplexity") {
       insufficient = true;
       confidence = Math.min(confidence, 20);
+    } else if (provider === "gemini") {
+      confidence = Math.min(confidence, 30);
     }
 
     return json({
