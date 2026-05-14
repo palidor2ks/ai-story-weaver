@@ -240,23 +240,6 @@ const fullNameOf = (name: string): string => {
   return cleaned;
 };
 
-/*
-const lastNameOf = (name: string): string => {
-  const cleaned = name.replace(/[.,]/g, ' ').trim();
-  if (name.includes(',')) return cleaned.split(/\s+/)[0];
-  const parts = cleaned.split(/\s+/).filter(p => !/^(jr|sr|ii|iii|iv)$/i.test(p));
-  return parts[parts.length - 1] || cleaned;
-};
-
-const fullNameOf = (name: string): string => {
-  if (name.includes(',')) {
-    const [last, rest] = name.split(',');
-    return `${rest.trim()} ${last.trim()}`.replace(/\s+/g, ' ').trim();
-  }
-  return name.trim();
-};
-*/
-
 const chamberKeyword = (office?: string): string | null => {
   const o = (office || '').toLowerCase();
   if (/senate|senator/.test(o)) return 'senator';
