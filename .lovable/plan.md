@@ -1,45 +1,43 @@
 ## Goal
 
-When Perplexity returns an auth/quota/rate-limit/server error (the "AI analysis temporarily unavailable" toast you saw on the Preserve America PAC card), automatically fall back to Lovable AI Gateway (`google/gemini-2.5-pro`) so users still get an analysis instead of an error message.
+Add a Share button on the Donor Profile page that opens the existing share modal, with a new card template that mirrors the four-stat tile layout from the attached screenshot (Total Given, Donations, Recipients, Cycles).
 
-## Scope
+## Changes
 
-Two edge functions, same change in each:
-- `supabase/functions/ai-donor-analysis/index.ts`
-- `supabase/functions/ai-recipient-analysis/index.ts`
+### 1. Extend share types — `src/components/share/templates/types.ts`
+- Add a new `kind: 'donor-stats'` to `CardData` plus optional fields:
+  - `donorName`, `donorType` ('Individual' | 'PAC' | 'Organization' | 'Unknown'), `donorLocation?`
+  - `totalGiven` (formatted string, e.g. "$232.7M"), `donationCount`, `recipientCount`, `cycleCount`
 
-No frontend, DB, or RPC changes. Response shape stays identical so existing UI just renders.
+### 2. New template — `src/components/share/templates/DonorStatsCard.tsx`
+- 1080×1080 card, same visual language as `BoldCard`/`DataCard`.
+- Header: PulseMark + "Pulse" wordmark, type badge.
+- Center: large donor name + location/type subtitle.
+- Four stat tiles in a 2×2 (or 4-up) grid using the same icons as the profile (DollarSign, Hash, Users, Calendar) — matches user's screenshot exactly. Uses semantic tokens (no hard-coded colors).
+- Footer: brand host URL.
 
-## Implementation
+### 3. Caption support — `src/lib/shareCaptions.ts`
+- Add `DonorStatsCaptionInput { kind: 'donor-stats'; donorName; totalGiven; donationCount; recipientCount; cycleCount; url }`.
+- Extend `generateLongCaption` / `generateShortCaption` / `getDefaultHashtags` with a donor-stats branch (e.g. "Miriam Adelson has given $232.7M across 22 donations to 8 recipients over 2 cycles. See the full breakdown on Pulse.").
 
-1. **Extract a `callPerplexity()` helper** in each file that performs the existing Perplexity call and returns `{ ok, content, citations, status }`.
+### 4. Register template — `src/components/share/ShareCardModal.tsx`
+- Add `{ id: 'donor', label: 'Donor', Component: DonorStatsCard }` to `TEMPLATES`.
+- Update `refs` typing and OG title branch for `kind === 'donor-stats'` ("Donor profile: {name}").
+- Default the selected template to `'donor'` when `data.kind === 'donor-stats'`; otherwise keep `'bold'`.
 
-2. **Add `callGeminiFallback()` helper** that hits the Lovable AI Gateway:
-   - URL: `https://ai.gateway.lovable.dev/v1/chat/completions`
-   - Auth: `Bearer ${LOVABLE_API_KEY}` (already provisioned in edge functions)
-   - Model: `google/gemini-2.5-pro`
-   - Same `messages` array as Perplexity (system + user search prompt)
-   - Adjusted system prompt note: "You do not have live web search. Ground claims in the FEC/finance context provided in the user prompt and well-known public knowledge. If you cannot identify the entity confidently, set insufficient_information=true and cap confidence at 30. Output strict JSON only."
-   - Returns `{ ok, content, citations: [] }` (Gemini has no citations)
+### 5. New trigger button — `src/components/ShareDonorButton.tsx`
+- Mirrors `ShareProfileButton` API but for donors. Opens `ShareCardModal` with `kind: 'donor-stats'` `CardData` and matching caption.
 
-3. **Replace the current `if (!ppxResp.ok)` early-return** with fallback logic:
-   - On Perplexity failure (any non-2xx, including 401/402/403/429/5xx) → call Gemini fallback
-   - If Gemini also fails → return the existing Perplexity error message + `code` (preserves current UX)
-   - If Gemini succeeds → continue through the existing parse/source/return path with `citations = []`
-   - Add a `provider: "perplexity" | "gemini"` field to the response so the UI can optionally show a "Generated without live web search" note (UI change out of scope; field is additive)
-
-4. **Source-count guard already handles Gemini's empty citations**: existing code sets `insufficient_information=true` and caps `confidence` at 20 when `sources.length === 0`. We loosen this slightly when `provider === "gemini"`: skip the auto-insufficient flag (keep the confidence cap) so the analysis renders as best-effort instead of a hard "unidentified" banner.
-
-5. **Handle Lovable AI's own 402/429** — surface the same friendly toast keyed to `LOVABLE_AI_RATE_LIMIT` / `LOVABLE_AI_PAYMENT` so credits-exhausted is distinguishable from Perplexity quota.
+### 6. Wire into profile — `src/pages/DonorProfile.tsx`
+- Import the new button, render it in the header card next to the donor info (top-right of the header block on desktop, full-width on mobile).
+- Pass `displayName`, `donor.type`, location, and the already-computed `stats` (formatted via existing `formatCompactAmount` / `formatCompactNumber`) plus `window.location.href` as the share URL.
 
 ## Out of scope
-
-- No changes to other Perplexity-using functions (`fetch-mayor`, `populate-*`, `enrich-*`, etc.) — those are research/ingestion jobs, not user-facing analysis cards. We can repeat the pattern later if you want.
-- No UI changes. The `provider` field is added but not displayed yet.
-- No retry logic on transient Perplexity 5xx (fallback fires immediately on any failure).
+- No edge-function changes (existing `upload-share-card` already accepts arbitrary OG metadata).
+- No changes to other share surfaces (candidate / quiz).
+- No analytics schema changes — reuses existing `share_*` events with `kind: 'donor-stats'`.
 
 ## Acceptance
-
-- Trigger the Preserve America PAC card with Perplexity broken → analysis renders from Gemini instead of the red error box.
-- Perplexity working → behavior unchanged (still uses Perplexity, sources populated).
-- Both Perplexity and Lovable AI broken → existing error toast shown.
+- Share button visible on `/donor/:id` header.
+- Clicking opens the modal with the donor stats template selected by default; preview matches the four-tile layout from the user's screenshot.
+- Download / Copy image / Twitter / Facebook / LinkedIn / native share all work, producing a 1080×1080 PNG with the donor's name + four stats.
