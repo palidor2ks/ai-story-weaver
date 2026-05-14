@@ -113,7 +113,7 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
   return useQuery({
     queryKey: ['donors-paginated', mergedFilters],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_donors_paginated', {
+      const { data, error } = await (supabase as any).rpc('get_donors_paginated', {
         p_page: page,
         p_page_size: pageSize,
         p_sort_by: sortBy,
