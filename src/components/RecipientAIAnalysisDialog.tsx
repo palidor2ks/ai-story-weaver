@@ -62,6 +62,13 @@ const normalizeInvokeError = (raw: unknown): string => {
   return message;
 };
 
+const toOneSentence = (items: unknown[]) => {
+  const parts = items
+    .map((item) => (item == null ? '' : String(item)).trim().replace(/\.$/, ''))
+    .filter(Boolean);
+  return parts.length > 0 ? parts.join('; ') + '.' : '';
+};
+
 export const RecipientAIAnalysisDialog = ({
   entityKind, entityId, entityName, fecId, party, office, state, cycle, trigger,
 }: Props) => {
