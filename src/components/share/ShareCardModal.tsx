@@ -198,12 +198,36 @@ export const ShareCardModal = ({
     charCount,
   });
 
+  // Run a non-blocking pre-flight QA pass and warn the user if cropping
+  // or font-loading issues are detected. Returns false if no node is available.
+  const preflightCheck = async (action: string): Promise<boolean> => {
+    const node = getNode();
+    if (!node) return false;
+    try {
+      const qa = await renderNodeWithQA(node);
+      if (qa.warnings.length) {
+        toast.warning(
+          `Export check: ${qa.warnings[0]} Use "Preview export" to inspect before sending.`,
+        );
+        trackEvent('share_export_warning', {
+          ...baseProps(),
+          action,
+          warnings: qa.warnings.slice(0, 3),
+        });
+      }
+    } catch (e) {
+      console.warn('preflight QA failed', e);
+    }
+    return true;
+  };
+
   const handleDownload = async () => {
     const node = getNode();
     if (!node) return;
     setBusy('download');
     trackEvent('share_action', { ...baseProps(), action: 'download', destination: 'file' });
     try {
+      await preflightCheck('download');
       await downloadNode(node, filename);
       toast.success('Image downloaded — attach it to your post.');
     } catch (e) {
