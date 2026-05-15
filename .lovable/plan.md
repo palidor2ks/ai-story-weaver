@@ -1,43 +1,37 @@
-# Fix Attach Donors errors and click delay
+# Fix alias visibility on Donors list
 
-## What's happening
+## Problem
 
-When you click **Attach**, the browser shows `Failed to send a request to the Edge Function` and a long delay before the toast appears.
+1. After **Attach**, the donor list still shows old un-merged variants for ~10–60s because `donor_consolidated_mv` refreshes in the background. The success toast misleads the user.
+2. After **Delete**, the MV is never refreshed at all, so deleted aliases keep showing merged rows indefinitely.
+3. **Newly created aliases** never appear on the Donors list until donors are attached — but the admin Aliases tab gives no indication.
 
-Looking at the edge function logs, the function **boots but never logs any execution** — meaning the request is dying before reaching the handler. Combined with the delay, the root cause is:
+## Plan
 
-1. **Sequential per-donor UPDATEs**: the function loops through every selected donor and runs a separate `UPDATE donors` query. With many raw name variations selected (e.g. all "ADELSON, MIRIAM ..." rows), this easily exceeds the Edge Function's request timeout, so the connection drops before a response is sent. The browser surfaces this as `FunctionsFetchError: Load failed`.
-2. **No client-side feedback during the wait**: the button just sits "pending" until the fetch finally fails, so it feels like nothing is happening.
+### 1. Refresh MV on every alias mutation
 
-## Fix plan
+- `attach-donors-to-alias` edge function: if `donors.length <= 50`, `await` the MV refresh inline before returning. Above 50, keep `EdgeRuntime.waitUntil`.
+- `useDeleteDonorAlias`: after deleting the alias + resetting orphan `display_name`s, call `supabase.rpc('refresh_donor_consolidated_mv')` (await it).
+- `detach-donors-from-alias` already handled by existing flow — confirm it refreshes too; if not, add the same await for small batches.
 
-### 1. Edge function: `attach-donors-to-alias`
-- Insert all `donor_alias_members` rows in a single `upsert` (already done) — keep.
-- Replace the per-donor UPDATE loop with **one bulk update** using `.in('name', names)` scoped per `type`. One query per donor type (max 4: Individual / PAC / Organization / Unknown) instead of N queries.
-- Wrap the MV refresh in `EdgeRuntime.waitUntil(...)` so the response returns immediately and the refresh completes in the background.
-- Return `200` with a clear summary as soon as the writes finish.
+### 2. Communicate refresh state in UI
 
-### 2. Client: `DonorAliasesPanel.tsx` + `useDonorAliases.ts`
-- In `useAttachDonors`, send the donor list in **chunks of 100** if more than 100 are selected, awaiting each chunk and aggregating counts. This keeps each request well under the timeout regardless of selection size.
-- Show a clearer pending state on the Attach button: spinner + "Attaching N donors…" label while `attachMutation.isPending`.
-- Keep the dialog open on error (already done) so the toast is visible.
+- Update success toasts to say `… — list refreshing (~30s)` so users know to wait.
+- In `DonorAliasesPanel` Attach dialog, show inline note after success: *"Donors list rebuild in progress. May take up to a minute to reflect on /donors."*
+- Invalidate `donors-paginated` query on success, and refetch once after 30s.
 
-### 3. Validation
-- Test attaching a small selection (1–3) and a large selection (50+) of "ADELSON, MIRIAM ..." variants.
-- Confirm the function logs show the bulk UPDATE completing and the response returns in <2s.
-- Confirm the Attach button shows the spinner + count during the request.
+### 3. Surface empty aliases in admin
 
-## Technical details
+- In `DonorAliasesPanel`, use `useAliasMemberCounts()` to render a yellow badge `0 attached — not visible publicly` next to any alias with 0 members.
+- Tooltip: *"Attach donor name variations under the Attach tab so this alias shows up on the Donors page."*
+- Sort 0-member aliases to the top of the Manage tab.
 
-- Bulk update shape:
-  ```ts
-  for (const type of uniqueTypes) {
-    const names = donors.filter(d => d.type === type).map(d => d.name);
-    await admin.from('donors')
-      .update({ display_name: alias.canonical_name })
-      .in('name', names)
-      .eq('type', type);
-  }
-  ```
-- Client chunking lives inside the mutation function, not the component, so callers don't change.
-- No DB schema changes required.
+### 4. Better creation toast
+
+- After `useCreateDonorAlias` succeeds, toast: `Alias created — now attach donors to make it visible on /donors`.
+
+## Files touched
+
+- `supabase/functions/attach-donors-to-alias/index.ts`
+- `src/hooks/useDonorAliases.ts`
+- `src/components/admin/DonorAliasesPanel.tsx`
