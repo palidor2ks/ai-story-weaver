@@ -977,9 +977,15 @@ async function generateAnswersForCandidate(
       const answer = await researchQuestionPosition(
         candidateName, candidateOffice, candidateState, candidateParty, question
       );
-      
+
+      if (!answer) {
+        console.log(`[Generate] No evidence for ${question.id}; skipping persistence`);
+        failedCount++;
+        continue;
+      }
+
       answersMap.set(answer.question_id, answer);
-      
+
       if (answer.evidence_type !== 'inferred') {
         researchedCount++;
       }
@@ -992,11 +998,7 @@ async function generateAnswersForCandidate(
     } catch (e) {
       console.error(`[Generate] Error for ${question.id}:`, e);
       failedCount++;
-      
-      // Add a neutral answer on error (only if not already present)
-      if (!answersMap.has(question.id)) {
-        answersMap.set(question.id, createNeutralAnswer(question.id, 'Error during research'));
-      }
+      // Do not persist a placeholder row on error; leave the question unanswered.
     }
   }
 
