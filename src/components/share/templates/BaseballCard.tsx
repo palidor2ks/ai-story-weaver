@@ -11,19 +11,19 @@ interface Props {
 
 const variantStyles: Record<BaseballVariant, { bg: string; border: string; stripe: string }> = {
   classic: {
-    bg: 'linear-gradient(160deg, hsl(var(--card)) 0%, hsl(var(--background)) 100%)',
-    border: 'hsl(var(--border))',
-    stripe: 'hsl(var(--primary) / 0.12)',
+    bg: 'linear-gradient(160deg, hsl(221 82% 20%) 0%, hsl(214 89% 28%) 45%, hsl(0 76% 42%) 100%)',
+    border: 'hsl(0 0% 98%)',
+    stripe: 'hsl(0 0% 100% / 0.2)',
   },
   holo: {
-    bg: 'linear-gradient(135deg, hsl(192 95% 95%) 0%, hsl(267 89% 96%) 50%, hsl(43 100% 93%) 100%)',
-    border: 'hsl(267 46% 72%)',
-    stripe: 'hsl(267 70% 70% / 0.18)',
+    bg: 'linear-gradient(135deg, hsl(215 95% 92%) 0%, hsl(0 100% 96%) 50%, hsl(220 90% 90%) 100%)',
+    border: 'hsl(218 76% 34%)',
+    stripe: 'hsl(0 71% 52% / 0.16)',
   },
   night: {
-    bg: 'linear-gradient(160deg, hsl(228 26% 16%) 0%, hsl(240 17% 9%) 100%)',
-    border: 'hsl(228 18% 35%)',
-    stripe: 'hsl(212 84% 62% / 0.22)',
+    bg: 'linear-gradient(160deg, hsl(228 61% 13%) 0%, hsl(215 75% 18%) 60%, hsl(0 62% 28%) 100%)',
+    border: 'hsl(0 0% 96%)',
+    stripe: 'hsl(0 0% 100% / 0.15)',
   },
 };
 
