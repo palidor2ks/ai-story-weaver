@@ -32,24 +32,24 @@ import { trackEvent } from '@/lib/analytics';
 
 const TEMPLATES_BY_KIND = {
   'candidate-alignment': [
-    { id: 'classic', label: 'Classic Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
-    { id: 'holo', label: 'Holo Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='holo' /> },
-    { id: 'night', label: 'Night Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='night' /> },
+    { id: 'classic', label: 'Patriot Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
+    { id: 'holo', label: 'Issue Breakdown', Component: (props: { data: CardData }) => <DataCard {...props} /> },
+    { id: 'night', label: 'Editorial Match', Component: (props: { data: CardData }) => <EditorialCard {...props} /> },
   ],
   'donor-stats': [
-    { id: 'classic', label: 'Classic Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
-    { id: 'holo', label: 'Holo Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='holo' /> },
-    { id: 'night', label: 'Night Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='night' /> },
+    { id: 'classic', label: 'Patriot Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
+    { id: 'holo', label: 'Donor Dashboard', Component: (props: { data: CardData }) => <DonorStatsCard {...props} /> },
+    { id: 'night', label: 'Patriot Night', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='night' /> },
   ],
   'user-profile': [
-    { id: 'classic', label: 'Classic Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
-    { id: 'holo', label: 'Holo Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='holo' /> },
-    { id: 'night', label: 'Night Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='night' /> },
+    { id: 'classic', label: 'My Patriot Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
+    { id: 'holo', label: 'Issue Breakdown', Component: (props: { data: CardData }) => <DataCard {...props} /> },
+    { id: 'night', label: 'Editorial Profile', Component: (props: { data: CardData }) => <EditorialCard {...props} /> },
   ],
   invite: [
-    { id: 'classic', label: 'Classic Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
-    { id: 'holo', label: 'Holo Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='holo' /> },
-    { id: 'night', label: 'Night Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='night' /> },
+    { id: 'classic', label: 'Invite Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
+    { id: 'holo', label: 'Why Share', Component: (props: { data: CardData }) => <EditorialCard {...props} /> },
+    { id: 'night', label: 'Patriot Night', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='night' /> },
   ],
 } as const;
 
