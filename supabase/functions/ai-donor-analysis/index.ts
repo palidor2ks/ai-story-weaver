@@ -361,12 +361,14 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     if (insufficient) {
       confidence = Math.min(confidence, 20);
     }
-    const confidence_rationale =
-      `Deterministic score from ${grounded.length} verified provider citation(s); ` +
-      `weighted 55% source count (saturating at 6) + 45% domain reliability.`;
+    const groundedFailed = providerErrors.length > 0 && grounded.length === 0;
+    const confidence_rationale = groundedFailed
+      ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
+      : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
 
     return json({
       provider,
+      provider_errors: providerErrors,
       summary: String(parsed.summary ?? ""),
       analysis: String(parsed.analysis ?? ""),
       positions: Array.isArray(parsed.positions) ? parsed.positions : [],
