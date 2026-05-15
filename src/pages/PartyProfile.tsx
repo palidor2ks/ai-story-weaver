@@ -269,6 +269,12 @@ export default function PartyProfile() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title={`${party.name} — Pulse`}
+        description={`Explore the ${party.name}'s official platform, positions across policy topics, and how they compare with your views.`}
+        path={`/party/${party.id}`}
+        type="article"
+      />
       <Header />
       
       <main className="container py-8 px-4 max-w-4xl">

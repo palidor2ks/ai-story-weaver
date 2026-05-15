@@ -244,6 +244,12 @@ export const CandidateProfile = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title={`${candidate.name} — Pulse`}
+        description={`See ${candidate.name}'s positions, voting record, donors, and how they align with your views on the issues that matter most.`}
+        path={`/candidate/${candidate.id}`}
+        type="article"
+      />
       <Header />
       
       <main className="container py-8 px-4">

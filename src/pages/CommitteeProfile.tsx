@@ -58,6 +58,12 @@ export const CommitteeProfile = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title={`${committee?.name ?? 'Committee'} — Pulse`}
+        description={`Donor breakdown, totals, and contribution history for ${committee?.name ?? 'this committee'}.`}
+        path={`/committee/${committee?.id ?? ''}`}
+        type="article"
+      />
       <Header />
 
       <main className="container py-8 px-4">

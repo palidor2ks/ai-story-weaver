@@ -527,6 +527,12 @@ const DonorProfile = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title={`${donor.name} — Donor Profile — Pulse`}
+        description={`Contributions, recipients, and giving history for donor ${donor.name}.`}
+        path={`/donor/${donor.id}`}
+        type="article"
+      />
       <Header />
 
       <main className="container py-8 px-4 space-y-8">
