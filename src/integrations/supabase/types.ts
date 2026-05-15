@@ -2966,6 +2966,15 @@ export type Database = {
           type: string
         }[]
       }
+      search_raw_donors_by_name: {
+        Args: { p_limit?: number; p_search: string; p_type?: string }
+        Returns: {
+          donor_name: string
+          total_amount: number
+          transaction_count: number
+          type: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "politician"
