@@ -292,6 +292,21 @@ export const Feed = () => {
     return Math.max(...matches);
   }, [transformedCandidates, profile?.overall_score]);
 
+  const newsPeople = useMemo(() => {
+    const seen = new Set<string>();
+    return [...unified.myReps, ...unified.federalExec].filter((person) => {
+      const key = `${person.name.toLowerCase()}|${person.office.toLowerCase()}|${person.state.toLowerCase()}|${(person.district || '').toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).map((person) => ({
+      name: person.name,
+      office: person.office,
+      state: person.state,
+      district: person.district,
+    }));
+  }, [unified.myReps, unified.federalExec]);
+
   const isLoading = profileLoading || unified.isLoading;
 
   if (isLoading) {
@@ -424,15 +439,10 @@ export const Feed = () => {
         </div>
 
         {/* Relevant News Feed */}
-        {unified.myReps.length > 0 && (
+        {newsPeople.length > 0 && (
           <div className="mb-6">
             <RelevantNewsFeed
-              people={unified.myReps.map(r => ({
-                name: r.name,
-                office: r.office,
-                state: r.state,
-                district: r.district,
-              }))}
+              people={newsPeople}
               topics={userTopics.map(t => (t as any).topic_id || (t as any).name).filter(Boolean)}
               state={unified.myReps[0]?.state}
               district={unified.myReps.find(r => r.district)?.district}
