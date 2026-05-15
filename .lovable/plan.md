@@ -1,61 +1,58 @@
-# Why this answer looks empty
+## Goal
 
-The DB row for Brian Mast on that question is:
+Remove the auto-matching donor alias system. Aliases become simple records (canonical name + notes). Admins explicitly attach donor rows to an alias — one at a time or by selecting many at once.
 
-- `answer_value: 0`
-- `confidence: low`
-- `evidence_type: inferred`
-- `source_type: other`
-- `source_description: "Unable to determine position"`
-- `source_url`, `source_urls`, `source_titles`, `voting_record_summary`, `public_statement_summary`: all empty
+## Database changes
 
-That is a **placeholder row**, not a real position.
+1. **Wipe existing data and reshape `donor_aliases`**
+   - `TRUNCATE donor_aliases`.
+   - Drop columns: `alias_pattern`, `alias_patterns`, `donor_type`, `donor_types`.
+   - Keep: `id`, `canonical_name`, `fec_committee_id` (optional), `notes`, `is_active`, timestamps.
 
-## Where it comes from
+2. **New attachment table `donor_alias_members`**
+   - Columns: `id uuid pk`, `alias_id uuid → donor_aliases.id on delete cascade`, `donor_name text`, `donor_type text`, `created_at`.
+   - Unique on `(donor_name, donor_type)` — a donor row can only belong to one alias.
+   - Index on `alias_id`.
+   - RLS: admin-only writes; public read.
 
-In `supabase/functions/get-candidate-answers/index.ts`, `researchQuestionPosition` runs a 3-stage pipeline:
+3. **Replace `resolve_donor_display_name(name, type)`**
+   - Lookup against `donor_alias_members` joined to active aliases. Fallback to passed-in name.
+   - The existing `BEFORE INSERT` trigger on `donors` keeps using this function, so new imports automatically get `display_name` set if a member row exists.
 
-1. Perplexity deep research
-2. Gemini fallback
-3. `inferFromPartyAlignment` (last resort)
+4. **Drop / replace**
+   - Drop `count_donors_matching_patterns`.
+   - Drop `refresh_donor_display_names()` (the SQL function).
+   - Reset `donors.display_name = donors.name` for all rows (clean slate after wipe).
 
-Stage 3 calls `google/gemini-2.5-flash` and expects strict JSON (`{score, reasoning}`). When the model returns non-JSON / unparseable output, the code calls `createNeutralAnswer(question.id, 'Unable to determine position')` (lines 856–857, 877–889). That helper writes `answer_value: 0`, `evidence_type: 'inferred'`, `source_type: 'other'`, no URLs and no real explanation — exactly the row you're seeing.
+## Edge function changes
 
-Then `generateAnswersForCandidate` (line 984) immediately persists every answer the pipeline returns, including these placeholders. The UI in `CompactPositionRow` has no way to distinguish "real neutral position" from "we gave up", so it renders it as a normal Moderate/0 answer with `Other Source · Unable to determine position`.
+- Delete `apply-donor-alias`, `unapply-donor-alias`, `refresh-donor-display-names`.
+- Add `attach-donors-to-alias` (admin-auth, JSON body):
+  - Input: `{ alias_id, donors: [{ name, type }] }` (1..N).
+  - Inserts member rows (on conflict, reassign to this alias).
+  - Updates matching `donors.display_name` to alias canonical name.
+  - Refreshes `donor_consolidated_mv`.
+- Add `detach-donors-from-alias`:
+  - Input: `{ donors: [{ name, type }] }`.
+  - Deletes member rows; resets affected donors' `display_name` to `name`.
+  - Refreshes MV.
 
-## Plan
+## Frontend changes (`DonorAliasesPanel.tsx` + `useDonorAliases.ts`)
 
-Scope: backend research function only. No DB schema, no scoring math, no UI redesign.
-
-1. **Stop persisting "gave up" rows in `get-candidate-answers/index.ts`.**
-   - Treat the three failure paths in `inferFromPartyAlignment` (`!response.ok`, unparseable JSON, thrown error) as **skips**, not neutral answers. Return `null` from those branches.
-   - In `researchQuestionPosition`, if the party-alignment stage returns `null`, propagate `null` upward.
-   - In `generateAnswersForCandidate`, if `researchQuestionPosition` returns `null`, increment `failedCount`, log it, and **do not** call `saveAnswersBatch` for that question. The question will simply have no row, which the UI already handles ("no documented position").
-
-2. **Upgrade the inference model.**
-   - Change `inferFromPartyAlignment` from `google/gemini-2.5-flash` to `google/gemini-3-flash-preview` (the project default per AI Gateway guidance). This is the same upgrade we just did for `ai-candidate-explanation` and reduces the JSON-parse failures that trigger the placeholder.
-
-3. **Backfill cleanup (one-shot SQL, optional but recommended).**
-   - Delete existing placeholder rows so users stop seeing them on already-researched candidates:
-     ```sql
-     DELETE FROM candidate_answers
-     WHERE evidence_type = 'inferred'
-       AND source_type = 'other'
-       AND source_description IN ('Unable to determine position', 'Unable to infer position', 'Error inferring position', 'Error during research')
-       AND (source_url IS NULL)
-       AND coalesce(array_length(source_urls,1),0) = 0;
-     ```
-   - Run via a migration so it's auditable.
-
-4. **Validate.**
-   - Re-run a small batch of questions for Mast (M001199) and confirm: questions with real evidence get rows; questions where every stage fails get **no row** (instead of a placeholder).
-   - Spot-check that legitimate "Moderate / 0" positions backed by real sources are unaffected (they have non-empty `source_url(s)` and `evidence_type !== 'inferred'`).
+- Strip pattern UI: remove `alias_patterns` editor, donor-type checkboxes, "Refresh Display Names", "Backfill alias", per-alias match counts.
+- **Aliases tab** — simple list: canonical name, member count, notes, active toggle, edit/delete. Create/edit dialog only collects canonical name + notes + optional FEC committee id.
+- **Search Donors tab** — keep donor search; each row shows current alias (if any) and gets:
+  - "Attach to alias" → opens picker dialog with searchable list of aliases (or "Create new alias from this donor").
+  - Multi-select checkboxes + sticky bar: "Attach N selected to alias…" → same picker, calls `attach-donors-to-alias` once.
+  - "Detach" button when already attached.
+- Update `useDonorAliases` hook: drop pattern/type/match-count helpers; add `useAttachDonors`, `useDetachDonors`, `useAliasMembers(aliasId)`.
 
 ## Out of scope
-- Changing how the UI renders genuine neutral positions.
-- Removing the party-alignment stage entirely (it's still useful when it succeeds with real reasoning).
-- Touching `ai-candidate-explanation`, finance, or share-card code.
 
-Files:
-- `supabase/functions/get-candidate-answers/index.ts` (primary)
-- new SQL migration for the placeholder cleanup
+Per user: committee/PAC-side aliasing is skipped. Existing committee allocation tab stays unchanged.
+
+## Technical notes
+
+- `donors.type` is the existing enum (`Individual | PAC | Organization | Unknown`). The new flow works for all four types uniformly — no dedicated PAC/Organization path needed.
+- All current pattern-based aliases will be lost (user approved wiping).
+- After deploy, admins re-create aliases manually.
