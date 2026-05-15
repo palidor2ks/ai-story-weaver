@@ -39,6 +39,28 @@ function extractJson(raw: string): any | null {
   return null;
 }
 
+function getDomainReliability(url: string): number {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    if (host === "fec.gov") return 100;
+    if (host === "opensecrets.org" || host === "propublica.org" || host === "followthemoney.org") return 95;
+    if (host === "reuters.com" || host === "apnews.com" || host === "wsj.com") return 90;
+    if (host === "nytimes.com" || host === "washingtonpost.com" || host === "politico.com") return 85;
+    if (host.endsWith(".gov")) return 95;
+    if (host.endsWith(".edu")) return 88;
+    return 65;
+  } catch {
+    return 50;
+  }
+}
+
+function computeDeterministicConfidence(sources: { url: string }[]): number {
+  if (!sources.length) return 0;
+  const sourceCountScore = Math.min(100, Math.round((Math.log2(sources.length + 1) / Math.log2(13)) * 100));
+  const avgReliability = sources.reduce((sum, s) => sum + getDomainReliability(s.url), 0) / sources.length;
+  return Math.round((sourceCountScore * 0.4) + (avgReliability * 0.6));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -323,14 +345,11 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     });
     const sources = Array.from(sourceMap.values());
 
-    // Hard guard: zero citations → mark unidentified (Perplexity only; Gemini has no citations).
-    let confidence = Math.max(0, Math.min(100, Number(parsed.confidence ?? 0)));
+    // Deterministic confidence based on source count + source reliability.
+    let confidence = computeDeterministicConfidence(sources);
     let insufficient = Boolean(parsed.insufficient_information);
-    if (sources.length === 0 && provider === "perplexity") {
+    if (sources.length === 0) {
       insufficient = true;
-      confidence = Math.min(confidence, 20);
-    } else if (provider === "gemini") {
-      confidence = Math.min(confidence, 30);
     }
 
     return json({
@@ -349,7 +368,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
       party_support: partyBreakdown,
       insufficient_information: insufficient,
       confidence,
-      confidence_rationale: String(parsed.confidence_rationale ?? ""),
+      confidence_rationale: `Deterministic score from ${sources.length} source${sources.length === 1 ? "" : "s"} weighted by domain reliability.`,
       data_coverage,
       sources,
       finance_context: {
