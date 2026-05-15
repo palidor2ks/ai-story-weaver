@@ -244,6 +244,7 @@ export const ShareCardModal = ({
     setBusy('copy');
     trackEvent('share_action', { ...baseProps(), action: 'copy_image', destination: 'clipboard' });
     try {
+      await preflightCheck('copy_image');
       const ok = await copyNodeToClipboard(node);
       if (ok) {
         toast.success('Image copied — paste it into your post.');
