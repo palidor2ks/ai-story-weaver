@@ -132,9 +132,16 @@ export function DonorAliasesPanel() {
     };
   }, [searchResults]);
 
-  const filteredAliases = aliases.filter((a) =>
-    a.canonical_name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filteredAliases = aliases
+    .filter((a) => a.canonical_name.toLowerCase().includes(search.toLowerCase()))
+    .slice()
+    .sort((a, b) => {
+      const aCount = memberCounts[a.id] || 0;
+      const bCount = memberCounts[b.id] || 0;
+      // 0-member aliases first, then alphabetical
+      if ((aCount === 0) !== (bCount === 0)) return aCount === 0 ? -1 : 1;
+      return a.canonical_name.localeCompare(b.canonical_name);
+    });
 
   const handleOpenCreate = () => {
     setSelectedAlias(null);
