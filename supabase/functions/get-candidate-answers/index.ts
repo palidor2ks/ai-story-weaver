@@ -801,9 +801,10 @@ async function inferFromPartyAlignment(
   candidateName: string,
   candidateParty: string,
   question: Question
-): Promise<GeneratedAnswer> {
+): Promise<GeneratedAnswer | null> {
   if (!LOVABLE_API_KEY) {
-    return createNeutralAnswer(question.id, 'Unable to research position');
+    console.log(`[Inference] Skipping ${question.id}: LOVABLE_API_KEY missing`);
+    return null;
   }
 
   const optionsContext = question.question_options
