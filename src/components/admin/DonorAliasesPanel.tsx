@@ -543,7 +543,9 @@ export function DonorAliasesPanel() {
               onClick={handleAttachConfirm}
               disabled={!pickerAliasId || pickerTargets.length === 0 || attachMutation.isPending}
             >
-              Attach
+              {attachMutation.isPending
+                ? `Attaching ${pickerTargets.length}…`
+                : `Attach ${pickerTargets.length || ''}`.trim()}
             </Button>
           </DialogFooter>
         </DialogContent>
