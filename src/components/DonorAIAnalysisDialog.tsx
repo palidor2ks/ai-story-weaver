@@ -288,10 +288,9 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
 
             {analysis.goals && analysis.goals.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">What they're trying to achieve</h4>
-                <ul className="list-disc pl-5 space-y-1 text-foreground">
-                  {analysis.goals.map((g, i) => <li key={i}>{g}</li>)}
-                </ul>
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Goals:</strong> {toOneSentence(analysis.goals)}
+                </p>
               </div>
             )}
 
