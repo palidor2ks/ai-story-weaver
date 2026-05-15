@@ -178,15 +178,15 @@ Deno.serve(async (req) => {
 
 Use FEC.gov, OpenSecrets, ProPublica, FollowTheMoney, and major news outlets. Confirm you are looking at the SAME entity by matching the FEC committee ID, top recipients, and cycle activity above. If the search returns information about a different same-named entity, say so and stop.
 
-Produce a structured analysis covering:
+Produce a concise, non-redundant structured analysis covering:
 - summary: 2-3 sentences identifying who they are and why they donate
 - positions: list of issue positions (each with topic + stance, e.g. {topic: "Climate", stance: "Opposes carbon regulation"})
-- goals: bullet list of what this donor is trying to achieve with their political spending (policy outcomes, candidate types, ideological project)
+- goals: short list of what this donor is trying to achieve with their political spending (policy outcomes, candidate types, ideological project)
 - key_people: founders, leaders, treasurers, major associated individuals
-- notable_recipients: notable candidates/committees they back, with brief note on why
+- notable_recipients: notable candidates/committees they back, with brief note on why (do not repeat full points from goals/positions)
 - controversies: documented controversies, FEC complaints, or notable reporting (cite [n] indexes)
 - finance_claims: factual claims derived from the FEC/finance data above
-- public_context_claims: claims from your web search, each ending with a [n] citation index
+- public_context_claims: concise claims from your web search, each ending with one or more [n] citation indexes that map to the citation list
 - insufficient_information: true if you couldn't confidently identify the entity
 - confidence: 0-100 trustworthiness score
 - confidence_rationale: one sentence
