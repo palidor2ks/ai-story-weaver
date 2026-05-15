@@ -391,7 +391,7 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
                         className="text-primary hover:underline inline-flex items-center gap-1"
                       >
                         <ExternalLink className="h-3 w-3" />
-                        {s.title}
+                        [{i + 1}] {s.title}
                       </a>
                     </li>
                   ))}
