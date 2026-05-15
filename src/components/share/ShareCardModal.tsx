@@ -325,6 +325,7 @@ export const ShareCardModal = ({
     setBusy('native');
     trackEvent('share_action', { ...baseProps(), action: 'native', destination: 'native' });
     try {
+      await preflightCheck('native');
       let files: File[] | undefined;
       try {
         files = [await nodeToFile(node, filename)];
