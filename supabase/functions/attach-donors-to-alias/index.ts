@@ -66,19 +66,31 @@ Deno.serve(async (req) => {
       .upsert(rows, { onConflict: 'donor_name,donor_type' });
     if (upErr) throw upErr;
 
+    // Bulk update donors: one query per donor type instead of one per donor
+    const typeGroups = new Map<string, string[]>();
+    for (const d of donors) {
+      const arr = typeGroups.get(d.type) ?? [];
+      arr.push(d.name);
+      typeGroups.set(d.type, arr);
+    }
+
     let attached = 0;
     const errors: string[] = [];
-    for (const d of donors) {
+    for (const [type, names] of typeGroups.entries()) {
       const { error: updErr, count } = await admin
         .from('donors')
         .update({ display_name: alias.canonical_name }, { count: 'exact' })
-        .eq('name', d.name)
-        .eq('type', d.type as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
+        .in('name', names)
+        .eq('type', type as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
       if (updErr) errors.push(updErr.message);
       else attached += count || 0;
     }
 
-    try { await admin.rpc('refresh_donor_consolidated_mv'); } catch (_) {}
+    // Run MV refresh in background so the response returns immediately
+    try {
+      // @ts-ignore EdgeRuntime is available in Deno deploy
+      EdgeRuntime.waitUntil(admin.rpc('refresh_donor_consolidated_mv').then(() => {}, () => {}));
+    } catch (_) {}
 
     return new Response(JSON.stringify({
       success: true, attached_count: donors.length, donors_updated: attached, errors,
