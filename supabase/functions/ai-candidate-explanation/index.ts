@@ -150,19 +150,21 @@ You must respond in valid JSON format with the following structure:
 
 For sources, include reputable news outlets, government records, or official statements. Only cite sources you have evidence for.`;
 
+    const todayStr = new Date().toISOString().slice(0, 10);
     const identityBlock = `
-EXACT CANDIDATE IDENTITY (do not confuse with anyone else who shares this name):
+VERIFIED CANDIDATE IDENTITY (authoritative — sourced from the application's live database as of ${todayStr}):
 - Name: ${candidateContext.name}
-- Office: ${candidateContext.office || 'unknown'}
+- Current Office: ${candidateContext.office || 'unknown'}
 - State: ${candidateContext.state || 'unknown'}
 - District: ${candidateContext.district || '(none)'}
 - Party: ${candidateContext.party || 'unknown'}
 
-CRITICAL DISAMBIGUATION RULES:
-- Only analyze THIS specific person — the ${candidateContext.office || 'official'}${candidateContext.state ? ' of ' + candidateContext.state : ''}.
-- NEVER mention a different city, state, district, or office than the ones listed above.
-- If you are not confident the documented record you are recalling belongs to THIS exact person/office/state, write "position is undocumented" instead of guessing.
-- Do NOT write about any other public figure who happens to share this name.
+GROUND TRUTH RULES:
+- This identity block is verified by our database and OVERRIDES any prior knowledge you have. If your training data shows this person in a different office, defer to the office above — they have since been elected, appointed, or sworn into the Current Office listed.
+- Treat the Current Office as a present-day fact. Do not deny it, hedge about it, or claim the person holds a different office.
+- Only analyze THIS specific person. Do NOT write about any other public figure who happens to share this name.
+- Do NOT mention a different city, state, district, or office than the ones listed above.
+- For specific policy positions or votes: if you don't have documented evidence for THIS person, say "position is undocumented" — but never use that phrase to deny their Current Office, party, or state.
 `;
 
     const userPrompt = `${identityBlock}
@@ -187,7 +189,7 @@ Remember: be objective, non-partisan, and analyze ONLY the person identified in 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-3-flash-preview',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
