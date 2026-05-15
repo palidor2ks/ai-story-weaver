@@ -1,5 +1,6 @@
 // AI-powered donor analysis grounded in live web search via Perplexity
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { callYouSmart, YouError, type YouCitation } from "../_shared/you-search.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
