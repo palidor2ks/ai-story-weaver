@@ -216,9 +216,10 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     const geminiSystemPrompt =
       "You are a nonpartisan campaign-finance analyst. You do not have live web search — ground every claim in the FEC/finance context provided in the user prompt and well-known public knowledge. Never invent dollar figures, FEC IDs, founders, or quotes. If you cannot confidently identify the entity, set insufficient_information=true and cap confidence at 30. Output strict JSON only.";
 
-    let provider: "perplexity" | "gemini" | null = null;
+    let provider: "perplexity" | "you" | "gemini" | null = null;
     let content = "";
     let citations: string[] = [];
+    let youCitations: YouCitation[] = [];
     let lastError: { status: number; code: string; message: string } | null = null;
 
     if (perplexityKey) {
