@@ -6,9 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Check, Copy, Download, Facebook, Linkedin, Loader2, RotateCcw, Share2, Twitter } from 'lucide-react';
 import { toast } from 'sonner';
-import { BoldCard } from './templates/BoldCard';
-import { DataCard } from './templates/DataCard';
-import { DonorStatsCard } from './templates/DonorStatsCard';
+import { BaseballCard } from './templates/BaseballCard';
 import { CardData, CARD_SIZE } from './templates/types';
 import { copyNodeToClipboard, downloadNode, nodeToBlob, nodeToFile } from '@/lib/shareImage';
 import { uploadShareCard } from '@/lib/shareUpload';
@@ -29,13 +27,31 @@ import {
 import { cn } from '@/lib/utils';
 import { trackEvent } from '@/lib/analytics';
 
-const TEMPLATES = [
-  { id: 'bold', label: 'Bold', Component: BoldCard },
-  { id: 'data', label: 'Data', Component: DataCard },
-  { id: 'donor', label: 'Donor', Component: DonorStatsCard },
-] as const;
+const TEMPLATES_BY_KIND = {
+  'candidate-alignment': [
+    { id: 'classic', label: 'Classic Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
+    { id: 'holo', label: 'Holo Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='holo' /> },
+    { id: 'night', label: 'Night Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='night' /> },
+  ],
+  'donor-stats': [
+    { id: 'classic', label: 'Classic Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
+    { id: 'holo', label: 'Holo Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='holo' /> },
+    { id: 'night', label: 'Night Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='night' /> },
+  ],
+  'user-profile': [
+    { id: 'classic', label: 'Classic Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
+    { id: 'holo', label: 'Holo Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='holo' /> },
+    { id: 'night', label: 'Night Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='night' /> },
+  ],
+  invite: [
+    { id: 'classic', label: 'Classic Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
+    { id: 'holo', label: 'Holo Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='holo' /> },
+    { id: 'night', label: 'Night Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='night' /> },
+  ],
+} as const;
 
-type TemplateId = typeof TEMPLATES[number]['id'];
+
+type TemplateId = 'classic' | 'holo' | 'night';
 
 interface ShareCardModalProps {
   open: boolean;
@@ -92,14 +108,13 @@ export const ShareCardModal = ({
   data,
   caption,
 }: ShareCardModalProps) => {
-  const [selected, setSelected] = useState<TemplateId>(
-    data.kind === 'donor-stats' ? 'donor' : 'bold',
-  );
+  const templates = TEMPLATES_BY_KIND[data.kind];
+  const [selected, setSelected] = useState<TemplateId>('classic');
   const [busy, setBusy] = useState<null | 'download' | 'copy' | 'native'>(null);
   const refs = useRef<Record<TemplateId, HTMLDivElement | null>>({
-    bold: null,
-    data: null,
-    donor: null,
+    classic: null,
+    holo: null,
+    night: null,
   });
 
   const defaultBody = useMemo(() => generateShortCaption(caption), [caption]);
@@ -119,7 +134,7 @@ export const ShareCardModal = ({
       trackEvent('share_modal_opened', {
         surface,
         kind: caption.kind,
-        templateDefault: 'bold',
+        templateDefault: 'classic',
       });
     }
   }, [open, defaultBody, surface, caption.kind]);
