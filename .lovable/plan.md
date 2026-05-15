@@ -1,37 +1,39 @@
-# Fix alias visibility on Donors list
+## Root cause
 
-## Problem
+The Koch Industries alias is wired up correctly:
 
-1. After **Attach**, the donor list still shows old un-merged variants for ~10–60s because `donor_consolidated_mv` refreshes in the background. The success toast misleads the user.
-2. After **Delete**, the MV is never refreshed at all, so deleted aliases keep showing merged rows indefinitely.
-3. **Newly created aliases** never appear on the Donors list until donors are attached — but the admin Aliases tab gives no indication.
+- 54 members in `donor_alias_members`
+- All matching `donors` rows have `display_name = 'Koch Industries'`
+- The per‑cycle MV `private.donor_consolidated_mv` correctly shows one aggregated `Koch Industries` row per cycle (2024: $45.5M, 2026: $10.99M)
 
-## Plan
+But the **all‑cycles** MV `private.donor_consolidated_all_mv` (which builds on top of the per‑cycle MV) is **stale**:
 
-### 1. Refresh MV on every alias mutation
+- It still shows `KOCH INDUSTRIES INC.`, `KOCHPAC`, `KOCH INC.`, etc. as separate rows
+- There is no `Koch Industries` row at all
+- `get_donors_paginated` reads from `donor_consolidated_all_mv` when `cycle = 'all'`, so the public Donors page (default view) keeps showing the un‑merged Koch rows
 
-- `attach-donors-to-alias` edge function: if `donors.length <= 50`, `await` the MV refresh inline before returning. Above 50, keep `EdgeRuntime.waitUntil`.
-- `useDeleteDonorAlias`: after deleting the alias + resetting orphan `display_name`s, call `supabase.rpc('refresh_donor_consolidated_mv')` (await it).
-- `detach-donors-from-alias` already handled by existing flow — confirm it refreshes too; if not, add the same await for small batches.
+The reason is that the DB function `refresh_donor_consolidated_mv()` only refreshes the per‑cycle MV. Every alias create / attach / detach / delete path the app uses calls that function and assumes both MVs get updated. They don't, so any alias change is invisible on the default "All cycles" view of /donors.
 
-### 2. Communicate refresh state in UI
+## Fix
 
-- Update success toasts to say `… — list refreshing (~30s)` so users know to wait.
-- In `DonorAliasesPanel` Attach dialog, show inline note after success: *"Donors list rebuild in progress. May take up to a minute to reflect on /donors."*
-- Invalidate `donors-paginated` query on success, and refetch once after 30s.
+1. **DB migration** — update `public.refresh_donor_consolidated_mv()` to refresh both MVs in order:
+   ```
+   REFRESH MATERIALIZED VIEW CONCURRENTLY private.donor_consolidated_mv;
+   REFRESH MATERIALIZED VIEW CONCURRENTLY private.donor_consolidated_all_mv;
+   ```
+   Keep the existing `SECURITY DEFINER`, `search_path`, and `statement_timeout = 300000` (bump to ~600000 if needed since we now do two refreshes).
 
-### 3. Surface empty aliases in admin
+2. **One‑time refresh now** — run `REFRESH MATERIALIZED VIEW CONCURRENTLY private.donor_consolidated_all_mv` so the Koch alias (and any other previously attached aliases) immediately appear merged on /donors.
 
-- In `DonorAliasesPanel`, use `useAliasMemberCounts()` to render a yellow badge `0 attached — not visible publicly` next to any alias with 0 members.
-- Tooltip: *"Attach donor name variations under the Attach tab so this alias shows up on the Donors page."*
-- Sort 0-member aliases to the top of the Manage tab.
+3. **No client / edge‑function changes required.** All existing call sites (`attach-donors-to-alias`, `useDeleteDonorAlias`, `useDetachDonors`, `apply-donor-alias`) already invoke `refresh_donor_consolidated_mv` and will automatically pick up the fix.
 
-### 4. Better creation toast
+## Verification after apply
 
-- After `useCreateDonorAlias` succeeds, toast: `Alias created — now attach donors to make it visible on /donors`.
+- `SELECT display_name, total_amount FROM private.donor_consolidated_all_mv WHERE display_name = 'Koch Industries'` returns one row (~$56.5M).
+- /donors with cycle = All shows a single "Koch Industries" entry.
+- Old rows (`KOCH INDUSTRIES INC.`, `KOCHPAC`, etc.) no longer appear as top donors.
 
-## Files touched
+## Notes
 
-- `supabase/functions/attach-donors-to-alias/index.ts`
-- `src/hooks/useDonorAliases.ts`
-- `src/components/admin/DonorAliasesPanel.tsx`
+- Both MVs have unique indexes (required for `REFRESH CONCURRENTLY`), so this stays non‑blocking.
+- Two sequential concurrent refreshes typically run in well under 60s on the current data volume; the 300s timeout is plenty.
