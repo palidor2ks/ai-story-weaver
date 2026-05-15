@@ -604,6 +604,12 @@ export const ShareCardModal = ({
           automatically as the link preview — no copy/paste needed.
         </p>
       </DialogContent>
+      <SharePreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        node={refs.current[selected]}
+        filename={filename}
+      />
     </Dialog>
   );
 };
