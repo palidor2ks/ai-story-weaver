@@ -112,7 +112,7 @@ export const useCreateDonorAlias = () => {
     },
     onSuccess: () => {
       invalidateDonorCaches(queryClient);
-      toast.success('Alias created');
+      toast.success('Alias created — now attach donors to make it visible on /donors');
     },
     onError: (error: Error) => toast.error(`Failed to create alias: ${error.message}`),
   });
