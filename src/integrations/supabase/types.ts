@@ -954,14 +954,42 @@ export type Database = {
         }
         Relationships: []
       }
+      donor_alias_members: {
+        Row: {
+          alias_id: string
+          created_at: string
+          donor_name: string
+          donor_type: string
+          id: string
+        }
+        Insert: {
+          alias_id: string
+          created_at?: string
+          donor_name: string
+          donor_type: string
+          id?: string
+        }
+        Update: {
+          alias_id?: string
+          created_at?: string
+          donor_name?: string
+          donor_type?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donor_alias_members_alias_id_fkey"
+            columns: ["alias_id"]
+            isOneToOne: false
+            referencedRelation: "donor_aliases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       donor_aliases: {
         Row: {
-          alias_pattern: string
-          alias_patterns: string[] | null
           canonical_name: string
           created_at: string | null
-          donor_type: string
-          donor_types: string[] | null
           fec_committee_id: string | null
           id: string
           is_active: boolean | null
@@ -969,12 +997,8 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          alias_pattern: string
-          alias_patterns?: string[] | null
           canonical_name: string
           created_at?: string | null
-          donor_type: string
-          donor_types?: string[] | null
           fec_committee_id?: string | null
           id?: string
           is_active?: boolean | null
@@ -982,12 +1006,8 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          alias_pattern?: string
-          alias_patterns?: string[] | null
           canonical_name?: string
           created_at?: string | null
-          donor_type?: string
-          donor_types?: string[] | null
           fec_committee_id?: string | null
           id?: string
           is_active?: boolean | null
@@ -2809,10 +2829,6 @@ export type Database = {
         Args: { p_anon_session_id: string }
         Returns: number
       }
-      count_donors_matching_patterns: {
-        Args: { p_donor_types: string[]; patterns: string[] }
-        Returns: number
-      }
       get_committee_cycles: { Args: never; Returns: string[] }
       get_contribution_totals: {
         Args: { p_candidate_id: string; p_cycle: string }
@@ -2923,7 +2939,6 @@ export type Database = {
       }
       refresh_bill_summary_stats: { Args: never; Returns: undefined }
       refresh_donor_consolidated_mv: { Args: never; Returns: undefined }
-      refresh_donor_display_names: { Args: never; Returns: undefined }
       resolve_donor_display_name: {
         Args: { p_donor_name: string; p_donor_type: string }
         Returns: string
