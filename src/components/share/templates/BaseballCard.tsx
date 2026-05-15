@@ -11,19 +11,19 @@ interface Props {
 
 const variantStyles: Record<BaseballVariant, { bg: string; border: string; stripe: string }> = {
   classic: {
-    bg: 'linear-gradient(160deg, hsl(var(--card)) 0%, hsl(var(--background)) 100%)',
-    border: 'hsl(var(--border))',
-    stripe: 'hsl(var(--primary) / 0.12)',
+    bg: 'linear-gradient(160deg, hsl(221 82% 20%) 0%, hsl(214 89% 28%) 45%, hsl(0 76% 42%) 100%)',
+    border: 'hsl(0 0% 98%)',
+    stripe: 'hsl(0 0% 100% / 0.2)',
   },
   holo: {
-    bg: 'linear-gradient(135deg, hsl(192 95% 95%) 0%, hsl(267 89% 96%) 50%, hsl(43 100% 93%) 100%)',
-    border: 'hsl(267 46% 72%)',
-    stripe: 'hsl(267 70% 70% / 0.18)',
+    bg: 'linear-gradient(135deg, hsl(215 95% 92%) 0%, hsl(0 100% 96%) 50%, hsl(220 90% 90%) 100%)',
+    border: 'hsl(218 76% 34%)',
+    stripe: 'hsl(0 71% 52% / 0.16)',
   },
   night: {
-    bg: 'linear-gradient(160deg, hsl(228 26% 16%) 0%, hsl(240 17% 9%) 100%)',
-    border: 'hsl(228 18% 35%)',
-    stripe: 'hsl(212 84% 62% / 0.22)',
+    bg: 'linear-gradient(160deg, hsl(228 61% 13%) 0%, hsl(215 75% 18%) 60%, hsl(0 62% 28%) 100%)',
+    border: 'hsl(0 0% 96%)',
+    stripe: 'hsl(0 0% 100% / 0.15)',
   },
 };
 
@@ -60,18 +60,19 @@ export const BaseballCard = forwardRef<HTMLDivElement, Props>(({ data, variant =
     : data.brandHost;
   const statCLabel = isCandidate ? 'Compared Topics' : isDonor ? 'Donations' : 'Share';
 
-  const textColor = variant === 'night' ? 'hsl(0 0% 100%)' : 'hsl(var(--foreground))';
-  const mutedColor = variant === 'night' ? 'hsl(220 16% 76%)' : 'hsl(var(--muted-foreground))';
+  const patriotic = variant === 'classic' || variant === 'night';
+  const textColor = patriotic ? 'hsl(0 0% 100%)' : 'hsl(var(--foreground))';
+  const mutedColor = patriotic ? 'hsl(214 29% 85%)' : 'hsl(var(--muted-foreground))';
 
   return (
     <div ref={ref} style={{ width: CARD_SIZE, height: CARD_SIZE, background: v.bg, color: textColor, padding: 56, fontFamily: 'var(--font-sans, ui-sans-serif, system-ui, sans-serif)' }}>
-      <div style={{ height: '100%', border: `5px solid ${v.border}`, borderRadius: 36, overflow: 'hidden', position: 'relative', background: variant === 'night' ? 'hsl(228 24% 13% / 0.65)' : 'hsl(var(--background) / 0.92)' }}>
+      <div style={{ height: '100%', border: `5px solid ${v.border}`, borderRadius: 36, overflow: 'hidden', position: 'relative', background: patriotic ? 'hsl(221 40% 14% / 0.58)' : 'hsl(var(--background) / 0.92)' }}>
         <div style={{ position: 'absolute', inset: 0, background: `repeating-linear-gradient(-18deg, ${v.stripe} 0px, ${v.stripe} 36px, transparent 36px, transparent 72px)` }} />
 
         <div style={{ position: 'relative', height: '100%', padding: 42, display: 'grid', gridTemplateRows: 'auto auto 1fr auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><PulseMark size={46} /><span style={{ fontWeight: 800, fontSize: 30 }}>Pulse Baseball Card</span></div>
-            <div style={{ fontSize: 20, letterSpacing: 2, textTransform: 'uppercase', color: mutedColor }}>{variant}</div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><PulseMark size={46} /><span style={{ fontWeight: 800, fontSize: 30 }}>Pulse Share Card</span></div>
+            <div style={{ fontSize: 20, letterSpacing: 2, textTransform: 'uppercase', color: mutedColor }}>{variant === 'classic' ? 'usa' : variant}</div>
           </div>
           <div style={{ marginTop: 18 }}>
             <div style={{ fontSize: 74, letterSpacing: -2, fontWeight: 900, lineHeight: 1.02 }}>{title}</div>
@@ -79,7 +80,7 @@ export const BaseballCard = forwardRef<HTMLDivElement, Props>(({ data, variant =
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 18, alignSelf: 'center' }}>
             {[{ value: statA, label: statALabel }, { value: statB, label: statBLabel }, { value: statC, label: statCLabel }].map((s) => (
-              <div key={s.label} style={{ border: `2px solid ${v.border}`, borderRadius: 18, padding: '24px 12px', textAlign: 'center', background: variant === 'night' ? 'hsl(228 18% 17% / 0.85)' : 'hsl(var(--card) / 0.75)' }}>
+              <div key={s.label} style={{ border: `2px solid ${v.border}`, borderRadius: 18, padding: '24px 12px', textAlign: 'center', background: patriotic ? 'hsl(220 37% 18% / 0.82)' : 'hsl(var(--card) / 0.75)' }}>
                 <div style={{ fontSize: 52, fontWeight: 800, lineHeight: 1.1 }}>{s.value}</div>
                 <div style={{ fontSize: 18, marginTop: 10, letterSpacing: 1.3, textTransform: 'uppercase', color: mutedColor }}>{s.label}</div>
               </div>
