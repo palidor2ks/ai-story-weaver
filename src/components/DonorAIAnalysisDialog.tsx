@@ -307,39 +307,33 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
 
             {analysis.notable_recipients && analysis.notable_recipients.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Notable recipients</h4>
-                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                  {analysis.notable_recipients.map((r, i) => <li key={i}>{r}</li>)}
-                </ul>
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Notable recipients:</strong> {toOneSentence(analysis.notable_recipients)}
+                </p>
               </div>
             )}
 
             {analysis.key_people && analysis.key_people.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Key people</h4>
-                <div className="flex flex-wrap gap-1.5">
-                  {analysis.key_people.map((p, i) => <Badge key={i} variant="outline">{p}</Badge>)}
-                </div>
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Key people:</strong> {toOneSentence(analysis.key_people)}
+                </p>
               </div>
             )}
 
             {analysis.controversies && analysis.controversies.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Controversies</h4>
-                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                  {analysis.controversies.map((c, i) => <li key={i}>{c}</li>)}
-                </ul>
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Controversies:</strong> {toOneSentence(analysis.controversies)}
+                </p>
               </div>
             )}
 
             {analysis.motivation_hypotheses && analysis.motivation_hypotheses.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Possible motivations</h4>
-                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                  {analysis.motivation_hypotheses.map((m, i) => (
-                    <li key={i}>{m}</li>
-                  ))}
-                </ul>
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Possible motivations:</strong> {toOneSentence(analysis.motivation_hypotheses)}
+                </p>
               </div>
             )}
 
