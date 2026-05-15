@@ -395,12 +395,70 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
     queryKey: ['donors', candidateId, cycle ?? 'all'],
     queryFn: async () => {
       if (!candidateId) return [];
+
+      let resolvedCandidateId = candidateId;
+      const isSyntheticExecutiveId =
+        candidateId === 'federal_president' ||
+        candidateId === 'federal_vice_president' ||
+        candidateId.startsWith('exec_') ||
+        candidateId.startsWith('gov_') ||
+        candidateId.startsWith('state_');
+
+      // Synthetic executive IDs (from civic officials/feed contexts) do not
+      // match the canonical candidate_id used in donors. Resolve them to the
+      // current incumbent candidate row before querying donors.
+      if (isSyntheticExecutiveId) {
+        if (candidateId === 'federal_president' || candidateId === 'federal_vice_president') {
+          const officeName = candidateId === 'federal_president' ? 'President' : 'Vice President';
+          const { data: execCandidate, error: execCandidateError } = await supabase
+            .from('candidates')
+            .select('id')
+            .eq('office', officeName)
+            .eq('is_incumbent', true)
+            .order('last_updated', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (execCandidateError) throw execCandidateError;
+          if (execCandidate?.id) {
+            resolvedCandidateId = execCandidate.id;
+          }
+        } else {
+          const { data: executiveOfficial, error: executiveOfficialError } = await supabase
+            .from('static_officials')
+            .select('name, office, state')
+            .eq('id', candidateId)
+            .maybeSingle();
+
+          if (executiveOfficialError) throw executiveOfficialError;
+          if (executiveOfficial?.office && executiveOfficial?.state) {
+            const { data: matchingCandidates, error: matchingCandidatesError } = await supabase
+              .from('candidates')
+              .select('id, name')
+              .eq('office', executiveOfficial.office)
+              .eq('state', executiveOfficial.state)
+              .eq('is_incumbent', true)
+              .order('last_updated', { ascending: false })
+              .limit(5);
+
+            if (matchingCandidatesError) throw matchingCandidatesError;
+            if (matchingCandidates && matchingCandidates.length > 0) {
+              const normalize = (value: string) =>
+                (value || '').toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
+              const preferredCandidate =
+                matchingCandidates.find(c => normalize(c.name) === normalize(executiveOfficial.name || '')) ??
+                matchingCandidates[0];
+              resolvedCandidateId = preferredCandidate.id;
+            }
+          }
+        }
+      }
       
       // First get raw donors
       let donorsQuery = supabase
         .from('donors')
         .select('*')
-        .eq('candidate_id', candidateId);
+        .eq('candidate_id', resolvedCandidateId);
       if (cycle && cycle !== 'all') {
         donorsQuery = donorsQuery.eq('cycle', cycle);
       }
