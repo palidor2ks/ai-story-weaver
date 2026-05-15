@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { QuizQuestion } from '@/components/QuizQuestion';
 import { ScoreText } from '@/components/ScoreText';
 import { Button } from '@/components/ui/button';

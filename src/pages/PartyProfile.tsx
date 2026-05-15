@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { usePartyPlatform, calculatePartyAlignment } from '@/hooks/usePartyPlatform';
 import { useUserTopicScores } from '@/hooks/useProfile';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

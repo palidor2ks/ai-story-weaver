@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -73,6 +74,12 @@ export const QuizLibrary = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title="Quiz Library — Pulse"
+        description="Answer questions across every policy topic to refine your political profile and improve your candidate matches."
+        path="/quiz-library"
+        noIndex
+      />
       <Header />
       
       <main className="container py-8 px-4">

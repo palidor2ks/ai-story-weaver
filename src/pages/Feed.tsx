@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { CandidateCard } from '@/components/CandidateCard';
 import { QuestionUpdateAlert } from '@/components/QuestionUpdateAlert';
 import { calculateMatchScore } from '@/hooks/useCandidates';
@@ -325,6 +326,12 @@ export const Feed = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title="Your Feed — Pulse"
+        description="Compare your political views with your representatives and discover candidates who match your values on the issues that matter to you."
+        path="/feed"
+        noIndex
+      />
       <Header />
       
       <main className="container py-8 px-4">

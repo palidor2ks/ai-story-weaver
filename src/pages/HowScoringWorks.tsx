@@ -1,4 +1,5 @@
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +19,11 @@ import { Button } from '@/components/ui/button';
 export const HowScoringWorks = () => {
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title="How Scoring Works — Pulse"
+        description="Learn how Pulse scores politicians on a -10 to +10 scale across 17 policy topics using voting records, public statements, and party platforms."
+        path="/how-scoring-works"
+      />
       <Header />
       
       <main className="container py-8 px-4">

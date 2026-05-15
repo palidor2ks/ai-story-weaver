@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { useAuth } from '@/context/AuthContext';
 import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding, useUpdateProfile } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
