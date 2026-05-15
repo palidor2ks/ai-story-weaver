@@ -80,7 +80,7 @@ export default function Privacy() {
             <p>Privacy questions or requests: <a className="text-primary underline" href="mailto:support@polipulseapp.com">support@polipulseapp.com</a>.</p>
           </Section>
         </article>
-      </div>
+      </main>
     </div>
   );
 }
