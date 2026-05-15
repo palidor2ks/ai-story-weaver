@@ -801,9 +801,10 @@ async function inferFromPartyAlignment(
   candidateName: string,
   candidateParty: string,
   question: Question
-): Promise<GeneratedAnswer> {
+): Promise<GeneratedAnswer | null> {
   if (!LOVABLE_API_KEY) {
-    return createNeutralAnswer(question.id, 'Unable to research position');
+    console.log(`[Inference] Skipping ${question.id}: LOVABLE_API_KEY missing`);
+    return null;
   }
 
   const optionsContext = question.question_options
@@ -835,7 +836,7 @@ Return JSON: {"score": <value>, "reasoning": "PARTY ALIGNMENT: <brief explanatio
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-3-flash-preview',
         messages: [
           { role: 'system', content: 'Return only valid JSON.' },
           { role: 'user', content: prompt }
@@ -846,7 +847,8 @@ Return JSON: {"score": <value>, "reasoning": "PARTY ALIGNMENT: <brief explanatio
     });
 
     if (!response.ok) {
-      return createNeutralAnswer(question.id, 'Unable to infer position');
+      console.log(`[Inference] Skipping ${question.id}: party-alignment HTTP ${response.status}`);
+      return null;
     }
 
     const data = await response.json();
@@ -854,7 +856,8 @@ Return JSON: {"score": <value>, "reasoning": "PARTY ALIGNMENT: <brief explanatio
     const parsed = extractJsonFromText(content);
 
     if (!parsed || typeof parsed.score !== 'number') {
-      return createNeutralAnswer(question.id, 'Unable to determine position');
+      console.log(`[Inference] Skipping ${question.id}: party-alignment returned unparseable output`);
+      return null;
     }
 
     return {
@@ -870,7 +873,8 @@ Return JSON: {"score": <value>, "reasoning": "PARTY ALIGNMENT: <brief explanatio
     };
 
   } catch (e) {
-    return createNeutralAnswer(question.id, 'Error inferring position');
+    console.log(`[Inference] Skipping ${question.id}: party-alignment threw`, e);
+    return null;
   }
 }
 
@@ -898,7 +902,7 @@ async function researchQuestionPosition(
   candidateState: string,
   candidateParty: string,
   question: Question
-): Promise<GeneratedAnswer> {
+): Promise<GeneratedAnswer | null> {
   // Step 1: Try Perplexity deep research (primary)
   const perplexityAnswer = await researchPositionWithPerplexity(
     candidateName, candidateOffice, candidateState, candidateParty, question
@@ -973,9 +977,15 @@ async function generateAnswersForCandidate(
       const answer = await researchQuestionPosition(
         candidateName, candidateOffice, candidateState, candidateParty, question
       );
-      
+
+      if (!answer) {
+        console.log(`[Generate] No evidence for ${question.id}; skipping persistence`);
+        failedCount++;
+        continue;
+      }
+
       answersMap.set(answer.question_id, answer);
-      
+
       if (answer.evidence_type !== 'inferred') {
         researchedCount++;
       }
@@ -988,11 +998,7 @@ async function generateAnswersForCandidate(
     } catch (e) {
       console.error(`[Generate] Error for ${question.id}:`, e);
       failedCount++;
-      
-      // Add a neutral answer on error (only if not already present)
-      if (!answersMap.has(question.id)) {
-        answersMap.set(question.id, createNeutralAnswer(question.id, 'Error during research'));
-      }
+      // Do not persist a placeholder row on error; leave the question unanswered.
     }
   }
 
