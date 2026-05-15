@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Seo } from "@/components/Seo";
 
 type State =
   | { status: "loading" }
@@ -65,7 +66,13 @@ export default function Unsubscribe() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+    <main className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <Seo
+        title="Unsubscribe — Pulse"
+        description="Manage your Pulse email preferences and unsubscribe from notifications."
+        path="/unsubscribe"
+        noIndex
+      />
       <Card className="max-w-md w-full">
         <CardHeader>
           <CardTitle>Unsubscribe from PoliPulse emails</CardTitle>

@@ -76,6 +76,6 @@ export default function VerifyEmail() {
           </p>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }
