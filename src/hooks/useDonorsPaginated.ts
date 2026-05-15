@@ -182,6 +182,31 @@ export const useSearchDonors = (searchTerm: string, donorType?: string) => {
   });
 };
 
+// Hook to search RAW donor names (one row per name+type variation, not collapsed by display_name)
+export const useSearchRawDonors = (searchTerm: string, donorType?: string) => {
+  return useQuery({
+    queryKey: ['donor-search-raw', searchTerm, donorType],
+    queryFn: async () => {
+      if (!searchTerm || searchTerm.length < 3) return [];
+
+      const { data, error } = await supabase.rpc('search_raw_donors_by_name', {
+        p_search: searchTerm,
+        p_type: donorType && donorType !== 'all' ? donorType : null,
+        p_limit: 200,
+      });
+      if (error) throw error;
+
+      return (data || []).map((d: any) => ({
+        name: d.donor_name as string,
+        type: d.type as string,
+        totalAmount: Number(d.total_amount) || 0,
+        transactionCount: Number(d.transaction_count) || 0,
+      }));
+    },
+    enabled: searchTerm.length >= 3,
+  });
+};
+
 // Hook to get alias for a specific donor name via donor_alias_members
 export const useDonorAlias = (donorName: string, donorType: string) => {
   return useQuery({

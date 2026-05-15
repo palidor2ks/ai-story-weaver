@@ -54,7 +54,7 @@ import {
   DonorAlias,
   DonorAliasInput,
 } from '@/hooks/useDonorAliases';
-import { useSearchDonors } from '@/hooks/useDonorsPaginated';
+import { useSearchRawDonors } from '@/hooks/useDonorsPaginated';
 import { supabase } from '@/integrations/supabase/client';
 
 const DONOR_TYPES = ['Individual', 'PAC', 'Organization', 'Unknown'];
@@ -88,7 +88,7 @@ export function DonorAliasesPanel() {
     const t = setTimeout(() => setDebouncedSearch(donorSearch), 300);
     return () => clearTimeout(t);
   }, [donorSearch]);
-  const { data: searchResults = [], isLoading: searchLoading } = useSearchDonors(
+  const { data: searchResults = [], isLoading: searchLoading } = useSearchRawDonors(
     debouncedSearch,
     donorTypeFilter,
   );

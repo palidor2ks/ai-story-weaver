@@ -1,58 +1,39 @@
 ## Goal
 
-Remove the auto-matching donor alias system. Aliases become simple records (canonical name + notes). Admins explicitly attach donor rows to an alias — one at a time or by selecting many at once.
+Make the Attach Donors search show every raw donor name variation (so admins can pick "ADELSON, MIRIAM DR.", "ADELSON, MIRIAM M.D.", etc.) and correctly indicate which raw names are already attached to an alias.
 
-## Database changes
+## Problem
 
-1. **Wipe existing data and reshape `donor_aliases`**
-   - `TRUNCATE donor_aliases`.
-   - Drop columns: `alias_pattern`, `alias_patterns`, `donor_type`, `donor_types`.
-   - Keep: `id`, `canonical_name`, `fec_committee_id` (optional), `notes`, `is_active`, timestamps.
+The current `search_donors_by_name` RPC groups by `display_name`. This:
+- Collapses every unattached raw variation into one row (you can't see or pick them individually).
+- Surfaces the canonical alias name itself as a row (because attached donors have `display_name = canonical_name`).
+- Breaks the "Current alias" indicator on consolidated rows (the lookup uses `display_name`, but members store the raw `name`).
 
-2. **New attachment table `donor_alias_members`**
-   - Columns: `id uuid pk`, `alias_id uuid → donor_aliases.id on delete cascade`, `donor_name text`, `donor_type text`, `created_at`.
-   - Unique on `(donor_name, donor_type)` — a donor row can only belong to one alias.
-   - Index on `alias_id`.
-   - RLS: admin-only writes; public read.
+## Fix
 
-3. **Replace `resolve_donor_display_name(name, type)`**
-   - Lookup against `donor_alias_members` joined to active aliases. Fallback to passed-in name.
-   - The existing `BEFORE INSERT` trigger on `donors` keeps using this function, so new imports automatically get `display_name` set if a member row exists.
+### 1. New RPC for the attach picker: `search_raw_donors_by_name`
 
-4. **Drop / replace**
-   - Drop `count_donors_matching_patterns`.
-   - Drop `refresh_donor_display_names()` (the SQL function).
-   - Reset `donors.display_name = donors.name` for all rows (clean slate after wipe).
+Group by raw `name` + `type` instead of `display_name`. Return one row per raw variation with its total amount and record count. Result columns: `donor_name`, `type`, `total_amount`, `transaction_count`.
 
-## Edge function changes
+Search predicate: `name ILIKE '%query%'` only (do not also match on `display_name`, so the canonical alias name doesn't pull in collapsed rows).
 
-- Delete `apply-donor-alias`, `unapply-donor-alias`, `refresh-donor-display-names`.
-- Add `attach-donors-to-alias` (admin-auth, JSON body):
-  - Input: `{ alias_id, donors: [{ name, type }] }` (1..N).
-  - Inserts member rows (on conflict, reassign to this alias).
-  - Updates matching `donors.display_name` to alias canonical name.
-  - Refreshes `donor_consolidated_mv`.
-- Add `detach-donors-from-alias`:
-  - Input: `{ donors: [{ name, type }] }`.
-  - Deletes member rows; resets affected donors' `display_name` to `name`.
-  - Refreshes MV.
+### 2. Update the panel to use the new RPC
 
-## Frontend changes (`DonorAliasesPanel.tsx` + `useDonorAliases.ts`)
+In `src/hooks/useDonorsPaginated.ts` add `useSearchRawDonors(searchTerm, donorType)` calling the new RPC.
 
-- Strip pattern UI: remove `alias_patterns` editor, donor-type checkboxes, "Refresh Display Names", "Backfill alias", per-alias match counts.
-- **Aliases tab** — simple list: canonical name, member count, notes, active toggle, edit/delete. Create/edit dialog only collects canonical name + notes + optional FEC committee id.
-- **Search Donors tab** — keep donor search; each row shows current alias (if any) and gets:
-  - "Attach to alias" → opens picker dialog with searchable list of aliases (or "Create new alias from this donor").
-  - Multi-select checkboxes + sticky bar: "Attach N selected to alias…" → same picker, calls `attach-donors-to-alias` once.
-  - "Detach" button when already attached.
-- Update `useDonorAliases` hook: drop pattern/type/match-count helpers; add `useAttachDonors`, `useDetachDonors`, `useAliasMembers(aliasId)`.
+In `src/components/admin/DonorAliasesPanel.tsx`:
+- Switch the Attach Donors tab to `useSearchRawDonors`.
+- Use `donor_name` (raw) as the row label so each variation is visible.
+- Keep the existing `donor_alias_members` batch lookup keyed on raw `name|type` — it will now resolve correctly for every row.
 
-## Out of scope
+### 3. Result
 
-Per user: committee/PAC-side aliasing is skipped. Existing committee allocation tab stays unchanged.
+Searching "Adelso" returns every raw variation (DR., M.D., O., OCHSHORN, NANCY, ROBERT S, ANDREW, EDWARD, …) as separate selectable rows. Rows already attached show the alias badge; unattached rows show "—". The canonical alias name no longer appears as a phantom donor row.
 
-## Technical notes
+## Files touched
 
-- `donors.type` is the existing enum (`Individual | PAC | Organization | Unknown`). The new flow works for all four types uniformly — no dedicated PAC/Organization path needed.
-- All current pattern-based aliases will be lost (user approved wiping).
-- After deploy, admins re-create aliases manually.
+- New migration: `search_raw_donors_by_name` RPC (security definer, search_path public).
+- `src/hooks/useDonorsPaginated.ts` — add `useSearchRawDonors`.
+- `src/components/admin/DonorAliasesPanel.tsx` — swap hook + row label in the Attach tab only. Manage Aliases tab unchanged.
+
+No schema changes; no edge function changes.
