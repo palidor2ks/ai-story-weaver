@@ -319,7 +319,8 @@ export function DonorAliasesPanel() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
