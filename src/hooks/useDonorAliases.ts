@@ -178,12 +178,22 @@ export const useAttachDonors = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ alias_id, donors }: { alias_id: string; donors: AttachableDonor[] }) => {
-      const { data, error } = await supabase.functions.invoke('attach-donors-to-alias', {
-        body: { alias_id, donors },
-      });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Attach failed');
-      return data;
+      const CHUNK = 100;
+      let attached_count = 0;
+      let donors_updated = 0;
+      const errors: string[] = [];
+      for (let i = 0; i < donors.length; i += CHUNK) {
+        const chunk = donors.slice(i, i + CHUNK);
+        const { data, error } = await supabase.functions.invoke('attach-donors-to-alias', {
+          body: { alias_id, donors: chunk },
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Attach failed');
+        attached_count += data.attached_count || 0;
+        donors_updated += data.donors_updated || 0;
+        if (Array.isArray(data.errors)) errors.push(...data.errors);
+      }
+      return { success: true, attached_count, donors_updated, errors };
     },
     onSuccess: (data) => {
       invalidateDonorCaches(queryClient);
