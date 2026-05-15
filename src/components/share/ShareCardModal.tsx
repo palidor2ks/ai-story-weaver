@@ -4,14 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Check, Copy, Download, Facebook, Linkedin, Loader2, RotateCcw, Share2, Twitter } from 'lucide-react';
+import { Check, Copy, Download, Eye, Facebook, Linkedin, Loader2, RotateCcw, Share2, Twitter } from 'lucide-react';
 import { toast } from 'sonner';
 import { BaseballCard } from './templates/BaseballCard';
 import { DataCard } from './templates/DataCard';
 import { EditorialCard } from './templates/EditorialCard';
 import { DonorStatsCard } from './templates/DonorStatsCard';
 import { CardData, CARD_SIZE } from './templates/types';
-import { copyNodeToClipboard, downloadNode, nodeToBlob, nodeToFile } from '@/lib/shareImage';
+import { copyNodeToClipboard, downloadNode, nodeToBlob, nodeToFile, renderNodeWithQA } from '@/lib/shareImage';
+import { SharePreviewDialog } from './SharePreviewDialog';
 import { uploadShareCard } from '@/lib/shareUpload';
 import {
   CaptionInput,
