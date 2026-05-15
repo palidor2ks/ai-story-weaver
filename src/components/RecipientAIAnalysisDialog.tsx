@@ -2,6 +2,7 @@ import { ReactNode, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+  DialogClose,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -9,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw } from 'lucide-react';
+import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface RecipientAnalysis {
@@ -61,6 +62,13 @@ const normalizeInvokeError = (raw: unknown): string => {
   return message;
 };
 
+const toOneSentence = (items: unknown[]) => {
+  const parts = items
+    .map((item) => (item == null ? '' : String(item)).trim().replace(/\.$/, ''))
+    .filter(Boolean);
+  return parts.length > 0 ? parts.join('; ') + '.' : '';
+};
+
 export const RecipientAIAnalysisDialog = ({
   entityKind, entityId, entityName, fecId, party, office, state, cycle, trigger,
 }: Props) => {
@@ -104,8 +112,8 @@ export const RecipientAIAnalysisDialog = ({
   return (
     <Dialog onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto [&>button:last-child]:hidden">
+        <DialogHeader className="sticky top-0 z-10 bg-background pb-2 border-b border-border">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1.5 min-w-0">
               <DialogTitle className="flex items-center gap-2">
@@ -117,10 +125,24 @@ export const RecipientAIAnalysisDialog = ({
               </DialogDescription>
             </div>
             {analysis && !isLoading && (
-              <Button size="sm" variant="outline" onClick={fetchAnalysis} className="shrink-0">
-                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                Regenerate
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button size="sm" variant="outline" onClick={fetchAnalysis}>
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  Regenerate
+                </Button>
+                <DialogClose asChild>
+                  <Button size="icon" variant="ghost" aria-label="Close analysis dialog">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </DialogClose>
+              </div>
+            )}
+            {!analysis && (
+              <DialogClose asChild>
+                <Button size="icon" variant="ghost" aria-label="Close analysis dialog" className="shrink-0">
+                  <X className="h-4 w-4" />
+                </Button>
+              </DialogClose>
             )}
           </div>
         </DialogHeader>
@@ -207,10 +229,9 @@ export const RecipientAIAnalysisDialog = ({
 
             {analysis.goals && analysis.goals.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">What they're trying to achieve</h4>
-                <ul className="list-disc pl-5 space-y-1 text-foreground">
-                  {analysis.goals.map((g, i) => <li key={i}>{g}</li>)}
-                </ul>
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Goals:</strong> {toOneSentence(analysis.goals)}
+                </p>
               </div>
             )}
 
@@ -225,30 +246,26 @@ export const RecipientAIAnalysisDialog = ({
 
             {analysis.notable_recipients && analysis.notable_recipients.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">
-                  {entityKind === 'committee' ? 'Notable spending / recipients' : 'Notable endorsements & coalitions'}
-                </h4>
-                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                  {analysis.notable_recipients.map((r, i) => <li key={i}>{r}</li>)}
-                </ul>
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>{entityKind === 'committee' ? 'Notable spending / recipients' : 'Notable endorsements & coalitions'}:</strong>{' '}
+                  {toOneSentence(analysis.notable_recipients)}
+                </p>
               </div>
             )}
 
             {analysis.key_people && analysis.key_people.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Key people</h4>
-                <div className="flex flex-wrap gap-1.5">
-                  {analysis.key_people.map((p, i) => <Badge key={i} variant="outline">{p}</Badge>)}
-                </div>
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Key people:</strong> {toOneSentence(analysis.key_people)}
+                </p>
               </div>
             )}
 
             {analysis.controversies && analysis.controversies.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-semibold text-foreground">Controversies</h4>
-                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                  {analysis.controversies.map((c, i) => <li key={i}>{c}</li>)}
-                </ul>
+                <p className="text-sm text-foreground leading-relaxed">
+                  <strong>Controversies:</strong> {toOneSentence(analysis.controversies)}
+                </p>
               </div>
             )}
 
@@ -302,7 +319,7 @@ export const RecipientAIAnalysisDialog = ({
                         className="text-primary hover:underline inline-flex items-center gap-1"
                       >
                         <ExternalLink className="h-3 w-3" />
-                        {s.title}
+                        [{i + 1}] {s.title}
                       </a>
                     </li>
                   ))}
