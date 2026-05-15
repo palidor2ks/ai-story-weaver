@@ -357,6 +357,7 @@ export const ShareCardModal = ({
     setBusy('native');
     trackEvent('share_action', { ...baseProps(), action: 'open_intent', destination });
     try {
+      await preflightCheck(`intent_${destination}`);
       let shareUrl = url;
       try {
         shareUrl = await prepareShareUrl();
