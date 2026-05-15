@@ -29,6 +29,8 @@ export interface RecipientAnalysis {
   confidence_rationale?: string;
   data_coverage?: 'none' | 'sparse' | 'moderate' | 'rich';
   sources: { title: string; url: string }[];
+  provider?: string;
+  provider_errors?: { provider: string; status: number; code: string }[];
 }
 
 interface Props {
@@ -326,7 +328,9 @@ export const RecipientAIAnalysisDialog = ({
                 </ol>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
-                  No external sources cited. Treat this analysis as tentative.
+                  {analysis.provider_errors && analysis.provider_errors.length > 0
+                    ? `External citation providers were unavailable (${analysis.provider_errors.map(p => `${p.provider} ${p.status}`).join(', ')}). This response used the fallback model and should be treated as tentative.`
+                    : "No external sources cited. Treat this analysis as tentative."}
                 </p>
               )}
             </div>
