@@ -265,6 +265,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
             ? "Perplexity rate limit reached. Try again shortly."
             : `Perplexity service error (${ppxResp.status}). Try again later.`,
         };
+        providerErrors.push({ provider: "perplexity", status: ppxResp.status, code: lastError.code });
       }
     }
 
@@ -284,6 +285,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
           code: ye?.code ?? "YOU_ERROR",
           message: ye?.message ?? "You.com fallback failed.",
         };
+        providerErrors.push({ provider: "you", status: ye?.status ?? 500, code: ye?.code ?? "YOU_ERROR" });
       }
     }
 
