@@ -433,52 +433,12 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
       if (donorError) throw donorError;
       if (!rawDonors || rawDonors.length === 0) return [];
       
-      // Get all active aliases
-      const { data: aliases, error: aliasError } = await supabase
-        .from('donor_aliases')
-        .select('*')
-        .eq('is_active', true);
-      
-      if (aliasError) {
-        console.warn('Failed to fetch donor aliases:', aliasError);
-        // Return donors without alias resolution
-        return rawDonors.map(d => ({
-          ...d,
-          display_name: d.name,
-          is_consolidated: false,
-        })) as DonorWithCanonical[];
-      }
-      
-      // Group donors by canonical name
+      // Group donors by canonical name (display_name set by attach flow / DB trigger)
       const canonicalGroups = new Map<string, DonorWithCanonical>();
-      
+
       rawDonors.forEach(donor => {
-        // Use display_name from database if it exists (already resolved by backfill)
-        let canonicalName = donor.display_name;
-        let isConsolidated = donor.display_name !== null && donor.display_name !== donor.name;
-        
-        // Fallback: Find matching alias if display_name not set or same as name
-        if (!canonicalName || canonicalName === donor.name) {
-          const matchingAlias = (aliases || []).find(alias => {
-            if (!alias.donor_types?.includes(donor.type)) return false;
-            
-            // Check all patterns in alias_patterns array
-            const patterns = alias.alias_patterns || (alias.alias_pattern ? [alias.alias_pattern] : []);
-            return patterns.some(pattern => {
-              if (!pattern) return false;
-              const regexPattern = pattern.replace(/%/g, '.*').replace(/_/g, '.');
-              const regex = new RegExp(`^${regexPattern}$`, 'i');
-              return regex.test(donor.name);
-            });
-          });
-          
-          if (matchingAlias) {
-            canonicalName = matchingAlias.canonical_name;
-            isConsolidated = true;
-          } else {
-            canonicalName = donor.name;
-          }
-        }
+        const canonicalName = donor.display_name || donor.name;
+        const isConsolidated = !!donor.display_name && donor.display_name !== donor.name;
         
         // Group by display_name and cycle (removes type to consolidate same entity across types)
         const groupKey = `${canonicalName}|${donor.cycle}`;
