@@ -261,16 +261,31 @@ export function DonorAliasesPanel() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredAliases.map((alias) => (
+                    filteredAliases.map((alias) => {
+                      const count = memberCounts[alias.id] || 0;
+                      return (
                       <TableRow key={alias.id}>
-                        <TableCell className="font-medium">{alias.canonical_name}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span>{alias.canonical_name}</span>
+                            {count === 0 && (
+                              <Badge
+                                variant="outline"
+                                className="text-amber-700 border-amber-400 bg-amber-50"
+                                title="Attach donor name variations under the Attach tab so this alias shows up on the Donors page."
+                              >
+                                0 attached — not visible publicly
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => setViewMembersFor(alias)}
                           >
-                            <Badge variant="secondary">{memberCounts[alias.id] || 0}</Badge>
+                            <Badge variant="secondary">{count}</Badge>
                           </Button>
                         </TableCell>
                         <TableCell className="font-mono text-xs">
