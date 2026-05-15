@@ -5,10 +5,6 @@ import { toast } from 'sonner';
 export interface DonorAlias {
   id: string;
   canonical_name: string;
-  alias_pattern: string;
-  alias_patterns: string[];
-  donor_type: string;
-  donor_types: string[];
   fec_committee_id: string | null;
   notes: string | null;
   is_active: boolean;
@@ -18,12 +14,36 @@ export interface DonorAlias {
 
 export interface DonorAliasInput {
   canonical_name: string;
-  alias_patterns: string[];
-  donor_types: string[];
   fec_committee_id?: string | null;
   notes?: string | null;
   is_active?: boolean;
 }
+
+export interface DonorAliasMember {
+  id: string;
+  alias_id: string;
+  donor_name: string;
+  donor_type: string;
+  created_at: string;
+}
+
+export interface AttachableDonor {
+  name: string;
+  type: string;
+}
+
+const invalidateDonorCaches = (qc: ReturnType<typeof useQueryClient>) => {
+  qc.invalidateQueries({ queryKey: ['donor-aliases'] });
+  qc.invalidateQueries({ queryKey: ['donor-alias-members'] });
+  qc.invalidateQueries({ queryKey: ['donor-alias-for'] });
+  qc.invalidateQueries({ queryKey: ['donor-alias-info'] });
+  qc.invalidateQueries({ queryKey: ['donors-consolidated'] });
+  qc.invalidateQueries({ queryKey: ['donors-paginated'] });
+  qc.invalidateQueries({ queryKey: ['candidate-donors'] });
+  qc.invalidateQueries({ queryKey: ['donor-search'] });
+  qc.invalidateQueries({ queryKey: ['donor-records'] });
+  qc.invalidateQueries({ queryKey: ['donor-name-variations'] });
+};
 
 export const useDonorAliases = () => {
   return useQuery({
@@ -33,170 +53,181 @@ export const useDonorAliases = () => {
         .from('donor_aliases')
         .select('*')
         .order('canonical_name');
-
       if (error) throw error;
       return data as DonorAlias[];
     },
   });
 };
 
+export const useAliasMemberCounts = () => {
+  return useQuery({
+    queryKey: ['donor-alias-member-counts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('donor_alias_members')
+        .select('alias_id');
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      (data || []).forEach((m: { alias_id: string }) => {
+        counts[m.alias_id] = (counts[m.alias_id] || 0) + 1;
+      });
+      return counts;
+    },
+  });
+};
+
+export const useAliasMembers = (aliasId: string | null | undefined) => {
+  return useQuery({
+    queryKey: ['donor-alias-members', aliasId],
+    queryFn: async () => {
+      if (!aliasId) return [] as DonorAliasMember[];
+      const { data, error } = await supabase
+        .from('donor_alias_members')
+        .select('*')
+        .eq('alias_id', aliasId)
+        .order('donor_name');
+      if (error) throw error;
+      return (data || []) as DonorAliasMember[];
+    },
+    enabled: !!aliasId,
+  });
+};
+
 export const useCreateDonorAlias = () => {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (input: DonorAliasInput) => {
-      // Include alias_pattern and donor_type for backwards compatibility
-      const insertData = {
-        canonical_name: input.canonical_name,
-        alias_patterns: input.alias_patterns,
-        alias_pattern: input.alias_patterns[0] || '',
-        donor_types: input.donor_types,
-        donor_type: input.donor_types[0] || 'PAC',
-        fec_committee_id: input.fec_committee_id,
-        notes: input.notes,
-        is_active: input.is_active,
-      };
       const { data, error } = await supabase
         .from('donor_aliases')
-        .insert(insertData)
+        .insert({
+          canonical_name: input.canonical_name,
+          fec_committee_id: input.fec_committee_id || null,
+          notes: input.notes || null,
+          is_active: input.is_active ?? true,
+        })
         .select()
         .single();
-
       if (error) throw error;
-      return data;
+      return data as DonorAlias;
     },
-    onSuccess: async (alias) => {
-      toast.info('Applying alias to matching donors…');
-      const { data: result, error: applyErr } = await supabase.functions.invoke('apply-donor-alias', {
-        body: { alias_id: (alias as { id: string }).id },
-      });
-      queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
-      queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
-      queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['candidate-donors'] });
-      if (applyErr) {
-        toast.error(`Alias created but apply failed: ${applyErr.message}`);
-      } else {
-        toast.success(`Alias created — applied to ${result?.updated_count ?? 0} donors`);
-      }
+    onSuccess: () => {
+      invalidateDonorCaches(queryClient);
+      toast.success('Alias created');
     },
-    onError: (error) => {
-      toast.error(`Failed to create alias: ${error.message}`);
-    },
+    onError: (error: Error) => toast.error(`Failed to create alias: ${error.message}`),
   });
 };
 
 export const useUpdateDonorAlias = () => {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async ({ id, ...input }: DonorAliasInput & { id: string }) => {
-      // Include alias_pattern and donor_type for backwards compatibility
-      const updateData = {
-        canonical_name: input.canonical_name,
-        alias_patterns: input.alias_patterns,
-        alias_pattern: input.alias_patterns[0] || '',
-        donor_types: input.donor_types,
-        donor_type: input.donor_types[0] || 'PAC',
-        fec_committee_id: input.fec_committee_id,
-        notes: input.notes,
-        is_active: input.is_active,
-      };
       const { data, error } = await supabase
         .from('donor_aliases')
-        .update(updateData)
+        .update({
+          canonical_name: input.canonical_name,
+          fec_committee_id: input.fec_committee_id || null,
+          notes: input.notes || null,
+          is_active: input.is_active ?? true,
+        })
         .eq('id', id)
         .select()
         .single();
-
       if (error) throw error;
-      return data;
+      return data as DonorAlias;
     },
-    onSuccess: async (alias) => {
-      toast.info('Applying alias to matching donors…');
-      const { data: result, error: applyErr } = await supabase.functions.invoke('apply-donor-alias', {
-        body: { alias_id: (alias as { id: string }).id },
-      });
-      queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
-      queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
-      queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['candidate-donors'] });
-      if (applyErr) {
-        toast.error(`Alias updated but apply failed: ${applyErr.message}`);
-      } else {
-        toast.success(`Alias updated — applied to ${result?.updated_count ?? 0} donors`);
-      }
+    onSuccess: () => {
+      invalidateDonorCaches(queryClient);
+      toast.success('Alias updated');
     },
-    onError: (error) => {
-      toast.error(`Failed to update alias: ${error.message}`);
-    },
+    onError: (error: Error) => toast.error(`Failed to update alias: ${error.message}`),
   });
 };
 
 export const useDeleteDonorAlias = () => {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (id: string) => {
-      // Capture patterns/types/canonical BEFORE delete so we can unapply
-      const { data: existing } = await supabase
-        .from('donor_aliases')
-        .select('canonical_name, alias_pattern, alias_patterns, donor_types')
-        .eq('id', id)
-        .single();
+      // Get all member donor names so we can reset their display_name
+      const { data: members } = await supabase
+        .from('donor_alias_members')
+        .select('donor_name, donor_type')
+        .eq('alias_id', id);
 
-      const { error } = await supabase
-        .from('donor_aliases')
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from('donor_aliases').delete().eq('id', id);
       if (error) throw error;
-      return existing;
-    },
-    onSuccess: async (existing) => {
-      const patterns = (existing?.alias_patterns?.length ? existing.alias_patterns : [existing?.alias_pattern]).filter(Boolean) as string[];
-      const donor_types = (existing?.donor_types || []) as string[];
-      const canonical_name = existing?.canonical_name;
 
-      if (patterns.length && donor_types.length) {
-        toast.info('Reverting affected donors…');
-        const { error: unErr } = await supabase.functions.invoke('unapply-donor-alias', {
-          body: { patterns, donor_types, canonical_name },
-        });
-        if (unErr) toast.error(`Delete saved but revert failed: ${unErr.message}`);
+      // Reset display_name for orphaned donors
+      for (const m of members || []) {
+        await supabase
+          .from('donors')
+          .update({ display_name: m.donor_name })
+          .eq('name', m.donor_name)
+          .eq('type', m.donor_type as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
       }
-      queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
-      queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
-      queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['candidate-donors'] });
-      toast.success('Donor alias deleted');
     },
-    onError: (error) => {
-      toast.error(`Failed to delete alias: ${error.message}`);
+    onSuccess: () => {
+      invalidateDonorCaches(queryClient);
+      toast.success('Alias deleted');
     },
+    onError: (error: Error) => toast.error(`Failed to delete alias: ${error.message}`),
   });
 };
 
-export const useMatchingDonorsCount = (patterns: string[], donorTypes: string[]) => {
-  return useQuery({
-    queryKey: ['matching-donors-count', patterns, donorTypes],
-    queryFn: async () => {
-      if (!patterns || patterns.length === 0 || !donorTypes || donorTypes.length === 0) return 0;
-      
-      const validTypes = ['Individual', 'PAC', 'Organization', 'Unknown'] as const;
-      const filteredTypes = donorTypes.filter(t => validTypes.includes(t as any));
-      if (filteredTypes.length === 0) return 0;
-      
-      // Use the new RPC function for multi-pattern matching
-      const { data, error } = await supabase
-        .rpc('count_donors_matching_patterns', {
-          patterns: patterns.filter(p => p.trim()),
-          p_donor_types: filteredTypes
-        });
-
+export const useAttachDonors = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ alias_id, donors }: { alias_id: string; donors: AttachableDonor[] }) => {
+      const { data, error } = await supabase.functions.invoke('attach-donors-to-alias', {
+        body: { alias_id, donors },
+      });
       if (error) throw error;
-      return data || 0;
+      if (!data?.success) throw new Error(data?.error || 'Attach failed');
+      return data;
     },
-    enabled: patterns.length > 0 && patterns.some(p => p.trim()) && donorTypes.length > 0,
+    onSuccess: (data) => {
+      invalidateDonorCaches(queryClient);
+      toast.success(`Attached ${data.attached_count} donor(s)`);
+    },
+    onError: (error: Error) => toast.error(`Failed to attach: ${error.message}`),
+  });
+};
+
+export const useDetachDonors = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ donors }: { donors: AttachableDonor[] }) => {
+      const { data, error } = await supabase.functions.invoke('detach-donors-from-alias', {
+        body: { donors },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Detach failed');
+      return data;
+    },
+    onSuccess: (data) => {
+      invalidateDonorCaches(queryClient);
+      toast.success(`Detached ${data.detached_count} donor(s)`);
+    },
+    onError: (error: Error) => toast.error(`Failed to detach: ${error.message}`),
+  });
+};
+
+// Lookup: which alias (if any) is this donor attached to?
+export const useDonorAliasLookup = (donorName: string, donorType: string) => {
+  return useQuery({
+    queryKey: ['donor-alias-for', donorName, donorType],
+    queryFn: async () => {
+      if (!donorName || !donorType) return null;
+      const { data, error } = await supabase
+        .from('donor_alias_members')
+        .select('alias_id, donor_aliases!inner(*)')
+        .eq('donor_name', donorName)
+        .eq('donor_type', donorType)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return (data as { donor_aliases: DonorAlias }).donor_aliases;
+    },
+    enabled: !!donorName && !!donorType,
   });
 };
