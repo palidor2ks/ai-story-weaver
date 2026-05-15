@@ -524,6 +524,15 @@ export const ShareCardModal = ({
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2 pt-2">
+          <Button
+            variant="outline"
+            onClick={() => setPreviewOpen(true)}
+            disabled={!!busy}
+            className="gap-2"
+          >
+            <Eye className="w-4 h-4" />
+            Preview export
+          </Button>
           <Button onClick={handleDownload} disabled={!!busy} className="gap-2">
             {busy === 'download' ? (
               <Loader2 className="w-4 h-4 animate-spin" />
