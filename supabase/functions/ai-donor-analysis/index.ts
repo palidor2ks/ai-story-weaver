@@ -55,6 +55,7 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const perplexityKey = Deno.env.get("PERPLEXITY_API_KEY");
+    const youKey = Deno.env.get("YOU_API_KEY");
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
 
     const userClient = createClient(supabaseUrl, anonKey, {
