@@ -313,7 +313,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     const ppxSources = citations.map((url, i) => {
       try {
         const host = new URL(url).hostname.replace(/^www\./, "");
-        return { title: `${host} [${i + 1}]`, url };
+        return { title: host, url, citation_index: i + 1 };
       } catch { return { title: url, url }; }
     });
     const modelSources = Array.isArray(parsed.sources) ? parsed.sources : [];
