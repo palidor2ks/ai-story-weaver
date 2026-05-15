@@ -143,8 +143,8 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
   return (
     <Dialog onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto [&>button:last-child]:hidden">
+        <DialogHeader className="sticky top-0 z-10 bg-background pb-2 border-b border-border">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1.5 min-w-0">
               <DialogTitle className="flex items-center gap-2">
@@ -156,15 +156,24 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
               </DialogDescription>
             </div>
             {analysis && !isLoading && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={fetchAnalysis}
-                className="shrink-0"
-              >
-                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                Regenerate
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button size="sm" variant="outline" onClick={fetchAnalysis}>
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  Regenerate
+                </Button>
+                <DialogClose asChild>
+                  <Button size="icon" variant="ghost" aria-label="Close analysis dialog">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </DialogClose>
+              </div>
+            )}
+            {!analysis && (
+              <DialogClose asChild>
+                <Button size="icon" variant="ghost" aria-label="Close analysis dialog" className="shrink-0">
+                  <X className="h-4 w-4" />
+                </Button>
+              </DialogClose>
             )}
           </div>
         </DialogHeader>
