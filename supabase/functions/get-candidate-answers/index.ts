@@ -835,7 +835,7 @@ Return JSON: {"score": <value>, "reasoning": "PARTY ALIGNMENT: <brief explanatio
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-3-flash-preview',
         messages: [
           { role: 'system', content: 'Return only valid JSON.' },
           { role: 'user', content: prompt }
@@ -846,7 +846,8 @@ Return JSON: {"score": <value>, "reasoning": "PARTY ALIGNMENT: <brief explanatio
     });
 
     if (!response.ok) {
-      return createNeutralAnswer(question.id, 'Unable to infer position');
+      console.log(`[Inference] Skipping ${question.id}: party-alignment HTTP ${response.status}`);
+      return null;
     }
 
     const data = await response.json();
@@ -854,7 +855,8 @@ Return JSON: {"score": <value>, "reasoning": "PARTY ALIGNMENT: <brief explanatio
     const parsed = extractJsonFromText(content);
 
     if (!parsed || typeof parsed.score !== 'number') {
-      return createNeutralAnswer(question.id, 'Unable to determine position');
+      console.log(`[Inference] Skipping ${question.id}: party-alignment returned unparseable output`);
+      return null;
     }
 
     return {
@@ -870,7 +872,8 @@ Return JSON: {"score": <value>, "reasoning": "PARTY ALIGNMENT: <brief explanatio
     };
 
   } catch (e) {
-    return createNeutralAnswer(question.id, 'Error inferring position');
+    console.log(`[Inference] Skipping ${question.id}: party-alignment threw`, e);
+    return null;
   }
 }
 
