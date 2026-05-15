@@ -299,14 +299,18 @@ Output ONLY a JSON object, no prose:
     });
     const sources = Array.from(sourceMap.values());
 
-    let confidence = Math.max(0, Math.min(100, Number(parsed.confidence ?? 0)));
+    // Deterministic confidence from verified provider citations only (NOT model-emitted parsed.sources).
+    let confidence = computeDeterministicConfidence(grounded);
     let insufficient = Boolean(parsed.insufficient_information);
-    if (sources.length === 0 && (provider === "perplexity" || provider === "you")) {
+    if (grounded.length === 0) {
       insufficient = true;
-      confidence = Math.min(confidence, 20);
-    } else if (provider === "gemini") {
-      confidence = Math.min(confidence, 30);
     }
+    if (insufficient) {
+      confidence = Math.min(confidence, 20);
+    }
+    const confidence_rationale =
+      `Deterministic score from ${grounded.length} verified provider citation(s); ` +
+      `weighted 55% source count (saturating at 6) + 45% domain reliability.`;
 
     return json({
       provider,
