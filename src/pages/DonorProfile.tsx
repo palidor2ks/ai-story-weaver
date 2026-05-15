@@ -169,57 +169,42 @@ const DonorProfile = () => {
     enabled: !!id,
   });
 
-  // Check if this donor has an alias (canonical name)
+  // Check if this donor has an alias via donor_alias_members
   const { data: aliasInfo } = useQuery({
     queryKey: ['donor-alias-info', donor?.name, donor?.type],
     queryFn: async () => {
       if (!donor?.name || !donor?.type) return null;
-      
-      // Fetch all active aliases (without filtering by type initially)
+
       const { data, error } = await supabase
-        .from('donor_aliases')
-        .select('*')
-        .eq('is_active', true);
-      
+        .from('donor_alias_members')
+        .select('alias_id, donor_aliases!inner(*)')
+        .eq('donor_name', donor.name)
+        .eq('donor_type', donor.type)
+        .eq('donor_aliases.is_active', true)
+        .maybeSingle();
+
       if (error) throw error;
-      
-      // Find matching alias - check if donor's type is in donor_types array
-      const matchingAlias = (data || []).find(alias => {
-        // Check name pattern match
-        const pattern = alias.alias_pattern.replace(/%/g, '.*').replace(/_/g, '.');
-        const regex = new RegExp(`^${pattern}$`, 'i');
-        const nameMatches = regex.test(donor.name);
-        
-        // Check type match - either in donor_types array or legacy donor_type field
-        const typeMatches = alias.donor_types?.includes(donor.type) || alias.donor_type === donor.type;
-        
-        return nameMatches && typeMatches;
-      });
-      
-      return matchingAlias || null;
+      return ((data as any)?.donor_aliases) || null;
     },
     enabled: !!donor?.name && !!donor?.type,
   });
 
-  // Get all name variations if there's an alias
+  // Get all member name variations for this alias
   const { data: nameVariations = [] } = useQuery({
-    queryKey: ['donor-name-variations', aliasInfo?.alias_pattern, donor?.type],
+    queryKey: ['donor-name-variations', aliasInfo?.id, donor?.type],
     queryFn: async () => {
-      if (!aliasInfo?.alias_pattern || !donor?.type) return [];
-      
+      if (!aliasInfo?.id) return [] as string[];
+
       const { data, error } = await supabase
-        .from('donors')
-        .select('name')
-        .eq('type', donor.type)
-        .ilike('name', aliasInfo.alias_pattern);
-      
+        .from('donor_alias_members')
+        .select('donor_name')
+        .eq('alias_id', aliasInfo.id);
+
       if (error) throw error;
-      
-      // Get unique names
-      const uniqueNames = [...new Set((data || []).map(d => d.name))];
+      const uniqueNames = [...new Set((data || []).map((d: any) => d.donor_name))];
       return uniqueNames.sort();
     },
-    enabled: !!aliasInfo?.alias_pattern && !!donor?.type,
+    enabled: !!aliasInfo?.id,
   });
 
   // The display name is the canonical name from alias, or the original name
@@ -227,30 +212,27 @@ const DonorProfile = () => {
 
   // Fetch all donor records with the same display name (across all types)
   const { data: donorRecords = [], isLoading: recordsLoading } = useQuery({
-    queryKey: ['donor-records', displayName, aliasInfo?.alias_pattern],
+    queryKey: ['donor-records', displayName, aliasInfo?.id, nameVariations.join('|')],
     queryFn: async () => {
       if (!donor?.name) return [] as DonorRecord[];
-      
+
       let query = supabase
         .from('donors')
         .select(`*, candidates (id, name, party, office, state, district, image_url)`)
         .order('amount', { ascending: false });
-      
+
       // PostgREST .or() treats commas as clause separators, so values that
       // contain commas (e.g. "ADELSON, MIRIAM") must be wrapped in double quotes.
       const q = (v: string) => `"${v.replace(/"/g, '\\"')}"`;
 
-      // If there's an alias, get all donors matching the pattern (across all types)
-      if (aliasInfo?.alias_pattern) {
-        query = query.ilike('name', aliasInfo.alias_pattern);
+      if (aliasInfo?.id && nameVariations.length > 0) {
+        query = query.in('name', nameVariations as string[]);
       } else if (aliasInfo?.canonical_name) {
-        // Match by display_name for consolidated donors
         query = query.or(`name.eq.${q(donor.name)},display_name.eq.${q(aliasInfo.canonical_name)}`);
       } else {
-        // Match by exact name OR display_name
         query = query.or(`name.eq.${q(donor.name)},display_name.eq.${q(donor.name)}`);
       }
-      
+
       const { data, error } = await query;
       if (error) throw error;
       return (data || []).map((row) => ({
@@ -263,7 +245,7 @@ const DonorProfile = () => {
 
   // Fetch individual contributions for detailed history (across all types)
   const { data: contributions = [], isLoading: contributionsLoading } = useQuery({
-    queryKey: ['donor-contributions', displayName, aliasInfo?.alias_pattern, showAllDonations, donorRecords.length],
+    queryKey: ['donor-contributions', displayName, aliasInfo?.id, showAllDonations, donorRecords.length],
     queryFn: async () => {
       if (!donor?.name || donorRecords.length === 0) return [] as ContributionRecord[];
 
@@ -275,13 +257,8 @@ const DonorProfile = () => {
         .order('receipt_date', { ascending: false })
         .limit(showAllDonations ? 5000 : 500);
 
-      // If there's an alias, get all contributions matching the pattern
-      if (aliasInfo?.alias_pattern) {
-        query = query.ilike('contributor_name', aliasInfo.alias_pattern);
-      } else {
-        query = query.in('contributor_name', donorNames);
-      }
-      
+      query = query.in('contributor_name', donorNames);
+
       const { data, error } = await query;
       if (error) throw error;
       return (data || []).map((row) => ({
