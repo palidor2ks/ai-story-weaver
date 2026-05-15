@@ -174,6 +174,7 @@ Output ONLY a JSON object, no prose:
     let citations: string[] = [];
     let youCitations: YouCitation[] = [];
     let lastError: { status: number; code: string; message: string } | null = null;
+    const providerErrors: { provider: string; status: number; code: string }[] = [];
 
     if (perplexityKey) {
       const ppxResp = await fetch("https://api.perplexity.ai/chat/completions", {
@@ -216,6 +217,7 @@ Output ONLY a JSON object, no prose:
             ? "Perplexity rate limit reached. Try again shortly."
             : `Perplexity service error (${ppxResp.status}). Try again later.`,
         };
+        providerErrors.push({ provider: "perplexity", status: ppxResp.status, code: lastError.code });
       }
     }
 
@@ -235,6 +237,7 @@ Output ONLY a JSON object, no prose:
           code: ye?.code ?? "YOU_ERROR",
           message: ye?.message ?? "You.com fallback failed.",
         };
+        providerErrors.push({ provider: "you", status: ye?.status ?? 500, code: ye?.code ?? "YOU_ERROR" });
       }
     }
 
