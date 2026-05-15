@@ -1,43 +1,45 @@
-## What’s happening
-- The donor analysis response is using `provider: "gemini"` and returning `sources: []`.
-- Edge logs show why:
-  - Perplexity is failing with quota/auth: `401 insufficient_quota`.
-  - You.com is failing with `401 Unauthorized`.
-  - The app then falls back to Gemini, which does not provide external citations.
-- The current You.com helper is calling the old/non-current endpoint `https://chat-api.you.com/smart`; current You.com docs show the cited Research API is `POST https://api.you.com/v1/research` and returns `output.content` plus `output.sources`.
+## Why it happened
 
-## Implementation plan
-1. **Replace the You.com helper implementation**
-   - Update `supabase/functions/_shared/you-search.ts` to call `https://api.you.com/v1/research`.
-   - Send `{ input: composedPrompt, research_effort: "lite" }`.
-   - Parse response from `data.output.content` and `data.output.sources`.
-   - Keep defensive parsing for alternate shapes so existing code remains resilient.
-   - Preserve the same exported `callYouSmart()` API so caller files need minimal changes.
+The DB has JD Vance correctly recorded:
+- `candidates.office = "Vice President"`, `state = "US"`, `party = "Republican"`
 
-2. **Make grounded-provider failures visible in AI analysis responses**
-   - In both `ai-donor-analysis` and `ai-recipient-analysis`, return lightweight diagnostics such as:
-     - `provider_errors: [{ provider: "perplexity", code, status }, { provider: "you", code, status }]`
-   - Do not expose raw secrets or full provider responses.
-   - This will make future “no citations” cases explainable from the UI/network response.
+The `ai-candidate-explanation` edge function injects this as an "EXACT CANDIDATE IDENTITY" block into the prompt, but the model still said he isn't VP. Two compounding causes:
 
-3. **Tighten Gemini fallback behavior**
-   - When both grounded providers fail and Gemini is used, keep `sources: []`, set `insufficient_information: true`, and cap confidence to `20`.
-   - Update `confidence_rationale` to explicitly say citations were unavailable because grounded search providers failed.
-   - This avoids presenting citation-less public-context claims as normally sourced analysis.
+1. **Stale model knowledge.** The function uses `google/gemini-2.5-flash`. Its training cutoff predates Vance's January 2025 inauguration as Vice President, so the model "knows" him only as the Ohio U.S. Senator and treats the identity block as wrong.
+2. **Prompt lets the model override the identity block.** The system prompt heavily emphasizes "do NOT infer", "if not confident, say undocumented", and "never mention a different office than the ones listed above". Faced with a conflict between its own memory ("Senator from Ohio") and the identity block ("Vice President"), the model defaults to hedging — which reads to the user as "he's not the VP".
 
-4. **Adjust the dialog copy only where needed**
-   - In `DonorAIAnalysisDialog` and `RecipientAIAnalysisDialog`, when `sources` is empty but provider diagnostics indicate grounded provider failures, show a clearer message like:
-     - “External citation providers were unavailable; this response used fallback analysis and should be treated as tentative.”
-   - Keep existing rendering for normal source lists.
+The same risk exists for any official whose role changed after the model's cutoff (newly seated members, recent appointees, etc.).
 
-5. **Deploy and validate**
-   - Deploy `ai-donor-analysis` and `ai-recipient-analysis`.
-   - Test the donor analysis edge function with the same Trump National Committee JFC payload.
-   - Confirm one of two acceptable outcomes:
-     - You.com succeeds and `sources` contains clickable citations, or
-     - You.com still returns auth failure, but the UI clearly reports grounded providers are unavailable and Gemini fallback is tentative.
+## Plan
+
+### 1. Treat the database identity as ground truth in the prompt
+In `supabase/functions/ai-candidate-explanation/index.ts`:
+- Reword the identity block to make the office assignment authoritative and current, e.g. "The following identity is verified by the application's database as of today and overrides any prior knowledge you may have. If your training data shows a different office, defer to this block."
+- Add an explicit "current office" line and an "as of {today}" timestamp so the model treats it as post-cutoff fact.
+- Keep the disambiguation guard (don't talk about other people with the same name) but remove language that could be read as "if unsure, deny the office".
+
+### 2. Upgrade the analysis model
+Switch the model from `google/gemini-2.5-flash` to `google/gemini-3-flash-preview` (the project's default per the AI Gateway guidance). Newer training data dramatically reduces the "I don't know this person in that role" failure mode for recently-elected officials.
+
+### 3. Apply the same fix to the sibling analysis functions
+Audit and apply the same identity-block + model changes (only where the same pattern exists) to:
+- `ai-donor-analysis`
+- `ai-recipient-analysis`
+- `user-profile-analysis`
+
+Skip any function that doesn't render candidate identity.
+
+### 4. Validate
+- Re-run the JD Vance analysis from the candidate profile page and confirm the summary refers to him as Vice President.
+- Spot-check one stable case (a long-tenured Senator) to make sure the wording change didn't introduce new hallucinations.
+- Check edge function logs for any JSON parsing regressions after the model swap.
 
 ## Out of scope
-- No database migrations.
-- No changes to finance calculations.
-- No changes to the visible donor profile layout beyond the empty-sources message.
+- No DB schema changes (the candidate row is already correct).
+- No changes to scoring, finance, or share-card code.
+- No changes to the citation provider chain (Perplexity/You.com/Gemini fallback).
+
+## Technical notes
+- Files touched: `supabase/functions/ai-candidate-explanation/index.ts` (primary), and the three sibling analysis functions if they share the identity-block pattern.
+- Model id change is a one-line edit per function.
+- No client-side changes required; `AIExplanation.tsx` consumes the same response shape.
