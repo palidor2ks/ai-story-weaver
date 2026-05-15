@@ -902,7 +902,7 @@ async function researchQuestionPosition(
   candidateState: string,
   candidateParty: string,
   question: Question
-): Promise<GeneratedAnswer> {
+): Promise<GeneratedAnswer | null> {
   // Step 1: Try Perplexity deep research (primary)
   const perplexityAnswer = await researchPositionWithPerplexity(
     candidateName, candidateOffice, candidateState, candidateParty, question
