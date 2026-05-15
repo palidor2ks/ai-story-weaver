@@ -171,17 +171,25 @@ export function DonorAliasesPanel() {
     }
   };
 
+  const activeAliases = useMemo(() => aliases.filter((a) => a.is_active), [aliases]);
+
   const openPicker = (targets: { name: string; type: string }[]) => {
     setPickerTargets(targets);
-    setPickerAliasId('');
+    // Auto-select when there's exactly one active alias to choose from
+    setPickerAliasId(activeAliases.length === 1 ? activeAliases[0].id : '');
     setPickerOpen(true);
   };
 
   const handleAttachConfirm = async () => {
     if (!pickerAliasId || pickerTargets.length === 0) return;
-    await attachMutation.mutateAsync({ alias_id: pickerAliasId, donors: pickerTargets });
-    setPickerOpen(false);
-    setSelected({});
+    try {
+      await attachMutation.mutateAsync({ alias_id: pickerAliasId, donors: pickerTargets });
+      setPickerOpen(false);
+      setSelected({});
+    } catch (err) {
+      // Error toast shown by mutation; keep dialog open so user can retry
+      console.error('[attach-donors] failed', err);
+    }
   };
 
   const handleDetach = async (name: string, type: string) => {
