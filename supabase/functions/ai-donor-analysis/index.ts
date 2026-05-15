@@ -222,6 +222,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     let citations: string[] = [];
     let youCitations: YouCitation[] = [];
     let lastError: { status: number; code: string; message: string } | null = null;
+    const providerErrors: { provider: string; status: number; code: string }[] = [];
 
     if (perplexityKey) {
       const ppxResp = await fetch("https://api.perplexity.ai/chat/completions", {
