@@ -377,7 +377,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
       party_support: partyBreakdown,
       insufficient_information: insufficient,
       confidence,
-      confidence_rationale: String(parsed.confidence_rationale ?? ""),
+      confidence_rationale,
       data_coverage,
       sources,
       finance_context: {
