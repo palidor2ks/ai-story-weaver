@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { Card, CardContent } from '@/components/ui/card';
 import { DonorAIAnalysisDialog } from '@/components/DonorAIAnalysisDialog';
 import { ShareDonorButton } from '@/components/ShareDonorButton';
@@ -526,6 +527,12 @@ const DonorProfile = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title={`${donor.name} — Donor Profile — Pulse`}
+        description={`Contributions, recipients, and giving history for donor ${donor.name}.`}
+        path={`/donor/${donor.id}`}
+        type="article"
+      />
       <Header />
 
       <main className="container py-8 px-4 space-y-8">

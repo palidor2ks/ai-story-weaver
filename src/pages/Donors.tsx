@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
@@ -93,6 +94,11 @@ export const Donors = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title="Campaign Donors — Pulse"
+        description="Explore individual and PAC contributions to political candidates. Filter by cycle, state, and donor type to follow the money."
+        path="/donors"
+      />
       <Header />
       
       <main className="container py-8 px-4">

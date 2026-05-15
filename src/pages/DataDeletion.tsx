@@ -10,7 +10,7 @@ export default function DataDeletion() {
         description="How to request deletion of your Pulse account and personal data."
         path="/data-deletion"
       />
-      <div className="container max-w-3xl py-10">
+      <main className="container max-w-3xl py-10">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
           <ArrowLeft className="w-4 h-4" /> Back
         </Link>
@@ -62,7 +62,7 @@ export default function DataDeletion() {
             </p>
           </Section>
         </article>
-      </div>
+      </main>
     </div>
   );
 }

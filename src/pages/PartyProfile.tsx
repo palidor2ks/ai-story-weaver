@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { usePartyPlatform, calculatePartyAlignment } from '@/hooks/usePartyPlatform';
 import { useUserTopicScores } from '@/hooks/useProfile';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -268,6 +269,12 @@ export default function PartyProfile() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title={`${party.name} — Pulse`}
+        description={`Explore the ${party.name}'s official platform, positions across policy topics, and how they compare with your views.`}
+        path={`/party/${party.id}`}
+        type="article"
+      />
       <Header />
       
       <main className="container py-8 px-4 max-w-4xl">

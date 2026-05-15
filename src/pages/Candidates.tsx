@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { CandidateCard } from '@/components/CandidateCard';
 import { ComparePanel } from '@/components/ComparePanel';
 import { calculateMatchScore } from '@/hooks/useCandidates';
@@ -151,6 +152,11 @@ export const Candidates = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title="All Politicians — Pulse"
+        description="Browse the President, Congress members, governors, and local representatives. Filter by office, party, and state to find leaders who match your values."
+        path="/candidates"
+      />
       <Header />
       
       <main className="container py-8 px-4">

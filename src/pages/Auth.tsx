@@ -122,7 +122,7 @@ export const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <main className="min-h-screen bg-background flex items-center justify-center p-4">
       <Seo
         title="Sign in or sign up — Pulse"
         description="Create a Pulse account or sign in to take the political alignment quiz and compare your views with candidates."
@@ -271,6 +271,6 @@ export const Auth = () => {
           <a href="/privacy" className="text-primary underline underline-offset-2 hover:text-primary/80">Privacy Policy</a>.
         </p>
       </div>
-    </div>
+    </main>
   );
 };

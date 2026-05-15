@@ -10,7 +10,7 @@ export default function Terms() {
         description="The terms governing your use of Pulse, the political alignment and candidate-comparison service."
         path="/terms"
       />
-      <div className="container max-w-3xl py-10">
+      <main className="container max-w-3xl py-10">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
           <ArrowLeft className="w-4 h-4" /> Back
         </Link>
@@ -68,7 +68,7 @@ export default function Terms() {
             <p>Questions about these Terms? Contact us at <a className="text-primary underline" href="mailto:support@polipulseapp.com">support@polipulseapp.com</a>.</p>
           </Section>
         </article>
-      </div>
+      </main>
     </div>
   );
 }

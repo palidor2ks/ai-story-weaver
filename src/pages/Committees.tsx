@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -92,6 +93,11 @@ export const Committees = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title="Committee Directory — Pulse"
+        description="Explore fundraising committees with donor counts and contribution totals across federal, state, and local races."
+        path="/committees"
+      />
       <Header />
 
       <main className="container py-8 px-4">

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Mail, RefreshCw, LogOut } from 'lucide-react';
+import { Seo } from '@/components/Seo';
 
 export default function VerifyEmail() {
   const { user, signOut } = useAuth();
@@ -41,7 +42,13 @@ export default function VerifyEmail() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <main className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Seo
+        title="Verify your email — Pulse"
+        description="Confirm your email address to activate your Pulse account."
+        path="/verify-email"
+        noIndex
+      />
       <Card className="w-full max-w-md shadow-elevated">
         <CardHeader className="text-center">
           <div className="w-14 h-14 rounded-2xl bg-primary/10 mx-auto mb-3 flex items-center justify-center">
@@ -69,6 +76,6 @@ export default function VerifyEmail() {
           </p>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

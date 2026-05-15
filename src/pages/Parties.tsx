@@ -1,4 +1,5 @@
 import { Header } from '@/components/Header';
+import { Seo } from '@/components/Seo';
 import { PartyCard } from '@/components/PartyCard';
 import { usePartiesWithStats, calculatePartyAlignment } from '@/hooks/usePartyPlatform';
 import { useUserTopicScores } from '@/hooks/useProfile';
@@ -25,6 +26,11 @@ export default function Parties() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title="Political Parties — Pulse"
+        description="Compare official platforms and positions across major and minor U.S. political parties to see which align with your views."
+        path="/parties"
+      />
       <Header />
       
       <main className="container py-8 px-4 max-w-4xl">
