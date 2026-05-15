@@ -1,5 +1,6 @@
 // AI-powered donor analysis grounded in live web search via Perplexity
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { callYouSmart, YouError, type YouCitation } from "../_shared/you-search.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,6 +55,7 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const perplexityKey = Deno.env.get("PERPLEXITY_API_KEY");
+    const youKey = Deno.env.get("YOU_API_KEY");
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
 
     const userClient = createClient(supabaseUrl, anonKey, {
@@ -64,8 +66,8 @@ Deno.serve(async (req) => {
       return json({ error: "Unauthorized" }, 401);
     }
 
-    if (!perplexityKey && !lovableKey) {
-      return json({ error: "No AI provider configured (PERPLEXITY_API_KEY or LOVABLE_API_KEY)" }, 500);
+    if (!perplexityKey && !youKey && !lovableKey) {
+      return json({ error: "No AI provider configured (PERPLEXITY_API_KEY, YOU_API_KEY, or LOVABLE_API_KEY)" }, 500);
     }
 
     let body: RequestBody;
@@ -214,9 +216,10 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     const geminiSystemPrompt =
       "You are a nonpartisan campaign-finance analyst. You do not have live web search — ground every claim in the FEC/finance context provided in the user prompt and well-known public knowledge. Never invent dollar figures, FEC IDs, founders, or quotes. If you cannot confidently identify the entity, set insufficient_information=true and cap confidence at 30. Output strict JSON only.";
 
-    let provider: "perplexity" | "gemini" | null = null;
+    let provider: "perplexity" | "you" | "gemini" | null = null;
     let content = "";
     let citations: string[] = [];
+    let youCitations: YouCitation[] = [];
     let lastError: { status: number; code: string; message: string } | null = null;
 
     if (perplexityKey) {
@@ -259,6 +262,25 @@ Output ONLY a JSON object, no prose. Use this exact schema:
             : isRate
             ? "Perplexity rate limit reached. Try again shortly."
             : `Perplexity service error (${ppxResp.status}). Try again later.`,
+        };
+      }
+    }
+
+    if (!provider && youKey) {
+      console.log("Trying You.com Smart as grounded-search fallback");
+      try {
+        const yres = await callYouSmart({ query: searchPrompt, apiKey: youKey, systemPrompt });
+        content = yres.content;
+        youCitations = yres.citations;
+        citations = yres.citations.map((c) => c.url);
+        provider = "you";
+      } catch (e) {
+        const ye = e as YouError;
+        console.error("You.com fallback error", ye?.status, ye?.message);
+        lastError = {
+          status: ye?.status ?? 500,
+          code: ye?.code ?? "YOU_ERROR",
+          message: ye?.message ?? "You.com fallback failed.",
         };
       }
     }
@@ -309,24 +331,27 @@ Output ONLY a JSON object, no prose. Use this exact schema:
       return json({ error: "Could not parse AI response. Please regenerate." }, 500);
     }
 
-    // Build sources from Perplexity citations + any sources the model returned.
-    const ppxSources = citations.map((url, i) => {
-      try {
-        const host = new URL(url).hostname.replace(/^www\./, "");
-        return { title: host, url, citation_index: i + 1 };
-      } catch { return { title: url, url }; }
-    });
+    // Build sources from grounded provider (Perplexity or You.com) + any sources the model returned.
+    const grounded: { title: string; url: string; citation_index?: number }[] =
+      provider === "you"
+        ? youCitations.map((c, i) => ({ title: c.title, url: c.url, citation_index: i + 1 }))
+        : citations.map((url, i) => {
+            try {
+              const host = new URL(url).hostname.replace(/^www\./, "");
+              return { title: host, url, citation_index: i + 1 };
+            } catch { return { title: url, url }; }
+          });
     const modelSources = Array.isArray(parsed.sources) ? parsed.sources : [];
     const sourceMap = new Map<string, { title: string; url: string }>();
-    [...ppxSources, ...modelSources].forEach((s: any) => {
+    [...grounded, ...modelSources].forEach((s: any) => {
       if (s?.url && !sourceMap.has(s.url)) sourceMap.set(s.url, { title: s.title || s.url, url: s.url });
     });
     const sources = Array.from(sourceMap.values());
 
-    // Hard guard: zero citations → mark unidentified (Perplexity only; Gemini has no citations).
+    // Hard guard: zero citations → mark unidentified (grounded providers only; Gemini has no citations).
     let confidence = Math.max(0, Math.min(100, Number(parsed.confidence ?? 0)));
     let insufficient = Boolean(parsed.insufficient_information);
-    if (sources.length === 0 && provider === "perplexity") {
+    if (sources.length === 0 && (provider === "perplexity" || provider === "you")) {
       insufficient = true;
       confidence = Math.min(confidence, 20);
     } else if (provider === "gemini") {
