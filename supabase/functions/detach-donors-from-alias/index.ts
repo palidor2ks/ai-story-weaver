@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
       if (updErr) errors.push(updErr.message);
     }
 
-    await admin.rpc('refresh_donor_consolidated_mv').catch(() => {});
+    try { await admin.rpc('refresh_donor_consolidated_mv'); } catch (_) {}
 
     return new Response(JSON.stringify({
       success: true, detached_count: donors.length, errors,
