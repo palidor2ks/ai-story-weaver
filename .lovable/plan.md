@@ -1,61 +1,96 @@
 ## Goal
 
-Add You.com as a second live-web-search provider in the AI analysis chain so that when Perplexity is out of quota / failing, the dialogs still get real citations instead of falling back to citation-less Gemini. Order becomes:
-
-```
-Perplexity (sonar-pro)  →  You.com (Smart / Research API)  →  Gemini (Lovable AI Gateway, no citations)
-```
+Replace the provider-based confidence rules in `ai-donor-analysis` and `ai-recipient-analysis` with a deterministic confidence score computed from **verified provider citations only** (Perplexity / You.com search results — not model-emitted `parsed.sources`). Also fold in both Codex review fixes from PR #50.
 
 ## Background
 
-Logs show Perplexity returning `401 insufficient_quota`, so both `ai-recipient-analysis` and `ai-donor-analysis` fall through to Gemini. Gemini has no web search, so `citations = []`, but the model still emits `[1]…[n]` markers in the body — which is exactly the empty-Sources mismatch you're seeing on `/candidate/M001199`.
+Today confidence comes from the model (`parsed.confidence`) plus crude provider caps:
+- Perplexity → keep model's confidence
+- You.com → keep model's confidence
+- Gemini → cap at 30
+- 0 sources + grounded provider → cap at 20 + insufficient
 
-You.com's API returns both an LLM answer and a `search_results` / `hits` array of `{title, url, snippet}`, which slots cleanly into the existing `sources` rendering.
+PR #50 makes this deterministic and provider-agnostic, but its first draft had two bugs flagged by Codex:
+1. **P1** — confidence wasn't clamped when `insufficient_information=true`, so a mismatched-entity result could still report 70+ confidence.
+2. **P2** — confidence was computed from the merged `sources` (verified citations + unverified `parsed.sources` from the model), which lets the model inflate its own score and bypass the "0 sources → insufficient" guard.
 
 ## Changes
 
-### 1. New shared helper: `supabase/functions/_shared/you-search.ts`
-- `callYouSmart({ query, apiKey, systemPrompt })` — POSTs to You.com's Smart endpoint (`https://chat-api.you.com/smart` or `/research`, configurable via constant).
-- Returns `{ content: string, citations: { title: string; url: string }[] }`.
-- Maps non-2xx into a typed error with `status` + `code` ("YOU_AUTH" | "YOU_RATE_LIMIT" | "YOU_ERROR") so the calling function can compose the same `lastError` chain it already uses for Perplexity.
+### 1. New shared helper: `supabase/functions/_shared/confidence.ts`
+
+```ts
+export function getDomainReliability(host: string): number   // 0..1
+export function computeDeterministicConfidence(
+  verifiedSources: { url: string }[]
+): number                                                    // 0..100
+```
+
+- `getDomainReliability` — small whitelist returning a 0–1 score:
+  - `1.00` — fec.gov, congress.gov, senate.gov, house.gov, supremecourt.gov, sec.gov
+  - `0.90` — opensecrets.org, propublica.org, followthemoney.org, ballotpedia.org, votesmart.org
+  - `0.80` — reuters.com, apnews.com, nytimes.com, washingtonpost.com, wsj.com, bloomberg.com
+  - `0.65` — politico.com, thehill.com, axios.com, npr.org, bbc.com, theguardian.com, cnn.com, foxnews.com
+  - `0.40` — anything else
+  - Robust to bad/missing URLs (returns 0).
+- `computeDeterministicConfidence(verifiedSources)`:
+  - `sourceCountScore = min(verifiedSources.length / 6, 1)` (saturates at 6 sources)
+  - `avgReliability = mean(getDomainReliability(host) for each source)` (0 if empty)
+  - `score = 100 * (0.55 * sourceCountScore + 0.45 * avgReliability)`
+  - Floors to integer, clamped 0–100. Returns `0` when input is empty.
+
+Keeping the helper shared (vs PR #50's per-function copies) avoids drift. The two domain whitelists in PR #50 differ only in cosmetic ordering — a single union list covers both.
 
 ### 2. `supabase/functions/ai-recipient-analysis/index.ts`
-- Read `const youKey = Deno.env.get("YOU_API_KEY")`.
-- After the existing Perplexity branch and **before** the Gemini fallback, add:
-  ```ts
-  if (!provider && youKey) {
-    try {
-      const { content: yc, citations: yCites } = await callYouSmart({...});
-      content = yc;
-      citations = yCites.map(c => c.url); // keep citations:string[] shape
-      youSources = yCites; // preserve titles for richer Sources UI
-      provider = "you";
-    } catch (e) { lastError = e; }
-  }
-  ```
-- When building `sources`, prefer `youSources` (with real titles) over the URL-only mapping if `provider === "you"`.
-- Treat `provider === "you"` exactly like `"perplexity"` for the "zero sources → mark insufficient" guard (it has live search, so missing citations is meaningful).
-- Keep the existing Perplexity system prompt (works for any grounded-search provider). No change to JSON schema requested from the model.
+
+Replace the existing confidence block (~lines 301–311 after the You.com merge) with:
+
+```ts
+import { computeDeterministicConfidence } from "../_shared/confidence.ts";
+
+// `grounded` already holds Perplexity/You.com verified citations only.
+// Do NOT score from `parsed.sources` (Codex P2).
+let confidence = computeDeterministicConfidence(grounded);
+let insufficient = Boolean(parsed.insufficient_information);
+
+if (grounded.length === 0) {
+  insufficient = true;                  // provider-agnostic (was perplexity-only)
+}
+if (insufficient) {
+  confidence = Math.min(confidence, 20); // Codex P1 — clamp when insufficient
+}
+
+const confidence_rationale =
+  `Deterministic score from ${grounded.length} verified provider citation(s); ` +
+  `weighted 55% source count (saturating at 6) + 45% domain reliability.`;
+```
+
+- Drop the `provider === "gemini"` cap (Gemini still returns `grounded.length === 0`, so the new code naturally caps it at 20 via the insufficient branch — strictly stricter than the old 30).
+- Keep `provider` in the response so the UI can still show "Sourced via X".
+- Replace `String(parsed.confidence_rationale ?? "")` in the response payload with the new deterministic `confidence_rationale`.
 
 ### 3. `supabase/functions/ai-donor-analysis/index.ts`
-- Mirror the same insertion of the You.com branch between Perplexity and Gemini, with the same source-merging and confidence rules.
 
-### 4. UI — no functional changes required
-- `RecipientAIAnalysisDialog.tsx` and `DonorAIAnalysisDialog.tsx` already render `analysis.sources` generically, so they will start showing You.com-grounded sources automatically.
-- (Optional polish, can skip): show a subtle provider tag like `Sourced via Perplexity / You.com / Gemini` under the confidence row. Flag this and I'll only add it if you say yes.
+Mirror the same swap on the analogous block (~lines 351–356 after the You.com merge). Same import, same logic, same rationale string. Use the local `grounded` array (verified citations only) — not the merged `sources` that includes `modelSources`.
 
-### 5. Secrets
-- Add `YOU_API_KEY` to Supabase secrets via the secrets tool. (Will prompt you to paste the key from https://api.you.com/ — Lovable never sees it.)
-- No frontend env var needed (server-only).
+`sources` (the merged array passed to the UI) stays unchanged so the dialog can still render any extra model-supplied URLs as additional reading; only **scoring** ignores them.
+
+### 4. UI
+
+No changes. `RecipientAIAnalysisDialog` and `DonorAIAnalysisDialog` already render `analysis.confidence`, `analysis.confidence_rationale`, and `analysis.sources` generically.
+
+### 5. Skipped from PR #50
+
+- The duplicated per-file helpers (we use one shared module instead).
+- The migration that errored in the PR's preview branch (`candidate_committees_candidate_id_fkey` already exists locally) — it's an unrelated FK migration, not part of the confidence change.
 
 ## Validation
 
-- Temporarily simulate Perplexity failure (already happening in prod logs). Open `/candidate/M001199` → analysis should now come back with `provider: "you"` and a populated `Sources & citations` list.
-- Restore Perplexity quota later → first branch wins, You.com only runs when Perplexity errors.
-- Confirm Gemini still serves as last-resort when both upstream providers fail (e.g. both keys missing/invalid).
+- Open `/candidate/M001199` (current page). With Perplexity 401 + You.com active → expect a non-zero deterministic confidence proportional to the number/quality of You.com citations, and `confidence_rationale` describing the formula.
+- Force both grounded providers to fail (Gemini-only path) → expect `insufficient_information: true` and `confidence ≤ 20`.
+- Inject a fake `parsed.sources` URL via prompt → confirm the score does **not** rise (Codex P2 fix).
 
 ## Out of scope
 
-- Streaming responses (we keep the existing single-shot `invoke` pattern).
-- Switching the default primary provider away from Perplexity.
-- Migration / DB / RLS changes (none needed).
+- Changing the prompts or the JSON schema requested from models.
+- Persisting historical confidence scores.
+- Any DB / RLS / migration work.
