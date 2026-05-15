@@ -182,30 +182,23 @@ export const useSearchDonors = (searchTerm: string, donorType?: string) => {
   });
 };
 
-// Hook to get alias for a specific donor name (now uses donor_types array)
+// Hook to get alias for a specific donor name via donor_alias_members
 export const useDonorAlias = (donorName: string, donorType: string) => {
   return useQuery({
     queryKey: ['donor-alias-for', donorName, donorType],
     queryFn: async () => {
       if (!donorName) return null;
-      
+
       const { data, error } = await supabase
-        .from('donor_aliases')
-        .select('*')
-        .eq('is_active', true);
-      
+        .from('donor_alias_members')
+        .select('alias_id, donor_aliases!inner(*)')
+        .eq('donor_name', donorName)
+        .eq('donor_type', donorType)
+        .eq('donor_aliases.is_active', true)
+        .maybeSingle();
+
       if (error) throw error;
-      
-      // Find matching alias using ILIKE pattern matching and donor_types array
-      const matchingAlias = (data || []).find(alias => {
-        // Check if the donor type is in the alias's donor_types array
-        if (!alias.donor_types?.includes(donorType)) return false;
-        const pattern = alias.alias_pattern.replace(/%/g, '.*').replace(/_/g, '.');
-        const regex = new RegExp(`^${pattern}$`, 'i');
-        return regex.test(donorName);
-      });
-      
-      return matchingAlias || null;
+      return (data as any)?.donor_aliases || null;
     },
     enabled: !!donorName && !!donorType,
   });
