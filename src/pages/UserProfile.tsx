@@ -343,6 +343,12 @@ export const UserProfile = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title="Your Profile — Pulse"
+        description="Manage your Pulse account, address, and topic priorities."
+        path="/profile"
+        noIndex
+      />
       <Header />
       
       <main className="container py-8 px-4 max-w-4xl">

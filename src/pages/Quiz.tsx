@@ -305,6 +305,12 @@ export const Quiz = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
+      <Seo
+        title="Take the Quiz — Pulse"
+        description="Answer questions on the issues that matter to you and get a detailed political profile across 17 policy topics."
+        path="/quiz"
+        noIndex
+      />
       <main className="container py-8 px-4 max-w-2xl">
         <div className="text-center mb-6">
           <h1 className="font-display text-xl font-semibold text-foreground">

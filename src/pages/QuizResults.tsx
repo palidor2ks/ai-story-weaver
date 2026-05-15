@@ -184,6 +184,12 @@ export const QuizResults = () => {
     <div className="min-h-screen bg-background">
       <Header />
 
+      <Seo
+        title="Your Political Profile — Pulse"
+        description="See your personalized political profile based on your quiz responses, and compare your views with candidates and parties."
+        path="/results"
+        noIndex
+      />
       <main className="container py-8 px-4 max-w-3xl mx-auto">
         {/* Hero Section */}
         <div className="text-center mb-8 animate-fade-in">
