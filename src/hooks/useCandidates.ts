@@ -395,12 +395,34 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
     queryKey: ['donors', candidateId, cycle ?? 'all'],
     queryFn: async () => {
       if (!candidateId) return [];
+
+      let resolvedCandidateId = candidateId;
+
+      // Synthetic executive IDs (from civic officials/feed contexts) do not
+      // match the canonical candidate_id used in donors. Resolve them to the
+      // current incumbent candidate row before querying donors.
+      if (candidateId === 'federal_president' || candidateId === 'federal_vice_president') {
+        const officeName = candidateId === 'federal_president' ? 'President' : 'Vice President';
+        const { data: execCandidate, error: execCandidateError } = await supabase
+          .from('candidates')
+          .select('id')
+          .eq('office', officeName)
+          .eq('is_incumbent', true)
+          .order('last_updated', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (execCandidateError) throw execCandidateError;
+        if (execCandidate?.id) {
+          resolvedCandidateId = execCandidate.id;
+        }
+      }
       
       // First get raw donors
       let donorsQuery = supabase
         .from('donors')
         .select('*')
-        .eq('candidate_id', candidateId);
+        .eq('candidate_id', resolvedCandidateId);
       if (cycle && cycle !== 'all') {
         donorsQuery = donorsQuery.eq('cycle', cycle);
       }
