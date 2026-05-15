@@ -32,6 +32,8 @@ export interface DonorAnalysis {
   confidence_rationale?: string;
   data_coverage?: 'none' | 'sparse' | 'moderate' | 'rich';
   sources: { title: string; url: string }[];
+  provider?: string;
+  provider_errors?: { provider: string; status: number; code: string }[];
 }
 
 interface Props {
@@ -398,7 +400,9 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
                 </ol>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
-                  No external sources cited. Public-context claims reflect the model's background knowledge and should be independently verified.
+                  {analysis.provider_errors && analysis.provider_errors.length > 0
+                    ? `External citation providers were unavailable (${analysis.provider_errors.map(p => `${p.provider} ${p.status}`).join(', ')}). This response used the fallback model, which cannot return external citations — treat as tentative.`
+                    : "No external sources cited. Public-context claims reflect the model's background knowledge and should be independently verified."}
                 </p>
               )}
             </div>

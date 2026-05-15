@@ -1,5 +1,6 @@
-// Shared You.com Smart/Research API helper.
-// Used by AI analysis edge functions as a grounded-search fallback after Perplexity.
+// Shared You.com Research API helper.
+// Endpoint: POST https://api.you.com/v1/research
+// Returns { output: { content, content_type, sources: [{title, url, ...}] } }
 
 export interface YouCitation {
   title: string;
@@ -21,14 +22,15 @@ export class YouError extends Error {
   }
 }
 
-const YOU_ENDPOINT = "https://chat-api.you.com/smart";
+const YOU_ENDPOINT = "https://api.you.com/v1/research";
 
 export async function callYouSmart(opts: {
   query: string;
   apiKey: string;
   systemPrompt?: string;
+  researchEffort?: "lite" | "standard" | "deep" | "exhaustive";
 }): Promise<YouResult> {
-  const { query, apiKey, systemPrompt } = opts;
+  const { query, apiKey, systemPrompt, researchEffort = "lite" } = opts;
   const composed = systemPrompt ? `${systemPrompt}\n\n${query}` : query;
 
   const resp = await fetch(YOU_ENDPOINT, {
@@ -37,7 +39,10 @@ export async function callYouSmart(opts: {
       "X-API-Key": apiKey,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query: composed }),
+    body: JSON.stringify({
+      input: composed.slice(0, 39000),
+      research_effort: researchEffort,
+    }),
   });
 
   if (!resp.ok) {
@@ -54,14 +59,16 @@ export async function callYouSmart(opts: {
 
   const data = await resp.json().catch(() => ({} as any));
 
-  // Defensive shape parsing — You.com has shipped slightly different shapes.
+  // Primary shape: { output: { content, sources } }
+  // Defensive: also accept top-level/legacy shapes.
+  const output = data?.output ?? {};
+  const rawContent = output?.content ?? data?.answer ?? data?.message ?? "";
   const content: string =
-    data?.answer ??
-    data?.message ??
-    data?.choices?.[0]?.message?.content ??
-    "";
+    typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent);
 
   const rawHits: any[] =
+    (Array.isArray(output?.sources) && output.sources) ||
+    (Array.isArray(data?.sources) && data.sources) ||
     (Array.isArray(data?.search_results) && data.search_results) ||
     (Array.isArray(data?.hits) && data.hits) ||
     (Array.isArray(data?.citations) && data.citations) ||

@@ -222,6 +222,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     let citations: string[] = [];
     let youCitations: YouCitation[] = [];
     let lastError: { status: number; code: string; message: string } | null = null;
+    const providerErrors: { provider: string; status: number; code: string }[] = [];
 
     if (perplexityKey) {
       const ppxResp = await fetch("https://api.perplexity.ai/chat/completions", {
@@ -264,6 +265,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
             ? "Perplexity rate limit reached. Try again shortly."
             : `Perplexity service error (${ppxResp.status}). Try again later.`,
         };
+        providerErrors.push({ provider: "perplexity", status: ppxResp.status, code: lastError.code });
       }
     }
 
@@ -283,6 +285,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
           code: ye?.code ?? "YOU_ERROR",
           message: ye?.message ?? "You.com fallback failed.",
         };
+        providerErrors.push({ provider: "you", status: ye?.status ?? 500, code: ye?.code ?? "YOU_ERROR" });
       }
     }
 
@@ -358,12 +361,14 @@ Output ONLY a JSON object, no prose. Use this exact schema:
     if (insufficient) {
       confidence = Math.min(confidence, 20);
     }
-    const confidence_rationale =
-      `Deterministic score from ${grounded.length} verified provider citation(s); ` +
-      `weighted 55% source count (saturating at 6) + 45% domain reliability.`;
+    const groundedFailed = providerErrors.length > 0 && grounded.length === 0;
+    const confidence_rationale = groundedFailed
+      ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
+      : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
 
     return json({
       provider,
+      provider_errors: providerErrors,
       summary: String(parsed.summary ?? ""),
       analysis: String(parsed.analysis ?? ""),
       positions: Array.isArray(parsed.positions) ? parsed.positions : [],
