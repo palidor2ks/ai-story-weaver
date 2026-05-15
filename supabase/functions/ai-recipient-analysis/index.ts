@@ -283,22 +283,25 @@ Output ONLY a JSON object, no prose:
       return json({ error: "Could not parse AI response. Please regenerate." }, 500);
     }
 
-    const ppxSources = citations.map((url, i) => {
-      try {
-        const host = new URL(url).hostname.replace(/^www\./, "");
-        return { title: `${host} [${i + 1}]`, url };
-      } catch { return { title: url, url }; }
-    });
+    const grounded: { title: string; url: string }[] =
+      provider === "you"
+        ? youCitations.map((c, i) => ({ title: `${c.title} [${i + 1}]`, url: c.url }))
+        : citations.map((url, i) => {
+            try {
+              const host = new URL(url).hostname.replace(/^www\./, "");
+              return { title: `${host} [${i + 1}]`, url };
+            } catch { return { title: url, url }; }
+          });
     const modelSources = Array.isArray(parsed.sources) ? parsed.sources : [];
     const sourceMap = new Map<string, { title: string; url: string }>();
-    [...ppxSources, ...modelSources].forEach((s: any) => {
+    [...grounded, ...modelSources].forEach((s: any) => {
       if (s?.url && !sourceMap.has(s.url)) sourceMap.set(s.url, { title: s.title || s.url, url: s.url });
     });
     const sources = Array.from(sourceMap.values());
 
     let confidence = Math.max(0, Math.min(100, Number(parsed.confidence ?? 0)));
     let insufficient = Boolean(parsed.insufficient_information);
-    if (sources.length === 0 && provider === "perplexity") {
+    if (sources.length === 0 && (provider === "perplexity" || provider === "you")) {
       insufficient = true;
       confidence = Math.min(confidence, 20);
     } else if (provider === "gemini") {
