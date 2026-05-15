@@ -115,6 +115,7 @@ export const ShareCardModal = ({
   const templates = TEMPLATES_BY_KIND[data.kind];
   const [selected, setSelected] = useState<TemplateId>('classic');
   const [busy, setBusy] = useState<null | 'download' | 'copy' | 'native'>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const refs = useRef<Record<TemplateId, HTMLDivElement | null>>({
     classic: null,
     holo: null,
