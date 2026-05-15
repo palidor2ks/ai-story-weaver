@@ -80,6 +80,13 @@ const normalizeInvokeError = (raw: unknown): string => {
   return message;
 };
 
+const toOneSentence = (items: unknown[]) => {
+  const parts = items
+    .map((item) => (item == null ? '' : String(item)).trim().replace(/\.$/, ''))
+    .filter(Boolean);
+  return parts.length > 0 ? parts.join('; ') + '.' : '';
+};
+
 export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trigger }: Props) => {
   const [analysis, setAnalysis] = useState<DonorAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(false);
