@@ -1,50 +1,61 @@
 ## Goal
 
-Apply the changes from the linked PR to this project, and resolve the runtime error Codex flagged: the new `toOneSentence` helper crashes if the AI returns non-string array items (`null`, numbers, etc.), making the analysis dialog fail to render.
+Add You.com as a second live-web-search provider in the AI analysis chain so that when Perplexity is out of quota / failing, the dialogs still get real citations instead of falling back to citation-less Gemini. Order becomes:
+
+```
+Perplexity (sonar-pro)  →  You.com (Smart / Research API)  →  Gemini (Lovable AI Gateway, no citations)
+```
+
+## Background
+
+Logs show Perplexity returning `401 insufficient_quota`, so both `ai-recipient-analysis` and `ai-donor-analysis` fall through to Gemini. Gemini has no web search, so `citations = []`, but the model still emits `[1]…[n]` markers in the body — which is exactly the empty-Sources mismatch you're seeing on `/candidate/M001199`.
+
+You.com's API returns both an LLM answer and a `search_results` / `hits` array of `{title, url, snippet}`, which slots cleanly into the existing `sources` rendering.
 
 ## Changes
 
-### 1. `src/components/DonorAIAnalysisDialog.tsx`
-- Import `DialogClose` and `X` icon.
-- Add `toOneSentence(items)` helper that:
-  - Coerces every entry to a string (`String(item)`),
-  - Filters out `null`/`undefined`/non-string-coercible junk,
-  - Trims, strips trailing period, joins with `; `, ends with `.`.
-- Make `DialogContent` hide the default close (`[&>button:last-child]:hidden`) and make `DialogHeader` sticky (`sticky top-0 z-10 bg-background pb-2 border-b`).
-- Replace the lone Regenerate button with a header action group: Regenerate + custom `DialogClose` X button (always visible while scrolling). Show a standalone X close when no analysis loaded yet.
-- Replace bullet lists for `goals`, `notable_recipients`, `key_people`, `controversies`, `motivation_hypotheses` with single-sentence `<p><strong>Label:</strong> …</p>` blocks using `toOneSentence`.
-- Prefix each Sources list item with `[n]` to map citations.
+### 1. New shared helper: `supabase/functions/_shared/you-search.ts`
+- `callYouSmart({ query, apiKey, systemPrompt })` — POSTs to You.com's Smart endpoint (`https://chat-api.you.com/smart` or `/research`, configurable via constant).
+- Returns `{ content: string, citations: { title: string; url: string }[] }`.
+- Maps non-2xx into a typed error with `status` + `code` ("YOU_AUTH" | "YOU_RATE_LIMIT" | "YOU_ERROR") so the calling function can compose the same `lastError` chain it already uses for Perplexity.
 
-### 2. `src/components/RecipientAIAnalysisDialog.tsx`
-- Mirror the exact same set of changes (imports, sticky header, close button group, `toOneSentence` with the same string-safety guard, concise sections, `[n]` prefix on sources).
+### 2. `supabase/functions/ai-recipient-analysis/index.ts`
+- Read `const youKey = Deno.env.get("YOU_API_KEY")`.
+- After the existing Perplexity branch and **before** the Gemini fallback, add:
+  ```ts
+  if (!provider && youKey) {
+    try {
+      const { content: yc, citations: yCites } = await callYouSmart({...});
+      content = yc;
+      citations = yCites.map(c => c.url); // keep citations:string[] shape
+      youSources = yCites; // preserve titles for richer Sources UI
+      provider = "you";
+    } catch (e) { lastError = e; }
+  }
+  ```
+- When building `sources`, prefer `youSources` (with real titles) over the URL-only mapping if `provider === "you"`.
+- Treat `provider === "you"` exactly like `"perplexity"` for the "zero sources → mark insufficient" guard (it has live search, so missing citations is meaningful).
+- Keep the existing Perplexity system prompt (works for any grounded-search provider). No change to JSON schema requested from the model.
 
 ### 3. `supabase/functions/ai-donor-analysis/index.ts`
-- Tighten the prompt: "Produce a concise, non-redundant structured analysis…", note `notable_recipients` shouldn't repeat goals/positions, require `public_context_claims` to end with `[n]` citation indexes mapping to the citation list.
-- In Perplexity citation handling, drop the `${host} [${i+1}]` title format and instead emit `{ title: host, url, citation_index: i + 1 }` so the UI's `[n]` prefix is the single source of truth for indexing.
+- Mirror the same insertion of the You.com branch between Perplexity and Gemini, with the same source-merging and confidence rules.
 
-### 4. Migrations (idempotency / 42P13 fixes)
-- `supabase/migrations/20251230170055_*.sql`: wrap the `candidate_committees_candidate_id_fkey` FK add in a `DO $$ … IF NOT EXISTS … $$;` block so re-runs don't fail.
-- `supabase/migrations/20251231030626_*.sql` and `supabase/migrations/20251231140008_*.sql`: prepend `DROP FUNCTION IF EXISTS public.get_contribution_totals(text, text);` and `…get_contribution_totals_by_committee(text, text);` before each `CREATE OR REPLACE FUNCTION`, since the return-type change requires drop+recreate (Postgres 42P13).
+### 4. UI — no functional changes required
+- `RecipientAIAnalysisDialog.tsx` and `DonorAIAnalysisDialog.tsx` already render `analysis.sources` generically, so they will start showing You.com-grounded sources automatically.
+- (Optional polish, can skip): show a subtle provider tag like `Sourced via Perplexity / You.com / Gemini` under the confidence row. Flag this and I'll only add it if you say yes.
 
-These migration files are historical; editing them is safe locally because they have already run on this project's DB. They only matter for fresh re-applies (e.g. Supabase preview branches), which is exactly what the PR is fixing.
-
-## Codex error being resolved
-
-Codex P1: `toOneSentence` calls `.trim()` on items that may be `null`/numbers/etc. since the edge function only does `Array.isArray(...)`. Fix: coerce to string and filter empties before trim:
-
-```ts
-const toOneSentence = (items: unknown[]) =>
-  items
-    .map((item) => (item == null ? '' : String(item)).trim().replace(/\.$/, ''))
-    .filter(Boolean)
-    .join('; ') + '.';
-```
-
-This is the only deviation from the PR — it hardens the helper so the dialog never throws on malformed AI output.
+### 5. Secrets
+- Add `YOU_API_KEY` to Supabase secrets via the secrets tool. (Will prompt you to paste the key from https://api.you.com/ — Lovable never sees it.)
+- No frontend env var needed (server-only).
 
 ## Validation
 
-- Confirm both dialogs render without errors when analysis arrays contain mixed/empty values.
-- Confirm sticky header keeps Regenerate + X visible while scrolling long analyses.
-- Confirm Sources list shows `[1] host`, `[2] host`, … matching `[n]` references in the body.
-- Edge function deploys automatically; spot-check the prompt output is more concise.
+- Temporarily simulate Perplexity failure (already happening in prod logs). Open `/candidate/M001199` → analysis should now come back with `provider: "you"` and a populated `Sources & citations` list.
+- Restore Perplexity quota later → first branch wins, You.com only runs when Perplexity errors.
+- Confirm Gemini still serves as last-resort when both upstream providers fail (e.g. both keys missing/invalid).
+
+## Out of scope
+
+- Streaming responses (we keep the existing single-shot `invoke` pattern).
+- Switching the default primary provider away from Perplexity.
+- Migration / DB / RLS changes (none needed).
