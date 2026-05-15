@@ -171,17 +171,25 @@ export function DonorAliasesPanel() {
     }
   };
 
+  const activeAliases = useMemo(() => aliases.filter((a) => a.is_active), [aliases]);
+
   const openPicker = (targets: { name: string; type: string }[]) => {
     setPickerTargets(targets);
-    setPickerAliasId('');
+    // Auto-select when there's exactly one active alias to choose from
+    setPickerAliasId(activeAliases.length === 1 ? activeAliases[0].id : '');
     setPickerOpen(true);
   };
 
   const handleAttachConfirm = async () => {
     if (!pickerAliasId || pickerTargets.length === 0) return;
-    await attachMutation.mutateAsync({ alias_id: pickerAliasId, donors: pickerTargets });
-    setPickerOpen(false);
-    setSelected({});
+    try {
+      await attachMutation.mutateAsync({ alias_id: pickerAliasId, donors: pickerTargets });
+      setPickerOpen(false);
+      setSelected({});
+    } catch (err) {
+      // Error toast shown by mutation; keep dialog open so user can retry
+      console.error('[attach-donors] failed', err);
+    }
   };
 
   const handleDetach = async (name: string, type: string) => {
@@ -514,17 +522,17 @@ export function DonorAliasesPanel() {
                 <SelectValue placeholder="Choose alias..." />
               </SelectTrigger>
               <SelectContent>
-                {aliases
-                  .filter((a) => a.is_active)
-                  .map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.canonical_name}
-                    </SelectItem>
-                  ))}
+                {activeAliases.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.canonical_name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Need a new alias? Create it in the Manage Aliases tab first.
+              {activeAliases.length === 0
+                ? 'No active aliases — create one in the Manage Aliases tab first.'
+                : 'Need a new alias? Create it in the Manage Aliases tab first.'}
             </p>
           </div>
           <DialogFooter>
@@ -533,7 +541,7 @@ export function DonorAliasesPanel() {
             </Button>
             <Button
               onClick={handleAttachConfirm}
-              disabled={!pickerAliasId || attachMutation.isPending}
+              disabled={!pickerAliasId || pickerTargets.length === 0 || attachMutation.isPending}
             >
               Attach
             </Button>
