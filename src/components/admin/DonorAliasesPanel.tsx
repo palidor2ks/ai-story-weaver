@@ -522,17 +522,17 @@ export function DonorAliasesPanel() {
                 <SelectValue placeholder="Choose alias..." />
               </SelectTrigger>
               <SelectContent>
-                {aliases
-                  .filter((a) => a.is_active)
-                  .map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.canonical_name}
-                    </SelectItem>
-                  ))}
+                {activeAliases.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.canonical_name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Need a new alias? Create it in the Manage Aliases tab first.
+              {activeAliases.length === 0
+                ? 'No active aliases — create one in the Manage Aliases tab first.'
+                : 'Need a new alias? Create it in the Manage Aliases tab first.'}
             </p>
           </div>
           <DialogFooter>
@@ -541,7 +541,7 @@ export function DonorAliasesPanel() {
             </Button>
             <Button
               onClick={handleAttachConfirm}
-              disabled={!pickerAliasId || attachMutation.isPending}
+              disabled={!pickerAliasId || pickerTargets.length === 0 || attachMutation.isPending}
             >
               Attach
             </Button>
