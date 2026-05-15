@@ -338,7 +338,7 @@ export const ShareCardModal = ({
       setBusy(null);
     }
   };
-  const SelectedComponent = TEMPLATES.find(t => t.id === selected)!.Component;
+  const SelectedComponent = templates.find(t => t.id === selected)!.Component;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -352,7 +352,7 @@ export const ShareCardModal = ({
 
         {/* Template grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {TEMPLATES.map(({ id, label, Component }) => (
+          {templates.map(({ id, label, Component }) => (
             <button
               key={id}
               type="button"
@@ -423,7 +423,7 @@ export const ShareCardModal = ({
             opacity: 0,
           }}
         >
-          {TEMPLATES.map(({ id, Component }) => (
+          {templates.map(({ id, Component }) => (
             <div
               key={id}
               ref={el => {
