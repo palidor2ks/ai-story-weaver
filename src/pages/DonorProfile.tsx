@@ -271,14 +271,14 @@ const DonorProfile = () => {
 
 
   const { data: pacContributors = [] } = useQuery({
-    queryKey: ['pac-contributors', id, donor?.name, displayName, aliasInfo?.alias_pattern, nameVariations.join('|')],
+    queryKey: ['pac-contributors', id, donor?.name, displayName, aliasInfo?.id, nameVariations.join('|')],
     queryFn: async () => {
       if (!donor?.name || (donor.type !== 'PAC' && donor.type !== 'Organization')) return [] as PACContributor[];
 
       const candidateNames = [
         displayName,
         donor.name,
-        ...(aliasInfo?.alias_pattern ? nameVariations : nameVariations),
+        ...nameVariations,
       ].filter(Boolean) as string[];
       const uniqueCandidateNames = [...new Set(candidateNames)];
 
