@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
       else attached += count || 0;
     }
 
-    await admin.rpc('refresh_donor_consolidated_mv').catch(() => {});
+    try { await admin.rpc('refresh_donor_consolidated_mv'); } catch (_) {}
 
     return new Response(JSON.stringify({
       success: true, attached_count: donors.length, donors_updated: attached, errors,
