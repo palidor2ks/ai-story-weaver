@@ -4,14 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Check, Copy, Download, Facebook, Linkedin, Loader2, RotateCcw, Share2, Twitter } from 'lucide-react';
+import { Check, Copy, Download, Eye, Facebook, Linkedin, Loader2, RotateCcw, Share2, Twitter } from 'lucide-react';
 import { toast } from 'sonner';
 import { BaseballCard } from './templates/BaseballCard';
 import { DataCard } from './templates/DataCard';
 import { EditorialCard } from './templates/EditorialCard';
 import { DonorStatsCard } from './templates/DonorStatsCard';
 import { CardData, CARD_SIZE } from './templates/types';
-import { copyNodeToClipboard, downloadNode, nodeToBlob, nodeToFile } from '@/lib/shareImage';
+import { copyNodeToClipboard, downloadNode, nodeToBlob, nodeToFile, renderNodeWithQA } from '@/lib/shareImage';
+import { SharePreviewDialog } from './SharePreviewDialog';
 import { uploadShareCard } from '@/lib/shareUpload';
 import {
   CaptionInput,
@@ -114,6 +115,7 @@ export const ShareCardModal = ({
   const templates = TEMPLATES_BY_KIND[data.kind];
   const [selected, setSelected] = useState<TemplateId>('classic');
   const [busy, setBusy] = useState<null | 'download' | 'copy' | 'native'>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const refs = useRef<Record<TemplateId, HTMLDivElement | null>>({
     classic: null,
     holo: null,
@@ -196,12 +198,36 @@ export const ShareCardModal = ({
     charCount,
   });
 
+  // Run a non-blocking pre-flight QA pass and warn the user if cropping
+  // or font-loading issues are detected. Returns false if no node is available.
+  const preflightCheck = async (action: string): Promise<boolean> => {
+    const node = getNode();
+    if (!node) return false;
+    try {
+      const qa = await renderNodeWithQA(node);
+      if (qa.warnings.length) {
+        toast.warning(
+          `Export check: ${qa.warnings[0]} Use "Preview export" to inspect before sending.`,
+        );
+        trackEvent('share_export_warning', {
+          ...baseProps(),
+          action,
+          warnings: qa.warnings.slice(0, 3),
+        });
+      }
+    } catch (e) {
+      console.warn('preflight QA failed', e);
+    }
+    return true;
+  };
+
   const handleDownload = async () => {
     const node = getNode();
     if (!node) return;
     setBusy('download');
     trackEvent('share_action', { ...baseProps(), action: 'download', destination: 'file' });
     try {
+      await preflightCheck('download');
       await downloadNode(node, filename);
       toast.success('Image downloaded — attach it to your post.');
     } catch (e) {
@@ -218,6 +244,7 @@ export const ShareCardModal = ({
     setBusy('copy');
     trackEvent('share_action', { ...baseProps(), action: 'copy_image', destination: 'clipboard' });
     try {
+      await preflightCheck('copy_image');
       const ok = await copyNodeToClipboard(node);
       if (ok) {
         toast.success('Image copied — paste it into your post.');
@@ -298,6 +325,7 @@ export const ShareCardModal = ({
     setBusy('native');
     trackEvent('share_action', { ...baseProps(), action: 'native', destination: 'native' });
     try {
+      await preflightCheck('native');
       let files: File[] | undefined;
       try {
         files = [await nodeToFile(node, filename)];
@@ -329,6 +357,7 @@ export const ShareCardModal = ({
     setBusy('native');
     trackEvent('share_action', { ...baseProps(), action: 'open_intent', destination });
     try {
+      await preflightCheck(`intent_${destination}`);
       let shareUrl = url;
       try {
         shareUrl = await prepareShareUrl();
@@ -495,6 +524,15 @@ export const ShareCardModal = ({
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2 pt-2">
+          <Button
+            variant="outline"
+            onClick={() => setPreviewOpen(true)}
+            disabled={!!busy}
+            className="gap-2"
+          >
+            <Eye className="w-4 h-4" />
+            Preview export
+          </Button>
           <Button onClick={handleDownload} disabled={!!busy} className="gap-2">
             {busy === 'download' ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -566,6 +604,12 @@ export const ShareCardModal = ({
           automatically as the link preview — no copy/paste needed.
         </p>
       </DialogContent>
+      <SharePreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        node={refs.current[selected]}
+        filename={filename}
+      />
     </Dialog>
   );
 };
