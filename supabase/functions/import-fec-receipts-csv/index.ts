@@ -289,7 +289,9 @@ Deno.serve(async (req) => {
           selected_cycle: String(cycle),
           mismatch_pct: mismatchPct
         }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        // Return 200 so the admin UI can show an intentional confirmation flow
+        // instead of Lovable/Supabase surfacing a handled 409 as a runtime error.
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
