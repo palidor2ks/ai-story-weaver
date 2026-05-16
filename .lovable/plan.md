@@ -1,44 +1,37 @@
-## Goal
+## Diagnosis
 
-Mirror PR #56 (`ai-story-weaver`) in this project: align the bill "Dig Deeper" edge function's provider fallback chain and confidence scoring with the donor/recipient analysis functions.
+The 2026 donations for Ashley Moody (`M001244`, committee `C00895763` MOODY FOR FLORIDA) **did import successfully**:
 
-## Context
+- `contributions`: 12,075 rows for cycle 2026, totaling **~$13,487,348**.
+- `candidate_committees`: the 2026 principal committee is linked (`Linked` badge in the screenshot is correct).
 
-`ai-donor-analysis` and `ai-recipient-analysis` here already use the shared You.com helper (`_shared/you-search.ts`) and the deterministic confidence helper (`_shared/confidence.ts`). The newer `ai-bill-analysis` function (Perplexity → Gemini only) is the odd one out. `YOU_API_KEY` is already configured.
+What's missing is the **reconciliation/rollup step**. The admin row reads from `finance_reconciliation`, and there is only a row for cycle **2024** (all zeros) — no row for cycle **2026**. Also `candidate_committees.local_itemized_total` is still `0`.
 
-## Changes — single file
+The CSV import function (`import-fec-receipts-csv`) writes raw `contributions` but does not recompute totals. Totals are only refreshed by the `nightly-finance-reconciliation` edge function, which hasn't been run for this candidate/cycle since the import.
 
-### `supabase/functions/ai-bill-analysis/index.ts`
+## Fix
 
-1. **Imports** (top): add
-   ```ts
-   import { callYouSmart, YouError, type YouCitation } from "../_shared/you-search.ts";
-   import { computeDeterministicConfidence } from "../_shared/confidence.ts";
-   ```
+Trigger reconciliation for just this candidate + cycle (cheap, ~seconds):
 
-2. **Env + provider guard**: read `YOU_API_KEY`; update the "no provider configured" check + error message to include it.
+```
+POST /functions/v1/nightly-finance-reconciliation
+{ "candidateId": "M001244", "cycle": "2026" }
+```
 
-3. **Provider state**: widen `provider` union to `"perplexity" | "you" | "gemini"` and add `let youCitations: YouCitation[] = []`.
+This will:
+1. Aggregate the 12,075 imported contributions into `finance_reconciliation` (cycle 2026) — populating `local_itemized`, `local_individual_itemized`, `local_pac_contributions`, etc.
+2. Update `candidate_committees.local_itemized_total` for the MOODY FOR FLORIDA committee.
+3. Fetch FEC API totals for cycle 2026 and compute the delta.
+4. The admin "Finance" / Local / Delta columns will then show the real numbers (and `$` status badge will flip from Balanced/0 to the actual reconciliation state).
 
-4. **Insert You.com fallback** between the Perplexity and Gemini branches: only runs if no provider succeeded yet and `youKey` exists. Calls `callYouSmart({ query: searchPrompt, apiKey: youKey, systemPrompt })`, sets `content`, populates `youCitations` and `citations` (mapped to URLs), sets `provider = "you"`. On error: push to `providerErrors`, record `lastError` from `YouError` (status/code/message fallbacks).
+## Verification
 
-5. **Grounded sources mapping**: when `provider === "you"`, build `grounded` from `youCitations` preserving `title`, `url`, and `citation_index`. Otherwise keep the current URL-derived host title (drop the `[n]` suffix; move index into `citation_index` field).
+After the function returns I'll re-query:
+- `SELECT local_itemized, fec_total_receipts, status FROM finance_reconciliation WHERE candidate_id='M001244' AND cycle='2026'`
+- `SELECT local_itemized_total FROM candidate_committees WHERE candidate_id='M001244'`
 
-6. **Confidence + rationale**: replace the manual confidence math with
-   ```ts
-   let confidence = computeDeterministicConfidence(grounded);
-   let insufficient = Boolean(parsed.insufficient_information);
-   if (grounded.length === 0) insufficient = true;
-   if (insufficient) confidence = Math.min(confidence, 20);
-   const groundedFailed = providerErrors.length > 0 && grounded.length === 0;
-   const confidence_rationale = groundedFailed
-     ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
-     : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
-   ```
-   Return `confidence_rationale` (the computed string) instead of `parsed.confidence_rationale`.
+and confirm both reflect the ~$13.5M.
 
-## Out of scope
+## Optional follow-up (ask before doing)
 
-- No frontend changes (`BillAIAnalysisDialog` already reads `sources` / `confidence` / `confidence_rationale` generically).
-- No schema/config changes; `YOU_API_KEY` and the shared helpers already exist.
-- No changes to donor/recipient functions or other edge functions.
+Right now any CSV import leaves totals stale until the nightly job runs. I can wire `import-fec-receipts-csv` to automatically enqueue a per-candidate reconciliation at the end of a successful import (using `EdgeRuntime.waitUntil`) so this never happens again. Want me to add that?
