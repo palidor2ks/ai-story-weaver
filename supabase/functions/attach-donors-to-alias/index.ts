@@ -86,14 +86,12 @@ Deno.serve(async (req) => {
       else attached += count || 0;
     }
 
-    // For small batches, await the MV refresh so the Donors list is immediately consistent.
-    // For large batches, run it in the background to avoid request timeouts.
+    // MV refresh is now coalesced by the caller. The client triggers one refresh
+    // after all chunks complete via supabase.rpc('refresh_donor_consolidated_mv').
+    // Pass skip_mv_refresh=false to opt into the old per-call refresh behaviour.
+    const skip_mv_refresh: boolean = body?.skip_mv_refresh !== false; // default: skip
     let mv_refreshed = false;
-    if (donors.length <= 50) {
-      const { error: mvErr } = await admin.rpc('refresh_donor_consolidated_mv');
-      if (mvErr) errors.push(`mv refresh: ${mvErr.message}`);
-      else mv_refreshed = true;
-    } else {
+    if (!skip_mv_refresh) {
       try {
         // @ts-ignore EdgeRuntime is available in Deno deploy
         EdgeRuntime.waitUntil(admin.rpc('refresh_donor_consolidated_mv').then(() => {}, () => {}));

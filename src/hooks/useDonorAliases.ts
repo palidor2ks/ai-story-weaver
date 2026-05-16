@@ -179,6 +179,17 @@ export const useDeleteDonorAlias = () => {
   });
 };
 
+// Single coalesced MV refresh shared across attach/detach/delete flows.
+const refreshDonorMv = async (queryClient: ReturnType<typeof useQueryClient>) => {
+  try {
+    await supabase.rpc('refresh_donor_consolidated_mv');
+  } catch (e) {
+    console.warn('[donor-mv] refresh failed:', (e as Error)?.message);
+  }
+  queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
+  queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
+};
+
 export const useAttachDonors = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -186,33 +197,26 @@ export const useAttachDonors = () => {
       const CHUNK = 100;
       let attached_count = 0;
       let donors_updated = 0;
-      let mv_refreshed_all = true;
       const errors: string[] = [];
       for (let i = 0; i < donors.length; i += CHUNK) {
         const chunk = donors.slice(i, i + CHUNK);
         const { data, error } = await supabase.functions.invoke('attach-donors-to-alias', {
-          body: { alias_id, donors: chunk },
+          body: { alias_id, donors: chunk, skip_mv_refresh: true },
         });
         if (error) throw error;
         if (!data?.success) throw new Error(data?.error || 'Attach failed');
         attached_count += data.attached_count || 0;
         donors_updated += data.donors_updated || 0;
-        if (!data.mv_refreshed) mv_refreshed_all = false;
         if (Array.isArray(data.errors)) errors.push(...data.errors);
       }
-      return { success: true, attached_count, donors_updated, mv_refreshed: mv_refreshed_all, errors };
+      return { success: true, attached_count, donors_updated, errors };
     },
     onSuccess: (data) => {
       invalidateDonorCaches(queryClient);
-      const suffix = data.mv_refreshed ? 'Donors list refreshed' : 'list refreshing (~30s)';
-      toast.success(`Attached ${data.attached_count} donor(s) — ${suffix}`);
-      // Refetch donors list once the background MV refresh likely completed
-      if (!data.mv_refreshed) {
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['donors-paginated'] });
-          queryClient.invalidateQueries({ queryKey: ['donors-consolidated'] });
-        }, 30000);
-      }
+      const toastId = toast.loading(`Attached ${data.attached_count} donor(s) — refreshing list…`);
+      refreshDonorMv(queryClient).finally(() => {
+        toast.success(`Attached ${data.attached_count} donor(s) — Donors list refreshed`, { id: toastId });
+      });
     },
     onError: (error: Error) => toast.error(`Failed to attach: ${error.message}`),
   });
@@ -223,22 +227,18 @@ export const useDetachDonors = () => {
   return useMutation({
     mutationFn: async ({ donors }: { donors: AttachableDonor[] }) => {
       const { data, error } = await supabase.functions.invoke('detach-donors-from-alias', {
-        body: { donors },
+        body: { donors, skip_mv_refresh: true },
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Detach failed');
-      // Best-effort MV refresh for small detaches (edge function may already do this)
-      if (donors.length <= 50) {
-        await supabase.rpc('refresh_donor_consolidated_mv').then(
-          () => {},
-          (e) => console.warn('[detach] mv refresh failed:', e?.message),
-        );
-      }
       return data;
     },
     onSuccess: (data) => {
       invalidateDonorCaches(queryClient);
-      toast.success(`Detached ${data.detached_count} donor(s) — Donors list refreshed`);
+      const toastId = toast.loading(`Detached ${data.detached_count} donor(s) — refreshing list…`);
+      refreshDonorMv(queryClient).finally(() => {
+        toast.success(`Detached ${data.detached_count} donor(s) — Donors list refreshed`, { id: toastId });
+      });
     },
     onError: (error: Error) => toast.error(`Failed to detach: ${error.message}`),
   });

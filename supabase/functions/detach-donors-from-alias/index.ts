@@ -68,7 +68,11 @@ Deno.serve(async (req) => {
       if (updErr) errors.push(updErr.message);
     }
 
-    try { await admin.rpc('refresh_donor_consolidated_mv'); } catch (_) {}
+    // MV refresh is coalesced by the client (single call after all chunks).
+    // Pass skip_mv_refresh=false to opt into legacy per-call refresh.
+    if (body?.skip_mv_refresh === false) {
+      try { await admin.rpc('refresh_donor_consolidated_mv'); } catch (_) {}
+    }
 
     return new Response(JSON.stringify({
       success: true, detached_count: donors.length, errors,
