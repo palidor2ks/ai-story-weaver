@@ -113,15 +113,25 @@ export function DonorImportPanel() {
             // Check for corrupted sub_id values (scientific notation from Excel)
             let corruptedCount = 0;
             const subIdSet = new Set<string>();
+            const cycleCounts: Record<string, number> = {};
             for (const row of rows) {
               const subId = row.sub_id || row.SUB_ID || '';
               subIdSet.add(subId);
-              // Check for scientific notation patterns
               if (/[eE][+-]?\d+/.test(subId) || (subId.includes('.') && subId.length < 15)) {
                 corruptedCount++;
               }
+              const rc = String(row.two_year_transaction_period || row.TWO_YEAR_TRANSACTION_PERIOD || '').trim();
+              if (rc) cycleCounts[rc] = (cycleCounts[rc] || 0) + 1;
             }
-            
+
+            // Detect dominant cycle in file
+            let dominantCycle: string | null = null;
+            let dominantCount = 0;
+            for (const [c, n] of Object.entries(cycleCounts)) {
+              if (n > dominantCount) { dominantCycle = c; dominantCount = n; }
+            }
+            setDetectedCycle(dominantCycle);
+
             // Warn if high corruption or collision rate
             const collisionRate = 1 - (subIdSet.size / rows.length);
             if (corruptedCount > rows.length * 0.1) {
