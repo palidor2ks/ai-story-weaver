@@ -758,7 +758,6 @@ export default function Admin() {
             <BulkDonorSyncCard />
             <DonorImportPanel />
           </TabsContent>
-          </TabsContent>
 
           <TabsContent value="polls">
             <PollsPanel />
