@@ -59,6 +59,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const perplexityKey = Deno.env.get("PERPLEXITY_API_KEY");
+    const youKey = Deno.env.get("YOU_API_KEY");
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
 
     const userClient = createClient(supabaseUrl, anonKey, {
@@ -67,8 +68,8 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData?.user) return json({ error: "Unauthorized" }, 401);
 
-    if (!perplexityKey && !lovableKey) {
-      return json({ error: "No AI provider configured (PERPLEXITY_API_KEY or LOVABLE_API_KEY)" }, 500);
+    if (!perplexityKey && !youKey && !lovableKey) {
+      return json({ error: "No AI provider configured (PERPLEXITY_API_KEY, YOU_API_KEY, or LOVABLE_API_KEY)" }, 500);
     }
 
     let body: RequestBody;
