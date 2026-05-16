@@ -140,8 +140,8 @@ export function AnswerCoveragePanel() {
   // Finance cycle selector (drives $, FEC, Local, Delta columns and finance actions)
   const { data: availableCycles } = useFinanceCycles();
   const [financeCycle, setFinanceCycleState] = useState<string>(() => {
-    if (typeof window === 'undefined') return '2026';
-    return localStorage.getItem('admin.financeCycle') ?? '2026';
+    if (typeof window === 'undefined') return financeCycle;
+    return localStorage.getItem('admin.financeCycle') ?? financeCycle;
   });
   const setFinanceCycle = useCallback((cycle: string) => {
     setFinanceCycleState(cycle);
@@ -565,7 +565,7 @@ export function AnswerCoveragePanel() {
         toast.info('No candidates with FEC IDs found. Link FEC IDs first.');
         return;
       }
-      const results = await batchFetchDonors(toProcess, '2026');
+      const results = await batchFetchDonors(toProcess, financeCycle);
       toast.success(
         `Imported ${results.totalImported} donors for ${results.success} candidates ` +
         `($${results.totalRaised.toLocaleString()} total)`
@@ -584,7 +584,7 @@ export function AnswerCoveragePanel() {
         name: c.name,
         fecCandidateId: c.fecCandidateId!
       }));
-      const results = await resumeAllPartialSyncs(toProcess, '2026');
+      const results = await resumeAllPartialSyncs(toProcess, financeCycle);
       toast.success(
         `Resumed ${results.resumed} syncs: ${results.completed} completed, ` +
         `${results.stillPartial} still partial. ` +
@@ -605,7 +605,7 @@ export function AnswerCoveragePanel() {
         return;
       }
       toast.info(`Refreshing FEC totals for ${toProcess.length} candidates...`);
-      const results = await batchRefreshFECTotals(toProcess, '2026');
+      const results = await batchRefreshFECTotals(toProcess, financeCycle);
       toast.success(
         `Refreshed FEC totals: ${results.success} succeeded, ${results.failed} failed, ${results.skipped} skipped`
       );
@@ -901,7 +901,7 @@ export function AnswerCoveragePanel() {
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction 
-                        onClick={() => syncAllCandidatesComplete('2026')}
+                        onClick={() => syncAllCandidatesComplete(financeCycle)}
                         className="bg-green-600 hover:bg-green-700"
                       >Start Full Sync</AlertDialogAction>
                     </AlertDialogFooter>
@@ -951,7 +951,7 @@ export function AnswerCoveragePanel() {
                     e.preventDefault();
                     setIsBatchReconciling(true);
                     try {
-                      const result = await runBatchReconciliation('2026', 200);
+                      const result = await runBatchReconciliation(financeCycle, 200);
                       toast.success(`Reconciliation complete: ${result.success} OK, ${result.warnings} warnings, ${result.failed} errors`);
                       refetchCandidates();
                     } catch (err) {
@@ -2555,7 +2555,7 @@ export function AnswerCoveragePanel() {
                                                 candidate.id,
                                                 candidate.fecCandidateId!,
                                                 candidate.name,
-                                                '2026',
+                                                financeCycle,
                                                 false
                                               );
                                               if (result.success) {
@@ -2591,7 +2591,7 @@ export function AnswerCoveragePanel() {
                                                   candidate.id,
                                                   candidate.fecCandidateId!,
                                                   candidate.name,
-                                                  '2026',
+                                                  financeCycle,
                                                   false
                                                 );
                                                 if (result.success) {
@@ -2623,7 +2623,7 @@ export function AnswerCoveragePanel() {
                                                   candidate.id,
                                                   candidate.fecCandidateId!,
                                                   candidate.name,
-                                                  '2026'
+                                                  financeCycle
                                                 );
                                                 if (result.success) {
                                                   if (result.hasMore) {
@@ -2659,7 +2659,7 @@ export function AnswerCoveragePanel() {
                                                 candidate.id,
                                                 candidate.fecCandidateId!,
                                                 candidate.name,
-                                                '2026',
+                                                financeCycle,
                                                 false
                                               );
                                               if (result.success) {
@@ -2688,7 +2688,7 @@ export function AnswerCoveragePanel() {
                                               candidate.id,
                                               candidate.fecCandidateId!,
                                               candidate.name,
-                                              '2026'
+                                              financeCycle
                                             );
                                             if (result.success) {
                                               toast.success(`Re-sync started: ${result.imported} donors`);
@@ -2725,7 +2725,7 @@ export function AnswerCoveragePanel() {
                                       void (async () => {
                                         try {
                                           toast.info(`Refreshing FEC totals...`);
-                                          const result = await refreshFECTotals(candidate.id, '2026');
+                                          const result = await refreshFECTotals(candidate.id, financeCycle);
                                           if (result.success) {
                                             toast.success(`FEC totals updated`);
                                             refetchCandidates();
@@ -2749,7 +2749,7 @@ export function AnswerCoveragePanel() {
                                       e.preventDefault();
                                       void (async () => {
                                         try {
-                                          const result = await triggerReconciliation(candidate.id, '2026');
+                                          const result = await triggerReconciliation(candidate.id, financeCycle);
                                           if (result.success) {
                                             toast.success(`Finance refreshed: ${result.status}`);
                                             refetchCandidates();
