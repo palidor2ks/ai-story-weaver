@@ -962,5 +962,9 @@ export function DonorImportPanel() {
         </p>
       </CardContent>
     </Card>
+    <div className="mt-6">
+      <DonorImportHistory refreshKey={historyKey} />
+    </div>
+    </>
   );
 }
