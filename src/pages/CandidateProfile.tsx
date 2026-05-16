@@ -1111,7 +1111,24 @@ export const CandidateProfile = () => {
                             >
                               {bill.bill_type} {bill.bill_number}: {bill.bill_name}
                             </a>
-                            <div className="flex flex-wrap gap-2 mt-1 text-sm text-muted-foreground">
+                            <div className="mt-2">
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                              >
+                                <a
+                                  href={`https://www.perplexity.ai/search/new?q=${encodeURIComponent(`Explain ${(bill.bill_type || 'HR').toUpperCase()} ${bill.bill_number || ''} (${bill.bill_name}) and ${candidate.name}'s ${bill.is_sponsor ? 'sponsorship' : 'cosponsorship'} position on it.`)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <Sparkles className="w-3 h-3 mr-1" />
+                                  Dig Deeper AI Analysis
+                                </a>
+                              </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-2 mt-2 text-sm text-muted-foreground">
                               {bill.topic && (
                                 <Badge variant="secondary" className="text-xs">{bill.topic}</Badge>
                               )}
