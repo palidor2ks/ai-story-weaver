@@ -1,26 +1,43 @@
 ## Goal
-Make the Cycle dropdown in the Committee Management popover always reflect cycles that actually exist for the candidate's committees, so 2026 (and any future cycle) appears automatically without code changes.
+Apply the changes from `palidor2ks/ai-story-weaver#54` to this project. That PR threads a `questionIds` parameter through the Relevant News flow and adds a Supabase-backed cache so repeated reads serve from cached articles instead of refetching Bing/GDELT every time.
+
+I verified that this project's `RelevantNewsFeed.tsx`, `useRelevantNews.ts`, and `fetch-relevant-news/index.ts` currently match the PR's "before" state, so the diff applies cleanly.
 
 ## Changes
 
-**File:** `src/components/admin/CommitteeBreakdown.tsx`
+### 1. `src/components/RelevantNewsFeed.tsx`
+- Add optional `questionIds?: string[]` to `Props` (default `[]`).
+- Pass it through to `useRelevantNews`.
 
-1. Compute a memoized `availableCycles` list from `committees[].cycles`:
-   - Flatten all `cycles` arrays across the candidate's committees
-   - Add a baseline of the current federal cycle and previous one (so the list is never empty before sync)
-   - Dedupe and sort descending (newest first)
-   - Always append an `"all"` option at the end
+### 2. `src/hooks/useRelevantNews.ts`
+- Add `questionIds?: string[]` to `Args` (default `[]`).
+- Include a sorted-joined `questionIds` key in the React Query `queryKey` so different question sets get separate cache entries.
+- Forward `questionIds` in the edge function `body`.
 
-2. Replace the hardcoded `<SelectItem>` list (lines 341–345) with `availableCycles.map(...)`.
+### 3. `supabase/functions/fetch-relevant-news/index.ts`
+- Import `createClient` from `npm:@supabase/supabase-js@2` and instantiate with service-role key.
+- Accept `questionIds?: string[]` in `RequestBody`.
+- Add a `resolveQuestionIds()` helper that:
+  - Seeds from explicit `questionIds`.
+  - Adds every question whose `topic_id` is in the request's topics (when topics look like UUIDs).
+- If no questions resolved, short-circuit with empty result.
+- Before fetching live news, query `question_news_feed_cache` joined with `news_articles` for any row with `last_seen_at` within 30 minutes; if results exist, return them mapped to the existing `FeedNewsItem` shape and skip network fetches.
+- After a live fetch, upsert each item into `news_articles`, then upsert one row per `questionId` into both `news_article_questions` (relevance + matched arrays) and `question_news_feed_cache` (rank score + window label + `last_seen_at = now()`).
 
-3. Change the default `selectedCycle` (line 48) from the hardcoded `'2024'` to the newest cycle in `availableCycles` (set via a `useEffect` once committees load, only if the current value isn't in the list).
+### 4. New migration `supabase/migrations/<new-timestamp>_news_article_question_cache.sql`
+Create three tables (idempotent `create table if not exists`):
 
-4. If the current `selectedCycle` is no longer valid after committees load (e.g. candidate has no 2024 data), fall back to the newest available cycle.
+- `news_articles(id uuid pk, url unique, title, source, published_at, snippet, created_at)`
+- `news_article_questions(article_id → news_articles, question_id → questions, relevance_score int, matched_people text[], matched_topics text[], linked_at, pk(article_id, question_id))`
+- `question_news_feed_cache(question_id → questions, article_id → news_articles, rank_score int, window_label text check in ('today','week','month','none'), last_seen_at, pk(question_id, article_id))`
 
-## Why this fixes the bug
-The dropdown was hardcoded to 2024/2022/2020/2018/All. ZDAN, ALEX's committee has a 2026 cycle in `candidate_committees.cycles`, but the UI never read that column, so 2026 was invisible. Deriving from the actual data fixes this candidate and every future cycle automatically.
+Plus the three indexes from the PR (`news_articles.published_at desc`, `news_article_questions.question_id`, `question_news_feed_cache.last_seen_at desc`).
+
+Also enable RLS on all three tables with admin-only read/write policies (PR omitted RLS; this project's convention requires it — these tables hold no user-specific data but should still be locked down at the table level, with the edge function using the service-role key to bypass).
+
+## Skipped from the PR
+- The two edits to already-applied migration files (`20251230170055_*.sql` adding `IF NOT EXISTS` around the FK, and `20251231030626_*.sql` adding `DROP FUNCTION IF EXISTS` lines). Both are idempotency safety nets for re-running migrations; they have no runtime effect on this project where the migrations already ran successfully. Including them as new migrations would be a no-op or, worse, drop+recreate live RPCs unnecessarily.
 
 ## Out of scope
-- No DB changes
-- No edge function changes
-- No changes to `useAvailableCycles` (a separate hook used elsewhere) — this popover already has the committee data loaded locally, so a local memo is simpler and avoids an extra query.
+- No callsite changes — `questionIds` is optional with `[]` default, so existing `<RelevantNewsFeed />` usages keep working unchanged. (If you want me to wire `questionIds` from a specific page that has question context, say which page and I'll add it.)
+- No changes to the news ranking, query building, or windowing logic.

@@ -11,6 +11,7 @@ interface Props {
   district?: string;
   title?: string;
   maxItems?: number;
+  questionIds?: string[];
 }
 
 const timeAgo = (iso: string) => {
@@ -42,6 +43,7 @@ export const RelevantNewsFeed = ({
   district,
   title = 'Relevant News',
   maxItems = 10,
+  questionIds = [],
 }: Props) => {
   const { data, isLoading } = useRelevantNews({
     people,
@@ -49,6 +51,7 @@ export const RelevantNewsFeed = ({
     state,
     district,
     limit: maxItems,
+    questionIds,
   });
 
   const items = data?.items ?? [];
