@@ -1234,6 +1234,7 @@ Deno.serve(async (req) => {
     const internalChainSecret = req.headers.get(INTERNAL_CHAIN_HEADER);
     const isInternalChain = internalChainSecret === SUPABASE_SERVICE_ROLE_KEY;
 
+    let isAdmin = false;
     if (!isInternalChain) {
       if (!authHeader?.startsWith('Bearer ')) {
         console.error('[Auth] Missing bearer token and no valid internal chain header');
@@ -1248,6 +1249,17 @@ Deno.serve(async (req) => {
         console.error('[Auth] User auth failed for non-chained request:', authError?.message || 'no user');
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
+
+      const adminClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      const { data: roleRow } = await adminClient
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+      isAdmin = !!roleRow;
+    } else {
+      isAdmin = true;
     }
 
 
@@ -1255,7 +1267,7 @@ Deno.serve(async (req) => {
     const {
       candidateId,
       questionIds,
-      forceRegenerate = false,
+      forceRegenerate: requestedForceRegenerate = false,
       candidateName,
       candidateParty,
       candidateOffice,
@@ -1263,6 +1275,12 @@ Deno.serve(async (req) => {
       useBackground = true, // Default to background processing for deep research
       _isChainedChunk = false, // Internal: set by self-chaining
     } = requestBody;
+
+    // Only admins (or internal chained calls) may force expensive regeneration.
+    const forceRegenerate = isAdmin ? requestedForceRegenerate : false;
+    if (requestedForceRegenerate && !isAdmin) {
+      console.warn('[Auth] Non-admin requested forceRegenerate; ignoring');
+    }
 
     if (_isChainedChunk) {
       console.log(`[Chain] Received chained chunk for ${candidateId} with ${questionIds?.length || 0} question IDs`);

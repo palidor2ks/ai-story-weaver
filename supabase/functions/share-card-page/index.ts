@@ -25,8 +25,8 @@ Deno.serve(async (req) => {
   }
 
   const supaUrl = Deno.env.get('SUPABASE_URL')!;
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-  const supabase = createClient(supaUrl, anonKey);
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supaUrl, serviceKey);
 
   const { data, error } = await supabase
     .from('share_cards')
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
 </head>
 <body>
 <p>Redirecting to <a href="${target}">${target}</a>…</p>
-<script>location.replace(${JSON.stringify(data.target_url)});</script>
+<script>location.replace(${JSON.stringify(data.target_url).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')});</script>
 </body>
 </html>`;
 
