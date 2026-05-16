@@ -668,7 +668,8 @@ Deno.serve(async (req) => {
       is_transfer: d.isTransfer,
       recipient_committee_id: d.recipientCommitteeId,
       recipient_committee_name: d.recipientCommitteeName,
-      candidate_id: d.candidateId
+      candidate_id: d.candidateId,
+      import_session_id: sessionId || null
     }));
 
     const totalDonorChunks = Math.ceil(donorRows.length / DONOR_CHUNK_SIZE);
