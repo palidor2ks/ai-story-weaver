@@ -82,8 +82,10 @@ serve(async (req) => {
       try {
         console.log('[SYNC-ALL-DONORS] Processing:', candidate.name);
 
-        // Call the fetch-fec-donors function
+        // Call the fetch-fec-donors function — forward the admin user's auth header
+        // because fetch-fec-donors requires an admin JWT (verifies via auth.getUser + user_roles).
         const { data, error } = await supabase.functions.invoke('fetch-fec-donors', {
+          headers: { Authorization: authHeader },
           body: {
             candidateId: candidate.id,
             fecCandidateId: candidate.fec_candidate_id,
