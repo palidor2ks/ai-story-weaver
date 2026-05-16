@@ -323,8 +323,9 @@ export function DonorImportPanel() {
                   }
                 });
 
-                // Handle cycle-mismatch confirmation (HTTP 409)
-                // supabase.functions.invoke wraps non-2xx as FunctionsHttpError with body on error.context (a Response).
+                // Handle cycle-mismatch confirmation.
+                // The function returns this as a normal JSON payload so Lovable doesn't treat an intentional
+                // guardrail response as an unhandled runtime error; older deployments may still return 409.
                 let ctxData: any = null;
                 if (error) {
                   const ctx: any = (error as any).context;
@@ -335,14 +336,15 @@ export function DonorImportPanel() {
                     try { ctxData = t ? JSON.parse(t) : null; } catch { ctxData = null; }
                   }
                 }
-                const isCycleMismatch = !!error && (
+                const mismatchData = data?.error === 'cycle_mismatch' ? data : ctxData;
+                const isCycleMismatch = !!mismatchData || (!!error && (
                   ctxData?.error === 'cycle_mismatch' ||
                   (error as any).context?.status === 409 ||
                   (error as any).status === 409 ||
                   error.message?.includes('cycle_mismatch')
-                );
+                ));
                 if (isCycleMismatch) {
-                  const detected = ctxData?.detected_cycle || detectedCycle || '?';
+                  const detected = mismatchData?.detected_cycle || detectedCycle || '?';
                   const ok = window.confirm(
                     `Cycle mismatch: file looks like cycle ${detected} but you selected ${cycle}.\n\n` +
                     `Click OK to import anyway and tag rows as ${cycle}, or Cancel to abort and re-select the correct cycle.`
