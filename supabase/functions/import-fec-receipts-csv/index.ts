@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { rows, cycle, candidateId, committeeId, multiCommittee } = body;
+    const { rows, cycle, candidateId, committeeId, multiCommittee, sessionId, filename, force, isFirstBatch } = body;
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       return new Response(
@@ -258,7 +258,58 @@ Deno.serve(async (req) => {
 
     const startTime = Date.now();
     const batchTag = rows[0]?.sub_id || rows[0]?.SUB_ID || 'unknown';
-    console.log(`[CSV-IMPORT] batch_tag=${batchTag} rows=${rows.length} cycle=${cycle}`);
+    console.log(`[CSV-IMPORT] batch_tag=${batchTag} rows=${rows.length} cycle=${cycle} session=${sessionId || 'none'}`);
+
+    // --- CYCLE MISMATCH GUARD ---
+    // Sample two_year_transaction_period across the batch and warn if it disagrees with selected cycle.
+    const cycleCounts: Record<string, number> = {};
+    let cycleSamples = 0;
+    for (const row of rows) {
+      const rc = String(row.two_year_transaction_period || row.TWO_YEAR_TRANSACTION_PERIOD || '').trim();
+      if (rc) {
+        cycleCounts[rc] = (cycleCounts[rc] || 0) + 1;
+        cycleSamples++;
+      }
+    }
+    let dominantCycle: string | null = null;
+    let dominantCount = 0;
+    for (const [c, n] of Object.entries(cycleCounts)) {
+      if (n > dominantCount) { dominantCycle = c; dominantCount = n; }
+    }
+    const mismatchPct = cycleSamples > 0 && dominantCycle && dominantCycle !== String(cycle)
+      ? (dominantCount / cycleSamples)
+      : 0;
+    if (dominantCycle && dominantCycle !== String(cycle) && mismatchPct > 0.2 && !force) {
+      console.warn(`[CSV-IMPORT] CYCLE MISMATCH: selected=${cycle} detected=${dominantCycle} (${Math.round(mismatchPct * 100)}% of sampled rows)`);
+      return new Response(
+        JSON.stringify({
+          error: 'cycle_mismatch',
+          message: `File appears to be cycle ${dominantCycle} but you selected ${cycle} (${Math.round(mismatchPct * 100)}% of rows). Re-select the correct cycle, or set force=true to import anyway.`,
+          detected_cycle: dominantCycle,
+          selected_cycle: String(cycle),
+          mismatch_pct: mismatchPct
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // --- SESSION TRACKING ---
+    if (sessionId && isFirstBatch) {
+      const { error: sessErr } = await supabase
+        .from('donor_import_sessions')
+        .upsert({
+          id: sessionId,
+          candidate_id: candidateId || null,
+          committee_id: committeeId || null,
+          cycle: String(cycle),
+          filename: filename || null,
+          multi_committee: !!multiCommittee,
+          detected_cycle: dominantCycle,
+          started_by: user.id,
+          status: 'running'
+        }, { onConflict: 'id' });
+      if (sessErr) console.error('[CSV-IMPORT] session insert error:', sessErr.message);
+    }
 
     // Check for corrupted sub_ids and warn
     let corruptedSubIdCount = 0;
@@ -470,6 +521,8 @@ Deno.serve(async (req) => {
         contributor_name: rd.contributorName,
         contributor_type: contributorType,
         amount: Math.round(rd.amount),
+        contributor_type: contributorType,
+        amount: Math.round(rd.amount),
         cycle: rd.rowCycle,
         receipt_date: rd.receiptDate,
         line_number: rd.lineNumber,
@@ -487,7 +540,8 @@ Deno.serve(async (req) => {
         is_contribution: lineClass.isContribution,
         is_transfer: lineClass.isTransfer,
         is_earmarked: earmarkInfo.isEarmarked,
-        candidate_id: rowCandidateId
+        candidate_id: rowCandidateId,
+        import_session_id: sessionId || null
       });
 
       // Aggregate for donors table
@@ -595,6 +649,21 @@ Deno.serve(async (req) => {
 
     // Upsert donors with retry
     let insertedDonors = 0;
+    // Pre-check existing donor IDs so we only tag NEW donor rows with this import_session_id.
+    // (Otherwise pre-existing donors would get "stolen" by this session and risk being deleted on undo.)
+    const allDonorIds = Array.from(donorAggregates.keys());
+    const existingDonorIds = new Set<string>();
+    if (sessionId) {
+      const DONOR_CHECK_CHUNK = 500;
+      for (let i = 0; i < allDonorIds.length; i += DONOR_CHECK_CHUNK) {
+        const idChunk = allDonorIds.slice(i, i + DONOR_CHECK_CHUNK);
+        const { data: existingDonors } = await supabase
+          .from('donors')
+          .select('id')
+          .in('id', idChunk);
+        for (const r of existingDonors || []) existingDonorIds.add(r.id);
+      }
+    }
     const donorRows = Array.from(donorAggregates.values()).map(d => ({
       id: d.id,
       name: d.name,
@@ -614,7 +683,9 @@ Deno.serve(async (req) => {
       is_transfer: d.isTransfer,
       recipient_committee_id: d.recipientCommitteeId,
       recipient_committee_name: d.recipientCommitteeName,
-      candidate_id: d.candidateId
+      candidate_id: d.candidateId,
+      // Only tag NEW donors with this session for safe undo behavior
+      import_session_id: (sessionId && !existingDonorIds.has(d.id)) ? sessionId : null
     }));
 
     const totalDonorChunks = Math.ceil(donorRows.length / DONOR_CHUNK_SIZE);
@@ -646,6 +717,27 @@ Deno.serve(async (req) => {
     
     const donorTime = Date.now() - donorStartTime;
     const totalTime = Date.now() - startTime;
+
+    // Increment session counters per batch (best-effort)
+    if (sessionId) {
+      try {
+        const { data: cur } = await supabase
+          .from('donor_import_sessions')
+          .select('row_count, inserted_contributions, inserted_donors')
+          .eq('id', sessionId)
+          .maybeSingle();
+        await supabase
+          .from('donor_import_sessions')
+          .update({
+            row_count: (cur?.row_count || 0) + rows.length,
+            inserted_contributions: (cur?.inserted_contributions || 0) + actualInserts,
+            inserted_donors: (cur?.inserted_donors || 0) + insertedDonors,
+          })
+          .eq('id', sessionId);
+      } catch (e) {
+        console.warn('[CSV-IMPORT] session counter update failed:', (e as Error).message);
+      }
+    }
 
     // Structured timing log for debugging
     console.log(`[CSV-IMPORT] batch_tag=${batchTag} timing={"prep_ms":${prepTime},"hash_ms":${hashTime},"donor_id_ms":${donorIdTime},"contrib_upsert_ms":${contribTime},"donor_upsert_ms":${donorTime},"total_ms":${totalTime}} counts={"processed":${insertedContributions},"inserted":${actualInserts},"skipped_dupes":${skippedDuplicates},"skipped_invalid":${skippedRows},"donors":${insertedDonors},"errors":${errors.length}}`);

@@ -11,6 +11,7 @@ import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Exte
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
+import { DonorImportHistory } from './DonorImportHistory';
 
 interface ImportStats {
   totalRows: number;
@@ -57,10 +58,12 @@ export function DonorImportPanel() {
   const [progress, setProgress] = useState(0);
   const [stats, setStats] = useState<ImportStats | null>(null);
   const [detectedCommittee, setDetectedCommittee] = useState<string | null>(null);
+  const [detectedCycle, setDetectedCycle] = useState<string | null>(null);
   const [existingCount, setExistingCount] = useState<number | null>(null);
   const [lastDebugInfo, setLastDebugInfo] = useState<DebugInfo | null>(null);
   const [fileHealthWarning, setFileHealthWarning] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [historyKey, setHistoryKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentSessionRef = useRef<string | null>(null);
 
@@ -87,6 +90,7 @@ export function DonorImportPanel() {
     setStats(null);
     setProgress(0);
     setDetectedCommittee(null);
+    setDetectedCycle(null);
     setExistingCount(null);
     setFileHealthWarning(null);
     setLastDebugInfo(null);
@@ -110,15 +114,25 @@ export function DonorImportPanel() {
             // Check for corrupted sub_id values (scientific notation from Excel)
             let corruptedCount = 0;
             const subIdSet = new Set<string>();
+            const cycleCounts: Record<string, number> = {};
             for (const row of rows) {
               const subId = row.sub_id || row.SUB_ID || '';
               subIdSet.add(subId);
-              // Check for scientific notation patterns
               if (/[eE][+-]?\d+/.test(subId) || (subId.includes('.') && subId.length < 15)) {
                 corruptedCount++;
               }
+              const rc = String(row.two_year_transaction_period || row.TWO_YEAR_TRANSACTION_PERIOD || '').trim();
+              if (rc) cycleCounts[rc] = (cycleCounts[rc] || 0) + 1;
             }
-            
+
+            // Detect dominant cycle in file
+            let dominantCycle: string | null = null;
+            let dominantCount = 0;
+            for (const [c, n] of Object.entries(cycleCounts)) {
+              if (n > dominantCount) { dominantCycle = c; dominantCount = n; }
+            }
+            setDetectedCycle(dominantCycle);
+
             // Warn if high corruption or collision rate
             const collisionRate = 1 - (subIdSet.size / rows.length);
             if (corruptedCount > rows.length * 0.1) {
@@ -301,9 +315,32 @@ export function DonorImportPanel() {
                     cycle,
                     candidateId: multiCommittee ? null : (candidateId || null),
                     committeeId: multiCommittee ? null : (committeeId || null),
-                    multiCommittee
+                    multiCommittee,
+                    sessionId,
+                    filename: file?.name || null,
+                    isFirstBatch: i === 0,
+                    force: (window as any).__force_cycle_mismatch === sessionId
                   }
                 });
+
+                // Handle cycle-mismatch confirmation (HTTP 409)
+                if (error && (error.message?.includes('cycle_mismatch') || (error as any).status === 409)) {
+                  const ctxData = (error as any).context?.json ? await (error as any).context.json().catch(() => null) : null;
+                  const detected = ctxData?.detected_cycle || detectedCycle || '?';
+                  const ok = window.confirm(
+                    `Cycle mismatch: file looks like cycle ${detected} but you selected ${cycle}.\n\n` +
+                    `Click OK to import anyway and tag rows as ${cycle}, or Cancel to abort and re-select the correct cycle.`
+                  );
+                  if (!ok) {
+                    errors.push(`Aborted: cycle mismatch (file=${detected}, selected=${cycle})`);
+                    currentSessionRef.current = null;
+                    setActiveSessionId(null);
+                    setIsImporting(false);
+                    return;
+                  }
+                  (window as any).__force_cycle_mismatch = sessionId;
+                  continue; // retry with force=true
+                }
 
                 if (error) {
                   // Capture debug info
@@ -462,7 +499,17 @@ export function DonorImportPanel() {
             setProgress(100);
             setActiveSessionId(null);
             currentSessionRef.current = null;
-            
+
+            // Mark session completed
+            try {
+              await supabase
+                .from('donor_import_sessions')
+                .update({ status: errors.length > 0 ? 'completed_with_errors' : 'completed', completed_at: new Date().toISOString() })
+                .eq('id', sessionId);
+            } catch (e) { /* non-fatal */ }
+            delete (window as any).__force_cycle_mismatch;
+            setHistoryKey(k => k + 1);
+
             if (errors.length > 0) {
               toast.warning(`Import complete with ${errors.length} errors: ${insertedContributions} contributions added`);
             } else {
@@ -507,6 +554,7 @@ export function DonorImportPanel() {
   };
 
   return (
+    <>
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -657,7 +705,14 @@ export function DonorImportPanel() {
         {/* Configuration */}
         <div className={multiCommittee ? 'space-y-2' : 'grid grid-cols-2 gap-4'}>
           <div className="space-y-2">
-            <Label htmlFor="cycle">Election Cycle</Label>
+            <Label htmlFor="cycle" className="flex items-center gap-2">
+              Election Cycle
+              {detectedCycle && (
+                <Badge variant="outline" className={detectedCycle !== cycle ? 'text-amber-600 border-amber-500/50' : 'text-green-600 border-green-500/50'}>
+                  Detected: {detectedCycle}{detectedCycle !== cycle ? ' (mismatch!)' : ''}
+                </Badge>
+              )}
+            </Label>
             <Select value={cycle} onValueChange={setCycle} disabled={isImporting}>
               <SelectTrigger>
                 <SelectValue />
@@ -908,5 +963,9 @@ export function DonorImportPanel() {
         </p>
       </CardContent>
     </Card>
+    <div className="mt-6">
+      <DonorImportHistory refreshKey={historyKey} />
+    </div>
+    </>
   );
 }
