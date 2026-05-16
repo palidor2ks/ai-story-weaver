@@ -77,26 +77,36 @@ serve(async (req) => {
       errors: [] as string[],
     };
 
+    const fetchFecDonorsUrl = `${supabaseUrl}/functions/v1/fetch-fec-donors`;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
     // Process each candidate
     for (const candidate of candidates) {
       try {
         console.log('[SYNC-ALL-DONORS] Processing:', candidate.name);
 
-        // Call the fetch-fec-donors function — forward the admin user's auth header
-        // because fetch-fec-donors requires an admin JWT (verifies via auth.getUser + user_roles).
-        const { data, error } = await supabase.functions.invoke('fetch-fec-donors', {
-          headers: { Authorization: authHeader },
-          body: {
+        // Call fetch-fec-donors via direct fetch with the service-role bearer token.
+        // fetch-fec-donors recognizes the service-role key and skips its admin/user check.
+        const resp = await fetch(fetchFecDonorsUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'apikey': anonKey,
+          },
+          body: JSON.stringify({
             candidateId: candidate.id,
             fecCandidateId: candidate.fec_candidate_id,
             cycle,
-          },
+          }),
         });
 
-        if (error) {
-          console.error('[SYNC-ALL-DONORS] Error for', candidate.name, ':', error);
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+          console.error('[SYNC-ALL-DONORS] HTTP', resp.status, 'for', candidate.name, ':', data);
           results.failed++;
-          results.errors.push(`${candidate.name}: ${error.message}`);
+          results.errors.push(`${candidate.name}: HTTP ${resp.status} ${data?.error || ''}`.trim());
         } else if (data?.success) {
           results.success++;
           results.totalDonorsImported += data.imported || 0;

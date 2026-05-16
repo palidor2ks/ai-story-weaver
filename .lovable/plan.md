@@ -1,48 +1,34 @@
-## Fix "Working for Working Americans" donor analysis (both approaches)
+## Problem
 
-Apply both fixes so this donor — and others like it — get a clean, well-grounded AI analysis.
+`sync-all-donors` calls `fetch-fec-donors` 50 times and every call returns **401 Unauthorized**, even though we added `headers: { Authorization: authHeader }` to the invoke last round.
 
-### A. Merge the two donor name variants under one alias
+Root cause: the `sync-all-donors` Supabase client is created with the **service-role key**, so `supabase.functions.invoke()` sends the service-role JWT in the `Authorization` header. The per-invoke `headers` option is *merged* with the client's defaults, but the client's default `Authorization` header wins — the user's admin JWT never reaches `fetch-fec-donors`. When `fetch-fec-donors` runs `auth.getUser()` against the service-role JWT, it returns no user → 401.
 
-Create a donor alias canonicalized as **"Working for Working Americans"** (FEC C00490847, LIUNA-affiliated PAC, Las Vegas NV) with two members:
+## Fix
 
-- `WORKING FOR WORKING AMERICANS - FEDERAL` (Organization / PAC)
-- `WORKING FOR WORKING AMERICANS` (Organization / PAC)
+Two coordinated changes:
 
-Steps (data migration, single insert call):
-1. Insert one row into `donor_aliases` with `canonical_name = 'Working for Working Americans'`, `is_active = true`.
-2. Insert both `(donor_name, donor_type)` pairs into `donor_alias_members`, idempotent on conflict.
-3. Update `donors.display_name = 'Working for Working Americans'` for every row whose `(name, type)` is in the alias's members.
-4. Ask the user to trigger a refresh of `private.donor_consolidated_mv` from the admin Donor Aliases panel (same flow as ActBlue) so the two cards collapse into one.
+### 1. `fetch-fec-donors/index.ts` — allow service-role bypass
+At the admin auth block (~line 396), before calling `auth.getUser()`, check if the bearer token equals `SUPABASE_SERVICE_ROLE_KEY`. If yes, treat as trusted internal caller and skip the user/role check. Otherwise run the existing admin check unchanged.
 
-Result: one donor card with the combined ~$17M+ total instead of two split cards.
+```ts
+const token = authHeader.replace('Bearer ', '');
+const isServiceRole = token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+if (!isServiceRole) {
+  // existing getUser + user_roles admin check
+}
+```
 
-### B. Enrich the AI analysis prompt with FEC committee context
+This is safe: the service-role key is server-only and only reachable from other edge functions.
 
-Today `ai-recipient-analysis` (and the donor-side equivalent the recipient analysis function shares logic with) only has the literal `display_name` to feed Perplexity. When the donor IS a registered FEC committee, we should look up its `fec_committee_id` and canonical name and inject them into the prompt as an anchor.
+### 2. `sync-all-donors/index.ts` — call fetch-fec-donors with the service-role key explicitly
+Replace the `supabase.functions.invoke('fetch-fec-donors', { headers: { Authorization: authHeader }, body })` with a direct `fetch()` to the function URL passing `Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}` and `apikey: SUPABASE_ANON_KEY`. This guarantees the header isn't overridden by supabase-js defaults.
 
-Changes in `supabase/functions/ai-donor-analysis/index.ts` (the donor analyzer — same pattern as `ai-recipient-analysis`):
+Keep the existing per-request admin gate at the top of `sync-all-donors` so only admins can trigger the batch.
 
-1. Before building the search prompt, try to match the donor to an FEC committee:
-   - Query `committees` (or `candidate_committees` if that's where canonical names live) by:
-     - exact match on `display_name`
-     - exact match on each member `name` from `donor_alias_members` for this alias
-     - fuzzy match using `ilike` with the donor name stripped of trailing tokens like `- FEDERAL`, `PAC`, `INC`
-   - If exactly one committee matches (or all matches share the same `fec_committee_id`), capture `{ fec_committee_id, committee_name, state, city, zip, treasurer_name }`.
-2. Inject the anchor into the search prompt:
-   - `Anchor: FEC committee {fec_committee_id} ("{committee_name}"), based in {city}, {state} {zip}. Confirm same entity by FEC ID before answering.`
-3. Update the system prompt rule:
-   - "If a search result contradicts the FEC anchor (different ID, different city, different treasurer), set `insufficient_information=true`. If results confirm the FEC anchor, proceed with full confidence even if the literal donor name string differs from the FEC canonical name."
-4. Return the resolved `fec_committee_id` and `committee_name` in the response payload so the UI can display "Identified as FEC C00490847 — Working for Working Americans" above the analysis.
-5. No change to the deterministic confidence formula; the anchor only affects whether the model flags `insufficient_information`.
+## Result
 
-### Verification
+- Admin clicks "Sync donors" → `sync-all-donors` verifies admin → calls `fetch-fec-donors` with service-role token → fetch-fec-donors recognizes service-role and processes the candidate.
+- Direct admin-from-browser calls to `fetch-fec-donors` (per-committee/per-candidate UI buttons) continue to work because the service-role branch is skipped for non-matching tokens.
 
-- After (A) runs, `/donors` shows a single "Working for Working Americans" card aggregating both variants.
-- Re-run AI analysis on that card: expect `provider = "perplexity"`, `insufficient_information = false`, `confidence ≥ 60`, FEC ID surfaced, and positions/goals populated (LIUNA construction-trades agenda).
-- Re-run on a donor with no FEC committee match (e.g. an individual): behavior unchanged, no anchor injected, same outcome as today.
-
-### Out of scope
-
-- Option C (loosening disambiguation without an FEC anchor). With (B) in place we don't need it.
-- Backfilling FEC IDs onto the `donors` table itself — the lookup at analysis time is enough.
+No DB or UI changes required.
