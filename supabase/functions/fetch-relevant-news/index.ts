@@ -442,6 +442,25 @@ function hashId(s: string): string {
   return Math.abs(h).toString(36);
 }
 
+async function resolveQuestionIds(
+  supabase: ReturnType<typeof createClient>,
+  explicitQuestionIds: string[],
+  topics: string[],
+): Promise<string[]> {
+  const seed = new Set(explicitQuestionIds.filter(Boolean));
+  const topicCandidates = topics.filter(Boolean);
+  if (topicCandidates.length > 0) {
+    const { data } = await supabase
+      .from('questions')
+      .select('id')
+      .in('topic_id', topicCandidates)
+      .limit(500);
+    for (const row of (data || []) as Array<{ id: string }>) seed.add(row.id);
+  }
+  return Array.from(seed);
+}
+
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
