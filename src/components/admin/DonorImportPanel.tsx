@@ -57,10 +57,12 @@ export function DonorImportPanel() {
   const [progress, setProgress] = useState(0);
   const [stats, setStats] = useState<ImportStats | null>(null);
   const [detectedCommittee, setDetectedCommittee] = useState<string | null>(null);
+  const [detectedCycle, setDetectedCycle] = useState<string | null>(null);
   const [existingCount, setExistingCount] = useState<number | null>(null);
   const [lastDebugInfo, setLastDebugInfo] = useState<DebugInfo | null>(null);
   const [fileHealthWarning, setFileHealthWarning] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [historyKey, setHistoryKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentSessionRef = useRef<string | null>(null);
 
