@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
 </head>
 <body>
 <p>Redirecting to <a href="${target}">${target}</a>…</p>
-<script>location.replace(${JSON.stringify(data.target_url)});</script>
+<script>location.replace(${JSON.stringify(data.target_url).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')});</script>
 </body>
 </html>`;
 
