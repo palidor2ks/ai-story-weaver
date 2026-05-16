@@ -45,7 +45,10 @@ export function CommitteeBreakdown({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
-  const [selectedCycle, setSelectedCycle] = useState<string>('2024');
+  const [selectedCycle, setSelectedCycle] = useState<string>(() => {
+    const y = new Date().getFullYear();
+    return String(y % 2 === 0 ? y : y + 1);
+  });
   const [hideInactive, setHideInactive] = useState(true);
   const [designationFilter, setDesignationFilter] = useState<'campaign' | 'external' | 'all'>('campaign');
 
@@ -114,6 +117,22 @@ export function CommitteeBreakdown({
       return true;
     });
   }, [committees, selectedCycle, hideInactive, designationFilter]);
+
+  // Derive available cycles from the candidate's committees, plus baseline current/previous federal cycles
+  const availableCycles = useMemo(() => {
+    const year = new Date().getFullYear();
+    const currentCycle = year % 2 === 0 ? year : year + 1;
+    const set = new Set<string>([String(currentCycle), String(currentCycle - 2)]);
+    committees.forEach(c => (c.cycles || []).forEach(cy => cy && set.add(String(cy))));
+    return Array.from(set).sort((a, b) => Number(b) - Number(a));
+  }, [committees]);
+
+  // If the selected cycle isn't in the available list, snap to the newest available
+  useEffect(() => {
+    if (selectedCycle !== 'all' && availableCycles.length > 0 && !availableCycles.includes(selectedCycle)) {
+      setSelectedCycle(availableCycles[0]);
+    }
+  }, [availableCycles, selectedCycle]);
 
   useEffect(() => {
     fetchCommittees();
@@ -338,10 +357,9 @@ export function CommitteeBreakdown({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="2024">2024</SelectItem>
-              <SelectItem value="2022">2022</SelectItem>
-              <SelectItem value="2020">2020</SelectItem>
-              <SelectItem value="2018">2018</SelectItem>
+              {availableCycles.map(cy => (
+                <SelectItem key={cy} value={cy}>{cy}</SelectItem>
+              ))}
               <SelectItem value="all">All</SelectItem>
             </SelectContent>
           </Select>
