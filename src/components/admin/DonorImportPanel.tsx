@@ -89,6 +89,7 @@ export function DonorImportPanel() {
     setStats(null);
     setProgress(0);
     setDetectedCommittee(null);
+    setDetectedCycle(null);
     setExistingCount(null);
     setFileHealthWarning(null);
     setLastDebugInfo(null);
