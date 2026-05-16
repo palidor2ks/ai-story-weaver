@@ -883,6 +883,7 @@ export type Database = {
           fec_transaction_id: string | null
           id: string
           identity_hash: string
+          import_session_id: string | null
           is_contribution: boolean | null
           is_earmarked: boolean | null
           is_transfer: boolean | null
@@ -912,6 +913,7 @@ export type Database = {
           fec_transaction_id?: string | null
           id?: string
           identity_hash: string
+          import_session_id?: string | null
           is_contribution?: boolean | null
           is_earmarked?: boolean | null
           is_transfer?: boolean | null
@@ -941,6 +943,7 @@ export type Database = {
           fec_transaction_id?: string | null
           id?: string
           identity_hash?: string
+          import_session_id?: string | null
           is_contribution?: boolean | null
           is_earmarked?: boolean | null
           is_transfer?: boolean | null
@@ -1016,6 +1019,63 @@ export type Database = {
         }
         Relationships: []
       }
+      donor_import_sessions: {
+        Row: {
+          candidate_id: string | null
+          committee_id: string | null
+          completed_at: string | null
+          cycle: string
+          detected_cycle: string | null
+          filename: string | null
+          id: string
+          inserted_contributions: number
+          inserted_donors: number
+          multi_committee: boolean
+          row_count: number
+          started_at: string
+          started_by: string | null
+          status: string
+          undo_summary: Json | null
+          undone_at: string | null
+        }
+        Insert: {
+          candidate_id?: string | null
+          committee_id?: string | null
+          completed_at?: string | null
+          cycle: string
+          detected_cycle?: string | null
+          filename?: string | null
+          id: string
+          inserted_contributions?: number
+          inserted_donors?: number
+          multi_committee?: boolean
+          row_count?: number
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          undo_summary?: Json | null
+          undone_at?: string | null
+        }
+        Update: {
+          candidate_id?: string | null
+          committee_id?: string | null
+          completed_at?: string | null
+          cycle?: string
+          detected_cycle?: string | null
+          filename?: string | null
+          id?: string
+          inserted_contributions?: number
+          inserted_donors?: number
+          multi_committee?: boolean
+          row_count?: number
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          undo_summary?: Json | null
+          undone_at?: string | null
+        }
+        Relationships: []
+      }
       donors: {
         Row: {
           amount: number
@@ -1030,6 +1090,7 @@ export type Database = {
           employer: string | null
           first_receipt_date: string | null
           id: string
+          import_session_id: string | null
           is_conduit_org: boolean | null
           is_contribution: boolean | null
           is_transfer: boolean | null
@@ -1055,6 +1116,7 @@ export type Database = {
           employer?: string | null
           first_receipt_date?: string | null
           id: string
+          import_session_id?: string | null
           is_conduit_org?: boolean | null
           is_contribution?: boolean | null
           is_transfer?: boolean | null
@@ -1080,6 +1142,7 @@ export type Database = {
           employer?: string | null
           first_receipt_date?: string | null
           id?: string
+          import_session_id?: string | null
           is_conduit_org?: boolean | null
           is_contribution?: boolean | null
           is_transfer?: boolean | null
@@ -3086,6 +3149,7 @@ export type Database = {
           type: string
         }[]
       }
+      undo_donor_import: { Args: { p_session_id: string }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "politician"
