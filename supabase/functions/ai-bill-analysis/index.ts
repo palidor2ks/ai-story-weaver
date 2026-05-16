@@ -136,9 +136,10 @@ Output ONLY a JSON object, no prose:
     const geminiSystemPrompt =
       "You are a nonpartisan legislative analyst. You do not have live web search — ground every claim in the bill metadata provided in the user prompt and well-known public knowledge. Never invent vote counts, sponsor names, or quotes. If you cannot confidently identify the bill, set insufficient_information=true and cap confidence at 30. Output strict JSON only.";
 
-    let provider: "perplexity" | "gemini" | null = null;
+    let provider: "perplexity" | "you" | "gemini" | null = null;
     let content = "";
     let citations: string[] = [];
+    let youCitations: YouCitation[] = [];
     let lastError: { status: number; code: string; message: string } | null = null;
     const providerErrors: { provider: string; status: number; code: string }[] = [];
 
