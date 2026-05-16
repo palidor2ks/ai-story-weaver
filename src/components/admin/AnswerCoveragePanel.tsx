@@ -140,8 +140,8 @@ export function AnswerCoveragePanel() {
   // Finance cycle selector (drives $, FEC, Local, Delta columns and finance actions)
   const { data: availableCycles } = useFinanceCycles();
   const [financeCycle, setFinanceCycleState] = useState<string>(() => {
-    if (typeof window === 'undefined') return financeCycle;
-    return localStorage.getItem('admin.financeCycle') ?? financeCycle;
+    if (typeof window === 'undefined') return '2026';
+    return localStorage.getItem('admin.financeCycle') ?? '2026';
   });
   const setFinanceCycle = useCallback((cycle: string) => {
     setFinanceCycleState(cycle);
