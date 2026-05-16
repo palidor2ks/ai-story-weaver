@@ -1,66 +1,44 @@
 ## Goal
 
-Replace the "Dig Deeper AI Analysis" button on each sponsored/cosponsored bill (CandidateProfile sponsored legislation list) — which currently opens perplexity.ai in a new tab — with an in-app dialog that fetches AI analysis and displays it inline, matching the look/feel of the donor analysis box (`DonorAIAnalysisDialog` / `RecipientAIAnalysisDialog`).
+Mirror PR #56 (`ai-story-weaver`) in this project: align the bill "Dig Deeper" edge function's provider fallback chain and confidence scoring with the donor/recipient analysis functions.
 
-## Changes
+## Context
 
-### 1. New edge function: `supabase/functions/ai-bill-analysis/index.ts`
-Modeled on `ai-recipient-analysis`. Accepts:
-```
-{ bill_id, bill_type, bill_number, bill_name, congress, topic, status, candidate_name, candidate_role, is_sponsor }
-```
-Calls Lovable AI Gateway (`google/gemini-3-flash-preview`) with a web-grounded prompt asking for:
-- `summary` — what the bill does in plain English
-- `key_provisions[]` — main provisions
-- `positions[]` — `{ topic, stance }` how it intersects major policy areas
-- `candidate_role_explanation` — why this candidate likely sponsored/cosponsored, based on their record
-- `controversies[]`, `supporters[]`, `opponents[]`
-- `sources[]` — `{ title, url }` citations
-- `confidence` (0–100), `confidence_rationale`, `insufficient_information` flag
+`ai-donor-analysis` and `ai-recipient-analysis` here already use the shared You.com helper (`_shared/you-search.ts`) and the deterministic confidence helper (`_shared/confidence.ts`). The newer `ai-bill-analysis` function (Perplexity → Gemini only) is the odd one out. `YOU_API_KEY` is already configured.
 
-Returns structured JSON. Uses `Output.object` (AI SDK) for schema enforcement. CORS + error normalization mirror existing functions.
+## Changes — single file
 
-Register in `supabase/config.toml` with `verify_jwt = false` (matching sibling AI functions — verify pattern first).
+### `supabase/functions/ai-bill-analysis/index.ts`
 
-### 2. New component: `src/components/BillAIAnalysisDialog.tsx`
-Modeled directly on `RecipientAIAnalysisDialog`. Props:
-```
-{ billId, billType, billNumber, billName, congress, topic, status, candidateName, candidateRole, isSponsor, trigger }
-```
-- Trigger renders the existing "Dig Deeper AI Analysis" button.
-- On open, invokes `ai-bill-analysis` edge function, shows loading spinner, then renders sections (summary, key provisions, positions, candidate role, controversies, supporters/opponents, sources).
-- Confidence + data-coverage chip, regenerate button, sticky header — same patterns as the donor/recipient dialog.
+1. **Imports** (top): add
+   ```ts
+   import { callYouSmart, YouError, type YouCitation } from "../_shared/you-search.ts";
+   import { computeDeterministicConfidence } from "../_shared/confidence.ts";
+   ```
 
-### 3. `src/pages/CandidateProfile.tsx` (lines ~1114–1130)
-Replace the `<Button asChild>` wrapping a perplexity `<a>` with:
-```tsx
-<BillAIAnalysisDialog
-  billId={bill.bill_id}
-  billType={bill.bill_type}
-  billNumber={bill.bill_number}
-  billName={bill.bill_name}
-  congress={bill.congress}
-  topic={bill.topic}
-  status={bill.status}
-  candidateName={candidate.name}
-  candidateRole={candidate.office /* or similar */}
-  isSponsor={bill.is_sponsor}
-  trigger={
-    <Button size="sm" variant="outline" className="h-7 text-xs">
-      <Sparkles className="w-3 h-3 mr-1" />
-      Dig Deeper AI Analysis
-    </Button>
-  }
-/>
-```
-Add the import. No other UI changes.
+2. **Env + provider guard**: read `YOU_API_KEY`; update the "no provider configured" check + error message to include it.
+
+3. **Provider state**: widen `provider` union to `"perplexity" | "you" | "gemini"` and add `let youCitations: YouCitation[] = []`.
+
+4. **Insert You.com fallback** between the Perplexity and Gemini branches: only runs if no provider succeeded yet and `youKey` exists. Calls `callYouSmart({ query: searchPrompt, apiKey: youKey, systemPrompt })`, sets `content`, populates `youCitations` and `citations` (mapped to URLs), sets `provider = "you"`. On error: push to `providerErrors`, record `lastError` from `YouError` (status/code/message fallbacks).
+
+5. **Grounded sources mapping**: when `provider === "you"`, build `grounded` from `youCitations` preserving `title`, `url`, and `citation_index`. Otherwise keep the current URL-derived host title (drop the `[n]` suffix; move index into `citation_index` field).
+
+6. **Confidence + rationale**: replace the manual confidence math with
+   ```ts
+   let confidence = computeDeterministicConfidence(grounded);
+   let insufficient = Boolean(parsed.insufficient_information);
+   if (grounded.length === 0) insufficient = true;
+   if (insufficient) confidence = Math.min(confidence, 20);
+   const groundedFailed = providerErrors.length > 0 && grounded.length === 0;
+   const confidence_rationale = groundedFailed
+     ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
+     : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
+   ```
+   Return `confidence_rationale` (the computed string) instead of `parsed.confidence_rationale`.
 
 ## Out of scope
-- No DB schema changes (no caching layer for bill analyses in this pass — can be added later if usage warrants, mirroring donor cache patterns).
-- No change to the comparable Perplexity link in `RepComparisonSummary` (different surface; only the bill-list button per the user's request).
-- No changes to other Perplexity integrations.
 
-## Technical notes
-- Edge function uses `LOVABLE_API_KEY` (auto-provisioned) via `createLovableAiGatewayProvider`; no new secrets.
-- Errors (429/402/network) surfaced inline in the dialog, same as `RecipientAIAnalysisDialog`.
-- Sources rendered as numbered, clickable list with `ExternalLink` icons.
+- No frontend changes (`BillAIAnalysisDialog` already reads `sources` / `confidence` / `confidence_rationale` generically).
+- No schema/config changes; `YOU_API_KEY` and the shared helpers already exist.
+- No changes to donor/recipient functions or other edge functions.
