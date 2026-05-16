@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { rows, cycle, candidateId, committeeId, multiCommittee } = body;
+    const { rows, cycle, candidateId, committeeId, multiCommittee, sessionId, filename, force, isFirstBatch } = body;
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       return new Response(
@@ -258,7 +258,58 @@ Deno.serve(async (req) => {
 
     const startTime = Date.now();
     const batchTag = rows[0]?.sub_id || rows[0]?.SUB_ID || 'unknown';
-    console.log(`[CSV-IMPORT] batch_tag=${batchTag} rows=${rows.length} cycle=${cycle}`);
+    console.log(`[CSV-IMPORT] batch_tag=${batchTag} rows=${rows.length} cycle=${cycle} session=${sessionId || 'none'}`);
+
+    // --- CYCLE MISMATCH GUARD ---
+    // Sample two_year_transaction_period across the batch and warn if it disagrees with selected cycle.
+    const cycleCounts: Record<string, number> = {};
+    let cycleSamples = 0;
+    for (const row of rows) {
+      const rc = String(row.two_year_transaction_period || row.TWO_YEAR_TRANSACTION_PERIOD || '').trim();
+      if (rc) {
+        cycleCounts[rc] = (cycleCounts[rc] || 0) + 1;
+        cycleSamples++;
+      }
+    }
+    let dominantCycle: string | null = null;
+    let dominantCount = 0;
+    for (const [c, n] of Object.entries(cycleCounts)) {
+      if (n > dominantCount) { dominantCycle = c; dominantCount = n; }
+    }
+    const mismatchPct = cycleSamples > 0 && dominantCycle && dominantCycle !== String(cycle)
+      ? (dominantCount / cycleSamples)
+      : 0;
+    if (dominantCycle && dominantCycle !== String(cycle) && mismatchPct > 0.2 && !force) {
+      console.warn(`[CSV-IMPORT] CYCLE MISMATCH: selected=${cycle} detected=${dominantCycle} (${Math.round(mismatchPct * 100)}% of sampled rows)`);
+      return new Response(
+        JSON.stringify({
+          error: 'cycle_mismatch',
+          message: `File appears to be cycle ${dominantCycle} but you selected ${cycle} (${Math.round(mismatchPct * 100)}% of rows). Re-select the correct cycle, or set force=true to import anyway.`,
+          detected_cycle: dominantCycle,
+          selected_cycle: String(cycle),
+          mismatch_pct: mismatchPct
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // --- SESSION TRACKING ---
+    if (sessionId && isFirstBatch) {
+      const { error: sessErr } = await supabase
+        .from('donor_import_sessions')
+        .upsert({
+          id: sessionId,
+          candidate_id: candidateId || null,
+          committee_id: committeeId || null,
+          cycle: String(cycle),
+          filename: filename || null,
+          multi_committee: !!multiCommittee,
+          detected_cycle: dominantCycle,
+          started_by: user.id,
+          status: 'running'
+        }, { onConflict: 'id' });
+      if (sessErr) console.error('[CSV-IMPORT] session insert error:', sessErr.message);
+    }
 
     // Check for corrupted sub_ids and warn
     let corruptedSubIdCount = 0;
