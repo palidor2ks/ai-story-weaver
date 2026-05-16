@@ -521,6 +521,8 @@ Deno.serve(async (req) => {
         contributor_name: rd.contributorName,
         contributor_type: contributorType,
         amount: Math.round(rd.amount),
+        contributor_type: contributorType,
+        amount: Math.round(rd.amount),
         cycle: rd.rowCycle,
         receipt_date: rd.receiptDate,
         line_number: rd.lineNumber,
