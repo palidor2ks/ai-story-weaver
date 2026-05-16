@@ -433,6 +433,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
         party_breakdown: partyBreakdown,
         top_recipients: topRecipients,
         fec_committee_id: fecCommitteeId,
+        alias_canonical_name: aliasCanonicalName,
       },
     });
   } catch (e) {
