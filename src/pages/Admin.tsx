@@ -34,6 +34,7 @@ import { PartyAnswersPanel } from "@/components/admin/PartyAnswersPanel";
 import { EvidenceReviewPanel } from "@/components/admin/EvidenceReviewPanel";
 import TopicReviewPanel from "@/components/admin/TopicReviewPanel";
 import { DonorImportPanel } from "@/components/admin/DonorImportPanel";
+import { BulkDonorSyncCard } from "@/components/admin/BulkDonorSyncCard";
 import { BulkAnswerValidation } from "@/components/admin/BulkAnswerValidation";
 import { AdminUsersPanel } from "@/components/admin/AdminUsersPanel";
 import { PollsPanel } from "@/components/admin/PollsPanel";
@@ -753,7 +754,8 @@ export default function Admin() {
             <BulkAnswerValidation />
           </TabsContent>
 
-          <TabsContent value="donor-import">
+          <TabsContent value="donor-import" className="space-y-6">
+            <BulkDonorSyncCard />
             <DonorImportPanel />
           </TabsContent>
 
