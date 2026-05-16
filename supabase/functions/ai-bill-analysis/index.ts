@@ -255,12 +255,15 @@ Output ONLY a JSON object, no prose:
       return json({ error: "Could not parse AI response. Please regenerate." }, 500);
     }
 
-    const grounded: { title: string; url: string }[] = citations.map((url, i) => {
-      try {
-        const host = new URL(url).hostname.replace(/^www\./, "");
-        return { title: `${host} [${i + 1}]`, url };
-      } catch { return { title: url, url }; }
-    });
+    const grounded: { title: string; url: string; citation_index?: number }[] =
+      provider === "you"
+        ? youCitations.map((c, i) => ({ title: c.title, url: c.url, citation_index: i + 1 }))
+        : citations.map((url, i) => {
+            try {
+              const host = new URL(url).hostname.replace(/^www\./, "");
+              return { title: host, url, citation_index: i + 1 };
+            } catch { return { title: url, url }; }
+          });
     const modelSources = Array.isArray(parsed.sources) ? parsed.sources : [];
     const sourceMap = new Map<string, { title: string; url: string }>();
     [...grounded, ...modelSources].forEach((s: any) => {
@@ -268,10 +271,14 @@ Output ONLY a JSON object, no prose:
     });
     const sources = Array.from(sourceMap.values());
 
+    let confidence = computeDeterministicConfidence(grounded);
     let insufficient = Boolean(parsed.insufficient_information);
-    if (grounded.length === 0 && provider === "perplexity") insufficient = true;
-    let confidence = Math.max(0, Math.min(100, Math.round(Number(parsed.confidence ?? 0))));
+    if (grounded.length === 0) insufficient = true;
     if (insufficient) confidence = Math.min(confidence, 20);
+    const groundedFailed = providerErrors.length > 0 && grounded.length === 0;
+    const confidence_rationale = groundedFailed
+      ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
+      : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
 
     return json({
       provider,
