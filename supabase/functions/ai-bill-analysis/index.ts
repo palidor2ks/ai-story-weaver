@@ -188,6 +188,26 @@ Output ONLY a JSON object, no prose:
       }
     }
 
+    if (!provider && youKey) {
+      console.log("Trying You.com Smart as grounded-search fallback");
+      try {
+        const yres = await callYouSmart({ query: searchPrompt, apiKey: youKey, systemPrompt });
+        content = yres.content;
+        youCitations = yres.citations;
+        citations = yres.citations.map((c) => c.url);
+        provider = "you";
+      } catch (e) {
+        const ye = e as YouError;
+        console.error("You.com fallback error", ye?.status, ye?.message);
+        lastError = {
+          status: ye?.status ?? 500,
+          code: ye?.code ?? "YOU_ERROR",
+          message: ye?.message ?? "You.com fallback failed.",
+        };
+        providerErrors.push({ provider: "you", status: ye?.status ?? 500, code: ye?.code ?? "YOU_ERROR" });
+      }
+    }
+
     if (!provider && lovableKey) {
       console.log("Falling back to Lovable AI Gateway (Gemini)");
       const gemResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
