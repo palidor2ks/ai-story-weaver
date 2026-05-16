@@ -718,6 +718,27 @@ Deno.serve(async (req) => {
     const donorTime = Date.now() - donorStartTime;
     const totalTime = Date.now() - startTime;
 
+    // Increment session counters per batch (best-effort)
+    if (sessionId) {
+      try {
+        const { data: cur } = await supabase
+          .from('donor_import_sessions')
+          .select('row_count, inserted_contributions, inserted_donors')
+          .eq('id', sessionId)
+          .maybeSingle();
+        await supabase
+          .from('donor_import_sessions')
+          .update({
+            row_count: (cur?.row_count || 0) + rows.length,
+            inserted_contributions: (cur?.inserted_contributions || 0) + actualInserts,
+            inserted_donors: (cur?.inserted_donors || 0) + insertedDonors,
+          })
+          .eq('id', sessionId);
+      } catch (e) {
+        console.warn('[CSV-IMPORT] session counter update failed:', (e as Error).message);
+      }
+    }
+
     // Structured timing log for debugging
     console.log(`[CSV-IMPORT] batch_tag=${batchTag} timing={"prep_ms":${prepTime},"hash_ms":${hashTime},"donor_id_ms":${donorIdTime},"contrib_upsert_ms":${contribTime},"donor_upsert_ms":${donorTime},"total_ms":${totalTime}} counts={"processed":${insertedContributions},"inserted":${actualInserts},"skipped_dupes":${skippedDuplicates},"skipped_invalid":${skippedRows},"donors":${insertedDonors},"errors":${errors.length}}`);
 
