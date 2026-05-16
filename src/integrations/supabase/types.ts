@@ -1450,6 +1450,78 @@ export type Database = {
         }
         Relationships: []
       }
+      news_article_questions: {
+        Row: {
+          article_id: string
+          linked_at: string
+          matched_people: string[]
+          matched_topics: string[]
+          question_id: string
+          relevance_score: number
+        }
+        Insert: {
+          article_id: string
+          linked_at?: string
+          matched_people?: string[]
+          matched_topics?: string[]
+          question_id: string
+          relevance_score?: number
+        }
+        Update: {
+          article_id?: string
+          linked_at?: string
+          matched_people?: string[]
+          matched_topics?: string[]
+          question_id?: string
+          relevance_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "news_article_questions_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "news_articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "news_article_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      news_articles: {
+        Row: {
+          created_at: string
+          id: string
+          published_at: string
+          snippet: string | null
+          source: string
+          title: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          published_at: string
+          snippet?: string | null
+          source: string
+          title: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          published_at?: string
+          snippet?: string | null
+          source?: string
+          title?: string
+          url?: string
+        }
+        Relationships: []
+      }
       official_transitions: {
         Row: {
           ai_confidence: string | null
@@ -2095,6 +2167,45 @@ export type Database = {
           voter_verified_at?: string | null
         }
         Relationships: []
+      }
+      question_news_feed_cache: {
+        Row: {
+          article_id: string
+          last_seen_at: string
+          question_id: string
+          rank_score: number
+          window_label: string
+        }
+        Insert: {
+          article_id: string
+          last_seen_at?: string
+          question_id: string
+          rank_score?: number
+          window_label: string
+        }
+        Update: {
+          article_id?: string
+          last_seen_at?: string
+          question_id?: string
+          rank_score?: number
+          window_label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_news_feed_cache_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "news_articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_news_feed_cache_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       question_options: {
         Row: {
