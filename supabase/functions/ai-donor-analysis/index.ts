@@ -201,13 +201,21 @@ Deno.serve(async (req) => {
     const cycleStr = cycles.length ? ` active in ${cycles.slice(-3).join(", ")}` : "";
     const anchorBits = [
       fecCommitteeId ? `FEC committee ID ${fecCommitteeId}` : null,
+      aliasCanonicalName && aliasCanonicalName.toLowerCase() !== donor_name.toLowerCase()
+        ? `also known as "${aliasCanonicalName}"`
+        : null,
       donor_type && donor_type !== "Unknown" ? `${donor_type.toLowerCase()} donor` : null,
       topRecipNames ? `whose top recipients include ${topRecipNames}` : null,
       partyTilt || null,
       cycleStr || null,
     ].filter(Boolean).join(", ");
 
-    const searchPrompt = `Research the political donor "${donor_name}"${anchorBits ? ` (${anchorBits})` : ""}.
+    const primaryName = aliasCanonicalName ?? donor_name;
+    const fecAnchorLine = fecCommitteeId
+      ? `\n\nFEC ANCHOR: This donor is registered with the FEC under committee ID ${fecCommitteeId}${aliasCanonicalName ? ` (canonical name: "${aliasCanonicalName}")` : ""}. Use this as ground truth — the literal donor-name string above may be a filing variant.`
+      : "";
+
+    const searchPrompt = `Research the political donor "${primaryName}"${anchorBits ? ` (${anchorBits})` : ""}.${fecAnchorLine}
 
 Use FEC.gov, OpenSecrets, ProPublica, FollowTheMoney, and major news outlets. Confirm you are looking at the SAME entity by matching the FEC committee ID, top recipients, and cycle activity above. If the search returns information about a different same-named entity, say so and stop.
 
@@ -242,10 +250,13 @@ Output ONLY a JSON object, no prose. Use this exact schema:
   "confidence_rationale": string
 }`;
 
+    const anchorRule = fecCommitteeId
+      ? " When an FEC ANCHOR committee ID is provided, treat it as ground truth: if search results confirm the same FEC ID (or the same committee name + treasurer + city), proceed at full confidence even if the literal donor-name string differs from the FEC canonical name. If results contradict the anchor (different FEC ID, different city, different treasurer), set insufficient_information=true and cap confidence at 20."
+      : "";
     const systemPrompt =
-      "You are a nonpartisan campaign-finance analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, founders, or quotes. If the search results describe a different entity than the one anchored by the user, set insufficient_information=true and cap confidence at 20. Output strict JSON only.";
+      "You are a nonpartisan campaign-finance analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, founders, or quotes. If the search results describe a different entity than the one anchored by the user, set insufficient_information=true and cap confidence at 20." + anchorRule + " Output strict JSON only.";
     const geminiSystemPrompt =
-      "You are a nonpartisan campaign-finance analyst. You do not have live web search — ground every claim in the FEC/finance context provided in the user prompt and well-known public knowledge. Never invent dollar figures, FEC IDs, founders, or quotes. If you cannot confidently identify the entity, set insufficient_information=true and cap confidence at 30. Output strict JSON only.";
+      "You are a nonpartisan campaign-finance analyst. You do not have live web search — ground every claim in the FEC/finance context provided in the user prompt and well-known public knowledge. Never invent dollar figures, FEC IDs, founders, or quotes. If you cannot confidently identify the entity, set insufficient_information=true and cap confidence at 30." + anchorRule + " Output strict JSON only.";
 
     let provider: "perplexity" | "you" | "gemini" | null = null;
     let content = "";
