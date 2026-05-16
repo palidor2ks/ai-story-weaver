@@ -754,8 +754,10 @@ export default function Admin() {
             <BulkAnswerValidation />
           </TabsContent>
 
-          <TabsContent value="donor-import">
+          <TabsContent value="donor-import" className="space-y-6">
+            <BulkDonorSyncCard />
             <DonorImportPanel />
+          </TabsContent>
           </TabsContent>
 
           <TabsContent value="polls">
