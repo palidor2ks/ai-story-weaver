@@ -218,7 +218,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         return [];
       }
 
-      const FINANCE_CYCLE = '2024';
+      const FINANCE_CYCLE = '2026';
 
       // Run ALL supporting queries in parallel for maximum performance
       const [
