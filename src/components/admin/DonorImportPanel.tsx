@@ -314,9 +314,32 @@ export function DonorImportPanel() {
                     cycle,
                     candidateId: multiCommittee ? null : (candidateId || null),
                     committeeId: multiCommittee ? null : (committeeId || null),
-                    multiCommittee
+                    multiCommittee,
+                    sessionId,
+                    filename: file?.name || null,
+                    isFirstBatch: i === 0,
+                    force: (window as any).__force_cycle_mismatch === sessionId
                   }
                 });
+
+                // Handle cycle-mismatch confirmation (HTTP 409)
+                if (error && (error.message?.includes('cycle_mismatch') || (error as any).status === 409)) {
+                  const ctxData = (error as any).context?.json ? await (error as any).context.json().catch(() => null) : null;
+                  const detected = ctxData?.detected_cycle || detectedCycle || '?';
+                  const ok = window.confirm(
+                    `Cycle mismatch: file looks like cycle ${detected} but you selected ${cycle}.\n\n` +
+                    `Click OK to import anyway and tag rows as ${cycle}, or Cancel to abort and re-select the correct cycle.`
+                  );
+                  if (!ok) {
+                    errors.push(`Aborted: cycle mismatch (file=${detected}, selected=${cycle})`);
+                    currentSessionRef.current = null;
+                    setActiveSessionId(null);
+                    setIsImporting(false);
+                    return;
+                  }
+                  (window as any).__force_cycle_mismatch = sessionId;
+                  continue; // retry with force=true
+                }
 
                 if (error) {
                   // Capture debug info
