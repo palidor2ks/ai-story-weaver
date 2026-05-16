@@ -97,22 +97,46 @@ export const useCreateDonorAlias = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: DonorAliasInput) => {
+      const name = (input.canonical_name || '').trim();
+      if (!name) throw new Error('Canonical name is required');
+
+      // Case-insensitive dedupe: reuse existing alias if one already exists.
+      const { data: existing, error: lookupErr } = await supabase
+        .from('donor_aliases')
+        .select('*')
+        .ilike('canonical_name', name)
+        .maybeSingle();
+      if (lookupErr && lookupErr.code !== 'PGRST116') throw lookupErr;
+      if (existing) {
+        return { ...(existing as DonorAlias), __reused: true } as DonorAlias & { __reused?: boolean };
+      }
+
       const { data, error } = await supabase
         .from('donor_aliases')
         .insert({
-          canonical_name: input.canonical_name,
+          canonical_name: name,
           fec_committee_id: input.fec_committee_id || null,
           notes: input.notes || null,
           is_active: input.is_active ?? true,
         })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        if ((error as { code?: string }).code === '23505') {
+          throw new Error(`Alias "${name}" already exists`);
+        }
+        throw error;
+      }
       return data as DonorAlias;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       invalidateDonorCaches(queryClient);
-      toast.success('Alias created — now attach donors to make it visible on /donors');
+      const reused = (data as DonorAlias & { __reused?: boolean }).__reused;
+      if (reused) {
+        toast.info(`Alias "${data.canonical_name}" already exists — using existing one`);
+      } else {
+        toast.success('Alias created — now attach donors to make it visible on /donors');
+      }
     },
     onError: (error: Error) => toast.error(`Failed to create alias: ${error.message}`),
   });
@@ -122,10 +146,13 @@ export const useUpdateDonorAlias = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...input }: DonorAliasInput & { id: string }) => {
+      const name = (input.canonical_name || '').trim();
+      if (!name) throw new Error('Canonical name is required');
+
       const { data, error } = await supabase
         .from('donor_aliases')
         .update({
-          canonical_name: input.canonical_name,
+          canonical_name: name,
           fec_committee_id: input.fec_committee_id || null,
           notes: input.notes || null,
           is_active: input.is_active ?? true,
@@ -133,7 +160,12 @@ export const useUpdateDonorAlias = () => {
         .eq('id', id)
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        if ((error as { code?: string }).code === '23505') {
+          throw new Error(`Another alias named "${name}" already exists`);
+        }
+        throw error;
+      }
       return data as DonorAlias;
     },
     onSuccess: () => {
