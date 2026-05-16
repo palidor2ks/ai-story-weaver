@@ -23,6 +23,7 @@ import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/Financ
 import { cn } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp, ScrollText, Briefcase } from 'lucide-react';
 import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialog';
+import { BillAIAnalysisDialog } from '@/components/BillAIAnalysisDialog';
 import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScoreText } from '@/components/ScoreText';
@@ -1112,21 +1113,28 @@ export const CandidateProfile = () => {
                               {bill.bill_type} {bill.bill_number}: {bill.bill_name}
                             </a>
                             <div className="mt-2">
-                              <Button
-                                asChild
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs"
-                              >
-                                <a
-                                  href={`https://www.perplexity.ai/search/new?q=${encodeURIComponent(`Explain ${(bill.bill_type || 'HR').toUpperCase()} ${bill.bill_number || ''} (${bill.bill_name}) and ${candidate.name}'s ${bill.is_sponsor ? 'sponsorship' : 'cosponsorship'} position on it.`)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  <Sparkles className="w-3 h-3 mr-1" />
-                                  Dig Deeper AI Analysis
-                                </a>
-                              </Button>
+                              <BillAIAnalysisDialog
+                                billId={bill.bill_id}
+                                billType={bill.bill_type}
+                                billNumber={bill.bill_number}
+                                billName={bill.bill_name}
+                                congress={bill.congress}
+                                topic={bill.topic}
+                                status={bill.status}
+                                billUrl={bill.url}
+                                sponsorshipDate={bill.sponsorship_date}
+                                candidateName={candidate.name}
+                                candidateParty={candidate.party}
+                                candidateOffice={candidate.office}
+                                candidateState={candidate.state}
+                                isSponsor={bill.is_sponsor}
+                                trigger={
+                                  <Button size="sm" variant="outline" className="h-7 text-xs">
+                                    <Sparkles className="w-3 h-3 mr-1" />
+                                    Dig Deeper AI Analysis
+                                  </Button>
+                                }
+                              />
                             </div>
                             <div className="flex flex-wrap gap-2 mt-2 text-sm text-muted-foreground">
                               {bill.topic && (

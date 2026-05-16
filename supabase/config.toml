@@ -5,6 +5,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = true
   [functions.ai-donor-analysis]
     verify_jwt = true
+  [functions.ai-bill-analysis]
+    verify_jwt = true
   [functions.ai-profile-summary]
     verify_jwt = true
   [functions.allocate-committee]
