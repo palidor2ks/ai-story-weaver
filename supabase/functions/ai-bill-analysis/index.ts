@@ -1,5 +1,7 @@
 // AI-powered analysis of a specific bill and a candidate's sponsorship/cosponsorship
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { callYouSmart, YouError, type YouCitation } from "../_shared/you-search.ts";
+import { computeDeterministicConfidence } from "../_shared/confidence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,6 +59,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const perplexityKey = Deno.env.get("PERPLEXITY_API_KEY");
+    const youKey = Deno.env.get("YOU_API_KEY");
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
 
     const userClient = createClient(supabaseUrl, anonKey, {
@@ -65,8 +68,8 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData?.user) return json({ error: "Unauthorized" }, 401);
 
-    if (!perplexityKey && !lovableKey) {
-      return json({ error: "No AI provider configured (PERPLEXITY_API_KEY or LOVABLE_API_KEY)" }, 500);
+    if (!perplexityKey && !youKey && !lovableKey) {
+      return json({ error: "No AI provider configured (PERPLEXITY_API_KEY, YOU_API_KEY, or LOVABLE_API_KEY)" }, 500);
     }
 
     let body: RequestBody;
@@ -133,9 +136,10 @@ Output ONLY a JSON object, no prose:
     const geminiSystemPrompt =
       "You are a nonpartisan legislative analyst. You do not have live web search — ground every claim in the bill metadata provided in the user prompt and well-known public knowledge. Never invent vote counts, sponsor names, or quotes. If you cannot confidently identify the bill, set insufficient_information=true and cap confidence at 30. Output strict JSON only.";
 
-    let provider: "perplexity" | "gemini" | null = null;
+    let provider: "perplexity" | "you" | "gemini" | null = null;
     let content = "";
     let citations: string[] = [];
+    let youCitations: YouCitation[] = [];
     let lastError: { status: number; code: string; message: string } | null = null;
     const providerErrors: { provider: string; status: number; code: string }[] = [];
 
@@ -181,6 +185,26 @@ Output ONLY a JSON object, no prose:
             : `Perplexity service error (${ppxResp.status}).`,
         };
         providerErrors.push({ provider: "perplexity", status: ppxResp.status, code: lastError.code });
+      }
+    }
+
+    if (!provider && youKey) {
+      console.log("Trying You.com Smart as grounded-search fallback");
+      try {
+        const yres = await callYouSmart({ query: searchPrompt, apiKey: youKey, systemPrompt });
+        content = yres.content;
+        youCitations = yres.citations;
+        citations = yres.citations.map((c) => c.url);
+        provider = "you";
+      } catch (e) {
+        const ye = e as YouError;
+        console.error("You.com fallback error", ye?.status, ye?.message);
+        lastError = {
+          status: ye?.status ?? 500,
+          code: ye?.code ?? "YOU_ERROR",
+          message: ye?.message ?? "You.com fallback failed.",
+        };
+        providerErrors.push({ provider: "you", status: ye?.status ?? 500, code: ye?.code ?? "YOU_ERROR" });
       }
     }
 
@@ -231,12 +255,15 @@ Output ONLY a JSON object, no prose:
       return json({ error: "Could not parse AI response. Please regenerate." }, 500);
     }
 
-    const grounded: { title: string; url: string }[] = citations.map((url, i) => {
-      try {
-        const host = new URL(url).hostname.replace(/^www\./, "");
-        return { title: `${host} [${i + 1}]`, url };
-      } catch { return { title: url, url }; }
-    });
+    const grounded: { title: string; url: string; citation_index?: number }[] =
+      provider === "you"
+        ? youCitations.map((c, i) => ({ title: c.title, url: c.url, citation_index: i + 1 }))
+        : citations.map((url, i) => {
+            try {
+              const host = new URL(url).hostname.replace(/^www\./, "");
+              return { title: host, url, citation_index: i + 1 };
+            } catch { return { title: url, url }; }
+          });
     const modelSources = Array.isArray(parsed.sources) ? parsed.sources : [];
     const sourceMap = new Map<string, { title: string; url: string }>();
     [...grounded, ...modelSources].forEach((s: any) => {
@@ -244,10 +271,14 @@ Output ONLY a JSON object, no prose:
     });
     const sources = Array.from(sourceMap.values());
 
+    let confidence = computeDeterministicConfidence(grounded);
     let insufficient = Boolean(parsed.insufficient_information);
-    if (grounded.length === 0 && provider === "perplexity") insufficient = true;
-    let confidence = Math.max(0, Math.min(100, Math.round(Number(parsed.confidence ?? 0))));
+    if (grounded.length === 0) insufficient = true;
     if (insufficient) confidence = Math.min(confidence, 20);
+    const groundedFailed = providerErrors.length > 0 && grounded.length === 0;
+    const confidence_rationale = groundedFailed
+      ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
+      : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
 
     return json({
       provider,
@@ -263,7 +294,7 @@ Output ONLY a JSON object, no prose:
       public_context_claims: Array.isArray(parsed.public_context_claims) ? parsed.public_context_claims : [],
       insufficient_information: insufficient,
       confidence,
-      confidence_rationale: String(parsed.confidence_rationale ?? ""),
+      confidence_rationale,
       sources,
     });
   } catch (e) {
