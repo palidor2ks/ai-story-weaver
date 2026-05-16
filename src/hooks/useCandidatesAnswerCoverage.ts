@@ -176,12 +176,13 @@ function useQuestionCounts() {
   });
 }
 
-export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean; limit?: number }) {
+export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean; limit?: number; financeCycle?: string }) {
   const limit = options?.limit;
+  const financeCycle = options?.financeCycle ?? '2026';
   const { data: questionCounts } = useQuestionCounts();
   
   return useQuery({
-    queryKey: ['candidates-answer-coverage', filters, limit ?? 'all'],
+    queryKey: ['candidates-answer-coverage', filters, limit ?? 'all', financeCycle],
     enabled: options?.enabled !== false && !!questionCounts,
     placeholderData: (previousData) => previousData, // Keep previous data during filter transitions
     queryFn: async (): Promise<CandidateAnswerCoverage[]> => {
@@ -218,7 +219,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         return [];
       }
 
-      const FINANCE_CYCLE = '2026';
+      const FINANCE_CYCLE = financeCycle;
 
       // Run ALL supporting queries in parallel for maximum performance
       const [
@@ -736,18 +737,20 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
 }
 
 // Progressive loading wrapper: loads first 20 instantly, then all in background
-export function useCandidatesAnswerCoverageProgressive(filters: Filters = {}, options?: { enabled?: boolean }) {
+export function useCandidatesAnswerCoverageProgressive(filters: Filters = {}, options?: { enabled?: boolean; financeCycle?: string }) {
   const INITIAL_LIMIT = 20;
   
   // Phase 1: Quick load first 20 candidates
   const initialQuery = useCandidatesAnswerCoverage(filters, { 
     ...options, 
-    limit: INITIAL_LIMIT 
+    limit: INITIAL_LIMIT,
+    financeCycle: options?.financeCycle,
   });
   
   // Phase 2: Load ALL after initial is done (different query key due to limit)
   const fullQuery = useCandidatesAnswerCoverage(filters, { 
     enabled: options?.enabled !== false && initialQuery.isSuccess,
+    financeCycle: options?.financeCycle,
     // No limit = fetch all
   });
   

@@ -13,6 +13,7 @@ import {
 
 const PAGE_SIZE = 20;
 import { useCandidatesAnswerCoverageProgressive, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
+import { useFinanceCycles } from "@/hooks/useFinanceCycles";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
 import { useEnrichCandidateSources } from "@/hooks/useCandidateAnswers";
 import { useFECIntegration } from "@/hooks/useFECIntegration";
@@ -135,6 +136,24 @@ export function AnswerCoveragePanel() {
   const [scoreFilter, setScoreFilter] = useState<'all' | 'left' | 'center' | 'right'>('all');
   const [tierFilter, setTierFilter] = useState<'all' | 'T1' | 'T2' | 'T3'>('all');
   const [fecIdFilter, setFecIdFilter] = useState<'all' | 'has_id' | 'missing' | 'mismatch'>('all');
+
+  // Finance cycle selector (drives $, FEC, Local, Delta columns and finance actions)
+  const { data: availableCycles } = useFinanceCycles();
+  const [financeCycle, setFinanceCycleState] = useState<string>(() => {
+    if (typeof window === 'undefined') return '2026';
+    return localStorage.getItem('admin.financeCycle') ?? '2026';
+  });
+  const setFinanceCycle = useCallback((cycle: string) => {
+    setFinanceCycleState(cycle);
+    try { localStorage.setItem('admin.financeCycle', cycle); } catch {}
+  }, []);
+  // If persisted cycle disappears from the available list, snap to newest
+  useEffect(() => {
+    if (!availableCycles || availableCycles.length === 0) return;
+    if (!availableCycles.includes(financeCycle)) {
+      setFinanceCycle(availableCycles[0]);
+    }
+  }, [availableCycles, financeCycle, setFinanceCycle]);
   
   // Edit dialog state
   const [editingCandidate, setEditingCandidate] = useState<CandidateAnswerCoverage | null>(null);
@@ -195,7 +214,7 @@ export function AnswerCoveragePanel() {
 
   const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, isLoadingMore, refetch: refetchCandidates } = useCandidatesAnswerCoverageProgressive(
     queryFilters,
-    { enabled: hasSelectedFilters }
+    { enabled: hasSelectedFilters, financeCycle }
   );
   
   // Error tracking for Phase 2
@@ -546,7 +565,7 @@ export function AnswerCoveragePanel() {
         toast.info('No candidates with FEC IDs found. Link FEC IDs first.');
         return;
       }
-      const results = await batchFetchDonors(toProcess, '2026');
+      const results = await batchFetchDonors(toProcess, financeCycle);
       toast.success(
         `Imported ${results.totalImported} donors for ${results.success} candidates ` +
         `($${results.totalRaised.toLocaleString()} total)`
@@ -565,7 +584,7 @@ export function AnswerCoveragePanel() {
         name: c.name,
         fecCandidateId: c.fecCandidateId!
       }));
-      const results = await resumeAllPartialSyncs(toProcess, '2026');
+      const results = await resumeAllPartialSyncs(toProcess, financeCycle);
       toast.success(
         `Resumed ${results.resumed} syncs: ${results.completed} completed, ` +
         `${results.stillPartial} still partial. ` +
@@ -586,7 +605,7 @@ export function AnswerCoveragePanel() {
         return;
       }
       toast.info(`Refreshing FEC totals for ${toProcess.length} candidates...`);
-      const results = await batchRefreshFECTotals(toProcess, '2026');
+      const results = await batchRefreshFECTotals(toProcess, financeCycle);
       toast.success(
         `Refreshed FEC totals: ${results.success} succeeded, ${results.failed} failed, ${results.skipped} skipped`
       );
@@ -644,7 +663,7 @@ export function AnswerCoveragePanel() {
               <BarChart3 className="h-5 w-5 text-primary" />
               Coverage & Finance Dashboard
               <Badge variant="outline" className="ml-2 text-xs font-normal">
-                Cycle 2026 ({getCycleDateRange('2026')})
+                Cycle {financeCycle} ({getCycleDateRange(financeCycle)})
               </Badge>
             </CardTitle>
             <CardDescription>
@@ -882,7 +901,7 @@ export function AnswerCoveragePanel() {
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction 
-                        onClick={() => syncAllCandidatesComplete('2026')}
+                        onClick={() => syncAllCandidatesComplete(financeCycle)}
                         className="bg-green-600 hover:bg-green-700"
                       >Start Full Sync</AlertDialogAction>
                     </AlertDialogFooter>
@@ -932,7 +951,7 @@ export function AnswerCoveragePanel() {
                     e.preventDefault();
                     setIsBatchReconciling(true);
                     try {
-                      const result = await runBatchReconciliation('2026', 200);
+                      const result = await runBatchReconciliation(financeCycle, 200);
                       toast.success(`Reconciliation complete: ${result.success} OK, ${result.warnings} warnings, ${result.failed} errors`);
                       refetchCandidates();
                     } catch (err) {
@@ -1951,6 +1970,20 @@ export function AnswerCoveragePanel() {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Cycle:</span>
+            <Select value={financeCycle} onValueChange={setFinanceCycle}>
+              <SelectTrigger className="w-[90px] h-7 text-xs bg-background">
+                <SelectValue placeholder="Cycle" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                {(availableCycles ?? [financeCycle]).map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Candidates Table */}
@@ -2522,7 +2555,7 @@ export function AnswerCoveragePanel() {
                                                 candidate.id,
                                                 candidate.fecCandidateId!,
                                                 candidate.name,
-                                                '2026',
+                                                financeCycle,
                                                 false
                                               );
                                               if (result.success) {
@@ -2558,7 +2591,7 @@ export function AnswerCoveragePanel() {
                                                   candidate.id,
                                                   candidate.fecCandidateId!,
                                                   candidate.name,
-                                                  '2026',
+                                                  financeCycle,
                                                   false
                                                 );
                                                 if (result.success) {
@@ -2590,7 +2623,7 @@ export function AnswerCoveragePanel() {
                                                   candidate.id,
                                                   candidate.fecCandidateId!,
                                                   candidate.name,
-                                                  '2026'
+                                                  financeCycle
                                                 );
                                                 if (result.success) {
                                                   if (result.hasMore) {
@@ -2626,7 +2659,7 @@ export function AnswerCoveragePanel() {
                                                 candidate.id,
                                                 candidate.fecCandidateId!,
                                                 candidate.name,
-                                                '2026',
+                                                financeCycle,
                                                 false
                                               );
                                               if (result.success) {
@@ -2655,7 +2688,7 @@ export function AnswerCoveragePanel() {
                                               candidate.id,
                                               candidate.fecCandidateId!,
                                               candidate.name,
-                                              '2026'
+                                              financeCycle
                                             );
                                             if (result.success) {
                                               toast.success(`Re-sync started: ${result.imported} donors`);
@@ -2692,7 +2725,7 @@ export function AnswerCoveragePanel() {
                                       void (async () => {
                                         try {
                                           toast.info(`Refreshing FEC totals...`);
-                                          const result = await refreshFECTotals(candidate.id, '2026');
+                                          const result = await refreshFECTotals(candidate.id, financeCycle);
                                           if (result.success) {
                                             toast.success(`FEC totals updated`);
                                             refetchCandidates();
@@ -2716,7 +2749,7 @@ export function AnswerCoveragePanel() {
                                       e.preventDefault();
                                       void (async () => {
                                         try {
-                                          const result = await triggerReconciliation(candidate.id, '2026');
+                                          const result = await triggerReconciliation(candidate.id, financeCycle);
                                           if (result.success) {
                                             toast.success(`Finance refreshed: ${result.status}`);
                                             refetchCandidates();
