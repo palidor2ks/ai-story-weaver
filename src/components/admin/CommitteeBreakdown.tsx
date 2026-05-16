@@ -357,10 +357,9 @@ export function CommitteeBreakdown({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="2024">2024</SelectItem>
-              <SelectItem value="2022">2022</SelectItem>
-              <SelectItem value="2020">2020</SelectItem>
-              <SelectItem value="2018">2018</SelectItem>
+              {availableCycles.map(cy => (
+                <SelectItem key={cy} value={cy}>{cy}</SelectItem>
+              ))}
               <SelectItem value="all">All</SelectItem>
             </SelectContent>
           </Select>
