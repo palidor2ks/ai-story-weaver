@@ -37,6 +37,8 @@ Deno.serve(async (req) => {
     if (file.type !== 'image/png') return json({ error: 'png only' }, 400);
     if (file.size > 3 * 1024 * 1024) return json({ error: 'file too large' }, 400);
     if (!/^https?:\/\//i.test(targetUrl)) return json({ error: 'invalid targetUrl' }, 400);
+    if (/[<>"'`\s]/.test(targetUrl)) return json({ error: 'invalid targetUrl characters' }, 400);
+    try { new URL(targetUrl); } catch { return json({ error: 'invalid targetUrl' }, 400); }
 
     // Require authentication to prevent storage abuse by anonymous callers
     const authHeader = req.headers.get('Authorization') ?? '';
