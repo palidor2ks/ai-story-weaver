@@ -704,7 +704,14 @@ export function DonorImportPanel() {
         {/* Configuration */}
         <div className={multiCommittee ? 'space-y-2' : 'grid grid-cols-2 gap-4'}>
           <div className="space-y-2">
-            <Label htmlFor="cycle">Election Cycle</Label>
+            <Label htmlFor="cycle" className="flex items-center gap-2">
+              Election Cycle
+              {detectedCycle && (
+                <Badge variant="outline" className={detectedCycle !== cycle ? 'text-amber-600 border-amber-500/50' : 'text-green-600 border-green-500/50'}>
+                  Detected: {detectedCycle}{detectedCycle !== cycle ? ' (mismatch!)' : ''}
+                </Badge>
+              )}
+            </Label>
             <Select value={cycle} onValueChange={setCycle} disabled={isImporting}>
               <SelectTrigger>
                 <SelectValue />
