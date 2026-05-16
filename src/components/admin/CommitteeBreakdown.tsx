@@ -45,7 +45,10 @@ export function CommitteeBreakdown({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
-  const [selectedCycle, setSelectedCycle] = useState<string>('2024');
+  const [selectedCycle, setSelectedCycle] = useState<string>(() => {
+    const y = new Date().getFullYear();
+    return String(y % 2 === 0 ? y : y + 1);
+  });
   const [hideInactive, setHideInactive] = useState(true);
   const [designationFilter, setDesignationFilter] = useState<'campaign' | 'external' | 'all'>('campaign');
 

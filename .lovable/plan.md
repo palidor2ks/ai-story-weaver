@@ -1,34 +1,26 @@
-## Problem
+## Goal
+Make the Cycle dropdown in the Committee Management popover always reflect cycles that actually exist for the candidate's committees, so 2026 (and any future cycle) appears automatically without code changes.
 
-`sync-all-donors` calls `fetch-fec-donors` 50 times and every call returns **401 Unauthorized**, even though we added `headers: { Authorization: authHeader }` to the invoke last round.
+## Changes
 
-Root cause: the `sync-all-donors` Supabase client is created with the **service-role key**, so `supabase.functions.invoke()` sends the service-role JWT in the `Authorization` header. The per-invoke `headers` option is *merged* with the client's defaults, but the client's default `Authorization` header wins — the user's admin JWT never reaches `fetch-fec-donors`. When `fetch-fec-donors` runs `auth.getUser()` against the service-role JWT, it returns no user → 401.
+**File:** `src/components/admin/CommitteeBreakdown.tsx`
 
-## Fix
+1. Compute a memoized `availableCycles` list from `committees[].cycles`:
+   - Flatten all `cycles` arrays across the candidate's committees
+   - Add a baseline of the current federal cycle and previous one (so the list is never empty before sync)
+   - Dedupe and sort descending (newest first)
+   - Always append an `"all"` option at the end
 
-Two coordinated changes:
+2. Replace the hardcoded `<SelectItem>` list (lines 341–345) with `availableCycles.map(...)`.
 
-### 1. `fetch-fec-donors/index.ts` — allow service-role bypass
-At the admin auth block (~line 396), before calling `auth.getUser()`, check if the bearer token equals `SUPABASE_SERVICE_ROLE_KEY`. If yes, treat as trusted internal caller and skip the user/role check. Otherwise run the existing admin check unchanged.
+3. Change the default `selectedCycle` (line 48) from the hardcoded `'2024'` to the newest cycle in `availableCycles` (set via a `useEffect` once committees load, only if the current value isn't in the list).
 
-```ts
-const token = authHeader.replace('Bearer ', '');
-const isServiceRole = token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-if (!isServiceRole) {
-  // existing getUser + user_roles admin check
-}
-```
+4. If the current `selectedCycle` is no longer valid after committees load (e.g. candidate has no 2024 data), fall back to the newest available cycle.
 
-This is safe: the service-role key is server-only and only reachable from other edge functions.
+## Why this fixes the bug
+The dropdown was hardcoded to 2024/2022/2020/2018/All. ZDAN, ALEX's committee has a 2026 cycle in `candidate_committees.cycles`, but the UI never read that column, so 2026 was invisible. Deriving from the actual data fixes this candidate and every future cycle automatically.
 
-### 2. `sync-all-donors/index.ts` — call fetch-fec-donors with the service-role key explicitly
-Replace the `supabase.functions.invoke('fetch-fec-donors', { headers: { Authorization: authHeader }, body })` with a direct `fetch()` to the function URL passing `Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}` and `apikey: SUPABASE_ANON_KEY`. This guarantees the header isn't overridden by supabase-js defaults.
-
-Keep the existing per-request admin gate at the top of `sync-all-donors` so only admins can trigger the batch.
-
-## Result
-
-- Admin clicks "Sync donors" → `sync-all-donors` verifies admin → calls `fetch-fec-donors` with service-role token → fetch-fec-donors recognizes service-role and processes the candidate.
-- Direct admin-from-browser calls to `fetch-fec-donors` (per-committee/per-candidate UI buttons) continue to work because the service-role branch is skipped for non-matching tokens.
-
-No DB or UI changes required.
+## Out of scope
+- No DB changes
+- No edge function changes
+- No changes to `useAvailableCycles` (a separate hook used elsewhere) — this popover already has the committee data loaded locally, so a local memo is simpler and avoids an extra query.
