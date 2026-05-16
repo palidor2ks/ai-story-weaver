@@ -1,3 +1,7 @@
+-- Ensure return signatures can change safely when replaying migrations
+DROP FUNCTION IF EXISTS public.get_contribution_totals(text, text);
+DROP FUNCTION IF EXISTS public.get_contribution_totals_by_committee(text, text);
+
 -- Update get_contribution_totals to exclude Line 13A (candidate loans) from itemized_total
 CREATE OR REPLACE FUNCTION public.get_contribution_totals(p_candidate_id text, p_cycle text)
  RETURNS TABLE(individual_total bigint, pac_total bigint, party_total bigint, itemized_total bigint, transfers_total bigint, earmarked_total bigint, passthrough_total bigint, other_total bigint, loans_total bigint, contribution_count bigint)
