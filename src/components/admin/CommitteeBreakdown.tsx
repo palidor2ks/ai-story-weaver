@@ -118,6 +118,22 @@ export function CommitteeBreakdown({
     });
   }, [committees, selectedCycle, hideInactive, designationFilter]);
 
+  // Derive available cycles from the candidate's committees, plus baseline current/previous federal cycles
+  const availableCycles = useMemo(() => {
+    const year = new Date().getFullYear();
+    const currentCycle = year % 2 === 0 ? year : year + 1;
+    const set = new Set<string>([String(currentCycle), String(currentCycle - 2)]);
+    committees.forEach(c => (c.cycles || []).forEach(cy => cy && set.add(String(cy))));
+    return Array.from(set).sort((a, b) => Number(b) - Number(a));
+  }, [committees]);
+
+  // If the selected cycle isn't in the available list, snap to the newest available
+  useEffect(() => {
+    if (selectedCycle !== 'all' && availableCycles.length > 0 && !availableCycles.includes(selectedCycle)) {
+      setSelectedCycle(availableCycles[0]);
+    }
+  }, [availableCycles, selectedCycle]);
+
   useEffect(() => {
     fetchCommittees();
   }, [candidateId]);
