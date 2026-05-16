@@ -649,6 +649,21 @@ Deno.serve(async (req) => {
 
     // Upsert donors with retry
     let insertedDonors = 0;
+    // Pre-check existing donor IDs so we only tag NEW donor rows with this import_session_id.
+    // (Otherwise pre-existing donors would get "stolen" by this session and risk being deleted on undo.)
+    const allDonorIds = Array.from(donorAggregates.keys());
+    const existingDonorIds = new Set<string>();
+    if (sessionId) {
+      const DONOR_CHECK_CHUNK = 500;
+      for (let i = 0; i < allDonorIds.length; i += DONOR_CHECK_CHUNK) {
+        const idChunk = allDonorIds.slice(i, i + DONOR_CHECK_CHUNK);
+        const { data: existingDonors } = await supabase
+          .from('donors')
+          .select('id')
+          .in('id', idChunk);
+        for (const r of existingDonors || []) existingDonorIds.add(r.id);
+      }
+    }
     const donorRows = Array.from(donorAggregates.values()).map(d => ({
       id: d.id,
       name: d.name,
@@ -669,7 +684,8 @@ Deno.serve(async (req) => {
       recipient_committee_id: d.recipientCommitteeId,
       recipient_committee_name: d.recipientCommitteeName,
       candidate_id: d.candidateId,
-      import_session_id: sessionId || null
+      // Only tag NEW donors with this session for safe undo behavior
+      import_session_id: (sessionId && !existingDonorIds.has(d.id)) ? sessionId : null
     }));
 
     const totalDonorChunks = Math.ceil(donorRows.length / DONOR_CHUNK_SIZE);
