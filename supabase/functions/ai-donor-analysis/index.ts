@@ -161,7 +161,37 @@ Deno.serve(async (req) => {
 
     // Detect FEC committee ID pattern in donor_id (e.g. "fec-C00...")
     const fecCommitteeMatch = donor_id.match(/C\d{8}/i);
-    const fecCommitteeId = fecCommitteeMatch ? fecCommitteeMatch[0].toUpperCase() : null;
+    let fecCommitteeId: string | null = fecCommitteeMatch ? fecCommitteeMatch[0].toUpperCase() : null;
+    let aliasCanonicalName: string | null = null;
+
+    // Look up donor alias for an FEC committee anchor. Matches across all
+    // raw name variants attached to this donor (handles cases where the
+    // display_name string itself isn't the FEC canonical name).
+    try {
+      const rawNames = Array.from(new Set([
+        donor_name,
+        ...rows.map((r: any) => String(r.name ?? "")).filter(Boolean),
+      ]));
+      const { data: memberRows } = await admin
+        .from("donor_alias_members")
+        .select("alias_id, donor_aliases!inner(canonical_name, fec_committee_id, is_active)")
+        .in("donor_name", rawNames)
+        .eq("donor_type", donor_type);
+      const hit = (memberRows ?? []).find(
+        (m: any) => m?.donor_aliases?.is_active && m?.donor_aliases?.fec_committee_id,
+      );
+      if (hit) {
+        const a = (hit as any).donor_aliases;
+        fecCommitteeId = fecCommitteeId ?? String(a.fec_committee_id).toUpperCase();
+        aliasCanonicalName = String(a.canonical_name);
+      } else {
+        // Even without an FEC ID, surface the canonical name if any alias matched
+        const anyHit = (memberRows ?? []).find((m: any) => m?.donor_aliases?.is_active);
+        if (anyHit) aliasCanonicalName = String((anyHit as any).donor_aliases.canonical_name);
+      }
+    } catch (e) {
+      console.warn("alias FEC lookup failed", e);
+    }
 
     // Build a search query that disambiguates the entity using our anchors.
     const topRecipNames = topRecipients.slice(0, 5).map((r) => r.name).join(", ");
