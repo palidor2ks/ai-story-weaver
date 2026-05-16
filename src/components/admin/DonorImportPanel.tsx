@@ -11,6 +11,7 @@ import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Exte
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
+import { DonorImportHistory } from './DonorImportHistory';
 
 interface ImportStats {
   totalRows: number;
