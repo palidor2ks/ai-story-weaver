@@ -294,7 +294,7 @@ Output ONLY a JSON object, no prose:
       public_context_claims: Array.isArray(parsed.public_context_claims) ? parsed.public_context_claims : [],
       insufficient_information: insufficient,
       confidence,
-      confidence_rationale: String(parsed.confidence_rationale ?? ""),
+      confidence_rationale,
       sources,
     });
   } catch (e) {
