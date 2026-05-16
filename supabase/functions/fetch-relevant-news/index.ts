@@ -627,6 +627,49 @@ Deno.serve(async (req: Request) => {
       .filter(it => !!it.title && !!it.url && !isGoogleHost(it.url))
       .map(({ ageHours: _a, ...rest }) => rest);
 
+    // Persist into cache for future requests scoped to these questions.
+    if (items.length > 0 && questionIds.length > 0) {
+      EdgeRuntime.waitUntil((async () => {
+        try {
+          for (const item of items) {
+            const { data: article } = await supabase
+              .from('news_articles')
+              .upsert({
+                url: item.url,
+                title: item.title,
+                source: item.source,
+                published_at: item.publishedAt,
+                snippet: item.snippet || null,
+              }, { onConflict: 'url' })
+              .select('id')
+              .single();
+
+            if (!article?.id) continue;
+
+            for (const questionId of questionIds) {
+              await supabase.from('news_article_questions').upsert({
+                article_id: article.id,
+                question_id: questionId,
+                relevance_score: item.relevanceScore,
+                matched_people: item.matchedPeople,
+                matched_topics: item.matchedTopics,
+              }, { onConflict: 'article_id,question_id' });
+
+              await supabase.from('question_news_feed_cache').upsert({
+                question_id: questionId,
+                article_id: article.id,
+                rank_score: item.relevanceScore,
+                window_label: windowLabel,
+                last_seen_at: new Date().toISOString(),
+              }, { onConflict: 'question_id,article_id' });
+            }
+          }
+        } catch (err) {
+          console.error('news cache persist failed', err);
+        }
+      })());
+    }
+
     return new Response(JSON.stringify({ items, window: windowLabel }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
