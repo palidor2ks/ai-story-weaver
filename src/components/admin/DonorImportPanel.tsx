@@ -498,7 +498,17 @@ export function DonorImportPanel() {
             setProgress(100);
             setActiveSessionId(null);
             currentSessionRef.current = null;
-            
+
+            // Mark session completed
+            try {
+              await supabase
+                .from('donor_import_sessions')
+                .update({ status: errors.length > 0 ? 'completed_with_errors' : 'completed', completed_at: new Date().toISOString() })
+                .eq('id', sessionId);
+            } catch (e) { /* non-fatal */ }
+            delete (window as any).__force_cycle_mismatch;
+            setHistoryKey(k => k + 1);
+
             if (errors.length > 0) {
               toast.warning(`Import complete with ${errors.length} errors: ${insertedContributions} contributions added`);
             } else {
