@@ -13,6 +13,7 @@ import {
 
 const PAGE_SIZE = 20;
 import { useCandidatesAnswerCoverageProgressive, useUniqueStates, useRecalculateCoverageTiers, CandidateAnswerCoverage } from "@/hooks/useCandidatesAnswerCoverage";
+import { useFinanceCycles } from "@/hooks/useFinanceCycles";
 import { usePopulateCandidateAnswers } from "@/hooks/usePopulateCandidateAnswers";
 import { useEnrichCandidateSources } from "@/hooks/useCandidateAnswers";
 import { useFECIntegration } from "@/hooks/useFECIntegration";
@@ -135,6 +136,24 @@ export function AnswerCoveragePanel() {
   const [scoreFilter, setScoreFilter] = useState<'all' | 'left' | 'center' | 'right'>('all');
   const [tierFilter, setTierFilter] = useState<'all' | 'T1' | 'T2' | 'T3'>('all');
   const [fecIdFilter, setFecIdFilter] = useState<'all' | 'has_id' | 'missing' | 'mismatch'>('all');
+
+  // Finance cycle selector (drives $, FEC, Local, Delta columns and finance actions)
+  const { data: availableCycles } = useFinanceCycles();
+  const [financeCycle, setFinanceCycleState] = useState<string>(() => {
+    if (typeof window === 'undefined') return '2026';
+    return localStorage.getItem('admin.financeCycle') ?? '2026';
+  });
+  const setFinanceCycle = useCallback((cycle: string) => {
+    setFinanceCycleState(cycle);
+    try { localStorage.setItem('admin.financeCycle', cycle); } catch {}
+  }, []);
+  // If persisted cycle disappears from the available list, snap to newest
+  useEffect(() => {
+    if (!availableCycles || availableCycles.length === 0) return;
+    if (!availableCycles.includes(financeCycle)) {
+      setFinanceCycle(availableCycles[0]);
+    }
+  }, [availableCycles, financeCycle, setFinanceCycle]);
   
   // Edit dialog state
   const [editingCandidate, setEditingCandidate] = useState<CandidateAnswerCoverage | null>(null);
@@ -195,7 +214,7 @@ export function AnswerCoveragePanel() {
 
   const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, isLoadingMore, refetch: refetchCandidates } = useCandidatesAnswerCoverageProgressive(
     queryFilters,
-    { enabled: hasSelectedFilters }
+    { enabled: hasSelectedFilters, financeCycle }
   );
   
   // Error tracking for Phase 2
@@ -644,7 +663,7 @@ export function AnswerCoveragePanel() {
               <BarChart3 className="h-5 w-5 text-primary" />
               Coverage & Finance Dashboard
               <Badge variant="outline" className="ml-2 text-xs font-normal">
-                Cycle 2026 ({getCycleDateRange('2026')})
+                Cycle {financeCycle} ({getCycleDateRange(financeCycle)})
               </Badge>
             </CardTitle>
             <CardDescription>
@@ -1948,6 +1967,20 @@ export function AnswerCoveragePanel() {
                 <SelectItem value="has_id">Has ID</SelectItem>
                 <SelectItem value="missing">Missing</SelectItem>
                 <SelectItem value="mismatch">Mismatch</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Cycle:</span>
+            <Select value={financeCycle} onValueChange={setFinanceCycle}>
+              <SelectTrigger className="w-[90px] h-7 text-xs bg-background">
+                <SelectValue placeholder="Cycle" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                {(availableCycles ?? [financeCycle]).map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
