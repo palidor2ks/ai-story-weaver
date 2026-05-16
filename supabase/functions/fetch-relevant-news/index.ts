@@ -468,12 +468,58 @@ Deno.serve(async (req: Request) => {
     const body: RequestBody = await req.json();
     const people = Array.isArray(body.people) ? body.people.slice(0, 12) : [];
     const topics = (body.topics || []).map(t => t.toLowerCase()).filter(Boolean);
+    const explicitQuestionIds = Array.isArray(body.questionIds) ? body.questionIds : [];
     const limit = Math.min(Math.max(body.limit ?? 20, 1), 50);
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     if (people.length === 0) {
       return new Response(JSON.stringify({ items: [], window: 'none' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // Resolve question IDs for caching. Only opt into the cache path when we have any —
+    // legacy callers without questionIds keep the original network-only behavior.
+    const questionIds = await resolveQuestionIds(supabase, explicitQuestionIds, topics);
+
+    if (questionIds.length > 0) {
+      const freshnessCutoff = new Date(Date.now() - 1000 * 60 * 30).toISOString();
+      const { data: cachedRows } = await supabase
+        .from('question_news_feed_cache')
+        .select('rank_score, window_label, last_seen_at, article:news_articles!inner(id,title,url,source,published_at,snippet)')
+        .in('question_id', questionIds)
+        .gte('last_seen_at', freshnessCutoff)
+        .order('rank_score', { ascending: false })
+        .limit(limit * 3);
+
+      if ((cachedRows || []).length > 0) {
+        const dedupCache = new Map<string, FeedNewsItem>();
+        for (const row of cachedRows || []) {
+          const article = (row as any).article;
+          if (!article?.url || dedupCache.has(article.url)) continue;
+          dedupCache.set(article.url, {
+            id: article.id,
+            title: article.title,
+            url: article.url,
+            source: article.source,
+            publishedAt: article.published_at,
+            snippet: article.snippet || '',
+            matchedPeople: [],
+            matchedTopics: [],
+            relevanceScore: (row as any).rank_score || 0,
+            isTopTopicHit: false,
+            isNew: (Date.now() - new Date(article.published_at).getTime()) <= 48 * 36e5,
+          });
+        }
+        const cachedItems = Array.from(dedupCache.values()).slice(0, limit);
+        const cachedWindow = ((cachedRows?.[0] as any)?.window_label as 'today' | 'week' | 'month' | 'none') || 'none';
+        return new Response(JSON.stringify({ items: cachedItems, window: cachedWindow }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const queries = buildQueries(people, body.state, body.district);
