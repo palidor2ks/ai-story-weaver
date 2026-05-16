@@ -324,8 +324,24 @@ export function DonorImportPanel() {
                 });
 
                 // Handle cycle-mismatch confirmation (HTTP 409)
-                if (error && (error.message?.includes('cycle_mismatch') || (error as any).status === 409)) {
-                  const ctxData = (error as any).context?.json ? await (error as any).context.json().catch(() => null) : null;
+                // supabase.functions.invoke wraps non-2xx as FunctionsHttpError with body on error.context (a Response).
+                let ctxData: any = null;
+                if (error) {
+                  const ctx: any = (error as any).context;
+                  if (ctx && typeof ctx.json === 'function') {
+                    ctxData = await ctx.json().catch(() => null);
+                  } else if (ctx && typeof ctx.text === 'function') {
+                    const t = await ctx.text().catch(() => null);
+                    try { ctxData = t ? JSON.parse(t) : null; } catch { ctxData = null; }
+                  }
+                }
+                const isCycleMismatch = !!error && (
+                  ctxData?.error === 'cycle_mismatch' ||
+                  (error as any).context?.status === 409 ||
+                  (error as any).status === 409 ||
+                  error.message?.includes('cycle_mismatch')
+                );
+                if (isCycleMismatch) {
                   const detected = ctxData?.detected_cycle || detectedCycle || '?';
                   const ok = window.confirm(
                     `Cycle mismatch: file looks like cycle ${detected} but you selected ${cycle}.\n\n` +
