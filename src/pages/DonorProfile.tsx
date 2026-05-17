@@ -152,6 +152,7 @@ const DonorProfile = () => {
   const [committeeFilter, setCommitteeFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [showAllRecipients, setShowAllRecipients] = useState(false);
+  const [showAllContributors, setShowAllContributors] = useState(false);
 
   // Fetch the specific donor record
   const { data: donor, isLoading: donorLoading } = useQuery({
@@ -643,6 +644,77 @@ const DonorProfile = () => {
           </div>
         </div>
 
+        {/* Top Contributors to this PAC (PAC/Org only, shown first) */}
+        {(donor.type === 'PAC' || donor.type === 'Organization') && pacContributors.length > 0 && (
+          <section>
+            <div className="flex items-center gap-3 mb-4">
+              <Users className="w-5 h-5 text-primary" />
+              <h2 className="font-display text-xl font-bold">Top Contributors to this PAC</h2>
+              <span className="text-sm text-muted-foreground">({pacContributors.length} total)</span>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {(showAllContributors ? pacContributors : pacContributors.slice(0, 6)).map((contributor, index) => {
+                const contributorKey = `contributor:${contributor.name}`;
+                return (
+                  <Card
+                    key={`${contributor.name}-${index}`}
+                    className="h-full transition-all hover:shadow-md hover:border-primary/30 group"
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                            {contributor.name}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {formatCompactNumber(contributor.contributionCount)} contribution{contributor.contributionCount === 1 ? '' : 's'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end pt-2 border-t border-border">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-agree">{formatAmount(contributor.totalAmount)}</span>
+                          <DonorAIAnalysisDialog
+                            id={contributorKey}
+                            name={contributor.name}
+                            type="Individual"
+                            trigger={
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-primary hover:text-primary"
+                                aria-label="Open AI analysis"
+                                title="Open AI analysis"
+                              >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                <span className="ml-1 text-xs font-semibold">AI</span>
+                              </Button>
+                            }
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {pacContributors.length > 6 && (
+              <div className="mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAllContributors(!showAllContributors)}
+                >
+                  {showAllContributors ? 'Show Top 6' : `View All Contributors (${pacContributors.length})`}
+                </Button>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* Top Recipients */}
         <section>
           <div className="flex items-center gap-3 mb-4">
@@ -731,46 +803,7 @@ const DonorProfile = () => {
           )}
         </section>
 
-        {(donor.type === 'PAC' || donor.type === 'Organization') && pacContributors.length > 0 && (
-          <section>
-            <div className="flex items-center gap-3 mb-4">
-              <Users className="w-5 h-5 text-primary" />
-              <h2 className="font-display text-xl font-bold">Top Contributors to this PAC</h2>
-              <span className="text-sm text-muted-foreground">({pacContributors.length} total)</span>
-            </div>
-
-            {pacContributors.length > 0 ? (
-              <div className="border border-border rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-muted/50 border-b border-border">
-                        <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3">Contributor</th>
-                        <th className="text-right text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3">Contributions</th>
-                        <th className="text-right text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-3">Total Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {pacContributors.slice(0, 100).map((contributor) => (
-                        <tr key={contributor.name} className="hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-3 font-medium text-foreground">{contributor.name}</td>
-                          <td className="px-4 py-3 text-right text-muted-foreground">{formatCompactNumber(contributor.contributionCount)}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-foreground">{formatAmount(contributor.totalAmount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="py-10 text-center text-muted-foreground">
-                  No contributor records found for this PAC yet.
-                </CardContent>
-              </Card>
-            )}
-          </section>
-        )}
+        {/* Top Contributors moved above Top Recipients */}
 
 
         {/* Detailed Contribution History */}
