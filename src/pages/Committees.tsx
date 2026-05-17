@@ -173,6 +173,16 @@ export const Committees = () => {
               </Select>
 
               <Button
+                variant={hideUnsynced ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => setHideUnsynced((v) => !v)}
+                disabled={isLoading}
+                className="h-10"
+              >
+                {hideUnsynced ? 'Hide unsynced' : 'Show all'}
+              </Button>
+
+              <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => {
@@ -180,6 +190,7 @@ export const Committees = () => {
                   setCycle(availableCycles[0] || 'all');
                   setDesignation('all');
                   setCandidateId('all');
+                  setHideUnsynced(true);
                 }}
                 disabled={isLoading}
               >
