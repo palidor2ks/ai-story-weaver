@@ -207,7 +207,9 @@ Deno.serve(async (req) => {
       : "";
     const cycleStr = cycles.length ? ` active in ${cycles.slice(-3).join(", ")}` : "";
     const anchorBits = [
-      fecCommitteeId ? `FEC committee ID ${fecCommitteeId}` : null,
+      fecCommitteeIds.length > 1
+        ? `FEC committee IDs ${fecCommitteeIds.join(", ")}`
+        : fecCommitteeId ? `FEC committee ID ${fecCommitteeId}` : null,
       aliasCanonicalName && aliasCanonicalName.toLowerCase() !== donor_name.toLowerCase()
         ? `also known as "${aliasCanonicalName}"`
         : null,
@@ -218,13 +220,15 @@ Deno.serve(async (req) => {
     ].filter(Boolean).join(", ");
 
     const primaryName = aliasCanonicalName ?? donor_name;
-    const fecAnchorLine = fecCommitteeId
-      ? `\n\nFEC ANCHOR: This donor is registered with the FEC under committee ID ${fecCommitteeId}${aliasCanonicalName ? ` (canonical name: "${aliasCanonicalName}")` : ""}. Use this as ground truth — the literal donor-name string above may be a filing variant.`
-      : "";
+    const fecAnchorLine = fecCommitteeIds.length > 1
+      ? `\n\nFEC ANCHOR: This donor is a parent entity that files under multiple FEC committees: ${fecCommitteeIds.join(", ")}${aliasCanonicalName ? ` (canonical name: "${aliasCanonicalName}")` : ""}. Analyze the parent organization across ALL of these committees — do not narrow the analysis to a single PAC. Treat any one of these IDs as confirmation of the same entity.`
+      : fecCommitteeId
+        ? `\n\nFEC ANCHOR: This donor is registered with the FEC under committee ID ${fecCommitteeId}${aliasCanonicalName ? ` (canonical name: "${aliasCanonicalName}")` : ""}. Use this as ground truth — the literal donor-name string above may be a filing variant.`
+        : "";
 
     const searchPrompt = `Research the political donor "${primaryName}"${anchorBits ? ` (${anchorBits})` : ""}.${fecAnchorLine}
 
-Use FEC.gov, OpenSecrets, ProPublica, FollowTheMoney, and major news outlets. Confirm you are looking at the SAME entity by matching the FEC committee ID, top recipients, and cycle activity above. If the search returns information about a different same-named entity, say so and stop.
+Use FEC.gov, OpenSecrets, ProPublica, FollowTheMoney, and major news outlets. Confirm you are looking at the SAME entity by matching ${fecCommitteeIds.length > 1 ? "any of the anchored FEC committee IDs" : "the FEC committee ID"}, top recipients, and cycle activity above. If the search returns information about a different same-named entity, say so and stop.
 
 Produce a concise, non-redundant structured analysis covering:
 - summary: 2-3 sentences identifying who they are and why they donate
