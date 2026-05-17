@@ -301,7 +301,19 @@ export function DonorAliasesPanel() {
                           </Button>
                         </TableCell>
                         <TableCell className="font-mono text-xs">
-                          {alias.fec_committee_id || '—'}
+                          {(() => {
+                            const ids = alias.fec_committee_ids && alias.fec_committee_ids.length
+                              ? alias.fec_committee_ids
+                              : alias.fec_committee_id ? [alias.fec_committee_id] : [];
+                            if (ids.length === 0) return '—';
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {ids.map((id) => (
+                                  <Badge key={id} variant="outline" className="font-mono text-[10px]">{id}</Badge>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           {alias.is_active ? (
