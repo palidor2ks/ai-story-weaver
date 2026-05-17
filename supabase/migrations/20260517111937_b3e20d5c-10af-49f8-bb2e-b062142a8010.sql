@@ -1,0 +1,1 @@
+UPDATE donors SET display_name = name WHERE display_name = 'SOROS FAMILY';
