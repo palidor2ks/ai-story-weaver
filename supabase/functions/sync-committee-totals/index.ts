@@ -154,20 +154,18 @@ serve(async (req) => {
           .not('candidate_id', 'is', null);
 
         if (linked && linked.length > 0) {
-          const uniqueCandidates = [...new Set(linked.map((l) => l.candidate_id).filter(Boolean))];
-          for (const candId of uniqueCandidates) {
-            await supabase
-              .from('committee_finance_rollups')
-              .upsert({
-                committee_id: c.fec_committee_id,
-                candidate_id: candId,
-                cycle,
-                fec_total_receipts: receipts,
-                fec_itemized: itemized,
-                contribution_count: contribCount,
-                last_fec_check: new Date().toISOString(),
-              }, { onConflict: 'committee_id,candidate_id,cycle' });
-          }
+          const candId = linked[0].candidate_id;
+          await supabase
+            .from('committee_finance_rollups')
+            .upsert({
+              committee_id: c.fec_committee_id,
+              candidate_id: candId,
+              cycle,
+              fec_total_receipts: receipts,
+              fec_itemized: itemized,
+              contribution_count: contribCount,
+              last_fec_check: new Date().toISOString(),
+            }, { onConflict: 'committee_id,cycle' });
         }
 
         results.success++;
