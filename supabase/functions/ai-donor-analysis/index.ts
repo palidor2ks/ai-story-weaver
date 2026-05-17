@@ -162,6 +162,7 @@ Deno.serve(async (req) => {
     // Detect FEC committee ID pattern in donor_id (e.g. "fec-C00...")
     const fecCommitteeMatch = donor_id.match(/C\d{8}/i);
     let fecCommitteeId: string | null = fecCommitteeMatch ? fecCommitteeMatch[0].toUpperCase() : null;
+    let fecCommitteeIds: string[] = fecCommitteeId ? [fecCommitteeId] : [];
     let aliasCanonicalName: string | null = null;
 
     // Look up donor alias for an FEC committee anchor. Matches across all
@@ -174,20 +175,26 @@ Deno.serve(async (req) => {
       ]));
       const { data: memberRows } = await admin
         .from("donor_alias_members")
-        .select("alias_id, donor_aliases!inner(canonical_name, fec_committee_id, is_active)")
+        .select("alias_id, donor_aliases!inner(canonical_name, fec_committee_id, fec_committee_ids, is_active)")
         .in("donor_name", rawNames)
         .eq("donor_type", donor_type);
-      const hit = (memberRows ?? []).find(
-        (m: any) => m?.donor_aliases?.is_active && m?.donor_aliases?.fec_committee_id,
+      const activeHits = (memberRows ?? []).filter(
+        (m: any) => m?.donor_aliases?.is_active,
       );
-      if (hit) {
-        const a = (hit as any).donor_aliases;
-        fecCommitteeId = fecCommitteeId ?? String(a.fec_committee_id).toUpperCase();
+      if (activeHits.length > 0) {
+        const a = (activeHits[0] as any).donor_aliases;
         aliasCanonicalName = String(a.canonical_name);
-      } else {
-        // Even without an FEC ID, surface the canonical name if any alias matched
-        const anyHit = (memberRows ?? []).find((m: any) => m?.donor_aliases?.is_active);
-        if (anyHit) aliasCanonicalName = String((anyHit as any).donor_aliases.canonical_name);
+        // Merge IDs from the array column (preferred) and scalar fallback
+        const arr = Array.isArray(a.fec_committee_ids) ? a.fec_committee_ids : [];
+        const merged = new Set<string>(fecCommitteeIds);
+        for (const id of arr) {
+          if (id) merged.add(String(id).toUpperCase());
+        }
+        if (a.fec_committee_id) merged.add(String(a.fec_committee_id).toUpperCase());
+        fecCommitteeIds = Array.from(merged);
+        if (!fecCommitteeId && fecCommitteeIds.length > 0) {
+          fecCommitteeId = fecCommitteeIds[0];
+        }
       }
     } catch (e) {
       console.warn("alias FEC lookup failed", e);
