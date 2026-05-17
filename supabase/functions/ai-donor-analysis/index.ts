@@ -261,9 +261,11 @@ Output ONLY a JSON object, no prose. Use this exact schema:
   "confidence_rationale": string
 }`;
 
-    const anchorRule = fecCommitteeId
-      ? " When an FEC ANCHOR committee ID is provided, treat it as ground truth: if search results confirm the same FEC ID (or the same committee name + treasurer + city), proceed at full confidence even if the literal donor-name string differs from the FEC canonical name. If results contradict the anchor (different FEC ID, different city, different treasurer), set insufficient_information=true and cap confidence at 20."
-      : "";
+    const anchorRule = fecCommitteeIds.length > 1
+      ? ` When FEC ANCHOR committee IDs are provided (a set of multiple IDs), treat the parent entity as ground truth: a match on ANY of the listed IDs (or the canonical name + treasurer + city) confirms the entity. Analyze the parent organization across all of these committees rather than narrowing to one PAC. Only set insufficient_information=true and cap confidence at 20 if results describe an entity that is not associated with ANY of the anchored IDs.`
+      : fecCommitteeId
+        ? " When an FEC ANCHOR committee ID is provided, treat it as ground truth: if search results confirm the same FEC ID (or the same committee name + treasurer + city), proceed at full confidence even if the literal donor-name string differs from the FEC canonical name. If results contradict the anchor (different FEC ID, different city, different treasurer), set insufficient_information=true and cap confidence at 20."
+        : "";
     const systemPrompt =
       "You are a nonpartisan campaign-finance analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, founders, or quotes. If the search results describe a different entity than the one anchored by the user, set insufficient_information=true and cap confidence at 20." + anchorRule + " Output strict JSON only.";
     const geminiSystemPrompt =
