@@ -86,10 +86,14 @@ export const Committees = () => {
   });
 
   const committees = useMemo(
-    () => (data?.pages.flatMap((page) => page.committees) ?? [])
-      .slice()
-      .sort((a, b) => b.totalRaised - a.totalRaised),
-    [data],
+    () => {
+      const all = (data?.pages.flatMap((page) => page.committees) ?? [])
+        .slice()
+        .sort((a, b) => b.totalRaised - a.totalRaised);
+      if (!hideUnsynced) return all;
+      return all.filter((c) => c.lastSyncDate || c.totalRaised > 0);
+    },
+    [data, hideUnsynced],
   );
 
   return (
