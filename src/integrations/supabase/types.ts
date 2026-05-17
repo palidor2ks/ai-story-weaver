@@ -994,6 +994,7 @@ export type Database = {
           canonical_name: string
           created_at: string | null
           fec_committee_id: string | null
+          fec_committee_ids: string[]
           id: string
           is_active: boolean | null
           notes: string | null
@@ -1003,6 +1004,7 @@ export type Database = {
           canonical_name: string
           created_at?: string | null
           fec_committee_id?: string | null
+          fec_committee_ids?: string[]
           id?: string
           is_active?: boolean | null
           notes?: string | null
@@ -1012,6 +1014,7 @@ export type Database = {
           canonical_name?: string
           created_at?: string | null
           fec_committee_id?: string | null
+          fec_committee_ids?: string[]
           id?: string
           is_active?: boolean | null
           notes?: string | null

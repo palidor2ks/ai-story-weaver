@@ -162,6 +162,7 @@ Deno.serve(async (req) => {
     // Detect FEC committee ID pattern in donor_id (e.g. "fec-C00...")
     const fecCommitteeMatch = donor_id.match(/C\d{8}/i);
     let fecCommitteeId: string | null = fecCommitteeMatch ? fecCommitteeMatch[0].toUpperCase() : null;
+    let fecCommitteeIds: string[] = fecCommitteeId ? [fecCommitteeId] : [];
     let aliasCanonicalName: string | null = null;
 
     // Look up donor alias for an FEC committee anchor. Matches across all
@@ -174,20 +175,26 @@ Deno.serve(async (req) => {
       ]));
       const { data: memberRows } = await admin
         .from("donor_alias_members")
-        .select("alias_id, donor_aliases!inner(canonical_name, fec_committee_id, is_active)")
+        .select("alias_id, donor_aliases!inner(canonical_name, fec_committee_id, fec_committee_ids, is_active)")
         .in("donor_name", rawNames)
         .eq("donor_type", donor_type);
-      const hit = (memberRows ?? []).find(
-        (m: any) => m?.donor_aliases?.is_active && m?.donor_aliases?.fec_committee_id,
+      const activeHits = (memberRows ?? []).filter(
+        (m: any) => m?.donor_aliases?.is_active,
       );
-      if (hit) {
-        const a = (hit as any).donor_aliases;
-        fecCommitteeId = fecCommitteeId ?? String(a.fec_committee_id).toUpperCase();
+      if (activeHits.length > 0) {
+        const a = (activeHits[0] as any).donor_aliases;
         aliasCanonicalName = String(a.canonical_name);
-      } else {
-        // Even without an FEC ID, surface the canonical name if any alias matched
-        const anyHit = (memberRows ?? []).find((m: any) => m?.donor_aliases?.is_active);
-        if (anyHit) aliasCanonicalName = String((anyHit as any).donor_aliases.canonical_name);
+        // Merge IDs from the array column (preferred) and scalar fallback
+        const arr = Array.isArray(a.fec_committee_ids) ? a.fec_committee_ids : [];
+        const merged = new Set<string>(fecCommitteeIds);
+        for (const id of arr) {
+          if (id) merged.add(String(id).toUpperCase());
+        }
+        if (a.fec_committee_id) merged.add(String(a.fec_committee_id).toUpperCase());
+        fecCommitteeIds = Array.from(merged);
+        if (!fecCommitteeId && fecCommitteeIds.length > 0) {
+          fecCommitteeId = fecCommitteeIds[0];
+        }
       }
     } catch (e) {
       console.warn("alias FEC lookup failed", e);
@@ -200,7 +207,9 @@ Deno.serve(async (req) => {
       : "";
     const cycleStr = cycles.length ? ` active in ${cycles.slice(-3).join(", ")}` : "";
     const anchorBits = [
-      fecCommitteeId ? `FEC committee ID ${fecCommitteeId}` : null,
+      fecCommitteeIds.length > 1
+        ? `FEC committee IDs ${fecCommitteeIds.join(", ")}`
+        : fecCommitteeId ? `FEC committee ID ${fecCommitteeId}` : null,
       aliasCanonicalName && aliasCanonicalName.toLowerCase() !== donor_name.toLowerCase()
         ? `also known as "${aliasCanonicalName}"`
         : null,
@@ -211,13 +220,15 @@ Deno.serve(async (req) => {
     ].filter(Boolean).join(", ");
 
     const primaryName = aliasCanonicalName ?? donor_name;
-    const fecAnchorLine = fecCommitteeId
-      ? `\n\nFEC ANCHOR: This donor is registered with the FEC under committee ID ${fecCommitteeId}${aliasCanonicalName ? ` (canonical name: "${aliasCanonicalName}")` : ""}. Use this as ground truth — the literal donor-name string above may be a filing variant.`
-      : "";
+    const fecAnchorLine = fecCommitteeIds.length > 1
+      ? `\n\nFEC ANCHOR: This donor is a parent entity that files under multiple FEC committees: ${fecCommitteeIds.join(", ")}${aliasCanonicalName ? ` (canonical name: "${aliasCanonicalName}")` : ""}. Analyze the parent organization across ALL of these committees — do not narrow the analysis to a single PAC. Treat any one of these IDs as confirmation of the same entity.`
+      : fecCommitteeId
+        ? `\n\nFEC ANCHOR: This donor is registered with the FEC under committee ID ${fecCommitteeId}${aliasCanonicalName ? ` (canonical name: "${aliasCanonicalName}")` : ""}. Use this as ground truth — the literal donor-name string above may be a filing variant.`
+        : "";
 
     const searchPrompt = `Research the political donor "${primaryName}"${anchorBits ? ` (${anchorBits})` : ""}.${fecAnchorLine}
 
-Use FEC.gov, OpenSecrets, ProPublica, FollowTheMoney, and major news outlets. Confirm you are looking at the SAME entity by matching the FEC committee ID, top recipients, and cycle activity above. If the search returns information about a different same-named entity, say so and stop.
+Use FEC.gov, OpenSecrets, ProPublica, FollowTheMoney, and major news outlets. Confirm you are looking at the SAME entity by matching ${fecCommitteeIds.length > 1 ? "any of the anchored FEC committee IDs" : "the FEC committee ID"}, top recipients, and cycle activity above. If the search returns information about a different same-named entity, say so and stop.
 
 Produce a concise, non-redundant structured analysis covering:
 - summary: 2-3 sentences identifying who they are and why they donate
@@ -250,9 +261,11 @@ Output ONLY a JSON object, no prose. Use this exact schema:
   "confidence_rationale": string
 }`;
 
-    const anchorRule = fecCommitteeId
-      ? " When an FEC ANCHOR committee ID is provided, treat it as ground truth: if search results confirm the same FEC ID (or the same committee name + treasurer + city), proceed at full confidence even if the literal donor-name string differs from the FEC canonical name. If results contradict the anchor (different FEC ID, different city, different treasurer), set insufficient_information=true and cap confidence at 20."
-      : "";
+    const anchorRule = fecCommitteeIds.length > 1
+      ? ` When FEC ANCHOR committee IDs are provided (a set of multiple IDs), treat the parent entity as ground truth: a match on ANY of the listed IDs (or the canonical name + treasurer + city) confirms the entity. Analyze the parent organization across all of these committees rather than narrowing to one PAC. Only set insufficient_information=true and cap confidence at 20 if results describe an entity that is not associated with ANY of the anchored IDs.`
+      : fecCommitteeId
+        ? " When an FEC ANCHOR committee ID is provided, treat it as ground truth: if search results confirm the same FEC ID (or the same committee name + treasurer + city), proceed at full confidence even if the literal donor-name string differs from the FEC canonical name. If results contradict the anchor (different FEC ID, different city, different treasurer), set insufficient_information=true and cap confidence at 20."
+        : "";
     const systemPrompt =
       "You are a nonpartisan campaign-finance analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, founders, or quotes. If the search results describe a different entity than the one anchored by the user, set insufficient_information=true and cap confidence at 20." + anchorRule + " Output strict JSON only.";
     const geminiSystemPrompt =
@@ -433,6 +446,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
         party_breakdown: partyBreakdown,
         top_recipients: topRecipients,
         fec_committee_id: fecCommitteeId,
+        fec_committee_ids: fecCommitteeIds,
         alias_canonical_name: aliasCanonicalName,
       },
     });

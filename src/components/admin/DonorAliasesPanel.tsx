@@ -75,10 +75,12 @@ export function DonorAliasesPanel() {
   const [viewMembersFor, setViewMembersFor] = useState<DonorAlias | null>(null);
   const [formData, setFormData] = useState<DonorAliasInput>({
     canonical_name: '',
-    fec_committee_id: '',
+    fec_committee_ids: [],
     notes: '',
     is_active: true,
   });
+  // Raw text the admin types in the FEC IDs field (comma- or newline-separated).
+  const [fecIdsText, setFecIdsText] = useState('');
 
   // Donor search state
   const [donorSearch, setDonorSearch] = useState('');
@@ -145,27 +147,37 @@ export function DonorAliasesPanel() {
 
   const handleOpenCreate = () => {
     setSelectedAlias(null);
-    setFormData({ canonical_name: '', fec_committee_id: '', notes: '', is_active: true });
+    setFormData({ canonical_name: '', fec_committee_ids: [], notes: '', is_active: true });
+    setFecIdsText('');
     setDialogOpen(true);
   };
 
   const handleOpenEdit = (alias: DonorAlias) => {
     setSelectedAlias(alias);
+    const ids = (alias.fec_committee_ids && alias.fec_committee_ids.length
+      ? alias.fec_committee_ids
+      : alias.fec_committee_id ? [alias.fec_committee_id] : []);
     setFormData({
       canonical_name: alias.canonical_name,
-      fec_committee_id: alias.fec_committee_id || '',
+      fec_committee_ids: ids,
       notes: alias.notes || '',
       is_active: alias.is_active,
     });
+    setFecIdsText(ids.join(', '));
     setDialogOpen(true);
   };
 
   const handleSubmit = async () => {
     if (!formData.canonical_name.trim()) return;
+    // Parse the FEC IDs textbox: split on commas/whitespace, uppercase, dedupe.
+    const ids = Array.from(new Set(
+      fecIdsText.split(/[\s,]+/).map((s) => s.trim().toUpperCase()).filter(Boolean),
+    ));
+    const payload: DonorAliasInput = { ...formData, fec_committee_ids: ids };
     if (selectedAlias) {
-      await updateMutation.mutateAsync({ id: selectedAlias.id, ...formData });
+      await updateMutation.mutateAsync({ id: selectedAlias.id, ...payload });
     } else {
-      await createMutation.mutateAsync(formData);
+      await createMutation.mutateAsync(payload);
     }
     setDialogOpen(false);
   };
@@ -289,7 +301,19 @@ export function DonorAliasesPanel() {
                           </Button>
                         </TableCell>
                         <TableCell className="font-mono text-xs">
-                          {alias.fec_committee_id || '—'}
+                          {(() => {
+                            const ids = alias.fec_committee_ids && alias.fec_committee_ids.length
+                              ? alias.fec_committee_ids
+                              : alias.fec_committee_id ? [alias.fec_committee_id] : [];
+                            if (ids.length === 0) return '—';
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {ids.map((id) => (
+                                  <Badge key={id} variant="outline" className="font-mono text-[10px]">{id}</Badge>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           {alias.is_active ? (
@@ -475,14 +499,16 @@ export function DonorAliasesPanel() {
               />
             </div>
             <div className="space-y-2">
-              <Label>FEC Committee ID (optional)</Label>
-              <Input
-                value={formData.fec_committee_id || ''}
-                onChange={(e) =>
-                  setFormData({ ...formData, fec_committee_id: e.target.value })
-                }
-                placeholder="C00..."
+              <Label>FEC Committee IDs (optional)</Label>
+              <Textarea
+                value={fecIdsText}
+                onChange={(e) => setFecIdsText(e.target.value)}
+                placeholder="C00502906, C00xxxxxx, C00yyyyyy"
+                rows={2}
               />
+              <p className="text-xs text-muted-foreground">
+                Separate multiple IDs with commas, spaces, or new lines. All listed committees are used as the AI analysis anchor so multi-PAC parent entities (e.g. Meta/Facebook) are analyzed as one organization.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Notes (optional)</Label>
