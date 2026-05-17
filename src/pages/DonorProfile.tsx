@@ -806,7 +806,8 @@ const DonorProfile = () => {
         {/* Top Contributors moved above Top Recipients */}
 
 
-        {/* Detailed Contribution History */}
+        {/* Detailed Contribution History — hidden for Individual donors */}
+        {donor.type !== 'Individual' && (
         <section>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
@@ -1004,6 +1005,7 @@ const DonorProfile = () => {
             )}
           </div>
         </section>
+        )}
       </main>
     </div>
   );
