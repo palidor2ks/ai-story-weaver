@@ -6,6 +6,7 @@ export interface DonorAlias {
   id: string;
   canonical_name: string;
   fec_committee_id: string | null;
+  fec_committee_ids: string[] | null;
   notes: string | null;
   is_active: boolean;
   created_at: string;
@@ -15,6 +16,7 @@ export interface DonorAlias {
 export interface DonorAliasInput {
   canonical_name: string;
   fec_committee_id?: string | null;
+  fec_committee_ids?: string[] | null;
   notes?: string | null;
   is_active?: boolean;
 }
