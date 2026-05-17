@@ -20,6 +20,8 @@ export interface FeedNewsItem {
   relevanceScore: number;
   isTopTopicHit: boolean;
   isNew: boolean;
+  topicLabel?: string;
+  relatedQuestion?: string;
 }
 
 export type NewsWindow = 'today' | 'week' | 'month' | 'none';
