@@ -95,6 +95,21 @@ export const useAliasMembers = (aliasId: string | null | undefined) => {
   });
 };
 
+// Normalize FEC ID input — supports either a list or a single scalar.
+// Always mirrors the first ID into the legacy scalar column for back-compat.
+const normalizeFecIds = (input: DonorAliasInput): { fec_committee_id: string | null; fec_committee_ids: string[] } => {
+  const raw: string[] = Array.isArray(input.fec_committee_ids)
+    ? input.fec_committee_ids
+    : input.fec_committee_id ? [input.fec_committee_id] : [];
+  const cleaned = Array.from(new Set(
+    raw.map((s) => String(s || '').trim().toUpperCase()).filter(Boolean),
+  ));
+  return {
+    fec_committee_id: cleaned[0] ?? null,
+    fec_committee_ids: cleaned,
+  };
+};
+
 export const useCreateDonorAlias = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -113,11 +128,13 @@ export const useCreateDonorAlias = () => {
         return { ...(existing as DonorAlias), __reused: true } as DonorAlias & { __reused?: boolean };
       }
 
+      const ids = normalizeFecIds(input);
       const { data, error } = await supabase
         .from('donor_aliases')
         .insert({
           canonical_name: name,
-          fec_committee_id: input.fec_committee_id || null,
+          fec_committee_id: ids.fec_committee_id,
+          fec_committee_ids: ids.fec_committee_ids,
           notes: input.notes || null,
           is_active: input.is_active ?? true,
         })
@@ -151,11 +168,13 @@ export const useUpdateDonorAlias = () => {
       const name = (input.canonical_name || '').trim();
       if (!name) throw new Error('Canonical name is required');
 
+      const ids = normalizeFecIds(input);
       const { data, error } = await supabase
         .from('donor_aliases')
         .update({
           canonical_name: name,
-          fec_committee_id: input.fec_committee_id || null,
+          fec_committee_id: ids.fec_committee_id,
+          fec_committee_ids: ids.fec_committee_ids,
           notes: input.notes || null,
           is_active: input.is_active ?? true,
         })
