@@ -34,6 +34,7 @@ export const Committees = () => {
   const [cycle, setCycle] = useState<string>('all');
   const [designation, setDesignation] = useState<string>('all');
   const [candidateId, setCandidateId] = useState<string>('all');
+  const [hideUnsynced, setHideUnsynced] = useState(true);
 
   const { data: filterOptions, isLoading: filtersLoading } = useCommitteeFilterOptions();
 
@@ -85,10 +86,14 @@ export const Committees = () => {
   });
 
   const committees = useMemo(
-    () => (data?.pages.flatMap((page) => page.committees) ?? [])
-      .slice()
-      .sort((a, b) => b.totalRaised - a.totalRaised),
-    [data],
+    () => {
+      const all = (data?.pages.flatMap((page) => page.committees) ?? [])
+        .slice()
+        .sort((a, b) => b.totalRaised - a.totalRaised);
+      if (!hideUnsynced) return all;
+      return all.filter((c) => c.lastSyncDate || c.totalRaised > 0);
+    },
+    [data, hideUnsynced],
   );
 
   return (
@@ -168,6 +173,16 @@ export const Committees = () => {
               </Select>
 
               <Button
+                variant={hideUnsynced ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => setHideUnsynced((v) => !v)}
+                disabled={isLoading}
+                className="h-10"
+              >
+                {hideUnsynced ? 'Hide unsynced' : 'Show all'}
+              </Button>
+
+              <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => {
@@ -175,6 +190,7 @@ export const Committees = () => {
                   setCycle(availableCycles[0] || 'all');
                   setDesignation('all');
                   setCandidateId('all');
+                  setHideUnsynced(true);
                 }}
                 disabled={isLoading}
               >
@@ -269,34 +285,48 @@ export const Committees = () => {
                   </Link>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 mt-6">
-                  <div className="p-3 rounded-lg border bg-muted/30">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <DollarSign className="w-4 h-4" />
-                      Total Raised
-                    </div>
-                    <p className="text-xl font-semibold text-foreground mt-1">
-                      {formatCurrency(committee.totalRaised)}
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-lg border bg-muted/30">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Users className="w-4 h-4" />
-                      Donors
-                    </div>
-                    <p className={cn(
-                      "text-xl font-semibold mt-1",
-                      committee.donorCount > 0 ? "text-foreground" : "text-muted-foreground"
-                    )}>
-                      {formatNumber(committee.donorCount)}
-                    </p>
-                  </div>
-                </div>
+                {(() => {
+                  const isUnsynced = !committee.lastSyncDate && committee.totalRaised === 0;
+                  return (
+                    <>
+                      <div className="grid grid-cols-2 gap-3 mt-6">
+                        <div className="p-3 rounded-lg border bg-muted/30">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <DollarSign className="w-4 h-4" />
+                            Total Raised
+                          </div>
+                          <p className={cn(
+                            "text-xl font-semibold mt-1",
+                            isUnsynced ? "text-muted-foreground" : "text-foreground"
+                          )}>
+                            {isUnsynced ? '—' : formatCurrency(committee.totalRaised)}
+                          </p>
+                        </div>
+                        <div className="p-3 rounded-lg border bg-muted/30">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Users className="w-4 h-4" />
+                            Donors
+                          </div>
+                          <p className={cn(
+                            "text-xl font-semibold mt-1",
+                            committee.donorCount > 0 ? "text-foreground" : "text-muted-foreground"
+                          )}>
+                            {isUnsynced ? '—' : formatNumber(committee.donorCount)}
+                          </p>
+                        </div>
+                      </div>
 
-                <div className="flex items-center justify-between text-xs text-muted-foreground mt-4">
-                  <span>Contributions: {formatNumber(committee.contributionCount)}</span>
-                  <span>Last sync: {formatDate(committee.lastSyncDate)}</span>
-                </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mt-4">
+                        <span>
+                          {isUnsynced
+                            ? 'Not yet synced from FEC'
+                            : `Contributions: ${formatNumber(committee.contributionCount)}`}
+                        </span>
+                        <span>Last sync: {formatDate(committee.lastSyncDate)}</span>
+                      </div>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           ))}
