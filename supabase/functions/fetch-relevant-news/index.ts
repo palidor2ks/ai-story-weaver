@@ -696,7 +696,16 @@ Deno.serve(async (req: Request) => {
     const items = sliced
       .filter(it => !!it.title && !!it.url && !isGoogleHost(it.url))
       .map((it) => {
-        const matchedQuestion = questionMeta.find(q => it.matchedTopics.includes((q.topic_name || '').toLowerCase()) || topicNames.includes((q.topic_name || '').toLowerCase())) || questionMeta[0];
+        const matchedQuestion =
+          questionMeta.find(q => {
+            const qTopic = (q.topic_name || '').toLowerCase();
+            return qTopic.length > 0 && it.matchedTopics.includes(qTopic);
+          }) ||
+          questionMeta.find(q => {
+            const qTopic = (q.topic_name || '').toLowerCase();
+            return qTopic.length > 0 && topicNames.includes(qTopic);
+          }) ||
+          questionMeta[0];
         const { ageHours: _a, ...rest } = it;
         return {
           ...rest,
