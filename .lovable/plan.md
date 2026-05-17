@@ -1,73 +1,20 @@
-# Fix: Musk shows up twice on Donors page
-
 ## Root cause
 
-The consolidated donor cards are produced by two materialized views:
-- `private.donor_consolidated_mv` (per cycle)
-- `private.donor_consolidated_all_mv` (across cycles)
-
-Both group rows by **exact `display_name` string**. In the current data there are two casings of the same alias target:
-
-| display_name | type        | rows | total      |
-|--------------|-------------|------|------------|
-| `Musk, Elon` | Individual  | 84   | $303.7M    |
-| `Musk, Elon` | Organization (Elon Musk Revocable Trust) | 3 | $23.5M |
-| `MUSK, ELON` | Organization (United States of America Inc) | 3 | $52.0M |
-| `Musk, Elon` | Individual (variants: REEVE, MR., R MR) | 3 | ~$324K |
-
-Because `"Musk, Elon" <> "MUSK, ELON"` at the byte level, the matview emits two separate cards. That's the second tile you circled.
+The recent migration dropped and recreated `private.donor_consolidated_mv` and `private.donor_consolidated_all_mv`. Dropping a matview also drops all GRANTs on it. The `get_donors_paginated` RPC (called by `useDonorsPaginated`) reads from `private.donor_consolidated_all_mv`, and now hits "permission denied for materialized view donor_consolidated_all_mv" because the role executing the read no longer has SELECT on the recreated views.
 
 ## Fix
 
-Make consolidation case-insensitive and pick a single canonical casing per group.
+One small migration that:
 
-### 1. Update both matviews
+1. Re-grants SELECT on both recreated matviews to the roles that need it (matching the pre-drop grants — typically `authenticated`, `anon`, `service_role`, and `postgres`).
+2. Sets ownership to `postgres` so future `REFRESH MATERIALIZED VIEW` calls from the existing refresh function continue to work.
+3. Makes the `get_donors_paginated` (and the search RPC if it also reads the mv) `SECURITY DEFINER` with `SET search_path = public, private` if not already — so callers don't need direct privileges on the `private` schema. This is the defensive fix that prevents this from recurring next time the matview is rebuilt.
+4. Refreshes both matviews once at the end so data is populated.
 
-Group by `lower(display_name)` and choose the display label as the most-frequent / largest-amount casing.
-
-```sql
--- private.donor_consolidated_all_mv
-SELECT
-  md5(coalesce(cycle,'') || '|' || lower(coalesce(display_name, name))) AS row_id,
-  cycle,
-  -- canonical label = casing tied to the largest single-row amount
-  (array_agg(coalesce(display_name, name) ORDER BY amount DESC NULLS LAST))[1] AS display_name,
-  min(id) AS primary_id,
-  array_agg(DISTINCT type ORDER BY type) AS types,
-  (array_agg(type ORDER BY amount DESC NULLS LAST))[1] AS type,
-  array_agg(DISTINCT name ORDER BY name) AS name_variations,
-  sum(amount) AS total_amount,
-  sum(coalesce(transaction_count,1)) AS total_transactions,
-  count(DISTINCT candidate_id) AS recipient_count,
-  (count(DISTINCT name) > 1
-    OR (array_agg(coalesce(display_name, name) ORDER BY amount DESC NULLS LAST))[1] <> min(name)
-  ) AS is_consolidated,
-  ((array_agg(coalesce(display_name, name) ORDER BY amount DESC NULLS LAST))[1]
-    || ' ' || string_agg(DISTINCT name, ' ' ORDER BY name)) AS search_text
-FROM donors d
-GROUP BY cycle, lower(coalesce(display_name, name));
-```
-
-Apply the same `lower(display_name)` grouping change to `private.donor_consolidated_mv` (the per-cycle one — same shape, no `cycle` column in its outer projection but same `GROUP BY display_name` pattern needs to become `GROUP BY lower(display_name)` with the same canonical-label logic).
-
-### 2. Refresh both matviews
-
-```sql
-REFRESH MATERIALIZED VIEW CONCURRENTLY private.donor_consolidated_mv;
-REFRESH MATERIALIZED VIEW CONCURRENTLY private.donor_consolidated_all_mv;
-```
-
-### 3. (Optional, recommended) Normalize alias `canonical_name` writes
-
-In the alias resolution code path that sets `donors.display_name`, normalize whatever casing the admin enters to a single canonical form (e.g. title-case "Musk, Elon") so new imports don't reintroduce the split. Single line change in the alias apply function — not strictly required for the fix but prevents recurrence.
-
-## Out of scope
-
-- DonorProfile page rendering
-- Alias UI changes
-- Score / analysis logic
+No frontend changes. No schema/shape changes to the matviews themselves.
 
 ## Verification
 
-After migration + refresh, on `/donors` searching "musk":
-- Expect **one** Musk, Elon card showing ~$379M total, ~5 name variations, types = `[Individual, Organization]`, and the United States of America Inc / Elon Musk Revocable Trust rows merged into it.
+- `/donors` loads without the "permission denied" error.
+- Searching "musk" returns the single consolidated Musk card from the previous fix.
+- Filter dropdowns still populate.
