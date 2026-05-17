@@ -1005,6 +1005,7 @@ const DonorProfile = () => {
             )}
           </div>
         </section>
+        )}
       </main>
     </div>
   );
