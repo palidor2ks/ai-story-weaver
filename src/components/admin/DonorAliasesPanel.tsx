@@ -147,27 +147,37 @@ export function DonorAliasesPanel() {
 
   const handleOpenCreate = () => {
     setSelectedAlias(null);
-    setFormData({ canonical_name: '', fec_committee_id: '', notes: '', is_active: true });
+    setFormData({ canonical_name: '', fec_committee_ids: [], notes: '', is_active: true });
+    setFecIdsText('');
     setDialogOpen(true);
   };
 
   const handleOpenEdit = (alias: DonorAlias) => {
     setSelectedAlias(alias);
+    const ids = (alias.fec_committee_ids && alias.fec_committee_ids.length
+      ? alias.fec_committee_ids
+      : alias.fec_committee_id ? [alias.fec_committee_id] : []);
     setFormData({
       canonical_name: alias.canonical_name,
-      fec_committee_id: alias.fec_committee_id || '',
+      fec_committee_ids: ids,
       notes: alias.notes || '',
       is_active: alias.is_active,
     });
+    setFecIdsText(ids.join(', '));
     setDialogOpen(true);
   };
 
   const handleSubmit = async () => {
     if (!formData.canonical_name.trim()) return;
+    // Parse the FEC IDs textbox: split on commas/whitespace, uppercase, dedupe.
+    const ids = Array.from(new Set(
+      fecIdsText.split(/[\s,]+/).map((s) => s.trim().toUpperCase()).filter(Boolean),
+    ));
+    const payload: DonorAliasInput = { ...formData, fec_committee_ids: ids };
     if (selectedAlias) {
-      await updateMutation.mutateAsync({ id: selectedAlias.id, ...formData });
+      await updateMutation.mutateAsync({ id: selectedAlias.id, ...payload });
     } else {
-      await createMutation.mutateAsync(formData);
+      await createMutation.mutateAsync(payload);
     }
     setDialogOpen(false);
   };
