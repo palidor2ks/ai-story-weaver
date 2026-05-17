@@ -152,6 +152,7 @@ const DonorProfile = () => {
   const [committeeFilter, setCommitteeFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [showAllRecipients, setShowAllRecipients] = useState(false);
+  const [showAllContributors, setShowAllContributors] = useState(false);
 
   // Fetch the specific donor record
   const { data: donor, isLoading: donorLoading } = useQuery({
