@@ -75,10 +75,12 @@ export function DonorAliasesPanel() {
   const [viewMembersFor, setViewMembersFor] = useState<DonorAlias | null>(null);
   const [formData, setFormData] = useState<DonorAliasInput>({
     canonical_name: '',
-    fec_committee_id: '',
+    fec_committee_ids: [],
     notes: '',
     is_active: true,
   });
+  // Raw text the admin types in the FEC IDs field (comma- or newline-separated).
+  const [fecIdsText, setFecIdsText] = useState('');
 
   // Donor search state
   const [donorSearch, setDonorSearch] = useState('');
