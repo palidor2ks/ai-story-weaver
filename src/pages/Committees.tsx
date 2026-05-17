@@ -34,6 +34,7 @@ export const Committees = () => {
   const [cycle, setCycle] = useState<string>('all');
   const [designation, setDesignation] = useState<string>('all');
   const [candidateId, setCandidateId] = useState<string>('all');
+  const [hideUnsynced, setHideUnsynced] = useState(true);
 
   const { data: filterOptions, isLoading: filtersLoading } = useCommitteeFilterOptions();
 
