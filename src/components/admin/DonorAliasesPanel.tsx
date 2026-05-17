@@ -499,14 +499,16 @@ export function DonorAliasesPanel() {
               />
             </div>
             <div className="space-y-2">
-              <Label>FEC Committee ID (optional)</Label>
-              <Input
-                value={formData.fec_committee_id || ''}
-                onChange={(e) =>
-                  setFormData({ ...formData, fec_committee_id: e.target.value })
-                }
-                placeholder="C00..."
+              <Label>FEC Committee IDs (optional)</Label>
+              <Textarea
+                value={fecIdsText}
+                onChange={(e) => setFecIdsText(e.target.value)}
+                placeholder="C00502906, C00xxxxxx, C00yyyyyy"
+                rows={2}
               />
+              <p className="text-xs text-muted-foreground">
+                Separate multiple IDs with commas, spaces, or new lines. All listed committees are used as the AI analysis anchor so multi-PAC parent entities (e.g. Meta/Facebook) are analyzed as one organization.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Notes (optional)</Label>
