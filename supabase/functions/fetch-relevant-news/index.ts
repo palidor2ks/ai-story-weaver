@@ -29,6 +29,8 @@ interface FeedNewsItem {
   relevanceScore: number;
   isTopTopicHit: boolean;
   isNew: boolean;
+  topicLabel?: string;
+  relatedQuestion?: string;
 }
 
 const STATE_NAMES: Record<string, string> = {
@@ -442,11 +444,52 @@ function hashId(s: string): string {
   return Math.abs(h).toString(36);
 }
 
+
+const titleSubjectKey = (title: string): string => {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\b(the|a|an|and|or|but|in|on|at|to|for|of|with|from|by|about|update|latest|breaking)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .slice(0, 8)
+    .join(' ');
+};
+
+
+
+
+async function resolveTopicNames(
+  supabase: ReturnType<typeof createClient>,
+  rawTopics: string[],
+): Promise<string[]> {
+  const cleaned = Array.from(new Set(rawTopics.map(t => String(t || '').trim()).filter(Boolean)));
+  if (cleaned.length === 0) return [];
+
+  const idLike = cleaned.filter(t => /^[0-9a-f-]{16,}$/i.test(t));
+  const nameLike = cleaned.filter(t => !idLike.includes(t));
+  const out = new Set<string>(nameLike.map(t => t.toLowerCase()));
+
+  if (idLike.length > 0) {
+    const { data } = await supabase
+      .from('topics')
+      .select('name')
+      .in('id', idLike)
+      .limit(500);
+    for (const row of (data || []) as Array<{ name: string }>) {
+      if (row?.name) out.add(row.name.toLowerCase());
+    }
+  }
+
+  return Array.from(out);
+}
+
 async function resolveQuestionIds(
   supabase: ReturnType<typeof createClient>,
   explicitQuestionIds: string[],
   topics: string[],
-): Promise<string[]> {
+): Promise<Array<{ id: string; text: string; topic_id: string | null; topic_name: string | null }>> {
   const seed = new Set(explicitQuestionIds.filter(Boolean));
   const topicCandidates = topics.filter(Boolean);
   if (topicCandidates.length > 0) {
@@ -457,7 +500,20 @@ async function resolveQuestionIds(
       .limit(500);
     for (const row of (data || []) as Array<{ id: string }>) seed.add(row.id);
   }
-  return Array.from(seed);
+  const ids = Array.from(seed);
+  if (ids.length === 0) return [];
+  const { data: questions } = await supabase
+    .from('questions')
+    .select('id,text,topic_id,topics:topic_id(name)')
+    .in('id', ids)
+    .limit(500);
+
+  return ((questions || []) as Array<any>).map((q) => ({
+    id: q.id,
+    text: q.text || '',
+    topic_id: q.topic_id || null,
+    topic_name: q.topics?.name || null,
+  }));
 }
 
 
@@ -467,7 +523,7 @@ Deno.serve(async (req: Request) => {
   try {
     const body: RequestBody = await req.json();
     const people = Array.isArray(body.people) ? body.people.slice(0, 12) : [];
-    const topics = (body.topics || []).map(t => t.toLowerCase()).filter(Boolean);
+    const rawTopics = (body.topics || []).map(t => String(t)).filter(Boolean);
     const explicitQuestionIds = Array.isArray(body.questionIds) ? body.questionIds : [];
     const limit = Math.min(Math.max(body.limit ?? 20, 1), 50);
 
@@ -483,13 +539,16 @@ Deno.serve(async (req: Request) => {
 
     // Resolve question IDs for caching. Only opt into the cache path when we have any —
     // legacy callers without questionIds keep the original network-only behavior.
-    const questionIds = await resolveQuestionIds(supabase, explicitQuestionIds, topics);
+    const questionMeta = await resolveQuestionIds(supabase, explicitQuestionIds, rawTopics);
+    const topicNames = await resolveTopicNames(supabase, rawTopics);
+    const questionIds = questionMeta.map(q => q.id);
+    const questionById = new Map(questionMeta.map(q => [q.id, q]));
 
     if (questionIds.length > 0) {
       const freshnessCutoff = new Date(Date.now() - 1000 * 60 * 30).toISOString();
       const { data: cachedRows } = await supabase
         .from('question_news_feed_cache')
-        .select('rank_score, window_label, last_seen_at, article:news_articles!inner(id,title,url,source,published_at,snippet)')
+        .select('rank_score, window_label, last_seen_at, question_id, article:news_articles!inner(id,title,url,source,published_at,snippet), qa:news_article_questions(question_id,matched_topics,question:questions(text,topics:topic_id(name)))')
         .in('question_id', questionIds)
         .gte('last_seen_at', freshnessCutoff)
         .order('rank_score', { ascending: false })
@@ -512,6 +571,8 @@ Deno.serve(async (req: Request) => {
             relevanceScore: (row as any).rank_score || 0,
             isTopTopicHit: false,
             isNew: (Date.now() - new Date(article.published_at).getTime()) <= 48 * 36e5,
+            topicLabel: (row as any)?.qa?.[0]?.question?.topics?.name || questionById.get((row as any).question_id)?.topic_name || undefined,
+            relatedQuestion: (row as any)?.qa?.[0]?.question?.text || questionById.get((row as any).question_id)?.text || undefined,
           });
         }
         const cachedItems = Array.from(dedupCache.values()).slice(0, limit);
@@ -555,7 +616,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const matchedTopics: string[] = [];
-      for (const t of topics) {
+      for (const t of topicNames) {
         if (t.length > 2 && text.includes(t)) matchedTopics.push(t);
       }
 
@@ -599,9 +660,18 @@ Deno.serve(async (req: Request) => {
     }
 
     const sourceMap = dedup.size > 0 ? dedup : fallbackDedup;
-    const all = Array.from(sourceMap.values()).sort(
+    const allRanked = Array.from(sourceMap.values()).sort(
       (a, b) => b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt),
     );
+    const subjectDedup = new Map<string, (FeedNewsItem & { ageHours: number })>();
+    for (const article of allRanked) {
+      const subject = titleSubjectKey(article.title);
+      const existing = subjectDedup.get(subject);
+      if (!existing || existing.relevanceScore < article.relevanceScore || +new Date(existing.publishedAt) < +new Date(article.publishedAt)) {
+        subjectDedup.set(subject, article);
+      }
+    }
+    const all = Array.from(subjectDedup.values()).sort((a, b) => b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt));
     console.info('relevant-news filtered results', { strict: dedup.size, fallback: fallbackDedup.size, candidates: all.length });
 
     const today = all.filter(i => i.ageHours <= 24);
@@ -625,7 +695,15 @@ Deno.serve(async (req: Request) => {
     }));
     const items = sliced
       .filter(it => !!it.title && !!it.url && !isGoogleHost(it.url))
-      .map(({ ageHours: _a, ...rest }) => rest);
+      .map((it) => {
+        const matchedQuestion = questionMeta.find(q => it.matchedTopics.includes((q.topic_name || '').toLowerCase()) || topicNames.includes((q.topic_name || '').toLowerCase())) || questionMeta[0];
+        const { ageHours: _a, ...rest } = it;
+        return {
+          ...rest,
+          topicLabel: matchedQuestion?.topic_name || rest.matchedTopics[0],
+          relatedQuestion: matchedQuestion?.text,
+        };
+      });
 
     // Persist into cache for future requests scoped to these questions.
     if (items.length > 0 && questionIds.length > 0) {

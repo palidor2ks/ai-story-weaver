@@ -106,12 +106,20 @@ export const RelevantNewsFeed = ({
                       {item.matchedTopics.slice(0, 3).map(t => (
                         <Badge key={t} variant="outline" className="text-xs capitalize">{t}</Badge>
                       ))}
+                      {item.topicLabel && (
+                        <Badge variant="outline" className="text-xs">Topic: {item.topicLabel}</Badge>
+                      )}
                     </div>
                     <h3 className="font-medium text-sm leading-snug group-hover:text-primary">
                       {item.title}
                     </h3>
                     {item.snippet && !item.snippet.startsWith('<') && !item.snippet.startsWith('http') && (
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.snippet}</p>
+                    )}
+                    {item.relatedQuestion && (
+                      <p className="text-xs mt-1 text-muted-foreground">
+                        Related question answered: <span className="font-medium text-foreground">{item.relatedQuestion}</span>
+                      </p>
                     )}
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
                       <span className="font-medium">{item.source}</span>
