@@ -65,41 +65,23 @@ export default function Poll() {
     setSubmitting(true);
     try {
       const anonId = getAnonSessionId();
-      const { data: respRow, error: respErr } = await supabase
-        .from('poll_responses')
-        .insert({
-          poll_id: poll.id,
-          anon_session_id: user ? null : anonId,
-          user_id: user?.id || null,
-          referrer: document.referrer || null,
-          user_agent: navigator.userAgent.slice(0, 200),
-        })
-        .select()
-        .single();
-      if (respErr) throw respErr;
-
-      const answerRows = questions.map((pq: any) => {
+      const payload = questions.map((pq: any) => {
         const opt = (pq.questions?.question_options || []).find((o: any) => o.id === answers[pq.question_id]);
         return {
-          response_id: respRow.id,
           question_id: pq.question_id,
           selected_option_id: answers[pq.question_id],
           value: opt?.value ?? 0,
         };
       });
-      const { error: aErr } = await supabase.from('poll_response_answers').insert(answerRows);
-      if (aErr) throw aErr;
 
-      // If logged in, also write into quiz_answers for scored polls
-      if (user && poll.type !== 'mc') {
-        const quizRows = answerRows.map(r => ({
-          user_id: user.id,
-          question_id: r.question_id,
-          selected_option_id: r.selected_option_id,
-          value: r.value,
-        }));
-        await supabase.from('quiz_answers').insert(quizRows);
-      }
+      const { error } = await supabase.rpc('submit_poll_response', {
+        p_poll_id: poll.id,
+        p_anon_session_id: user ? null : anonId,
+        p_referrer: document.referrer || null,
+        p_user_agent: navigator.userAgent.slice(0, 200),
+        p_answers: payload,
+      });
+      if (error) throw error;
 
       setSubmitted(true);
       toast.success('Thanks for voting!');
