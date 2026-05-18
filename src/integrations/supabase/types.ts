@@ -3152,6 +3152,16 @@ export type Database = {
           type: string
         }[]
       }
+      submit_poll_response: {
+        Args: {
+          p_anon_session_id: string
+          p_answers: Json
+          p_poll_id: string
+          p_referrer: string
+          p_user_agent: string
+        }
+        Returns: string
+      }
       undo_donor_import: { Args: { p_session_id: string }; Returns: Json }
     }
     Enums: {
