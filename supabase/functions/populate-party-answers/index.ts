@@ -273,6 +273,13 @@ interface PerplexityResult {
   citationTitles: string[];
 }
 
+interface YouResult {
+  found: boolean;
+  researchText: string;
+  citations: string[];
+  citationTitles: string[];
+}
+
 /**
  * Research party position using Perplexity's sonar-deep-research model
  * PRIMARY research engine for party platforms
