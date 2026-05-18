@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, LabelList } from 'recharts';
-import { Users, BarChart3, Clock } from 'lucide-react';
+import { Users, BarChart3, Clock, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TallyRow { question_id: string; selected_option_id: string; count: number }
