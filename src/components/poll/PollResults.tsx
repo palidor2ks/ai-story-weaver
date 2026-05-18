@@ -63,34 +63,32 @@ export function PollResults({ poll, questions, tally, userAnswers = {} }: Props)
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div style={{ width: '100%', height: Math.max(140, opts.length * 44) }}>
-                <ResponsiveContainer>
-                  <BarChart data={data} layout="vertical" margin={{ left: 0, right: 48, top: 4, bottom: 4 }}>
-                    <XAxis type="number" hide domain={[0, Math.max(1, total)]} />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={140}
-                      tick={{ fill: 'hsl(var(--foreground))', fontSize: 12 }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <Bar dataKey="count" radius={[4, 4, 4, 4]} background={{ fill: 'hsl(var(--muted))', radius: 4 } as any}>
-                      {data.map((d) => (
-                        <Cell
-                          key={d.id}
-                          fill={d.isUser ? 'hsl(var(--primary))' : 'hsl(var(--primary) / 0.4)'}
-                        />
-                      ))}
-                      <LabelList
-                        dataKey="pct"
-                        position="right"
-                        formatter={(v: number) => `${v}%`}
-                        style={{ fill: 'hsl(var(--foreground))', fontSize: 12, fontWeight: 500 }}
+              <div className="space-y-3">
+                {data.map((d) => (
+                  <div key={d.id} className={cn('space-y-1.5', d.isUser && 'rounded-md')}>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className={cn(
+                        'text-sm leading-snug flex-1 break-words',
+                        d.isUser ? 'text-foreground font-medium' : 'text-foreground/90'
+                      )}>
+                        {d.isUser && <CheckCircle2 className="inline w-3.5 h-3.5 mr-1 -mt-0.5 text-primary" />}
+                        {d.name}
+                      </p>
+                      <span className="text-sm font-semibold tabular-nums text-foreground shrink-0">
+                        {d.pct}%
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all',
+                          d.isUser ? 'bg-primary' : 'bg-primary/40'
+                        )}
+                        style={{ width: `${d.pct}%` }}
                       />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div className="text-xs text-muted-foreground">
