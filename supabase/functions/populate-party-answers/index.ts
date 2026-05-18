@@ -14,6 +14,7 @@ const corsHeaders = {
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const GOOGLE_GEMINI_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
 const PERPLEXITY_API_KEY = Deno.env.get('PERPLEXITY_API_KEY');
+const YOU_API_KEY = Deno.env.get('YOU_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -272,6 +273,13 @@ interface PerplexityResult {
   citationTitles: string[];
 }
 
+interface YouResult {
+  found: boolean;
+  researchText: string;
+  citations: string[];
+  citationTitles: string[];
+}
+
 /**
  * Research party position using Perplexity's sonar-deep-research model
  * PRIMARY research engine for party platforms
@@ -383,7 +391,84 @@ Topic area: ${topicName}`
 }
 
 /**
- * Hybrid research: Try Perplexity first, fall back to Gemini
+ * Research party position using You.com RAG search
+ * SECONDARY research engine after Perplexity
+ */
+async function researchPartyWithYou(
+  partyName: string,
+  questionText: string,
+  topicName: string,
+  partyId: string
+): Promise<YouResult> {
+  if (!YOU_API_KEY) {
+    console.log('[You.com] API key not configured, skipping');
+    return { found: false, researchText: '', citations: [], citationTitles: [] };
+  }
+
+  const partyDomains: Record<string, string[]> = {
+    democrat: ['democrats.org', 'dnc.org'],
+    republican: ['gop.com', 'rnc.org'],
+    green: ['gp.org', 'greenparty.org'],
+    libertarian: ['lp.org'],
+  };
+
+  const query = `Research the ${partyName}'s current position on: "${questionText}". Topic: ${topicName}. Prioritize official party platform pages, leadership policy statements, and congressional voting evidence. Use domains when possible: ${(partyDomains[partyId] || []).join(', ') || 'official party domains'}. If no concrete evidence exists, state NO DOCUMENTED POSITION FOUND.`;
+
+  try {
+    const response = await fetch('https://api.ydc-index.io/rag', {
+      method: 'POST',
+      headers: {
+        'X-API-Key': YOU_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, num_web_results: 8 }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        console.warn('[You.com] Rate limited, falling back to Gemini');
+      } else {
+        console.error(`[You.com] API error: ${response.status}`);
+      }
+      return { found: false, researchText: '', citations: [], citationTitles: [] };
+    }
+
+    const data = await response.json();
+    const answer = String(data?.answer || '').trim();
+    const docs = Array.isArray(data?.search_results) ? data.search_results : [];
+
+    const citations = docs
+      .map((d: any) => String(d?.url || '').trim())
+      .filter((u: string) => u.length > 0)
+      .slice(0, 5);
+
+    const citationTitles = docs
+      .map((d: any) => String(d?.title || '').trim())
+      .filter((t: string) => t.length > 0)
+      .slice(0, 5);
+
+    const hasEvidence = !answer.toLowerCase().includes('no documented position') &&
+                        !answer.toLowerCase().includes('no evidence found') &&
+                        answer.length > 100;
+
+    console.log(`[You.com] Party research for "${questionText.slice(0, 50)}...": ${hasEvidence ? 'FOUND' : 'NOT FOUND'}, ${citations.length} citations`);
+
+    return {
+      found: hasEvidence,
+      researchText: hasEvidence ? smartTruncate(answer, 2000) : '',
+      citations,
+      citationTitles: citationTitles.length === citations.length
+        ? citationTitles
+        : citations.map((url: string) => extractDomainName(url)),
+    };
+  } catch (e) {
+    console.error('[You.com] Research error:', e);
+    return { found: false, researchText: '', citations: [], citationTitles: [] };
+  }
+}
+
+/**
+ * Hybrid research: Try Perplexity first, then You.com, then Gemini fallback
  */
 async function hybridPartyResearch(
   partyName: string,
@@ -406,8 +491,23 @@ async function hybridPartyResearch(
     };
   }
 
-  // Step 2: Fall back to Gemini grounded search
-  console.log(`[HybridResearch] Perplexity found nothing, trying Gemini for party "${questionText.slice(0, 50)}..."`);
+  // Step 2: Try You.com RAG search
+  const youResult = await researchPartyWithYou(
+    partyName, questionText, topicName, partyId
+  );
+
+  if (youResult.found && youResult.researchText.length > 100) {
+    console.log(`[HybridResearch] You.com found party evidence for "${questionText.slice(0, 50)}..."`);
+    return {
+      researchText: youResult.researchText,
+      sourceUrls: youResult.citations,
+      sourceTitles: youResult.citationTitles,
+      success: true,
+    };
+  }
+
+  // Step 3: Fall back to Gemini grounded search
+  console.log(`[HybridResearch] Perplexity/You.com found nothing, trying Gemini for party "${questionText.slice(0, 50)}..."`);
   return researchPartyPosition(partyName, questionText, topicName);
 }
 

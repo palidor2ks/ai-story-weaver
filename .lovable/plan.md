@@ -1,84 +1,36 @@
 ## Goal
 
-Fix the $0 / "0 donors" cards in the Committee Directory for joint-fundraising committees, leadership PACs, and other committees that were never synced — while keeping the existing JU/BD exclusion rule intact for candidate-level totals.
+Re-apply PR #60 in Lovable: add You.com RAG as a secondary research provider in `populate-party-answers`, sitting between Perplexity (primary) and Gemini (fallback).
 
-## Scope
+## Changes
 
-Audit shows ~620 committees with no rollup row today:
-- 590 joint_fundraising
-- 17 leadership_pac
-- 17 unlinked principals
-- ~handful of authorized / external / delegate
+### 1. `supabase/functions/populate-party-answers/index.ts`
 
-All currently render as `$0` / `0`, which looks like a bug.
+- Add `const YOU_API_KEY = Deno.env.get('YOU_API_KEY');` next to the other API key constants (already configured in Supabase secrets — no new secret needed).
+- Add a `YouResult` interface mirroring `PerplexityResult` shape (`found`, `researchText`, `citations`, `citationTitles`).
+- Add `researchPartyWithYou(partyName, questionText, topicName, partyId)`:
+  - Skips silently if `YOU_API_KEY` missing.
+  - Builds a query that biases toward official party domains (`democrats.org`, `gop.com`, `gp.org`, `lp.org`, etc.).
+  - POSTs to `https://api.ydc-index.io/rag` with `{ query, num_web_results: 8 }`, `X-API-Key` header.
+  - Handles 429/non-OK by returning `found: false` (lets Gemini take over).
+  - Marks `found: true` only when answer length > 100 chars AND doesn't contain "no documented position" / "no evidence found".
+  - Returns up to 5 citations + titles, falling back to `extractDomainName(url)` when titles missing.
+  - Truncates evidence with existing `smartTruncate(answer, 2000)`.
+- Update `hybridPartyResearch` to insert a Step 2 You.com attempt between the existing Perplexity step and the Gemini fallback. Log line updated to `Perplexity/You.com found nothing, trying Gemini…`.
 
-## Implementation
+### 2. Migration idempotency fix (`supabase/migrations/20251230170055_*.sql`)
 
-### 1. New edge function: `sync-committee-totals`
-
-Lightweight, FEC-only, no donor itemization.
-
-- Admin auth + service-role gate (mirrors `sync-all-donors`)
-- Input: `{ committeeIds?: string[], roles?: string[], cycle?: string, limit?: number, onlyMissing?: boolean }`
-- For each committee:
-  - Call `https://api.open.fec.gov/v1/committee/{id}/totals/?cycle={cycle}&per_page=1` (uses existing `FEC_API_KEY`)
-  - Upsert one row into `committee_finance_rollups` keyed on `(committee_id, cycle, candidate_id=NULL)` with:
-    - `fec_total_receipts = receipts`
-    - `fec_itemized = individual_itemized_contributions + other_political_committee_contributions`
-    - `contribution_count = contributions` (when present)
-    - `donor_count = NULL` (we don't itemize JFCs)
-  - Update `candidate_committees.last_sync_date = now()`, `fec_itemized_total`
-- Background work via `EdgeRuntime.waitUntil()`, 200 ms delay between calls, batch size 50 per invocation
-- Per [Finance Sync Dependencies] and [JU BD exclusion], these rows are read by the directory only — `get_contribution_totals` already filters `designation IN ('P','A')`, so candidate aggregates remain unaffected.
-
-### 2. Migration: unique index for the new rollup shape
-
-```sql
-CREATE UNIQUE INDEX IF NOT EXISTS committee_finance_rollups_committee_cycle_nullcand_uniq
-  ON public.committee_finance_rollups (committee_id, cycle)
-  WHERE candidate_id IS NULL;
-```
-
-Enables idempotent upsert from the edge function without touching existing candidate-linked rollups.
-
-### 3. Admin UI: "Sync committee totals" card
-
-Extend `src/components/admin/BulkDonorSyncCard.tsx` (or add a sibling card on the same panel):
-- Button: **Sync committee totals** with a role selector (all unsynced / joint_fundraising / leadership_pac / external)
-- Cycle selector reuses `useFinanceCycles`
-- Progress + last-run summary, same pattern as the existing donor sync card
-- Calls `sync-committee-totals` via `supabase.functions.invoke`
-
-### 4. Frontend polish — `src/pages/Committees.tsx`
-
-Honest empty state for unsynced committees:
-- When `lastSyncDate == null` AND `totalRaised === 0` → render `—` in both tiles plus a small muted "Not yet synced" caption under the card
-- When `lastSyncDate` exists but `totalRaised === 0` → keep `$0` (real reported zero)
-- Add a filter chip **"Hide unsynced"**, default **on**, so the directory leads with real numbers; toggling off shows everything (current behavior)
-- Update `formatCurrency`/donor tile to accept `null` and render `—`
-
-No change to `useCommittees` mapping logic — `buildCommitteeSummaries` already falls back through `local_itemized → fec_total_receipts → fec_itemized → aggregated`.
-
-## Files touched
-
-```text
-supabase/functions/sync-committee-totals/index.ts   (new)
-supabase/migrations/<ts>_committee_rollups_nullcand_uniq.sql   (new)
-src/components/admin/BulkDonorSyncCard.tsx          (extend or split)
-src/pages/Committees.tsx                            (empty-state + filter)
-src/hooks/useCommittees.ts                          (allow null totalRaised)
-```
+Wrap the existing `candidate_committees_candidate_id_fkey` ADD CONSTRAINT in a `DO $$ … pg_constraint guard … $$` block so re-runs don't error. No schema change beyond the guard.
 
 ## Out of scope
 
-- Re-allocating JFC dollars into candidate roll-ups (intentionally excluded per existing memory)
-- Itemized JFC donor import
-- Backfilling historical cycles beyond what the admin selects
+- No frontend changes.
+- No changes to candidate-answer research path — party flow only, matching the PR.
+- No new secret prompts (`YOU_API_KEY` already present).
 
 ## Verification
 
-1. Run migration, deploy function
-2. From admin panel, trigger sync for `joint_fundraising` cycle `2024`
-3. Reload `/committees` filtered to JFCs — totals should now reflect FEC reported receipts; remaining unsynced ones show `—`
-4. Spot-check `C00523985` (FRESHMAN HOLD'EM JFC) and one leadership PAC against fec.gov
-5. Confirm a known principal candidate's total disbursements/receipts on their profile is unchanged (regression check on candidate aggregation)
+1. Deploy edge function automatically.
+2. From Admin → Populate party answers, trigger a small batch where Perplexity is known to return empty (e.g. an obscure local-scope question).
+3. Tail logs at Edge Function → populate-party-answers — expect `[You.com] Party research … FOUND` or graceful `NOT FOUND` then Gemini fallback.
+4. Confirm migration replays cleanly (no error if the FK already exists).
