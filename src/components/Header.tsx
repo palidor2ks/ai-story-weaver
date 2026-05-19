@@ -58,11 +58,13 @@ export const Header = () => {
               </Button>
             </Link>
           ))}
-          <Link to="/how-scoring-works">
-            <Button variant="ghost" size="icon" className="ml-2">
-              <HelpCircle className="w-4 h-4" />
-            </Button>
-          </Link>
+          {!authLoading && user && (
+            <Link to="/how-scoring-works">
+              <Button variant="ghost" size="icon" className="ml-2">
+                <HelpCircle className="w-4 h-4" />
+              </Button>
+            </Link>
+          )}
           {isPolitician && (
             <Link to="/politician">
               <Button 
