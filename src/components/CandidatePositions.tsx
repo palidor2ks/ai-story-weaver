@@ -42,7 +42,8 @@ export const CandidatePositions = ({ candidateId, candidateName, isUserRep = fal
           selected_option:question_options (
             id,
             text,
-            value
+            value,
+            is_skip_option
           )
         `)
         .eq('user_id', user.id);
@@ -54,15 +55,24 @@ export const CandidatePositions = ({ candidateId, candidateName, isUserRep = fal
       return data as Array<{
         question_id: string;
         value: number;
-        selected_option: { id: string; text: string; value: number } | null;
+        selected_option: { id: string; text: string; value: number; is_skip_option: boolean | null } | null;
       }>;
     },
   });
 
   // Create a map of user answers for quick lookup
+  // If the user picked the skip option ("Not important to me"), null out the text
+  // so downstream components fall back to the nearest substantive label.
   const userAnswerMap = new Map(
-    userQuizAnswers.map(a => [a.question_id, { value: a.value, text: a.selected_option?.text || null }])
+    userQuizAnswers.map(a => [
+      a.question_id,
+      {
+        value: a.value,
+        text: a.selected_option?.is_skip_option ? null : (a.selected_option?.text || null),
+      },
+    ])
   );
+
 
   // Group answers by topic
   const answersByTopic = candidateAnswers.reduce((acc, answer) => {

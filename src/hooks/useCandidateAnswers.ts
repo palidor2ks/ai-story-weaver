@@ -284,12 +284,13 @@ export const useCandidateAnswersForUser = (
               id,
               name
             ),
-            question_options (
-              id,
-              value,
-              text,
-              display_order
-            )
+              question_options (
+                id,
+                value,
+                text,
+                display_order,
+                is_skip_option
+              )
           )
         `)
         .eq('candidate_id', candidateId)
