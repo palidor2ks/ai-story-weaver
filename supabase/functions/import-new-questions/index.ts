@@ -66,6 +66,14 @@ function parseOptionValue(text: string, position: number): number {
   return positionValues[position] ?? 0;
 }
 
+function snapOptionValueToFivePoint(value: number): number {
+  if (value <= -8) return -10;
+  if (value <= -3) return -5;
+  if (value < 3) return 0;
+  if (value < 8) return 5;
+  return 10;
+}
+
 // Clean option text by removing score prefix
 function cleanOptionText(text: string): string {
   return text
@@ -246,9 +254,10 @@ serve(async (req) => {
         // Parse options - support both string array and object array
         const parsedOptions = (q.options || []).map((opt: string | { text: string; value?: number }, idx: number) => {
           const text = typeof opt === 'string' ? opt : opt.text;
-          const value = typeof opt === 'object' && opt.value !== undefined 
+          const rawValue = typeof opt === 'object' && opt.value !== undefined 
             ? opt.value 
             : parseOptionValue(text, idx);
+          const value = snapOptionValueToFivePoint(rawValue);
           return { text: cleanOptionText(text), value };
         });
         
