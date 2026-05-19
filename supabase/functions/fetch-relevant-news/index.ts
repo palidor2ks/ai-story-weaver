@@ -494,14 +494,44 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+
+    // Require an authenticated session to prevent anonymous abuse of external API
+    // quotas and writes to the news cache tables.
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    try {
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const token = authHeader.replace('Bearer ', '');
+      const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
+      if (claimsErr || !claimsData?.claims?.sub) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    } catch {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const body: RequestBody = await req.json();
     const people = Array.isArray(body.people) ? body.people.slice(0, 12) : [];
     const topics = (body.topics || []).map(t => t.toLowerCase()).filter(Boolean);
     const explicitQuestionIds = Array.isArray(body.questionIds) ? body.questionIds : [];
     const limit = Math.min(Math.max(body.limit ?? 20, 1), 50);
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     if (people.length === 0) {
