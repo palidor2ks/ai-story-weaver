@@ -94,7 +94,7 @@ export const HowScoringWorks = () => {
               </div>
 
               <p className="text-sm text-muted-foreground">
-                Scores are displayed as integers (e.g., L8, CL2, C, CR1, R5).
+                Scores are displayed with two decimals (e.g., L8.25, CL2.00, C, CR1.75, R5.50).
               </p>
             </CardContent>
           </Card>
@@ -224,26 +224,26 @@ export const HowScoringWorks = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-foreground">
-                Confidence reflects how complete the candidate's stance data is:
+                Confidence reflects how strong and complete the available evidence is for a candidate's scored positions:
               </p>
               
               <div className="space-y-2">
                 <div className="flex items-center justify-between p-3 rounded-lg bg-green-50 border border-green-200">
                   <div className="flex items-center gap-3">
                     <Badge className="bg-green-100 text-green-800">High</Badge>
-                    <span className="text-sm text-green-700">≥85% of weighted stances known</span>
+                    <span className="text-sm text-green-700">High-confidence sourcing and coverage</span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg bg-yellow-50 border border-yellow-200">
                   <div className="flex items-center gap-3">
                     <Badge className="bg-yellow-100 text-yellow-800">Medium</Badge>
-                    <span className="text-sm text-yellow-700">60-84% of weighted stances known</span>
+                    <span className="text-sm text-yellow-700">Mixed confidence across topics</span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg bg-red-50 border border-red-200">
                   <div className="flex items-center gap-3">
                     <Badge className="bg-red-100 text-red-800">Low</Badge>
-                    <span className="text-sm text-red-700">&lt;60% of weighted stances known</span>
+                    <span className="text-sm text-red-700">Limited or less-certain evidence</span>
                   </div>
                 </div>
               </div>
