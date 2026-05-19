@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, ShieldCheck, CheckCircle2, ShieldOff, ShieldPlus } from "lucide-react";
+import { Loader2, ShieldCheck, CheckCircle2, ShieldOff, ShieldPlus, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
 
 interface ProfileRow {
   id: string;
@@ -310,7 +310,8 @@ export function AdminUsersPanel() {
                     onClick={() => setPage((p) => Math.max(0, p - 1))}
                     disabled={page === 0}
                   >
-                    Previous
+                    <ChevronLeft className="h-4 w-4" />
+                    <span className="sr-only">Previous</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -318,7 +319,18 @@ export function AdminUsersPanel() {
                     onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                     disabled={page >= totalPages - 1}
                   >
-                    Next
+                    <ChevronRight className="h-4 w-4" />
+                    <span className="sr-only">Next</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(totalPages - 1)}
+                    disabled={page >= totalPages - 1}
+                    aria-label="Go to last page"
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                    <span className="sr-only">Last page</span>
                   </Button>
                 </div>
               </div>
