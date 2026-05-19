@@ -178,22 +178,27 @@ export const CandidateAnswerCard = ({
           </div>
 
           {/* User comparison */}
-          {userAnswer !== null && userAnswer !== undefined && (
-            <div className="mt-2 pt-2 border-t border-border/50">
-              <div className="text-xs text-muted-foreground mb-1">Your answer:</div>
-              {(userAnswerText || getAnswerText(userAnswer, true)) && (
-                <p className="text-sm italic text-foreground/80 mb-1">
-                  "{userAnswerText || getAnswerText(userAnswer, true)?.text}"
-                </p>
-              )}
-              <span className={cn(
-                "font-medium px-1.5 py-0.5 rounded text-xs",
-                getScoreColor(userAnswer)
-              )}>
-                {userAnswer > 0 ? '+' : ''}{userAnswer}
-              </span>
-            </div>
-          )}
+          {userAnswer !== null && userAnswer !== undefined && (() => {
+            const fallback = getAnswerText(userAnswer, true)?.text;
+            const resolvedUserText = userAnswerText || fallback;
+            return (
+              <div className="mt-2 pt-2 border-t border-border/50">
+                <div className="text-xs text-muted-foreground mb-1">Your answer:</div>
+                {resolvedUserText && (
+                  <p className="text-sm italic text-foreground/80 mb-1">
+                    "{resolvedUserText}"
+                  </p>
+                )}
+                <span className={cn(
+                  "font-medium px-1.5 py-0.5 rounded text-xs",
+                  getScoreColor(userAnswer)
+                )}>
+                  {userAnswer > 0 ? '+' : ''}{userAnswer}
+                </span>
+              </div>
+            );
+          })()}
+
         </CardContent>
       </Card>
     </TooltipProvider>
