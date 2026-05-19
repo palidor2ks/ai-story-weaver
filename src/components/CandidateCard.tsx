@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Candidate } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -8,6 +8,7 @@ import { ScoreText } from './ScoreText';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { OfficialAvatar } from './OfficialAvatar';
+import { useAuth } from '@/context/AuthContext';
 
 interface CandidateCardProps {
   candidate: Candidate;
@@ -24,6 +25,8 @@ export const CandidateCard = ({
   isSelected = false,
   onToggleSelect
 }: CandidateCardProps) => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const hasAIAnswers = candidate.hasAIAnswers ?? false;
   const answerCount = candidate.answerCount;
 
@@ -74,6 +77,12 @@ export const CandidateCard = ({
     if (compareMode && onToggleSelect) {
       e.preventDefault();
       onToggleSelect(candidate);
+      return;
+    }
+
+    if (!compareMode && !user) {
+      e.preventDefault();
+      navigate('/auth');
     }
   };
 

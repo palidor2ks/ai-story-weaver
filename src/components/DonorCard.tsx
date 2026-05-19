@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DonorAIAnalysisDialog } from '@/components/DonorAIAnalysisDialog';
+import { useAuth } from '@/context/AuthContext';
 
 interface DonorCardProps {
   id: string;
@@ -66,13 +67,23 @@ export const DonorCard = ({
   recipientCount,
   cycle,
 }: DonorCardProps) => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const hasMultipleVariations = nameVariations && nameVariations.length > 1;
   const hasMultipleTypes = types && types.length > 1;
+
+  const requireAuth = (e: React.MouseEvent) => {
+    if (user) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    navigate('/auth');
+    return true;
+  };
 
   return (
     <Card className="h-full transition-all duration-200 hover:shadow-lg hover:border-primary/30 group hover:scale-[1.01]">
       <CardContent className="p-5">
-        <Link to={`/donor/${id}`} className="block rounded-md -m-2 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+        <Link to={`/donor/${id}`} onClick={requireAuth} className="block rounded-md -m-2 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <div className="flex items-start justify-between mb-4">
             <div className={`p-2.5 rounded-lg ${getTypeBadgeStyle(type)}`}>
               {getTypeIcon(type)}
@@ -140,7 +151,7 @@ export const DonorCard = ({
         </Link>
 
         <div className="mt-4 flex items-center justify-between gap-2">
-          <Link to={`/donor/${id}`}>
+          <Link to={`/donor/${id}`} onClick={requireAuth}>
             <Button variant="ghost" size="sm" className="px-2">View details</Button>
           </Link>
 
@@ -151,7 +162,18 @@ export const DonorCard = ({
             cycle={cycle}
             profileHref={`/donor/${id}`}
             trigger={
-              <Button variant="outline" size="sm" className="gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={(e) => {
+                  if (!user) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    navigate('/auth');
+                  }
+                }}
+              >
                 <Sparkles className="h-3.5 w-3.5" />
                 AI Analysis
               </Button>
