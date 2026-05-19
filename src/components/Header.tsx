@@ -1,6 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { useUser } from '@/context/UserContext';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
@@ -11,8 +10,7 @@ import logoImg from '@/assets/logo.png';
 
 export const Header = () => {
   const location = useLocation();
-  const { user } = useUser();
-  const { loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { data: adminData, isLoading: adminLoading } = useAdminRole();
   const { data: politicianData, isLoading: politicianLoading } = usePoliticianRole();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
