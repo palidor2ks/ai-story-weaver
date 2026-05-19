@@ -133,15 +133,17 @@ export const Header = () => {
                 </Button>
               </Link>
             ))}
-            <Link 
-              to="/how-scoring-works"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <Button variant="ghost" className="w-full justify-start gap-3">
-                <HelpCircle className="w-5 h-5" />
-                How Scoring Works
-              </Button>
-            </Link>
+            {!authLoading && user && (
+              <Link 
+                to="/how-scoring-works"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Button variant="ghost" className="w-full justify-start gap-3">
+                  <HelpCircle className="w-5 h-5" />
+                  How Scoring Works
+                </Button>
+              </Link>
+            )}
             {isPolitician && (
               <Link 
                 to="/politician"
