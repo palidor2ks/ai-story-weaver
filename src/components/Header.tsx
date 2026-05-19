@@ -18,15 +18,17 @@ export const Header = () => {
   const isPolitician = politicianData?.isPolitician;
 
   const navItems = [
-    { path: '/feed', label: 'Feed', icon: LayoutGrid },
-    { path: '/candidates', label: 'Candidates', icon: Users },
-    { path: '/parties', label: 'Parties', icon: Building2 },
-    { path: '/donors', label: 'Donors', icon: DollarSign },
-    { path: '/committees', label: 'Committees', icon: Landmark },
-    { path: '/quiz-library', label: 'Quizzes', icon: BookOpen },
-    { path: '/blog', label: 'Blog', icon: Newspaper },
-    { path: '/profile', label: 'Profile', icon: User },
+    { path: '/feed', label: 'Feed', icon: LayoutGrid, requiresAuth: true },
+    { path: '/candidates', label: 'Candidates', icon: Users, requiresAuth: false },
+    { path: '/parties', label: 'Parties', icon: Building2, requiresAuth: true },
+    { path: '/donors', label: 'Donors', icon: DollarSign, requiresAuth: false },
+    { path: '/committees', label: 'Committees', icon: Landmark, requiresAuth: true },
+    { path: '/quiz-library', label: 'Quizzes', icon: BookOpen, requiresAuth: true },
+    { path: '/blog', label: 'Blog', icon: Newspaper, requiresAuth: false },
+    { path: '/profile', label: 'Profile', icon: User, requiresAuth: true },
   ];
+
+  const visibleNavItems = navItems.filter((item) => (item.requiresAuth ? !!user : true));
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -40,7 +42,7 @@ export const Header = () => {
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1">
-          {navItems.map(item => (
+          {visibleNavItems.map(item => (
             <Link key={item.path} to={item.path}>
               <Button 
                 variant={isActive(item.path) ? "secondary" : "ghost"}
@@ -112,7 +114,7 @@ export const Header = () => {
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-border bg-background animate-slide-up">
           <nav className="container py-4 space-y-2">
-            {navItems.map(item => (
+            {visibleNavItems.map(item => (
               <Link 
                 key={item.path} 
                 to={item.path}
