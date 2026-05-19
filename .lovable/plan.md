@@ -1,31 +1,35 @@
-## Why PR #66 looks broken
+## Fix: Header navigation visibility by role
 
-PR #66 only fixed the **candidate** answer text path (mapping `answer_value` → option text while ignoring skip options). It did not touch the **user's** answer text, which is fetched verbatim from `quiz_answers.selected_option.text`. When a user chose "Not important to me" (the skip option, value `0`), that literal string still renders in the "Your answer" block of every expanded candidate position — which is what makes it feel like the fix didn't land.
+**Problem:** `src/components/Header.tsx` mixes auth-gating inconsistently. Non-users see Candidates/Donors/Blog (good) but logged-in non-admin users are missing browse pages like Parties/Committees when they shouldn't be, and the admin/politician icons are gated correctly but the rule isn't unified.
 
-A second, latent gap: `useCandidateAnswersForUser` in `src/hooks/useCandidateAnswers.ts` is the only candidate-answer query the PR did not extend with `is_skip_option`. The hook is currently unused but should be aligned to prevent regressions.
+**Target behavior:**
+- **Non-logged-in:** Candidates, Donors, Blog only.
+- **Logged-in (non-admin):** Everything except the Admin shield icon (Feed, Candidates, Parties, Donors, Committees, Quizzes, Blog, Profile, How Scoring Works, plus Politician icon if applicable).
+- **Admin:** All of the above plus the Admin shield icon.
 
-## Fix
+### Changes
 
-1. `src/components/CandidatePositions.tsx`
-   - In the `user-quiz-answers-for-comparison` query, also select `selected_option.is_skip_option` and `selected_option.value`.
-   - When building `userAnswerMap`, set `text` to `null` whenever `selected_option.is_skip_option === true` (so downstream components fall back to nearest substantive option text, or hide the quote entirely).
+**`src/components/Header.tsx`** (only file edited):
 
-2. `src/components/CompactPositionRow.tsx`
-   - In the "Your answer" block, if `userAnswerText` is empty/skip, fall back to `getAnswerText(userAnswer)` (which already filters skip options) so the user sees the equivalent substantive label like "Neutral—support modest increases." instead of "Not important to me". If no substantive option exists, render only the numeric badge.
+1. Wait for auth + role data before rendering role-gated items to prevent flash:
+   - Pull `loading` from `useAuth()`.
+   - Pull `isLoading` from `useAdminRole()` and `usePoliticianRole()`.
+   - While `loading` is true, render the header shell (logo + mobile button) but skip the nav items list. Admin/politician icons render only once their respective queries settle.
 
-3. `src/components/CandidateAnswerCard.tsx`
-   - Same treatment in the "Your answer" block (line ~184): prefer `userAnswerText` only when it is not the skip label; otherwise fall back to `getAnswerText(userAnswer, true)?.text`.
+2. Confirm the `navItems` array `requiresAuth` flags match the spec:
+   - `requiresAuth: false` → Candidates, Donors, Blog
+   - `requiresAuth: true` → Feed, Parties, Committees, Quizzes, Profile
+   - (Current array already matches — no change needed there.)
 
-4. `src/hooks/useCandidateAnswers.ts`
-   - Add `is_skip_option` to the `question_options` embed inside `useCandidateAnswersForUser` so all three fetchers are consistent.
+3. Keep `isAdmin` / `isPolitician` icons rendered only when their data has loaded AND the flag is true, so non-admin logged-in users never see them and there's no flash for admins.
 
-## Out of scope
+4. Apply the same gating to the mobile menu (same `visibleNavItems` array is already shared — verify and keep).
 
-- No DB migration: the `is_skip_option` column already exists and data is correctly flagged (verified via query).
-- No changes to admin dialog or party comparison card — those already either handle the skip sentinel or fetch a single option.
-- No score recomputation: `answer_value` semantics are unchanged.
+### Verification
 
-## Verification
+- Log out → nav shows: Candidates, Donors, Blog, How Scoring Works icon.
+- Log in as regular user → adds Feed, Parties, Committees, Quizzes, Profile. No Admin icon.
+- Log in as admin → all of the above plus the Admin shield. No flash of the icon during load.
+- Mobile menu mirrors desktop in all three cases.
 
-- On `/candidate/S4NJ00524`, expand a Technology question where the user answered "Not important to me". The "Your answer" line should now read the nearest substantive label (e.g. `"Neutral—…"`) or just the numeric badge, never `"Not important to me"`.
-- Candidate quote line continues to show the substantive option text (unchanged behavior from PR #66).
+No other files need changes. No backend/data changes.
