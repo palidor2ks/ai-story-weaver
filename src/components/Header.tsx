@@ -1,6 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { useUser } from '@/context/UserContext';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
@@ -11,8 +10,7 @@ import logoImg from '@/assets/logo.png';
 
 export const Header = () => {
   const location = useLocation();
-  const { user } = useUser();
-  const { loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { data: adminData, isLoading: adminLoading } = useAdminRole();
   const { data: politicianData, isLoading: politicianLoading } = usePoliticianRole();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -60,11 +58,13 @@ export const Header = () => {
               </Button>
             </Link>
           ))}
-          <Link to="/how-scoring-works">
-            <Button variant="ghost" size="icon" className="ml-2">
-              <HelpCircle className="w-4 h-4" />
-            </Button>
-          </Link>
+          {!authLoading && user && (
+            <Link to="/how-scoring-works">
+              <Button variant="ghost" size="icon" className="ml-2">
+                <HelpCircle className="w-4 h-4" />
+              </Button>
+            </Link>
+          )}
           {isPolitician && (
             <Link to="/politician">
               <Button 
@@ -98,7 +98,7 @@ export const Header = () => {
               <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
                 <User className="w-3 h-3 text-primary-foreground" />
               </div>
-              <span className="text-sm font-medium text-foreground">{user.name}</span>
+              <span className="text-sm font-medium text-foreground">{(user.user_metadata as any)?.name || user.email}</span>
             </div>
           )}
         </div>
@@ -133,15 +133,17 @@ export const Header = () => {
                 </Button>
               </Link>
             ))}
-            <Link 
-              to="/how-scoring-works"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <Button variant="ghost" className="w-full justify-start gap-3">
-                <HelpCircle className="w-5 h-5" />
-                How Scoring Works
-              </Button>
-            </Link>
+            {!authLoading && user && (
+              <Link 
+                to="/how-scoring-works"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Button variant="ghost" className="w-full justify-start gap-3">
+                  <HelpCircle className="w-5 h-5" />
+                  How Scoring Works
+                </Button>
+              </Link>
+            )}
             {isPolitician && (
               <Link 
                 to="/politician"
