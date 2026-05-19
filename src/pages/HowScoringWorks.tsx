@@ -109,7 +109,7 @@ export const HowScoringWorks = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-foreground">
-                Each quiz question has answer options with values from -10 to +10:
+                Each quiz question has 5 answer options mapped to values from -10 to +10:
               </p>
               
               <div className="space-y-2">
@@ -118,8 +118,16 @@ export const HowScoringWorks = () => {
                   <span className="text-sm">Strongly progressive response</span>
                 </div>
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary">
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700">-5</Badge>
+                  <span className="text-sm">Lean progressive response</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary">
                   <Badge variant="outline" className="bg-purple-100 text-purple-700">0</Badge>
                   <span className="text-sm">Neutral or mixed response</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary">
+                  <Badge variant="outline" className="bg-red-50 text-red-700">+5</Badge>
+                  <span className="text-sm">Lean conservative response</span>
                 </div>
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary">
                   <Badge variant="outline" className="bg-red-100 text-red-700">+10</Badge>
