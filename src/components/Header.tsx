@@ -98,7 +98,7 @@ export const Header = () => {
               <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
                 <User className="w-3 h-3 text-primary-foreground" />
               </div>
-              <span className="text-sm font-medium text-foreground">{user.name}</span>
+              <span className="text-sm font-medium text-foreground">{(user.user_metadata as any)?.name || user.email}</span>
             </div>
           )}
         </div>
