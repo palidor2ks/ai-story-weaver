@@ -39,6 +39,52 @@ export interface UpcomingElectionsResult {
 
 const EMPTY: UpcomingElectionsResult = { federal: [], state: [], local: [] };
 
+const MAX_LOOKAHEAD_DAYS = 550;
+
+function normalizeUpcomingElections(data: UpcomingElectionsResult): UpcomingElectionsResult {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const maxDate = new Date(today);
+  maxDate.setDate(maxDate.getDate() + MAX_LOOKAHEAD_DAYS);
+
+  const toTime = (date: string) => {
+    const t = new Date(`${date}T00:00:00`).getTime();
+    return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
+  };
+
+  const filterAndDedupe = (rows: UpcomingElection[]) => {
+    const filtered = rows
+      .filter((row) => {
+        const d = new Date(`${row.election_date}T00:00:00`);
+        return d >= today && d <= maxDate;
+      })
+      .sort((a, b) => toTime(a.election_date) - toTime(b.election_date));
+
+    const byRace = new Map<string, UpcomingElection>();
+    for (const row of filtered) {
+      for (const c of row.candidates) {
+        const raceKey = [
+          c.office.toLowerCase(),
+          (c.state || row.state || '').toLowerCase(),
+          (c.district || row.jurisdiction || '').toLowerCase(),
+          row.election_type.toLowerCase(),
+        ].join('|');
+
+        if (!byRace.has(raceKey)) byRace.set(raceKey, row);
+      }
+    }
+
+    const allowedIds = new Set(Array.from(byRace.values()).map((r) => r.id));
+    return filtered.filter((r) => allowedIds.has(r.id));
+  };
+
+  return {
+    federal: filterAndDedupe(data.federal),
+    state: filterAndDedupe(data.state),
+    local: filterAndDedupe(data.local),
+  };
+}
+
 export function useUpcomingElections(address: string | null | undefined) {
   const geocodeQuery = useGeocode(address);
   const geocode = geocodeQuery.data;
@@ -67,7 +113,7 @@ export function useUpcomingElections(address: string | null | undefined) {
         console.error('[useUpcomingElections]', error);
         return EMPTY;
       }
-      return data ?? EMPTY;
+      return normalizeUpcomingElections(data ?? EMPTY);
     },
     enabled: !!address && !!geocode?.state && !geocodeQuery.isLoading,
     staleTime: 1000 * 60 * 60, // 1h
