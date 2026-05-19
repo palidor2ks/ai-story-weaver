@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
 import { User, LayoutGrid, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper } from 'lucide-react';
@@ -11,11 +12,13 @@ import logoImg from '@/assets/logo.png';
 export const Header = () => {
   const location = useLocation();
   const { user } = useUser();
-  const { data: adminData } = useAdminRole();
-  const { data: politicianData } = usePoliticianRole();
+  const { loading: authLoading } = useAuth();
+  const { data: adminData, isLoading: adminLoading } = useAdminRole();
+  const { data: politicianData, isLoading: politicianLoading } = usePoliticianRole();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const isAdmin = adminData?.isAdmin;
-  const isPolitician = politicianData?.isPolitician;
+  // Only treat role flags as true once their queries have settled, to prevent flash of admin/politician icons.
+  const isAdmin = !!user && !adminLoading && !!adminData?.isAdmin;
+  const isPolitician = !!user && !politicianLoading && !!politicianData?.isPolitician;
 
   const navItems = [
     { path: '/feed', label: 'Feed', icon: LayoutGrid, requiresAuth: true },
