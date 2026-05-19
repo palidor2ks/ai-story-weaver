@@ -45,9 +45,11 @@ export const CompactPositionRow = ({ answer, userAnswer, userAnswerText }: Compa
 
   const getAnswerText = (value: number): string | null => {
     if (!answer.question?.question_options?.length) return null;
-    const exactMatch = answer.question.question_options.find(opt => opt.value === value);
+    const substantiveOptions = answer.question.question_options.filter(opt => !opt.is_skip_option);
+    const optionsToUse = substantiveOptions.length > 0 ? substantiveOptions : answer.question.question_options;
+    const exactMatch = optionsToUse.find(opt => opt.value === value);
     if (exactMatch) return exactMatch.text;
-    const sorted = [...answer.question.question_options].sort(
+    const sorted = [...optionsToUse].sort(
       (a, b) => Math.abs(a.value - value) - Math.abs(b.value - value)
     );
     return sorted[0]?.text || null;

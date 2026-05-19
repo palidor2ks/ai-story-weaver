@@ -27,6 +27,7 @@ export interface CandidateAnswer {
       value: number;
       text: string;
       display_order: number | null;
+      is_skip_option?: boolean | null;
     }>;
   };
 }
@@ -54,7 +55,8 @@ export const useCandidateAnswers = (candidateId: string | undefined) => {
               id,
               value,
               text,
-              display_order
+              display_order,
+              is_skip_option
             )
           )
         `)
@@ -100,7 +102,7 @@ export const useSmartCandidateAnswers = (
             text,
             topic_id,
             topics (id, name),
-            question_options (id, value, text, display_order)
+            question_options (id, value, text, display_order, is_skip_option)
           )
         `)
         .eq('candidate_id', candidateId)

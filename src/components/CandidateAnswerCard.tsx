@@ -50,14 +50,16 @@ export const CandidateAnswerCard = ({
   // Get the answer text from question options - with nearest-match fallback
   const getAnswerText = (value: number, approximate = false): { text: string; isApproximate: boolean } | null => {
     if (!answer.question?.question_options || answer.question.question_options.length === 0) return null;
+    const substantiveOptions = answer.question.question_options.filter(opt => !opt.is_skip_option);
+    const optionsToUse = substantiveOptions.length > 0 ? substantiveOptions : answer.question.question_options;
     
     // Try exact match first
-    const exactMatch = answer.question.question_options.find(opt => opt.value === value);
+    const exactMatch = optionsToUse.find(opt => opt.value === value);
     if (exactMatch) return { text: exactMatch.text, isApproximate: false };
     
     // Fallback: find nearest option by value
     if (approximate) {
-      const sorted = [...answer.question.question_options].sort(
+      const sorted = [...optionsToUse].sort(
         (a, b) => Math.abs(a.value - value) - Math.abs(b.value - value)
       );
       if (sorted[0]) {
