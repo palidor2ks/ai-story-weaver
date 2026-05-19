@@ -184,7 +184,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/blog" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <Blog />
         </RouteGuard>
       } />
