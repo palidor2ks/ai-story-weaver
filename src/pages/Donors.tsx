@@ -3,7 +3,7 @@ import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsRight, Loader2 } from 'lucide-react';
 import { DonorFilters } from '@/components/DonorFilters';
 import { DonorCard } from '@/components/DonorCard';
 import { useDonorsPaginated, useAvailableDonorFilters, type DonorFilters as DonorFiltersType } from '@/hooks/useDonorsPaginated';
@@ -60,25 +60,6 @@ export const Donors = () => {
       setFilters(prev => ({ ...prev, page }));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  };
-
-  const getPageNumbers = () => {
-    const pages: (number | 'ellipsis')[] = [];
-    const showPages = 5;
-    
-    if (totalPages <= showPages + 2) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      pages.push(1);
-      if (currentPage > 3) pages.push('ellipsis');
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
-      for (let i = start; i <= end; i++) pages.push(i);
-      if (currentPage < totalPages - 2) pages.push('ellipsis');
-      pages.push(totalPages);
-    }
-    
-    return pages;
   };
 
   if (optionsLoading) {
@@ -216,25 +197,6 @@ export const Donors = () => {
               <ChevronLeft className="h-4 w-4" />
               <span className="hidden sm:inline ml-1">Previous</span>
             </Button>
-            
-            <div className="flex items-center gap-1">
-              {getPageNumbers().map((page, i) => (
-                page === 'ellipsis' ? (
-                  <span key={`ellipsis-${i}`} className="px-2 text-muted-foreground">…</span>
-                ) : (
-                  <Button
-                    key={page}
-                    variant={page === currentPage ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => goToPage(page)}
-                    className="w-9"
-                  >
-                    {page}
-                  </Button>
-                )
-              ))}
-            </div>
-            
             <Button
               variant="outline"
               size="sm"
@@ -243,6 +205,16 @@ export const Donors = () => {
             >
               <span className="hidden sm:inline mr-1">Next</span>
               <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => goToPage(totalPages)}
+              disabled={currentPage === totalPages}
+              aria-label="Go to last page"
+            >
+              <ChevronsRight className="h-4 w-4" />
+              <span className="sr-only">Last page</span>
             </Button>
           </div>
         )}
