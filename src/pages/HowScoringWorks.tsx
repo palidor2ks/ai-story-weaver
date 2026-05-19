@@ -143,16 +143,16 @@ export const HowScoringWorks = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-foreground">
-                Your overall score is weighted by your <strong>Top 5 topic priorities</strong>:
+                Your overall score is a weighted average of topic scores, using your selected priority weights:
               </p>
               
               <div className="space-y-2">
                 {[
-                  { rank: 1, weight: 5, normalized: '33%' },
-                  { rank: 2, weight: 4, normalized: '27%' },
-                  { rank: 3, weight: 3, normalized: '20%' },
-                  { rank: 4, weight: 2, normalized: '13%' },
-                  { rank: 5, weight: 1, normalized: '7%' },
+                  { rank: 1, weight: 'Highest priority', normalized: 'Most influence' },
+                  { rank: 2, weight: 'High priority', normalized: 'More influence' },
+                  { rank: 3, weight: 'Standard priority', normalized: 'Baseline influence' },
+                  { rank: 4, weight: 'Lower priority', normalized: 'Less influence' },
+                  { rank: 5, weight: 'Lowest priority', normalized: 'Least influence' },
                 ].map(({ rank, weight, normalized }) => (
                   <div key={rank} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
                     <div className="flex items-center gap-3">
@@ -162,7 +162,7 @@ export const HowScoringWorks = () => {
                       <span className="text-sm">Priority #{rank}</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm text-muted-foreground">Weight: {weight}</span>
+                      <span className="text-sm text-muted-foreground">{weight}</span>
                       <Badge variant="outline">{normalized}</Badge>
                     </div>
                   </div>
@@ -170,7 +170,7 @@ export const HowScoringWorks = () => {
               </div>
 
               <p className="text-sm text-muted-foreground">
-                Topics you care about most have more influence on your overall score and candidate matches.
+                The exact numeric weights depend on the flow (for example federal + local onboarding uses different rank weights), but higher-priority topics always count more in your overall score.
               </p>
             </CardContent>
           </Card>
@@ -192,8 +192,8 @@ export const HowScoringWorks = () => {
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
                   <Info className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium text-yellow-800">Imputed as Center (0.00)</p>
-                    <p className="text-sm text-yellow-700">Unknown stances are treated as neutral for scoring purposes.</p>
+                    <p className="font-medium text-yellow-800">Not Scored Until Evidence Exists</p>
+                    <p className="text-sm text-yellow-700">Unknown questions are excluded from score calculations rather than forced to 0.00.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
