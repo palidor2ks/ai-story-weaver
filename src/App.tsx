@@ -109,12 +109,12 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/candidates" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <Candidates />
         </RouteGuard>
       } />
       <Route path="/donors" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <Donors />
         </RouteGuard>
       } />
