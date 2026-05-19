@@ -8,7 +8,7 @@ import {
   Calculator, 
   Layers, 
   AlertTriangle, 
-  CheckCircle, 
+  CheckCircle2, 
   Info,
   ArrowLeft,
   ArrowRight
@@ -189,11 +189,11 @@ export const HowScoringWorks = () => {
               </p>
               
               <div className="space-y-3">
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
-                  <Info className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                  <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium text-yellow-800">Not Scored Until Evidence Exists</p>
-                    <p className="text-sm text-yellow-700">Unknown questions are excluded from score calculations rather than forced to 0.00.</p>
+                    <p className="font-medium text-blue-800">Not Scored Until Evidence Exists</p>
+                    <p className="text-sm text-blue-700">Unknown questions are excluded from score calculations rather than forced to 0.00.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
@@ -203,11 +203,11 @@ export const HowScoringWorks = () => {
                     <p className="text-sm text-yellow-700">More unknown stances = lower confidence badge.</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
-                  <CheckCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium text-yellow-800">Always Disclosed</p>
-                    <p className="text-sm text-yellow-700">Unknown questions are listed on candidate pages.</p>
+                    <p className="font-medium text-emerald-800">Always Disclosed</p>
+                    <p className="text-sm text-emerald-700">Unknown questions are listed on candidate pages.</p>
                   </div>
                 </div>
               </div>
@@ -218,7 +218,7 @@ export const HowScoringWorks = () => {
           <Card className="mb-6 shadow-elevated">
             <CardHeader>
               <CardTitle className="font-display flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-primary" />
+                <CheckCircle2 className="w-5 h-5 text-primary" />
                 Confidence Levels
               </CardTitle>
             </CardHeader>
