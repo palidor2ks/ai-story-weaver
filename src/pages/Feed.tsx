@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { CandidateCard } from '@/components/CandidateCard';
@@ -20,12 +20,27 @@ import { Candidate, GovernmentLevel } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 export const Feed = () => {
   const queryClient = useQueryClient();
 
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: userTopics = [] } = useUserTopics();
+  const { data: userQuestionIds = [] } = useQuery({
+    queryKey: ['feed-user-question-ids'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('quiz_answers')
+        .select('question_id')
+        .order('updated_at', { ascending: false })
+        .limit(150);
+
+      if (error) throw error;
+      return Array.from(new Set((data ?? []).map((row) => row.question_id).filter(Boolean)));
+    },
+    staleTime: 5 * 60 * 1000,
+  });
   const unified = useUnifiedCandidates({ address: profile?.address });
   const { data: upcomingElections } = useUpcomingElections(profile?.address);
 
@@ -451,6 +466,7 @@ export const Feed = () => {
             <RelevantNewsFeed
               people={newsPeople}
               topics={userTopics.map(t => (t as any).topic_id || (t as any).name).filter(Boolean)}
+              questionIds={userQuestionIds}
               state={unified.myReps[0]?.state}
               district={unified.myReps.find(r => r.district)?.district}
               title="Relevant News for Your Representatives"
