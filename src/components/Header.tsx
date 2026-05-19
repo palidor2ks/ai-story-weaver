@@ -31,7 +31,8 @@ export const Header = () => {
     { path: '/profile', label: 'Profile', icon: User, requiresAuth: true },
   ];
 
-  const visibleNavItems = navItems.filter((item) => (item.requiresAuth ? !!user : true));
+  // While auth is loading, render only public (non-auth) items to avoid flashing auth-gated links.
+  const visibleNavItems = navItems.filter((item) => (item.requiresAuth ? !authLoading && !!user : true));
 
   const isActive = (path: string) => location.pathname === path;
 
