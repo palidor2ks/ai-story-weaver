@@ -308,7 +308,7 @@ export const Candidates = () => {
 
         <div className={cn(
           "grid gap-4 md:grid-cols-2 lg:grid-cols-3",
-          compareMode && selectedCandidates.length > 0 && "pb-48" // Space for compare panel
+          compareMode && compareReady && selectedCandidates.length > 0 && "pb-48" // Space for compare panel
         )}>
           {filteredCandidates.map((candidate, index) => (
             <CandidateCard 
@@ -340,7 +340,7 @@ export const Candidates = () => {
         )}
 
         {/* Compare Panel */}
-        {compareMode && selectedCandidates.length > 0 && (
+        {compareMode && compareReady && selectedCandidates.length > 0 && (
           <ComparePanel 
             candidates={selectedCandidates}
             userScore={profile?.overall_score ?? 0}
