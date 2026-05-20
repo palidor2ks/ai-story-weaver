@@ -193,11 +193,15 @@ export const ComparePanel = ({
             className={cn(
               "grid gap-3 sm:gap-4 grid-flow-col auto-cols-[82%] overflow-x-auto snap-x snap-mandatory -mx-1 px-1",
               "sm:grid-flow-row sm:auto-cols-auto sm:overflow-visible sm:snap-none sm:mx-0 sm:px-0",
+              {
+                'sm:grid-cols-1': visibleCandidates.length === 1,
+                'sm:grid-cols-2': visibleCandidates.length === 2,
+                'sm:grid-cols-3': visibleCandidates.length === 3,
+                'sm:grid-cols-4': visibleCandidates.length >= 4,
+              },
             )}
-            style={{
-              ['--cols' as any]: Math.min(candidates.length, 4),
-            }}
           >
+
             {visibleCandidates.map((candidate) => {
               const finance = financeByCandidate[candidate.id];
               const diffFromUser = Math.abs((candidate.overallScore ?? 0) - userScore);
