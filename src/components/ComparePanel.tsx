@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { X, Users, ArrowRight } from 'lucide-react';
+import { X, Users, ArrowRight, Landmark, HandCoins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,8 @@ import { OfficialAvatar } from './OfficialAvatar';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ComparePanelProps {
   candidates: Candidate[];
@@ -17,12 +19,21 @@ interface ComparePanelProps {
   onClose: () => void;
 }
 
-export const ComparePanel = ({ 
-  candidates, 
-  userScore, 
-  onRemove, 
+interface FinanceSnapshot {
+  candidateId: string;
+  totalRaised: number;
+  donorCount: number;
+  topDonors: { name: string; amount: number }[];
+  smallDonationAmount: number;
+  smallDonationCount: number;
+}
+
+export const ComparePanel = ({
+  candidates,
+  userScore,
+  onRemove,
   onClear,
-  onClose 
+  onClose
 }: ComparePanelProps) => {
   const getPartyColor = (party: string) => {
     switch (party) {
@@ -33,10 +44,102 @@ export const ComparePanel = ({
     }
   };
 
-  // Sort by score for easier comparison
   const sortedCandidates = useMemo(() => {
     return [...candidates].sort((a, b) => (b.overallScore ?? 0) - (a.overallScore ?? 0));
   }, [candidates]);
+
+  const visibleCandidates = sortedCandidates.slice(0, 4);
+
+  const { data: financeByCandidate = {} } = useQuery({
+    queryKey: ['compare-finance-snapshot', visibleCandidates.map(c => c.id).join(',')],
+    queryFn: async () => {
+      if (!visibleCandidates.length) return {} as Record<string, FinanceSnapshot>;
+
+      const candidateIds = visibleCandidates.map((c) => c.id);
+      const snapshots: Record<string, FinanceSnapshot> = Object.fromEntries(
+        candidateIds.map((id) => [id, { candidateId: id, totalRaised: 0, donorCount: 0, topDonors: [], smallDonationAmount: 0, smallDonationCount: 0 }]),
+      );
+
+      const { data: committees } = await supabase
+        .from('candidate_committees')
+        .select('candidate_id, fec_committee_id')
+        .in('candidate_id', candidateIds);
+
+      const committeeByCandidate = new Map<string, string[]>();
+      (committees || []).forEach((row) => {
+        if (!row.candidate_id || !row.fec_committee_id) return;
+        const list = committeeByCandidate.get(row.candidate_id) || [];
+        list.push(row.fec_committee_id);
+        committeeByCandidate.set(row.candidate_id, list);
+      });
+
+      const allCommitteeIds = Array.from(new Set((committees || []).map((r) => r.fec_committee_id).filter(Boolean)));
+      if (!allCommitteeIds.length) return snapshots;
+
+      const [{ data: rollups }, { data: topContributions }] = await Promise.all([
+        supabase
+          .from('committee_finance_rollups')
+          .select('committee_id, candidate_id, local_itemized, fec_total_receipts, donor_count')
+          .in('committee_id', allCommitteeIds),
+        supabase
+          .from('contributions')
+          .select('candidate_id, contributor_name, contributor_type, amount')
+          .in('recipient_committee_id', allCommitteeIds)
+          .order('amount', { ascending: false })
+          .limit(1200),
+      ]);
+
+      (rollups || []).forEach((row) => {
+        if (!row.candidate_id || !snapshots[row.candidate_id]) return;
+        snapshots[row.candidate_id].totalRaised += Number(row.local_itemized ?? row.fec_total_receipts ?? 0);
+        snapshots[row.candidate_id].donorCount += Number(row.donor_count ?? 0);
+      });
+
+      const topDonorMap = new Map<string, { name: string; amount: number }[]>();
+      const individualDonorSet = new Map<string, Set<string>>();
+
+      (topContributions || []).forEach((row) => {
+        const candidateId = row.candidate_id;
+        if (!candidateId || !snapshots[candidateId]) return;
+        const amount = Number(row.amount || 0);
+        const name = row.contributor_name || 'Unknown';
+        const list = topDonorMap.get(candidateId) || [];
+        list.push({ name, amount });
+        topDonorMap.set(candidateId, list);
+
+        if (row.contributor_type === 'Individual') {
+          const donorNames = individualDonorSet.get(candidateId) || new Set<string>();
+          donorNames.add(name);
+          individualDonorSet.set(candidateId, donorNames);
+
+          if (amount <= 200) {
+            snapshots[candidateId].smallDonationAmount += amount;
+            snapshots[candidateId].smallDonationCount += 1;
+          }
+        }
+      });
+
+      topDonorMap.forEach((donors, candidateId) => {
+        const aggregate = donors.reduce((acc, donor) => {
+          acc[donor.name] = (acc[donor.name] || 0) + donor.amount;
+          return acc;
+        }, {} as Record<string, number>);
+
+        snapshots[candidateId].topDonors = Object.entries(aggregate)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([name, amount]) => ({ name, amount }));
+      });
+
+      individualDonorSet.forEach((donors, candidateId) => {
+        snapshots[candidateId].donorCount = donors.size;
+      });
+
+      return snapshots;
+    },
+    enabled: visibleCandidates.length > 0,
+    staleTime: 1000 * 60 * 10,
+  });
 
   if (candidates.length === 0) return null;
 
@@ -47,7 +150,7 @@ export const ComparePanel = ({
           <div className="flex items-center justify-between">
             <CardTitle className="font-display text-lg flex items-center gap-2">
               <Users className="w-5 h-5 text-primary" />
-              Compare ({candidates.length})
+              Compare Side-by-Side ({candidates.length})
             </CardTitle>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={onClear} className="text-xs">
@@ -60,54 +163,80 @@ export const ComparePanel = ({
           </div>
         </CardHeader>
         <CardContent className="px-4 pb-4">
-          {/* Comparison Grid */}
           <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${Math.min(candidates.length, 4)}, 1fr)` }}>
-            {sortedCandidates.slice(0, 4).map((candidate) => (
-              <div 
-                key={candidate.id} 
-                className="relative p-3 rounded-lg border border-border bg-secondary/30 hover:bg-secondary/50 transition-colors"
-              >
-                {/* Remove button */}
-                <button 
-                  onClick={() => onRemove(candidate.id)}
-                  className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs hover:bg-destructive/80 transition-colors"
-                >
-                  <X className="w-3 h-3" />
-                </button>
+            {visibleCandidates.map((candidate) => {
+              const finance = financeByCandidate[candidate.id];
+              const diffFromUser = Math.abs((candidate.overallScore ?? 0) - userScore);
 
-                {/* Candidate info */}
-                <div className="flex items-center gap-2 mb-3">
-                  <OfficialAvatar
-                    imageUrl={candidate.imageUrl}
-                    name={candidate.name}
-                    party={candidate.party}
-                    size="sm"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold text-sm text-foreground truncate">{candidate.name}</h4>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs text-muted-foreground truncate">{candidate.office}</span>
-                      <Badge variant="outline" className={cn("text-[10px] px-1 py-0", getPartyColor(candidate.party))}>
-                        {candidate.party.charAt(0)}
-                      </Badge>
+              return (
+                <div
+                  key={candidate.id}
+                  className="relative p-3 rounded-lg border border-border bg-secondary/30 hover:bg-secondary/50 transition-colors"
+                >
+                  <button
+                    onClick={() => onRemove(candidate.id)}
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs hover:bg-destructive/80 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+
+                  <div className="flex items-center gap-2 mb-3">
+                    <OfficialAvatar imageUrl={candidate.imageUrl} name={candidate.name} party={candidate.party} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-sm text-foreground truncate">{candidate.name}</h4>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs text-muted-foreground truncate">{candidate.office}</span>
+                        <Badge variant="outline" className={cn('text-[10px] px-1 py-0', getPartyColor(candidate.party))}>
+                          {candidate.party.charAt(0)}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Score */}
-                <div className="mb-3 flex justify-center">
-                  <ScoreText score={candidate.overallScore} size="lg" showLabel />
-                </div>
+                  <div className="mb-3 flex justify-center">
+                    <ScoreText score={candidate.overallScore} size="lg" showLabel />
+                  </div>
 
-                {/* View profile link */}
-                <Link to={`/candidate/${candidate.id}`}>
-                  <Button variant="ghost" size="sm" className="w-full mt-2 text-xs gap-1">
-                    View Profile
-                    <ArrowRight className="w-3 h-3" />
-                  </Button>
-                </Link>
-              </div>
-            ))}
+                  <div className="space-y-2 text-xs border rounded-md p-2 bg-background/60">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-muted-foreground">Score gap vs you</span>
+                      <span className="font-medium">{diffFromUser.toFixed(1)} pts</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-muted-foreground inline-flex items-center gap-1"><Landmark className="w-3 h-3" />Raised</span>
+                      <span className="font-medium">${(finance?.totalRaised ?? 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-muted-foreground inline-flex items-center gap-1"><HandCoins className="w-3 h-3" />Donors</span>
+                      <span className="font-medium">{(finance?.donorCount ?? 0).toLocaleString()}</span>
+                    </div>
+                    <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-1.5">
+                      <p className="text-emerald-700 dark:text-emerald-300 text-[11px] mb-0.5">Small-dollar support</p>
+                      <p className="font-medium text-[11px]">
+                        ${ (finance?.smallDonationAmount ?? 0).toLocaleString()} from {(finance?.smallDonationCount ?? 0).toLocaleString()} small donations
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground mb-1">Major donors</p>
+                      <ul className="font-medium space-y-0.5">
+                        {finance?.topDonors?.length ? finance.topDonors.map((donor) => (
+                          <li key={`${candidate.id}-${donor.name}`} className="truncate">
+                            {donor.name} — ${donor.amount.toLocaleString()}
+                          </li>
+                        )) : <li>No donor data yet</li>}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <Link to={`/candidate/${candidate.id}`}>
+                    <Button variant="ghost" size="sm" className="w-full mt-2 text-xs gap-1">
+                      View Profile
+                      <ArrowRight className="w-3 h-3" />
+                    </Button>
+                  </Link>
+                </div>
+              );
+            })}
           </div>
 
           {candidates.length > 4 && (

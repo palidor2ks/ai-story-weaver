@@ -32,8 +32,10 @@ export const Candidates = () => {
   // Compare mode state
   const [compareMode, setCompareMode] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState<Candidate[]>([]);
+  const [compareReady, setCompareReady] = useState(false);
 
   const handleToggleSelect = useCallback((candidate: Candidate) => {
+    setCompareReady(false);
     setSelectedCandidates(prev => {
       const exists = prev.find(c => c.id === candidate.id);
       if (exists) return prev.filter(c => c.id !== candidate.id);
@@ -43,13 +45,18 @@ export const Candidates = () => {
   }, []);
 
   const handleRemoveFromCompare = useCallback((id: string) => {
+    setCompareReady(false);
     setSelectedCandidates(prev => prev.filter(c => c.id !== id));
   }, []);
 
-  const handleClearCompare = useCallback(() => setSelectedCandidates([]), []);
+  const handleClearCompare = useCallback(() => {
+    setCompareReady(false);
+    setSelectedCandidates([]);
+  }, []);
 
   const handleCloseCompare = useCallback(() => {
     setCompareMode(false);
+    setCompareReady(false);
     setSelectedCandidates([]);
   }, []);
 
@@ -259,6 +266,7 @@ export const Candidates = () => {
                   handleCloseCompare();
                 } else {
                   setCompareMode(true);
+                  setCompareReady(false);
                 }
               }}
               className={cn("gap-2", compareMode && "bg-primary")}
@@ -275,6 +283,17 @@ export const Candidates = () => {
                 </>
               )}
             </Button>
+
+            {compareMode && (
+              <Button
+                size="sm"
+                onClick={() => setCompareReady(true)}
+                disabled={selectedCandidates.length < 2}
+                className="gap-2"
+              >
+                Done ({selectedCandidates.length})
+              </Button>
+            )}
           </div>
         </div>
 
@@ -291,7 +310,7 @@ export const Candidates = () => {
 
         <div className={cn(
           "grid gap-4 md:grid-cols-2 lg:grid-cols-3",
-          compareMode && selectedCandidates.length > 0 && "pb-48" // Space for compare panel
+          compareMode && compareReady && selectedCandidates.length > 0 && "pb-48" // Space for compare panel
         )}>
           {filteredCandidates.map((candidate, index) => (
             <CandidateCard 
@@ -323,7 +342,7 @@ export const Candidates = () => {
         )}
 
         {/* Compare Panel */}
-        {compareMode && selectedCandidates.length > 0 && (
+        {compareMode && compareReady && selectedCandidates.length > 0 && (
           <ComparePanel 
             candidates={selectedCandidates}
             userScore={profile?.overall_score ?? 0}
