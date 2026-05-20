@@ -1,30 +1,46 @@
-## Plan
+## PR #79 Review — Compare Side-by-Side Finance Panel
 
-Fix `src/components/Header.tsx` so the navigation matches the approved visibility rules:
+The PR adds a `Done` gate and a per-candidate finance snapshot (raised, donor count, small-dollar, top donors) into `ComparePanel`. The UI/gating direction is fine, but the data layer has several correctness and project-convention issues that must be fixed before merging.
 
-1. **Use the real authenticated user source**
-   - Replace `useUser()` in the header with `useAuth()` for `user` and `loading`.
-   - Root cause: `useUser()` is a local quiz/onboarding context and is not the Supabase auth user, so logged-in users can still look like non-users in the nav.
+### Issues found
 
-2. **Correct public vs signed-in nav items**
-   - Logged-out visitors see only public browse pages: `Candidates`, `Donors`, `Blog`.
-   - Signed-in non-admin users see: `Feed`, `Candidates`, `Parties`, `Donors`, `Committees`, `Quizzes`, `Blog`, `Profile`, plus `How Scoring Works` if it remains a signed-in page.
-   - Admin users see all of the above plus `Admin`.
+1. **Donor count clobbered.** The query first sums `donor_count` from `committee_finance_rollups`, then later overwrites it with `individualDonorSet.get(candidateId).size`. The second number is derived from only the top 1200 contributions (and only Individuals), so it almost always understates the real donor count. The rollup value must win.
+2. **Top contributions limited globally, not per candidate.** `.limit(1200)` across all selected candidates means a high-raising candidate can crowd out donor rows for the others, producing empty/biased "Major donors" lists. Needs per-candidate fetch or a window function.
+3. **JU/BD committees are not excluded.** Project rule (memory: *External Committee Finance*): JU/BD committees are excluded from main candidate totals. The PR pulls every `candidate_committees` row without filtering by `designation`/`role`, so totals can be inflated.
+4. **Conduit/pass-through contributions not excluded.** Project rule (memory: *Automated Exclusion Logic*, *Conduit Reference Data*): ActBlue-style conduits and memo-code `X` rows must be excluded from net totals. PR sums raw `amount`.
+5. **Reconciliation formula not used.** Memory: *Reconciliation Calculation Formula* — totals should be `max(local, FEC)` per cycle, not `local_itemized ?? fec_total_receipts`. Mixing the two across cycles double-counts or under-counts.
+6. **No cycle scope.** Query sums across all cycles in `committee_finance_rollups`, so a long-serving incumbent's lifetime totals are compared with a newcomer's single cycle. Default to the latest cycle (or expose via `useFinanceCycles`).
+7. **Candidate attribution risk.** The contributions query keys off `row.candidate_id`, which is null for many JU/BD/orphan rows. Should map via `committeeByCandidate` so a contribution to a known committee is attributed to that candidate.
+8. **`compareReady` reset on every toggle.** Adding or removing a single candidate forces the user to click *Done* again. Reset only on `clear`/`close`/mode-toggle; on add/remove just refetch.
+9. **RLS / public access.** `/candidates` is public. Confirm `committee_finance_rollups` and `contributions` are readable by `anon`; if not, the panel will silently render zeros for logged-out users. Either gate the panel to authenticated users or relax RLS for these read-only aggregates.
+10. **Minor:** "small donor" threshold of `$200` should be a named constant; `topDonors` aggregation uses raw `contributor_name` without alias resolution (memory: *Donor Alias Resolution Priority* — should prefer `display_name`).
 
-3. **Remove/limit the extra icon issue shown in the screenshot**
-   - The unlabeled `How Scoring Works` help icon currently appears for non-users even though its route requires auth.
-   - Gate it behind authenticated user state, or convert it into a normal signed-in nav item if space allows.
+### Plan
 
-4. **Keep role buttons safely gated**
-   - Admin and politician dashboard buttons render only after auth and role queries finish.
-   - Regular users never see the Admin shield.
+1. **Refactor finance fetch in `ComparePanel`**
+   - Filter `candidate_committees` to exclude `designation IN ('J','U','B','D')` (keep authorized/principal only).
+   - Compute `totalRaised` per candidate as `sum over committees of max(local_itemized, fec_total_receipts)` within the selected cycle, matching the reconciliation rule.
+   - Keep `donorCount` from rollups only (no overwrite).
+   - Replace single `.limit(1200)` contributions query with per-candidate queries (Promise.all): for each candidate, fetch its committees' top contributions ordered by amount, limit 50. Aggregate top 3 donors with alias resolution (`donor_aliases.display_name` if available, else `contributor_name`).
+   - Exclude conduits and memo-code `X` rows (use existing exclusion list pattern; see `useCommittees.ts` and the conduit memory).
+   - Add `cycle` parameter (default to latest from `useFinanceCycles`).
 
-5. **Mirror desktop and mobile behavior**
-   - Use the same filtered nav list for desktop and mobile so both menus behave identically.
+2. **Fix UX gating in `Candidates.tsx`**
+   - Do NOT reset `compareReady` in `handleToggleSelect` / `handleRemoveFromCompare`. Only reset on `handleClearCompare`, `handleCloseCompare`, and when entering compare mode.
+   - Keep `Done` button disabled until ≥2 candidates selected.
 
-## Technical details
+3. **RLS verification**
+   - Run a quick `supabase--read_query` against `committee_finance_rollups` and `contributions` as `anon` to confirm public read; if blocked, either add a public read policy for aggregate columns only, or hide the finance section for anonymous viewers.
 
-- Change `Header.tsx` to rely on `const { user, loading: authLoading } = useAuth()` only.
-- Remove the `useUser()` import and local user context dependency from the header.
-- Update `visibleNavItems` and the `How Scoring Works` button condition to require `!authLoading && user` when appropriate.
-- Keep public links visible during auth loading; hide auth-only links until auth resolves.
+4. **Polish**
+   - Extract `SMALL_DONATION_THRESHOLD = 200` constant.
+   - Add a tiny loading skeleton inside each compare card while the finance query is pending.
+   - Add `aria-label`s on Remove/Done buttons.
+
+### Technical details
+
+- Files touched: `src/components/ComparePanel.tsx`, `src/pages/Candidates.tsx`.
+- New helpers may go inline in `ComparePanel` (or extracted to `src/hooks/useCompareFinance.ts` if it grows).
+- Reuse existing conventions in `useCommittees.ts` (rollup selection, designation filter) and `useFinanceReconciliation.ts` (max(local, FEC) formula).
+- Use `donor_aliases` lookup table for top-donor display names (see *Donor Alias Resolution Priority* memory).
+- No schema changes required; no new edge functions.

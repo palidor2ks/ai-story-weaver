@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { X, Users, ArrowRight, Landmark, HandCoins } from 'lucide-react';
+import { X, Users, ArrowRight, Landmark, HandCoins, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
+import { useFinanceCycles } from '@/hooks/useFinanceCycles';
 
 interface ComparePanelProps {
   candidates: Candidate[];
@@ -19,20 +21,36 @@ interface ComparePanelProps {
   onClose: () => void;
 }
 
+interface TopDonor {
+  name: string;
+  amount: number;
+}
+
 interface FinanceSnapshot {
   candidateId: string;
   totalRaised: number;
   donorCount: number;
-  topDonors: string[];
+  smallDonationAmount: number;
+  smallDonationCount: number;
+  topDonors: TopDonor[];
 }
+
+const SMALL_DONATION_THRESHOLD = 200;
+// Designations excluded from a candidate's primary fundraising totals
+// (Joint, Unauthorized, Leadership PAC / Buddy committees, etc.).
+const EXCLUDED_DESIGNATIONS = new Set(['J', 'U', 'B', 'D']);
 
 export const ComparePanel = ({
   candidates,
   userScore,
   onRemove,
   onClear,
-  onClose
+  onClose,
 }: ComparePanelProps) => {
+  const { user } = useAuth();
+  const { data: cycles } = useFinanceCycles();
+  const cycle = cycles?.[0];
+
   const getPartyColor = (party: string) => {
     switch (party) {
       case 'Democrat': return 'bg-blue-500/10 text-blue-700 border-blue-500/30';
@@ -42,85 +60,113 @@ export const ComparePanel = ({
     }
   };
 
-  const sortedCandidates = useMemo(() => {
-    return [...candidates].sort((a, b) => (b.overallScore ?? 0) - (a.overallScore ?? 0));
-  }, [candidates]);
-
+  const sortedCandidates = useMemo(
+    () => [...candidates].sort((a, b) => (b.overallScore ?? 0) - (a.overallScore ?? 0)),
+    [candidates],
+  );
   const visibleCandidates = sortedCandidates.slice(0, 4);
+  const candidateIds = visibleCandidates.map((c) => c.id);
 
-  const { data: financeByCandidate = {} } = useQuery({
-    queryKey: ['compare-finance-snapshot', visibleCandidates.map(c => c.id).join(',')],
-    queryFn: async () => {
-      if (!visibleCandidates.length) return {} as Record<string, FinanceSnapshot>;
-
-      const candidateIds = visibleCandidates.map((c) => c.id);
+  const { data: financeByCandidate = {}, isLoading: financeLoading } = useQuery({
+    queryKey: ['compare-finance-snapshot', cycle ?? 'latest', candidateIds.join(',')],
+    enabled: candidateIds.length > 0 && !!cycle,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async (): Promise<Record<string, FinanceSnapshot>> => {
       const snapshots: Record<string, FinanceSnapshot> = Object.fromEntries(
-        candidateIds.map((id) => [id, { candidateId: id, totalRaised: 0, donorCount: 0, topDonors: [] }]),
+        candidateIds.map((id) => [
+          id,
+          { candidateId: id, totalRaised: 0, donorCount: 0, smallDonationAmount: 0, smallDonationCount: 0, topDonors: [] },
+        ]),
       );
 
-      const { data: committees } = await supabase
+      // 1) Authorized/principal committees only.
+      const { data: committees, error: committeeError } = await supabase
         .from('candidate_committees')
-        .select('candidate_id, fec_committee_id')
+        .select('candidate_id, fec_committee_id, designation')
         .in('candidate_id', candidateIds);
+      if (committeeError) throw committeeError;
 
-      const committeeByCandidate = new Map<string, string[]>();
-      (committees || []).forEach((row) => {
+      const committeesByCandidate = new Map<string, string[]>();
+      (committees ?? []).forEach((row) => {
         if (!row.candidate_id || !row.fec_committee_id) return;
-        const list = committeeByCandidate.get(row.candidate_id) || [];
+        if (row.designation && EXCLUDED_DESIGNATIONS.has(row.designation)) return;
+        const list = committeesByCandidate.get(row.candidate_id) ?? [];
         list.push(row.fec_committee_id);
-        committeeByCandidate.set(row.candidate_id, list);
+        committeesByCandidate.set(row.candidate_id, list);
       });
 
-      const allCommitteeIds = Array.from(new Set((committees || []).map((r) => r.fec_committee_id).filter(Boolean)));
-      if (!allCommitteeIds.length) return snapshots;
+      const allCommitteeIds = Array.from(
+        new Set(Array.from(committeesByCandidate.values()).flat()),
+      );
+      if (allCommitteeIds.length === 0) return snapshots;
 
-      const [{ data: rollups }, { data: topContributions }] = await Promise.all([
-        supabase
-          .from('committee_finance_rollups')
-          .select('committee_id, candidate_id, local_itemized, fec_total_receipts, donor_count')
-          .in('committee_id', allCommitteeIds),
-        supabase
-          .from('contributions')
-          .select('candidate_id, contributor_name, amount')
-          .in('recipient_committee_id', allCommitteeIds)
-          .order('amount', { ascending: false })
-          .limit(1200),
-      ]);
+      // 2) Per-cycle rollups: totalRaised = sum( max(local_itemized, fec_total_receipts) ),
+      //    donorCount = sum(donor_count).
+      const { data: rollups, error: rollupError } = await supabase
+        .from('committee_finance_rollups')
+        .select('committee_id, candidate_id, local_itemized, fec_total_receipts, donor_count, cycle')
+        .in('committee_id', allCommitteeIds)
+        .eq('cycle', cycle!);
+      if (rollupError) throw rollupError;
 
-      (rollups || []).forEach((row) => {
-        if (!row.candidate_id || !snapshots[row.candidate_id]) return;
-        snapshots[row.candidate_id].totalRaised += Number(row.local_itemized ?? row.fec_total_receipts ?? 0);
-        snapshots[row.candidate_id].donorCount += Number(row.donor_count ?? 0);
+      const committeeOwner = new Map<string, string>();
+      committeesByCandidate.forEach((ids, candidateId) => {
+        ids.forEach((id) => committeeOwner.set(id, candidateId));
       });
 
-      const topDonorMap = new Map<string, { name: string; amount: number }[]>();
-      (topContributions || []).forEach((row) => {
-        const candidateId = row.candidate_id;
-        if (!candidateId || !snapshots[candidateId]) return;
-        const list = topDonorMap.get(candidateId) || [];
-        list.push({ name: row.contributor_name || 'Unknown', amount: Number(row.amount || 0) });
-        topDonorMap.set(candidateId, list);
+      (rollups ?? []).forEach((row) => {
+        const owner = row.candidate_id ?? committeeOwner.get(row.committee_id);
+        if (!owner || !snapshots[owner]) return;
+        const local = Number(row.local_itemized ?? 0);
+        const fec = Number(row.fec_total_receipts ?? 0);
+        snapshots[owner].totalRaised += Math.max(local, fec);
+        snapshots[owner].donorCount += Number(row.donor_count ?? 0);
       });
 
-      topDonorMap.forEach((donors, candidateId) => {
-        const aggregate = donors.reduce((acc, donor) => {
-          acc[donor.name] = (acc[donor.name] || 0) + donor.amount;
-          return acc;
-        }, {} as Record<string, number>);
+      // 3) Top donors + small-dollar (auth-only because `donors`/`contributions` are not public).
+      if (user) {
+        await Promise.all(
+          Array.from(committeesByCandidate.entries()).map(async ([candidateId, ids]) => {
+            const { data: donors } = await supabase
+              .from('donors')
+              .select('display_name, name, amount, type, recipient_committee_id, conduit_committee_id')
+              .in('recipient_committee_id', ids)
+              .eq('cycle', cycle!)
+              .eq('is_conduit_org', false)
+              .is('conduit_committee_id', null)
+              .order('amount', { ascending: false })
+              .limit(75);
 
-        snapshots[candidateId].topDonors = Object.entries(aggregate)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([name]) => name);
-      });
+            const aggregate = new Map<string, number>();
+            let smallAmount = 0;
+            let smallCount = 0;
+            (donors ?? []).forEach((row) => {
+              const amount = Number(row.amount ?? 0);
+              const name = (row.display_name || row.name || 'Unknown').trim();
+              aggregate.set(name, (aggregate.get(name) ?? 0) + amount);
+              if (row.type === 'Individual' && amount <= SMALL_DONATION_THRESHOLD) {
+                smallAmount += amount;
+                smallCount += 1;
+              }
+            });
+
+            snapshots[candidateId].topDonors = Array.from(aggregate.entries())
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 3)
+              .map(([name, amount]) => ({ name, amount }));
+            snapshots[candidateId].smallDonationAmount = smallAmount;
+            snapshots[candidateId].smallDonationCount = smallCount;
+          }),
+        );
+      }
 
       return snapshots;
     },
-    enabled: visibleCandidates.length > 0,
-    staleTime: 1000 * 60 * 10,
   });
 
   if (candidates.length === 0) return null;
+
+  const fmtMoney = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 animate-slide-up">
@@ -130,12 +176,13 @@ export const ComparePanel = ({
             <CardTitle className="font-display text-lg flex items-center gap-2">
               <Users className="w-5 h-5 text-primary" />
               Compare Side-by-Side ({candidates.length})
+              {cycle && <span className="text-xs text-muted-foreground font-normal">· {cycle} cycle</span>}
             </CardTitle>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={onClear} className="text-xs">
                 Clear All
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Close compare panel">
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -154,6 +201,7 @@ export const ComparePanel = ({
                 >
                   <button
                     onClick={() => onRemove(candidate.id)}
+                    aria-label={`Remove ${candidate.name} from compare`}
                     className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs hover:bg-destructive/80 transition-colors"
                   >
                     <X className="w-3 h-3" />
@@ -182,19 +230,45 @@ export const ComparePanel = ({
                       <span className="font-medium">{diffFromUser.toFixed(1)} pts</span>
                     </div>
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-muted-foreground inline-flex items-center gap-1"><Landmark className="w-3 h-3" />Raised</span>
-                      <span className="font-medium">${(finance?.totalRaised ?? 0).toLocaleString()}</span>
+                      <span className="text-muted-foreground inline-flex items-center gap-1">
+                        <Landmark className="w-3 h-3" />Raised
+                      </span>
+                      <span className="font-medium">
+                        {financeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : fmtMoney(finance?.totalRaised ?? 0)}
+                      </span>
                     </div>
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-muted-foreground inline-flex items-center gap-1"><HandCoins className="w-3 h-3" />Donors</span>
-                      <span className="font-medium">{(finance?.donorCount ?? 0).toLocaleString()}</span>
+                      <span className="text-muted-foreground inline-flex items-center gap-1">
+                        <HandCoins className="w-3 h-3" />Donors
+                      </span>
+                      <span className="font-medium">
+                        {financeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : (finance?.donorCount ?? 0).toLocaleString()}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground mb-1">Major donors</p>
-                      <p className="font-medium line-clamp-2">
-                        {finance?.topDonors?.length ? finance.topDonors.join(', ') : 'No donor data yet'}
-                      </p>
-                    </div>
+                    {user && (finance?.smallDonationCount ?? 0) > 0 && (
+                      <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-1.5">
+                        <p className="text-emerald-700 dark:text-emerald-300 text-[11px] mb-0.5">Small-dollar support</p>
+                        <p className="font-medium text-[11px]">
+                          {fmtMoney(finance!.smallDonationAmount)} from {finance!.smallDonationCount.toLocaleString()} small donations
+                        </p>
+                      </div>
+                    )}
+                    {user && (
+                      <div>
+                        <p className="text-muted-foreground mb-1">Major donors</p>
+                        <ul className="font-medium space-y-0.5">
+                          {finance?.topDonors?.length ? (
+                            finance.topDonors.map((donor) => (
+                              <li key={`${candidate.id}-${donor.name}`} className="truncate">
+                                {donor.name} — {fmtMoney(donor.amount)}
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-muted-foreground font-normal">No donor data yet</li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
                   </div>
 
                   <Link to={`/candidate/${candidate.id}`}>
