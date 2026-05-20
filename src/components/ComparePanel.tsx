@@ -170,16 +170,16 @@ export const ComparePanel = ({
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 animate-slide-up">
-      <Card className="mx-4 mb-4 shadow-2xl border-2 border-primary/20 bg-card/95 backdrop-blur-md">
-        <CardHeader className="pb-2 pt-4 px-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="font-display text-lg flex items-center gap-2">
-              <Users className="w-5 h-5 text-primary" />
-              Compare Side-by-Side ({candidates.length})
-              {cycle && <span className="text-xs text-muted-foreground font-normal">· {cycle} cycle</span>}
+      <Card className="mx-2 sm:mx-4 mb-2 sm:mb-4 shadow-2xl border-2 border-primary/20 bg-card/95 backdrop-blur-md max-h-[78vh] flex flex-col">
+        <CardHeader className="pb-2 pt-3 px-3 sm:px-4 shrink-0">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <CardTitle className="font-display text-base sm:text-lg flex items-center gap-2 min-w-0 flex-1">
+              <Users className="w-5 h-5 text-primary shrink-0" />
+              <span className="truncate">Compare ({candidates.length})</span>
+              {cycle && <span className="text-xs text-muted-foreground font-normal shrink-0">· {cycle}</span>}
             </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={onClear} className="text-xs">
+            <div className="flex items-center gap-1 shrink-0">
+              <Button variant="ghost" size="sm" onClick={onClear} className="text-xs h-8 px-2">
                 Clear All
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} aria-label="Close compare panel">
@@ -188,8 +188,16 @@ export const ComparePanel = ({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="px-4 pb-4">
-          <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${Math.min(candidates.length, 4)}, 1fr)` }}>
+        <CardContent className="px-3 sm:px-4 pb-3 sm:pb-4 overflow-y-auto">
+          <div
+            className={cn(
+              "grid gap-3 sm:gap-4 grid-flow-col auto-cols-[82%] overflow-x-auto snap-x snap-mandatory -mx-1 px-1",
+              "sm:grid-flow-row sm:auto-cols-auto sm:overflow-visible sm:snap-none sm:mx-0 sm:px-0",
+            )}
+            style={{
+              ['--cols' as any]: Math.min(candidates.length, 4),
+            }}
+          >
             {visibleCandidates.map((candidate) => {
               const finance = financeByCandidate[candidate.id];
               const diffFromUser = Math.abs((candidate.overallScore ?? 0) - userScore);
