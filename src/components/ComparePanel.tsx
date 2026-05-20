@@ -209,7 +209,7 @@ export const ComparePanel = ({
               return (
                 <div
                   key={candidate.id}
-                  className="relative p-3 rounded-lg border border-border bg-secondary/30 hover:bg-secondary/50 transition-colors"
+                  className="relative p-3 rounded-lg border border-border bg-secondary/30 hover:bg-secondary/50 transition-colors snap-start min-w-0"
                 >
                   <button
                     onClick={() => onRemove(candidate.id)}
