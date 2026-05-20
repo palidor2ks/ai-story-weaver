@@ -264,6 +264,7 @@ export const Candidates = () => {
                   handleCloseCompare();
                 } else {
                   setCompareMode(true);
+                  setCompareReady(false);
                 }
               }}
               className={cn("gap-2", compareMode && "bg-primary")}
@@ -280,6 +281,17 @@ export const Candidates = () => {
                 </>
               )}
             </Button>
+            {compareMode && (
+              <Button
+                size="sm"
+                onClick={() => setCompareReady(true)}
+                disabled={selectedCandidates.length < 2}
+                aria-label="Show comparison panel"
+                className="gap-2"
+              >
+                Done ({selectedCandidates.length})
+              </Button>
+            )}
           </div>
         </div>
 
