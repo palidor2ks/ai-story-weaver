@@ -32,6 +32,7 @@ export const Candidates = () => {
   // Compare mode state
   const [compareMode, setCompareMode] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState<Candidate[]>([]);
+  const [compareReady, setCompareReady] = useState(false);
 
   const handleToggleSelect = useCallback((candidate: Candidate) => {
     setSelectedCandidates(prev => {
@@ -46,10 +47,14 @@ export const Candidates = () => {
     setSelectedCandidates(prev => prev.filter(c => c.id !== id));
   }, []);
 
-  const handleClearCompare = useCallback(() => setSelectedCandidates([]), []);
+  const handleClearCompare = useCallback(() => {
+    setCompareReady(false);
+    setSelectedCandidates([]);
+  }, []);
 
   const handleCloseCompare = useCallback(() => {
     setCompareMode(false);
+    setCompareReady(false);
     setSelectedCandidates([]);
   }, []);
 
