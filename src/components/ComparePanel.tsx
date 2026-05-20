@@ -241,19 +241,19 @@ export const ComparePanel = ({
                       <span className="text-muted-foreground">Score gap vs you</span>
                       <span className="font-medium">{diffFromUser.toFixed(1)} pts</span>
                     </div>
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-muted-foreground inline-flex items-center gap-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground inline-flex items-center gap-1 shrink-0">
                         <Landmark className="w-3 h-3" />Raised
                       </span>
-                      <span className="font-medium">
+                      <span className="font-medium truncate text-right">
                         {financeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : fmtMoney(finance?.totalRaised ?? 0)}
                       </span>
                     </div>
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-muted-foreground inline-flex items-center gap-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground inline-flex items-center gap-1 shrink-0">
                         <HandCoins className="w-3 h-3" />Donors
                       </span>
-                      <span className="font-medium">
+                      <span className="font-medium truncate text-right">
                         {financeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : (finance?.donorCount ?? 0).toLocaleString()}
                       </span>
                     </div>
