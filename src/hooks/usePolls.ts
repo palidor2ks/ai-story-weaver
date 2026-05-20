@@ -161,11 +161,21 @@ export const useCreatePoll = () => {
       // Auto-post on publish if requested
       if (input.status === 'published' && input.auto_post !== false && (input.share_platforms?.length ?? 0) > 0) {
         try {
-          await supabase.functions.invoke('post-poll-to-social', {
+          const { data, error } = await supabase.functions.invoke('post-poll-to-social', {
             body: { pollId: pollRow.id, platforms: input.share_platforms },
           });
+          if (error) throw error;
+
+          const failedPosts = ((data as any)?.results || []).filter((r: any) => r.status === 'failed');
+          if (failedPosts.length > 0) {
+            const details = failedPosts
+              .map((r: any) => `${r.platform}: ${r.error || 'unknown error'}`)
+              .join('; ');
+            throw new Error(`Auto-post failed for ${failedPosts.length} platform(s): ${details}`);
+          }
         } catch (e) {
           console.warn('auto-post failed', e);
+          throw e;
         }
       }
 
