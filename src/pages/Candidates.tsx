@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X } from 'lucide-react';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
+import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
 
 
 export const Candidates = () => {
