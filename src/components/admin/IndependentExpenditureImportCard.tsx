@@ -13,6 +13,7 @@ interface Stats {
   totalRows: number;
   processedRows: number;
   inserted: number;
+  updated: number;
   skippedInvalid: number;
   skippedBelowMin: number;
   errors: string[];
