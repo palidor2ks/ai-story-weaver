@@ -26,7 +26,7 @@ const BATCH_SIZE = 500;
 const DELAY_MS = 150;
 const MAX_RETRIES = 5;
 
-export function IndependentExpenditureImportCard() {
+export function IndependentExpenditureImportCard({ onImportComplete }: { onImportComplete?: () => void } = {}) {
   const [file, setFile] = useState<File | null>(null);
   const [cycle, setCycle] = useState('2024');
   const [minAmount, setMinAmount] = useState(0);
