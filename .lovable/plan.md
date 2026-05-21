@@ -1,53 +1,69 @@
-## Implement PR #80 — Independent Expenditures (FEC outside spending)
+# Independent Expenditures — CSV File Import
 
-PR #80 only adds a schema + a planning doc. This plan implements the full end-to-end feature it describes.
+Replace the API-only `IndependentExpenditureImportCard` flow with a file-upload-driven import that mirrors the existing receipts CSV importer (`DonorImportPanel` → `import-fec-receipts-csv`).
 
-### 1. Database migration
+## What changes for the user
 
-Create `public.independent_expenditures` with columns:
-- `fec_transaction_id`, `image_number`, `expenditure_date`, `cycle`, `amount`, `purpose`, `communication_type`
-- `support_oppose_indicator` ('S'/'O')
-- `spending_committee_fec_id`, `spending_committee_name`, `committee_id` → `committees.id`
-- `target_fec_candidate_id`, `target_candidate_name`, `candidate_id` → `candidates.id`
-- `state`, `office`, `district`, `election_type`, `report_type`, `raw_payload`, `source`
-- Unique `(fec_transaction_id, spending_committee_fec_id)`, indexes on lookup columns
-- RLS: public read; admins manage (using existing `has_role`/`is_admin`)
-- Trigger to maintain `updated_at`
-- Two views: `committee_independent_expenditure_totals`, `candidate_independent_expenditure_totals` (count, total, support, oppose)
+In Admin → Donor Import tab, the "Independent Expenditures Import" card becomes a CSV uploader:
 
-### 2. Edge function `import-independent-expenditures`
+- Pick a CSV file (FEC Schedule E bulk export or `oppexp`/`independent_expenditures` CSV from FEC.gov bulk-data or the API CSV export)
+- Auto-detect cycle and a sample of spending committees from the first rows
+- Choose cycle (defaulted from detection) and optional min-amount filter
+- Click **Run import** → rows are streamed in batches to an edge function, with a progress bar, batch counter, inserted/skipped/duplicate counts, and an "unmapped committees / candidates" list at the end
 
-- Inputs: `cycle`, optional `min_amount` (default 50000), optional `min_date`, `max_pages`
-- Calls FEC `/schedules/schedule_e/` with `data_type=processed`, `most_recent=true`, `is_notice=true`, `min_amount`, `two_year_transaction_period={cycle}`, pagination via `last_indexes`
-- Uses `FEC_API_KEY` secret (already configured in project — verify; otherwise add)
-- For each row: normalize → resolve `committee_id` from `committees.fec_committee_id`, `candidate_id` from `candidate_fec_ids.fec_candidate_id` → upsert by `(fec_transaction_id, spending_committee_fec_id)` storing full payload in `raw_payload`
-- Return counts: inserted, updated, skipped, unmapped_committees, unmapped_candidates
-- Admin-only (verify caller has admin role)
-- Uses `EdgeRuntime.waitUntil` + batching per project conventions
+The existing "pull from FEC API" path is removed from this card (the API edge function stays in the repo unused, or we delete it — see Technical).
 
-### 3. Admin UI
+## Files
 
-Add a new admin card `IndependentExpenditureImportCard.tsx` (rendered in the admin Finance/Imports area) with:
-- cycle selector (reuses `useFinanceCycles`), min-amount input, run button
-- progress + last-run summary (inserted/updated/skipped/unmapped)
-- link to a small unmapped-reconciliation table (query rows where `committee_id IS NULL` or `candidate_id IS NULL`)
+**New**
+- `supabase/functions/import-fec-schedule-e-csv/index.ts` — admin-gated batch upsert into `independent_expenditures`. Accepts `{ rows, cycle, sessionId, filename, isFirstBatch, force }`. Normalizes FEC Schedule E columns (both bulk pipe-export header names and API CSV header names), resolves `spending_committee_fec_id` → `committees` and `target_fec_candidate_id` → `candidate_fec_ids`, upserts on `(fec_transaction_id, spending_committee_fec_id)`. Returns per-batch counts + unmapped lists. Cycle-mismatch guardrail like `import-fec-receipts-csv`.
 
-### 4. Profile integration
+**Replaced**
+- `src/components/admin/IndependentExpenditureImportCard.tsx` — rewritten as a CSV uploader. Reuses the same UX patterns as `DonorImportPanel`: file picker, first-N-row preview for cycle/committee detection, batch loop (500 rows, ~150ms delay, retry/backoff on 504/546/timeout), progress UI, results summary, debug-copy button.
 
-- New hook `useIndependentExpenditures.ts` exposing per-committee and per-candidate totals + top spenders/targets via the rollup views.
-- `CommitteeProfile`: add an "Independent Expenditures" section showing total / support / oppose / count and a small table of recent IE rows (`independent_expenditures` filtered by `committee_id`, `order by expenditure_date desc limit 10`).
-- `CandidateProfile`: add a "Outside Spending" card showing total for / against / count and the top spending committees grouped by `spending_committee_fec_id`.
+**Touched**
+- `src/pages/Admin.tsx` — no structural change; the card stays in the same tab.
+- `supabase/functions/import-independent-expenditures/index.ts` — keep for now (still usable for ad-hoc backfills), or delete if you'd rather only support CSV. Default: keep, but it's no longer wired to UI.
 
-All money formatted with existing `fmtMoney` helpers; styling uses semantic tokens already in the design system.
+## Technical notes
 
-### 5. Sequencing
+**Column mapping** (accept both header styles, case-insensitive):
 
-1. Run migration (separate approval step).
-2. After approval: regenerate Supabase types, then add edge function, hook, admin card, profile sections in parallel.
-3. Verify build, then user can trigger first import from the admin panel.
+```text
+FEC field                          → independent_expenditures column
+sub_id / SUB_ID / transaction_id   → fec_transaction_id
+image_num / image_number           → image_number
+expenditure_dt / expenditure_date  → expenditure_date
+two_year_transaction_period/cycle  → cycle
+exp_amo / expenditure_amount       → amount
+pur / purpose                      → purpose
+category_code / communication_type → communication_type
+sup_opp / support_oppose_indicator → support_oppose_indicator ('S'|'O')
+fec_committee_id / cmte_id         → spending_committee_fec_id
+committee_name                     → spending_committee_name
+cand_id / candidate_id             → target_fec_candidate_id
+candidate_name / cand_name         → target_candidate_name
+state / s                          → state
+office / cand_office               → office
+district / cand_office_district    → district
+election_type                      → election_type
+rpt_tp / report_type               → report_type
+```
 
-### Notes / open items
+Whole raw row is kept in `raw_payload` JSONB.
 
-- PR's Supabase preview failed on an unrelated FK (`candidate_committees_candidate_id_fkey` already exists) — not part of this migration; safe to ignore.
-- `candidate_id` is `text` to match the existing `candidates.id` column type used by current FKs.
-- If `FEC_API_KEY` is not yet a Supabase secret, I'll add it via the secrets tool before deploying the function.
+**Batching**: 500 rows/batch, sequential; retry on WORKER_LIMIT / 504 / 503 / statement timeout (max 5, exponential backoff + jitter) — same constants as donor importer.
+
+**Cycle detection**: dominant value of `two_year_transaction_period` (or year from `expenditure_dt`) across first 2000 rows.
+
+**Min-amount filter**: applied client-side before sending the batch (skip rows where `amount < minAmount`).
+
+**Auth**: edge function requires admin role (same `has_role(auth.uid(),'admin')` gate as `import-independent-expenditures`).
+
+**Unmapped reporting**: edge function returns `unmappedCommittees: string[]` and `unmappedCandidates: string[]` per batch; UI aggregates and shows them so you can fix `committees` / `candidate_fec_ids` mappings.
+
+## Out of scope
+
+- No DB schema changes — `independent_expenditures` already exists with the right unique constraint.
+- No changes to `CommitteeProfile` / `CandidateProfile` integration.
+- No background job table — same in-browser progress model as donor CSV import.
