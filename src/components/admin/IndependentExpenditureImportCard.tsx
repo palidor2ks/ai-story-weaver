@@ -13,6 +13,7 @@ interface Stats {
   totalRows: number;
   processedRows: number;
   inserted: number;
+  updated: number;
   skippedInvalid: number;
   skippedBelowMin: number;
   errors: string[];
@@ -111,6 +112,7 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
           totalRows,
           processedRows: 0,
           inserted: 0,
+          updated: 0,
           skippedInvalid: 0,
           skippedBelowMin,
           errors: [],
@@ -176,7 +178,8 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
                 }
                 s.errors.push(`Batch ${batchNum}: ${error.message}`);
               } else if (data) {
-                s.inserted += data.inserted || 0;
+                s.inserted += data.newRows ?? data.inserted ?? 0;
+                s.updated += data.updatedRows ?? 0;
                 s.skippedInvalid += data.skippedInvalid || 0;
                 for (const c of data.unmappedCommittees || []) s.unmappedCommittees.add(c);
                 for (const c of data.unmappedCandidates || []) s.unmappedCandidates.add(c);
@@ -214,9 +217,9 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
 
         setIsImporting(false);
         if (cancelRef.current) {
-          toast.info(`Cancelled · ${s.inserted} rows imported`);
+          toast.info(`Cancelled · ${s.inserted} new, ${s.updated} updated`);
         } else {
-          toast.success(`Imported ${s.inserted} expenditures (${s.unmappedCommittees.size} unmapped committees)`);
+          toast.success(`${s.inserted} new · ${s.updated} updated · ${s.unmappedCommittees.size} unmapped committees`);
         }
         onImportComplete?.();
       },
@@ -276,7 +279,7 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
           <div className="space-y-2">
             <Progress value={progress} />
             <p className="text-xs text-muted-foreground">
-              Batch {stats.currentBatch}/{stats.totalBatches} · {stats.processedRows}/{stats.totalRows} rows · {stats.inserted} imported
+              Batch {stats.currentBatch}/{stats.totalBatches} · {stats.processedRows}/{stats.totalRows} rows · {stats.inserted} new · {stats.updated} updated
             </p>
             <Button variant="outline" onClick={cancelImport} className="w-full">
               <XCircle className="mr-2 h-4 w-4" /> Cancel
@@ -292,8 +295,8 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
           <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
             <p className="font-medium">Last run</p>
             <p className="text-muted-foreground">
-              Imported {stats.inserted} · Invalid rows {stats.skippedInvalid}
-              {stats.skippedBelowMin > 0 && <> · Below min amount {stats.skippedBelowMin}</>}
+              {stats.inserted} new · {stats.updated} updated · {stats.skippedInvalid} invalid
+              {stats.skippedBelowMin > 0 && <> · {stats.skippedBelowMin} below min</>}
             </p>
             <p className="text-muted-foreground">
               Unmapped committees: {stats.unmappedCommittees.size} · Unmapped candidates: {stats.unmappedCandidates.size}

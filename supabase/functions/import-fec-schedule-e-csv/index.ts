@@ -224,25 +224,76 @@ Deno.serve(async (req) => {
     const dedupedRecords = Array.from(dedupMap.values());
     const intraBatchDuplicates = records.length - dedupedRecords.length;
 
-    // Upsert in chunks
+    // Process in chunks. Pre-check which (tx_id, committee_id) keys already exist so we can:
+    //  1) report newRows vs updatedRows accurately
+    //  2) keep the ORIGINAL import_session_id on rows that already exist (don't overwrite)
     const CHUNK = 500;
-    let inserted = 0;
+    let newRows = 0;
+    let updatedRows = 0;
     let failedBatches = 0;
     const errors: string[] = [];
+
     for (let i = 0; i < dedupedRecords.length; i += CHUNK) {
       const slice = dedupedRecords.slice(i, i + CHUNK);
-      const { error, count } = await admin
+      const chunkNum = Math.floor(i / CHUNK) + 1;
+
+      // Find which keys already exist in DB
+      const txIds = Array.from(new Set(slice.map(r => r.fec_transaction_id)));
+      const cmteIds = Array.from(new Set(slice.map(r => r.spending_committee_fec_id)));
+      const existingKeys = new Set<string>();
+      const { data: existing, error: selErr } = await admin
         .from('independent_expenditures')
-        .upsert(slice, { onConflict: 'fec_transaction_id,spending_committee_fec_id', count: 'exact' });
-      if (error) {
+        .select('fec_transaction_id, spending_committee_fec_id')
+        .in('fec_transaction_id', txIds)
+        .in('spending_committee_fec_id', cmteIds);
+      if (selErr) {
         failedBatches++;
-        errors.push(`chunk ${Math.floor(i / CHUNK) + 1} (${slice.length} rows): ${error.message}`);
-      } else {
-        inserted += count ?? slice.length;
+        errors.push(`chunk ${chunkNum} lookup: ${selErr.message}`);
+        continue;
+      }
+      for (const r of existing || []) {
+        existingKeys.add(`${r.fec_transaction_id}|${r.spending_committee_fec_id}`);
+      }
+
+      const inserts: any[] = [];
+      const updates: any[] = [];
+      for (const r of slice) {
+        const k = `${r.fec_transaction_id}|${r.spending_committee_fec_id}`;
+        if (existingKeys.has(k)) {
+          // Strip import_session_id so we don't overwrite the original owner
+          const { import_session_id: _drop, ...rest } = r;
+          updates.push(rest);
+        } else {
+          inserts.push(r);
+        }
+      }
+
+      if (inserts.length > 0) {
+        const { error: insErr, count: insCount } = await admin
+          .from('independent_expenditures')
+          .insert(inserts, { count: 'exact' });
+        if (insErr) {
+          failedBatches++;
+          errors.push(`chunk ${chunkNum} insert (${inserts.length}): ${insErr.message}`);
+        } else {
+          newRows += insCount ?? inserts.length;
+        }
+      }
+
+      if (updates.length > 0) {
+        const { error: updErr, count: updCount } = await admin
+          .from('independent_expenditures')
+          .upsert(updates, { onConflict: 'fec_transaction_id,spending_committee_fec_id', count: 'exact' });
+        if (updErr) {
+          failedBatches++;
+          errors.push(`chunk ${chunkNum} update (${updates.length}): ${updErr.message}`);
+        } else {
+          updatedRows += updCount ?? updates.length;
+        }
       }
     }
 
-    // Update session counters / finalize
+    // Update session counters / finalize — count only TRUE new rows owned by this session
     if (sessionId) {
       const { data: cur } = await admin
         .from('ie_import_sessions')
@@ -250,10 +301,10 @@ Deno.serve(async (req) => {
         .eq('id', sessionId)
         .maybeSingle();
       const patch: Record<string, any> = {
-        inserted_rows: (cur?.inserted_rows ?? 0) + inserted,
+        inserted_rows: (cur?.inserted_rows ?? 0) + newRows,
       };
       if (isLastBatch) {
-        patch.status = errors.length > 0 && inserted === 0 ? 'failed' : 'completed';
+        patch.status = errors.length > 0 && newRows === 0 && updatedRows === 0 ? 'failed' : 'completed';
         patch.completed_at = new Date().toISOString();
       }
       await admin.from('ie_import_sessions').update(patch).eq('id', sessionId);
@@ -264,7 +315,10 @@ Deno.serve(async (req) => {
       processed: normalized.length,
       deduped: dedupedRecords.length,
       intraBatchDuplicates,
-      inserted,
+      newRows,
+      updatedRows,
+      // legacy field for backwards-compat with any callers that still read `inserted`
+      inserted: newRows,
       skippedInvalid,
       failedBatches,
       unmappedCommittees: Array.from(unmappedCommittees),
