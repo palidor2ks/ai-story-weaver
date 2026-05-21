@@ -147,10 +147,10 @@ Deno.serve(async (req) => {
     }
 
     // Cycle mismatch guardrail (first batch only)
+    const detectedCycle = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
     if (isFirstBatch && cycleOverride && !force) {
-      const detected = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-      if (detected && detected !== cycleOverride) {
-        return new Response(JSON.stringify({ error: 'cycle_mismatch', detected_cycle: detected, selected_cycle: cycleOverride }), {
+      if (detectedCycle && detectedCycle !== cycleOverride) {
+        return new Response(JSON.stringify({ error: 'cycle_mismatch', detected_cycle: detectedCycle, selected_cycle: cycleOverride }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -161,6 +161,21 @@ Deno.serve(async (req) => {
     if (cycleOverride) {
       for (const n of normalized) n.cycle = cycleOverride;
     }
+
+    // Create import session on first batch
+    if (sessionId && isFirstBatch) {
+      await admin.from('ie_import_sessions').upsert({
+        id: sessionId,
+        cycle: cycleOverride || detectedCycle || 'unknown',
+        filename,
+        row_count: totalRowCount || rows.length,
+        detected_cycle: detectedCycle,
+        status: 'running',
+        started_at: new Date().toISOString(),
+        created_by: user.id,
+      }, { onConflict: 'id' });
+    }
+
 
     // Resolve candidate_id from target_fec_candidate_id via candidate_fec_ids
     const fecCandIds = Array.from(new Set(normalized.map(n => n.target_fec_candidate_id).filter(Boolean))) as string[];
