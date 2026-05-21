@@ -26,7 +26,8 @@ export const CandidateCard = ({
   index = 0,
   compareMode = false,
   isSelected = false,
-  onToggleSelect
+  onToggleSelect,
+  ieTotals,
 }: CandidateCardProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
