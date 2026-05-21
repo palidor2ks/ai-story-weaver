@@ -38,6 +38,7 @@ import { BulkDonorSyncCard } from "@/components/admin/BulkDonorSyncCard";
 import { BulkCommitteeTotalsCard } from "@/components/admin/BulkCommitteeTotalsCard";
 import { BulkAnswerValidation } from "@/components/admin/BulkAnswerValidation";
 import { IndependentExpenditureImportCard } from "@/components/admin/IndependentExpenditureImportCard";
+import { IndependentExpenditureImportHistory } from "@/components/admin/IndependentExpenditureImportHistory";
 import { AdminUsersPanel } from "@/components/admin/AdminUsersPanel";
 import { PollsPanel } from "@/components/admin/PollsPanel";
 
@@ -97,6 +98,7 @@ export default function Admin() {
   const [editingOfficial, setEditingOfficial] = useState<StaticOfficial | null>(null);
   const [formData, setFormData] = useState<OfficialFormData>(defaultFormData);
   const [activeTab, setActiveTab] = useState("officials");
+  const [ieHistoryRefresh, setIeHistoryRefresh] = useState(0);
   const [scrapingPiscataway, setScrapingPiscataway] = useState(false);
   const queryClient = useQueryClient();
 
@@ -759,7 +761,8 @@ export default function Admin() {
           <TabsContent value="donor-import" className="space-y-6">
             <BulkDonorSyncCard />
             <BulkCommitteeTotalsCard />
-            <IndependentExpenditureImportCard />
+            <IndependentExpenditureImportCard onImportComplete={() => setIeHistoryRefresh(k => k + 1)} />
+            <IndependentExpenditureImportHistory refreshKey={ieHistoryRefresh} />
             <DonorImportPanel />
           </TabsContent>
 

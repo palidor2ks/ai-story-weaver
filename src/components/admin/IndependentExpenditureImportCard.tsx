@@ -26,7 +26,7 @@ const BATCH_SIZE = 500;
 const DELAY_MS = 150;
 const MAX_RETRIES = 5;
 
-export function IndependentExpenditureImportCard() {
+export function IndependentExpenditureImportCard({ onImportComplete }: { onImportComplete?: () => void } = {}) {
   const [file, setFile] = useState<File | null>(null);
   const [cycle, setCycle] = useState('2024');
   const [minAmount, setMinAmount] = useState(0);
@@ -122,6 +122,7 @@ export function IndependentExpenditureImportCard() {
         setStats({ ...s });
 
         let forceCycleMismatch = false;
+        const sessionId = (crypto as any).randomUUID ? (crypto as any).randomUUID() : `ie-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
         for (let i = 0; i < totalRows; i += BATCH_SIZE) {
           if (cancelRef.current) break;
@@ -137,6 +138,10 @@ export function IndependentExpenditureImportCard() {
                   rows: batch,
                   cycle,
                   isFirstBatch: i === 0,
+                  isLastBatch: i + BATCH_SIZE >= totalRows,
+                  sessionId,
+                  filename: file.name,
+                  totalRowCount: totalRows,
                   force: forceCycleMismatch,
                 },
               });
@@ -195,12 +200,22 @@ export function IndependentExpenditureImportCard() {
           if (i + BATCH_SIZE < totalRows) await new Promise((r) => setTimeout(r, DELAY_MS));
         }
 
+        // Finalize session if user cancelled before the last batch fired isLastBatch
+        if (cancelRef.current) {
+          try {
+            await supabase.functions.invoke('import-fec-schedule-e-csv', {
+              body: { sessionId, finalize: true, failed: s.inserted === 0 },
+            });
+          } catch (_e) { /* ignore */ }
+        }
+
         setIsImporting(false);
         if (cancelRef.current) {
           toast.info(`Cancelled · ${s.inserted} rows imported`);
         } else {
           toast.success(`Imported ${s.inserted} expenditures (${s.unmappedCommittees.size} unmapped committees)`);
         }
+        onImportComplete?.();
       },
     });
   };

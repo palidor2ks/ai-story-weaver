@@ -111,6 +111,23 @@ Deno.serve(async (req) => {
     const cycleOverride: string | null = body?.cycle ? String(body.cycle) : null;
     const force: boolean = !!body?.force;
     const isFirstBatch: boolean = !!body?.isFirstBatch;
+    const isLastBatch: boolean = !!body?.isLastBatch;
+    const sessionId: string | null = body?.sessionId ? String(body.sessionId) : null;
+    const filename: string | null = body?.filename ? String(body.filename) : null;
+    const totalRowCount: number = Number(body?.totalRowCount ?? 0) || 0;
+    const finalize: boolean = !!body?.finalize;
+    const failed: boolean = !!body?.failed;
+
+    // Finalize-only call (no rows, just close out the session)
+    if (sessionId && finalize && rows.length === 0) {
+      await admin.from('ie_import_sessions').update({
+        status: failed ? 'failed' : 'completed',
+        completed_at: new Date().toISOString(),
+      }).eq('id', sessionId);
+      return new Response(JSON.stringify({ ok: true, finalized: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     if (rows.length === 0) {
       return new Response(JSON.stringify({ inserted: 0, skipped: 0, totalReceived: 0, unmappedCommittees: [], unmappedCandidates: [] }), {
@@ -130,10 +147,10 @@ Deno.serve(async (req) => {
     }
 
     // Cycle mismatch guardrail (first batch only)
+    const detectedCycle = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
     if (isFirstBatch && cycleOverride && !force) {
-      const detected = Object.entries(cycleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-      if (detected && detected !== cycleOverride) {
-        return new Response(JSON.stringify({ error: 'cycle_mismatch', detected_cycle: detected, selected_cycle: cycleOverride }), {
+      if (detectedCycle && detectedCycle !== cycleOverride) {
+        return new Response(JSON.stringify({ error: 'cycle_mismatch', detected_cycle: detectedCycle, selected_cycle: cycleOverride }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -144,6 +161,21 @@ Deno.serve(async (req) => {
     if (cycleOverride) {
       for (const n of normalized) n.cycle = cycleOverride;
     }
+
+    // Create import session on first batch
+    if (sessionId && isFirstBatch) {
+      await admin.from('ie_import_sessions').upsert({
+        id: sessionId,
+        cycle: cycleOverride || detectedCycle || 'unknown',
+        filename,
+        row_count: totalRowCount || rows.length,
+        detected_cycle: detectedCycle,
+        status: 'running',
+        started_at: new Date().toISOString(),
+        created_by: user.id,
+      }, { onConflict: 'id' });
+    }
+
 
     // Resolve candidate_id from target_fec_candidate_id via candidate_fec_ids
     const fecCandIds = Array.from(new Set(normalized.map(n => n.target_fec_candidate_id).filter(Boolean))) as string[];
@@ -173,11 +205,11 @@ Deno.serve(async (req) => {
       for (const cid of committeeIds) if (!known.has(cid)) unmappedCommittees.add(cid);
     }
 
-    // Attach candidate_id and collect unmapped candidates
+    // Attach candidate_id, session id, and collect unmapped candidates
     const records = normalized.map(n => {
       const candidate_id = n.target_fec_candidate_id ? (fecToCandidate.get(n.target_fec_candidate_id) ?? null) : null;
       if (n.target_fec_candidate_id && !candidate_id) unmappedCandidates.add(n.target_fec_candidate_id);
-      return { ...n, candidate_id };
+      return { ...n, candidate_id, import_session_id: sessionId };
     });
 
     // Upsert in chunks
@@ -194,6 +226,23 @@ Deno.serve(async (req) => {
       } else {
         inserted += count ?? slice.length;
       }
+    }
+
+    // Update session counters / finalize
+    if (sessionId) {
+      const { data: cur } = await admin
+        .from('ie_import_sessions')
+        .select('inserted_rows')
+        .eq('id', sessionId)
+        .maybeSingle();
+      const patch: Record<string, any> = {
+        inserted_rows: (cur?.inserted_rows ?? 0) + inserted,
+      };
+      if (isLastBatch) {
+        patch.status = errors.length > 0 && inserted === 0 ? 'failed' : 'completed';
+        patch.completed_at = new Date().toISOString();
+      }
+      await admin.from('ie_import_sessions').update(patch).eq('id', sessionId);
     }
 
     return new Response(JSON.stringify({
