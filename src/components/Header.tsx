@@ -24,6 +24,7 @@ export const Header = () => {
     { path: '/parties', label: 'Parties', icon: Building2, requiresAuth: true },
     { path: '/donors', label: 'Donors', icon: DollarSign, requiresAuth: false },
     { path: '/committees', label: 'Committees', icon: Landmark, requiresAuth: true },
+    { path: '/top-spenders', label: 'Top Spenders', icon: Megaphone, requiresAuth: false },
     { path: '/quiz-library', label: 'Quizzes', icon: BookOpen, requiresAuth: true },
     { path: '/blog', label: 'Blog', icon: Newspaper, requiresAuth: false },
     { path: '/profile', label: 'Profile', icon: User, requiresAuth: true },
