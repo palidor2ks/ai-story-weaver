@@ -180,6 +180,9 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
                 s.skippedInvalid += data.skippedInvalid || 0;
                 for (const c of data.unmappedCommittees || []) s.unmappedCommittees.add(c);
                 for (const c of data.unmappedCandidates || []) s.unmappedCandidates.add(c);
+                if (data.failedBatches && data.errors?.length) {
+                  for (const e of data.errors) s.errors.push(`Batch ${batchNum}: ${e}`);
+                }
               }
               break;
             } catch (err) {
