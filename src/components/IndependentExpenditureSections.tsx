@@ -1,31 +1,50 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Megaphone, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { useCommitteeIE, useCandidateIE } from '@/hooks/useIndependentExpenditures';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
-const fmtDate = (s: string | null) =>
-  s ? new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-
 export const CommitteeIESection = ({ committeeFecId }: { committeeFecId: string | null | undefined }) => {
-  const { data, isLoading } = useCommitteeIE(committeeFecId);
+  const [cycle, setCycle] = useState<string>('all');
+  const { data, isLoading } = useCommitteeIE(committeeFecId, cycle);
   if (!committeeFecId) return null;
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
       <Card><CardContent className="py-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></CardContent></Card>
     );
   }
-  if (!data || data.totals.expenditure_count === 0) return null;
-  const { totals, rows } = data;
+  if (!data) return null;
+  const { totals, targets, availableCycles } = data;
+  const hasAny = totals.expenditure_count > 0 || availableCycles.length > 0;
+  if (!hasAny) return null;
+
   return (
     <Card className="shadow-elevated">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 font-display">
-          <Megaphone className="w-5 h-5 text-primary" />
-          Independent Expenditures
-        </CardTitle>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <CardTitle className="flex items-center gap-2 font-display">
+            <Megaphone className="w-5 h-5 text-primary" />
+            Independent Expenditures
+          </CardTitle>
+          {availableCycles.length > 0 && (
+            <Select value={cycle} onValueChange={setCycle}>
+              <SelectTrigger className="w-[160px] h-8 text-xs">
+                <SelectValue placeholder="All cycles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All cycles</SelectItem>
+                {availableCycles.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -34,19 +53,37 @@ export const CommitteeIESection = ({ committeeFecId }: { committeeFecId: string 
           <Stat label="Opposing" value={fmt(totals.oppose_amount)} tone="disagree" />
           <Stat label="Filings" value={totals.expenditure_count.toLocaleString()} />
         </div>
-        {rows.length > 0 && (
+        {targets.length === 0 ? (
+          <div className="text-sm text-muted-foreground text-center py-6">No expenditures for this cycle.</div>
+        ) : (
           <div className="rounded-md border overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
-                <tr><th className="text-left p-2">Date</th><th className="text-left p-2">Target</th><th className="text-left p-2">S/O</th><th className="text-right p-2">Amount</th></tr>
+                <tr>
+                  <th className="text-left p-2">Target</th>
+                  <th className="text-right p-2">Supporting</th>
+                  <th className="text-right p-2">Opposing</th>
+                  <th className="text-right p-2">Total</th>
+                  <th className="text-right p-2">Filings</th>
+                </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 10).map((r) => (
-                  <tr key={r.id} className="border-t">
-                    <td className="p-2 text-muted-foreground">{fmtDate(r.expenditure_date)}</td>
-                    <td className="p-2 truncate max-w-[260px]">{r.target_candidate_name ?? '—'}</td>
-                    <td className="p-2"><Badge variant="outline" className={r.support_oppose_indicator === 'S' ? 'border-agree/40 text-agree' : 'border-disagree/40 text-disagree'}>{r.support_oppose_indicator === 'S' ? 'Support' : 'Oppose'}</Badge></td>
-                    <td className="p-2 text-right font-medium">{fmt(Number(r.amount))}</td>
+                {targets.map((t) => (
+                  <tr key={t.key} className="border-t">
+                    <td className="p-2 truncate max-w-[260px]">
+                      {t.candidateId ? (
+                        <Link to={`/candidate/${t.candidateId}`} className="font-medium hover:text-primary hover:underline">
+                          {t.name}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{t.name}</span>
+                      )}
+                      {t.fecId && <div className="text-xs text-muted-foreground">{t.fecId}</div>}
+                    </td>
+                    <td className="p-2 text-right text-agree">{t.support > 0 ? fmt(t.support) : '—'}</td>
+                    <td className="p-2 text-right text-disagree">{t.oppose > 0 ? fmt(t.oppose) : '—'}</td>
+                    <td className="p-2 text-right font-semibold">{fmt(t.total)}</td>
+                    <td className="p-2 text-right text-muted-foreground">{t.count.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
