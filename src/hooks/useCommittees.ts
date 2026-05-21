@@ -120,7 +120,7 @@ const buildCommitteeSummaries = (
     return {
       id: committee.id,
       name: committee.name,
-      aliasName: committee.alias_name,
+      aliasName: null,
       fecCommitteeId: committee.fec_committee_id,
       designation: committee.designation,
       designationFull: committee.designation_full,
