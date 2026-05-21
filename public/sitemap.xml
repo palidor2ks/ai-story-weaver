@@ -111,6 +111,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00904144</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00635722</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -5166,7 +5171,22 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00923995</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00929208</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00898148</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/committee/C00897520</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -5601,6 +5621,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/committee/C00920496</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/committee/C00709832</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -5646,14 +5671,9 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/p/checks-and-balances-war-powers-gin0p</loc>
+    <loc>https://www.polipulseapp.com/committee/C00925917</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://www.polipulseapp.com/p/checks-and-balances-war-powers-gin0p/results</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.5</priority>
   </url>
   <url>
     <loc>https://www.polipulseapp.com/p/third-presidential-term-7ck3t</loc>
@@ -5682,6 +5702,16 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/p/government-structure-and-representation-31dgg/results</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/p/government-and-domestic-extremism-ryw1k</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/p/government-and-domestic-extremism-ryw1k/results</loc>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
