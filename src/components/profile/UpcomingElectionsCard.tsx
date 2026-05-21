@@ -28,7 +28,8 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function CandidateRow({ c }: { c: UpcomingCandidate }) {
+function CandidateRow({ c, ieMap }: { c: UpcomingCandidate; ieMap?: IETotalsMap }) {
+  const ie = ieMap?.get(c.candidate_id);
   return (
     <Link
       to={`/candidate/${c.candidate_id}`}
@@ -51,6 +52,7 @@ function CandidateRow({ c }: { c: UpcomingCandidate }) {
               <Badge variant="secondary" className="text-xs">Incumbent</Badge>
             )}
           </div>
+          <IESummaryInline totals={ie} className="mt-0.5" />
         </div>
       </div>
       <div className="flex-shrink-0 text-right">
