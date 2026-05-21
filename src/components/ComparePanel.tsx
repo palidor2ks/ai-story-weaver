@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { X, Users, ArrowRight, Landmark, HandCoins, Loader2 } from 'lucide-react';
+import { X, Users, ArrowRight, Landmark, HandCoins, Loader2, Megaphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useFinanceCycles } from '@/hooks/useFinanceCycles';
+import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
+import { IESummaryInline } from './IESummaryInline';
 
 interface ComparePanelProps {
   candidates: Candidate[];
