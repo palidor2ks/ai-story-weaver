@@ -1,10 +1,12 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, MapPin, ExternalLink, Loader2 } from 'lucide-react';
+import { Calendar, MapPin, ExternalLink, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ScoreText } from '@/components/ScoreText';
 import type { UpcomingElection, UpcomingCandidate } from '@/hooks/useUpcomingElections';
+import type { IETotalsMap, IETotals } from '@/hooks/useIndependentExpenditures';
+import { IESummaryInline, formatIECompact } from '@/components/IESummaryInline';
 
 const PARTY_BADGE: Record<string, string> = {
   Democrat: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
