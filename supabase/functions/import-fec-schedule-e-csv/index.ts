@@ -205,11 +205,11 @@ Deno.serve(async (req) => {
       for (const cid of committeeIds) if (!known.has(cid)) unmappedCommittees.add(cid);
     }
 
-    // Attach candidate_id and collect unmapped candidates
+    // Attach candidate_id, session id, and collect unmapped candidates
     const records = normalized.map(n => {
       const candidate_id = n.target_fec_candidate_id ? (fecToCandidate.get(n.target_fec_candidate_id) ?? null) : null;
       if (n.target_fec_candidate_id && !candidate_id) unmappedCandidates.add(n.target_fec_candidate_id);
-      return { ...n, candidate_id };
+      return { ...n, candidate_id, import_session_id: sessionId };
     });
 
     // Upsert in chunks
@@ -226,6 +226,23 @@ Deno.serve(async (req) => {
       } else {
         inserted += count ?? slice.length;
       }
+    }
+
+    // Update session counters / finalize
+    if (sessionId) {
+      const { data: cur } = await admin
+        .from('ie_import_sessions')
+        .select('inserted_rows')
+        .eq('id', sessionId)
+        .maybeSingle();
+      const patch: Record<string, any> = {
+        inserted_rows: (cur?.inserted_rows ?? 0) + inserted,
+      };
+      if (isLastBatch) {
+        patch.status = errors.length > 0 && inserted === 0 ? 'failed' : 'completed';
+        patch.completed_at = new Date().toISOString();
+      }
+      await admin.from('ie_import_sessions').update(patch).eq('id', sessionId);
     }
 
     return new Response(JSON.stringify({
