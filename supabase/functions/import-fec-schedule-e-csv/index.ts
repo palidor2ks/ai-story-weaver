@@ -60,7 +60,8 @@ function normalizeSO(s: string | null): 'S' | 'O' | null {
 }
 
 function normalizeRow(row: Record<string, any>) {
-  const fec_transaction_id = pick(row, ['tra_id', 'transaction_id', 'sub_id', 'SUB_ID', 'fec_transaction_id']);
+  // Prefer sub_id (truly unique FEC bulk-data row id) over tra_id (repeats across amendments)
+  const fec_transaction_id = pick(row, ['sub_id', 'SUB_ID', 'tra_id', 'transaction_id', 'fec_transaction_id']);
   const amount = parseAmount(pick(row, ['exp_amo', 'expenditure_amount', 'amount']));
   const support_oppose_indicator = normalizeSO(pick(row, ['sup_opp', 'support_oppose_indicator', 'support_oppose']));
   const spending_committee_fec_id = pick(row, ['spe_id', 'cmte_id', 'fec_committee_id', 'spending_committee_fec_id', 'committee_id']);
