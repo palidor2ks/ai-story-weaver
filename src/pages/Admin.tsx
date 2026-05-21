@@ -759,6 +759,7 @@ export default function Admin() {
           <TabsContent value="donor-import" className="space-y-6">
             <BulkDonorSyncCard />
             <BulkCommitteeTotalsCard />
+            <IndependentExpenditureImportCard />
             <DonorImportPanel />
           </TabsContent>
 
