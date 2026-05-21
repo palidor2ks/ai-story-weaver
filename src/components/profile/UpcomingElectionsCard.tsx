@@ -196,6 +196,7 @@ export function UpcomingElectionsCard({ address }: Props) {
         election={openElection}
         open={!!openElection}
         onOpenChange={(o) => { if (!o) setOpenElection(null); }}
+        ieMap={ieMap}
       />
     </>
   );
