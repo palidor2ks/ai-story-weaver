@@ -122,6 +122,7 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
         setStats({ ...s });
 
         let forceCycleMismatch = false;
+        const sessionId = (crypto as any).randomUUID ? (crypto as any).randomUUID() : `ie-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
         for (let i = 0; i < totalRows; i += BATCH_SIZE) {
           if (cancelRef.current) break;
@@ -137,6 +138,10 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
                   rows: batch,
                   cycle,
                   isFirstBatch: i === 0,
+                  isLastBatch: i + BATCH_SIZE >= totalRows,
+                  sessionId,
+                  filename: file.name,
+                  totalRowCount: totalRows,
                   force: forceCycleMismatch,
                 },
               });
