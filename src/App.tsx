@@ -35,6 +35,7 @@ import Blog from "./pages/Blog";
 import Unsubscribe from "./pages/Unsubscribe";
 import Poll from "./pages/Poll";
 import PollResultsPage from "./pages/PollResultsPage";
+import TopSpenders from "./pages/TopSpenders";
 
 const queryClient = new QueryClient();
 
@@ -121,6 +122,11 @@ const AppRoutes = () => {
       <Route path="/committees" element={
         <RouteGuard requireAuth requireOnboarding>
           <Committees />
+        </RouteGuard>
+      } />
+      <Route path="/top-spenders" element={
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
+          <TopSpenders />
         </RouteGuard>
       } />
       <Route path="/committee/:id" element={

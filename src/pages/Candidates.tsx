@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X } from 'lucide-react';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
+import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
 
 
 export const Candidates = () => {
@@ -135,6 +136,12 @@ export const Candidates = () => {
     return result;
   }, [searchQuery, sortBy, partyFilter, officeFilter, tabCandidates, profile, isHidden]);
 
+  const visibleIds = useMemo(
+    () => filteredCandidates.slice(0, 120).map((c) => c.id),
+    [filteredCandidates],
+  );
+  const { data: ieMap } = useCandidatesIE(visibleIds);
+
   const isLoading = profileLoading || unified.isLoading;
 
   // Count for tabs
@@ -156,6 +163,7 @@ export const Candidates = () => {
   }
 
   return (
+
     <div className="min-h-screen bg-background">
       <Seo
         title="All Politicians — Pulse"
@@ -318,6 +326,7 @@ export const Candidates = () => {
               compareMode={compareMode}
               isSelected={selectedCandidates.some(c => c.id === candidate.id)}
               onToggleSelect={handleToggleSelect}
+              ieTotals={ieMap?.get(candidate.id)}
             />
           ))}
         </div>

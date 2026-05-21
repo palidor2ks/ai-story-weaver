@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,6 +9,8 @@ import { ScoreText } from '@/components/ScoreText';
 import { ElectionDetailsDialog } from './ElectionDetailsDialog';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useCandidatesIE, type IETotalsMap } from '@/hooks/useIndependentExpenditures';
+import { IESummaryInline } from '@/components/IESummaryInline';
 
 interface Props {
   address: string | null | undefined;
@@ -26,7 +28,8 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function CandidateRow({ c }: { c: UpcomingCandidate }) {
+function CandidateRow({ c, ieMap }: { c: UpcomingCandidate; ieMap?: IETotalsMap }) {
+  const ie = ieMap?.get(c.candidate_id);
   return (
     <Link
       to={`/candidate/${c.candidate_id}`}
@@ -49,6 +52,7 @@ function CandidateRow({ c }: { c: UpcomingCandidate }) {
               <Badge variant="secondary" className="text-xs">Incumbent</Badge>
             )}
           </div>
+          <IESummaryInline totals={ie} className="mt-0.5" />
         </div>
       </div>
       <div className="flex-shrink-0 text-right">
@@ -64,7 +68,7 @@ function CandidateRow({ c }: { c: UpcomingCandidate }) {
   );
 }
 
-function ElectionGroup({ election, onOpen }: { election: UpcomingElection; onOpen: (e: UpcomingElection) => void }) {
+function ElectionGroup({ election, onOpen, ieMap }: { election: UpcomingElection; onOpen: (e: UpcomingElection) => void; ieMap?: IETotalsMap }) {
   // Group candidates by office within this election.
   const byOffice = new Map<string, UpcomingCandidate[]>();
   for (const c of election.candidates) {
@@ -88,7 +92,7 @@ function ElectionGroup({ election, onOpen }: { election: UpcomingElection; onOpe
         <div key={office} className="space-y-1.5 pl-6">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{office}</div>
           <div className="space-y-1.5">
-            {cands.map(c => <CandidateRow key={c.candidate_id} c={c} />)}
+            {cands.map(c => <CandidateRow key={c.candidate_id} c={c} ieMap={ieMap} />)}
           </div>
         </div>
       ))}
@@ -104,6 +108,15 @@ export function UpcomingElectionsCard({ address }: Props) {
     (data?.federal.length ?? 0) +
     (data?.state.length ?? 0) +
     (data?.local.length ?? 0);
+
+  const allCandidateIds = useMemo(() => {
+    const ids = new Set<string>();
+    [...(data?.federal ?? []), ...(data?.state ?? []), ...(data?.local ?? [])].forEach((e) => {
+      e.candidates.forEach((c) => ids.add(c.candidate_id));
+    });
+    return Array.from(ids);
+  }, [data]);
+  const { data: ieMap } = useCandidatesIE(allCandidateIds);
 
   const handleRefresh = async () => {
     const result = await refresh();
@@ -154,13 +167,13 @@ export function UpcomingElectionsCard({ address }: Props) {
               {data?.federal.length ? (
                 <section className="space-y-4">
                   <h4 className="text-sm font-semibold text-muted-foreground">Federal</h4>
-                  {data.federal.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} />)}
+                  {data.federal.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} ieMap={ieMap} />)}
                 </section>
               ) : null}
               {data?.state.length ? (
                 <section className="space-y-4">
                   <h4 className="text-sm font-semibold text-muted-foreground">State</h4>
-                  {data.state.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} />)}
+                  {data.state.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} ieMap={ieMap} />)}
                 </section>
               ) : null}
               {data?.local.length ? (
@@ -168,7 +181,7 @@ export function UpcomingElectionsCard({ address }: Props) {
                   <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5" /> Local
                   </h4>
-                  {data.local.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} />)}
+                  {data.local.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} ieMap={ieMap} />)}
                 </section>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
@@ -183,6 +196,7 @@ export function UpcomingElectionsCard({ address }: Props) {
         election={openElection}
         open={!!openElection}
         onOpenChange={(o) => { if (!o) setOpenElection(null); }}
+        ieMap={ieMap}
       />
     </>
   );

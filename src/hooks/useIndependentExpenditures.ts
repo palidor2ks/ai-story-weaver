@@ -110,3 +110,38 @@ export const useCandidateIE = (candidateId: string | null | undefined) => {
     },
   });
 };
+
+export type IETotalsMap = Map<string, IETotals>;
+
+export const useCandidatesIE = (candidateIds: string[]) => {
+  const sortedKey = [...candidateIds].sort().join(',');
+  return useQuery({
+    queryKey: ['ie-candidates-bulk', sortedKey],
+    enabled: candidateIds.length > 0,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async (): Promise<IETotalsMap> => {
+      const { data, error } = await supabase
+        .from('candidate_independent_expenditure_totals')
+        .select('candidate_id, expenditure_count, total_amount, support_amount, oppose_amount')
+        .in('candidate_id', candidateIds);
+      if (error) throw error;
+      const map: IETotalsMap = new Map();
+      (data ?? []).forEach((row) => {
+        if (!row.candidate_id) return;
+        const cur = map.get(row.candidate_id) ?? {
+          expenditure_count: 0,
+          total_amount: 0,
+          support_amount: 0,
+          oppose_amount: 0,
+        };
+        cur.expenditure_count += num(row.expenditure_count);
+        cur.total_amount += num(row.total_amount);
+        cur.support_amount += num(row.support_amount);
+        cur.oppose_amount += num(row.oppose_amount);
+        map.set(row.candidate_id, cur);
+      });
+      return map;
+    },
+  });
+};
+

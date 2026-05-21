@@ -9,6 +9,8 @@ import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { OfficialAvatar } from './OfficialAvatar';
 import { useAuth } from '@/context/AuthContext';
+import { IESummaryInline } from './IESummaryInline';
+import type { IETotals } from '@/hooks/useIndependentExpenditures';
 
 interface CandidateCardProps {
   candidate: Candidate;
@@ -16,6 +18,7 @@ interface CandidateCardProps {
   compareMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (candidate: Candidate) => void;
+  ieTotals?: IETotals;
 }
 
 export const CandidateCard = ({ 
@@ -23,7 +26,8 @@ export const CandidateCard = ({
   index = 0,
   compareMode = false,
   isSelected = false,
-  onToggleSelect
+  onToggleSelect,
+  ieTotals,
 }: CandidateCardProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -139,6 +143,7 @@ export const CandidateCard = ({
                 <MapPin className="w-3 h-3 flex-shrink-0" />
                 <span className="flex-shrink-0">{candidate.state}</span>
               </div>
+              <IESummaryInline totals={ieTotals} className="mt-1" />
             </div>
           </div>
 

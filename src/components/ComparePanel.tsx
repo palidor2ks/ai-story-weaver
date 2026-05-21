@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { X, Users, ArrowRight, Landmark, HandCoins, Loader2 } from 'lucide-react';
+import { X, Users, ArrowRight, Landmark, HandCoins, Loader2, Megaphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useFinanceCycles } from '@/hooks/useFinanceCycles';
+import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
+import { IESummaryInline } from './IESummaryInline';
 
 interface ComparePanelProps {
   candidates: Candidate[];
@@ -66,6 +68,8 @@ export const ComparePanel = ({
   );
   const visibleCandidates = sortedCandidates.slice(0, 4);
   const candidateIds = visibleCandidates.map((c) => c.id);
+  const { data: ieMap } = useCandidatesIE(candidateIds);
+
 
   const { data: financeByCandidate = {}, isLoading: financeLoading } = useQuery({
     queryKey: ['compare-finance-snapshot', cycle ?? 'latest', candidateIds.join(',')],
@@ -257,6 +261,13 @@ export const ComparePanel = ({
                         {financeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : (finance?.donorCount ?? 0).toLocaleString()}
                       </span>
                     </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground inline-flex items-center gap-1 shrink-0">
+                        <Megaphone className="w-3 h-3" />Outside
+                      </span>
+                      <IESummaryInline totals={ieMap?.get(candidate.id)} hideIfEmpty={false} className="text-right" />
+                    </div>
+
                     {user && (finance?.smallDonationCount ?? 0) > 0 && (
                       <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-1.5">
                         <p className="text-emerald-700 dark:text-emerald-300 text-[11px] mb-0.5">Small-dollar support</p>
