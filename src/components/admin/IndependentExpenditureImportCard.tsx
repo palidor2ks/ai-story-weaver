@@ -112,6 +112,7 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
           totalRows,
           processedRows: 0,
           inserted: 0,
+          updated: 0,
           skippedInvalid: 0,
           skippedBelowMin,
           errors: [],
