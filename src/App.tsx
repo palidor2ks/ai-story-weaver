@@ -35,6 +35,7 @@ import Blog from "./pages/Blog";
 import Unsubscribe from "./pages/Unsubscribe";
 import Poll from "./pages/Poll";
 import PollResultsPage from "./pages/PollResultsPage";
+import TopSpenders from "./pages/TopSpenders";
 
 const queryClient = new QueryClient();
 
