@@ -760,7 +760,8 @@ export default function Admin() {
           <TabsContent value="donor-import" className="space-y-6">
             <BulkDonorSyncCard />
             <BulkCommitteeTotalsCard />
-            <IndependentExpenditureImportCard />
+            <IndependentExpenditureImportCard onImportComplete={() => setIeHistoryRefresh(k => k + 1)} />
+            <IndependentExpenditureImportHistory refreshKey={ieHistoryRefresh} />
             <DonorImportPanel />
           </TabsContent>
 
