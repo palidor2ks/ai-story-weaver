@@ -279,7 +279,7 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
           <div className="space-y-2">
             <Progress value={progress} />
             <p className="text-xs text-muted-foreground">
-              Batch {stats.currentBatch}/{stats.totalBatches} · {stats.processedRows}/{stats.totalRows} rows · {stats.inserted} imported
+              Batch {stats.currentBatch}/{stats.totalBatches} · {stats.processedRows}/{stats.totalRows} rows · {stats.inserted} new · {stats.updated} updated
             </p>
             <Button variant="outline" onClick={cancelImport} className="w-full">
               <XCircle className="mr-2 h-4 w-4" /> Cancel
