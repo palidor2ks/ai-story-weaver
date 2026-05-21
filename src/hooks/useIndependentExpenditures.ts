@@ -24,35 +24,90 @@ export interface IERow {
 
 const num = (v: unknown) => Number(v ?? 0);
 
-export const useCommitteeIE = (committeeFecId: string | null | undefined) => {
+export interface IETargetSummary {
+  key: string;
+  name: string;
+  fecId: string | null;
+  candidateId: string | null;
+  support: number;
+  oppose: number;
+  total: number;
+  count: number;
+}
+
+export const useCommitteeIE = (
+  committeeFecId: string | null | undefined,
+  cycle?: string | null,
+) => {
   return useQuery({
-    queryKey: ['ie-committee-totals', committeeFecId],
+    queryKey: ['ie-committee-summary', committeeFecId, cycle ?? 'all'],
     enabled: !!committeeFecId,
     staleTime: 1000 * 60 * 10,
     queryFn: async () => {
-      const [totalsRes, rowsRes] = await Promise.all([
-        supabase
-          .from('committee_independent_expenditure_totals')
-          .select('expenditure_count, total_amount, support_amount, oppose_amount')
-          .eq('spending_committee_fec_id', committeeFecId!)
-          .maybeSingle(),
-        supabase
-          .from('independent_expenditures')
-          .select(
-            'id, expenditure_date, amount, support_oppose_indicator, purpose, spending_committee_fec_id, spending_committee_name, candidate_id, target_fec_candidate_id, target_candidate_name, cycle',
-          )
-          .eq('spending_committee_fec_id', committeeFecId!)
-          .order('expenditure_date', { ascending: false })
-          .limit(25),
-      ]);
-      const t = totalsRes.data;
+      // Cycles list (unfiltered, for stable dropdown)
+      const cyclesRes = await supabase
+        .from('independent_expenditures')
+        .select('cycle')
+        .eq('spending_committee_fec_id', committeeFecId!)
+        .not('cycle', 'is', null);
+      const availableCycles = Array.from(
+        new Set((cyclesRes.data ?? []).map((r: any) => String(r.cycle))),
+      ).sort((a, b) => b.localeCompare(a));
+
+      // Filtered rows
+      let q = supabase
+        .from('independent_expenditures')
+        .select(
+          'id, amount, support_oppose_indicator, candidate_id, target_fec_candidate_id, target_candidate_name, cycle',
+        )
+        .eq('spending_committee_fec_id', committeeFecId!);
+      if (cycle && cycle !== 'all') q = q.eq('cycle', cycle);
+      const rowsRes = await q.limit(50000);
+      const rows = (rowsRes.data ?? []) as Array<{
+        amount: number | string;
+        support_oppose_indicator: 'S' | 'O';
+        candidate_id: string | null;
+        target_fec_candidate_id: string | null;
+        target_candidate_name: string | null;
+      }>;
+
       const totals: IETotals = {
-        expenditure_count: num(t?.expenditure_count),
-        total_amount: num(t?.total_amount),
-        support_amount: num(t?.support_amount),
-        oppose_amount: num(t?.oppose_amount),
+        expenditure_count: rows.length,
+        total_amount: 0,
+        support_amount: 0,
+        oppose_amount: 0,
       };
-      return { totals, rows: (rowsRes.data ?? []) as IERow[] };
+      const map = new Map<string, IETargetSummary>();
+      rows.forEach((r) => {
+        const amt = num(r.amount);
+        totals.total_amount += amt;
+        if (r.support_oppose_indicator === 'S') totals.support_amount += amt;
+        else totals.oppose_amount += amt;
+
+        const key =
+          r.target_fec_candidate_id ?? r.candidate_id ?? r.target_candidate_name ?? 'unknown';
+        const cur =
+          map.get(key) ??
+          {
+            key,
+            name: r.target_candidate_name ?? r.target_fec_candidate_id ?? 'Unknown target',
+            fecId: r.target_fec_candidate_id,
+            candidateId: r.candidate_id,
+            support: 0,
+            oppose: 0,
+            total: 0,
+            count: 0,
+          };
+        cur.total += amt;
+        cur.count += 1;
+        if (r.support_oppose_indicator === 'S') cur.support += amt;
+        else cur.oppose += amt;
+        if (!cur.candidateId && r.candidate_id) cur.candidateId = r.candidate_id;
+        map.set(key, cur);
+      });
+      const targets = Array.from(map.values()).sort((a, b) => b.total - a.total);
+
+      return { totals, targets, availableCycles };
     },
   });
 };
