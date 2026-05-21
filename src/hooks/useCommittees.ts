@@ -379,11 +379,63 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
     queryFn: async () => {
       if (!committeeId) return null;
       const committees = await fetchCommittees(cycle, committeeId);
-      return committees[0] || null;
+      if (committees[0]) return committees[0];
+
+      // Fallback: committee not in candidate_committees — synthesize from contributions + rollups
+      const { data: contribRow } = await supabase
+        .from('contributions')
+        .select('recipient_committee_id, recipient_committee_name, cycle, receipt_date')
+        .eq('recipient_committee_id', committeeId)
+        .order('receipt_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const { data: rollupRows } = await supabase
+        .from('committee_finance_rollups')
+        .select('committee_id, candidate_id, donor_count, contribution_count, local_itemized, fec_itemized, fec_total_receipts, cycle')
+        .eq('committee_id', committeeId);
+
+      if (!contribRow && (!rollupRows || rollupRows.length === 0)) {
+        return null;
+      }
+
+      const rollups = (rollupRows || []) as CommitteeRollupRow[];
+      const filtered = cycle && cycle !== 'all' ? rollups.filter(r => r.cycle === cycle) : rollups;
+      const totals = filtered.reduce(
+        (acc, r) => ({
+          donor_count: acc.donor_count + (r.donor_count ?? 0),
+          contribution_count: acc.contribution_count + (r.contribution_count ?? 0),
+          total_raised: acc.total_raised + (r.local_itemized ?? r.fec_total_receipts ?? r.fec_itemized ?? 0),
+        }),
+        { donor_count: 0, contribution_count: 0, total_raised: 0 },
+      );
+      const cycles = Array.from(new Set(rollups.map(r => r.cycle).filter(Boolean)));
+
+      const summary: CommitteeSummary = {
+        id: committeeId,
+        name: contribRow?.recipient_committee_name ?? committeeId,
+        aliasName: null,
+        fecCommitteeId: committeeId,
+        designation: null,
+        designationFull: null,
+        role: null,
+        cycles,
+        lastSyncDate: null,
+        lastContributionDate: contribRow?.receipt_date ?? null,
+        localItemizedTotal: null,
+        fecItemizedTotal: null,
+        candidateId: null,
+        candidate: null,
+        donorCount: totals.donor_count,
+        contributionCount: totals.contribution_count,
+        totalRaised: totals.total_raised,
+      };
+      return summary;
     },
     enabled: !!committeeId,
   });
 };
+
 
 export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all') => {
   return useQuery({
