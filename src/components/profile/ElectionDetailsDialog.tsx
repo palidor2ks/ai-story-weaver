@@ -26,7 +26,7 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-function CandidateCard({ c }: { c: UpcomingCandidate }) {
+function CandidateCard({ c, ie }: { c: UpcomingCandidate; ie?: IETotals }) {
   return (
     <div className="rounded-lg border border-border/60 p-3 space-y-2">
       <div className="flex items-start gap-3">
@@ -44,6 +44,7 @@ function CandidateCard({ c }: { c: UpcomingCandidate }) {
           <div className="text-xs text-muted-foreground mt-0.5">
             {c.office}{c.district ? ` · District ${c.district}` : ''}{c.state ? ` · ${c.state}` : ''}
           </div>
+          <IESummaryInline totals={ie} size="sm" className="mt-1" />
         </div>
         <div className="flex-shrink-0 text-right">
           {c.is_pending_research ? (
