@@ -29,6 +29,24 @@ interface FetchDonorsResult {
   error?: string;
 }
 
+async function readFunctionError(error: any): Promise<string> {
+  try {
+    const ctx = error?.context;
+    if (ctx && typeof ctx.json === 'function') {
+      const body = await ctx.clone().json().catch(() => null);
+      if (body?.error) return String(body.error);
+      if (body?.message) return String(body.message);
+    }
+    if (ctx && typeof ctx.text === 'function') {
+      const txt = await ctx.clone().text().catch(() => '');
+      if (txt) return txt;
+    }
+  } catch {
+    /* ignore */
+  }
+  return error?.message ?? 'Unknown error';
+}
+
 export function useImportExternalCommittee() {
   const queryClient = useQueryClient();
 
@@ -38,9 +56,9 @@ export function useImportExternalCommittee() {
         body: { committeeId }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await readFunctionError(error));
       if (data?.error) throw new Error(data.error);
-      
+
       return data;
     },
     onSuccess: (data) => {
@@ -69,9 +87,9 @@ export function useFetchCommitteeDonors() {
         body: { committeeId, cycle }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await readFunctionError(error));
       if (data?.error) throw new Error(data.error);
-      
+
       return data;
     },
     onSuccess: (data) => {
