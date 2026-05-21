@@ -1059,7 +1059,9 @@ export const CandidateProfile = () => {
                 )}
               </CardContent>
             </Card>
+            <div className="mt-6"><CandidateIESection candidateId={candidate.id} /></div>
           </TabsContent>
+
 
           <TabsContent value="votes">
             <VotingRecordSection 
