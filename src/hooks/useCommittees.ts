@@ -54,7 +54,7 @@ interface CommitteeRollupRow {
 interface CommitteeRow {
   id: string;
   name: string | null;
-  alias_name?: string | null;
+  
   fec_committee_id: string;
   designation: string | null;
   designation_full: string | null;
@@ -120,7 +120,7 @@ const buildCommitteeSummaries = (
     return {
       id: committee.id,
       name: committee.name,
-      aliasName: committee.alias_name,
+      aliasName: null,
       fecCommitteeId: committee.fec_committee_id,
       designation: committee.designation,
       designationFull: committee.designation_full,
@@ -145,7 +145,6 @@ async function fetchCommittees(cycle: string = 'all', committeeId?: string) {
     .select(`
       id,
       name,
-      alias_name,
       fec_committee_id,
       designation,
       designation_full,
@@ -454,16 +453,9 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all
         employer: string | null;
         occupation: string | null;
         candidate_id: string | null;
-        candidates: {
-          id: string;
-          name: string;
-          party: string;
-          office: string;
-          state: string;
-        } | null;
       }
 
-      const { data, error } = await supabase
+      let contribQuery = supabase
         .from('contributions')
         .select(`
           id,
@@ -475,32 +467,45 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all
           contributor_state,
           employer,
           occupation,
-          candidate_id,
-          candidates:candidate_id (
-            id,
-            name,
-            party,
-            office,
-            state
-          )
+          candidate_id
         `)
-        .eq('recipient_committee_id', committeeId)
-        .eq('cycle', cycle)
+        .eq('recipient_committee_id', committeeId);
+
+      if (cycle && cycle !== 'all') {
+        contribQuery = contribQuery.eq('cycle', cycle);
+      }
+
+      const { data, error } = await contribQuery
         .order('amount', { ascending: false })
         .limit(500)
         .returns<ContributionRow[]>();
 
       if (error) throw error;
 
+      const rows = data || [];
+      const candidateIds = Array.from(
+        new Set(rows.map((r) => r.candidate_id).filter((id): id is string => !!id)),
+      );
+
+      const candidateMap = new Map<string, { name: string }>();
+      if (candidateIds.length > 0) {
+        const { data: candData } = await supabase
+          .from('candidates')
+          .select('id, name')
+          .in('id', candidateIds);
+        (candData || []).forEach((c: { id: string; name: string }) => {
+          candidateMap.set(c.id, { name: c.name });
+        });
+      }
+
       const donorMap = new Map<string, CommitteeDonor>();
 
-      (data || []).forEach((row) => {
+      rows.forEach((row) => {
         const key = `${row.contributor_name}-${row.contributor_state || ''}-${row.contributor_city || ''}`;
         const existing = donorMap.get(key);
         const candidateNames = new Set(existing?.candidateNames || []);
-        if (row.candidates?.name) {
-          candidateNames.add(row.candidates.name);
-        }
+        const candName = row.candidate_id ? candidateMap.get(row.candidate_id)?.name : null;
+        if (candName) candidateNames.add(candName);
 
         const existingDate = existing?.latestDate ? new Date(existing.latestDate) : null;
         const currentDate = row.receipt_date ? new Date(row.receipt_date) : null;
