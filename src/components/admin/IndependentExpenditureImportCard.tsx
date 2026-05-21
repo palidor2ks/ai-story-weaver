@@ -178,7 +178,8 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
                 }
                 s.errors.push(`Batch ${batchNum}: ${error.message}`);
               } else if (data) {
-                s.inserted += data.inserted || 0;
+                s.inserted += data.newRows ?? data.inserted ?? 0;
+                s.updated += data.updatedRows ?? 0;
                 s.skippedInvalid += data.skippedInvalid || 0;
                 for (const c of data.unmappedCommittees || []) s.unmappedCommittees.add(c);
                 for (const c of data.unmappedCandidates || []) s.unmappedCandidates.add(c);
