@@ -143,6 +143,7 @@ export const CandidateCard = ({
                 <MapPin className="w-3 h-3 flex-shrink-0" />
                 <span className="flex-shrink-0">{candidate.state}</span>
               </div>
+              <IESummaryInline totals={ieTotals} className="mt-1" />
             </div>
           </div>
 
