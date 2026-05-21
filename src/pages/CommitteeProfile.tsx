@@ -267,6 +267,9 @@ export const CommitteeProfile = () => {
               )}
             </section>
 
+            <CommitteeIESection committeeFecId={committee.fecCommitteeId} />
+
+
             <Card>
               <CardContent className="p-5">
                 <div className="flex items-center justify-between gap-3 mb-4">
