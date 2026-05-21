@@ -145,7 +145,6 @@ async function fetchCommittees(cycle: string = 'all', committeeId?: string) {
     .select(`
       id,
       name,
-      alias_name,
       fec_committee_id,
       designation,
       designation_full,
