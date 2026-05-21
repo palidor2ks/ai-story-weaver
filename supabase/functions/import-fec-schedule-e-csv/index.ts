@@ -262,8 +262,11 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       totalReceived: rows.length,
       processed: normalized.length,
+      deduped: dedupedRecords.length,
+      intraBatchDuplicates,
       inserted,
       skippedInvalid,
+      failedBatches,
       unmappedCommittees: Array.from(unmappedCommittees),
       unmappedCandidates: Array.from(unmappedCandidates),
       errors,
