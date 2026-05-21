@@ -295,8 +295,8 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
           <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
             <p className="font-medium">Last run</p>
             <p className="text-muted-foreground">
-              Imported {stats.inserted} · Invalid rows {stats.skippedInvalid}
-              {stats.skippedBelowMin > 0 && <> · Below min amount {stats.skippedBelowMin}</>}
+              {stats.inserted} new · {stats.updated} updated · {stats.skippedInvalid} invalid
+              {stats.skippedBelowMin > 0 && <> · {stats.skippedBelowMin} below min</>}
             </p>
             <p className="text-muted-foreground">
               Unmapped committees: {stats.unmappedCommittees.size} · Unmapped candidates: {stats.unmappedCandidates.size}
