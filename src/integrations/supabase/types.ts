@@ -1474,6 +1474,54 @@ export type Database = {
         }
         Relationships: []
       }
+      ie_import_sessions: {
+        Row: {
+          completed_at: string | null
+          created_by: string | null
+          cycle: string
+          detected_cycle: string | null
+          filename: string | null
+          id: string
+          inserted_rows: number
+          row_count: number
+          started_at: string
+          status: string
+          undo_summary: Json | null
+          undone_at: string | null
+          updated_rows: number
+        }
+        Insert: {
+          completed_at?: string | null
+          created_by?: string | null
+          cycle: string
+          detected_cycle?: string | null
+          filename?: string | null
+          id: string
+          inserted_rows?: number
+          row_count?: number
+          started_at?: string
+          status?: string
+          undo_summary?: Json | null
+          undone_at?: string | null
+          updated_rows?: number
+        }
+        Update: {
+          completed_at?: string | null
+          created_by?: string | null
+          cycle?: string
+          detected_cycle?: string | null
+          filename?: string | null
+          id?: string
+          inserted_rows?: number
+          row_count?: number
+          started_at?: string
+          status?: string
+          undo_summary?: Json | null
+          undone_at?: string | null
+          updated_rows?: number
+        }
+        Relationships: []
+      }
       independent_expenditures: {
         Row: {
           amount: number
@@ -1487,6 +1535,7 @@ export type Database = {
           fec_transaction_id: string
           id: string
           image_number: string | null
+          import_session_id: string | null
           office: string | null
           purpose: string | null
           raw_payload: Json
@@ -1512,6 +1561,7 @@ export type Database = {
           fec_transaction_id: string
           id?: string
           image_number?: string | null
+          import_session_id?: string | null
           office?: string | null
           purpose?: string | null
           raw_payload?: Json
@@ -1537,6 +1587,7 @@ export type Database = {
           fec_transaction_id?: string
           id?: string
           image_number?: string | null
+          import_session_id?: string | null
           office?: string | null
           purpose?: string | null
           raw_payload?: Json
@@ -3293,6 +3344,7 @@ export type Database = {
         Returns: string
       }
       undo_donor_import: { Args: { p_session_id: string }; Returns: Json }
+      undo_ie_import: { Args: { p_session_id: string }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "politician"
