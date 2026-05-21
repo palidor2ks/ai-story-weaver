@@ -68,6 +68,8 @@ export const ComparePanel = ({
   );
   const visibleCandidates = sortedCandidates.slice(0, 4);
   const candidateIds = visibleCandidates.map((c) => c.id);
+  const { data: ieMap } = useCandidatesIE(candidateIds);
+
 
   const { data: financeByCandidate = {}, isLoading: financeLoading } = useQuery({
     queryKey: ['compare-finance-snapshot', cycle ?? 'latest', candidateIds.join(',')],
