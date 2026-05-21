@@ -200,12 +200,22 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
           if (i + BATCH_SIZE < totalRows) await new Promise((r) => setTimeout(r, DELAY_MS));
         }
 
+        // Finalize session if user cancelled before the last batch fired isLastBatch
+        if (cancelRef.current) {
+          try {
+            await supabase.functions.invoke('import-fec-schedule-e-csv', {
+              body: { sessionId, finalize: true, failed: s.inserted === 0 },
+            });
+          } catch (_e) { /* ignore */ }
+        }
+
         setIsImporting(false);
         if (cancelRef.current) {
           toast.info(`Cancelled · ${s.inserted} rows imported`);
         } else {
           toast.success(`Imported ${s.inserted} expenditures (${s.unmappedCommittees.size} unmapped committees)`);
         }
+        onImportComplete?.();
       },
     });
   };
