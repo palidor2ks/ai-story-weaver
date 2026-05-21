@@ -167,13 +167,13 @@ export function UpcomingElectionsCard({ address }: Props) {
               {data?.federal.length ? (
                 <section className="space-y-4">
                   <h4 className="text-sm font-semibold text-muted-foreground">Federal</h4>
-                  {data.federal.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} />)}
+                  {data.federal.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} ieMap={ieMap} />)}
                 </section>
               ) : null}
               {data?.state.length ? (
                 <section className="space-y-4">
                   <h4 className="text-sm font-semibold text-muted-foreground">State</h4>
-                  {data.state.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} />)}
+                  {data.state.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} ieMap={ieMap} />)}
                 </section>
               ) : null}
               {data?.local.length ? (
@@ -181,7 +181,7 @@ export function UpcomingElectionsCard({ address }: Props) {
                   <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5" /> Local
                   </h4>
-                  {data.local.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} />)}
+                  {data.local.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} ieMap={ieMap} />)}
                 </section>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
