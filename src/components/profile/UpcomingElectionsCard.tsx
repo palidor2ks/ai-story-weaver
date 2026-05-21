@@ -109,6 +109,15 @@ export function UpcomingElectionsCard({ address }: Props) {
     (data?.state.length ?? 0) +
     (data?.local.length ?? 0);
 
+  const allCandidateIds = useMemo(() => {
+    const ids = new Set<string>();
+    [...(data?.federal ?? []), ...(data?.state ?? []), ...(data?.local ?? [])].forEach((e) => {
+      e.candidates.forEach((c) => ids.add(c.candidate_id));
+    });
+    return Array.from(ids);
+  }, [data]);
+  const { data: ieMap } = useCandidatesIE(allCandidateIds);
+
   const handleRefresh = async () => {
     const result = await refresh();
     if (result.ok) {
