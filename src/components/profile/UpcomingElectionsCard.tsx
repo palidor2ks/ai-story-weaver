@@ -68,7 +68,7 @@ function CandidateRow({ c, ieMap }: { c: UpcomingCandidate; ieMap?: IETotalsMap 
   );
 }
 
-function ElectionGroup({ election, onOpen }: { election: UpcomingElection; onOpen: (e: UpcomingElection) => void }) {
+function ElectionGroup({ election, onOpen, ieMap }: { election: UpcomingElection; onOpen: (e: UpcomingElection) => void; ieMap?: IETotalsMap }) {
   // Group candidates by office within this election.
   const byOffice = new Map<string, UpcomingCandidate[]>();
   for (const c of election.candidates) {
@@ -92,7 +92,7 @@ function ElectionGroup({ election, onOpen }: { election: UpcomingElection; onOpe
         <div key={office} className="space-y-1.5 pl-6">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{office}</div>
           <div className="space-y-1.5">
-            {cands.map(c => <CandidateRow key={c.candidate_id} c={c} />)}
+            {cands.map(c => <CandidateRow key={c.candidate_id} c={c} ieMap={ieMap} />)}
           </div>
         </div>
       ))}
