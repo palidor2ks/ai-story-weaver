@@ -12,6 +12,7 @@ import { useCommittee, useCommitteeDonors } from '@/hooks/useCommittees';
 import { useFetchCommitteeDonors } from '@/hooks/useImportExternalCommittee';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialog';
+import { CommitteeIESection } from '@/components/IndependentExpenditureSections';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
