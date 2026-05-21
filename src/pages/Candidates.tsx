@@ -326,6 +326,7 @@ export const Candidates = () => {
               compareMode={compareMode}
               isSelected={selectedCandidates.some(c => c.id === candidate.id)}
               onToggleSelect={handleToggleSelect}
+              ieTotals={ieMap?.get(candidate.id)}
             />
           ))}
         </div>
