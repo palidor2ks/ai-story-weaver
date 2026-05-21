@@ -98,6 +98,7 @@ export default function Admin() {
   const [editingOfficial, setEditingOfficial] = useState<StaticOfficial | null>(null);
   const [formData, setFormData] = useState<OfficialFormData>(defaultFormData);
   const [activeTab, setActiveTab] = useState("officials");
+  const [ieHistoryRefresh, setIeHistoryRefresh] = useState(0);
   const [scrapingPiscataway, setScrapingPiscataway] = useState(false);
   const queryClient = useQueryClient();
 
