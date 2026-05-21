@@ -54,7 +54,7 @@ interface CommitteeRollupRow {
 interface CommitteeRow {
   id: string;
   name: string | null;
-  alias_name?: string | null;
+  
   fec_committee_id: string;
   designation: string | null;
   designation_full: string | null;
