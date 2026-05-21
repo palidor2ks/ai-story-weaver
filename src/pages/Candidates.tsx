@@ -136,6 +136,12 @@ export const Candidates = () => {
     return result;
   }, [searchQuery, sortBy, partyFilter, officeFilter, tabCandidates, profile, isHidden]);
 
+  const visibleIds = useMemo(
+    () => filteredCandidates.slice(0, 120).map((c) => c.id),
+    [filteredCandidates],
+  );
+  const { data: ieMap } = useCandidatesIE(visibleIds);
+
   const isLoading = profileLoading || unified.isLoading;
 
   // Count for tabs
@@ -156,13 +162,8 @@ export const Candidates = () => {
     );
   }
 
-  const visibleIds = useMemo(
-    () => filteredCandidates.slice(0, 120).map((c) => c.id),
-    [filteredCandidates],
-  );
-  const { data: ieMap } = useCandidatesIE(visibleIds);
-
   return (
+
     <div className="min-h-screen bg-background">
       <Seo
         title="All Politicians — Pulse"
