@@ -213,17 +213,30 @@ Deno.serve(async (req) => {
       return { ...n, candidate_id, import_session_id: sessionId };
     });
 
+    // Dedupe within the batch on (fec_transaction_id, spending_committee_fec_id) — Postgres rejects
+    // ON CONFLICT DO UPDATE if the same conflict key appears twice in one statement, which would
+    // fail the whole batch. Keep the LAST occurrence (later amendments win over earlier rows).
+    const dedupMap = new Map<string, any>();
+    for (const r of records) {
+      const k = `${r.fec_transaction_id}|${r.spending_committee_fec_id}`;
+      dedupMap.set(k, r);
+    }
+    const dedupedRecords = Array.from(dedupMap.values());
+    const intraBatchDuplicates = records.length - dedupedRecords.length;
+
     // Upsert in chunks
     const CHUNK = 500;
     let inserted = 0;
+    let failedBatches = 0;
     const errors: string[] = [];
-    for (let i = 0; i < records.length; i += CHUNK) {
-      const slice = records.slice(i, i + CHUNK);
+    for (let i = 0; i < dedupedRecords.length; i += CHUNK) {
+      const slice = dedupedRecords.slice(i, i + CHUNK);
       const { error, count } = await admin
         .from('independent_expenditures')
         .upsert(slice, { onConflict: 'fec_transaction_id,spending_committee_fec_id', count: 'exact' });
       if (error) {
-        errors.push(error.message);
+        failedBatches++;
+        errors.push(`chunk ${Math.floor(i / CHUNK) + 1} (${slice.length} rows): ${error.message}`);
       } else {
         inserted += count ?? slice.length;
       }
