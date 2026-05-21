@@ -100,6 +100,18 @@ async function main() {
     }
   }
 
+  // Candidates
+  const candidates = await fetchRows("candidates", "id");
+  for (const c of candidates) {
+    if (c?.id) entries.push({ path: `/candidate/${c.id}`, changefreq: "weekly", priority: "0.6" });
+  }
+
+  // Donors
+  const donors = await fetchRows("donors", "id");
+  for (const d of donors) {
+    if (d?.id) entries.push({ path: `/donor/${d.id}`, changefreq: "weekly", priority: "0.5" });
+  }
+
   writeFileSync(resolve("public/sitemap.xml"), xml(entries));
   console.log(`sitemap.xml written (${entries.length} entries)`);
 }
