@@ -217,9 +217,9 @@ export function IndependentExpenditureImportCard({ onImportComplete }: { onImpor
 
         setIsImporting(false);
         if (cancelRef.current) {
-          toast.info(`Cancelled · ${s.inserted} rows imported`);
+          toast.info(`Cancelled · ${s.inserted} new, ${s.updated} updated`);
         } else {
-          toast.success(`Imported ${s.inserted} expenditures (${s.unmappedCommittees.size} unmapped committees)`);
+          toast.success(`${s.inserted} new · ${s.updated} updated · ${s.unmappedCommittees.size} unmapped committees`);
         }
         onImportComplete?.();
       },
