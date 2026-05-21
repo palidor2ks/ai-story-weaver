@@ -111,6 +111,23 @@ Deno.serve(async (req) => {
     const cycleOverride: string | null = body?.cycle ? String(body.cycle) : null;
     const force: boolean = !!body?.force;
     const isFirstBatch: boolean = !!body?.isFirstBatch;
+    const isLastBatch: boolean = !!body?.isLastBatch;
+    const sessionId: string | null = body?.sessionId ? String(body.sessionId) : null;
+    const filename: string | null = body?.filename ? String(body.filename) : null;
+    const totalRowCount: number = Number(body?.totalRowCount ?? 0) || 0;
+    const finalize: boolean = !!body?.finalize;
+    const failed: boolean = !!body?.failed;
+
+    // Finalize-only call (no rows, just close out the session)
+    if (sessionId && finalize && rows.length === 0) {
+      await admin.from('ie_import_sessions').update({
+        status: failed ? 'failed' : 'completed',
+        completed_at: new Date().toISOString(),
+      }).eq('id', sessionId);
+      return new Response(JSON.stringify({ ok: true, finalized: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     if (rows.length === 0) {
       return new Response(JSON.stringify({ inserted: 0, skipped: 0, totalReceived: 0, unmappedCommittees: [], unmappedCandidates: [] }), {
