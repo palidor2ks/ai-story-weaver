@@ -1474,6 +1474,99 @@ export type Database = {
         }
         Relationships: []
       }
+      independent_expenditures: {
+        Row: {
+          amount: number
+          candidate_id: string | null
+          communication_type: string | null
+          created_at: string
+          cycle: string | null
+          district: string | null
+          election_type: string | null
+          expenditure_date: string | null
+          fec_transaction_id: string
+          id: string
+          image_number: string | null
+          office: string | null
+          purpose: string | null
+          raw_payload: Json
+          report_type: string | null
+          source: string
+          spending_committee_fec_id: string
+          spending_committee_name: string | null
+          state: string | null
+          support_oppose_indicator: string
+          target_candidate_name: string | null
+          target_fec_candidate_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          candidate_id?: string | null
+          communication_type?: string | null
+          created_at?: string
+          cycle?: string | null
+          district?: string | null
+          election_type?: string | null
+          expenditure_date?: string | null
+          fec_transaction_id: string
+          id?: string
+          image_number?: string | null
+          office?: string | null
+          purpose?: string | null
+          raw_payload?: Json
+          report_type?: string | null
+          source?: string
+          spending_committee_fec_id: string
+          spending_committee_name?: string | null
+          state?: string | null
+          support_oppose_indicator: string
+          target_candidate_name?: string | null
+          target_fec_candidate_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          candidate_id?: string | null
+          communication_type?: string | null
+          created_at?: string
+          cycle?: string | null
+          district?: string | null
+          election_type?: string | null
+          expenditure_date?: string | null
+          fec_transaction_id?: string
+          id?: string
+          image_number?: string | null
+          office?: string | null
+          purpose?: string | null
+          raw_payload?: Json
+          report_type?: string | null
+          source?: string
+          spending_committee_fec_id?: string
+          spending_committee_name?: string | null
+          state?: string | null
+          support_oppose_indicator?: string
+          target_candidate_name?: string | null
+          target_fec_candidate_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "independent_expenditures_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_voting_coverage"
+            referencedColumns: ["candidate_id"]
+          },
+          {
+            foreignKeyName: "independent_expenditures_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mayor_fetch_queue: {
         Row: {
           attempts: number
@@ -2913,6 +3006,32 @@ export type Database = {
           },
         ]
       }
+      candidate_independent_expenditure_totals: {
+        Row: {
+          candidate_id: string | null
+          expenditure_count: number | null
+          oppose_amount: number | null
+          support_amount: number | null
+          target_fec_candidate_id: string | null
+          total_amount: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "independent_expenditures_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_voting_coverage"
+            referencedColumns: ["candidate_id"]
+          },
+          {
+            foreignKeyName: "independent_expenditures_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_voting_coverage: {
         Row: {
           candidate_id: string | null
@@ -2925,6 +3044,17 @@ export type Database = {
           party: Database["public"]["Enums"]["party_type"] | null
           topics_covered: number | null
           total_votes_stored: number | null
+        }
+        Relationships: []
+      }
+      committee_independent_expenditure_totals: {
+        Row: {
+          expenditure_count: number | null
+          oppose_amount: number | null
+          spending_committee_fec_id: string | null
+          spending_committee_name: string | null
+          support_amount: number | null
+          total_amount: number | null
         }
         Relationships: []
       }
