@@ -79,9 +79,10 @@ interface Props {
   election: UpcomingElection | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  ieMap?: IETotalsMap;
 }
 
-export function ElectionDetailsDialog({ election, open, onOpenChange }: Props) {
+export function ElectionDetailsDialog({ election, open, onOpenChange, ieMap }: Props) {
   if (!election) return null;
 
   const byOffice = new Map<string, UpcomingCandidate[]>();
@@ -89,6 +90,16 @@ export function ElectionDetailsDialog({ election, open, onOpenChange }: Props) {
     if (!byOffice.has(c.office)) byOffice.set(c.office, []);
     byOffice.get(c.office)!.push(c);
   }
+
+  // Total outside spending across all candidates in this race
+  let raceSupport = 0;
+  let raceOppose = 0;
+  for (const c of election.candidates) {
+    const ie = ieMap?.get(c.candidate_id);
+    raceSupport += ie?.support_amount ?? 0;
+    raceOppose += ie?.oppose_amount ?? 0;
+  }
+  const raceTotal = raceSupport + raceOppose;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -110,6 +121,18 @@ export function ElectionDetailsDialog({ election, open, onOpenChange }: Props) {
           </DialogDescription>
         </DialogHeader>
 
+        {raceTotal > 0 && (
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="font-medium">Outside money in this race:</span>
+            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+              <TrendingUp className="w-3 h-3" /> {formatIECompact(raceSupport)} supporting
+            </span>
+            <span className="inline-flex items-center gap-1 text-destructive">
+              <TrendingDown className="w-3 h-3" /> {formatIECompact(raceOppose)} opposing
+            </span>
+          </div>
+        )}
+
         <div className="space-y-5 pt-2">
           {byOffice.size === 0 ? (
             <p className="text-sm text-muted-foreground">No candidates listed yet for this race.</p>
@@ -120,7 +143,7 @@ export function ElectionDetailsDialog({ election, open, onOpenChange }: Props) {
                   {office} · {cands.length} candidate{cands.length === 1 ? '' : 's'}
                 </h3>
                 <div className="space-y-2">
-                  {cands.map(c => <CandidateCard key={c.candidate_id} c={c} />)}
+                  {cands.map(c => <CandidateCard key={c.candidate_id} c={c} ie={ieMap?.get(c.candidate_id)} />)}
                 </div>
               </section>
             ))
