@@ -34,6 +34,7 @@ const formatNumber = (value: number) =>
 
 export const CommitteeProfile = () => {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const { data: committee, isLoading: committeeLoading } = useCommittee(id);
   const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id);
   const { data: adminData } = useAdminRole();
@@ -41,6 +42,15 @@ export const CommitteeProfile = () => {
 
   const isAdmin = adminData?.isAdmin ?? false;
   const isLoading = committeeLoading || donorsLoading;
+
+  const fromState = (location.state as { from?: string } | null)?.from;
+  // If the committee has no candidate-committee receipts, it's an outside-spender (IE-only) committee
+  // that lives on /top-spenders rather than /committees.
+  const isOutsideSpenderOnly = !!committee && !committee.totalRaised && !committee.candidate;
+  const backTo = fromState === '/top-spenders' || fromState === '/committees'
+    ? fromState
+    : isOutsideSpenderOnly ? '/top-spenders' : '/committees';
+  const backLabel = backTo === '/top-spenders' ? 'Back to Top Spenders' : 'Back to Committees';
 
   const availableCycles = useMemo(() => {
     const baseYear = new Date().getFullYear();
