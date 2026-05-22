@@ -117,7 +117,11 @@ const AssignmentsTab = () => {
   const del = useDeleteCommitteeTopic();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'unassigned' | 'ai' | 'admin' | 'low-confidence'>('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'candidate_committees' | 'independent_expenditures' | 'external_pacs'>('all');
   const [running, setRunning] = useState(false);
+  const [importId, setImportId] = useState('');
+  const importMut = useImportFecCommittee();
+  const syncMut = useSyncFecCommittees();
 
   const causeById = useMemo(() => new Map(causes.map((c) => [c.id, c])), [causes]);
   const causesByIssue = useMemo(() => {
