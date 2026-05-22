@@ -565,10 +565,34 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all
         });
       }
 
-      const donorMap = new Map<string, CommitteeDonor>();
+      // Apply donor alias consolidation (same canonical_name used by /donors)
+      const rawNames = Array.from(new Set(rows.map((r) => r.contributor_name).filter(Boolean)));
+      const nameToAlias = new Map<string, { aliasId: string; canonicalName: string }>();
+      if (rawNames.length > 0) {
+        const { data: aliasRows } = await supabase
+          .from('donor_alias_members')
+          .select('donor_name, alias_id, donor_aliases!inner(id, canonical_name, is_active)')
+          .in('donor_name', rawNames);
+        for (const m of (aliasRows || []) as Array<{
+          donor_name: string;
+          alias_id: string;
+          donor_aliases: { id: string; canonical_name: string; is_active: boolean } | null;
+        }>) {
+          const a = m.donor_aliases;
+          if (a && a.is_active) {
+            nameToAlias.set(m.donor_name, { aliasId: a.id, canonicalName: a.canonical_name });
+          }
+        }
+      }
+
+      const donorMap = new Map<string, CommitteeDonor & { _topAmount: number }>();
 
       rows.forEach((row) => {
-        const key = `${row.contributor_name}-${row.contributor_state || ''}-${row.contributor_city || ''}`;
+        const alias = nameToAlias.get(row.contributor_name);
+        const key = alias
+          ? `alias:${alias.aliasId}`
+          : `${row.contributor_name}-${row.contributor_state || ''}-${row.contributor_city || ''}`;
+        const displayName = alias ? alias.canonicalName : row.contributor_name;
         const existing = donorMap.get(key);
         const candidateNames = new Set(existing?.candidateNames || []);
         const candName = row.candidate_id ? candidateMap.get(row.candidate_id)?.name : null;
@@ -583,21 +607,29 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all
               ? row.receipt_date
               : existing?.latestDate || null;
 
+        // Prefer location/employer/occupation from the highest-amount contribution
+        const rowAmount = row.amount || 0;
+        const useThisRowForMeta = !existing || rowAmount > existing._topAmount;
+
         donorMap.set(key, {
           id: existing?.id || row.id,
-          name: row.contributor_name,
-          totalAmount: (existing?.totalAmount || 0) + (row.amount || 0),
+          name: displayName,
+          totalAmount: (existing?.totalAmount || 0) + rowAmount,
           contributionCount: (existing?.contributionCount || 0) + 1,
           latestDate,
-          city: row.contributor_city || existing?.city || null,
-          state: row.contributor_state || existing?.state || null,
-          occupation: row.occupation || existing?.occupation || null,
-          employer: row.employer || existing?.employer || null,
+          city: useThisRowForMeta ? (row.contributor_city ?? existing?.city ?? null) : (existing?.city ?? null),
+          state: useThisRowForMeta ? (row.contributor_state ?? existing?.state ?? null) : (existing?.state ?? null),
+          occupation: useThisRowForMeta ? (row.occupation ?? existing?.occupation ?? null) : (existing?.occupation ?? null),
+          employer: useThisRowForMeta ? (row.employer ?? existing?.employer ?? null) : (existing?.employer ?? null),
           candidateNames: Array.from(candidateNames),
+          _topAmount: Math.max(existing?._topAmount ?? 0, rowAmount),
         });
       });
 
-      return Array.from(donorMap.values()).sort((a, b) => b.totalAmount - a.totalAmount);
+      return Array.from(donorMap.values())
+        .map(({ _topAmount, ...d }) => d)
+        .sort((a, b) => b.totalAmount - a.totalAmount);
+
     },
     enabled: !!committeeId,
   });
