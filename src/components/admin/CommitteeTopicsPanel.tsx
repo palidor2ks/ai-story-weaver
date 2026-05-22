@@ -8,11 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Sparkles, Search, X, Check, Trash2, Plus, RefreshCw } from 'lucide-react';
+import { Loader2, Sparkles, Search, X, Check, Trash2, Plus, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTopics } from '@/hooks/useCandidates';
 import {
-  useAllCommitteeTopics,
   useUpsertCommitteeTopic,
   useDeleteCommitteeTopic,
   useCommitteeCauses,
@@ -20,6 +19,7 @@ import {
   useDeleteCommitteeCause,
 } from '@/hooks/useCommitteeTopics';
 import { useImportFecCommittee, useSyncFecCommittees } from '@/hooks/useImportFecCommittee';
+import { useCommitteePool, useRefreshCommitteePool } from '@/hooks/useCommitteePool';
 
 interface CommitteeRow {
   fec_committee_id: string;
