@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Sparkles, Search, X, Check, Trash2 } from 'lucide-react';
+import { Loader2, Sparkles, Search, X, Check, Trash2, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTopics } from '@/hooks/useCandidates';
 import {
@@ -19,17 +19,19 @@ import {
   useUpsertCommitteeCause,
   useDeleteCommitteeCause,
 } from '@/hooks/useCommitteeTopics';
+import { useImportFecCommittee, useSyncFecCommittees } from '@/hooks/useImportFecCommittee';
 
 interface CommitteeRow {
   fec_committee_id: string;
   name: string | null;
   designation: string | null;
-  source: 'candidate_committees' | 'independent_expenditures';
+  committee_type?: string | null;
+  source: 'candidate_committees' | 'independent_expenditures' | 'external_pacs';
 }
 
 const useExternalCommittees = () => {
   return useQuery({
-    queryKey: ['admin-external-committees', 'v2'],
+    queryKey: ['admin-external-committees', 'v3'],
     staleTime: 1000 * 60 * 5,
     queryFn: async (): Promise<CommitteeRow[]> => {
       // Candidate committees that aren't principal/authorized (include NULL designation).
@@ -39,8 +41,26 @@ const useExternalCommittees = () => {
         .or('designation.is.null,and(designation.neq.P,designation.neq.A)')
         .limit(5000);
 
-      // Distinct IE spenders via RPC (avoids row-limit truncation of raw IE rows).
+      // Distinct IE spenders via RPC.
       const { data: ieSpenders } = await supabase.rpc('list_ie_spenders' as any);
+
+      // External PACs (FEC-registered standalone PACs / SuperPACs / leadership / party).
+      // Paginate to bypass the 1000-row default.
+      const externalRows: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data, error } = await supabase
+          .from('external_pacs' as any)
+          .select('fec_committee_id, name, designation, committee_type')
+          .order('fec_committee_id')
+          .range(from, from + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        externalRows.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+        if (from > 50000) break;
+      }
 
       const map = new Map<string, CommitteeRow>();
       (cmtes ?? []).forEach((c: any) => {
@@ -62,10 +82,26 @@ const useExternalCommittees = () => {
           source: 'independent_expenditures',
         });
       });
+      externalRows.forEach((r: any) => {
+        const id = r.fec_committee_id;
+        if (!id || map.has(id)) return;
+        map.set(id, {
+          fec_committee_id: id,
+          name: r.name,
+          designation: r.designation,
+          committee_type: r.committee_type,
+          source: 'external_pacs',
+        });
+      });
       return Array.from(map.values()).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
     },
   });
 };
+
+const sourceLabel = (s: CommitteeRow['source']) =>
+  s === 'candidate_committees' ? 'Candidate cmte'
+  : s === 'independent_expenditures' ? 'IE spender'
+  : 'Standalone PAC';
 
 const stanceColor = (s: string) =>
   s === 'pro' ? 'bg-primary/10 text-primary border-primary/30'
@@ -81,7 +117,11 @@ const AssignmentsTab = () => {
   const del = useDeleteCommitteeTopic();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'unassigned' | 'ai' | 'admin' | 'low-confidence'>('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'candidate_committees' | 'independent_expenditures' | 'external_pacs'>('all');
   const [running, setRunning] = useState(false);
+  const [importId, setImportId] = useState('');
+  const importMut = useImportFecCommittee();
+  const syncMut = useSyncFecCommittees();
 
   const causeById = useMemo(() => new Map(causes.map((c) => [c.id, c])), [causes]);
   const causesByIssue = useMemo(() => {
@@ -104,6 +144,7 @@ const AssignmentsTab = () => {
     const q = search.trim().toLowerCase();
     return committees.filter((c) => {
       if (q && !(c.name ?? '').toLowerCase().includes(q) && !c.fec_committee_id.toLowerCase().includes(q)) return false;
+      if (sourceFilter !== 'all' && c.source !== sourceFilter) return false;
       const a = assignmentMap.get(c.fec_committee_id);
       if (filter === 'unassigned' && a) return false;
       if (filter === 'ai' && (!a || a.admin_overridden)) return false;
@@ -111,7 +152,7 @@ const AssignmentsTab = () => {
       if (filter === 'low-confidence' && (!a || a.ai_confidence !== 'low')) return false;
       return true;
     }).slice(0, 500);
-  }, [committees, assignmentMap, search, filter]);
+  }, [committees, assignmentMap, search, filter, sourceFilter]);
 
   const handleClassifyUnassigned = async () => {
     setRunning(true);
@@ -149,10 +190,25 @@ const AssignmentsTab = () => {
             </span>
           )}
         </div>
-        <Button onClick={handleClassifyUnassigned} disabled={running} className="gap-2">
-          {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          Run AI on unassigned
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (confirm('Pull the full FEC PAC universe (PACs, SuperPACs, party, leadership) for the 2024 + 2026 cycles? This takes a few minutes and runs in the background.')) {
+                syncMut.mutate();
+              }
+            }}
+            disabled={syncMut.isPending}
+            className="gap-2"
+          >
+            {syncMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sync FEC universe
+          </Button>
+          <Button onClick={handleClassifyUnassigned} disabled={running} className="gap-2">
+            {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            Run AI on unassigned
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -161,7 +217,7 @@ const AssignmentsTab = () => {
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search committees by name or FEC ID" className="pl-9" />
         </div>
         <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
-          <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All committees</SelectItem>
             <SelectItem value="unassigned">Unassigned</SelectItem>
@@ -170,7 +226,41 @@ const AssignmentsTab = () => {
             <SelectItem value="low-confidence">Low AI confidence</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={sourceFilter} onValueChange={(v: any) => setSourceFilter(v)}>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sources</SelectItem>
+            <SelectItem value="candidate_committees">Candidate cmtes</SelectItem>
+            <SelectItem value="independent_expenditures">IE spenders</SelectItem>
+            <SelectItem value="external_pacs">Standalone PACs</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex gap-2 items-center">
+          <Input
+            value={importId}
+            onChange={(e) => setImportId(e.target.value.toUpperCase())}
+            placeholder="Add by FEC ID (e.g. C00797670)"
+            className="w-[240px]"
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              if (!/^C\d{8}$/.test(importId)) {
+                toast.error('FEC ID must be C followed by 8 digits');
+                return;
+              }
+              importMut.mutate(importId, { onSuccess: () => setImportId('') });
+            }}
+            disabled={importMut.isPending}
+            className="gap-1"
+          >
+            {importMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+            Add
+          </Button>
+        </div>
       </div>
+
 
       {(isLoading || loadingAssigns) ? (
         <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>

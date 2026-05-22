@@ -1440,6 +1440,114 @@ export type Database = {
         }
         Relationships: []
       }
+      external_pacs: {
+        Row: {
+          city: string | null
+          committee_type: string | null
+          committee_type_full: string | null
+          created_at: string
+          cycles: string[] | null
+          designation: string | null
+          designation_full: string | null
+          fec_committee_id: string
+          filing_frequency: string | null
+          first_file_date: string | null
+          is_active: boolean
+          last_file_date: string | null
+          name: string
+          organization_type: string | null
+          party: string | null
+          source: string
+          state: string | null
+          street_1: string | null
+          treasurer_name: string | null
+          updated_at: string
+          zip: string | null
+        }
+        Insert: {
+          city?: string | null
+          committee_type?: string | null
+          committee_type_full?: string | null
+          created_at?: string
+          cycles?: string[] | null
+          designation?: string | null
+          designation_full?: string | null
+          fec_committee_id: string
+          filing_frequency?: string | null
+          first_file_date?: string | null
+          is_active?: boolean
+          last_file_date?: string | null
+          name: string
+          organization_type?: string | null
+          party?: string | null
+          source?: string
+          state?: string | null
+          street_1?: string | null
+          treasurer_name?: string | null
+          updated_at?: string
+          zip?: string | null
+        }
+        Update: {
+          city?: string | null
+          committee_type?: string | null
+          committee_type_full?: string | null
+          created_at?: string
+          cycles?: string[] | null
+          designation?: string | null
+          designation_full?: string | null
+          fec_committee_id?: string
+          filing_frequency?: string | null
+          first_file_date?: string | null
+          is_active?: boolean
+          last_file_date?: string | null
+          name?: string
+          organization_type?: string | null
+          party?: string | null
+          source?: string
+          state?: string | null
+          street_1?: string | null
+          treasurer_name?: string | null
+          updated_at?: string
+          zip?: string | null
+        }
+        Relationships: []
+      }
+      fec_committee_sync_status: {
+        Row: {
+          completed_at: string | null
+          error_message: string | null
+          id: string
+          last_page: number
+          started_at: string
+          status: string
+          total_fetched: number
+          total_upserted: number
+          triggered_by: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_page?: number
+          started_at?: string
+          status?: string
+          total_fetched?: number
+          total_upserted?: number
+          triggered_by?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_page?: number
+          started_at?: string
+          status?: string
+          total_fetched?: number
+          total_upserted?: number
+          triggered_by?: string | null
+        }
+        Relationships: []
+      }
       finance_reconciliation: {
         Row: {
           candidate_id: string
