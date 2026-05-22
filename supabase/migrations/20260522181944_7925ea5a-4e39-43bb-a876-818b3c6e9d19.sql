@@ -1,0 +1,1 @@
+UPDATE public.candidates SET image_url = 'https://upload.wikimedia.org/wikipedia/commons/4/41/Kamala_Harris_Vice_Presidential_Portrait.jpg' WHERE id = 'P00009423';
