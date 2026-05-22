@@ -45,6 +45,7 @@ const AssignmentsTab = () => {
   const syncMut = useSyncFecCommittees();
   const refreshPool = useRefreshCommitteePool();
   const [refreshing, setRefreshing] = useState(false);
+  const qc = useQueryClient();
 
   const { data: causes = [] } = useCommitteeCauses(false);
   const upsert = useUpsertCommitteeTopic();
