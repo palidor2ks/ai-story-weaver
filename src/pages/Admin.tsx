@@ -739,9 +739,6 @@ export default function Admin() {
                 <DonorAliasesPanel />
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="donor-aliases">
             <Card className="mt-4">
               <CardHeader>
                 <CardTitle>Vendor Refunds</CardTitle>
