@@ -627,6 +627,21 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all
         }
       }
 
+      // Resolve a donors-table id per contributor name so profile links work
+      const nameToDonorId = new Map<string, string>();
+      if (rawNames.length > 0) {
+        const { data: donorRows } = await supabase
+          .from('donors')
+          .select('id, name, type, amount')
+          .in('name', rawNames);
+        for (const d of (donorRows || []) as Array<{ id: string; name: string; type: string; amount: number }>) {
+          const existing = nameToDonorId.get(d.name);
+          if (!existing) {
+            nameToDonorId.set(d.name, d.id);
+          }
+        }
+      }
+
       const donorMap = new Map<string, CommitteeDonor & { _topAmount: number }>();
 
       rows.forEach((row) => {
@@ -654,7 +669,7 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all
         const useThisRowForMeta = !existing || rowAmount > existing._topAmount;
 
         donorMap.set(key, {
-          id: existing?.id || row.id,
+          id: existing?.id || nameToDonorId.get(row.contributor_name) || row.id,
           name: displayName,
           totalAmount: (existing?.totalAmount || 0) + rowAmount,
           contributionCount: (existing?.contributionCount || 0) + 1,
