@@ -239,10 +239,7 @@ export const CandidateProfile = () => {
   const hasVariance = fecTotalReceipts !== null && Math.abs(varianceAmount) > varianceThreshold;
   const variancePct = fecTotalReceipts ? ((varianceAmount / fecTotalReceipts) * 100).toFixed(1) : '0';
 
-  const formatCurrency = (value: number | null | undefined) => {
-    if (value === null || value === undefined) return '—';
-    return `$${Math.round(value).toLocaleString()}`;
-  };
+  const formatCurrency = formatCompactCurrency;
 
   return (
     <div className="min-h-screen bg-background">
