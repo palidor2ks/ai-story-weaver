@@ -16,8 +16,20 @@ import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
 import { formatIECompact } from '@/components/IESummaryInline';
 
 
-const formatCurrency = (value: number) =>
+const formatCurrencyFull = (value: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+
+const trimZero = (s: string) => s.replace(/\.0$/, '');
+
+const formatCurrency = (value: number) => {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+  if (abs >= 1_000_000_000) return `${sign}$${trimZero((abs / 1_000_000_000).toFixed(1))}B`;
+  if (abs >= 10_000_000) return `${sign}$${Math.round(abs / 1_000_000)}M`;
+  if (abs >= 1_000_000) return `${sign}$${trimZero((abs / 1_000_000).toFixed(1))}M`;
+  if (abs >= 1_000) return `${sign}$${Math.round(abs / 1_000)}K`;
+  return `${sign}$${Math.round(abs)}`;
+};
 
 const formatNumber = (value: number) =>
   value >= 1_000_000
@@ -336,10 +348,13 @@ export const Committees = () => {
                             <DollarSign className="w-4 h-4" />
                             Total Raised
                           </div>
-                          <p className={cn(
-                            "text-xl font-semibold mt-1",
-                            isUnsynced ? "text-muted-foreground" : "text-foreground"
-                          )}>
+                          <p
+                            className={cn(
+                              "text-xl font-semibold mt-1",
+                              isUnsynced ? "text-muted-foreground" : "text-foreground"
+                            )}
+                            title={isUnsynced ? undefined : formatCurrencyFull(committee.totalRaised)}
+                          >
                             {isUnsynced ? '—' : formatCurrency(committee.totalRaised)}
                           </p>
                         </div>
