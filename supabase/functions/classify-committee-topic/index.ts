@@ -251,7 +251,21 @@ Deno.serve(async (req) => {
       const candidateIds = (cmtes ?? []).map((c: any) => c.fec_committee_id).filter(Boolean);
       const { data: ieSpenders } = await supabase.rpc('list_ie_spenders');
       const ieIds = ((ieSpenders ?? []) as any[]).map((r: any) => r.fec_committee_id).filter(Boolean);
-      const pool = Array.from(new Set([...candidateIds, ...ieIds]));
+      // External standalone PACs (paginated)
+      const extIds: string[] = [];
+      let from = 0;
+      while (from < 50000) {
+        const { data } = await supabase
+          .from('external_pacs')
+          .select('fec_committee_id')
+          .order('fec_committee_id')
+          .range(from, from + 999);
+        if (!data || data.length === 0) break;
+        for (const r of data) if (r.fec_committee_id) extIds.push(r.fec_committee_id);
+        if (data.length < 1000) break;
+        from += 1000;
+      }
+      const pool = Array.from(new Set([...candidateIds, ...ieIds, ...extIds]));
       const { data: existing } = await supabase
         .from('committee_topics')
         .select('fec_committee_id')
