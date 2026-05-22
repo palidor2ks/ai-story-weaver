@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Megaphone, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { useCommitteeIE, useCandidateIE } from '@/hooks/useIndependentExpenditures';
+import { useCommitteeTopicsMap } from '@/hooks/useCommitteeTopics';
+import { CommitteeTopicBadge } from '@/components/CommitteeTopicBadge';
 import { formatCompactCurrency } from '@/lib/utils';
 
 const fmt = (n: number) => formatCompactCurrency(n);
@@ -97,6 +99,8 @@ export const CommitteeIESection = ({ committeeFecId }: { committeeFecId: string 
 
 export const CandidateIESection = ({ candidateId }: { candidateId: string | null | undefined }) => {
   const { data, isLoading } = useCandidateIE(candidateId);
+  const spenderIds = (data?.topSpenders ?? []).map((s) => s.fecId).filter(Boolean) as string[];
+  const { data: topicsMap } = useCommitteeTopicsMap(spenderIds);
   if (!candidateId) return null;
   if (isLoading) {
     return (
@@ -131,7 +135,16 @@ export const CandidateIESection = ({ candidateId }: { candidateId: string | null
                 <tbody>
                   {topSpenders.map((s) => (
                     <tr key={s.fecId} className="border-t">
-                      <td className="p-2 truncate max-w-[260px]"><div className="font-medium">{s.name}</div><div className="text-xs text-muted-foreground">{s.fecId} · {s.count} filing{s.count !== 1 ? 's' : ''}</div></td>
+                      <td className="p-2 truncate max-w-[260px]">
+                        <div className="font-medium flex items-center gap-2 flex-wrap">
+                          <span>{s.name}</span>
+                          <CommitteeTopicBadge
+                            fecCommitteeId={s.fecId}
+                            row={topicsMap?.get(s.fecId) ?? null}
+                          />
+                        </div>
+                        <div className="text-xs text-muted-foreground">{s.fecId} · {s.count} filing{s.count !== 1 ? 's' : ''}</div>
+                      </td>
                       <td className="p-2 text-right text-agree">{fmt(s.support)}</td>
                       <td className="p-2 text-right text-disagree">{fmt(s.oppose)}</td>
                       <td className="p-2 text-right font-semibold">{fmt(s.total)}</td>
