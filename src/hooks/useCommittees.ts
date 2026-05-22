@@ -669,7 +669,7 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all
         const useThisRowForMeta = !existing || rowAmount > existing._topAmount;
 
         donorMap.set(key, {
-          id: existing?.id || row.id,
+          id: existing?.id || nameToDonorId.get(row.contributor_name) || row.id,
           name: displayName,
           totalAmount: (existing?.totalAmount || 0) + rowAmount,
           contributionCount: (existing?.contributionCount || 0) + 1,
