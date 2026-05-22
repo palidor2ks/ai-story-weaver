@@ -523,8 +523,20 @@ const DonorProfile = () => {
           Back to Donors
         </Link>
 
+        {/* Mobile sticky identity bar */}
+        <div className="md:hidden sticky top-16 z-30 -mx-4 px-4 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+            {getTypeIcon(donor.type)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-display font-bold text-sm truncate">{displayName}</p>
+            <p className="text-xs text-muted-foreground truncate">{donor.type}{donor.contributor_state ? ` · ${donor.contributor_city ?? ''} ${donor.contributor_state}` : ''}</p>
+          </div>
+        </div>
+
         {/* Header card */}
         <div className="bg-card rounded-2xl border border-border p-6 md:p-8 shadow-elevated">
+
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
             {/* Donor info */}
             <div className="flex items-start gap-4">
