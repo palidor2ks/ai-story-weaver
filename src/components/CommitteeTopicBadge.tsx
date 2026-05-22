@@ -9,8 +9,10 @@ interface Props {
   size?: 'sm' | 'md';
   showSecondaries?: boolean;
   className?: string;
-  /** Pre-fetched row (skip per-badge query, e.g. in lists). */
+  /** Pre-fetched row (skip per-badge query, e.g. in lists). Pass `null` to disable fetching when nothing was found. */
   row?: CommitteeTopicRow | null;
+  /** If true, never auto-fetch — only use the `row` prop. */
+  disableFetch?: boolean;
 }
 
 export const CommitteeTopicBadge = ({
@@ -19,11 +21,12 @@ export const CommitteeTopicBadge = ({
   showSecondaries = false,
   className,
   row: providedRow,
+  disableFetch = false,
 }: Props) => {
-  const enabled = !providedRow && !!fecCommitteeId;
+  const enabled = !disableFetch && providedRow === undefined && !!fecCommitteeId;
   const { data: fetched } = useCommitteeTopic(enabled ? fecCommitteeId : undefined);
   const { data: topics = [] } = useTopics();
-  const row = providedRow ?? fetched;
+  const row = providedRow !== undefined ? providedRow : fetched;
   if (!row) return null;
 
   const byId = new Map(topics.map((t: any) => [t.id, t]));
