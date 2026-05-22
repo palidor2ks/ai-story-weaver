@@ -348,10 +348,13 @@ export const Committees = () => {
                             <DollarSign className="w-4 h-4" />
                             Total Raised
                           </div>
-                          <p className={cn(
-                            "text-xl font-semibold mt-1",
-                            isUnsynced ? "text-muted-foreground" : "text-foreground"
-                          )}>
+                          <p
+                            className={cn(
+                              "text-xl font-semibold mt-1",
+                              isUnsynced ? "text-muted-foreground" : "text-foreground"
+                            )}
+                            title={isUnsynced ? undefined : formatCurrencyFull(committee.totalRaised)}
+                          >
                             {isUnsynced ? '—' : formatCurrency(committee.totalRaised)}
                           </p>
                         </div>
