@@ -25,12 +25,13 @@ interface CommitteeRow {
   fec_committee_id: string;
   name: string | null;
   designation: string | null;
-  source: 'candidate_committees' | 'independent_expenditures';
+  committee_type?: string | null;
+  source: 'candidate_committees' | 'independent_expenditures' | 'external_pacs';
 }
 
 const useExternalCommittees = () => {
   return useQuery({
-    queryKey: ['admin-external-committees', 'v2'],
+    queryKey: ['admin-external-committees', 'v3'],
     staleTime: 1000 * 60 * 5,
     queryFn: async (): Promise<CommitteeRow[]> => {
       // Candidate committees that aren't principal/authorized (include NULL designation).
@@ -40,8 +41,26 @@ const useExternalCommittees = () => {
         .or('designation.is.null,and(designation.neq.P,designation.neq.A)')
         .limit(5000);
 
-      // Distinct IE spenders via RPC (avoids row-limit truncation of raw IE rows).
+      // Distinct IE spenders via RPC.
       const { data: ieSpenders } = await supabase.rpc('list_ie_spenders' as any);
+
+      // External PACs (FEC-registered standalone PACs / SuperPACs / leadership / party).
+      // Paginate to bypass the 1000-row default.
+      const externalRows: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data, error } = await supabase
+          .from('external_pacs' as any)
+          .select('fec_committee_id, name, designation, committee_type')
+          .order('fec_committee_id')
+          .range(from, from + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        externalRows.push(...data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+        if (from > 50000) break;
+      }
 
       const map = new Map<string, CommitteeRow>();
       (cmtes ?? []).forEach((c: any) => {
@@ -63,10 +82,26 @@ const useExternalCommittees = () => {
           source: 'independent_expenditures',
         });
       });
+      externalRows.forEach((r: any) => {
+        const id = r.fec_committee_id;
+        if (!id || map.has(id)) return;
+        map.set(id, {
+          fec_committee_id: id,
+          name: r.name,
+          designation: r.designation,
+          committee_type: r.committee_type,
+          source: 'external_pacs',
+        });
+      });
       return Array.from(map.values()).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
     },
   });
 };
+
+const sourceLabel = (s: CommitteeRow['source']) =>
+  s === 'candidate_committees' ? 'Candidate cmte'
+  : s === 'independent_expenditures' ? 'IE spender'
+  : 'Standalone PAC';
 
 const stanceColor = (s: string) =>
   s === 'pro' ? 'bg-primary/10 text-primary border-primary/30'
