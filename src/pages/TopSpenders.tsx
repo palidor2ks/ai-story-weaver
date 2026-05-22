@@ -282,8 +282,15 @@ export default function TopSpenders() {
                       <p className="font-medium truncate">{r.spending_committee_name ?? r.spending_committee_fec_id}</p>
                       <p className="text-[11px] text-muted-foreground font-mono truncate">
                         {r.spending_committee_fec_id} · {r.expenditure_count.toLocaleString()} expenditure{r.expenditure_count === 1 ? '' : 's'}
+                        {(() => {
+                          const raised = raisedMap?.get(r.spending_committee_fec_id) ?? 0;
+                          return raised > 0 ? (
+                            <span className="ml-2 text-muted-foreground/80">· Raised {formatIECompact(raised)}</span>
+                          ) : null;
+                        })()}
                       </p>
                     </div>
+
                     <span className="hidden sm:inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
                       <TrendingUp className="w-3 h-3" />{formatIECompact(r.support_amount)}
                     </span>
