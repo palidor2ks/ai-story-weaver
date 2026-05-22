@@ -150,7 +150,7 @@ export const CommitteeProfile = () => {
 
         {committee && (
           <div className="space-y-8">
-            <div className="md:static sticky top-[6.5rem] z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border md:border-0 md:bg-transparent md:backdrop-blur-none md:py-0 md:mx-0 md:px-0">
+            <div className="md:static sticky top-[6.5rem] z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border md:border-0 md:bg-transparent md:backdrop-blur-none md:py-0 md:mx-0 md:px-0 flex flex-col gap-3">
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <Landmark className="w-5 h-5 md:w-6 md:h-6" />
@@ -170,9 +170,7 @@ export const CommitteeProfile = () => {
                   )}
                 </div>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 {committee.designation && <Badge variant="secondary">{committee.designation}</Badge>}
                 {committee.designationFull && <Badge variant="outline">{committee.designationFull}</Badge>}
@@ -194,7 +192,7 @@ export const CommitteeProfile = () => {
                     </Button>
                   }
                 />
-                
+
                 {/* Admin Sync Button */}
                 {isAdmin && (
                   <div className="ml-2 flex items-center gap-2">
@@ -225,6 +223,7 @@ export const CommitteeProfile = () => {
                 )}
               </div>
             </div>
+
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <Card>
