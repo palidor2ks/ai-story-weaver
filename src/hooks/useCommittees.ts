@@ -456,6 +456,7 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
           donorCount: 0,
           contributionCount: 0,
           totalRaised: 0,
+          hasRollupData: false,
         };
         return ieSummary;
       }
