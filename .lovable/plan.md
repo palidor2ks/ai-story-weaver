@@ -1,25 +1,34 @@
-## Problem
+## Why it appears in 2026 but not All cycles
 
-The Top Outside Spenders page's cycle dropdown only shows 2024, even though 2026 data exists (6,783 rows confirmed in `independent_expenditures`).
+The “All cycles + All” view reads from `committee_independent_expenditure_totals`, a database view that already excludes rows in `ie_excluded_committees`.
 
-**Root cause:** `useIECycles` in `src/pages/TopSpenders.tsx` calls:
-```ts
-supabase.from('independent_expenditures').select('cycle').not('cycle', 'is', null).limit(5000)
-```
-It then builds a `Set` from the result. Because PostgREST has no DISTINCT and the first 5,000 rows returned all happen to be cycle `2024`, `2026` never appears in the set.
+But when you select `Cycle 2026` or Support/Oppose, `TopSpenders.tsx` switches to querying the raw `independent_expenditures` table and aggregates in the browser. That raw-table path does not currently apply `ie_excluded_committees`, so an excluded committee can reappear under cycle/stance filters.
 
-## Fix
+The “Failed to exclude” error happens because the committee is already excluded in the database, so clicking remove again tries to insert a duplicate primary key.
 
-1. **Migration** — add a tiny view that returns distinct cycles:
-   ```sql
-   CREATE OR REPLACE VIEW public.independent_expenditure_cycles
-   WITH (security_invoker = true) AS
-   SELECT DISTINCT cycle
-   FROM public.independent_expenditures
-   WHERE cycle IS NOT NULL;
-   GRANT SELECT ON public.independent_expenditure_cycles TO anon, authenticated;
-   ```
+## Plan to fix
 
-2. **`src/pages/TopSpenders.tsx`** — change `useIECycles` to query the new view (no `.limit`), keeping the descending sort. Result: dropdown will list every cycle present (currently `2026`, `2024`), and selecting `2026` filters correctly since the underlying query already uses `.eq('cycle', cycle)`.
+1. Update the Top Spenders query to load the exclusion list and apply it to every data path:
+   - All cycles / all stance
+   - Specific cycle, including 2026
+   - Support-only
+   - Oppose-only
+   - Search results and KPI cards
 
-No other files affected.
+2. Add the exclusion IDs into the `top-spenders` query key so React Query refetches/recomputes immediately after an exclusion changes.
+
+3. Filter excluded committee IDs before aggregation/sorting on the raw `independent_expenditures` branch, so excluded committees never affect:
+   - table rows
+   - “Total IE spending”
+   - committee count
+   - “#1 Spender”
+
+4. Change `useExcludeCommittee` from `insert` to `upsert` on `fec_committee_id`:
+   - if the committee is already excluded, update the reason/timestamp instead of throwing a duplicate-key error
+   - keep the existing cache invalidation so the row disappears immediately
+
+5. Keep database/RLS unchanged for now because the exclusion table and view policies are already working for the All cycles path. This is a frontend query consistency bug, not a permissions failure.
+
+## Expected result
+
+Once a committee is excluded, it will not appear anywhere on the Top Outside Spenders chart under any cycle or stance filter, including 2026, and clicking Exclude on an already-excluded committee will no longer produce a false failure.

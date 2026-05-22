@@ -37,11 +37,17 @@ export function useExcludeCommittee() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ fecCommitteeId, reason }: { fecCommitteeId: string; reason: string }) => {
-      const { error } = await supabase.from('ie_excluded_committees').insert({
-        fec_committee_id: fecCommitteeId,
-        reason,
-        excluded_by: user?.id ?? null,
-      });
+      const { error } = await supabase
+        .from('ie_excluded_committees')
+        .upsert(
+          {
+            fec_committee_id: fecCommitteeId,
+            reason,
+            excluded_by: user?.id ?? null,
+            excluded_at: new Date().toISOString(),
+          },
+          { onConflict: 'fec_committee_id' },
+        );
       if (error) throw error;
     },
     onSuccess: () => invalidateIE(qc),
