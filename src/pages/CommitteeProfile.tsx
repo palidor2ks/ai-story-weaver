@@ -15,6 +15,7 @@ import { useIEExclusions, useRestoreCommittee } from '@/hooks/useIEExclusions';
 import { toast } from 'sonner';
 import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialog';
 import { CommitteeIESection } from '@/components/IndependentExpenditureSections';
+import { CommitteeTopicBadge } from '@/components/CommitteeTopicBadge';
 import { formatCompactCurrency as formatCurrency } from '@/lib/utils';
 
 const formatDate = (value: string | null) => {
@@ -176,6 +177,12 @@ export const CommitteeProfile = () => {
                 {committee.cycles && committee.cycles.length > 0 && (
                   <Badge variant="outline">Cycles: {committee.cycles.join(', ')}</Badge>
                 )}
+                <CommitteeTopicBadge
+                  fecCommitteeId={committee.fecCommitteeId}
+                  size="md"
+                  showSecondaries
+                />
+
 
                 <RecipientAIAnalysisDialog
                   entityKind="committee"
