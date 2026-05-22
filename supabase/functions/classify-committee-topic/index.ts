@@ -236,14 +236,11 @@ Deno.serve(async (req) => {
       const { data: cmtes } = await supabase
         .from('candidate_committees')
         .select('fec_committee_id, designation')
-        .not('designation', 'in', '(P,A)')
-        .limit(500);
-      const candidateIds = (cmtes ?? []).map((c: any) => c.fec_committee_id);
-      const { data: ieCmtes } = await supabase
-        .from('independent_expenditures')
-        .select('spending_committee_fec_id')
-        .limit(500);
-      const ieIds = Array.from(new Set((ieCmtes ?? []).map((r: any) => r.spending_committee_fec_id).filter(Boolean)));
+        .or('designation.is.null,and(designation.neq.P,designation.neq.A)')
+        .limit(5000);
+      const candidateIds = (cmtes ?? []).map((c: any) => c.fec_committee_id).filter(Boolean);
+      const { data: ieSpenders } = await supabase.rpc('list_ie_spenders');
+      const ieIds = ((ieSpenders ?? []) as any[]).map((r: any) => r.fec_committee_id).filter(Boolean);
       const pool = Array.from(new Set([...candidateIds, ...ieIds]));
       const { data: existing } = await supabase
         .from('committee_topics')
