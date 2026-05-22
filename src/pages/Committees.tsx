@@ -137,11 +137,16 @@ export const Committees = () => {
         <div className="flex flex-col gap-4 mb-8">
           <div>
             <p className="text-sm text-muted-foreground mb-1 font-medium">Committees</p>
-            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">Committee Directory</h1>
+            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">Top Federal Committees by Receipts</h1>
             <p className="text-muted-foreground mt-2">
-              Explore fundraising committees with donor counts and contribution totals. Click a committee to dive into donor details.
+              All federal committees ranked by money raised. Looking for outside spending instead? See{' '}
+              <Link to="/top-spenders" className="text-primary underline-offset-2 hover:underline">Top Outside Spenders</Link>.
             </p>
+            <div className="mt-3">
+              <CommitteesViewSwitcher />
+            </div>
           </div>
+
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="relative w-full sm:max-w-md">
