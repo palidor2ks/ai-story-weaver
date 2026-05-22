@@ -177,9 +177,14 @@ export default function TopSpenders() {
           </h1>
           <p className="text-muted-foreground max-w-2xl">
             Super PACs and outside groups ranked by independent expenditures supporting or opposing federal candidates. These dollars are
-            spent <em>independently</em> of campaigns and are not subject to contribution limits.
+            spent <em>independently</em> of campaigns and are not subject to contribution limits. Looking for fundraising totals?
+            See <Link to="/committees" className="text-primary underline-offset-2 hover:underline">Committees by receipts</Link>.
           </p>
+          <div className="mt-3">
+            <CommitteesViewSwitcher />
+          </div>
         </div>
+
 
         {/* KPIs */}
         <div className="grid gap-4 sm:grid-cols-3 mb-6">
