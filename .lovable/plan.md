@@ -1,46 +1,50 @@
-# Fix $0 totals for committees with contributions but no rollups
+# Clarify Committees vs Top Spenders (keep separate, link them)
 
-## Root cause
+## Why not merge
 
-`useCommittee` (in `src/hooks/useCommittees.ts`) has a fallback for committees not present in `candidate_committees`:
+The two pages share rows (committees) but measure opposite flows:
 
-1. Read latest row from `contributions` (for name + last contribution date).
-2. Read aggregated totals from `committee_finance_rollups`.
-3. If both are empty → fall through to the IE-only synthesis (totals all 0).
+- **Committees** ranks by **receipts** (money raised into the committee) from `committee_finance_rollups` + `contributions`. Universe = every tracked committee (candidate principal/authorized committees, PACs, party, super PACs).
+- **Top Spenders** ranks by **independent expenditures** (money spent supporting/opposing federal candidates, Schedule E) from `independent_expenditures` / `committee_independent_expenditure_totals`. Universe = outside spenders only.
 
-Lincoln Project (`C00725820`) lives in the middle of that gap: it has **601 contributions ($12.2M)** in `contributions` and 82 rows in `independent_expenditures`, but **no `committee_finance_rollups` row** and no `candidate_committees` entry. So step 1 succeeds, step 2 returns nothing, and the synthesized summary uses `0` for `totalRaised`, `donorCount`, and `contributionCount`. Meanwhile `useCommitteeDonors` queries `contributions` directly, which is why "Top Contributors" shows real donors right below the $0 cards.
+A merged view would either:
+- Pick one metric and bury the other (loses the IE story or the fundraising story), or
+- Show both side-by-side with a single sort, which makes ranking meaningless and forces a wide table that's hard to scan on mobile.
 
-## Fix
+Both pages already link into the same `/committee/{fec_id}` profile, which is the right place for the full picture.
 
-In the contributions/rollups fallback branch of `useCommittee`, when `rollupRows` is empty but `contribRow` exists, derive totals directly from the `contributions` table for that committee (filtered by cycle when one is provided).
+## Changes
 
-### Change in `src/hooks/useCommittees.ts` (`useCommittee` queryFn, the existing fallback block before the IE-only branch)
+Make the relationship obvious so users stop perceiving them as duplicates.
 
-After fetching `contribRow` and `rollupRows`, before computing `totals`:
+### 1. Rename and reframe headers / SEO
 
-- If `rollupRows` is empty (or all-zero) AND `contribRow` exists, run two extra reads against `contributions` scoped to `recipient_committee_id = committeeId` (and `cycle = cycle` when `cycle && cycle !== 'all'`):
-  - **Aggregate read** for `total_raised` and `contribution_count`:
-    - Try `supabase.rpc('committee_contribution_totals', { committee_id, cycle })` if it exists, otherwise paginate `contributions` in chunks of 1000 (`range(0,999)`, `range(1000,1999)`, …) until fewer than 1000 rows return. Sum `amount`, count rows. Cap at e.g. 20k rows to bound work; if capped, mark a flag (not surfaced in UI for now).
-    - Simpler initial implementation: a single `.select('amount, donor_id, contributor_name, cycle', { count: 'exact' })` with `.range(0, 9999)` (10k cap) is acceptable and matches how other hooks in this file fetch contribution-level data.
-  - **Distinct donor count**: from the same fetched rows, build a `Set` keyed by `donor_id ?? contributor_name?.toLowerCase().trim()` and take its size.
-- Use those derived values for `totals.total_raised`, `totals.contribution_count`, `totals.donor_count`.
-- Derive `cycles` from the same fetched contribution rows (distinct non-null `cycle`), unioned with any rollup cycles (currently none in this case).
-- Keep the existing IE-only branch as the last resort (only when `contribRow` is null AND rollups are empty AND no IE rows).
+- **Committees** page header subtitle: "All federal committees ranked by money raised (receipts)."
+- **Top Spenders** page header (already says "Super PACs and outside groups ranked by independent expenditures…") — keep, but add a small link: *"Looking for fundraising totals? See [Committees]."*
+- Mirror link on Committees: *"Looking for outside spending (Super PAC IEs)? See [Top Spenders]."*
+- Update `<Seo>` titles/descriptions on both pages to reflect the metric ("Top Federal Committees by Receipts" vs "Top Outside Spenders by Independent Expenditures").
 
-Everything else in the synthesized `CommitteeSummary` stays the same (name from `contribRow.recipient_committee_name`, `lastContributionDate` from `contribRow.receipt_date`, etc.).
+### 2. Add a cross-metric column to each list (lightweight)
 
-### Optional small UX clarification (low priority, can skip)
+For each row, surface the other side as a small secondary number with a link, so users can see context without leaving:
 
-The "Total Raised" card subtitle currently says *"Includes latest synced totals"*. When this fallback path is used, that's misleading. Out of scope for this fix unless the user requests it.
+- **Committees row**: append a small "IE: $X" badge for committees that appear in `committee_independent_expenditure_totals` (single batched lookup keyed by `fec_committee_id` for the visible page). Empty/omitted when zero.
+- **Top Spenders row**: append a small "Raised: $X" line under the committee name, sourced from `committee_finance_rollups` aggregated by `committee_id` for the visible page. Empty/omitted when no rollup exists.
 
-## Verification
+Both are presentation-only: one extra batched `select … in (…)` per page, mapped client-side. No new endpoints, no schema changes.
 
-- `/committee/C00725820` (Lincoln Project) should show ~$12.2M total raised, ~601 contributions, and the real distinct donor count — matching the Top Contributors section below.
-- Committees that already resolve through `candidate_committees` + rollups are untouched (the new branch only runs when rollups are empty).
-- IE-only committees (e.g. C00875427 Court of Divine Justice) still hit the IE fallback and render correctly.
+### 3. Navigation
+
+- Add a small segmented control (or just two tabs) at the top of each page: **By receipts (Committees)** | **By outside spending (Top Spenders)**. Same visual, two routes. Reuses existing pages, just makes the switch one click instead of menu hunting.
 
 ## Out of scope
 
-- Backfilling `committee_finance_rollups` for committees like Lincoln Project (separate admin task).
-- Changing `CommitteeProfile.tsx` UI.
-- Any edge function / DB migration changes.
+- Merging the two queries into one table.
+- Changing the underlying tables/views.
+- Editing `/committee/{fec_id}` profile (already shows both sides via `CommitteeIESection` + the totals cards).
+
+## Verification
+
+- Committees still loads with current filters and counts; new "IE" badges only appear for committees present in IE totals.
+- Top Spenders still loads with current filters; new "Raised" line only appears for committees that have rollups.
+- Cross-links between the two pages render and route correctly.
