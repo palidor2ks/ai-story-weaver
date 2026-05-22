@@ -106,24 +106,12 @@ const getTypeIcon = (type: string) => {
   }
 };
 
-const formatAmount = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
+import { formatCompactCurrency, formatFullCurrency } from '@/lib/utils';
 
-const formatCompactAmount = (amount: number) => {
-  if (amount >= 1_000_000) {
-    return `$${(amount / 1_000_000).toFixed(1)}M`;
-  }
-  if (amount >= 1_000) {
-    return `$${(amount / 1_000).toFixed(0)}K`;
-  }
-  return formatAmount(amount);
-};
+const formatAmount = (amount: number) => formatCompactCurrency(amount);
+const formatAmountFull = (amount: number) => formatFullCurrency(amount);
+const formatCompactAmount = (amount: number) => formatCompactCurrency(amount);
+
 
 const formatCompactNumber = (num: number) => {
   if (num >= 1_000_000) {
