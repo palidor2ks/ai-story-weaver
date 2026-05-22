@@ -1,45 +1,66 @@
-# Why the Committee Causes list is incomplete
+# Include all FEC committees, PACs & SuperPACs in the Causes panel
 
-Three independent reasons the panel is missing committees today:
+## Goal
+Every active FEC-registered committee (PAC, SuperPAC, hybrid PAC, leadership PAC, party committee, etc.) should appear in the Committee Causes panel and be taggable — not just committees tied to one of our candidates or that filed independent expenditures.
 
-## 1. IE spenders are truncated to ~25 of 1,229
+## Why it's missing today
+The pool is built from only two sources:
+- `candidate_committees` — committees linked to a candidate (Principal/Authorized/Joint).
+- `independent_expenditures` — committees that filed IE reports we've imported.
 
-`useExternalCommittees` reads `independent_expenditures` with `.limit(2000)` rows (not distinct committees). Rows cluster heavily by committee, so the first 2,000 rows only contain **25 distinct** spending committees out of **1,229** that exist. Everything past those 25 is invisible in the dropdown.
+Standalone PACs (AIPAC, Preserve America, NRA-PVF, etc.) live in neither, so they're invisible.
 
-**Fix:** query distinct IE committees instead of raw IE rows. Use an RPC or a dedicated query (e.g. `select distinct spending_committee_fec_id, spending_committee_name from independent_expenditures`) and raise the row cap to cover all ~1,229.
+## Plan
 
-## 2. Candidate committees with NULL designation are excluded
+### 1. New table: `external_pacs`
+A library of FEC-registered committees that aren't already in `candidate_committees`.
 
-`.not('designation', 'in', '(P,A)')` is NULL-unsafe in PostgREST and drops the 20 rows where `designation IS NULL`.
+Columns:
+- `fec_committee_id` (PK)
+- `name`, `committee_type`, `committee_type_full`
+- `designation`, `designation_full`
+- `party`, `state`, `treasurer_name`, `street_1`, `city`, `zip`
+- `filing_frequency`, `organization_type`
+- `cycles` (text[]), `first_file_date`, `last_file_date`
+- `is_active` (bool), `source` ('fec_api' | 'manual'), `created_at`, `updated_at`
 
-**Fix:** change the filter to also include NULL designations (e.g. `designation.is.null,designation.not.in.(P,A)` with an `.or(...)`).
+RLS: public read; admin + service_role write. Index on `name` (trigram) and `committee_type`.
 
-## 3. Standalone PACs we never ingested can't appear
+### 2. Edge function: `import-fec-committee`
+Single-committee add. Input `{ committee_id }`. Calls FEC `/committees/{id}/`, upserts into `external_pacs`. Used by the admin "Add by FEC ID" button.
 
-AIPAC itself isn't in the DB — only `CITIZENS AGAINST AIPAC CORRUPTION` is, because that one filed independent expenditures. Our `candidate_committees` table only holds committees tied to a candidate (Principal / Authorized / Joint / etc.), and `independent_expenditures` only holds committees that filed IE reports. A standalone PAC with no candidate link and no IE filings is **not stored anywhere** in this project today, so the cause panel has nothing to tag.
+### 3. Edge function: `sync-fec-committees` (bulk)
+One-time + on-demand backfill. Paginates FEC `/committees/` with filters:
+- `committee_type=N,Q,O,V,W,Y,Z,X,U` (PAC, qualified PAC, SuperPAC, hybrid, party, leadership, etc.)
+- `cycle=2024,2026` (latest two cycles, active filers only)
+- `per_page=100`, follow pagination
 
-Counts today:
-- `candidate_committees`: 1,252 total (504 P, 114 A, 590 J, 20 NULL, 18 U, 6 D) — ~634 external
-- `independent_expenditures`: 1,229 distinct spenders
-- `external_committee_finance`: 0
-- `pac_expenditures`: 46
+Uses `EdgeRuntime.waitUntil()` + batch upserts of 500. Writes progress to a small `fec_committee_sync_status` row. Skips committees already in `candidate_committees` (no dupes). Expected volume: ~15-25k rows.
 
-Combined, the panel *could* show ~1,800 committees once #1 and #2 are fixed. To go beyond that (e.g. AIPAC, NRA-ILA, every FEC-registered PAC), we'd need a separate ingestion step.
+### 4. Wire the new pool into existing UI + AI
 
-## Proposed scope for this change
+**`useExternalCommittees` in `CommitteeTopicsPanel.tsx`** — Add `external_pacs` as a third source (union with candidate_committees + `list_ie_spenders` RPC). Dedupe by `fec_committee_id`. Existing NULL-designation and 5,000-row logic stays. Group dropdown labels: "Candidate Committees / IE Spenders / Standalone PACs".
 
-**In scope (fixes #1 and #2 — pure UI/query work):**
-- Update `useExternalCommittees` in `src/components/admin/CommitteeTopicsPanel.tsx` to:
-  - Pull *distinct* IE spenders (new RPC `list_ie_spenders()` returning `fec_committee_id, name, total_amount` OR a paginated select-distinct loop), capped at 5,000.
-  - Include NULL-designation candidate committees by switching the filter to an `.or(...)` clause.
-- Mirror the same pool logic in the `classify-committee-topic` edge function (it has the same `limit(500)` bug for both queries), so "Run AI on unassigned" sees every committee the UI sees.
-- Add a small counter at the top of the Assignments tab: "Showing X of Y external committees" so the truncation is visible if it ever happens again.
+**`classify-committee-topic` edge function** — Mirror the same pool in the auto-pick branch. Extend `gatherInfo()` to fall back to `external_pacs` for name/designation when no candidate_committees or IE row exists. AI classification logic unchanged.
 
-**Out of scope (issue #3):** ingesting the full FEC PAC universe. If you want AIPAC / NRA / etc. taggable even when they have no IEs and no candidate link, that's a separate feature — a new `external_pacs` table seeded from FEC's committee master file, plus an admin "add committee by FEC ID" button. Flag it and I'll plan it separately.
+### 5. Admin UI additions (Causes Library tab)
+- "Add committee by FEC ID" input + button → calls `import-fec-committee`, refetches, surfaces the new row in the assignment dropdown.
+- "Sync FEC committee universe" button (admin-only, confirm dialog) → triggers `sync-fec-committees`. Shows last sync timestamp and row count.
 
-## Technical summary
+## Technical notes
+- Requires `FEC_API_KEY` secret (already used elsewhere in the project — confirm at build time, add if missing).
+- Pool size after sync will be ~15-25k. UI dropdown should switch from a flat list to a searchable Combobox (`cmdk`) if not already, to stay performant.
+- `committee_topics` schema doesn't change — `fec_committee_id` is a free text key, so any new committee from `external_pacs` works automatically.
+- Memory `External Committee Onboarding` flow is unaffected; this is a parallel taxonomy/tagging surface, not finance ingestion.
 
-- File: `src/components/admin/CommitteeTopicsPanel.tsx` — rewrite `useExternalCommittees`.
-- File: `supabase/functions/classify-committee-topic/index.ts` — same pool logic in the auto-pick branch (no signature change).
-- Migration: add SQL function `public.list_ie_spenders()` returning `(fec_committee_id text, name text, total numeric)` selecting distinct + max(name) + sum(amount) from `independent_expenditures`, grantable to authenticated. (Avoids select-distinct pagination on the client.)
-- No schema changes to `committee_causes` / `committee_topics`.
+## Out of scope
+- Finance ingestion for these PACs (receipts, expenditures, donor rollups). This plan only makes them **taggable**. Pulling their financial data is a separate, much larger feature.
+- Historical (pre-2024) committee backfill.
+
+## Files touched
+- Migration: `external_pacs` table + `fec_committee_sync_status` table + RLS + indexes
+- New: `supabase/functions/import-fec-committee/index.ts`
+- New: `supabase/functions/sync-fec-committees/index.ts`
+- Edit: `supabase/functions/classify-committee-topic/index.ts` (pool + gatherInfo fallback)
+- Edit: `src/components/admin/CommitteeTopicsPanel.tsx` (pool union, two new admin controls, Combobox if needed)
+- New hook: `src/hooks/useImportFecCommittee.ts`
