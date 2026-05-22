@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { Card, CardContent } from '@/components/ui/card';
@@ -34,6 +34,7 @@ const formatNumber = (value: number) =>
 
 export const CommitteeProfile = () => {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const { data: committee, isLoading: committeeLoading } = useCommittee(id);
   const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id);
   const { data: adminData } = useAdminRole();
@@ -41,6 +42,15 @@ export const CommitteeProfile = () => {
 
   const isAdmin = adminData?.isAdmin ?? false;
   const isLoading = committeeLoading || donorsLoading;
+
+  const fromState = (location.state as { from?: string } | null)?.from;
+  // If the committee has no candidate-committee receipts, it's an outside-spender (IE-only) committee
+  // that lives on /top-spenders rather than /committees.
+  const isOutsideSpenderOnly = !!committee && !committee.totalRaised && !committee.candidate;
+  const backTo = fromState === '/top-spenders' || fromState === '/committees'
+    ? fromState
+    : isOutsideSpenderOnly ? '/top-spenders' : '/committees';
+  const backLabel = backTo === '/top-spenders' ? 'Back to Top Spenders' : 'Back to Committees';
 
   const availableCycles = useMemo(() => {
     const baseYear = new Date().getFullYear();
@@ -69,12 +79,12 @@ export const CommitteeProfile = () => {
 
       <main className="container py-8 px-4">
         <div className="flex items-center gap-2 mb-6">
-          <Link to="/committees">
+          <Link to={backTo}>
             <Button variant="ghost" size="icon">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <p className="text-sm text-muted-foreground">Back to Committees</p>
+          <p className="text-sm text-muted-foreground">{backLabel}</p>
         </div>
 
         {isLoading && (
@@ -86,7 +96,7 @@ export const CommitteeProfile = () => {
         {!isLoading && !committee && (
           <div className="text-center py-16">
             <p className="text-muted-foreground">Committee not found.</p>
-            <Link to="/committees">
+            <Link to={backTo}>
               <Button className="mt-4">Return to list</Button>
             </Link>
           </div>
