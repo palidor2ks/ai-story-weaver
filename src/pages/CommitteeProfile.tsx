@@ -252,7 +252,7 @@ export const CommitteeProfile = () => {
                     <Landmark className="w-4 h-4" />
                     Contributions
                   </div>
-                  <p className="text-2xl font-bold text-foreground mt-2">{formatNumber(committee.contributionCount)}</p>
+                  <p className="text-2xl font-bold text-foreground mt-2">{committee.contributionCount == null ? '—' : formatNumber(committee.contributionCount)}</p>
                   <p className="text-xs text-muted-foreground mt-1">Recorded contribution entries</p>
                 </CardContent>
               </Card>
