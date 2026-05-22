@@ -7,12 +7,17 @@ import { Seo } from '@/components/Seo';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Megaphone, TrendingUp, TrendingDown, Search, ExternalLink } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Megaphone, TrendingUp, TrendingDown, Search, ExternalLink, EyeOff, Loader2 } from 'lucide-react';
 import { formatIECompact } from '@/components/IESummaryInline';
 import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
+import { useAdminRole } from '@/hooks/useAdminRole';
+import { useExcludeCommittee } from '@/hooks/useIEExclusions';
+import { toast } from 'sonner';
 
 
 type Stance = 'all' | 'support' | 'oppose';
