@@ -105,6 +105,24 @@ export const CommitteeProfile = () => {
           <p className="text-sm text-muted-foreground">{backLabel}</p>
         </div>
 
+        {isAdmin && exclusion && (
+          <div className="mb-6 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 flex items-start gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-destructive">Excluded from public IE rollups</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Reason: {exclusion.reason} · Excluded {new Date(exclusion.excluded_at).toLocaleString()}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Non-admins do not see this committee in Top Spenders, candidate IE summaries, or election dialogs.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={handleRestore} disabled={restoreCommittee.isPending}>
+              {restoreCommittee.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+              Restore
+            </Button>
+          </div>
+        )}
+
         {isLoading && (
           <div className="flex justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
