@@ -276,6 +276,7 @@ export default function TopSpenders() {
                   <Link
                     key={r.spending_committee_fec_id}
                     to={`/committee/${r.spending_committee_fec_id}`}
+                    state={{ from: '/top-spenders' }}
                     className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 px-4 py-3 hover:bg-accent/40 transition-colors"
                   >
                     <span className="w-8 text-right text-sm font-mono text-muted-foreground">{i + 1}</span>
