@@ -1,26 +1,24 @@
-## Apply donor aliases to Committee profile "Top Contributors"
+## Why you can't find it
 
-### Why they differ today
+`THE COURT OF DIVINE JUSTICE` (C00875427) is **not** a candidate committee — it has no row in `candidate_committees` and no `committee_finance_rollups` entry (Total Raised = $0, 0 contributions on the profile). It only exists in our system as an **outside spender** in `committee_independent_expenditure_totals` (~$9.98B in IEs).
 
-- **Donors page** (`/donors`) calls the RPC `get_donors_paginated`, which groups by the canonical alias (`donor_aliases.canonical_name` via `donor_alias_members`). That's why "ADELSON, MIRIAM" + "ADELSON, MIRIAM DR." collapse into one row.
-- **Committee profile Top Contributors** (`useCommitteeDonors` in `src/hooks/useCommittees.ts`, line 506) groups by raw `contributions.contributor_name + state + city`. It never consults `donor_aliases` / `donor_alias_members`, so every spelling variant shows as its own row and the alias display name is ignored.
+The `/committees` page is sourced entirely from `candidate_committees` + finance rollups, so IE-only committees never appear there. They're listed on **`/top-spenders`** instead (the sibling tab in the CommitteesViewSwitcher). You most likely arrived at this profile from Top Spenders or an IE link elsewhere, but the back button hard-codes `/committees`.
 
-### Change
+## Plan
 
-Update `useCommitteeDonors` in `src/hooks/useCommittees.ts` to apply the same alias collapsing the donor list uses:
+Make the back link context-aware in `src/pages/CommitteeProfile.tsx`:
 
-1. After fetching the up-to-500 `contributions` rows for this committee+cycle, collect the distinct `contributor_name` values (uppercased/trimmed for matching).
-2. Single query against `donor_alias_members` filtered by those names, joining to `donor_aliases` where `is_active = true`, returning `donor_name`, `alias_id`, `canonical_name`. Build a `Map<rawName, { aliasId, canonicalName }>`.
-3. Group rows by:
-   - `aliasId` when a match exists → display the alias's `canonical_name`
-   - else fall back to current `name + state + city` key (raw name preserved)
-4. Sum `totalAmount`, `contributionCount`, latest date, candidate names across all variants. Show the canonical name as `name`.
-5. For city / state / occupation / employer on collapsed rows, keep the values from the highest-amount contribution (so the card still has location/occupation context — currently it just takes the first row).
+1. **Determine the right destination**:
+   - If `location.state?.from` is set by the linking page, use that.
+   - Else, if the committee has no `candidate_committees` row (or no receipts) but has IE totals, default to `/top-spenders`.
+   - Else default to `/committees`.
+2. **Update the label** to match ("Back to Committees" vs "Back to Top Spenders").
+3. **Pass `state={{ from: '/top-spenders' }}`** from Top Spenders rows that link into `/committee/:id`, and `state={{ from: '/committees' }}` from the Committees list, so the back button always returns to the originating list (covers the case where a committee appears on both).
+4. **Apply the same logic** to the "Return to list" button in the not-found state.
 
-No schema, RPC, or RLS changes. No edits to the donor list, the Committees list, or finance rollups. Just this hook.
+No data model changes. Purely frontend/navigation.
 
-### Out of scope
-
-- Donor type filtering on the committee page (still shows all contributor types as-is).
-- Cross-committee alias scoping (`donor_aliases.fec_committee_id` / `fec_committee_ids`): for v1 we treat any active alias as global, matching how the Donors page consolidates. If you want committee-scoped aliases only, say so and I'll filter on `fec_committee_id IS NULL OR <this committee's FEC id> = ANY(fec_committee_ids)`.
-- The 500-row contribution cap stays. (Aliases let us show more *unique* donors within the same 500, but if you want the cap raised, flag it.)
+### Files touched
+- `src/pages/CommitteeProfile.tsx` — context-aware back link + label
+- `src/pages/TopSpenders.tsx` — pass `state={{ from: '/top-spenders' }}` on committee links
+- `src/pages/Committees.tsx` — pass `state={{ from: '/committees' }}` on committee links
