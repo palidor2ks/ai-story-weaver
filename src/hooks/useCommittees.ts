@@ -398,8 +398,8 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
         // Final fallback: IE-only committees (appear only in independent_expenditures)
         const { data: ieRows } = await supabase
           .from('independent_expenditures')
-          .select('committee_name, cycle, expenditure_date')
-          .eq('committee_fec_id', committeeId)
+          .select('spending_committee_name, cycle, expenditure_date')
+          .eq('spending_committee_fec_id', committeeId)
           .order('expenditure_date', { ascending: false })
           .limit(1000);
 
@@ -407,11 +407,12 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
           return null;
         }
 
-        const ieName = ieRows.find((r) => r.committee_name)?.committee_name ?? committeeId;
+        const rows = ieRows as Array<{ spending_committee_name: string | null; cycle: string | null; expenditure_date: string | null }>;
+        const ieName = rows.find((r) => r.spending_committee_name)?.spending_committee_name ?? committeeId;
         const ieCycles = Array.from(
-          new Set(ieRows.map((r) => r.cycle).filter(Boolean) as string[]),
+          new Set(rows.map((r) => r.cycle).filter(Boolean) as string[]),
         ).sort((a, b) => Number(b) - Number(a));
-        const lastDate = ieRows.find((r) => r.expenditure_date)?.expenditure_date ?? null;
+        const lastDate = rows.find((r) => r.expenditure_date)?.expenditure_date ?? null;
 
         const ieSummary: CommitteeSummary = {
           id: committeeId,
