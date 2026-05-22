@@ -741,6 +741,21 @@ export default function Admin() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="donor-aliases">
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>Vendor Refunds</CardTitle>
+                <CardDescription>
+                  Hide media buyers, ad agencies, and consulting firms (e.g. Waterfront Strategies, GMMB) from donor lists.
+                  Their refunds are recorded as Schedule A receipts but aren't real contributions.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <VendorRefundsPanel />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="questions">
             <QuestionManagementPanel />
           </TabsContent>
