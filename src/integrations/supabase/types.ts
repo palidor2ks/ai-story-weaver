@@ -3378,6 +3378,16 @@ export type Database = {
         }
         Relationships: []
       }
+      committee_pool_mv: {
+        Row: {
+          committee_type: string | null
+          designation: string | null
+          fec_committee_id: string | null
+          name: string | null
+          source: string | null
+        }
+        Relationships: []
+      }
       donor_attributed_impact: {
         Row: {
           attributed_oppose_amount: number | null
@@ -3555,6 +3565,28 @@ export type Database = {
         }
         Returns: boolean
       }
+      list_committee_pool: {
+        Args: {
+          p_assigned?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_source?: string
+        }
+        Returns: {
+          admin_overridden: boolean
+          ai_confidence: string
+          ai_reasoning: string
+          committee_type: string
+          designation: string
+          fec_committee_id: string
+          name: string
+          primary_cause_id: string
+          secondary_cause_ids: string[]
+          source: string
+          total_count: number
+        }[]
+      }
       list_ie_spenders: {
         Args: never
         Returns: {
@@ -3579,6 +3611,7 @@ export type Database = {
         }[]
       }
       refresh_bill_summary_stats: { Args: never; Returns: undefined }
+      refresh_committee_pool: { Args: never; Returns: undefined }
       refresh_donor_consolidated_mv: { Args: never; Returns: undefined }
       resolve_donor_display_name: {
         Args: { p_donor_name: string; p_donor_type: string }
