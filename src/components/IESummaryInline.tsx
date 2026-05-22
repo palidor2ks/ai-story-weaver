@@ -4,6 +4,7 @@ import type { IETotals } from '@/hooks/useIndependentExpenditures';
 
 const compact = (n: number): string => {
   if (!n) return '$0';
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(n >= 10_000_000_000 ? 1 : 2)}B`;
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
   if (n >= 1_000) return `$${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`;
   return `$${Math.round(n).toLocaleString()}`;
