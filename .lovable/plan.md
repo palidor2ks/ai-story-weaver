@@ -1,29 +1,31 @@
-## Problem
+## Why the picture is missing
 
-The identity bar (Committee / FF PAC / FEC ID) was already wrapped in a `sticky top-[6.5rem]` container on mobile, but it scrolls away anyway. Reason: a `position: sticky` element only stays pinned inside its parent's box. Its current parent is a short `<div className="flex flex-col gap-3">` that only holds the identity + the badges row (~150px tall on mobile), so once you scroll past those ~150px the sticky element leaves with them.
+`candidates.image_url` for `P00009423` (Kamala D. Harris) is:
+
+```
+https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Kamala_Harris_Vice_Presidential_Portrait.jpg/600px-Kamala_Harris_Vice_Presidential_Portrait.jpg
+```
+
+That URL returns **HTTP 400** from Wikimedia (the thumbnail path is invalid — the source file was renamed/removed on Commons). The `<img>` `onError` handler in `OfficialAvatar` fires and the component falls back to the blue initials tile ("KH"). There is no `candidate_overrides.image_url` to mask it.
 
 ## Fix
 
-Lift the sticky identity bar so its containing block is the full page-content column (the `<div className="space-y-8">`), which is thousands of pixels tall and covers the entire profile. The bar then stays pinned for the whole scroll of the profile.
+Use the existing `enrich-official-photos` edge function (admin-only) which already:
+1. Asks the AI gateway for a verified official portrait URL
+2. Downloads + sniffs it
+3. Uploads to the `official-photos` Supabase Storage bucket
+4. Updates `candidates.image_url` to the rehosted public URL (cache-busted)
 
-### `src/pages/CommitteeProfile.tsx`
-- Move the sticky identity `<div>` (current lines 154–174) OUT of the `flex flex-col gap-3` wrapper and make it the first direct child of the existing `<div className="space-y-8">` block.
-- Keep the badges/AI Analysis/Sync Donors row inside its own non-sticky `flex flex-col gap-3` wrapper right below it (unchanged classes).
-- Keep all sticky classes the same: `md:static sticky top-[6.5rem] z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border md:border-0 md:bg-transparent md:backdrop-blur-none md:py-0 md:mx-0 md:px-0`.
-- Desktop layout stays identical because the wrapper collapses to `md:static` with no chrome.
+Steps:
+1. Invoke `enrich-official-photos` with `{ candidateId: "P00009423" }` from an admin session (the existing Admin → Photos panel button, or a one-off invoke).
+2. Verify the new `image_url` on `/candidate/P00009423` renders.
 
-### Peer pages — same root-cause fix
-Apply the same lift on the mobile-only mini identity bars added previously, so each one's parent is the page's tall main column (not a short sibling group):
-- `src/pages/CandidateProfile.tsx`
-- `src/pages/DonorProfile.tsx`
-- `src/pages/PartyProfile.tsx`
+No code changes required — this is a data fix using the tool you already built. If the AI lookup fails to find a good portrait, fall back to manually setting a known-good URL (e.g. her Senate or White House official portrait) on the candidate row.
 
-For each: ensure the `md:hidden sticky top-16 z-30 …` mini bar is a direct child of the main page wrapper that contains all the scrolling content below it. If it currently sits inside a small header card or short flex group, move it up one level so its containing block spans the rest of the page.
+## Optional hardening (separate follow-up, not in this plan)
 
-## Technical notes
-- `position: sticky` is bounded by the nearest scroll ancestor AND by its own parent's box. The parent box is the real issue here, not the scroll ancestor.
-- Offsets (`top-[6.5rem]` on CommitteeProfile, `top-16` elsewhere) and z-index (`z-30`, below Header `z-50` and the back sub-bar `z-40`) are correct and unchanged.
-- No changes to Header, back sub-bar, badges, KPIs, or any desktop styles.
+To prevent silent breakage when external image hosts go bad, we could:
+- Add a nightly cron that calls `enrich-official-photos` with `mode: 'rehost-all'` so every candidate photo lives in our bucket.
+- Or add a server-side validator that pings non-self-hosted `image_url`s and queues bad ones for re-enrichment.
 
-## Out of scope
-- No new components, no design changes, no business logic.
+Confirm if you want me to (a) just run the one-off re-enrichment for Kamala, or (b) also schedule the rehost-all sweep.
