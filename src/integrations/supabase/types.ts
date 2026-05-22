@@ -3166,6 +3166,12 @@ export type Database = {
         }
         Relationships: []
       }
+      independent_expenditure_cycles: {
+        Row: {
+          cycle: string | null
+        }
+        Relationships: []
+      }
       topic_answer_counts: {
         Row: {
           answer_count: number | null
