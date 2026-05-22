@@ -80,6 +80,7 @@ Deno.serve(async (req) => {
 
     const { error } = await supabase.from('external_pacs').upsert(row, { onConflict: 'fec_committee_id' });
     if (error) throw error;
+    await supabase.rpc('refresh_committee_pool').catch((e: any) => console.warn('pool refresh failed', e?.message));
 
     return new Response(JSON.stringify({ ok: true, committee: row }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
