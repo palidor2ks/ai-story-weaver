@@ -287,8 +287,20 @@ export default function PartyProfile() {
           All Parties
         </Link>
 
+        {/* Mobile sticky identity bar */}
+        <div className="md:hidden sticky top-16 z-30 -mx-4 px-4 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border flex items-center gap-3 mb-4">
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+            style={{ backgroundColor: `${party.color}30` }}
+          >
+            <Icon className="w-5 h-5" style={{ color: party.color }} />
+          </div>
+          <p className={cn("font-display font-bold text-sm truncate", colors.text)}>{party.name}</p>
+        </div>
+
         {/* Party Header */}
         <Card className={cn("mb-8 shadow-elevated", colors.bg, colors.border)}>
+
           <CardContent className="p-6 md:p-8">
             <div className="flex items-start gap-6">
               <div 
