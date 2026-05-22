@@ -15,9 +15,7 @@ import { useIEExclusions, useRestoreCommittee } from '@/hooks/useIEExclusions';
 import { toast } from 'sonner';
 import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialog';
 import { CommitteeIESection } from '@/components/IndependentExpenditureSections';
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+import { formatCompactCurrency as formatCurrency } from '@/lib/utils';
 
 const formatDate = (value: string | null) => {
   if (!value) return '—';
