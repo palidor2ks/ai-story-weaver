@@ -1097,6 +1097,7 @@ export type Database = {
           is_conduit_org: boolean | null
           is_contribution: boolean | null
           is_transfer: boolean | null
+          is_vendor_refund: boolean
           last_receipt_date: string | null
           line_number: string | null
           name: string
@@ -1123,6 +1124,7 @@ export type Database = {
           is_conduit_org?: boolean | null
           is_contribution?: boolean | null
           is_transfer?: boolean | null
+          is_vendor_refund?: boolean
           last_receipt_date?: string | null
           line_number?: string | null
           name: string
@@ -1149,6 +1151,7 @@ export type Database = {
           is_conduit_org?: boolean | null
           is_contribution?: boolean | null
           is_transfer?: boolean | null
+          is_vendor_refund?: boolean
           last_receipt_date?: string | null
           line_number?: string | null
           name?: string
@@ -2937,6 +2940,36 @@ export type Database = {
           },
         ]
       }
+      vendor_refund_organizations: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       vote_sync_status: {
         Row: {
           candidate_id: string
@@ -3328,6 +3361,7 @@ export type Database = {
         Args: { p_donor_name: string; p_donor_type: string }
         Returns: string
       }
+      retag_vendor_refunds: { Args: never; Returns: number }
       save_quiz_results: {
         Args: {
           p_answers: Json
