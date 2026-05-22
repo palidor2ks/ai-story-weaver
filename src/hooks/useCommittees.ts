@@ -90,12 +90,16 @@ const buildCommitteeSummaries = (
 
   return committees.map((committee) => {
     const committeeRollups = rollupByCommittee.get(committee.fec_committee_id) || [];
-    const matchingRollup =
-      committeeRollups.find((row) => row.candidate_id === committee.candidate_id) ??
-      committeeRollups.find((row) => !cycle || cycle === 'all' || row.cycle === cycle) ??
-      committeeRollups[0];
+    const isAllCycles = !cycle || cycle === 'all';
 
-    const aggregatedRollup = (!cycle || cycle === 'all') && committeeRollups.length > 0
+    // When a specific cycle is selected, pick that cycle's rollup row.
+    // When "all cycles", aggregate across every rollup row for this committee
+    // (avoids the bug where a stale zero-row for one cycle masked the real one).
+    const matchingRollup = isAllCycles
+      ? null
+      : (committeeRollups.find((row) => row.cycle === cycle) ?? null);
+
+    const aggregatedRollup = isAllCycles && committeeRollups.length > 0
       ? committeeRollups.reduce(
           (acc, row) => {
             const raised = row.local_itemized ?? row.fec_total_receipts ?? row.fec_itemized ?? 0;
@@ -118,9 +122,23 @@ const buildCommitteeSummaries = (
       committee.fec_itemized_total ??
       0;
 
+    const hasRollupData = committeeRollups.length > 0;
+    const donorCount = hasRollupData
+      ? (matchingRollup?.donor_count ?? aggregatedRollup?.donor_count ?? 0)
+      : null;
+    const contributionCount = hasRollupData
+      ? (matchingRollup?.contribution_count ?? aggregatedRollup?.contribution_count ?? 0)
+      : null;
+
+    // Name fallback chain: committee.name → linked candidate name → "Unknown Committee"
+    const candidateName = committee.candidates?.name;
+    const resolvedName =
+      committee.name ??
+      (candidateName ? `${candidateName} Committee` : null);
+
     return {
       id: committee.id,
-      name: committee.name,
+      name: resolvedName,
       aliasName: null,
       fecCommitteeId: committee.fec_committee_id,
       designation: committee.designation,
@@ -133,9 +151,10 @@ const buildCommitteeSummaries = (
       fecItemizedTotal: committee.fec_itemized_total,
       candidateId: committee.candidate_id,
       candidate: committee.candidates,
-      donorCount: matchingRollup?.donor_count ?? aggregatedRollup?.donor_count ?? 0,
-      contributionCount: matchingRollup?.contribution_count ?? aggregatedRollup?.contribution_count ?? 0,
+      donorCount,
+      contributionCount,
       totalRaised,
+      hasRollupData,
     } as CommitteeSummary;
   });
 };
