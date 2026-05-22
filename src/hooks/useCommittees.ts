@@ -395,7 +395,45 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
         .eq('committee_id', committeeId);
 
       if (!contribRow && (!rollupRows || rollupRows.length === 0)) {
-        return null;
+        // Final fallback: IE-only committees (appear only in independent_expenditures)
+        const { data: ieRows } = await supabase
+          .from('independent_expenditures')
+          .select('spending_committee_name, cycle, expenditure_date')
+          .eq('spending_committee_fec_id', committeeId)
+          .order('expenditure_date', { ascending: false })
+          .limit(1000);
+
+        if (!ieRows || ieRows.length === 0) {
+          return null;
+        }
+
+        const rows = ieRows as Array<{ spending_committee_name: string | null; cycle: string | null; expenditure_date: string | null }>;
+        const ieName = rows.find((r) => r.spending_committee_name)?.spending_committee_name ?? committeeId;
+        const ieCycles = Array.from(
+          new Set(rows.map((r) => r.cycle).filter(Boolean) as string[]),
+        ).sort((a, b) => Number(b) - Number(a));
+        const lastDate = rows.find((r) => r.expenditure_date)?.expenditure_date ?? null;
+
+        const ieSummary: CommitteeSummary = {
+          id: committeeId,
+          name: ieName,
+          aliasName: null,
+          fecCommitteeId: committeeId,
+          designation: null,
+          designationFull: null,
+          role: null,
+          cycles: ieCycles,
+          lastSyncDate: null,
+          lastContributionDate: lastDate,
+          localItemizedTotal: null,
+          fecItemizedTotal: null,
+          candidateId: null,
+          candidate: null,
+          donorCount: 0,
+          contributionCount: 0,
+          totalRaised: 0,
+        };
+        return ieSummary;
       }
 
       const rollups = (rollupRows || []) as CommitteeRollupRow[];
