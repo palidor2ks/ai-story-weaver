@@ -1,77 +1,45 @@
+# Why the Committee Causes list is incomplete
 
-# Committee Causes (Pro-X / Anti-X) — Revised Plan
+Three independent reasons the panel is missing committees today:
 
-Replace the previous "committee topics = 17 quiz topics" model with a dedicated **causes** taxonomy (e.g. *Pro-Israel*, *Pro-gun*, *Pro-choice*, *Anti-tax*). Each cause maps to one of the 17 quiz topics so we can later show "this committee influences your X score."
+## 1. IE spenders are truncated to ~25 of 1,229
 
-## Taxonomy
+`useExternalCommittees` reads `independent_expenditures` with `.limit(2000)` rows (not distinct committees). Rows cluster heavily by committee, so the first 2,000 rows only contain **25 distinct** spending committees out of **1,229** that exist. Everything past those 25 is invisible in the dropdown.
 
-New table **`committee_causes`** (the controlled vocabulary):
-- `id` (slug, e.g. `pro-israel`)
-- `label` (display, e.g. `Pro-Israel`)
-- `stance` (`pro` | `anti` | `neutral`)
-- `issue` (short, e.g. `Israel`, `Gun rights`)
-- `quiz_topic_id` (FK → existing topics; required)
-- `description`, `aliases` (text[])
-- `status` (`active` | `pending` | `rejected`) — AI suggestions land as `pending`
-- `created_by` (`seed` | `ai` | `admin`), `approved_by`, timestamps
+**Fix:** query distinct IE committees instead of raw IE rows. Use an RPC or a dedicated query (e.g. `select distinct spending_committee_fec_id, spending_committee_name from independent_expenditures`) and raise the row cap to cover all ~1,229.
 
-Seed ~40 well-known causes across the 17 topics. Examples:
-- Pro-Israel, Pro-Palestine → Foreign Policy
-- Pro-gun, Pro-gun-control → Gun Policy
-- Pro-choice, Pro-life → Abortion
-- Pro-union/Labor, Anti-union → Labor
-- Pro-crypto, Anti-crypto → Tech & Innovation
-- Pro-fossil-fuel, Pro-climate-action → Environment
-- Anti-tax, Pro-progressive-tax → Taxes
-- Pro-immigration, Anti-immigration → Immigration
-- Pro-Medicare-for-all, Anti-ACA → Healthcare
-- Pro-Trump, Anti-Trump, Conservative, Progressive → Government (general-purpose buckets)
+## 2. Candidate committees with NULL designation are excluded
 
-## Committee → Cause mapping
+`.not('designation', 'in', '(P,A)')` is NULL-unsafe in PostgREST and drops the 20 rows where `designation IS NULL`.
 
-Rework existing **`committee_topics`** table → rename conceptually to causes:
-- `fec_committee_id` (PK)
-- `primary_cause_id` (FK → `committee_causes.id`, required)
-- `secondary_cause_ids` (text[])
-- `assigned_by` (`ai` | `admin`), `ai_confidence`, `ai_reasoning`, `admin_overridden`
+**Fix:** change the filter to also include NULL designations (e.g. `designation.is.null,designation.not.in.(P,A)` with an `.or(...)`).
 
-Drop the columns referencing `topics.id`; primary becomes a cause id. Quiz-topic linkage is derived via `committee_causes.quiz_topic_id`.
+## 3. Standalone PACs we never ingested can't appear
 
-## AI classification (revised edge function)
+AIPAC itself isn't in the DB — only `CITIZENS AGAINST AIPAC CORRUPTION` is, because that one filed independent expenditures. Our `candidate_committees` table only holds committees tied to a candidate (Principal / Authorized / Joint / etc.), and `independent_expenditures` only holds committees that filed IE reports. A standalone PAC with no candidate link and no IE filings is **not stored anywhere** in this project today, so the cause panel has nothing to tag.
 
-`classify-committee-topic` → repurpose to `classify-committee-cause`:
-- Input context: committee name, designation, IE purposes, top targets, top donor employers.
-- Tool-call output constrained to **active causes only**, plus an optional `suggested_new_cause` object (label, stance, issue, suggested_quiz_topic_id, reasoning).
-- Suggested new causes are inserted into `committee_causes` as `status='pending'` and NOT applied to the committee until an admin approves them (committee gets the closest active cause or remains unassigned with a note).
+Counts today:
+- `candidate_committees`: 1,252 total (504 P, 114 A, 590 J, 20 NULL, 18 U, 6 D) — ~634 external
+- `independent_expenditures`: 1,229 distinct spenders
+- `external_committee_finance`: 0
+- `pac_expenditures`: 46
 
-## Admin UI
+Combined, the panel *could* show ~1,800 committees once #1 and #2 are fixed. To go beyond that (e.g. AIPAC, NRA-ILA, every FEC-registered PAC), we'd need a separate ingestion step.
 
-Two panels in `Admin → Committee Topics` tab (renamed **Committee Causes**):
+## Proposed scope for this change
 
-1. **Causes library** — list/search active + pending causes, edit label/stance/issue/quiz_topic mapping, approve or reject AI suggestions, merge duplicates (move all committee assignments from cause A → B).
-2. **Committee assignments** — existing panel, but the dropdown now picks from active causes (grouped by issue). Shows the derived quiz topic next to each cause for clarity.
+**In scope (fixes #1 and #2 — pure UI/query work):**
+- Update `useExternalCommittees` in `src/components/admin/CommitteeTopicsPanel.tsx` to:
+  - Pull *distinct* IE spenders (new RPC `list_ie_spenders()` returning `fec_committee_id, name, total_amount` OR a paginated select-distinct loop), capped at 5,000.
+  - Include NULL-designation candidate committees by switching the filter to an `.or(...)` clause.
+- Mirror the same pool logic in the `classify-committee-topic` edge function (it has the same `limit(500)` bug for both queries), so "Run AI on unassigned" sees every committee the UI sees.
+- Add a small counter at the top of the Assignments tab: "Showing X of Y external committees" so the truncation is visible if it ever happens again.
 
-## Display changes
-
-`CommitteeTopicBadge` → `CommitteeCauseBadge`:
-- Primary cause as a colored chip ("Pro-Israel") with the stance color (pro = neutral/blue, anti = red, neutral = gray).
-- Tooltip shows: cause description, mapped quiz topic, AI reasoning, assigned-by.
-- Secondary causes render as smaller chips.
-
-Used in the same three places already wired: committee profile header, committees list cards, IE sections next to spending committee.
-
-## Out of scope
-
-- Auto-recomputing candidate quiz scores from committee causes (foundation only — derived `quiz_topic_id` makes that future feature possible).
-- Candidate principal/authorized committees (still excluded).
-
-## Migration impact
-
-- Existing `committee_topics` rows (already seeded from the prior plan against quiz-topic IDs) will be wiped — those topic ids are not valid causes. Admins re-run "AI classify unassigned" after the new taxonomy is seeded.
-- Frontend renames: `useCommitteeTopics` → `useCommitteeCauses`, `CommitteeTopicBadge` → `CommitteeCauseBadge`. Edge function renamed + redeployed.
+**Out of scope (issue #3):** ingesting the full FEC PAC universe. If you want AIPAC / NRA / etc. taggable even when they have no IEs and no candidate link, that's a separate feature — a new `external_pacs` table seeded from FEC's committee master file, plus an admin "add committee by FEC ID" button. Flag it and I'll plan it separately.
 
 ## Technical summary
 
-- **Migrations:** create `committee_causes`; alter `committee_topics` (drop topic FKs, switch primary/secondary to cause ids, clear rows); seed ~40 causes.
-- **Edge fn:** `classify-committee-cause` (Lovable AI Gateway, `google/gemini-3-flash-preview`, tool-calling).
-- **Frontend:** rename hooks/components, update Admin panel to two-tab layout (Library + Assignments), update three display surfaces.
+- File: `src/components/admin/CommitteeTopicsPanel.tsx` — rewrite `useExternalCommittees`.
+- File: `supabase/functions/classify-committee-topic/index.ts` — same pool logic in the auto-pick branch (no signature change).
+- Migration: add SQL function `public.list_ie_spenders()` returning `(fec_committee_id text, name text, total numeric)` selecting distinct + max(name) + sum(amount) from `independent_expenditures`, grantable to authenticated. (Avoids select-distinct pagination on the client.)
+- No schema changes to `committee_causes` / `committee_topics`.

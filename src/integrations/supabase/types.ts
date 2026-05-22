@@ -3447,6 +3447,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      list_ie_spenders: {
+        Args: never
+        Returns: {
+          fec_committee_id: string
+          name: string
+          total: number
+        }[]
+      }
       recalculate_all_coverage_tiers: {
         Args: never
         Returns: {
