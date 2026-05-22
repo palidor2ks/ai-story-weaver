@@ -106,11 +106,10 @@ const getTypeIcon = (type: string) => {
   }
 };
 
-import { formatCompactCurrency, formatFullCurrency } from '@/lib/utils';
-
 const formatAmount = (amount: number) => formatCompactCurrency(amount);
 const formatAmountFull = (amount: number) => formatFullCurrency(amount);
 const formatCompactAmount = (amount: number) => formatCompactCurrency(amount);
+
 
 
 const formatCompactNumber = (num: number) => {
