@@ -5,9 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Megaphone, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { useCommitteeIE, useCandidateIE } from '@/hooks/useIndependentExpenditures';
+import { formatCompactCurrency } from '@/lib/utils';
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+const fmt = (n: number) => formatCompactCurrency(n);
 
 export const CommitteeIESection = ({ committeeFecId }: { committeeFecId: string | null | undefined }) => {
   const [cycle, setCycle] = useState<string>('all');

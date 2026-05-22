@@ -10,26 +10,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCommitteesPaginated, useCommitteeFilterOptions } from '@/hooks/useCommittees';
 import { Loader2, Landmark, Users, DollarSign, ArrowRight, Search, SlidersHorizontal, Inbox, Megaphone } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCompactCurrency as formatCurrency, formatFullCurrency as formatCurrencyFull } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
 import { formatIECompact } from '@/components/IESummaryInline';
 
-
-const formatCurrencyFull = (value: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
-
-const trimZero = (s: string) => s.replace(/\.0$/, '');
-
-const formatCurrency = (value: number) => {
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1_000_000_000) return `${sign}$${trimZero((abs / 1_000_000_000).toFixed(1))}B`;
-  if (abs >= 10_000_000) return `${sign}$${Math.round(abs / 1_000_000)}M`;
-  if (abs >= 1_000_000) return `${sign}$${trimZero((abs / 1_000_000).toFixed(1))}M`;
-  if (abs >= 1_000) return `${sign}$${Math.round(abs / 1_000)}K`;
-  return `${sign}$${Math.round(abs)}`;
-};
 
 const formatNumber = (value: number) =>
   value >= 1_000_000

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { formatCompactCurrency } from '@/lib/utils';
 
 interface SyncResult {
   processed: number;
@@ -102,7 +103,7 @@ export function BulkDonorSyncCard() {
             </p>
             <p className="text-muted-foreground">
               Donors imported: {lastResult.totalDonorsImported.toLocaleString()} ·
-              {' '}Total raised: ${Math.round(lastResult.totalRaised).toLocaleString()}
+              {' '}Total raised: {formatCompactCurrency(lastResult.totalRaised)}
             </p>
             {lastResult.errors && lastResult.errors.length > 0 && (
               <details className="mt-2">

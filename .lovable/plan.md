@@ -1,39 +1,47 @@
-## Plan: Vendor refund exclusion system
+## Plan: Compact dollar formatting site-wide
 
-Hide media-buy / ad-vendor refunds (like Waterfront Strategies, GMMB, etc.) from donor lists, donor counts, and top-donor rankings.
+Show all dollar amounts as compact ($266.9M, $19M, $14.7M, $1.2B, $4.9K) everywhere, matching the format already used on the Committees list.
 
-### 1. Database migration
+### 1. Add shared helpers in `src/lib/utils.ts`
 
-Create a new `vendor_refund_organizations` table (mirrors `conduit_organizations`):
-- `id uuid pk`, `name text not null unique`, `category text` (media, consulting, fundraising, etc.), `notes text`, `is_active bool default true`, timestamps
-- RLS: public read; admin manage; service role full access
-- Seed with a starter list: Waterfront Strategies, GMMB, AL Media, Bully Pulpit Interactive, SKDK, Mission Control, Assemble The Agency, Canal Partners Media, Buying Time, Putnam Partners, Devine Mulvey Longabaugh, Screen Strategies Media, Trilogy Interactive, Mothership Strategies
+```ts
+export function formatCompactCurrency(value: number | null | undefined): string
+export function formatFullCurrency(value: number | null | undefined): string  // for tooltips
+```
 
-Add `is_vendor_refund boolean default false` to `donors` table, indexed.
+Rules (same as current `Committees.tsx`):
+- `>= 1B` → `$1.2B` (1 decimal, strip trailing `.0`)
+- `>= 10M` → `$266M` (no decimals)
+- `>= 1M` → `$4.9M` (1 decimal, strip `.0`)
+- `>= 1K` → `$15K` (no decimals)
+- `< 1K` → `$N` (integer)
+- Negative values get a leading `-`
+- `null`/`undefined`/`NaN` → `—`
 
-Backfill: set `is_vendor_refund = true` for `donors` where `type = 'Organization'`, `line_number IN ('15','17')`, and name matches any active vendor (case-insensitive, with %wildcards on punctuation variants).
+### 2. Replace local formatters with the shared one
 
-### 2. Read paths — exclude tagged donors
+Files that currently define or use their own `formatCurrency` / `Intl.NumberFormat({ currency })`:
+- `src/pages/Committees.tsx` — remove local copies, import shared.
+- `src/pages/CommitteeProfile.tsx` — replace local `formatCurrency` (used on Total Raised, top contributors, donor table).
+- `src/pages/CandidateProfile.tsx` — replace local formatter on finance/donor totals.
+- `src/pages/DonorProfile.tsx` — replace local formatter on lifetime total, recipient totals, contribution rows.
+- `src/components/FinanceSummaryCard.tsx`
+- `src/components/FinanceReconciliationCard.tsx`
+- `src/components/IndependentExpenditureSections.tsx`
+- `src/components/admin/CommitteeBreakdown.tsx`
+- `src/components/admin/FinanceCategoryBreakdown.tsx`
+- `src/components/admin/FinanceStatusBadge.tsx`
+- `src/components/admin/DeltaBadge.tsx`
+- `src/components/admin/AnswerCoveragePanel.tsx`
+- `src/components/admin/BulkDonorSyncCard.tsx` (the "Total raised: $..." line)
 
-Update these to filter out `is_vendor_refund = true`:
-- `src/hooks/useDonorsPaginated.ts` (committee donor list on `/committee/:id`)
-- Any donor list / top-donor query on donor profile and global donor pages
-- Refresh `committee_finance_rollups.donor_count` so vendor refunds don't inflate counts (recompute via existing rollup function or a small SQL update in the migration)
+For each big number, wrap with a `title={formatFullCurrency(value)}` tooltip so the exact figure is still available on hover (consistent with the Committees list).
 
-### 3. Importer updates
+### 3. Out of scope
 
-- `supabase/functions/import-donors-csv` and FEC sync paths: after inserting donor rows, set `is_vendor_refund = true` for rows matching the active vendor list (same criteria as backfill). Cache the vendor list once per invocation.
+- Admin reconciliation **delta** cells where the exact dollar gap matters (Reconciliation Card line-item table). I'll keep full numbers there to preserve diff readability — open to flipping these to compact too if you'd prefer.
+- Share card templates (`src/components/share/templates/*`) keep their existing formatting since they're designed-for-print and already chosen by the user.
 
-### 4. Admin UI
-
-New panel `src/components/admin/VendorRefundsPanel.tsx` (modeled on `DonorAliasesPanel`):
-- List active vendors, add / edit / deactivate
-- "Re-tag donors" button → calls a new edge function `retag-vendor-refunds` that re-runs the backfill against current donors
-- Wire into `src/pages/Admin.tsx` under the Finance/Donors tab area
-
-### 5. Technical notes
-
-- Matching uses `ILIKE name pattern` with `%` wrapping for resilience to "INC", "LLC", "STRATEGIES, INC" variations
-- We only tag `type = 'Organization'` + `line_number IN ('15','17')` so genuine PAC contributions from a similarly-named entity aren't accidentally hidden
-- `is_vendor_refund` is reversible — flipping a vendor inactive and re-tagging restores rows
-- No changes to `contributions` table (audit trail preserved); only `donors` aggregate gets flagged
+### Technical notes
+- One commit touches ~12 files; behavior change only — no schema or query changes.
+- Removes 4+ duplicated `formatCurrency` implementations.

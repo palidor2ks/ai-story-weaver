@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DollarSign, Info, CheckCircle2, AlertTriangle, ArrowRightLeft } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCompactCurrency as formatCurrency } from "@/lib/utils";
 
 export interface FinanceSummaryData {
   fecItemized: number | null;
@@ -14,11 +14,6 @@ interface FinanceSummaryCardProps {
   compact?: boolean;
   className?: string;
 }
-
-const formatCurrency = (value: number | null | undefined) => {
-  if (value === null || value === undefined) return '—';
-  return `$${Math.round(value).toLocaleString()}`;
-};
 
 export function FinanceSummaryCard({ data, compact = false, className }: FinanceSummaryCardProps) {
   const hasFecData = data.fecTotalReceipts !== null && data.fecTotalReceipts > 0;

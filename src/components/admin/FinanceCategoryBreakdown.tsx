@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { cn, formatCompactCurrency } from '@/lib/utils';
 import { CheckCircle2, AlertTriangle, TrendingDown, TrendingUp } from 'lucide-react';
 
 interface CategoryData {
@@ -26,13 +26,7 @@ interface FinanceCategoryBreakdownProps {
   className?: string;
 }
 
-const formatCurrency = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return '—';
-  const absVal = Math.abs(value);
-  if (absVal >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-  if (absVal >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-  return `$${Math.round(value).toLocaleString()}`;
-};
+const formatCurrency = (value: number | null | undefined): string => formatCompactCurrency(value);
 
 const getDeltaColor = (deltaPct: number | null): string => {
   if (deltaPct === null) return 'text-muted-foreground';

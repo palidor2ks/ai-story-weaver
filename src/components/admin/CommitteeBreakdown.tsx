@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, Building2, RefreshCw, Clock, AlertTriangle, CheckCircle2, EyeOff, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
+import { formatCompactCurrency } from '@/lib/utils';
 
 interface Committee {
   id: string;
@@ -208,10 +209,7 @@ export function CommitteeBreakdown({
     }
   };
 
-  const formatCurrency = (value: number | null) => {
-    if (value === null || value === undefined) return '—';
-    return `$${Math.round(value).toLocaleString()}`;
-  };
+  const formatCurrency = (value: number | null) => formatCompactCurrency(value);
 
   const getSyncStatusBadge = (committee: Committee) => {
     if (committee.has_more) {

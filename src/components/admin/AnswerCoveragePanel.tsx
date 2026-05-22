@@ -317,15 +317,15 @@ export function AnswerCoveragePanel() {
     };
   }, []);
 
-  const formatCurrency = (value?: number | null, compact = false) => {
+  const formatCurrency = (value?: number | null, _compact = false) => {
     if (value === null || value === undefined) return '—';
-    if (compact && Math.abs(value) >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    }
-    if (compact && Math.abs(value) >= 1000) {
-      return `$${(value / 1000).toFixed(0)}K`;
-    }
-    return `$${Math.round(value).toLocaleString()}`;
+    const abs = Math.abs(value);
+    const sign = value < 0 ? '-' : '';
+    if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+    if (abs >= 10_000_000) return `${sign}$${Math.round(abs / 1_000_000)}M`;
+    if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+    if (abs >= 1_000) return `${sign}$${Math.round(abs / 1_000)}K`;
+    return `${sign}$${Math.round(abs)}`;
   };
 
   // FEC stats from cache (moved to line 516)
