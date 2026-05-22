@@ -38,7 +38,12 @@ Deno.serve(async (req) => {
     if (file.size > 3 * 1024 * 1024) return json({ error: 'file too large' }, 400);
     if (!/^https?:\/\//i.test(targetUrl)) return json({ error: 'invalid targetUrl' }, 400);
     if (/[<>"'`\s]/.test(targetUrl)) return json({ error: 'invalid targetUrl characters' }, 400);
-    try { new URL(targetUrl); } catch { return json({ error: 'invalid targetUrl' }, 400); }
+    let parsedTarget: URL;
+    try { parsedTarget = new URL(targetUrl); } catch { return json({ error: 'invalid targetUrl' }, 400); }
+    const ALLOWED_HOSTS = ['polipulseapp.com', 'polipulse.lovable.app', 'id-preview--b4a499eb-c11a-4320-8adc-dfe50259459a.lovable.app'];
+    const host = parsedTarget.hostname.toLowerCase();
+    const hostAllowed = ALLOWED_HOSTS.some((d) => host === d || host.endsWith('.' + d));
+    if (!hostAllowed) return json({ error: 'targetUrl must be on an allowed domain' }, 400);
 
     // Require authentication to prevent storage abuse by anonymous callers
     const authHeader = req.headers.get('Authorization') ?? '';
