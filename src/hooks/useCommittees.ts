@@ -169,6 +169,8 @@ async function fetchCommittees(cycle: string = 'all', committeeId?: string) {
   }
 
   const { data: committees, error: committeeError } = await query
+    .order('local_itemized_total', { ascending: false, nullsFirst: false })
+    .order('fec_itemized_total', { ascending: false, nullsFirst: false })
     .order('name', { ascending: true })
     .returns<CommitteeRow[]>();
   if (committeeError) throw committeeError;
