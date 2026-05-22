@@ -8,6 +8,7 @@ import { Header } from "@/components/Header";
 import { AnswerCoveragePanel } from "@/components/admin/AnswerCoveragePanel";
 import { ClaimReviewPanel } from "@/components/admin/ClaimReviewPanel";
 import { DonorAliasesPanel } from "@/components/admin/DonorAliasesPanel";
+import { VendorRefundsPanel } from "@/components/admin/VendorRefundsPanel";
 import { ScoreFixesTab } from "@/pages/admin/tabs/ScoreFixesTab";
 import { BillSummaryDashboard } from "@/components/admin/BillSummaryDashboard";
 import { HiddenStatesPanel } from "@/components/admin/HiddenStatesPanel";
@@ -736,6 +737,18 @@ export default function Admin() {
               </CardHeader>
               <CardContent>
                 <DonorAliasesPanel />
+              </CardContent>
+            </Card>
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>Vendor Refunds</CardTitle>
+                <CardDescription>
+                  Hide media buyers, ad agencies, and consulting firms (e.g. Waterfront Strategies, GMMB) from donor lists.
+                  Their refunds are recorded as Schedule A receipts but aren't real contributions.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <VendorRefundsPanel />
               </CardContent>
             </Card>
           </TabsContent>

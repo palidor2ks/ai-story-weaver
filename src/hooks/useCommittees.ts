@@ -580,7 +580,18 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all
 
       if (error) throw error;
 
-      const rows = data || [];
+      // Filter out vendor-refund organizations (media buyers, ad agencies, etc.)
+      const { data: vendorRows } = await supabase
+        .from('vendor_refund_organizations')
+        .select('name')
+        .eq('is_active', true);
+      const vendorPatterns = (vendorRows || []).map((v) => v.name.toUpperCase());
+      const isVendorRefund = (name: string) => {
+        const up = (name || '').toUpperCase();
+        return vendorPatterns.some((p) => up.includes(p));
+      };
+
+      const rows = (data || []).filter((r) => !isVendorRefund(r.contributor_name));
       const candidateIds = Array.from(
         new Set(rows.map((r) => r.candidate_id).filter((id): id is string => !!id)),
       );
