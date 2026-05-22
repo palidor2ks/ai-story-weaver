@@ -520,6 +520,7 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
         donorCount: totals.donor_count,
         contributionCount: totals.contribution_count,
         totalRaised: totals.total_raised,
+        hasRollupData: rollups.length > 0 || totals.contribution_count > 0,
       };
       return summary;
     },
