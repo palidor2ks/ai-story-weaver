@@ -327,6 +327,11 @@ const fetchCommitteePage = async (
   }
 
   const summaries = buildCommitteeSummaries(committees, rollups, cycle);
+  summaries.sort((a, b) => {
+    const diff = (b.totalRaised ?? 0) - (a.totalRaised ?? 0);
+    if (diff !== 0) return diff;
+    return (a.name ?? '').localeCompare(b.name ?? '');
+  });
   const totalCount = count ?? summaries.length;
   const hasMore = offset + summaries.length < totalCount;
 
