@@ -1,14 +1,16 @@
-## Compact currency on committee cards
+## Plan
 
-Update `formatCurrency` in `src/pages/Committees.tsx` so the "Total Raised" amount shows as `$316M` / `$4.9M` / `$750K` instead of the full `$316,109,603`.
+Fix the committee list so the visible order matches the displayed **Total Raised** amount.
 
-### Logic
-- `>= 1_000_000_000` → `$X.XB` (1 decimal, trim trailing `.0`)
-- `>= 1_000_000` → `$XM` if ≥ $10M (no decimal), else `$X.XM`
-- `>= 1_000` → `$XK`
-- otherwise → `$X`
+### What I’ll change
+- Update `src/hooks/useCommittees.ts` in the paginated committee fetch path.
+- After committee rollups are loaded and `totalRaised` is calculated, sort the built committee summaries by:
+  1. `totalRaised` descending
+  2. committee name ascending as the tie-breaker
+- Keep the existing filters, cycle selection, search, and compact dollar formatting unchanged.
 
-### Scope
-- Only the committee card "Total Raised" value on `src/pages/Committees.tsx`.
-- Tooltip on the value will show the full exact dollar amount on hover so precision isn't lost.
-- No other pages (CommitteeProfile, etc.) are changed.
+### Why this fixes it
+Right now the database query sorts by `candidate_committees.local_itemized_total` / `fec_itemized_total`, but the cards display `totalRaised` computed from `committee_finance_rollups`. Those can differ, so the card order can look wrong, like `$5.9M` appearing before `$7.1M`.
+
+### Technical note
+This will make the loaded results display in the correct order immediately. If we later need perfect global sorting across all pages before pagination, the stronger follow-up would be a database RPC/view that ranks committees by the same rollup-derived total before applying `range()`.
