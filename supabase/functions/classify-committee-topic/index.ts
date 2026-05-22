@@ -45,6 +45,16 @@ async function gatherInfo(supabase: any, fecId: string): Promise<CommitteeInfo |
     name = ie?.spending_committee_name ?? null;
   }
 
+  if (!name) {
+    const { data: ext } = await supabase
+      .from('external_pacs')
+      .select('name, designation')
+      .eq('fec_committee_id', fecId)
+      .maybeSingle();
+    name = ext?.name ?? null;
+    designation = designation ?? ext?.designation ?? null;
+  }
+
   if (!name) return null;
 
   const { data: ieRows } = await supabase
