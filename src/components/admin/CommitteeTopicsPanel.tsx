@@ -29,19 +29,18 @@ interface CommitteeRow {
 
 const useExternalCommittees = () => {
   return useQuery({
-    queryKey: ['admin-external-committees'],
+    queryKey: ['admin-external-committees', 'v2'],
     staleTime: 1000 * 60 * 5,
     queryFn: async (): Promise<CommitteeRow[]> => {
+      // Candidate committees that aren't principal/authorized (include NULL designation).
       const { data: cmtes } = await supabase
         .from('candidate_committees')
         .select('fec_committee_id, name, designation')
-        .not('designation', 'in', '(P,A)')
-        .limit(1000);
+        .or('designation.is.null,and(designation.neq.P,designation.neq.A)')
+        .limit(5000);
 
-      const { data: ieRows } = await supabase
-        .from('independent_expenditures')
-        .select('spending_committee_fec_id, spending_committee_name')
-        .limit(2000);
+      // Distinct IE spenders via RPC (avoids row-limit truncation of raw IE rows).
+      const { data: ieSpenders } = await supabase.rpc('list_ie_spenders' as any);
 
       const map = new Map<string, CommitteeRow>();
       (cmtes ?? []).forEach((c: any) => {
@@ -53,12 +52,12 @@ const useExternalCommittees = () => {
           source: 'candidate_committees',
         });
       });
-      (ieRows ?? []).forEach((r: any) => {
-        const id = r.spending_committee_fec_id;
+      ((ieSpenders ?? []) as any[]).forEach((r: any) => {
+        const id = r.fec_committee_id;
         if (!id || map.has(id)) return;
         map.set(id, {
           fec_committee_id: id,
-          name: r.spending_committee_name,
+          name: r.name,
           designation: null,
           source: 'independent_expenditures',
         });
