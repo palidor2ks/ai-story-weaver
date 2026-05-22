@@ -143,6 +143,11 @@ const AssignmentsTab = () => {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="text-sm text-muted-foreground">
           Tag external committees (PACs, SuperPACs, party committees) with one primary cause (Pro-Israel, Pro-gun, etc.).
+          {!isLoading && (
+            <span className="ml-2 text-xs">
+              Showing {visible.length.toLocaleString()} of {committees.length.toLocaleString()} committees.
+            </span>
+          )}
         </div>
         <Button onClick={handleClassifyUnassigned} disabled={running} className="gap-2">
           {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
