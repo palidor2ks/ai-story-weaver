@@ -1,38 +1,43 @@
-## Goal
+# Fix "Committee not found" for IE-only spenders
 
-On the committee profile's **Independent Expenditures** card (`CommitteeIESection`), replace the row-by-row filings table with a summary grouped by **target candidate** (totals supporting vs opposing), and add a **year/cycle filter**.
+## Root cause
 
-## Changes
+The Top Outside Spenders list is built from `independent_expenditures` and links to `/committee/{fec_committee_id}`. The committee profile page uses `useCommittee()`, which looks up the FEC ID in this order:
 
-### 1. `src/hooks/useIndependentExpenditures.ts` — extend `useCommitteeIE`
+1. `candidate_committees` (via `fetchCommittees`)
+2. Fallback: latest row in `contributions` + any `committee_finance_rollups`
 
-- Accept an optional `cycle` arg: `useCommitteeIE(committeeFecId, cycle?)`.
-- Fetch all IE rows for the committee (not just 25), filtered by `cycle` when provided. Select the existing fields plus `target_fec_candidate_id` / `candidate_id` for grouping.
-- Derive in JS:
-  - `availableCycles: string[]` — distinct cycles found for this committee (always from an unfiltered call so the dropdown is stable).
-  - `totals` — recomputed from filtered rows (so the headline numbers respect the filter).
-  - `targets: Array<{ key, name, fecId, candidateId, support, oppose, total, count }>` grouped by `target_fec_candidate_id ?? target_candidate_name`, sorted by `total` desc.
-- To keep the dropdown stable, do two queries: (a) lightweight `select('cycle')` distinct for cycle list, (b) the filtered rows query.
+`C00875427` (THE COURT OF DIVINE JUSTICE) only exists in `independent_expenditures` — it has no candidate link, no itemized contributions on file, and no finance rollups. All three lookups miss, so the hook returns `null` and the page renders the "Committee not found" empty state.
 
-### 2. `src/components/IndependentExpenditureSections.tsx` — rewrite `CommitteeIESection`
+## Fix
 
-- Add local `cycle` state (default `'all'`). Pass to hook.
-- Header right side: `<Select>` with `All cycles` + each cycle from `availableCycles` (desc).
-- Keep the 4 Stat cards (Total / Supporting / Opposing / Filings), now reflecting filtered totals.
-- Replace the filings table with a **By target** table:
-  `Target | Supporting | Opposing | Total | Filings`, with the same styling tokens (`text-agree`, `text-disagree`). Link target name to `/candidate/{candidateId}` when available.
-- Empty state if no rows for the selected cycle.
+Extend the `useCommittee` fallback in `src/hooks/useCommittees.ts` with a final lookup against `independent_expenditures` so any committee that appears as an outside spender resolves to a minimal synthesized profile.
 
-### 3. No DB changes
+### Change in `src/hooks/useCommittees.ts` (`useCommittee` queryFn)
 
-All grouping done client-side from `independent_expenditures`. No migration, no edge function changes.
+After the existing `contributions` + `committee_finance_rollups` fallback, if both are still empty:
 
-## Files touched
+- Query `independent_expenditures` filtered by `committee_fec_id = committeeId`:
+  - `select('committee_name, cycle, expenditure_date, support_oppose_indicator, expenditure_amount')`
+  - `order('expenditure_date', { ascending: false })`
+  - `limit(1000)` (enough to derive name, cycles, last activity)
+- If no rows are returned either, keep returning `null` (real unknown committee).
+- Otherwise synthesize a `CommitteeSummary`:
+  - `name` = first non-null `committee_name`, fallback to `committeeId`
+  - `fecCommitteeId` / `id` = `committeeId`
+  - `cycles` = distinct non-null `cycle` values, sorted desc
+  - `lastContributionDate` = max `expenditure_date`
+  - `donorCount` = `0`, `contributionCount` = `0`, `totalRaised` = `0` (this is IE spending, not receipts — the IE section already renders the real numbers)
+  - All other fields `null` as in the existing synthesis path
+- Leave the existing two fallbacks above untouched; this is only a third tier.
 
-- `src/hooks/useIndependentExpenditures.ts`
-- `src/components/IndependentExpenditureSections.tsx`
+## Result
+
+- Visiting `/committee/C00875427` renders the committee header (name, cycles), the empty donors/contributors sections (correctly empty), and the existing `CommitteeIESection` which already aggregates the IE spending against each target.
+- No DB changes, no edge function changes, no impact on committees that already resolve through the normal path.
 
 ## Out of scope
 
-- Candidate profile's `CandidateIESection` (already aggregates by top spender).
-- Admin import UI.
+- Importing IE-only committees into `candidate_committees` (separate admin flow already exists).
+- Changing the Top Outside Spenders link target.
+- Any UI changes to `CommitteeProfile.tsx`.
