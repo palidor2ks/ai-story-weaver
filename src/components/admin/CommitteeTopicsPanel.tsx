@@ -97,6 +97,7 @@ const AssignmentsTab = () => {
       });
       if (error) throw error;
       toast.success('AI classified');
+      qc.invalidateQueries({ queryKey: ['committee-pool'] });
     } catch (e: any) {
       toast.error(e?.message ?? 'Failed');
     }
