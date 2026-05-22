@@ -772,6 +772,10 @@ export default function Admin() {
             <PollsPanel />
           </TabsContent>
 
+          <TabsContent value="ie-exclusions">
+            <IEExclusionsPanel />
+          </TabsContent>
+
         </Tabs>
       </main>
     </div>
