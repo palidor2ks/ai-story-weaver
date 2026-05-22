@@ -101,13 +101,36 @@ export const Committees = () => {
     [data, hideUnsynced],
   );
 
+  // Batched lookup: outside-spending totals for the visible committees
+  const visibleIds = useMemo(
+    () => committees.map((c) => c.fecCommitteeId).filter(Boolean).slice(0, 200),
+    [committees],
+  );
+  const { data: ieMap } = useQuery({
+    queryKey: ['committees-ie-totals', visibleIds],
+    enabled: visibleIds.length > 0,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      const { data: rows } = await supabase
+        .from('committee_independent_expenditure_totals')
+        .select('spending_committee_fec_id, total_amount')
+        .in('spending_committee_fec_id', visibleIds);
+      const map = new Map<string, number>();
+      (rows ?? []).forEach((r) => {
+        if (r.spending_committee_fec_id) map.set(r.spending_committee_fec_id, Number(r.total_amount ?? 0));
+      });
+      return map;
+    },
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <Seo
-        title="Committee Directory — Pulse"
-        description="Explore fundraising committees with donor counts and contribution totals across federal, state, and local races."
+        title="Top Federal Committees by Receipts — Pulse"
+        description="All federal committees ranked by money raised. Donor counts, contribution totals, and links to the candidates they back."
         path="/committees"
       />
+
       <Header />
 
       <main className="container py-8 px-4">
