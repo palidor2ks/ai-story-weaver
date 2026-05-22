@@ -103,14 +103,12 @@ const useIECycles = () => {
     queryKey: ['ie-cycles'],
     staleTime: 1000 * 60 * 60,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('independent_expenditures')
-        .select('cycle')
-        .not('cycle', 'is', null)
-        .limit(5000);
+      const { data, error } = await (supabase as any)
+        .from('independent_expenditure_cycles')
+        .select('cycle');
       if (error) throw error;
       const set = new Set<string>();
-      (data ?? []).forEach((r) => r.cycle && set.add(r.cycle));
+      (data ?? []).forEach((r: { cycle: string | null }) => r.cycle && set.add(r.cycle));
       return Array.from(set).sort((a, b) => b.localeCompare(a));
     },
   });
