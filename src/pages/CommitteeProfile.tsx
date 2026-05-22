@@ -95,8 +95,18 @@ export const CommitteeProfile = () => {
       />
       <Header />
 
+      {/* Mobile back sub-bar — sits directly under Header */}
+      <div className="md:hidden sticky top-16 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-10 items-center px-4">
+          <Link to={backTo} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="w-4 h-4" />
+            <span>{backLabel}</span>
+          </Link>
+        </div>
+      </div>
+
       <main className="container py-8 px-4">
-        <div className="flex items-center gap-2 mb-6">
+        <div className="hidden md:flex items-center gap-2 mb-6">
           <Link to={backTo}>
             <Button variant="ghost" size="icon">
               <ArrowLeft className="w-4 h-4" />
