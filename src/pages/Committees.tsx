@@ -350,9 +350,13 @@ export const Committees = () => {
                           </div>
                           <p className={cn(
                             "text-xl font-semibold mt-1",
-                            committee.donorCount > 0 ? "text-foreground" : "text-muted-foreground"
+                            (committee.donorCount ?? 0) > 0 ? "text-foreground" : "text-muted-foreground"
                           )}>
-                            {isUnsynced ? '—' : formatNumber(committee.donorCount)}
+                            {isUnsynced
+                              ? '—'
+                              : committee.donorCount == null
+                                ? '—'
+                                : formatNumber(committee.donorCount)}
                           </p>
                         </div>
                       </div>
@@ -361,10 +365,13 @@ export const Committees = () => {
                         <span>
                           {isUnsynced
                             ? 'Not yet synced from FEC'
-                            : `Contributions: ${formatNumber(committee.contributionCount)}`}
+                            : committee.contributionCount == null
+                              ? 'Contributions: —'
+                              : `Contributions: ${formatNumber(committee.contributionCount)}`}
                         </span>
                         <span>Last sync: {formatDate(committee.lastSyncDate)}</span>
                       </div>
+
                     </>
                   );
                 })()}
