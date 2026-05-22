@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
+import { formatCompactCurrency, formatFullCurrency } from '@/lib/utils';
 import { 
   ArrowLeft, 
   Building2, 
