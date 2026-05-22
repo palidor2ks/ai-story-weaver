@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CheckCircle2, AlertTriangle, XCircle, Minus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, formatCompactCurrency as formatCompactCurrencyLib } from '@/lib/utils';
 
 interface FinanceStatusBadgeProps {
   status: 'ok' | 'warning' | 'error' | null;
