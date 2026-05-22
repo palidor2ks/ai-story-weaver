@@ -242,7 +242,7 @@ export const CommitteeProfile = () => {
                     <Users className="w-4 h-4" />
                     Unique Donors
                   </div>
-                  <p className="text-2xl font-bold text-foreground mt-2">{formatNumber(committee.donorCount)}</p>
+                  <p className="text-2xl font-bold text-foreground mt-2">{committee.donorCount == null ? '—' : formatNumber(committee.donorCount)}</p>
                   <p className="text-xs text-muted-foreground mt-1">From committee finance rollups</p>
                 </CardContent>
               </Card>
