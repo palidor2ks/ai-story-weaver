@@ -16,7 +16,7 @@ import { Megaphone, TrendingUp, TrendingDown, Search, ExternalLink, EyeOff, Load
 import { formatIECompact } from '@/components/IESummaryInline';
 import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
 import { useAdminRole } from '@/hooks/useAdminRole';
-import { useExcludeCommittee } from '@/hooks/useIEExclusions';
+import { useExcludeCommittee, useIEExclusions } from '@/hooks/useIEExclusions';
 import { toast } from 'sonner';
 
 
@@ -33,9 +33,11 @@ interface SpenderRow {
 
 const num = (v: unknown) => Number(v ?? 0);
 
-const useTopSpenders = (cycle: string | 'all', stance: Stance) => {
+const useTopSpenders = (cycle: string | 'all', stance: Stance, excludedIds: string[]) => {
+  const excludedKey = [...excludedIds].sort().join(',');
+  const excludedSet = new Set(excludedIds);
   return useQuery({
-    queryKey: ['top-spenders', cycle, stance],
+    queryKey: ['top-spenders', cycle, stance, excludedKey],
     staleTime: 1000 * 60 * 10,
     queryFn: async (): Promise<SpenderRow[]> => {
       // If a specific cycle is selected we must aggregate from the base table.
@@ -45,16 +47,19 @@ const useTopSpenders = (cycle: string | 'all', stance: Stance) => {
           .from('committee_independent_expenditure_totals')
           .select('spending_committee_fec_id, spending_committee_name, expenditure_count, total_amount, support_amount, oppose_amount')
           .order('total_amount', { ascending: false })
-          .limit(100);
+          .limit(200);
         if (error) throw error;
-        return (data ?? []).map((r) => ({
-          spending_committee_fec_id: r.spending_committee_fec_id,
-          spending_committee_name: r.spending_committee_name,
-          expenditure_count: num(r.expenditure_count),
-          total_amount: num(r.total_amount),
-          support_amount: num(r.support_amount),
-          oppose_amount: num(r.oppose_amount),
-        }));
+        return (data ?? [])
+          .filter((r) => !excludedSet.has(r.spending_committee_fec_id))
+          .slice(0, 100)
+          .map((r) => ({
+            spending_committee_fec_id: r.spending_committee_fec_id,
+            spending_committee_name: r.spending_committee_name,
+            expenditure_count: num(r.expenditure_count),
+            total_amount: num(r.total_amount),
+            support_amount: num(r.support_amount),
+            oppose_amount: num(r.oppose_amount),
+          }));
       }
 
       // Aggregate from base table with filters.
@@ -73,6 +78,7 @@ const useTopSpenders = (cycle: string | 'all', stance: Stance) => {
       (data ?? []).forEach((r) => {
         const key = r.spending_committee_fec_id;
         if (!key) return;
+        if (excludedSet.has(key)) return;
         const cur = map.get(key) ?? {
           spending_committee_fec_id: key,
           spending_committee_name: r.spending_committee_name ?? null,
@@ -116,11 +122,16 @@ const useIECycles = () => {
 
 export default function TopSpenders() {
   const { data: cycles } = useIECycles();
+  const { data: exclusions } = useIEExclusions();
+  const excludedIds = useMemo(
+    () => (exclusions ?? []).map((e) => e.fec_committee_id),
+    [exclusions],
+  );
   const [cycle, setCycle] = useState<string | 'all'>('all');
   const [stance, setStance] = useState<Stance>('all');
   const [search, setSearch] = useState('');
 
-  const { data: rows, isLoading } = useTopSpenders(cycle, stance);
+  const { data: rows, isLoading } = useTopSpenders(cycle, stance, excludedIds);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
