@@ -261,8 +261,24 @@ export const CandidateProfile = () => {
           Back to Feed
         </Link>
 
+        {/* Mobile sticky identity bar */}
+        <div className="md:hidden sticky top-16 z-30 -mx-4 px-4 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border flex items-center gap-3 mb-4">
+          <OfficialAvatar
+            imageUrl={representativeDetails?.image_url || candidate.image_url}
+            name={candidate.name}
+            party={candidate.party}
+            size="sm"
+            className="rounded-lg shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="font-display font-bold text-sm truncate">{candidate.name}</p>
+            <p className="text-xs text-muted-foreground truncate">{candidate.party} · {candidate.office} {candidate.state}</p>
+          </div>
+        </div>
+
         {/* Hero Section */}
         <div className="bg-card rounded-2xl border border-border p-6 md:p-8 mb-8 shadow-elevated">
+
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             {/* Avatar */}
             <OfficialAvatar
