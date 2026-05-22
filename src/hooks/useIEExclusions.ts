@@ -5,7 +5,6 @@ import { useAuth } from '@/context/AuthContext';
 export interface IEExclusion {
   fec_committee_id: string;
   reason: string;
-  excluded_by: string | null;
   excluded_at: string;
 }
 
@@ -16,7 +15,7 @@ export function useIEExclusions() {
     queryFn: async (): Promise<IEExclusion[]> => {
       const { data, error } = await supabase
         .from('ie_excluded_committees')
-        .select('fec_committee_id, reason, excluded_by, excluded_at')
+        .select('fec_committee_id, reason, excluded_at')
         .order('excluded_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as IEExclusion[];
