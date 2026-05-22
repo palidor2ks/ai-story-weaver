@@ -837,6 +837,50 @@ export type Database = {
         }
         Relationships: []
       }
+      committee_topics: {
+        Row: {
+          admin_overridden: boolean
+          ai_confidence: string | null
+          ai_reasoning: string | null
+          assigned_by: string
+          created_at: string
+          fec_committee_id: string
+          primary_topic_id: string
+          secondary_topic_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          admin_overridden?: boolean
+          ai_confidence?: string | null
+          ai_reasoning?: string | null
+          assigned_by?: string
+          created_at?: string
+          fec_committee_id: string
+          primary_topic_id: string
+          secondary_topic_ids?: string[]
+          updated_at?: string
+        }
+        Update: {
+          admin_overridden?: boolean
+          ai_confidence?: string | null
+          ai_reasoning?: string | null
+          assigned_by?: string
+          created_at?: string
+          fec_committee_id?: string
+          primary_topic_id?: string
+          secondary_topic_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "committee_topics_primary_topic_id_fkey"
+            columns: ["primary_topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conduit_organizations: {
         Row: {
           created_at: string | null
