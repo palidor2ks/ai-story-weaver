@@ -446,7 +446,36 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
         }),
         { donor_count: 0, contribution_count: 0, total_raised: 0 },
       );
-      const cycles = Array.from(new Set(rollups.map(r => r.cycle).filter(Boolean)));
+      let cycles = Array.from(new Set(rollups.map(r => r.cycle).filter(Boolean))) as string[];
+
+      // If rollups are missing/empty but contributions exist, derive totals from contributions table
+      if (contribRow && totals.total_raised === 0 && totals.contribution_count === 0) {
+        let contribQuery = supabase
+          .from('contributions')
+          .select('amount, donor_id, contributor_name, cycle')
+          .eq('recipient_committee_id', committeeId)
+          .range(0, 9999);
+        if (cycle && cycle !== 'all') {
+          contribQuery = contribQuery.eq('cycle', cycle);
+        }
+        const { data: contribRows } = await contribQuery;
+        const rows = (contribRows ?? []) as Array<{ amount: number | null; donor_id: string | null; contributor_name: string | null; cycle: string | null }>;
+        if (rows.length > 0) {
+          const donorKeys = new Set<string>();
+          let raised = 0;
+          const cycleSet = new Set<string>(cycles);
+          for (const r of rows) {
+            raised += Number(r.amount ?? 0);
+            const key = r.donor_id ?? (r.contributor_name?.toLowerCase().trim() || '');
+            if (key) donorKeys.add(key);
+            if (r.cycle) cycleSet.add(r.cycle);
+          }
+          totals.total_raised = raised;
+          totals.contribution_count = rows.length;
+          totals.donor_count = donorKeys.size;
+          cycles = Array.from(cycleSet).sort((a, b) => Number(b) - Number(a));
+        }
+      }
 
       const summary: CommitteeSummary = {
         id: committeeId,
