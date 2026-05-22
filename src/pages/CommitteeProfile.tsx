@@ -11,6 +11,8 @@ import { Loader2, ArrowLeft, DollarSign, Users, Landmark, MapPin, Calendar, Refr
 import { useCommittee, useCommitteeDonors } from '@/hooks/useCommittees';
 import { useFetchCommitteeDonors } from '@/hooks/useImportExternalCommittee';
 import { useAdminRole } from '@/hooks/useAdminRole';
+import { useIEExclusions, useRestoreCommittee } from '@/hooks/useIEExclusions';
+import { toast } from 'sonner';
 import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialog';
 import { CommitteeIESection } from '@/components/IndependentExpenditureSections';
 
