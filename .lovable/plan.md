@@ -1,31 +1,35 @@
-## Why the picture is missing
+## Problem
 
-`candidates.image_url` for `P00009423` (Kamala D. Harris) is:
-
-```
-https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Kamala_Harris_Vice_Presidential_Portrait.jpg/600px-Kamala_Harris_Vice_Presidential_Portrait.jpg
-```
-
-That URL returns **HTTP 400** from Wikimedia (the thumbnail path is invalid — the source file was renamed/removed on Commons). The `<img>` `onError` handler in `OfficialAvatar` fires and the component falls back to the blue initials tile ("KH"). There is no `candidate_overrides.image_url` to mask it.
+The Committees page is paginated by **alphabetical name** in the database query (see the screenshot: Adam Gray → Adam Smith → Aaron Bean). The client then re-sorts each loaded page by `totalRaised`, but that only sorts within the 50 already-loaded rows — the actual top receipts in the database may live on page 20+ and never appear at the top.
 
 ## Fix
 
-Use the existing `enrich-official-photos` edge function (admin-only) which already:
-1. Asks the AI gateway for a verified official portrait URL
-2. Downloads + sniffs it
-3. Uploads to the `official-photos` Supabase Storage bucket
-4. Updates `candidates.image_url` to the rehosted public URL (cache-busted)
+Sort the DB query in `src/hooks/useCommittees.ts` by receipts so pagination reflects the true ranking.
 
-Steps:
-1. Invoke `enrich-official-photos` with `{ candidateId: "P00009423" }` from an admin session (the existing Admin → Photos panel button, or a one-off invoke).
-2. Verify the new `image_url` on `/candidate/P00009423` renders.
+### Changes
 
-No code changes required — this is a data fix using the tool you already built. If the AI lookup fails to find a good portrait, fall back to manually setting a known-good URL (e.g. her Senate or White House official portrait) on the candidate row.
+**`src/hooks/useCommittees.ts` — `fetchCommitteePage` (and `fetchCommittees` for consistency)**
 
-## Optional hardening (separate follow-up, not in this plan)
+Replace:
+```ts
+.order('name', { ascending: true })
+```
+with receipts-first ordering on `candidate_committees`:
+```ts
+.order('local_itemized_total', { ascending: false, nullsFirst: false })
+.order('fec_itemized_total',   { ascending: false, nullsFirst: false })
+.order('name', { ascending: true })
+```
 
-To prevent silent breakage when external image hosts go bad, we could:
-- Add a nightly cron that calls `enrich-official-photos` with `mode: 'rehost-all'` so every candidate photo lives in our bucket.
-- Or add a server-side validator that pings non-self-hosted `image_url`s and queues bad ones for re-enrichment.
+`local_itemized_total` / `fec_itemized_total` are the cycle-aggregate receipt totals already stored on the committee row and are what `buildCommitteeSummaries` falls back to when no rollup matches, so server order will match the displayed "Total Raised" for the default "All cycles" view.
 
-Confirm if you want me to (a) just run the one-off re-enrichment for Kamala, or (b) also schedule the rehost-all sweep.
+**`src/pages/Committees.tsx`**
+
+Drop the client-side `.sort((a, b) => b.totalRaised - a.totalRaised)` re-sort (lines ~88–90) so the page preserves server order across pages instead of shuffling each page in isolation.
+
+### Notes / caveats
+
+- When a specific cycle is selected, the rollup for that cycle can override `totalRaised` per row, so within a page some rows may not be in strict cycle-specific order. Fixing that perfectly would require a server-side join/RPC against `committee_finance_rollups`; out of scope for this change unless you want it.
+- "Hide unsynced" still filters client-side after sort, which is fine.
+
+No backend/schema changes.

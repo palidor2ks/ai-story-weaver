@@ -262,6 +262,8 @@ const fetchCommitteePage = async (
         state
       )
     `, { count: 'exact' })
+    .order('local_itemized_total', { ascending: false, nullsFirst: false })
+    .order('fec_itemized_total', { ascending: false, nullsFirst: false })
     .order('name', { ascending: true })
     .range(offset, offset + limit);
 
