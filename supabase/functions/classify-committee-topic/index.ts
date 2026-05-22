@@ -152,9 +152,9 @@ ${topicMenu}`;
 async function processIds(supabase: any, ids: string[], force: boolean) {
   const { data: topics } = await supabase
     .from('topics')
-    .select('id, name, displayName:display_name, icon, scope')
+    .select('id, name, icon, scope')
     .in('scope', ['all', 'federal']);
-  const topicList = topics ?? [];
+  const topicList = (topics ?? []).map((t: any) => ({ ...t, displayName: t.name }));
   if (topicList.length === 0) {
     console.error('No federal topics available');
     return { processed: 0 };
