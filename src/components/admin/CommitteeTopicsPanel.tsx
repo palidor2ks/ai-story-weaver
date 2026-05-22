@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,7 @@ const AssignmentsTab = () => {
   const syncMut = useSyncFecCommittees();
   const refreshPool = useRefreshCommitteePool();
   const [refreshing, setRefreshing] = useState(false);
+  const qc = useQueryClient();
 
   const { data: causes = [] } = useCommitteeCauses(false);
   const upsert = useUpsertCommitteeTopic();
@@ -96,6 +97,7 @@ const AssignmentsTab = () => {
       });
       if (error) throw error;
       toast.success('AI classified');
+      qc.invalidateQueries({ queryKey: ['committee-pool'] });
     } catch (e: any) {
       toast.error(e?.message ?? 'Failed');
     }
