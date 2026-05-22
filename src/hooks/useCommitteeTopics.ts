@@ -137,6 +137,7 @@ export const useDeleteCommitteeTopic = () => {
       qc.invalidateQueries({ queryKey: ['committee-topic'] });
       qc.invalidateQueries({ queryKey: ['committee-topics-all'] });
       qc.invalidateQueries({ queryKey: ['committee-topics-map'] });
+      qc.invalidateQueries({ queryKey: ['committee-pool'] });
     },
   });
 };
