@@ -92,9 +92,7 @@ export const Committees = () => {
 
   const committees = useMemo(
     () => {
-      const all = (data?.pages.flatMap((page) => page.committees) ?? [])
-        .slice()
-        .sort((a, b) => b.totalRaised - a.totalRaised);
+      const all = data?.pages.flatMap((page) => page.committees) ?? [];
       if (!hideUnsynced) return all;
       return all.filter((c) => c.lastSyncDate || c.totalRaised > 0);
     },
