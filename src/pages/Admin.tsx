@@ -486,6 +486,7 @@ export default function Admin() {
               { value: "bulk-validation", label: "Bulk Validation", Icon: CheckCircle2 },
               { value: "donor-import", label: "Donor Import", Icon: Upload },
               { value: "polls", label: "Polls", Icon: Sparkles },
+              { value: "ie-exclusions", label: "IE Exclusions", Icon: AlertTriangle },
               { value: "visible-states", label: "Visible States", Icon: Shield },
               { value: "users", label: "Users", Icon: Users },
             ];
