@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { cn, formatCompactCurrency } from '@/lib/utils';
 import { CheckCircle2, AlertTriangle, TrendingDown, TrendingUp } from 'lucide-react';
 
 interface CategoryData {
