@@ -190,10 +190,25 @@ const AssignmentsTab = () => {
             </span>
           )}
         </div>
-        <Button onClick={handleClassifyUnassigned} disabled={running} className="gap-2">
-          {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          Run AI on unassigned
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (confirm('Pull the full FEC PAC universe (PACs, SuperPACs, party, leadership) for the 2024 + 2026 cycles? This takes a few minutes and runs in the background.')) {
+                syncMut.mutate();
+              }
+            }}
+            disabled={syncMut.isPending}
+            className="gap-2"
+          >
+            {syncMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sync FEC universe
+          </Button>
+          <Button onClick={handleClassifyUnassigned} disabled={running} className="gap-2">
+            {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            Run AI on unassigned
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -202,7 +217,7 @@ const AssignmentsTab = () => {
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search committees by name or FEC ID" className="pl-9" />
         </div>
         <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
-          <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All committees</SelectItem>
             <SelectItem value="unassigned">Unassigned</SelectItem>
@@ -211,7 +226,41 @@ const AssignmentsTab = () => {
             <SelectItem value="low-confidence">Low AI confidence</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={sourceFilter} onValueChange={(v: any) => setSourceFilter(v)}>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sources</SelectItem>
+            <SelectItem value="candidate_committees">Candidate cmtes</SelectItem>
+            <SelectItem value="independent_expenditures">IE spenders</SelectItem>
+            <SelectItem value="external_pacs">Standalone PACs</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex gap-2 items-center">
+          <Input
+            value={importId}
+            onChange={(e) => setImportId(e.target.value.toUpperCase())}
+            placeholder="Add by FEC ID (e.g. C00797670)"
+            className="w-[240px]"
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              if (!/^C\d{8}$/.test(importId)) {
+                toast.error('FEC ID must be C followed by 8 digits');
+                return;
+              }
+              importMut.mutate(importId, { onSuccess: () => setImportId('') });
+            }}
+            disabled={importMut.isPending}
+            className="gap-1"
+          >
+            {importMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+            Add
+          </Button>
+        </div>
       </div>
+
 
       {(isLoading || loadingAssigns) ? (
         <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
