@@ -1,34 +1,21 @@
-## Why it appears in 2026 but not All cycles
+## Goal
+On mobile, the "Back to Top Spenders" row takes a full line of vertical space below the header. Move it into the header strip area so it sits inline with the nav bar, while keeping desktop layout unchanged.
 
-The “All cycles + All” view reads from `committee_independent_expenditure_totals`, a database view that already excludes rows in `ie_excluded_committees`.
+## Approach
+Scoped to `src/pages/CommitteeProfile.tsx` only (no Header.tsx changes, no logic changes).
 
-But when you select `Cycle 2026` or Support/Oppose, `TopSpenders.tsx` switches to querying the raw `independent_expenditures` table and aggregates in the browser. That raw-table path does not currently apply `ie_excluded_committees`, so an excluded committee can reappear under cycle/stance filters.
+1. Remove the current back row (lines 99–106) from the main content area on mobile.
+2. Render a compact back control as a sticky sub-bar **directly under `<Header />`** that is visible only on mobile (`md:hidden`):
+   - Full-width thin strip, `sticky top-16 z-40`, same `bg-background/95 backdrop-blur` styling as Header for visual continuity.
+   - Left-aligned: small `ArrowLeft` icon + `backLabel` text as a single `<Link>` (tap target ~40px tall).
+   - Border-bottom to separate from page content.
+3. Keep the existing back row visible on desktop (`hidden md:flex`) so nothing changes on larger screens.
 
-The “Failed to exclude” error happens because the committee is already excluded in the database, so clicking remove again tries to insert a duplicate primary key.
+This makes the back affordance feel like part of the navigation chrome on mobile (matching the user's highlighted area) and reclaims vertical space above the committee title.
 
-## Plan to fix
+## Files
+- `src/pages/CommitteeProfile.tsx` — split the back control into a mobile sticky sub-bar + desktop inline row.
 
-1. Update the Top Spenders query to load the exclusion list and apply it to every data path:
-   - All cycles / all stance
-   - Specific cycle, including 2026
-   - Support-only
-   - Oppose-only
-   - Search results and KPI cards
-
-2. Add the exclusion IDs into the `top-spenders` query key so React Query refetches/recomputes immediately after an exclusion changes.
-
-3. Filter excluded committee IDs before aggregation/sorting on the raw `independent_expenditures` branch, so excluded committees never affect:
-   - table rows
-   - “Total IE spending”
-   - committee count
-   - “#1 Spender”
-
-4. Change `useExcludeCommittee` from `insert` to `upsert` on `fec_committee_id`:
-   - if the committee is already excluded, update the reason/timestamp instead of throwing a duplicate-key error
-   - keep the existing cache invalidation so the row disappears immediately
-
-5. Keep database/RLS unchanged for now because the exclusion table and view policies are already working for the All cycles path. This is a frontend query consistency bug, not a permissions failure.
-
-## Expected result
-
-Once a committee is excluded, it will not appear anywhere on the Top Outside Spenders chart under any cycle or stance filter, including 2026, and clicking Exclude on an already-excluded committee will no longer produce a false failure.
+## Out of scope
+- No changes to `Header.tsx`, routing, or back-target logic.
+- Applies only to CommitteeProfile; other pages with similar back links can be migrated later if desired.
