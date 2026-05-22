@@ -1,60 +1,77 @@
-## Goal
 
-Allow external/independent committees (PACs, SuperPACs, party committees, leadership PACs — anything that isn't a candidate's own principal/authorized committee) to be tagged with one primary topic plus optional secondary topics. AI classifies automatically; admins can override. Topic badges appear on the committee profile, in the Committees list, and inside IE sections.
+# Committee Causes (Pro-X / Anti-X) — Revised Plan
 
-## Data model
+Replace the previous "committee topics = 17 quiz topics" model with a dedicated **causes** taxonomy (e.g. *Pro-Israel*, *Pro-gun*, *Pro-choice*, *Anti-tax*). Each cause maps to one of the 17 quiz topics so we can later show "this committee influences your X score."
 
-New table `committee_topics`:
+## Taxonomy
 
-- `fec_committee_id` (text, PK) — one row per committee
-- `primary_topic_id` (text, FK → topics.id) — required
-- `secondary_topic_ids` (text[]) — optional, defaults to `{}`
-- `assigned_by` (`'ai' | 'admin'`)
-- `ai_confidence` (`'low' | 'medium' | 'high'`, nullable)
-- `ai_reasoning` (text, nullable) — short explanation shown in admin
-- `admin_overridden` (boolean) — true once an admin edits it; AI re-runs skip these rows
-- `created_at`, `updated_at`
+New table **`committee_causes`** (the controlled vocabulary):
+- `id` (slug, e.g. `pro-israel`)
+- `label` (display, e.g. `Pro-Israel`)
+- `stance` (`pro` | `anti` | `neutral`)
+- `issue` (short, e.g. `Israel`, `Gun rights`)
+- `quiz_topic_id` (FK → existing topics; required)
+- `description`, `aliases` (text[])
+- `status` (`active` | `pending` | `rejected`) — AI suggestions land as `pending`
+- `created_by` (`seed` | `ai` | `admin`), `approved_by`, timestamps
 
-RLS: public SELECT, admin/service-role write.
+Seed ~40 well-known causes across the 17 topics. Examples:
+- Pro-Israel, Pro-Palestine → Foreign Policy
+- Pro-gun, Pro-gun-control → Gun Policy
+- Pro-choice, Pro-life → Abortion
+- Pro-union/Labor, Anti-union → Labor
+- Pro-crypto, Anti-crypto → Tech & Innovation
+- Pro-fossil-fuel, Pro-climate-action → Environment
+- Anti-tax, Pro-progressive-tax → Taxes
+- Pro-immigration, Anti-immigration → Immigration
+- Pro-Medicare-for-all, Anti-ACA → Healthcare
+- Pro-Trump, Anti-Trump, Conservative, Progressive → Government (general-purpose buckets)
 
-We intentionally exclude candidate principal/authorized committees (`candidate_committees.designation IN ('P','A')`) from classification — those inherit the candidate's topics.
+## Committee → Cause mapping
 
-## AI classification
+Rework existing **`committee_topics`** table → rename conceptually to causes:
+- `fec_committee_id` (PK)
+- `primary_cause_id` (FK → `committee_causes.id`, required)
+- `secondary_cause_ids` (text[])
+- `assigned_by` (`ai` | `admin`), `ai_confidence`, `ai_reasoning`, `admin_overridden`
 
-New edge function `classify-committee-topic`:
+Drop the columns referencing `topics.id`; primary becomes a cause id. Quiz-topic linkage is derived via `committee_causes.quiz_topic_id`.
 
-- Input: `fec_committee_id` (or batch array)
-- Pulls committee name, designation, recent IE purposes/descriptions, top recipient candidates
-- Calls Lovable AI Gateway (`google/gemini-3-flash-preview`) with tool-calling to return `{ primary_topic_id, secondary_topic_ids[], confidence, reasoning }` constrained to the 12 federal topic IDs
-- Upserts into `committee_topics` only when `admin_overridden = false`
+## AI classification (revised edge function)
 
-Companion `classify-committees-batch` admin trigger processes all uncovered external committees using `EdgeRuntime.waitUntil()` in chunks.
+`classify-committee-topic` → repurpose to `classify-committee-cause`:
+- Input context: committee name, designation, IE purposes, top targets, top donor employers.
+- Tool-call output constrained to **active causes only**, plus an optional `suggested_new_cause` object (label, stance, issue, suggested_quiz_topic_id, reasoning).
+- Suggested new causes are inserted into `committee_causes` as `status='pending'` and NOT applied to the committee until an admin approves them (committee gets the closest active cause or remains unassigned with a note).
 
 ## Admin UI
 
-New `CommitteeTopicsPanel.tsx` in `src/components/admin/`, mounted as a tab in `Admin.tsx`:
+Two panels in `Admin → Committee Topics` tab (renamed **Committee Causes**):
 
-- Lists external committees with current topic, AI confidence, "AI" or "Admin" badge
-- Filter by topic / unassigned / low-confidence
-- Inline dropdown to change primary topic + multi-select secondaries → sets `admin_overridden = true`
-- Bulk action: "Run AI classification on unassigned"
+1. **Causes library** — list/search active + pending causes, edit label/stance/issue/quiz_topic mapping, approve or reject AI suggestions, merge duplicates (move all committee assignments from cause A → B).
+2. **Committee assignments** — existing panel, but the dropdown now picks from active causes (grouped by issue). Shows the derived quiz topic next to each cause for clarity.
 
-## Display
+## Display changes
 
-1. **`/committee/:id`** (`CommitteeProfile.tsx`) — primary topic badge in the header next to the committee name; secondaries shown as smaller chips below.
-2. **`/committees`** (`Committees.tsx`) — topic chip column + a topic filter dropdown.
-3. **IE sections** (`IndependentExpenditureSections.tsx`, `IESummaryInline.tsx`) — topic chip next to the spending committee name on each row.
+`CommitteeTopicBadge` → `CommitteeCauseBadge`:
+- Primary cause as a colored chip ("Pro-Israel") with the stance color (pro = neutral/blue, anti = red, neutral = gray).
+- Tooltip shows: cause description, mapped quiz topic, AI reasoning, assigned-by.
+- Secondary causes render as smaller chips.
 
-Badge uses the existing `TopicIcon` + topic display name; styles via existing semantic tokens (no new colors).
-
-## Technical notes
-
-- New hook `useCommitteeTopics(fecCommitteeIds: string[])` returns a `Map<fec_committee_id, { primary, secondaries }>` for batched lookup on list pages.
-- Single-committee hook `useCommitteeTopic(fecCommitteeId)` for the profile page.
-- Topic IDs validated against the existing 12 federal-scope topics (governor/local scope topics excluded — these committees are federal).
-- Reclassification: editing a committee name or new IE data → next batch run picks it up unless `admin_overridden`.
+Used in the same three places already wired: committee profile header, committees list cards, IE sections next to spending committee.
 
 ## Out of scope
 
-- Tagging candidate principal/authorized committees (they inherit candidate topics).
-- Topic-based scoring impact on candidates — this is purely a categorization/filter layer for now.
+- Auto-recomputing candidate quiz scores from committee causes (foundation only — derived `quiz_topic_id` makes that future feature possible).
+- Candidate principal/authorized committees (still excluded).
+
+## Migration impact
+
+- Existing `committee_topics` rows (already seeded from the prior plan against quiz-topic IDs) will be wiped — those topic ids are not valid causes. Admins re-run "AI classify unassigned" after the new taxonomy is seeded.
+- Frontend renames: `useCommitteeTopics` → `useCommitteeCauses`, `CommitteeTopicBadge` → `CommitteeCauseBadge`. Edge function renamed + redeployed.
+
+## Technical summary
+
+- **Migrations:** create `committee_causes`; alter `committee_topics` (drop topic FKs, switch primary/secondary to cause ids, clear rows); seed ~40 causes.
+- **Edge fn:** `classify-committee-cause` (Lovable AI Gateway, `google/gemini-3-flash-preview`, tool-calling).
+- **Frontend:** rename hooks/components, update Admin panel to two-tab layout (Library + Assignments), update three display surfaces.
