@@ -25,10 +25,7 @@ export function FinanceStatusBadge({
   showDelta = false,
   className 
 }: FinanceStatusBadgeProps) {
-  const formatCurrency = (value?: number | null) => {
-    if (value === null || value === undefined) return '—';
-    return `$${Math.round(value).toLocaleString()}`;
-  };
+  const formatCurrency = (value?: number | null) => formatCompactCurrencyLib(value ?? null);
 
   const formatCompactCurrency = (value?: number | null) => {
     if (value === null || value === undefined) return '—';
