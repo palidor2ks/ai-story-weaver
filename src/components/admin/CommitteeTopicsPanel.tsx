@@ -8,11 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Sparkles, Search, X, Check, Trash2, Plus, RefreshCw } from 'lucide-react';
+import { Loader2, Sparkles, Search, X, Check, Trash2, Plus, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTopics } from '@/hooks/useCandidates';
 import {
-  useAllCommitteeTopics,
   useUpsertCommitteeTopic,
   useDeleteCommitteeTopic,
   useCommitteeCauses,
@@ -20,85 +19,9 @@ import {
   useDeleteCommitteeCause,
 } from '@/hooks/useCommitteeTopics';
 import { useImportFecCommittee, useSyncFecCommittees } from '@/hooks/useImportFecCommittee';
+import { useCommitteePool, useRefreshCommitteePool } from '@/hooks/useCommitteePool';
 
-interface CommitteeRow {
-  fec_committee_id: string;
-  name: string | null;
-  designation: string | null;
-  committee_type?: string | null;
-  source: 'candidate_committees' | 'independent_expenditures' | 'external_pacs';
-}
-
-const useExternalCommittees = () => {
-  return useQuery({
-    queryKey: ['admin-external-committees', 'v3'],
-    staleTime: 1000 * 60 * 5,
-    queryFn: async (): Promise<CommitteeRow[]> => {
-      // Candidate committees that aren't principal/authorized (include NULL designation).
-      const { data: cmtes } = await supabase
-        .from('candidate_committees')
-        .select('fec_committee_id, name, designation')
-        .or('designation.is.null,and(designation.neq.P,designation.neq.A)')
-        .limit(5000);
-
-      // Distinct IE spenders via RPC.
-      const { data: ieSpenders } = await supabase.rpc('list_ie_spenders' as any);
-
-      // External PACs (FEC-registered standalone PACs / SuperPACs / leadership / party).
-      // Paginate to bypass the 1000-row default.
-      const externalRows: any[] = [];
-      let from = 0;
-      const pageSize = 1000;
-      while (true) {
-        const { data, error } = await supabase
-          .from('external_pacs' as any)
-          .select('fec_committee_id, name, designation, committee_type')
-          .order('fec_committee_id')
-          .range(from, from + pageSize - 1);
-        if (error || !data || data.length === 0) break;
-        externalRows.push(...data);
-        if (data.length < pageSize) break;
-        from += pageSize;
-        if (from > 50000) break;
-      }
-
-      const map = new Map<string, CommitteeRow>();
-      (cmtes ?? []).forEach((c: any) => {
-        if (!c.fec_committee_id) return;
-        map.set(c.fec_committee_id, {
-          fec_committee_id: c.fec_committee_id,
-          name: c.name,
-          designation: c.designation,
-          source: 'candidate_committees',
-        });
-      });
-      ((ieSpenders ?? []) as any[]).forEach((r: any) => {
-        const id = r.fec_committee_id;
-        if (!id || map.has(id)) return;
-        map.set(id, {
-          fec_committee_id: id,
-          name: r.name,
-          designation: null,
-          source: 'independent_expenditures',
-        });
-      });
-      externalRows.forEach((r: any) => {
-        const id = r.fec_committee_id;
-        if (!id || map.has(id)) return;
-        map.set(id, {
-          fec_committee_id: id,
-          name: r.name,
-          designation: r.designation,
-          committee_type: r.committee_type,
-          source: 'external_pacs',
-        });
-      });
-      return Array.from(map.values()).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
-    },
-  });
-};
-
-const sourceLabel = (s: CommitteeRow['source']) =>
+const sourceLabel = (s: string) =>
   s === 'candidate_committees' ? 'Candidate cmte'
   : s === 'independent_expenditures' ? 'IE spender'
   : 'Standalone PAC';
@@ -108,20 +31,39 @@ const stanceColor = (s: string) =>
   : s === 'anti' ? 'bg-destructive/10 text-destructive border-destructive/30'
   : 'bg-muted text-muted-foreground border-muted-foreground/20';
 
+const PAGE_SIZE = 100;
+
 // ---------------- Assignments tab ----------------
 const AssignmentsTab = () => {
-  const { data: committees = [], isLoading } = useExternalCommittees();
-  const { data: assignments = [], isLoading: loadingAssigns } = useAllCommitteeTopics();
-  const { data: causes = [] } = useCommitteeCauses(false);
-  const upsert = useUpsertCommitteeTopic();
-  const del = useDeleteCommitteeTopic();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'unassigned' | 'ai' | 'admin' | 'low-confidence'>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'candidate_committees' | 'independent_expenditures' | 'external_pacs'>('all');
+  const [page, setPage] = useState(0);
   const [running, setRunning] = useState(false);
   const [importId, setImportId] = useState('');
   const importMut = useImportFecCommittee();
   const syncMut = useSyncFecCommittees();
+  const refreshPool = useRefreshCommitteePool();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const { data: causes = [] } = useCommitteeCauses(false);
+  const upsert = useUpsertCommitteeTopic();
+  const del = useDeleteCommitteeTopic();
+
+  const { data, isLoading, isFetching } = useCommitteePool({
+    search,
+    source: sourceFilter,
+    assigned: filter,
+    page,
+    pageSize: PAGE_SIZE,
+  });
+
+  const rows = data?.rows ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // Reset to page 0 when filters change
+  const resetPage = () => setPage(0);
 
   const causeById = useMemo(() => new Map(causes.map((c) => [c.id, c])), [causes]);
   const causesByIssue = useMemo(() => {
@@ -133,26 +75,6 @@ const AssignmentsTab = () => {
     });
     return Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [causes]);
-
-  const assignmentMap = useMemo(() => {
-    const m = new Map<string, (typeof assignments)[number]>();
-    assignments.forEach((r) => m.set(r.fec_committee_id, r));
-    return m;
-  }, [assignments]);
-
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return committees.filter((c) => {
-      if (q && !(c.name ?? '').toLowerCase().includes(q) && !c.fec_committee_id.toLowerCase().includes(q)) return false;
-      if (sourceFilter !== 'all' && c.source !== sourceFilter) return false;
-      const a = assignmentMap.get(c.fec_committee_id);
-      if (filter === 'unassigned' && a) return false;
-      if (filter === 'ai' && (!a || a.admin_overridden)) return false;
-      if (filter === 'admin' && (!a || !a.admin_overridden)) return false;
-      if (filter === 'low-confidence' && (!a || a.ai_confidence !== 'low')) return false;
-      return true;
-    }).slice(0, 500);
-  }, [committees, assignmentMap, search, filter, sourceFilter]);
 
   const handleClassifyUnassigned = async () => {
     setRunning(true);
@@ -184,13 +106,26 @@ const AssignmentsTab = () => {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="text-sm text-muted-foreground">
           Tag external committees (PACs, SuperPACs, party committees) with one primary cause (Pro-Israel, Pro-gun, etc.).
-          {!isLoading && (
-            <span className="ml-2 text-xs">
-              Showing {visible.length.toLocaleString()} of {committees.length.toLocaleString()} committees.
-            </span>
-          )}
+          <span className="ml-2 text-xs">
+            {total.toLocaleString()} committees · page {page + 1} of {totalPages}
+            {isFetching && <Loader2 className="inline w-3 h-3 animate-spin ml-2" />}
+          </span>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              setRefreshing(true);
+              await refreshPool();
+              setRefreshing(false);
+            }}
+            disabled={refreshing}
+            className="gap-2"
+          >
+            {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Refresh pool
+          </Button>
           <Button
             variant="outline"
             onClick={() => {
@@ -214,9 +149,14 @@ const AssignmentsTab = () => {
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="relative flex-1 min-w-[240px]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search committees by name or FEC ID" className="pl-9" />
+          <Input
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); resetPage(); }}
+            placeholder="Search committees by name or FEC ID"
+            className="pl-9"
+          />
         </div>
-        <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
+        <Select value={filter} onValueChange={(v: any) => { setFilter(v); resetPage(); }}>
           <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All committees</SelectItem>
@@ -226,7 +166,7 @@ const AssignmentsTab = () => {
             <SelectItem value="low-confidence">Low AI confidence</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={sourceFilter} onValueChange={(v: any) => setSourceFilter(v)}>
+        <Select value={sourceFilter} onValueChange={(v: any) => { setSourceFilter(v); resetPage(); }}>
           <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All sources</SelectItem>
@@ -261,104 +201,119 @@ const AssignmentsTab = () => {
         </div>
       </div>
 
-
-      {(isLoading || loadingAssigns) ? (
+      {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
       ) : (
-        <div className="rounded-md border overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Committee</TableHead>
-                <TableHead className="w-[300px]">Primary Cause</TableHead>
-                <TableHead className="w-[140px]">Source</TableHead>
-                <TableHead className="w-[120px] text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visible.map((c) => {
-                const a = assignmentMap.get(c.fec_committee_id);
-                const currentCause = a ? causeById.get(a.primary_cause_id) : null;
-                return (
-                  <TableRow key={c.fec_committee_id}>
-                    <TableCell>
-                      <div className="font-medium">{c.name ?? c.fec_committee_id}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {c.fec_committee_id}{c.designation && <> · {c.designation}</>}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={a?.primary_cause_id ?? ''}
-                        onValueChange={(causeId) => {
-                          upsert.mutate({
-                            fec_committee_id: c.fec_committee_id,
-                            primary_cause_id: causeId,
-                            secondary_cause_ids: a?.secondary_cause_ids ?? [],
-                          });
-                        }}
-                      >
-                        <SelectTrigger className="h-8"><SelectValue placeholder="— pick a cause —" /></SelectTrigger>
-                        <SelectContent>
-                          {causesByIssue.map(([issue, list]) => (
-                            <div key={issue}>
-                              <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">{issue}</div>
-                              {list.map((cause) => (
-                                <SelectItem key={cause.id} value={cause.id}>
-                                  <span className="flex items-center gap-2">
-                                    <span className={`inline-block w-2 h-2 rounded-full ${cause.stance === 'pro' ? 'bg-primary' : cause.stance === 'anti' ? 'bg-destructive' : 'bg-muted-foreground'}`} />
-                                    {cause.label}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </div>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {currentCause && (
-                        <div className="text-[10px] text-muted-foreground mt-1">
-                          → {currentCause.quiz_topic_id.replace(/-/g, ' ')}
+        <>
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Committee</TableHead>
+                  <TableHead className="w-[300px]">Primary Cause</TableHead>
+                  <TableHead className="w-[140px]">Source</TableHead>
+                  <TableHead className="w-[120px] text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((c) => {
+                  const hasAssign = !!c.primary_cause_id;
+                  const currentCause = hasAssign ? causeById.get(c.primary_cause_id!) : null;
+                  return (
+                    <TableRow key={c.fec_committee_id}>
+                      <TableCell>
+                        <div className="font-medium">{c.name ?? c.fec_committee_id}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {c.fec_committee_id}{c.designation && <> · {c.designation}</>}
                         </div>
-                      )}
-                      {a?.ai_reasoning && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.ai_reasoning}</p>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {a ? (
-                        <div className="flex flex-col gap-1">
-                          <Badge variant={a.admin_overridden ? 'default' : 'secondary'} className="w-fit text-[10px]">
-                            {a.admin_overridden ? 'Admin' : 'AI'}
-                          </Badge>
-                          {a.ai_confidence && !a.admin_overridden && (
-                            <span className="text-[10px] text-muted-foreground">{a.ai_confidence} confidence</span>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={c.primary_cause_id ?? ''}
+                          onValueChange={(causeId) => {
+                            upsert.mutate({
+                              fec_committee_id: c.fec_committee_id,
+                              primary_cause_id: causeId,
+                              secondary_cause_ids: c.secondary_cause_ids ?? [],
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="h-8"><SelectValue placeholder="— pick a cause —" /></SelectTrigger>
+                          <SelectContent>
+                            {causesByIssue.map(([issue, list]) => (
+                              <div key={issue}>
+                                <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">{issue}</div>
+                                {list.map((cause) => (
+                                  <SelectItem key={cause.id} value={cause.id}>
+                                    <span className="flex items-center gap-2">
+                                      <span className={`inline-block w-2 h-2 rounded-full ${cause.stance === 'pro' ? 'bg-primary' : cause.stance === 'anti' ? 'bg-destructive' : 'bg-muted-foreground'}`} />
+                                      {cause.label}
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </div>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {currentCause && (
+                          <div className="text-[10px] text-muted-foreground mt-1">
+                            → {currentCause.quiz_topic_id.replace(/-/g, ' ')}
+                          </div>
+                        )}
+                        {c.ai_reasoning && (
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.ai_reasoning}</p>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {hasAssign ? (
+                          <div className="flex flex-col gap-1">
+                            <Badge variant={c.admin_overridden ? 'default' : 'secondary'} className="w-fit text-[10px]">
+                              {c.admin_overridden ? 'Admin' : 'AI'}
+                            </Badge>
+                            {c.ai_confidence && !c.admin_overridden && (
+                              <span className="text-[10px] text-muted-foreground">{c.ai_confidence} confidence</span>
+                            )}
+                          </div>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px]">Unassigned</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleClassifyOne(c.fec_committee_id)} title="Re-run AI">
+                            <Sparkles className="w-3.5 h-3.5" />
+                          </Button>
+                          {hasAssign && (
+                            <Button variant="ghost" size="sm" onClick={() => del.mutate(c.fec_committee_id)} title="Clear cause">
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
                           )}
                         </div>
-                      ) : (
-                        <Badge variant="outline" className="text-[10px]">Unassigned</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => handleClassifyOne(c.fec_committee_id)} title="Re-run AI">
-                          <Sparkles className="w-3.5 h-3.5" />
-                        </Button>
-                        {a && (
-                          <Button variant="ghost" size="sm" onClick={() => del.mutate(c.fec_committee_id)} title="Clear cause">
-                            <X className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {visible.length === 0 && (
-                <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No committees match.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {rows.length === 0 && (
+                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No committees match.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-xs text-muted-foreground">
+              Showing {rows.length === 0 ? 0 : page * PAGE_SIZE + 1}–{page * PAGE_SIZE + rows.length} of {total.toLocaleString()}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0 || isFetching}>
+                <ChevronLeft className="w-4 h-4" /> Prev
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)} disabled={page + 1 >= totalPages || isFetching}>
+                Next <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </>
       )}
     </>
   );

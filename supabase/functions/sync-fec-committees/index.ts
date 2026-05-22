@@ -96,6 +96,7 @@ async function runSync(supabase: any, sessionId: string, cycles: number[], types
       status: 'completed', completed_at: new Date().toISOString(),
       total_fetched: totalFetched, total_upserted: totalUpserted,
     }).eq('id', sessionId);
+    await supabase.rpc('refresh_committee_pool').catch((e: any) => console.warn('pool refresh failed', e?.message));
   } catch (e) {
     console.error('sync-fec-committees failed', e);
     await supabase.from('fec_committee_sync_status').update({
