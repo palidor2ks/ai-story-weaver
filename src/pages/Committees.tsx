@@ -302,6 +302,15 @@ export const Committees = () => {
                             {committee.role}
                           </Badge>
                         )}
+                        {(() => {
+                          const ie = ieMap?.get(committee.fecCommitteeId) ?? 0;
+                          return ie > 0 ? (
+                            <Badge variant="outline" className="text-xs gap-1 border-primary/40 text-primary">
+                              <Megaphone className="w-3 h-3" />
+                              IE {formatIECompact(ie)}
+                            </Badge>
+                          ) : null;
+                        })()}
                       </div>
                       <p className="text-sm text-muted-foreground">FEC ID: {committee.fecCommitteeId}</p>
                       {committee.candidate && (
@@ -309,6 +318,7 @@ export const Committees = () => {
                           Linked to {committee.candidate.name} ({committee.candidate.party})
                         </p>
                       )}
+
                     </div>
                   </div>
                   <Link to={`/committee/${committee.fecCommitteeId}`}>
