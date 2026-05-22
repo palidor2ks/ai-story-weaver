@@ -118,6 +118,7 @@ export const useUpsertCommitteeTopic = () => {
       qc.invalidateQueries({ queryKey: ['committee-topic', vars.fec_committee_id] });
       qc.invalidateQueries({ queryKey: ['committee-topics-all'] });
       qc.invalidateQueries({ queryKey: ['committee-topics-map'] });
+      qc.invalidateQueries({ queryKey: ['committee-pool'] });
     },
   });
 };
