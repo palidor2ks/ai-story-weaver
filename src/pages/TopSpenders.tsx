@@ -128,6 +128,29 @@ export default function TopSpenders() {
     );
   }, [rows, search]);
 
+  // Batched lookup: receipts (raised) for visible spender rows from committee_finance_rollups
+  const visibleIds = useMemo(
+    () => filtered.map((r) => r.spending_committee_fec_id).filter(Boolean).slice(0, 100),
+    [filtered],
+  );
+  const { data: raisedMap } = useQuery({
+    queryKey: ['top-spenders-raised', visibleIds],
+    enabled: visibleIds.length > 0,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      const { data: rollups } = await supabase
+        .from('committee_finance_rollups')
+        .select('committee_id, local_itemized, fec_total_receipts, fec_itemized')
+        .in('committee_id', visibleIds);
+      const map = new Map<string, number>();
+      (rollups ?? []).forEach((r) => {
+        const v = Number(r.local_itemized ?? r.fec_total_receipts ?? r.fec_itemized ?? 0);
+        map.set(r.committee_id, (map.get(r.committee_id) ?? 0) + v);
+      });
+      return map;
+    },
+  });
+
   const summary = useMemo(() => {
     const list = rows ?? [];
     return {
@@ -136,6 +159,7 @@ export default function TopSpenders() {
       top: list[0],
     };
   }, [rows]);
+
 
   return (
     <div className="min-h-screen bg-background">
