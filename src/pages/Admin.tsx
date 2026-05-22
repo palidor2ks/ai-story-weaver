@@ -41,6 +41,7 @@ import { IndependentExpenditureImportCard } from "@/components/admin/Independent
 import { IndependentExpenditureImportHistory } from "@/components/admin/IndependentExpenditureImportHistory";
 import { AdminUsersPanel } from "@/components/admin/AdminUsersPanel";
 import { PollsPanel } from "@/components/admin/PollsPanel";
+import { IEExclusionsPanel } from "@/components/admin/IEExclusionsPanel";
 
 
 // Only levels that require manual entry (no API available)
