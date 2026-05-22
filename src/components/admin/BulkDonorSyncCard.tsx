@@ -102,7 +102,7 @@ export function BulkDonorSyncCard() {
             </p>
             <p className="text-muted-foreground">
               Donors imported: {lastResult.totalDonorsImported.toLocaleString()} ·
-              {' '}Total raised: ${Math.round(lastResult.totalRaised).toLocaleString()}
+              {' '}Total raised: {formatCompactCurrency(lastResult.totalRaised)}
             </p>
             {lastResult.errors && lastResult.errors.length > 0 && (
               <details className="mt-2">
