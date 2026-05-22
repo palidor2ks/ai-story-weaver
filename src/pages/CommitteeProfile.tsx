@@ -361,7 +361,9 @@ export const CommitteeProfile = () => {
                         {donors.map((donor) => (
                           <TableRow key={donor.id}>
                             <TableCell>
-                              <div className="font-medium text-foreground">{donor.name}</div>
+                              <Link to={`/donor/${donor.id}`} className="font-medium text-foreground hover:text-primary hover:underline">
+                                {donor.name}
+                              </Link>
                               {(donor.employer || donor.occupation) && (
                                 <p className="text-xs text-muted-foreground">
                                   {[donor.occupation, donor.employer].filter(Boolean).join(' • ')}
