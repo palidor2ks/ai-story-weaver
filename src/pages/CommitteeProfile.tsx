@@ -11,6 +11,8 @@ import { Loader2, ArrowLeft, DollarSign, Users, Landmark, MapPin, Calendar, Refr
 import { useCommittee, useCommitteeDonors } from '@/hooks/useCommittees';
 import { useFetchCommitteeDonors } from '@/hooks/useImportExternalCommittee';
 import { useAdminRole } from '@/hooks/useAdminRole';
+import { useIEExclusions, useRestoreCommittee } from '@/hooks/useIEExclusions';
+import { toast } from 'sonner';
 import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialog';
 import { CommitteeIESection } from '@/components/IndependentExpenditureSections';
 
@@ -38,10 +40,26 @@ export const CommitteeProfile = () => {
   const { data: committee, isLoading: committeeLoading } = useCommittee(id);
   const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id);
   const { data: adminData } = useAdminRole();
+  const { data: ieExclusions = [] } = useIEExclusions();
+  const restoreCommittee = useRestoreCommittee();
   const fetchDonorsMutation = useFetchCommitteeDonors();
 
   const isAdmin = adminData?.isAdmin ?? false;
   const isLoading = committeeLoading || donorsLoading;
+  const exclusion = useMemo(
+    () => ieExclusions.find((e) => e.fec_committee_id === (committee?.fecCommitteeId ?? id)),
+    [ieExclusions, committee?.fecCommitteeId, id],
+  );
+
+  const handleRestore = async () => {
+    if (!exclusion) return;
+    try {
+      await restoreCommittee.mutateAsync(exclusion.fec_committee_id);
+      toast.success('Committee restored to IE rollups');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to restore');
+    }
+  };
 
   const fromState = (location.state as { from?: string } | null)?.from;
   // If the committee has no candidate-committee receipts, it's an outside-spender (IE-only) committee
@@ -86,6 +104,24 @@ export const CommitteeProfile = () => {
           </Link>
           <p className="text-sm text-muted-foreground">{backLabel}</p>
         </div>
+
+        {isAdmin && exclusion && (
+          <div className="mb-6 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 flex items-start gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-destructive">Excluded from public IE rollups</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Reason: {exclusion.reason} · Excluded {new Date(exclusion.excluded_at).toLocaleString()}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Non-admins do not see this committee in Top Spenders, candidate IE summaries, or election dialogs.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={handleRestore} disabled={restoreCommittee.isPending}>
+              {restoreCommittee.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+              Restore
+            </Button>
+          </div>
+        )}
 
         {isLoading && (
           <div className="flex justify-center py-16">
