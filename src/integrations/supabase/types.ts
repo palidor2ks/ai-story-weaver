@@ -1474,6 +1474,27 @@ export type Database = {
         }
         Relationships: []
       }
+      ie_excluded_committees: {
+        Row: {
+          excluded_at: string
+          excluded_by: string | null
+          fec_committee_id: string
+          reason: string
+        }
+        Insert: {
+          excluded_at?: string
+          excluded_by?: string | null
+          fec_committee_id: string
+          reason: string
+        }
+        Update: {
+          excluded_at?: string
+          excluded_by?: string | null
+          fec_committee_id?: string
+          reason?: string
+        }
+        Relationships: []
+      }
       ie_import_sessions: {
         Row: {
           completed_at: string | null
