@@ -762,6 +762,62 @@ export type Database = {
         }
         Relationships: []
       }
+      committee_causes: {
+        Row: {
+          ai_reasoning: string | null
+          aliases: string[]
+          approved_by: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          issue: string
+          label: string
+          quiz_topic_id: string
+          stance: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ai_reasoning?: string | null
+          aliases?: string[]
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id: string
+          issue: string
+          label: string
+          quiz_topic_id: string
+          stance: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ai_reasoning?: string | null
+          aliases?: string[]
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          issue?: string
+          label?: string
+          quiz_topic_id?: string
+          stance?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "committee_causes_quiz_topic_id_fkey"
+            columns: ["quiz_topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       committee_finance_rollups: {
         Row: {
           candidate_id: string
@@ -845,8 +901,8 @@ export type Database = {
           assigned_by: string
           created_at: string
           fec_committee_id: string
-          primary_topic_id: string
-          secondary_topic_ids: string[]
+          primary_cause_id: string
+          secondary_cause_ids: string[]
           updated_at: string
         }
         Insert: {
@@ -856,8 +912,8 @@ export type Database = {
           assigned_by?: string
           created_at?: string
           fec_committee_id: string
-          primary_topic_id: string
-          secondary_topic_ids?: string[]
+          primary_cause_id: string
+          secondary_cause_ids?: string[]
           updated_at?: string
         }
         Update: {
@@ -867,14 +923,21 @@ export type Database = {
           assigned_by?: string
           created_at?: string
           fec_committee_id?: string
-          primary_topic_id?: string
-          secondary_topic_ids?: string[]
+          primary_cause_id?: string
+          secondary_cause_ids?: string[]
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "committee_topics_primary_cause_fk"
+            columns: ["primary_cause_id"]
+            isOneToOne: false
+            referencedRelation: "committee_causes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "committee_topics_primary_topic_id_fkey"
-            columns: ["primary_topic_id"]
+            columns: ["primary_cause_id"]
             isOneToOne: false
             referencedRelation: "topics"
             referencedColumns: ["id"]

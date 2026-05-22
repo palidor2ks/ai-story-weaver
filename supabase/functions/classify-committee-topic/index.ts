@@ -1,6 +1,6 @@
-// Classify external committees (PACs, SuperPACs, party committees) to one primary topic + optional secondaries.
+// Classify external committees (PACs, SuperPACs, party committees) by *cause*
+// (Pro-Israel, Pro-gun, etc.) — picked from the active `committee_causes` taxonomy.
 // Body: { fec_committee_ids?: string[], limit?: number, force?: boolean }
-// If no ids supplied, processes up to `limit` (default 20) unclassified external committees in background.
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -14,6 +14,15 @@ interface CommitteeInfo {
   designation: string | null;
   ie_purposes: string[];
   top_targets: string[];
+}
+
+interface Cause {
+  id: string;
+  label: string;
+  stance: string;
+  issue: string;
+  description: string | null;
+  quiz_topic_id: string;
 }
 
 async function gatherInfo(supabase: any, fecId: string): Promise<CommitteeInfo | null> {
@@ -40,89 +49,80 @@ async function gatherInfo(supabase: any, fecId: string): Promise<CommitteeInfo |
 
   const { data: ieRows } = await supabase
     .from('independent_expenditures')
-    .select('purpose, target_candidate_name, support_oppose_indicator, amount')
+    .select('purpose, target_candidate_name, amount')
     .eq('spending_committee_fec_id', fecId)
     .order('amount', { ascending: false })
     .limit(50);
 
-  const purposes = Array.from(
-    new Set((ieRows ?? []).map((r: any) => (r.purpose ?? '').trim()).filter(Boolean)),
-  ).slice(0, 15);
-  const targets = Array.from(
-    new Set((ieRows ?? []).map((r: any) => r.target_candidate_name).filter(Boolean)),
-  ).slice(0, 10);
+  const purposes = Array.from(new Set((ieRows ?? []).map((r: any) => (r.purpose ?? '').trim()).filter(Boolean))).slice(0, 15);
+  const targets = Array.from(new Set((ieRows ?? []).map((r: any) => r.target_candidate_name).filter(Boolean))).slice(0, 10);
 
-  return {
-    fec_committee_id: fecId,
-    name,
-    designation,
-    ie_purposes: purposes as string[],
-    top_targets: targets as string[],
-  };
+  return { fec_committee_id: fecId, name, designation, ie_purposes: purposes as string[], top_targets: targets as string[] };
 }
 
-async function classifyOne(info: CommitteeInfo, topics: any[]): Promise<{
-  primary_topic_id: string;
-  secondary_topic_ids: string[];
+async function classifyOne(info: CommitteeInfo, causes: Cause[]): Promise<{
+  primary_cause_id: string;
+  secondary_cause_ids: string[];
   confidence: 'low' | 'medium' | 'high';
   reasoning: string;
+  suggested_new_cause?: { label: string; stance: string; issue: string; quiz_topic_id: string; reasoning: string };
 } | null> {
-  const topicMenu = topics
-    .map((t) => `- ${t.id}: ${t.displayName || t.name}`)
+  const causeMenu = causes
+    .map((c) => `- ${c.id}: ${c.label} (${c.stance} ${c.issue})${c.description ? ' — ' + c.description : ''}`)
     .join('\n');
+  const allowed = causes.map((c) => c.id);
 
   const userMsg = `Committee: ${info.name}
 Designation: ${info.designation ?? 'unknown'}
 Top IE targets: ${info.top_targets.join(', ') || 'none'}
 IE expenditure purposes: ${info.ie_purposes.slice(0, 10).join(' | ') || 'none'}
 
-Pick ONE primary federal topic id that best captures this committee's focus, plus 0-2 optional secondary topic ids if clearly relevant. Only use ids from the list.
+Pick ONE primary cause id from the list below that best describes this committee's focus, plus 0-2 optional secondary cause ids if clearly relevant. Use "low" confidence for generic partisan committees with no clear single-issue focus.
 
-Topics:
-${topicMenu}`;
+If NO cause fits well, you may also propose a single new cause (suggested_new_cause) — but ONLY if there's a clear, specific issue not represented (e.g. "Pro-cannabis"). Do not propose duplicates.
 
-  const allowed = topics.map((t) => t.id);
+Causes:
+${causeMenu}`;
 
   const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'google/gemini-3-flash-preview',
       messages: [
-        {
-          role: 'system',
-          content:
-            'You categorize US political committees (PACs, SuperPACs, party committees) into a single primary policy topic. Be conservative — pick "low" confidence for generic partisan committees with no clear single issue focus.',
-        },
+        { role: 'system', content: 'You categorize US political committees (PACs, SuperPACs, party committees) by cause/stance (e.g. Pro-Israel, Pro-gun). Be conservative; prefer "conservative" or "progressive" generic buckets over forcing a specific cause when unclear.' },
         { role: 'user', content: userMsg },
       ],
-      tools: [
-        {
-          type: 'function',
-          function: {
-            name: 'classify_committee',
-            description: 'Return primary and optional secondary topic ids.',
-            parameters: {
-              type: 'object',
-              properties: {
-                primary_topic_id: { type: 'string', enum: allowed },
-                secondary_topic_ids: {
-                  type: 'array',
-                  items: { type: 'string', enum: allowed },
-                  maxItems: 2,
+      tools: [{
+        type: 'function',
+        function: {
+          name: 'classify_committee',
+          description: 'Return primary and optional secondary cause ids.',
+          parameters: {
+            type: 'object',
+            properties: {
+              primary_cause_id: { type: 'string', enum: allowed },
+              secondary_cause_ids: { type: 'array', items: { type: 'string', enum: allowed }, maxItems: 2 },
+              confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+              reasoning: { type: 'string', maxLength: 240 },
+              suggested_new_cause: {
+                type: 'object',
+                properties: {
+                  label: { type: 'string' },
+                  stance: { type: 'string', enum: ['pro', 'anti', 'neutral'] },
+                  issue: { type: 'string' },
+                  quiz_topic_id: { type: 'string' },
+                  reasoning: { type: 'string', maxLength: 240 },
                 },
-                confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
-                reasoning: { type: 'string', maxLength: 240 },
+                required: ['label', 'stance', 'issue', 'quiz_topic_id'],
+                additionalProperties: false,
               },
-              required: ['primary_topic_id', 'confidence', 'reasoning'],
-              additionalProperties: false,
             },
+            required: ['primary_cause_id', 'confidence', 'reasoning'],
+            additionalProperties: false,
           },
         },
-      ],
+      }],
       tool_choice: { type: 'function', function: { name: 'classify_committee' } },
     }),
   });
@@ -136,12 +136,13 @@ ${topicMenu}`;
   if (!args) return null;
   try {
     const parsed = JSON.parse(args);
-    if (!allowed.includes(parsed.primary_topic_id)) return null;
+    if (!allowed.includes(parsed.primary_cause_id)) return null;
     return {
-      primary_topic_id: parsed.primary_topic_id,
-      secondary_topic_ids: (parsed.secondary_topic_ids ?? []).filter((id: string) => allowed.includes(id)),
+      primary_cause_id: parsed.primary_cause_id,
+      secondary_cause_ids: (parsed.secondary_cause_ids ?? []).filter((id: string) => allowed.includes(id)),
       confidence: parsed.confidence ?? 'low',
       reasoning: (parsed.reasoning ?? '').slice(0, 240),
+      suggested_new_cause: parsed.suggested_new_cause,
     };
   } catch (e) {
     console.error('Failed to parse AI args', e);
@@ -150,15 +151,18 @@ ${topicMenu}`;
 }
 
 async function processIds(supabase: any, ids: string[], force: boolean) {
-  const { data: topics } = await supabase
-    .from('topics')
-    .select('id, name, icon, scope')
-    .in('scope', ['all', 'federal']);
-  const topicList = (topics ?? []).map((t: any) => ({ ...t, displayName: t.name }));
-  if (topicList.length === 0) {
-    console.error('No federal topics available');
+  const { data: causesData } = await supabase
+    .from('committee_causes')
+    .select('id, label, stance, issue, description, quiz_topic_id')
+    .eq('status', 'active');
+  const causes = (causesData ?? []) as Cause[];
+  if (causes.length === 0) {
+    console.error('No active causes available');
     return { processed: 0 };
   }
+
+  const { data: validTopicsData } = await supabase.from('topics').select('id');
+  const validTopicIds = new Set((validTopicsData ?? []).map((t: any) => t.id));
 
   let processed = 0;
   for (const id of ids) {
@@ -176,26 +180,40 @@ async function processIds(supabase: any, ids: string[], force: boolean) {
       }
 
       const info = await gatherInfo(supabase, id);
-      if (!info) {
-        console.log(`No info for ${id}`);
-        continue;
-      }
-      const result = await classifyOne(info, topicList);
+      if (!info) { console.log(`No info for ${id}`); continue; }
+      const result = await classifyOne(info, causes);
       if (!result) continue;
+
+      // Persist AI-suggested new cause as `pending` for admin review (if it doesn't conflict).
+      if (result.suggested_new_cause) {
+        const s = result.suggested_new_cause;
+        const slug = s.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+        if (slug && validTopicIds.has(s.quiz_topic_id) && !causes.some((c) => c.id === slug)) {
+          await supabase.from('committee_causes').upsert({
+            id: slug,
+            label: s.label.slice(0, 80),
+            stance: s.stance,
+            issue: s.issue.slice(0, 80),
+            quiz_topic_id: s.quiz_topic_id,
+            description: null,
+            status: 'pending',
+            created_by: 'ai',
+            ai_reasoning: (s.reasoning ?? '').slice(0, 240),
+          }, { onConflict: 'id', ignoreDuplicates: true });
+          console.log(`Suggested new cause: ${slug}`);
+        }
+      }
 
       const { error } = await supabase.from('committee_topics').upsert({
         fec_committee_id: id,
-        primary_topic_id: result.primary_topic_id,
-        secondary_topic_ids: result.secondary_topic_ids,
+        primary_cause_id: result.primary_cause_id,
+        secondary_cause_ids: result.secondary_cause_ids,
         assigned_by: 'ai',
         ai_confidence: result.confidence,
         ai_reasoning: result.reasoning,
         admin_overridden: false,
       });
-      if (error) {
-        console.error(`Upsert failed for ${id}`, error);
-        continue;
-      }
+      if (error) { console.error(`Upsert failed for ${id}`, error); continue; }
       processed++;
     } catch (e) {
       console.error(`Error processing ${id}`, e);
@@ -215,20 +233,17 @@ Deno.serve(async (req) => {
 
     if (ids.length === 0) {
       const limit = Math.min(Math.max(Number(body.limit) || 20, 1), 100);
-      // Find external committees that lack a topic (exclude principal/authorized candidate committees).
       const { data: cmtes } = await supabase
         .from('candidate_committees')
         .select('fec_committee_id, designation')
         .not('designation', 'in', '(P,A)')
         .limit(500);
       const candidateIds = (cmtes ?? []).map((c: any) => c.fec_committee_id);
-
       const { data: ieCmtes } = await supabase
         .from('independent_expenditures')
         .select('spending_committee_fec_id')
         .limit(500);
       const ieIds = Array.from(new Set((ieCmtes ?? []).map((r: any) => r.spending_committee_fec_id).filter(Boolean)));
-
       const pool = Array.from(new Set([...candidateIds, ...ieIds]));
       const { data: existing } = await supabase
         .from('committee_topics')
@@ -244,7 +259,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Small batches inline, large batches in background.
     if (ids.length <= 5) {
       const result = await processIds(supabase, ids, force);
       return new Response(JSON.stringify({ ok: true, ...result, ids }), {
