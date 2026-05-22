@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,8 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCommitteesPaginated, useCommitteeFilterOptions } from '@/hooks/useCommittees';
-import { Loader2, Landmark, Users, DollarSign, ArrowRight, Search, SlidersHorizontal, Inbox } from 'lucide-react';
+import { Loader2, Landmark, Users, DollarSign, ArrowRight, Search, SlidersHorizontal, Inbox, Megaphone } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
+import { formatIECompact } from '@/components/IESummaryInline';
+
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
@@ -96,24 +101,52 @@ export const Committees = () => {
     [data, hideUnsynced],
   );
 
+  // Batched lookup: outside-spending totals for the visible committees
+  const visibleIds = useMemo(
+    () => committees.map((c) => c.fecCommitteeId).filter(Boolean).slice(0, 200),
+    [committees],
+  );
+  const { data: ieMap } = useQuery({
+    queryKey: ['committees-ie-totals', visibleIds],
+    enabled: visibleIds.length > 0,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      const { data: rows } = await supabase
+        .from('committee_independent_expenditure_totals')
+        .select('spending_committee_fec_id, total_amount')
+        .in('spending_committee_fec_id', visibleIds);
+      const map = new Map<string, number>();
+      (rows ?? []).forEach((r) => {
+        if (r.spending_committee_fec_id) map.set(r.spending_committee_fec_id, Number(r.total_amount ?? 0));
+      });
+      return map;
+    },
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <Seo
-        title="Committee Directory — Pulse"
-        description="Explore fundraising committees with donor counts and contribution totals across federal, state, and local races."
+        title="Top Federal Committees by Receipts — Pulse"
+        description="All federal committees ranked by money raised. Donor counts, contribution totals, and links to the candidates they back."
         path="/committees"
       />
+
       <Header />
 
       <main className="container py-8 px-4">
         <div className="flex flex-col gap-4 mb-8">
           <div>
             <p className="text-sm text-muted-foreground mb-1 font-medium">Committees</p>
-            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">Committee Directory</h1>
+            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">Top Federal Committees by Receipts</h1>
             <p className="text-muted-foreground mt-2">
-              Explore fundraising committees with donor counts and contribution totals. Click a committee to dive into donor details.
+              All federal committees ranked by money raised. Looking for outside spending instead? See{' '}
+              <Link to="/top-spenders" className="text-primary underline-offset-2 hover:underline">Top Outside Spenders</Link>.
             </p>
+            <div className="mt-3">
+              <CommitteesViewSwitcher />
+            </div>
           </div>
+
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="relative w-full sm:max-w-md">
@@ -269,6 +302,15 @@ export const Committees = () => {
                             {committee.role}
                           </Badge>
                         )}
+                        {(() => {
+                          const ie = ieMap?.get(committee.fecCommitteeId) ?? 0;
+                          return ie > 0 ? (
+                            <Badge variant="outline" className="text-xs gap-1 border-primary/40 text-primary">
+                              <Megaphone className="w-3 h-3" />
+                              IE {formatIECompact(ie)}
+                            </Badge>
+                          ) : null;
+                        })()}
                       </div>
                       <p className="text-sm text-muted-foreground">FEC ID: {committee.fecCommitteeId}</p>
                       {committee.candidate && (
@@ -276,6 +318,7 @@ export const Committees = () => {
                           Linked to {committee.candidate.name} ({committee.candidate.party})
                         </p>
                       )}
+
                     </div>
                   </div>
                   <Link to={`/committee/${committee.fecCommitteeId}`}>

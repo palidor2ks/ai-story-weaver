@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Megaphone, TrendingUp, TrendingDown, Search, ExternalLink } from 'lucide-react';
 import { formatIECompact } from '@/components/IESummaryInline';
+import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
+
 
 type Stance = 'all' | 'support' | 'oppose';
 
@@ -126,6 +128,29 @@ export default function TopSpenders() {
     );
   }, [rows, search]);
 
+  // Batched lookup: receipts (raised) for visible spender rows from committee_finance_rollups
+  const visibleIds = useMemo(
+    () => filtered.map((r) => r.spending_committee_fec_id).filter(Boolean).slice(0, 100),
+    [filtered],
+  );
+  const { data: raisedMap } = useQuery({
+    queryKey: ['top-spenders-raised', visibleIds],
+    enabled: visibleIds.length > 0,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      const { data: rollups } = await supabase
+        .from('committee_finance_rollups')
+        .select('committee_id, local_itemized, fec_total_receipts, fec_itemized')
+        .in('committee_id', visibleIds);
+      const map = new Map<string, number>();
+      (rollups ?? []).forEach((r) => {
+        const v = Number(r.local_itemized ?? r.fec_total_receipts ?? r.fec_itemized ?? 0);
+        map.set(r.committee_id, (map.get(r.committee_id) ?? 0) + v);
+      });
+      return map;
+    },
+  });
+
   const summary = useMemo(() => {
     const list = rows ?? [];
     return {
@@ -135,13 +160,15 @@ export default function TopSpenders() {
     };
   }, [rows]);
 
+
   return (
     <div className="min-h-screen bg-background">
       <Seo
-        title="Top IE Spenders — Pulse"
-        description="The biggest super PACs and outside groups spending on independent expenditures to support or oppose federal candidates."
+        title="Top Outside Spenders by Independent Expenditures — Pulse"
+        description="Super PACs and outside groups ranked by independent expenditures supporting or opposing federal candidates."
         path="/top-spenders"
       />
+
       <Header />
       <main className="container py-8 px-4">
         <div className="mb-6">
@@ -151,9 +178,14 @@ export default function TopSpenders() {
           </h1>
           <p className="text-muted-foreground max-w-2xl">
             Super PACs and outside groups ranked by independent expenditures supporting or opposing federal candidates. These dollars are
-            spent <em>independently</em> of campaigns and are not subject to contribution limits.
+            spent <em>independently</em> of campaigns and are not subject to contribution limits. Looking for fundraising totals?
+            See <Link to="/committees" className="text-primary underline-offset-2 hover:underline">Committees by receipts</Link>.
           </p>
+          <div className="mt-3">
+            <CommitteesViewSwitcher />
+          </div>
         </div>
+
 
         {/* KPIs */}
         <div className="grid gap-4 sm:grid-cols-3 mb-6">
@@ -251,8 +283,15 @@ export default function TopSpenders() {
                       <p className="font-medium truncate">{r.spending_committee_name ?? r.spending_committee_fec_id}</p>
                       <p className="text-[11px] text-muted-foreground font-mono truncate">
                         {r.spending_committee_fec_id} · {r.expenditure_count.toLocaleString()} expenditure{r.expenditure_count === 1 ? '' : 's'}
+                        {(() => {
+                          const raised = raisedMap?.get(r.spending_committee_fec_id) ?? 0;
+                          return raised > 0 ? (
+                            <span className="ml-2 text-muted-foreground/80">· Raised {formatIECompact(raised)}</span>
+                          ) : null;
+                        })()}
                       </p>
                     </div>
+
                     <span className="hidden sm:inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
                       <TrendingUp className="w-3 h-3" />{formatIECompact(r.support_amount)}
                     </span>
