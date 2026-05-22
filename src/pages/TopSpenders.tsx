@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Megaphone, TrendingUp, TrendingDown, Search, ExternalLink } from 'lucide-react';
 import { formatIECompact } from '@/components/IESummaryInline';
+import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
+
 
 type Stance = 'all' | 'support' | 'oppose';
 
