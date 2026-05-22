@@ -321,7 +321,7 @@ export const Committees = () => {
 
                     </div>
                   </div>
-                  <Link to={`/committee/${committee.fecCommitteeId}`}>
+                  <Link to={`/committee/${committee.fecCommitteeId}`} state={{ from: '/committees' }}>
                     <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
                       <ArrowRight className="w-4 h-4" />
                     </Button>
