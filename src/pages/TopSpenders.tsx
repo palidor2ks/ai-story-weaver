@@ -164,10 +164,11 @@ export default function TopSpenders() {
   return (
     <div className="min-h-screen bg-background">
       <Seo
-        title="Top IE Spenders — Pulse"
-        description="The biggest super PACs and outside groups spending on independent expenditures to support or oppose federal candidates."
+        title="Top Outside Spenders by Independent Expenditures — Pulse"
+        description="Super PACs and outside groups ranked by independent expenditures supporting or opposing federal candidates."
         path="/top-spenders"
       />
+
       <Header />
       <main className="container py-8 px-4">
         <div className="mb-6">
