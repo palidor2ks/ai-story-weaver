@@ -144,6 +144,7 @@ const AssignmentsTab = () => {
     const q = search.trim().toLowerCase();
     return committees.filter((c) => {
       if (q && !(c.name ?? '').toLowerCase().includes(q) && !c.fec_committee_id.toLowerCase().includes(q)) return false;
+      if (sourceFilter !== 'all' && c.source !== sourceFilter) return false;
       const a = assignmentMap.get(c.fec_committee_id);
       if (filter === 'unassigned' && a) return false;
       if (filter === 'ai' && (!a || a.admin_overridden)) return false;
@@ -151,7 +152,7 @@ const AssignmentsTab = () => {
       if (filter === 'low-confidence' && (!a || a.ai_confidence !== 'low')) return false;
       return true;
     }).slice(0, 500);
-  }, [committees, assignmentMap, search, filter]);
+  }, [committees, assignmentMap, search, filter, sourceFilter]);
 
   const handleClassifyUnassigned = async () => {
     setRunning(true);
