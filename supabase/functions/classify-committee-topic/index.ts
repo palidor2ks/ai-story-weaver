@@ -243,35 +243,18 @@ Deno.serve(async (req) => {
 
     if (ids.length === 0) {
       const limit = Math.min(Math.max(Number(body.limit) || 20, 1), 100);
-      const { data: cmtes } = await supabase
-        .from('candidate_committees')
-        .select('fec_committee_id, designation')
-        .or('designation.is.null,and(designation.neq.P,designation.neq.A)')
-        .limit(5000);
-      const candidateIds = (cmtes ?? []).map((c: any) => c.fec_committee_id).filter(Boolean);
-      const { data: ieSpenders } = await supabase.rpc('list_ie_spenders');
-      const ieIds = ((ieSpenders ?? []) as any[]).map((r: any) => r.fec_committee_id).filter(Boolean);
-      // External standalone PACs (paginated)
-      const extIds: string[] = [];
-      let from = 0;
-      while (from < 50000) {
-        const { data } = await supabase
-          .from('external_pacs')
-          .select('fec_committee_id')
-          .order('fec_committee_id')
-          .range(from, from + 999);
-        if (!data || data.length === 0) break;
-        for (const r of data) if (r.fec_committee_id) extIds.push(r.fec_committee_id);
-        if (data.length < 1000) break;
-        from += 1000;
+      // Use server-side paginated MV to get unassigned committees in one query.
+      const { data: poolRows, error: poolErr } = await supabase.rpc('list_committee_pool', {
+        p_search: null,
+        p_source: null,
+        p_assigned: 'unassigned',
+        p_limit: limit,
+        p_offset: 0,
+      });
+      if (poolErr) {
+        console.error('list_committee_pool failed', poolErr);
       }
-      const pool = Array.from(new Set([...candidateIds, ...ieIds, ...extIds]));
-      const { data: existing } = await supabase
-        .from('committee_topics')
-        .select('fec_committee_id')
-        .in('fec_committee_id', pool);
-      const have = new Set((existing ?? []).map((r: any) => r.fec_committee_id));
-      ids = pool.filter((id) => !have.has(id)).slice(0, limit);
+      ids = ((poolRows ?? []) as any[]).map((r) => r.fec_committee_id).filter(Boolean);
     }
 
     if (ids.length === 0) {
