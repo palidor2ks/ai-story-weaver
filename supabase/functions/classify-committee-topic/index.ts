@@ -249,13 +249,6 @@ Deno.serve(async (req) => {
       const have = new Set((existing ?? []).map((r: any) => r.fec_committee_id));
       ids = pool.filter((id) => !have.has(id)).slice(0, limit);
     }
-      const { data: existing } = await supabase
-        .from('committee_topics')
-        .select('fec_committee_id')
-        .in('fec_committee_id', pool);
-      const have = new Set((existing ?? []).map((r: any) => r.fec_committee_id));
-      ids = pool.filter((id) => !have.has(id)).slice(0, limit);
-    }
 
     if (ids.length === 0) {
       return new Response(JSON.stringify({ ok: true, processed: 0, message: 'Nothing to classify' }), {
