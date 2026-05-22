@@ -13,6 +13,8 @@ import { Loader2, Landmark, Users, DollarSign, ArrowRight, Search, SlidersHorizo
 import { cn, formatCompactCurrency as formatCurrency, formatFullCurrency as formatCurrencyFull } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
+import { CommitteeTopicBadge } from '@/components/CommitteeTopicBadge';
+import { useCommitteeTopicsMap } from '@/hooks/useCommitteeTopics';
 import { formatIECompact } from '@/components/IESummaryInline';
 
 
@@ -117,6 +119,10 @@ export const Committees = () => {
       return map;
     },
   });
+
+  const { data: topicsMap } = useCommitteeTopicsMap(visibleIds);
+
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -313,9 +319,16 @@ export const Committees = () => {
                           Linked to {committee.candidate.name} ({committee.candidate.party})
                         </p>
                       )}
+                      <div className="mt-1.5">
+                        <CommitteeTopicBadge
+                          fecCommitteeId={committee.fecCommitteeId}
+                          row={topicsMap?.get(committee.fecCommitteeId) ?? null}
+                        />
+                      </div>
 
                     </div>
                   </div>
+
                   <Link to={`/committee/${committee.fecCommitteeId}`} state={{ from: '/committees' }}>
                     <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
                       <ArrowRight className="w-4 h-4" />
