@@ -22,9 +22,10 @@ export interface CommitteeSummary {
     office: string;
     state: string;
   } | null;
-  donorCount: number;
-  contributionCount: number;
+  donorCount: number | null;
+  contributionCount: number | null;
   totalRaised: number;
+  hasRollupData: boolean;
 }
 
 export interface CommitteeDonor {
