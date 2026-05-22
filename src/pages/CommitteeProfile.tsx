@@ -79,12 +79,12 @@ export const CommitteeProfile = () => {
 
       <main className="container py-8 px-4">
         <div className="flex items-center gap-2 mb-6">
-          <Link to="/committees">
+          <Link to={backTo}>
             <Button variant="ghost" size="icon">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <p className="text-sm text-muted-foreground">Back to Committees</p>
+          <p className="text-sm text-muted-foreground">{backLabel}</p>
         </div>
 
         {isLoading && (
@@ -96,7 +96,7 @@ export const CommitteeProfile = () => {
         {!isLoading && !committee && (
           <div className="text-center py-16">
             <p className="text-muted-foreground">Committee not found.</p>
-            <Link to="/committees">
+            <Link to={backTo}>
               <Button className="mt-4">Return to list</Button>
             </Link>
           </div>
