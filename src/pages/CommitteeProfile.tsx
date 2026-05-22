@@ -40,10 +40,26 @@ export const CommitteeProfile = () => {
   const { data: committee, isLoading: committeeLoading } = useCommittee(id);
   const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id);
   const { data: adminData } = useAdminRole();
+  const { data: ieExclusions = [] } = useIEExclusions();
+  const restoreCommittee = useRestoreCommittee();
   const fetchDonorsMutation = useFetchCommitteeDonors();
 
   const isAdmin = adminData?.isAdmin ?? false;
   const isLoading = committeeLoading || donorsLoading;
+  const exclusion = useMemo(
+    () => ieExclusions.find((e) => e.fec_committee_id === (committee?.fecCommitteeId ?? id)),
+    [ieExclusions, committee?.fecCommitteeId, id],
+  );
+
+  const handleRestore = async () => {
+    if (!exclusion) return;
+    try {
+      await restoreCommittee.mutateAsync(exclusion.fec_committee_id);
+      toast.success('Committee restored to IE rollups');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to restore');
+    }
+  };
 
   const fromState = (location.state as { from?: string } | null)?.from;
   // If the committee has no candidate-committee receipts, it's an outside-spender (IE-only) committee
