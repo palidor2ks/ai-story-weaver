@@ -332,7 +332,7 @@ Output ONLY a JSON object, no prose:
       ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
       : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
 
-    return json({
+    const responseBody = {
       provider,
       provider_errors: providerErrors,
       summary: String(parsed.summary ?? ""),
@@ -356,7 +356,9 @@ Output ONLY a JSON object, no prose:
         top_donors: topDonors,
         fec_id,
       },
-    });
+    };
+    const saved = await writeCache(cacheKey, responseBody, provider);
+    return json({ ...responseBody, cached: false, updated_at: saved?.updated_at });
   } catch (e) {
     console.error("ai-recipient-analysis error", e);
     return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
