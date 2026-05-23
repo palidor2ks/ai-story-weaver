@@ -85,7 +85,7 @@ export const BillAIAnalysisDialog = ({
 
   const billLabel = billType && billNumber ? `${String(billType).toUpperCase()} ${billNumber}` : billName;
 
-  const fetchAnalysis = async () => {
+  const fetchAnalysis = async (force = false) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -105,6 +105,7 @@ export const BillAIAnalysisDialog = ({
           candidate_office: candidateOffice ?? null,
           candidate_state: candidateState ?? null,
           is_sponsor: isSponsor,
+          force_refresh: force,
         },
       });
       if (fnError) throw new Error(normalizeInvokeError(fnError));
