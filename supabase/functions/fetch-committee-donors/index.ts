@@ -294,6 +294,12 @@ serve(async (req) => {
     const contributions: any[] = [];
     const donorMap = new Map<string, AggregatedDonor>();
 
+    // FEC Schedule A line numbers that are NOT donor contributions:
+    //   15/17/17A/17C → vendor refunds/offsets (Line 15) and other federal receipts (Line 17)
+    //   18 → transfers in, 20A → refunds of contributions out, 21 → other disbursements
+    const NON_CONTRIBUTION_LINES = new Set(['15', '17', '17A', '17C', '18', '20A', '21']);
+    const VENDOR_REFUND_LINES = new Set(['15', '17', '17A', '17C']);
+
     for (const receipt of allReceipts) {
       const contributorName = receipt.contributor_name || 'Unknown';
       const amount = Math.round(receipt.contribution_receipt_amount || 0);
@@ -302,6 +308,9 @@ serve(async (req) => {
       const state = receipt.contributor_state || '';
       const zip = receipt.contributor_zip || '';
       const receiptDate = receipt.contribution_receipt_date || null;
+      const lineNumber = (receipt.line_number || '').toString().toUpperCase();
+      const isRealContribution = !NON_CONTRIBUTION_LINES.has(lineNumber);
+      const isVendorRefund = VENDOR_REFUND_LINES.has(lineNumber);
 
       // Generate contribution hash
       const identityHash = await generateContributionHash(
@@ -332,7 +341,7 @@ serve(async (req) => {
         memo_code: receipt.memo_code || null,
         employer: receipt.contributor_employer || null,
         occupation: receipt.contributor_occupation || null,
-        is_contribution: true,
+        is_contribution: isRealContribution,
         is_transfer: false,
         is_earmarked: false,
       });
