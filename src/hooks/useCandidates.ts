@@ -495,7 +495,7 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
       // Group donors by canonical name (display_name set by attach flow / DB trigger)
       const canonicalGroups = new Map<string, DonorWithCanonical>();
 
-      rawDonors.forEach(donor => {
+      allowedRawDonors.forEach(donor => {
         const canonicalName = donor.display_name || donor.name;
         const isConsolidated = !!donor.display_name && donor.display_name !== donor.name;
 
