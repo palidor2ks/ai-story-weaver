@@ -87,6 +87,18 @@ Deno.serve(async (req) => {
       return json({ error: "candidate_name and bill information are required" }, 400);
     }
 
+    // Bill analysis depends on which candidate is being viewed (sponsor vs cosponsor
+    // and their record), so cache per bill + candidate + role.
+    const subjectId = String(body.bill_id ?? `${billType}-${billNumber}-${body.congress ?? ''}`).trim();
+    const fp = await fingerprint({ candidate: candidateName, role: body.is_sponsor ? 's' : 'c' });
+    const cacheKey = { kind: "bill" as const, subject_id: subjectId, input_fingerprint: fp };
+    if (!body.force_refresh && subjectId) {
+      const cached = await readCache<Record<string, unknown>>(cacheKey);
+      if (cached) {
+        return json({ ...cached.payload, cached: true, updated_at: cached.updated_at });
+      }
+    }
+
     const billLabel = billType && billNumber ? `${billType} ${billNumber}` : billName;
     const congressLabel = body.congress ? `${body.congress}th Congress` : "";
     const anchorBits = [
