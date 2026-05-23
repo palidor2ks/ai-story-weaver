@@ -99,10 +99,10 @@ export function ClaimProfileDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <UserCheck className="h-4 w-4" />
-          Claim This Profile
-        </Button>
+        <IconActionButton
+          label="Claim This Profile"
+          icon={<UserCheck className="h-4 w-4" />}
+        />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
