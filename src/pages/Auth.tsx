@@ -134,11 +134,15 @@ export const Auth = () => {
           <div className="w-16 h-16 rounded-2xl bg-gradient-hero mx-auto mb-4 flex items-center justify-center shadow-glow">
             <Sparkles className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="font-display text-3xl font-bold text-foreground">
+          <h1 className="font-display text-3xl font-bold text-foreground flex items-center justify-center gap-2">
             <span className="text-gradient">Pulse</span>
+            <BetaBadge size="md" />
           </h1>
           <p className="text-muted-foreground mt-2">
             Your political alignment companion
+          </p>
+          <p className="text-xs text-muted-foreground/80 mt-1">
+            You're using an early beta — expect rapid changes.
           </p>
         </div>
 
