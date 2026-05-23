@@ -275,8 +275,14 @@ Remember: be objective, non-partisan, and analyze ONLY the person identified in 
 
     console.log('AI analysis generated successfully, personalized:', !!analysis.personalizedComparison);
 
+    let updated_at: string | undefined;
+    if (cacheKey.subject_id) {
+      const saved = await writeCache(cacheKey, analysis, 'google/gemini-3-flash-preview');
+      updated_at = saved?.updated_at;
+    }
+
     return new Response(
-      JSON.stringify(analysis),
+      JSON.stringify({ ...analysis, cached: false, updated_at }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: unknown) {
