@@ -1,33 +1,76 @@
-## Why AMERICA PAC shows up
+## Goal
 
-The recipient banner on `/candidate/:id` displays `donors[0].recipient_committee_name` — the top donor row by amount. For Trump (P80001571), 2024 cycle, the `donors` table contains:
+Persist every AI analysis the first time it's generated, then serve cached results on subsequent visits. Replace the "click to generate" flow with auto-load from cache + a Refresh button for manual regeneration.
 
-| Recipient | Designation | Rows | Total |
-|---|---|---|---|
-| AMERICA PAC (C00879510) | U (leadership/Super PAC) | 27 | $12.28M |
-| NEVER SURRENDER, INC. (C00828541) | D (delegate) | 12 | $55K |
-| MAGA PAC (C00580100) | U (leadership) | 1 | $30K |
+## In scope (4 AI surfaces)
 
-AMERICA PAC is the largest by amount, so it ends up as `donors[0]` and drives the banner label. None of Trump's authorized P/A committees (e.g. DJTRNF C00867275) have donor rows for this cycle, so the user sees a Super PAC labeled as the recipient of his "Campaign Contributions".
+| Surface | Component | Edge fn | Cache key | Scope |
+|---|---|---|---|---|
+| Candidate AI Stance Analysis | `AIExplanation` | `ai-candidate-explanation` | candidate_id + user_id (+ user-scores fingerprint) | per-user |
+| Donor AI Analysis | `DonorAIAnalysisDialog` | `ai-donor-analysis` | donor_id + cycle | global |
+| Recipient AI Analysis | `RecipientAIAnalysisDialog` | `ai-recipient-analysis` | committee_id + cycle | global |
+| Bill AI Analysis | `BillAIAnalysisDialog` | `ai-bill-analysis` | bill_id | global |
 
-AMERICA PAC is Elon Musk's independent-expenditure Super PAC supporting Trump — it is **not** an authorized Trump campaign committee. It's already marked `active=false` and `role='external'` in `candidate_committees`, and donations to it should not appear in Trump's donor list at all.
+## Schema (single new table)
 
-Root cause: `useCandidateDonors` (and the FEC import pipelines that wrote these rows) ignore the committee's designation/active flag and accept any donor row whose `candidate_id` matches.
+```sql
+create table public.ai_analysis_cache (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null,                -- 'candidate' | 'donor' | 'recipient' | 'bill'
+  subject_id text not null,          -- candidate_id / donor_id / committee_id / bill_id
+  cycle text,                        -- nullable; used by donor + recipient
+  user_id uuid references auth.users(id) on delete cascade,  -- null for global kinds
+  input_fingerprint text,            -- hash of user-scores blob for candidate; null otherwise
+  payload jsonb not null,            -- raw analysis JSON returned by the edge fn
+  model text,                        -- e.g. 'google/gemini-3-flash-preview'
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (kind, subject_id, cycle, user_id, input_fingerprint)
+);
+```
 
-## Fix
+RLS:
+- Global rows (`user_id is null`) — `SELECT` to `public`.
+- Per-user rows — `SELECT/INSERT/UPDATE/DELETE` only when `auth.uid() = user_id`.
+- Service role full access (writes happen from edge functions).
 
-1. **Frontend query (`src/hooks/useCandidates.ts` → `useCandidateDonors`)**: after loading `candidate_committees`, filter `rawDonors` to keep only rows whose `recipient_committee_id` is either (a) one of the candidate's committees with `active=true` AND designation in (`P`,`A`,`J`) — i.e. authorized campaign / JFC — or (b) absent (legacy rows). Drop rows whose recipient is a `U`/`D`/`B` committee, an inactive committee, or appears in `ie_excluded_committees`. Apply this before grouping, so banner/totals/lists all reflect the filtered set.
+## Edge function changes (shared cache-read + cache-write helper)
 
-2. **Banner selection (`src/pages/CandidateProfile.tsx` ~L548)**: instead of `donors[0].recipient_committee_name`, prefer the candidate's primary `P`-designation committee name from `candidate_committees` (fallback to most-funded authorized committee, then to "Multiple committees" when several authorized recipients exist). This keeps the label correct even when one committee dominates by dollars.
+Each of the four edge functions gets the same wrapper:
 
-3. **Data cleanup migration**: delete donor rows for `candidate_id='P80001571'` where `recipient_committee_id IN ('C00879510','C00828541','C00580100')` (and generalize: delete donor rows where the recipient committee is linked to the candidate with `active=false` or designation not in P/A/J). This removes the $12M of AMERICA PAC, $18M NEVER SURRENDER, etc., from his totals where they were inflating the picture.
+1. Compute cache key (kind/subject/cycle/user_id/input_fingerprint).
+2. Look up `ai_analysis_cache`. If a row exists AND the request did not pass `force_refresh: true`, return `payload`.
+3. Otherwise call the model, upsert into `ai_analysis_cache`, then return.
 
-4. **Import-side guard**: in the FEC donor import edge function(s) that populate `donors`, skip contributions whose recipient committee is not an authorized (P/A/J + active) committee of the candidate, or is in `ie_excluded_committees`. This prevents reintroduction on the next refresh.
+Edge fn signature additions: optional `force_refresh: boolean` in the request body. For per-user kinds, the function reads `auth.uid()` from the verified JWT (already passed by `supabase.functions.invoke` when the user is signed in); anonymous users skip cache and behave as today.
 
-5. **Verification**: after migration + code change, re-open Trump's profile on 2024 cycle and confirm the banner reads his authorized committee (e.g. DJTRNF) and the donor list no longer contains AMERICA PAC / NEVER SURRENDER / MAGA PAC entries. Spot-check a House/Senate incumbent to make sure normal P-only candidates are unaffected.
+`input_fingerprint` (candidate kind only): SHA-256 of canonicalized `userTopicScores` JSON. Different score profile → different cache row; same profile → reuse.
 
-### Technical notes
+## Frontend changes
 
-- `candidate_committees` already has the truth: `active=false`, `role='external'` for AMERICA PAC. The filter just needs to consult it.
-- Memory rule "JU BD committees excluded from main candidate totals" already exists for the finance reconciliation path — this extends the same rule to the donor list view.
-- The two impacted edge functions are likely `fetch-fec-donors` and the bulk donor sync used by the admin Donor Import panel; both should share a helper that returns the allowed committee id set for a candidate.
+In each of `AIExplanation`, `DonorAIAnalysisDialog`, `RecipientAIAnalysisDialog`, `BillAIAnalysisDialog`:
+
+- Replace the "click to generate" gate with an auto-fetch on mount/open (the cache lookup is cheap; first-render shows skeleton while the edge fn returns a cached payload).
+- Add a small "Refresh" icon button (RefreshCw) in the header that calls the same edge fn with `force_refresh: true` and overwrites the local state.
+- Show last-generated timestamp ("Updated 5/12/2026") under the title, sourced from `ai_analysis_cache.updated_at` returned alongside the payload.
+- Keep the existing error / retry handling.
+
+For `AIExplanation` specifically: today it auto-shows the "Click below to generate…" placeholder. After the change, that placeholder is gone — content loads automatically and the Refresh button regenerates with the current `userTopicScores`.
+
+## Anonymous users
+
+- Global kinds (donor/recipient/bill): full cache benefit for everyone.
+- Per-user candidate analysis: anonymous visitors still get the generic (no-user-scores) variant, cached as a single global row with `user_id = null` and `input_fingerprint = null`.
+
+## Out of scope
+
+- Background pre-warming, cache TTL/expiration (refresh is manual).
+- Caching admin-only tools (`generate-ai-bill-summaries` already persists into `bills.summary` and is unchanged).
+- UI changes beyond the 4 components above.
+
+## Verification
+
+1. Open Trump's profile → AI Stance Analysis loads from cache on second visit, no spinner.
+2. Click Refresh → spinner, new content, `updated_at` advances.
+3. Sign out → generic analysis cached/served from a separate row.
+4. Open a donor / committee / bill dialog twice → second open is instant; Refresh regenerates.

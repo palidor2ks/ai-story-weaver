@@ -32,6 +32,45 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_analysis_cache: {
+        Row: {
+          created_at: string
+          cycle: string | null
+          id: string
+          input_fingerprint: string | null
+          kind: string
+          model: string | null
+          payload: Json
+          subject_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          cycle?: string | null
+          id?: string
+          input_fingerprint?: string | null
+          kind: string
+          model?: string | null
+          payload: Json
+          subject_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          cycle?: string | null
+          id?: string
+          input_fingerprint?: string | null
+          kind?: string
+          model?: string | null
+          payload?: Json
+          subject_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       bill_ingestion_status: {
         Row: {
           completed_at: string | null
