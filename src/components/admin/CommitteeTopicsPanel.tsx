@@ -83,6 +83,9 @@ const AssignmentsTab = () => {
       const { data, error } = await supabase.functions.invoke('classify-committee-topic', { body: { limit: 50 } });
       if (error) throw error;
       toast.success(data?.queued ? `Queued ${data.queued} committees` : `Classified ${data?.processed ?? 0}`);
+      if (!data?.queued) {
+        await qc.refetchQueries({ queryKey: ['committee-pool'], type: 'active' });
+      }
     } catch (e: any) {
       toast.error(e?.message ?? 'Classification failed');
     } finally {
@@ -97,7 +100,7 @@ const AssignmentsTab = () => {
       });
       if (error) throw error;
       toast.success('AI classified');
-      qc.invalidateQueries({ queryKey: ['committee-pool'] });
+      await qc.refetchQueries({ queryKey: ['committee-pool'], type: 'active' });
     } catch (e: any) {
       toast.error(e?.message ?? 'Failed');
     }
@@ -233,11 +236,17 @@ const AssignmentsTab = () => {
                         <Select
                           value={c.primary_cause_id ?? ''}
                           onValueChange={(causeId) => {
-                            upsert.mutate({
-                              fec_committee_id: c.fec_committee_id,
-                              primary_cause_id: causeId,
-                              secondary_cause_ids: c.secondary_cause_ids ?? [],
-                            });
+                            upsert.mutate(
+                              {
+                                fec_committee_id: c.fec_committee_id,
+                                primary_cause_id: causeId,
+                                secondary_cause_ids: c.secondary_cause_ids ?? [],
+                              },
+                              {
+                                onSuccess: () => toast.success('Cause updated'),
+                                onError: (e: any) => toast.error(e?.message ?? 'Failed to update cause'),
+                              },
+                            );
                           }}
                         >
                           <SelectTrigger className="h-8"><SelectValue placeholder="— pick a cause —" /></SelectTrigger>
@@ -286,7 +295,15 @@ const AssignmentsTab = () => {
                             <Sparkles className="w-3.5 h-3.5" />
                           </Button>
                           {hasAssign && (
-                            <Button variant="ghost" size="sm" onClick={() => del.mutate(c.fec_committee_id)} title="Clear cause">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => del.mutate(c.fec_committee_id, {
+                                onSuccess: () => toast.success('Cause cleared'),
+                                onError: (e: any) => toast.error(e?.message ?? 'Failed to clear cause'),
+                              })}
+                              title="Clear cause"
+                            >
                               <X className="w-3.5 h-3.5" />
                             </Button>
                           )}
