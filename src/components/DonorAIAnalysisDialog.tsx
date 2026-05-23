@@ -94,12 +94,12 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchAnalysis = async () => {
+  const fetchAnalysis = async (force = false) => {
     setIsLoading(true);
     setError(null);
 
     const invokeOnce = () => supabase.functions.invoke('ai-donor-analysis', {
-      body: { donor_id: id, donor_name: name, donor_type: type, cycle },
+      body: { donor_id: id, donor_name: name, donor_type: type, cycle, force_refresh: force },
     });
 
     try {
