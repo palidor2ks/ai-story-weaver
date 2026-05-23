@@ -384,10 +384,19 @@ export const useCandidate = (id: string | undefined) => {
 };
 
 // Extended donor interface with canonical name support
+export interface ViaCommittee {
+  committee_id: string;
+  committee_name: string;
+  designation: string | null;
+  amount: number;
+}
+
 export interface DonorWithCanonical extends Donor {
   display_name: string;
   is_consolidated: boolean;
   name_variations?: string[];
+  via_committees?: ViaCommittee[];
+  is_external_only?: boolean;
 }
 
 export const useCandidateDonors = (candidateId: string | undefined, cycle?: string) => {
