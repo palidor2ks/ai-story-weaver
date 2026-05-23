@@ -39,7 +39,7 @@ export const useCommitteePool = ({ search, source, assigned, page, pageSize = 10
   return useQuery({
     queryKey: ['committee-pool', debouncedSearch, source, assigned, page, pageSize],
     placeholderData: keepPreviousData,
-    staleTime: 1000 * 30,
+    staleTime: 0,
     queryFn: async () => {
       const { data, error } = await supabase.rpc('list_committee_pool' as any, {
         p_search: debouncedSearch || null,
