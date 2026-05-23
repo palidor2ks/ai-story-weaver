@@ -78,7 +78,7 @@ export const RecipientAIAnalysisDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchAnalysis = async () => {
+  const fetchAnalysis = async (force = false) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -92,6 +92,7 @@ export const RecipientAIAnalysisDialog = ({
           office: office ?? null,
           state: state ?? null,
           cycle: cycle ?? null,
+          force_refresh: force,
         },
       });
       if (fnError) throw new Error(normalizeInvokeError(fnError));
