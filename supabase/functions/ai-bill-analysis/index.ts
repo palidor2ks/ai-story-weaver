@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callYouSmart, YouError, type YouCitation } from "../_shared/you-search.ts";
 import { computeDeterministicConfidence } from "../_shared/confidence.ts";
+import { readCache, writeCache, fingerprint } from "../_shared/ai-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
