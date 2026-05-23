@@ -3456,6 +3456,24 @@ export type Database = {
         }
         Relationships: []
       }
+      ie_excluded_committees_public: {
+        Row: {
+          excluded_at: string | null
+          fec_committee_id: string | null
+          reason: string | null
+        }
+        Insert: {
+          excluded_at?: string | null
+          fec_committee_id?: string | null
+          reason?: string | null
+        }
+        Update: {
+          excluded_at?: string | null
+          fec_committee_id?: string | null
+          reason?: string | null
+        }
+        Relationships: []
+      }
       independent_expenditure_cycles: {
         Row: {
           cycle: string | null

@@ -13,8 +13,8 @@ export function useIEExclusions() {
     queryKey: ['ie-exclusions'],
     staleTime: 1000 * 60 * 5,
     queryFn: async (): Promise<IEExclusion[]> => {
-      const { data, error } = await supabase
-        .from('ie_excluded_committees')
+      const { data, error } = await (supabase as any)
+        .from('ie_excluded_committees_public')
         .select('fec_committee_id, reason, excluded_at')
         .order('excluded_at', { ascending: false });
       if (error) throw error;
