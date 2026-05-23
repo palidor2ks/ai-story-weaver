@@ -445,17 +445,32 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
       
       if (donorError) throw donorError;
       if (!rawDonors || rawDonors.length === 0) return [];
-      
+
+      // Fetch the candidate's committee map so we can tag donors that gave through
+      // outside committees (super PACs, JFCs, leadership PACs, etc.) instead of
+      // the principal/authorized campaign.
+      const { data: committeeRows } = await supabase
+        .from('candidate_committees')
+        .select('fec_committee_id, name, designation')
+        .eq('candidate_id', resolvedCandidateId);
+      const committeeMap = new Map<string, { name: string; designation: string | null }>();
+      (committeeRows || []).forEach(c => {
+        if (c.fec_committee_id) {
+          committeeMap.set(c.fec_committee_id, { name: c.name ?? '', designation: c.designation ?? null });
+        }
+      });
+      const isDirectDesignation = (d: string | null) => d === 'P' || d === 'A';
+
       // Group donors by canonical name (display_name set by attach flow / DB trigger)
       const canonicalGroups = new Map<string, DonorWithCanonical>();
 
       rawDonors.forEach(donor => {
         const canonicalName = donor.display_name || donor.name;
         const isConsolidated = !!donor.display_name && donor.display_name !== donor.name;
-        
+
         // Group by display_name and cycle (removes type to consolidate same entity across types)
         const groupKey = `${canonicalName}|${donor.cycle}`;
-        
+
         const existing = canonicalGroups.get(groupKey);
         if (existing) {
           // Merge with existing donor
@@ -466,16 +481,54 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
             existing.name_variations.push(donor.name);
           }
           existing.is_consolidated = true;
+          // Accumulate recipient committee tallies
+          if (donor.recipient_committee_id) {
+            const meta = committeeMap.get(donor.recipient_committee_id);
+            const arr = existing.via_committees ?? [];
+            const found = arr.find(v => v.committee_id === donor.recipient_committee_id);
+            if (found) {
+              found.amount += donor.amount;
+            } else {
+              arr.push({
+                committee_id: donor.recipient_committee_id,
+                committee_name: meta?.name || donor.recipient_committee_name || donor.recipient_committee_id,
+                designation: meta?.designation ?? null,
+                amount: donor.amount,
+              });
+            }
+            existing.via_committees = arr;
+          }
         } else {
+          const via: ViaCommittee[] = [];
+          if (donor.recipient_committee_id) {
+            const meta = committeeMap.get(donor.recipient_committee_id);
+            via.push({
+              committee_id: donor.recipient_committee_id,
+              committee_name: meta?.name || donor.recipient_committee_name || donor.recipient_committee_id,
+              designation: meta?.designation ?? null,
+              amount: donor.amount,
+            });
+          }
           canonicalGroups.set(groupKey, {
             ...donor,
             display_name: canonicalName,
             is_consolidated: isConsolidated,
             name_variations: isConsolidated ? [donor.name] : undefined,
+            via_committees: via,
           });
         }
       });
-      
+
+      // Compute is_external_only: every contribution went through a non-principal/non-authorized committee
+      canonicalGroups.forEach(group => {
+        const via = group.via_committees ?? [];
+        if (via.length === 0) {
+          group.is_external_only = false;
+          return;
+        }
+        group.is_external_only = via.every(v => !isDirectDesignation(v.designation));
+      });
+
       // Sort by amount descending
       return Array.from(canonicalGroups.values())
         .sort((a, b) => b.amount - a.amount);
