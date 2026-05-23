@@ -413,7 +413,8 @@ serve(async (req) => {
       cycle,
       candidate_id: committee.candidate_id, // Will be null for orphan committees
       line_number: donor.lineNumber || null,
-      is_contribution: true,
+      is_contribution: !NON_CONTRIBUTION_LINES.has((donor.lineNumber || '').toUpperCase()),
+      is_vendor_refund: VENDOR_REFUND_LINES.has((donor.lineNumber || '').toUpperCase()),
       is_transfer: false,
     }));
 
