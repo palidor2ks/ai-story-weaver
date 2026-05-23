@@ -36,6 +36,51 @@ Deno.serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+
+  // Authorization: only admins (or service-role internal calls) may send
+  // transactional emails to arbitrary recipients. verify_jwt=true ensures a
+  // valid JWT exists; we additionally require the admin role to prevent any
+  // authenticated user from sending official PoliPulse-branded emails.
+  const authHeader = req.headers.get('Authorization') ?? ''
+  const token = authHeader.replace(/^Bearer\s+/i, '')
+  let isServiceRole = false
+  let isAdmin = false
+  try {
+    if (supabaseUrl && supabaseAnonKey && token) {
+      const authedClient = (await import('npm:@supabase/supabase-js@2')).createClient(
+        supabaseUrl,
+        supabaseAnonKey,
+        { global: { headers: { Authorization: `Bearer ${token}` } } }
+      )
+      const { data: claimsData } = await authedClient.auth.getClaims(token)
+      const role = (claimsData?.claims as any)?.role
+      if (role === 'service_role') {
+        isServiceRole = true
+      } else {
+        const uid = (claimsData?.claims as any)?.sub
+        if (uid) {
+          const { data: roleRow } = await authedClient
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', uid)
+            .eq('role', 'admin')
+            .maybeSingle()
+          isAdmin = !!roleRow
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Auth check failed', e)
+  }
+
+  if (!isServiceRole && !isAdmin) {
+    return new Response(JSON.stringify({ error: 'Forbidden' }), {
+      status: 403,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
   if (!supabaseUrl || !supabaseServiceKey) {
