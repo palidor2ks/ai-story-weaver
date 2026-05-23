@@ -418,11 +418,15 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
         }
       }
       
-      // First get raw donors
+      // First get raw donors — exclude FEC vendor refunds and non-contribution
+      // receipt lines (Line 15/17 offsets, Line 18/20A/21 transfers/refunds out)
+      // so vendors like AIR PARTNER LLC don't appear in the donor list.
       let donorsQuery = supabase
         .from('donors')
         .select('*')
-        .eq('candidate_id', resolvedCandidateId);
+        .eq('candidate_id', resolvedCandidateId)
+        .eq('is_contribution', true)
+        .eq('is_vendor_refund', false);
       if (cycle && cycle !== 'all') {
         donorsQuery = donorsQuery.eq('cycle', cycle);
       }

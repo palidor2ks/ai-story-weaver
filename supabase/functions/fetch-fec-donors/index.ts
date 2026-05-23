@@ -166,14 +166,18 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
   } else if (isLine12) {
     return { isContribution: true, isTransfer: true, receiptType: 'transfer', contributionCategory: 'other' };
   } else if (isLine15) {
-    // Line 15 = Other receipts (slate mailers, refunds, misc) - treat as contributions for display
-    return { isContribution: true, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
+    // Line 15 = Offsets to Operating Expenditures (vendor refunds/rebates).
+    // NOT a real contribution — flag as vendor refund so it stays out of donor lists.
+    return { isContribution: false, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
   } else if (isLine17) {
-    return { isContribution: true, isTransfer: false, receiptType: 'contribution', contributionCategory: 'other' };
+    // Line 17 = Other Federal Receipts (dividends, interest, misc rebates).
+    // Not a contribution; exclude from donor lists.
+    return { isContribution: false, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
   }
   
-  // Default: still mark as contribution so it appears in donor list
-  return { isContribution: true, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
+  // Lines 18 (transfers in), 20A (refunds of contributions, i.e. outflows),
+  // 21 (other disbursements) and anything else: not a donor contribution.
+  return { isContribution: false, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
 }
 
 // Generate a stable SHA-256 based ID for donor identity (aggregated)
