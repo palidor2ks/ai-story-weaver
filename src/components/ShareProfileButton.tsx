@@ -39,10 +39,11 @@ export const ShareProfileButton = ({
 
   return (
     <>
-      <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
-        <Share2 className="h-4 w-4" />
-        Share
-      </Button>
+      <IconActionButton
+        label="Share"
+        icon={<Share2 className="h-4 w-4" />}
+        onClick={() => setOpen(true)}
+      />
       <ShareCardModal
         open={open}
         onOpenChange={setOpen}
