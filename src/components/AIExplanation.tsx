@@ -105,7 +105,22 @@ export const AIExplanation = ({
               {matchScore}% Match
             </span>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-auto h-7 w-7"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            title="Regenerate analysis"
+          >
+            <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+          </Button>
         </CardTitle>
+        {analysis?.updated_at && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Updated {new Date(analysis.updated_at).toLocaleDateString()}
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         {/* Summary - Always visible */}
@@ -119,11 +134,12 @@ export const AIExplanation = ({
             <p className="text-foreground leading-relaxed">{analysis.summary}</p>
           ) : (
             <p className="text-muted-foreground italic">
-              Click below to generate an AI-powered analysis of {candidateName}&apos;s political positions
-              {hasUserScores ? ' and how they compare to yours.' : '.'}
+              Loading analysis of {candidateName}&apos;s political positions
+              {hasUserScores ? ' and how they compare to yours...' : '...'}
             </p>
           )}
         </div>
+
 
         {/* Personalized Comparison Section */}
         {analysis?.personalizedComparison && (
