@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Share2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
 
 interface TopicComparison {
