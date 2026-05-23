@@ -16,6 +16,7 @@ interface RequestBody {
   donor_name: string;
   donor_type: string;
   cycle?: string | null;
+  force_refresh?: boolean;
 }
 
 function json(body: unknown, status = 200) {
