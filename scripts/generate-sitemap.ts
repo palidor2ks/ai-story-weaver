@@ -28,6 +28,10 @@ const staticEntries: SitemapEntry[] = [
   { path: "/terms", changefreq: "yearly", priority: "0.3" },
   { path: "/privacy", changefreq: "yearly", priority: "0.3" },
   { path: "/data-deletion", changefreq: "yearly", priority: "0.3" },
+  { path: "/top-spenders", changefreq: "weekly", priority: "0.7" },
+  { path: "/results", changefreq: "monthly", priority: "0.4" },
+  { path: "/verify-email", changefreq: "yearly", priority: "0.2" },
+  { path: "/unsubscribe", changefreq: "yearly", priority: "0.2" },
 ];
 
 async function fetchRows(table: string, select: string, extra = ""): Promise<any[]> {
@@ -106,11 +110,9 @@ async function main() {
     if (c?.id) entries.push({ path: `/candidate/${c.id}`, changefreq: "weekly", priority: "0.6" });
   }
 
-  // Donors
-  const donors = await fetchRows("donors", "id");
-  for (const d of donors) {
-    if (d?.id) entries.push({ path: `/donor/${d.id}`, changefreq: "weekly", priority: "0.5" });
-  }
+  // Donors — intentionally omitted from sitemap. /donor/:id requires
+  // authentication (RLS on `donors` table is authenticated-only) and the
+  // table has >1M rows; these pages are not meant to be indexed.
 
   writeFileSync(resolve("public/sitemap.xml"), xml(entries));
   console.log(`sitemap.xml written (${entries.length} entries)`);
