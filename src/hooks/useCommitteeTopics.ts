@@ -1,7 +1,7 @@
 // NOTE: Filename kept for stability. Conceptually this is now "committee causes"
 // (Pro-Israel, Pro-gun, etc.) — not the 17 quiz topics. Each cause maps to a
 // quiz topic via `committee_causes.quiz_topic_id`.
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface CommitteeCause {
@@ -92,6 +92,27 @@ export const useAllCommitteeTopics = () => {
   });
 };
 
+const patchCommitteePoolRows = (
+  qc: QueryClient,
+  fecCommitteeId: string,
+  topic: Partial<CommitteeTopicRow> | null,
+) => {
+  qc.setQueriesData<{ rows: any[]; total: number }>({ queryKey: ['committee-pool'] }, (old) => {
+    if (!old?.rows) return old;
+    return {
+      ...old,
+      rows: old.rows.map((row) => row.fec_committee_id === fecCommitteeId ? {
+        ...row,
+        primary_cause_id: topic?.primary_cause_id ?? null,
+        secondary_cause_ids: topic?.secondary_cause_ids ?? [],
+        admin_overridden: topic?.admin_overridden ?? null,
+        ai_confidence: topic?.ai_confidence ?? null,
+        ai_reasoning: topic?.ai_reasoning ?? null,
+      } : row),
+    };
+  });
+};
+
 export const useUpsertCommitteeTopic = () => {
   const qc = useQueryClient();
   return useMutation({
@@ -114,7 +135,8 @@ export const useUpsertCommitteeTopic = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_d, vars) => {
+    onSuccess: (data, vars) => {
+      patchCommitteePoolRows(qc, vars.fec_committee_id, data as unknown as CommitteeTopicRow);
       qc.invalidateQueries({ queryKey: ['committee-topic', vars.fec_committee_id] });
       qc.invalidateQueries({ queryKey: ['committee-topics-all'] });
       qc.invalidateQueries({ queryKey: ['committee-topics-map'] });
@@ -133,7 +155,8 @@ export const useDeleteCommitteeTopic = () => {
         .eq('fec_committee_id', fec_committee_id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, fecCommitteeId) => {
+      patchCommitteePoolRows(qc, fecCommitteeId, null);
       qc.invalidateQueries({ queryKey: ['committee-topic'] });
       qc.invalidateQueries({ queryKey: ['committee-topics-all'] });
       qc.invalidateQueries({ queryKey: ['committee-topics-map'] });
