@@ -44,9 +44,7 @@ export const AIExplanation = ({
 
   const hasUserScores = userTopicScores && userTopicScores.length > 0;
 
-  const fetchAnalysis = async () => {
-    if (analysis) return; // Already loaded
-    
+  const fetchAnalysis = async (force = false) => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('ai-candidate-explanation', {
@@ -56,6 +54,7 @@ export const AIExplanation = ({
           topicScores,
           userTopicScores: hasUserScores ? userTopicScores : undefined,
           matchScore: hasUserScores ? matchScore : undefined,
+          force_refresh: force,
         },
       });
 
@@ -74,11 +73,20 @@ export const AIExplanation = ({
     }
   };
 
+  // Auto-load on mount (and when the candidate or user-score profile changes).
+  useEffect(() => {
+    if (!candidateId) return;
+    fetchAnalysis(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidateId, hasUserScores, matchScore]);
+
   const handleToggle = () => {
-    if (!isOpen && !analysis) {
-      fetchAnalysis();
-    }
     setIsOpen(!isOpen);
+  };
+
+  const handleRefresh = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fetchAnalysis(true);
   };
 
   return (
