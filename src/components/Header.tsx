@@ -7,6 +7,7 @@ import { User, LayoutGrid, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shi
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
+import { BetaBadge } from '@/components/BetaBadge';
 
 export const Header = () => {
   const location = useLocation();
