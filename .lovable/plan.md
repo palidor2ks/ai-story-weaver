@@ -1,52 +1,41 @@
-## Why these are showing up
+## Goal
 
-AIR PARTNER LLC and HARRIS SIKES MEDIA LLC are not donors — they are vendors (charter jet + media buyer) that issued refunds/rebates to Trump-aligned committees. The FEC reports those refunds on Schedule A under specific line numbers:
+Keep super PAC / IE-only / JFC donors visible on the candidate donor list (so $1M from Lonsdale Enterprises to AMERICA PAC still appears under Trump), but visually flag them so users immediately see the money went to a supporting outside committee, not the candidate's direct campaign.
 
-- **Line 15** — "Offsets to Operating Expenditures" (Form 3X). Vendor refunds, rebates, returned bank charges. ~$6.3M of Organization-typed "donors" come in on this line.
-- **Line 17** — "Other Federal Receipts" (Form 3X). Dividends, interest, miscellaneous rebates. ~$3.4M of Organization-typed entries and another ~$46M of Individual-typed entries are flagged here.
+## What changes
 
-In `supabase/functions/fetch-fec-donors/index.ts` (`classifyLineNumber`), both Line 15 and Line 17 are currently returned with `isContribution: true`. So the importer writes them into `donors` and they appear in donor lists/totals as if they were contributions.
+### 1. Donor query — carry committee designation through aggregation
 
-A few other lines (18 transfers in, 20A refunds-of-contributions, 21 other disbursements) are also leaking into the donor table and should not be there either.
+In `src/hooks/useCandidates.ts` (`useCandidateDonors`):
+- After fetching raw donors, also fetch `candidate_committees` rows for that candidate (`fec_committee_id`, `name`, `designation`, `role`) and build a map keyed by `fec_committee_id`.
+- When grouping donors by canonical name + cycle, collect a `recipient_committees` array of `{ committee_id, committee_name, designation, role }` for each unique recipient.
+- Compute two derived flags per grouped donor:
+  - `via_committees`: list of distinct non-principal recipients (designation in `O`, `U`, `D`, `J`, `B` — i.e. anything that isn't `P` Principal / `A` Authorized for this candidate).
+  - `is_external_only`: true when **every** contribution for this donor went through a non-principal/non-authorized committee.
 
-## Fix
+### 2. DonorCard — render badge
 
-### 1. Reclassify non-contribution receipt lines
+In `src/components/DonorCard.tsx`:
+- Add optional props: `viaCommittees?: { name: string; designation: string }[]`, `isExternalOnly?: boolean`.
+- When `viaCommittees` is non-empty, render a small badge under the donor name:
+  - `is_external_only` and one committee → `via AMERICA PAC · Super PAC`
+  - `is_external_only` and multiple → `via 3 outside committees`
+  - mixed (gave to both direct + outside) → `+ via AMERICA PAC` (muted, smaller)
+- Use a neutral/amber badge style (not the donation-amount green) so it reads as a caveat, not a stat.
+- Map designation → label: `O` Super PAC, `U` Unauthorized, `D` Leadership PAC, `J` JFC, `B` Lobbyist/Registrant PAC, fallback "Outside committee".
 
-In `supabase/functions/fetch-fec-donors/index.ts`:
+### 3. Wire it through CandidateProfile donor list
 
-- Line 15 → `isContribution: false`, `receiptType: 'other_receipt'`, set `is_vendor_refund: true`.
-- Line 17 → `isContribution: false`, `receiptType: 'other_receipt'`. Keep `is_vendor_refund: true` when the entity is an Organization (vendor rebate); for Individuals on Line 17 (rare; usually misc rebates/escheat), still mark `isContribution: false` so they don't inflate donor totals.
-- Lines 18, 20A, 21 → `isContribution: false` (these are transfers or outflows, not donor contributions). Skip insert entirely rather than store as `donor` rows.
+In `src/pages/CandidateProfile.tsx` where DonorCards are rendered from `donors`, pass the new fields.
 
-Apply the same classification in `supabase/functions/fetch-committee-donors/index.ts` (it has its own insert path with `line_number`).
+## Out of scope
 
-### 2. Exclude non-contributions from the donor list UI / RPCs
+- No backend / RPC changes; designations already exist in `candidate_committees`.
+- No change to donor totals, reconciliation, or DonorProfile page.
+- No change to how super PAC donors are *counted* in finance summaries — purely a label on the donor card.
 
-The donor list is served by `get_donors_paginated`, `search_donors_by_name`, and `search_raw_donors_by_name` (see `src/hooks/useDonorsPaginated.ts`) plus the candidate profile donors query. All of them should filter out rows where `is_contribution = false` OR `is_vendor_refund = true` OR `line_number IN ('15','17','17A','17C','18','20A','21')`.
+## Files touched
 
-- Add a migration that updates each RPC to add a `WHERE is_contribution AND NOT COALESCE(is_vendor_refund,false) AND COALESCE(line_number,'') NOT IN ('15','17','17A','17C','18','20A','21')` clause.
-- Keep the rows in the table (useful for reconciliation against FEC totals) but hide them from donor browsing.
-
-### 3. Backfill existing data
-
-One-off SQL migration to update already-imported rows so the UI fix takes effect without a re-sync:
-
-```sql
-UPDATE public.donors
-SET is_contribution = false,
-    is_vendor_refund = true
-WHERE line_number IN ('15','17','17A','17C');
-
-UPDATE public.donors
-SET is_contribution = false
-WHERE line_number IN ('18','20A','21');
-```
-
-### 4. Reconciliation card
-
-`FinanceReconciliationCard` already shows Line 14/15 offsets. Verify it still reads from `donors` correctly after the flag flip (it uses `is_vendor_refund`/`line_number` filters, not `is_contribution`), so the offset totals on the candidate finance page continue to match FEC.
-
-## Result
-
-AIR PARTNER LLC, HARRIS SIKES MEDIA LLC, and similar vendor refund/rebate entries will no longer appear in the donor list for Trump or any other candidate. They remain in the database for reconciliation but are correctly classified as offsets, not contributions.
+- `src/hooks/useCandidates.ts` — enrich `useCandidateDonors` result with `via_committees` / `is_external_only`.
+- `src/components/DonorCard.tsx` — new props + badge.
+- `src/pages/CandidateProfile.tsx` — pass new props through.
