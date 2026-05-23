@@ -289,9 +289,10 @@ export const CandidateProfile = () => {
             />
 
             {/* Info */}
-            <div className="flex-1">
-              <div className="flex flex-wrap items-start gap-4 mb-4">
-                <div>
+            <div className="flex-1 min-w-0">
+              {/* Top row: name/badges on left, action icons on right */}
+              <div className="flex items-start gap-3 mb-4">
+                <div className="flex-1 min-w-0">
                   <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground">
                     {candidate.name}
                   </h1>
@@ -303,80 +304,76 @@ export const CandidateProfile = () => {
                       {candidate.state} {candidate.district && `(${candidate.district})`}
                     </span>
                   </div>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <Badge variant="outline" className={cn("border text-sm", getPartyColor(candidate.party))}>
+                      {candidate.party}
+                    </Badge>
+                    {isClaimed && (
+                      <Badge variant="secondary" className="bg-agree/10 text-agree border-agree/30">
+                        <BadgeCheck className="h-3 w-3 mr-1" />
+                        Verified
+                      </Badge>
+                    )}
+                    {candidate.hasOverride && isAdmin && (
+                      <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/30">
+                        Overridden
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <Badge variant="outline" className={cn("border text-sm", getPartyColor(candidate.party))}>
-                  {candidate.party}
-                </Badge>
-                {isClaimed && (
-                  <Badge variant="secondary" className="bg-agree/10 text-agree border-agree/30">
-                    <BadgeCheck className="h-3 w-3 mr-1" />
-                    Verified
-                  </Badge>
-                )}
-                {candidate.hasOverride && isAdmin && (
-                  <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/30">
-                    Overridden
-                  </Badge>
-                )}
-              </div>
-              
-              {/* Edit Button (Admin or Politician Owner) */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {canEdit && (
-                  <IconActionButton
-                    label="Edit"
-                    icon={<Pencil className="h-4 w-4" />}
-                    onClick={() => setIsEditDialogOpen(true)}
+
+                {/* Action icons — top right */}
+                <div className="flex flex-wrap justify-end items-center gap-2 shrink-0">
+                  {canEdit && (
+                    <IconActionButton
+                      label="Edit"
+                      icon={<Pencil className="h-4 w-4" />}
+                      onClick={() => setIsEditDialogOpen(true)}
+                    />
+                  )}
+                  {isPoliticianOwner && (
+                    <Link to="/politician" aria-label="Answer Questions">
+                      <IconActionButton
+                        label="Answer Questions"
+                        icon={<FileText className="h-4 w-4" />}
+                      />
+                    </Link>
+                  )}
+                  <ClaimProfileDialog
+                    candidateId={candidate.id}
+                    candidateName={candidate.name}
+                    isAlreadyClaimed={isClaimed}
                   />
-                )}
-
-                {/* Link to Politician Dashboard for profile owner */}
-                {isPoliticianOwner && (
-                  <Link to="/politician" aria-label="Answer Questions">
-                    <IconActionButton
-                      label="Answer Questions"
-                      icon={<FileText className="h-4 w-4" />}
-                    />
-                  </Link>
-                )}
-
-                {/* Claim Profile Button */}
-                <ClaimProfileDialog
-                  candidateId={candidate.id}
-                  candidateName={candidate.name}
-                  isAlreadyClaimed={isClaimed}
-                />
-
-                {/* AI Analysis Button */}
-                <RecipientAIAnalysisDialog
-                  entityKind="candidate"
-                  entityId={candidate.id}
-                  entityName={candidate.name}
-                  fecId={candidate.fec_candidate_id ?? null}
-                  party={candidate.party}
-                  office={candidate.office}
-                  state={candidate.state}
-                  trigger={
-                    <IconActionButton
-                      label="AI Analysis"
-                      icon={<Sparkles className="h-4 w-4" />}
-                    />
-                  }
-                />
-
-                <ShareProfileButton
-                  candidateName={candidate.name}
-                  candidateOffice={candidate.office}
-                  candidateParty={candidate.party}
-                  candidateScore={resolvedScore}
-                  candidateImage={representativeDetails?.image_url || candidate.image_url}
-                  userScore={userScore}
-                  matchScore={matchScore}
-                  agreements={agreements}
-                  disagreements={disagreements}
-                  profileUrl={window.location.href}
-                />
+                  <RecipientAIAnalysisDialog
+                    entityKind="candidate"
+                    entityId={candidate.id}
+                    entityName={candidate.name}
+                    fecId={candidate.fec_candidate_id ?? null}
+                    party={candidate.party}
+                    office={candidate.office}
+                    state={candidate.state}
+                    trigger={
+                      <IconActionButton
+                        label="AI Analysis"
+                        icon={<Sparkles className="h-4 w-4" />}
+                      />
+                    }
+                  />
+                  <ShareProfileButton
+                    candidateName={candidate.name}
+                    candidateOffice={candidate.office}
+                    candidateParty={candidate.party}
+                    candidateScore={resolvedScore}
+                    candidateImage={representativeDetails?.image_url || candidate.image_url}
+                    userScore={userScore}
+                    matchScore={matchScore}
+                    agreements={agreements}
+                    disagreements={disagreements}
+                    profileUrl={window.location.href}
+                  />
+                </div>
               </div>
+
 
               {/* Score Display */}
               <CandidateScoreCard score={resolvedScore} matchScore={matchScore} userScore={profile?.overall_score ?? null} className="mb-4" />
