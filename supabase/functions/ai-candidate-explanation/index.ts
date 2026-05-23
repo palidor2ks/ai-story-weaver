@@ -42,7 +42,35 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id);
 
-    const { candidateId, candidateName, topicScores, userTopicScores, matchScore } = await req.json();
+    const { candidateId, candidateName, topicScores, userTopicScores, matchScore, force_refresh } = await req.json();
+
+    // Cache lookup: candidate analyses are per-user when a user score profile is provided,
+    // otherwise a single shared row.
+    const hasUserScores = Array.isArray(userTopicScores) && userTopicScores.length > 0;
+    const fp = hasUserScores
+      ? await fingerprint(
+          (userTopicScores as Array<{ topicId: string; score: number }>)
+            .map((t) => ({ t: t.topicId, s: Number(t.score) }))
+            .sort((a, b) => a.t.localeCompare(b.t)),
+        )
+      : null;
+    const cacheKey = {
+      kind: "candidate" as const,
+      subject_id: String(candidateId ?? ""),
+      cycle: null,
+      user_id: hasUserScores ? user.id : null,
+      input_fingerprint: fp,
+    };
+
+    if (!force_refresh && cacheKey.subject_id) {
+      const cached = await readCache<Record<string, unknown>>(cacheKey);
+      if (cached) {
+        return new Response(
+          JSON.stringify({ ...cached.payload, cached: true, updated_at: cached.updated_at }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // Look up authoritative candidate context (office/state/district/party) so the AI
     // does not hallucinate a different person who shares the same name.
