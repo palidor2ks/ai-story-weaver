@@ -26,6 +26,7 @@ interface RequestBody {
   is_sponsor: boolean;
   sponsorship_date?: string | null;
   bill_url?: string | null;
+  force_refresh?: boolean;
 }
 
 function json(body: unknown, status = 200) {
