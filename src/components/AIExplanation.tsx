@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronUp, Sparkles, ExternalLink, Loader2, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ChevronDown, ChevronUp, Sparkles, ExternalLink, Loader2, ThumbsUp, ThumbsDown, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,8 @@ interface AIAnalysis {
   deepAnalysis: string;
   personalizedComparison?: PersonalizedComparison;
   sources: Array<{ title: string; url: string }>;
+  updated_at?: string;
+  cached?: boolean;
 }
 
 export const AIExplanation = ({ 
@@ -42,9 +44,7 @@ export const AIExplanation = ({
 
   const hasUserScores = userTopicScores && userTopicScores.length > 0;
 
-  const fetchAnalysis = async () => {
-    if (analysis) return; // Already loaded
-    
+  const fetchAnalysis = async (force = false) => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('ai-candidate-explanation', {
@@ -54,6 +54,7 @@ export const AIExplanation = ({
           topicScores,
           userTopicScores: hasUserScores ? userTopicScores : undefined,
           matchScore: hasUserScores ? matchScore : undefined,
+          force_refresh: force,
         },
       });
 
@@ -72,11 +73,20 @@ export const AIExplanation = ({
     }
   };
 
+  // Auto-load on mount (and when the candidate or user-score profile changes).
+  useEffect(() => {
+    if (!candidateId) return;
+    fetchAnalysis(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidateId, hasUserScores, matchScore]);
+
   const handleToggle = () => {
-    if (!isOpen && !analysis) {
-      fetchAnalysis();
-    }
     setIsOpen(!isOpen);
+  };
+
+  const handleRefresh = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fetchAnalysis(true);
   };
 
   return (
@@ -95,7 +105,22 @@ export const AIExplanation = ({
               {matchScore}% Match
             </span>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-auto h-7 w-7"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            title="Regenerate analysis"
+          >
+            <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+          </Button>
         </CardTitle>
+        {analysis?.updated_at && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Updated {new Date(analysis.updated_at).toLocaleDateString()}
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         {/* Summary - Always visible */}
@@ -109,11 +134,12 @@ export const AIExplanation = ({
             <p className="text-foreground leading-relaxed">{analysis.summary}</p>
           ) : (
             <p className="text-muted-foreground italic">
-              Click below to generate an AI-powered analysis of {candidateName}&apos;s political positions
-              {hasUserScores ? ' and how they compare to yours.' : '.'}
+              Loading analysis of {candidateName}&apos;s political positions
+              {hasUserScores ? ' and how they compare to yours...' : '...'}
             </p>
           )}
         </div>
+
 
         {/* Personalized Comparison Section */}
         {analysis?.personalizedComparison && (

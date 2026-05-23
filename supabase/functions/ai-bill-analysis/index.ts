@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callYouSmart, YouError, type YouCitation } from "../_shared/you-search.ts";
 import { computeDeterministicConfidence } from "../_shared/confidence.ts";
+import { readCache, writeCache, fingerprint } from "../_shared/ai-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +26,7 @@ interface RequestBody {
   is_sponsor: boolean;
   sponsorship_date?: string | null;
   bill_url?: string | null;
+  force_refresh?: boolean;
 }
 
 function json(body: unknown, status = 200) {
@@ -83,6 +85,18 @@ Deno.serve(async (req) => {
 
     if (!candidateName || (!billName && !billNumber)) {
       return json({ error: "candidate_name and bill information are required" }, 400);
+    }
+
+    // Bill analysis depends on which candidate is being viewed (sponsor vs cosponsor
+    // and their record), so cache per bill + candidate + role.
+    const subjectId = String(body.bill_id ?? `${billType}-${billNumber}-${body.congress ?? ''}`).trim();
+    const fp = await fingerprint({ candidate: candidateName, role: body.is_sponsor ? 's' : 'c' });
+    const cacheKey = { kind: "bill" as const, subject_id: subjectId, input_fingerprint: fp };
+    if (!body.force_refresh && subjectId) {
+      const cached = await readCache<Record<string, unknown>>(cacheKey);
+      if (cached) {
+        return json({ ...cached.payload, cached: true, updated_at: cached.updated_at });
+      }
     }
 
     const billLabel = billType && billNumber ? `${billType} ${billNumber}` : billName;
@@ -280,7 +294,7 @@ Output ONLY a JSON object, no prose:
       ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
       : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
 
-    return json({
+    const responseBody = {
       provider,
       provider_errors: providerErrors,
       summary: String(parsed.summary ?? ""),
@@ -296,7 +310,9 @@ Output ONLY a JSON object, no prose:
       confidence,
       confidence_rationale,
       sources,
-    });
+    };
+    const saved = await writeCache(cacheKey, responseBody, provider);
+    return json({ ...responseBody, cached: false, updated_at: saved?.updated_at });
   } catch (e) {
     console.error("ai-bill-analysis error", e);
     return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { readCache, writeCache, fingerprint } from "../_shared/ai-cache.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,7 +42,35 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id);
 
-    const { candidateId, candidateName, topicScores, userTopicScores, matchScore } = await req.json();
+    const { candidateId, candidateName, topicScores, userTopicScores, matchScore, force_refresh } = await req.json();
+
+    // Cache lookup: candidate analyses are per-user when a user score profile is provided,
+    // otherwise a single shared row.
+    const hasUserScores = Array.isArray(userTopicScores) && userTopicScores.length > 0;
+    const fp = hasUserScores
+      ? await fingerprint(
+          (userTopicScores as Array<{ topicId: string; score: number }>)
+            .map((t) => ({ t: t.topicId, s: Number(t.score) }))
+            .sort((a, b) => a.t.localeCompare(b.t)),
+        )
+      : null;
+    const cacheKey = {
+      kind: "candidate" as const,
+      subject_id: String(candidateId ?? ""),
+      cycle: null,
+      user_id: hasUserScores ? user.id : null,
+      input_fingerprint: fp,
+    };
+
+    if (!force_refresh && cacheKey.subject_id) {
+      const cached = await readCache<Record<string, unknown>>(cacheKey);
+      if (cached) {
+        return new Response(
+          JSON.stringify({ ...cached.payload, cached: true, updated_at: cached.updated_at }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // Look up authoritative candidate context (office/state/district/party) so the AI
     // does not hallucinate a different person who shares the same name.
@@ -246,8 +275,14 @@ Remember: be objective, non-partisan, and analyze ONLY the person identified in 
 
     console.log('AI analysis generated successfully, personalized:', !!analysis.personalizedComparison);
 
+    let updated_at: string | undefined;
+    if (cacheKey.subject_id) {
+      const saved = await writeCache(cacheKey, analysis, 'google/gemini-3-flash-preview');
+      updated_at = saved?.updated_at;
+    }
+
     return new Response(
-      JSON.stringify(analysis),
+      JSON.stringify({ ...analysis, cached: false, updated_at }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: unknown) {

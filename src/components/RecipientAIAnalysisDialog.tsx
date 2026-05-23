@@ -78,7 +78,7 @@ export const RecipientAIAnalysisDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchAnalysis = async () => {
+  const fetchAnalysis = async (force = false) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -92,6 +92,7 @@ export const RecipientAIAnalysisDialog = ({
           office: office ?? null,
           state: state ?? null,
           cycle: cycle ?? null,
+          force_refresh: force,
         },
       });
       if (fnError) throw new Error(normalizeInvokeError(fnError));
@@ -128,7 +129,8 @@ export const RecipientAIAnalysisDialog = ({
             </div>
             {analysis && !isLoading && (
               <div className="flex items-center gap-2 shrink-0">
-                <Button size="sm" variant="outline" onClick={fetchAnalysis}>
+                <Button size="sm" variant="outline" onClick={() => fetchAnalysis(true)}>
+
                   <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                   Regenerate
                 </Button>
@@ -162,7 +164,7 @@ export const RecipientAIAnalysisDialog = ({
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
-            <Button size="sm" variant="outline" onClick={fetchAnalysis}>Retry</Button>
+            <Button size="sm" variant="outline" onClick={() => fetchAnalysis(false)}>Retry</Button>
           </div>
         )}
 

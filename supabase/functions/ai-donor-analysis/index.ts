@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { callYouSmart, YouError, type YouCitation } from "../_shared/you-search.ts";
 import { computeDeterministicConfidence } from "../_shared/confidence.ts";
+import { readCache, writeCache } from "../_shared/ai-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,6 +16,7 @@ interface RequestBody {
   donor_name: string;
   donor_type: string;
   cycle?: string | null;
+  force_refresh?: boolean;
 }
 
 function json(body: unknown, status = 200) {
@@ -88,6 +90,14 @@ Deno.serve(async (req) => {
 
     if (!donor_id || !donor_name) {
       return json({ error: "donor_id and donor_name are required" }, 400);
+    }
+
+    const cacheKey = { kind: "donor" as const, subject_id: donor_id, cycle };
+    if (!body.force_refresh) {
+      const cached = await readCache<Record<string, unknown>>(cacheKey);
+      if (cached) {
+        return json({ ...cached.payload, cached: true, updated_at: cached.updated_at });
+      }
     }
 
     const admin = createClient(supabaseUrl, serviceKey);
@@ -420,7 +430,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
       ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
       : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
 
-    return json({
+    const responseBody = {
       provider,
       provider_errors: providerErrors,
       summary: String(parsed.summary ?? ""),
@@ -449,7 +459,10 @@ Output ONLY a JSON object, no prose. Use this exact schema:
         fec_committee_ids: fecCommitteeIds,
         alias_canonical_name: aliasCanonicalName,
       },
-    });
+    };
+
+    const saved = await writeCache(cacheKey, responseBody, provider);
+    return json({ ...responseBody, cached: false, updated_at: saved?.updated_at });
   } catch (e) {
     console.error("ai-donor-analysis error", e);
     return json(
