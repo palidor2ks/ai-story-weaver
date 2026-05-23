@@ -47,7 +47,7 @@ export function CandidateScoreCard({ score, matchScore, userScore, className }: 
   return (
     <div
       className={cn(
-        'relative rounded-2xl border bg-gradient-to-br from-card to-muted/40 p-5 shadow-sm overflow-hidden',
+        'relative w-full rounded-2xl border bg-gradient-to-br from-card to-muted/40 p-4 sm:p-5 shadow-sm overflow-hidden',
         className
       )}
     >
@@ -57,9 +57,9 @@ export function CandidateScoreCard({ score, matchScore, userScore, className }: 
         className="pointer-events-none absolute -top-12 -right-12 h-32 w-32 rounded-full bg-primary/10 blur-2xl"
       />
 
-      <div className="flex items-end justify-between gap-4 mb-4">
-        <div>
-          <div className={cn('text-5xl font-extrabold tracking-tight leading-none', colorClass)}>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <div className={cn('text-4xl sm:text-5xl font-extrabold tracking-tight leading-none break-words', colorClass)}>
             {scoreText}
           </div>
           <div className="mt-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -67,7 +67,7 @@ export function CandidateScoreCard({ score, matchScore, userScore, className }: 
           </div>
         </div>
         {typeof matchScore === 'number' && !isNA && (
-          <div className="text-right">
+          <div className="sm:text-right">
             <div className="text-2xl font-bold text-foreground leading-none">
               {Math.round(matchScore)}%
             </div>

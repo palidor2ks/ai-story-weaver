@@ -5,6 +5,7 @@ import { Seo } from '@/components/Seo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { IconActionButton } from '@/components/ui/icon-action-button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowLeft, DollarSign, Users, Landmark, MapPin, Calendar, RefreshCw, TrendingUp, Sparkles } from 'lucide-react';
@@ -191,10 +192,11 @@ export const CommitteeProfile = () => {
                   fecId={committee.fecCommitteeId ?? null}
                   cycle={effectiveCycle ?? null}
                   trigger={
-                    <Button variant="outline" size="sm" className="gap-2 ml-1">
-                      <Sparkles className="h-4 w-4" />
-                      AI Analysis
-                    </Button>
+                    <IconActionButton
+                      label="AI Analysis"
+                      icon={<Sparkles className="h-4 w-4" />}
+                      className="ml-1"
+                    />
                   }
                 />
 

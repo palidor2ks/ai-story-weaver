@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useMyClaimForCandidate, useSubmitClaim } from '@/hooks/useProfileClaims';
 import { Button } from '@/components/ui/button';
+import { IconActionButton } from '@/components/ui/icon-action-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -99,10 +100,10 @@ export function ClaimProfileDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <UserCheck className="h-4 w-4" />
-          Claim This Profile
-        </Button>
+        <IconActionButton
+          label="Claim This Profile"
+          icon={<UserCheck className="h-4 w-4" />}
+        />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
