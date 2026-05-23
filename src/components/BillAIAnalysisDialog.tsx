@@ -142,7 +142,8 @@ export const BillAIAnalysisDialog = ({
             </div>
             {analysis && !isLoading && (
               <div className="flex items-center gap-2 shrink-0">
-                <Button size="sm" variant="outline" onClick={fetchAnalysis}>
+                <Button size="sm" variant="outline" onClick={() => fetchAnalysis(true)}>
+
                   <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                   Regenerate
                 </Button>
