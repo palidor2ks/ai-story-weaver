@@ -26,6 +26,8 @@ interface AIAnalysis {
   deepAnalysis: string;
   personalizedComparison?: PersonalizedComparison;
   sources: Array<{ title: string; url: string }>;
+  updated_at?: string;
+  cached?: boolean;
 }
 
 export const AIExplanation = ({ 
