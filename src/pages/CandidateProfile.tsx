@@ -939,6 +939,52 @@ export const CandidateProfile = () => {
                                           {isConduit && (
                                             <span className="text-xs text-amber-600">Pass-through</span>
                                           )}
+                                          {(() => {
+                                            const via = donor.via_committees ?? [];
+                                            const external = via.filter(v => v.designation !== 'P' && v.designation !== 'A');
+                                            if (external.length === 0) return null;
+                                            const designationLabel = (d: string | null) => {
+                                              switch (d) {
+                                                case 'O': return 'Super PAC';
+                                                case 'U': return 'Unauthorized';
+                                                case 'D': return 'Leadership PAC';
+                                                case 'J': return 'Joint Fundraising';
+                                                case 'B': return 'Lobbyist PAC';
+                                                default: return 'Outside committee';
+                                              }
+                                            };
+                                            const prefix = donor.is_external_only ? 'via' : '+ via';
+                                            const label = external.length === 1
+                                              ? `${prefix} ${external[0].committee_name} · ${designationLabel(external[0].designation)}`
+                                              : `${prefix} ${external.length} outside committees`;
+                                            return (
+                                              <TooltipProvider>
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <Badge
+                                                      variant="outline"
+                                                      className="text-[10px] border-amber-500/50 text-amber-700 bg-amber-500/10 dark:text-amber-400"
+                                                    >
+                                                      {label}
+                                                    </Badge>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent className="max-w-xs">
+                                                    <p className="font-medium mb-1">Routed through outside committees</p>
+                                                    <ul className="text-xs space-y-0.5">
+                                                      {external.slice(0, 5).map(v => (
+                                                        <li key={v.committee_id}>
+                                                          • {v.committee_name} ({designationLabel(v.designation)}) — ${v.amount.toLocaleString()}
+                                                        </li>
+                                                      ))}
+                                                    </ul>
+                                                    <p className="text-xs mt-2 text-muted-foreground">
+                                                      Money to these committees supports the candidate but is not a direct contribution to their campaign.
+                                                    </p>
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                              </TooltipProvider>
+                                            );
+                                          })()}
                                           {donor.contributor_city && donor.contributor_state && (
                                             <span className="text-xs text-muted-foreground">
                                               {donor.contributor_city}, {donor.contributor_state}
