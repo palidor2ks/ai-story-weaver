@@ -475,10 +475,10 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
         d === 'P' || d === 'A' || d === 'J';
 
       // Fetch IE-excluded committees so we drop their donor rows too.
-      const { data: ieExcludedRows } = await supabase
-        .from('ie_excluded_committees')
+      const { data: ieExcludedRows } = await (supabase as any)
+        .from('ie_excluded_committees_public')
         .select('fec_committee_id');
-      const ieExcluded = new Set((ieExcludedRows || []).map(r => r.fec_committee_id));
+      const ieExcluded = new Set((ieExcludedRows || []).map((r: any) => r.fec_committee_id));
 
       const allowedRawDonors = rawDonors.filter(d => {
         const rid = d.recipient_committee_id;
