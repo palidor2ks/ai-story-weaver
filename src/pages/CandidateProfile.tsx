@@ -322,35 +322,31 @@ export const CandidateProfile = () => {
               {/* Edit Button (Admin or Politician Owner) */}
               <div className="flex items-center gap-2 flex-wrap">
                 {canEdit && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
+                  <IconActionButton
+                    label="Edit"
+                    icon={<Pencil className="h-4 w-4" />}
                     onClick={() => setIsEditDialogOpen(true)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Edit
-                  </Button>
+                  />
                 )}
-                
+
                 {/* Link to Politician Dashboard for profile owner */}
                 {isPoliticianOwner && (
-                  <Link to="/politician">
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <FileText className="h-4 w-4" />
-                      Answer Questions
-                    </Button>
+                  <Link to="/politician" aria-label="Answer Questions">
+                    <IconActionButton
+                      label="Answer Questions"
+                      icon={<FileText className="h-4 w-4" />}
+                    />
                   </Link>
                 )}
-                
+
                 {/* Claim Profile Button */}
                 <ClaimProfileDialog
                   candidateId={candidate.id}
                   candidateName={candidate.name}
                   isAlreadyClaimed={isClaimed}
                 />
-                
-                {/* Share Profile Button */}
+
+                {/* AI Analysis Button */}
                 <RecipientAIAnalysisDialog
                   entityKind="candidate"
                   entityId={candidate.id}
@@ -360,10 +356,10 @@ export const CandidateProfile = () => {
                   office={candidate.office}
                   state={candidate.state}
                   trigger={
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <Sparkles className="h-4 w-4" />
-                      AI Analysis
-                    </Button>
+                    <IconActionButton
+                      label="AI Analysis"
+                      icon={<Sparkles className="h-4 w-4" />}
+                    />
                   }
                 />
 
