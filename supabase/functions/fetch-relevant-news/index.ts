@@ -489,6 +489,115 @@ async function resolveQuestionIds(
   }));
 }
 
+interface ArticleClassification {
+  is_policy_relevant: boolean;
+  topic_id: string | null;
+  question_ids: string[];
+  confidence: 'high' | 'medium' | 'low';
+}
+
+async function classifyArticles(
+  articles: Array<{ idx: number; title: string; snippet: string }>,
+  topics: Array<{ id: string; name: string }>,
+  questions: Array<{ id: string; text: string; topic_name: string | null }>,
+): Promise<Map<number, ArticleClassification>> {
+  const out = new Map<number, ArticleClassification>();
+  const apiKey = Deno.env.get('LOVABLE_API_KEY');
+  if (!apiKey || articles.length === 0 || questions.length === 0) return out;
+
+  const topicList = topics.map(t => `- ${t.id}: ${t.name}`).join('\n');
+  // Cap question list to avoid prompt bloat; prioritize unique by topic
+  const cappedQuestions = questions.slice(0, 120);
+  const questionList = cappedQuestions
+    .map(q => `- ${q.id} [${q.topic_name || 'unknown'}]: ${q.text}`)
+    .join('\n');
+  const articleList = articles
+    .map(a => `[${a.idx}] TITLE: ${a.title}\nSNIPPET: ${a.snippet || '(none)'}`)
+    .join('\n\n');
+
+  const systemPrompt = `You classify political news articles by policy topic and matching candidate quiz questions.
+
+RULES:
+- Horse-race, campaign-strategy, personnel, scandal, or "who's running in 2028" stories are NOT policy-relevant. Set is_policy_relevant=false, topic_id=null, question_ids=[].
+- Only assign a topic_id from the provided list. If no topic clearly fits, topic_id=null.
+- Only include question_ids when the article presents concrete evidence about a candidate's stance or action on THAT specific question. Maximum 2 IDs per article. If unsure, return [].
+- confidence: "high" only when both topic and question are clearly evidenced. "medium" if topic is clear but question is approximate. "low" if either is a stretch — caller will then drop the labels.
+
+Return strict JSON via the classify_articles tool.`;
+
+  const userPrompt = `TOPICS:\n${topicList}\n\nQUESTIONS:\n${questionList}\n\nARTICLES:\n${articleList}`;
+
+  try {
+    const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        tools: [{
+          type: 'function',
+          function: {
+            name: 'classify_articles',
+            description: 'Return classification for each article by index.',
+            parameters: {
+              type: 'object',
+              properties: {
+                results: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      idx: { type: 'number' },
+                      is_policy_relevant: { type: 'boolean' },
+                      topic_id: { type: ['string', 'null'] },
+                      question_ids: { type: 'array', items: { type: 'string' } },
+                      confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+                    },
+                    required: ['idx', 'is_policy_relevant', 'topic_id', 'question_ids', 'confidence'],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ['results'],
+              additionalProperties: false,
+            },
+          },
+        }],
+        tool_choice: { type: 'function', function: { name: 'classify_articles' } },
+      }),
+    });
+
+    if (!resp.ok) {
+      console.warn('classifyArticles non-ok', resp.status, await resp.text().catch(() => ''));
+      return out;
+    }
+    const data = await resp.json();
+    const args = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+    if (!args) return out;
+    const parsed = JSON.parse(args);
+    const validTopicIds = new Set(topics.map(t => t.id));
+    const validQuestionIds = new Set(cappedQuestions.map(q => q.id));
+    for (const r of (parsed.results || []) as Array<any>) {
+      const topicId = r.topic_id && validTopicIds.has(r.topic_id) ? r.topic_id : null;
+      const qIds = Array.isArray(r.question_ids)
+        ? r.question_ids.filter((q: string) => validQuestionIds.has(q)).slice(0, 2)
+        : [];
+      out.set(Number(r.idx), {
+        is_policy_relevant: !!r.is_policy_relevant,
+        topic_id: topicId,
+        question_ids: qIds,
+        confidence: (r.confidence === 'high' || r.confidence === 'medium') ? r.confidence : 'low',
+      });
+    }
+  } catch (err) {
+    console.warn('classifyArticles error', err);
+  }
+  return out;
+}
+
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -695,19 +804,47 @@ Deno.serve(async (req: Request) => {
         else it.url = '';
       }
     }));
-    const items = sliced
-      .filter(it => !!it.title && !!it.url && !isGoogleHost(it.url))
-      .map((it) => {
-        const matchedQuestion = questionMeta.find(q => it.matchedTopics.includes((q.topic_name || '').toLowerCase()) || topics.includes((q.topic_name || '').toLowerCase()));
-        const { ageHours: _a, ...rest } = it;
-        return {
-          ...rest,
-          topicLabel: matchedQuestion?.topic_name || rest.matchedTopics[0],
-          relatedQuestion: matchedQuestion?.text,
-        };
-      });
+    const filtered = sliced.filter(it => !!it.title && !!it.url && !isGoogleHost(it.url));
 
-    // Persist into cache for future requests scoped to these questions.
+    // AI classification: per-article topic + best-matching question(s).
+    const topicsForClassifier = Array.from(
+      new Map(
+        questionMeta
+          .filter(q => q.topic_id && q.topic_name)
+          .map(q => [q.topic_id as string, { id: q.topic_id as string, name: q.topic_name as string }]),
+      ).values(),
+    );
+    const classifierInput = filtered.map((it, i) => ({
+      idx: i,
+      title: it.title,
+      snippet: it.snippet || '',
+    }));
+    const classifications = await classifyArticles(
+      classifierInput,
+      topicsForClassifier,
+      questionMeta.map(q => ({ id: q.id, text: q.text, topic_name: q.topic_name })),
+    );
+
+    const items = filtered.map((it, i) => {
+      const cls = classifications.get(i);
+      const showLabels = !!cls && cls.is_policy_relevant && cls.confidence !== 'low';
+      const topicMeta = showLabels && cls!.topic_id
+        ? topicsForClassifier.find(t => t.id === cls!.topic_id)
+        : undefined;
+      const firstQ = showLabels && cls!.question_ids.length > 0
+        ? questionMeta.find(q => q.id === cls!.question_ids[0])
+        : undefined;
+      const { ageHours: _a, ...rest } = it;
+      return {
+        ...rest,
+        topicLabel: topicMeta?.name || firstQ?.topic_name || undefined,
+        relatedQuestion: firstQ?.text || undefined,
+        _classifiedQuestionIds: cls && showLabels ? cls.question_ids : [],
+        _classifiedTopicId: topicMeta?.id || null,
+      } as FeedNewsItem & { _classifiedQuestionIds: string[]; _classifiedTopicId: string | null };
+    });
+
+    // Persist into cache. Only attach articles to questions the classifier picked.
     if (items.length > 0 && questionIds.length > 0) {
       EdgeRuntime.waitUntil((async () => {
         try {
@@ -726,13 +863,15 @@ Deno.serve(async (req: Request) => {
 
             if (!article?.id) continue;
 
-            for (const questionId of questionIds) {
+            const targetQuestionIds = item._classifiedQuestionIds.filter(q => questionIds.includes(q));
+            for (const questionId of targetQuestionIds) {
+              const topicTag = item._classifiedTopicId ? [item._classifiedTopicId] : [];
               await supabase.from('news_article_questions').upsert({
                 article_id: article.id,
                 question_id: questionId,
                 relevance_score: item.relevanceScore,
                 matched_people: item.matchedPeople,
-                matched_topics: item.matchedTopics,
+                matched_topics: topicTag,
               }, { onConflict: 'article_id,question_id' });
 
               await supabase.from('question_news_feed_cache').upsert({
@@ -750,7 +889,10 @@ Deno.serve(async (req: Request) => {
       })());
     }
 
-    return new Response(JSON.stringify({ items, window: windowLabel }), {
+    // Strip internal fields before responding.
+    const responseItems = items.map(({ _classifiedQuestionIds, _classifiedTopicId, ...rest }) => rest);
+
+    return new Response(JSON.stringify({ items: responseItems, window: windowLabel }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (e) {
