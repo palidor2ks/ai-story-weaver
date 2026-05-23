@@ -110,23 +110,9 @@ async function main() {
     if (c?.id) entries.push({ path: `/candidate/${c.id}`, changefreq: "weekly", priority: "0.6" });
   }
 
-  // Donors — paginate (table is very large); cap to keep sitemap under 50k URLs
-  const DONOR_CAP = 30000;
-  const DONOR_PAGE = 1000;
-  let donorOffset = 0;
-  while (donorOffset < DONOR_CAP) {
-    const page = await fetchRows(
-      "donors",
-      "id",
-      `&order=id.asc&limit=${DONOR_PAGE}&offset=${donorOffset}`
-    );
-    if (!page.length) break;
-    for (const d of page) {
-      if (d?.id) entries.push({ path: `/donor/${d.id}`, changefreq: "weekly", priority: "0.5" });
-    }
-    if (page.length < DONOR_PAGE) break;
-    donorOffset += DONOR_PAGE;
-  }
+  // Donors — intentionally omitted from sitemap. /donor/:id requires
+  // authentication (RLS on `donors` table is authenticated-only) and the
+  // table has >1M rows; these pages are not meant to be indexed.
 
   writeFileSync(resolve("public/sitemap.xml"), xml(entries));
   console.log(`sitemap.xml written (${entries.length} entries)`);
