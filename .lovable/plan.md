@@ -1,41 +1,26 @@
-## Goal
+## Plan: Batch-classify all unassigned committees
 
-Keep super PAC / IE-only / JFC donors visible on the candidate donor list (so $1M from Lonsdale Enterprises to AMERICA PAC still appears under Trump), but visually flag them so users immediately see the money went to a supporting outside committee, not the candidate's direct campaign.
+There are 1,727 committees and only 80 have causes assigned — ~1,647 to go. The `classify-committee-topic` edge function already does the work (gathers committee info, calls Lovable AI, upserts to `committee_topics`, can also suggest new causes). I'll drive it from a script with no UI changes.
 
-## What changes
+### Script behavior (`/tmp/classify_all_committees.ts`, run via bun)
 
-### 1. Donor query — carry committee designation through aggregation
+Loop until done:
+1. Query `committee_pool_mv` for count of unassigned committees (committees without a `committee_topics` row).
+2. If 0 → stop and print summary.
+3. POST to `classify-committee-topic` with `{ limit: 50 }`. The function picks the next batch of unassigned IDs from `list_committee_pool` and processes them in the background via `EdgeRuntime.waitUntil`.
+4. Wait ~60s for the background batch to finish, then re-check the unassigned count.
+5. If the count didn't decrease for 2 consecutive iterations, log the stuck IDs (likely no name/IE data available) and skip them by recording a sentinel — actually simpler: just break and report.
 
-In `src/hooks/useCandidates.ts` (`useCandidateDonors`):
-- After fetching raw donors, also fetch `candidate_committees` rows for that candidate (`fec_committee_id`, `name`, `designation`, `role`) and build a map keyed by `fec_committee_id`.
-- When grouping donors by canonical name + cycle, collect a `recipient_committees` array of `{ committee_id, committee_name, designation, role }` for each unique recipient.
-- Compute two derived flags per grouped donor:
-  - `via_committees`: list of distinct non-principal recipients (designation in `O`, `U`, `D`, `J`, `B` — i.e. anything that isn't `P` Principal / `A` Authorized for this candidate).
-  - `is_external_only`: true when **every** contribution for this donor went through a non-principal/non-authorized committee.
+### Output
+At the end, print:
+- starting unassigned count
+- ending unassigned count
+- total processed
+- any committees that couldn't be classified (no info)
+- any new `pending` causes the AI suggested (queryable from `committee_causes` where `status='pending'`)
 
-### 2. DonorCard — render badge
+### No code changes to the app
+- No UI, no migrations, no edge function changes.
+- Just the throwaway script in `/tmp/` and the AI classifications it writes via the existing edge function.
 
-In `src/components/DonorCard.tsx`:
-- Add optional props: `viaCommittees?: { name: string; designation: string }[]`, `isExternalOnly?: boolean`.
-- When `viaCommittees` is non-empty, render a small badge under the donor name:
-  - `is_external_only` and one committee → `via AMERICA PAC · Super PAC`
-  - `is_external_only` and multiple → `via 3 outside committees`
-  - mixed (gave to both direct + outside) → `+ via AMERICA PAC` (muted, smaller)
-- Use a neutral/amber badge style (not the donation-amount green) so it reads as a caveat, not a stat.
-- Map designation → label: `O` Super PAC, `U` Unauthorized, `D` Leadership PAC, `J` JFC, `B` Lobbyist/Registrant PAC, fallback "Outside committee".
-
-### 3. Wire it through CandidateProfile donor list
-
-In `src/pages/CandidateProfile.tsx` where DonorCards are rendered from `donors`, pass the new fields.
-
-## Out of scope
-
-- No backend / RPC changes; designations already exist in `candidate_committees`.
-- No change to donor totals, reconciliation, or DonorProfile page.
-- No change to how super PAC donors are *counted* in finance summaries — purely a label on the donor card.
-
-## Files touched
-
-- `src/hooks/useCandidates.ts` — enrich `useCandidateDonors` result with `via_committees` / `is_external_only`.
-- `src/components/DonorCard.tsx` — new props + badge.
-- `src/pages/CandidateProfile.tsx` — pass new props through.
+Estimated runtime: ~17 batches × ~60s = ~17 min. I'll report back with the final tallies when it finishes.
