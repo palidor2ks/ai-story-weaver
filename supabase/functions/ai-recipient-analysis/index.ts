@@ -20,6 +20,7 @@ interface RequestBody {
   office?: string | null;
   state?: string | null;
   cycle?: string | null;
+  force_refresh?: boolean;
 }
 
 function json(body: unknown, status = 200) {
