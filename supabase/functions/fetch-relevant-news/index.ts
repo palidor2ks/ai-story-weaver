@@ -895,10 +895,6 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ items: responseItems, window: windowLabel }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-
-    return new Response(JSON.stringify({ items, window: windowLabel }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
   } catch (e) {
     console.error(e);
     return new Response(JSON.stringify({ error: (e as Error).message, items: [], window: 'none' }), {
