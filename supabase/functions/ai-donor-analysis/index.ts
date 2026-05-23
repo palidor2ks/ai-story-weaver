@@ -430,7 +430,7 @@ Output ONLY a JSON object, no prose. Use this exact schema:
       ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
       : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
 
-    return json({
+    const responseBody = {
       provider,
       provider_errors: providerErrors,
       summary: String(parsed.summary ?? ""),
@@ -459,7 +459,10 @@ Output ONLY a JSON object, no prose. Use this exact schema:
         fec_committee_ids: fecCommitteeIds,
         alias_canonical_name: aliasCanonicalName,
       },
-    });
+    };
+
+    const saved = await writeCache(cacheKey, responseBody, provider);
+    return json({ ...responseBody, cached: false, updated_at: saved?.updated_at });
   } catch (e) {
     console.error("ai-donor-analysis error", e);
     return json(
