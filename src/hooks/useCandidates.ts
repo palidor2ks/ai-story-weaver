@@ -451,20 +451,51 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
       // the principal/authorized campaign.
       const { data: committeeRows } = await supabase
         .from('candidate_committees')
-        .select('fec_committee_id, name, designation')
+        .select('fec_committee_id, name, designation, active')
         .eq('candidate_id', resolvedCandidateId);
-      const committeeMap = new Map<string, { name: string; designation: string | null }>();
+      const committeeMap = new Map<string, { name: string; designation: string | null; active: boolean }>();
       (committeeRows || []).forEach(c => {
         if (c.fec_committee_id) {
-          committeeMap.set(c.fec_committee_id, { name: c.name ?? '', designation: c.designation ?? null });
+          committeeMap.set(c.fec_committee_id, {
+            name: c.name ?? '',
+            designation: c.designation ?? null,
+            active: c.active !== false,
+          });
         }
       });
       const isDirectDesignation = (d: string | null) => d === 'P' || d === 'A';
+      // Authorized recipients for the candidate's main donor list:
+      // Principal (P), Authorized (A), and Joint Fundraising (J) committees
+      // that are still active. Leadership/Super PACs (U), delegate (D),
+      // lobbyist (B) committees, or any inactive committee are excluded —
+      // those donations are not contributions to the candidate's own campaign
+      // (e.g. AMERICA PAC is a Super PAC making independent expenditures, not
+      // an authorized Trump campaign committee).
+      const isAuthorizedRecipient = (d: string | null) =>
+        d === 'P' || d === 'A' || d === 'J';
+
+      // Fetch IE-excluded committees so we drop their donor rows too.
+      const { data: ieExcludedRows } = await supabase
+        .from('ie_excluded_committees')
+        .select('fec_committee_id');
+      const ieExcluded = new Set((ieExcludedRows || []).map(r => r.fec_committee_id));
+
+      const allowedRawDonors = rawDonors.filter(d => {
+        const rid = d.recipient_committee_id;
+        if (!rid) return true; // legacy rows without recipient — keep
+        if (ieExcluded.has(rid)) return false;
+        const meta = committeeMap.get(rid);
+        if (!meta) return true; // recipient not in this candidate's committee map — keep (unknown linkage)
+        if (!meta.active) return false;
+        return isAuthorizedRecipient(meta.designation);
+      });
+
+      if (allowedRawDonors.length === 0) return [];
 
       // Group donors by canonical name (display_name set by attach flow / DB trigger)
       const canonicalGroups = new Map<string, DonorWithCanonical>();
 
-      rawDonors.forEach(donor => {
+      allowedRawDonors.forEach(donor => {
         const canonicalName = donor.display_name || donor.name;
         const isConsolidated = !!donor.display_name && donor.display_name !== donor.name;
 
