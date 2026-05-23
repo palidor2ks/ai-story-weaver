@@ -118,7 +118,7 @@ export const useUpsertCommitteeTopic = () => {
       qc.invalidateQueries({ queryKey: ['committee-topic', vars.fec_committee_id] });
       qc.invalidateQueries({ queryKey: ['committee-topics-all'] });
       qc.invalidateQueries({ queryKey: ['committee-topics-map'] });
-      qc.invalidateQueries({ queryKey: ['committee-pool'] });
+      qc.refetchQueries({ queryKey: ['committee-pool'], type: 'active' });
     },
   });
 };
@@ -137,7 +137,7 @@ export const useDeleteCommitteeTopic = () => {
       qc.invalidateQueries({ queryKey: ['committee-topic'] });
       qc.invalidateQueries({ queryKey: ['committee-topics-all'] });
       qc.invalidateQueries({ queryKey: ['committee-topics-map'] });
-      qc.invalidateQueries({ queryKey: ['committee-pool'] });
+      qc.refetchQueries({ queryKey: ['committee-pool'], type: 'active' });
     },
   });
 };
