@@ -1,41 +1,16 @@
 ## Goal
-Reduce visual clutter by converting text+icon action buttons to icon-only across the app, and tighten card layouts so they adapt better to small screens.
+Use the empty space to the right of the avatar (currently below the name on mobile) by relocating the action icon row (Edit, Claim, AI Analysis, Share) to sit at the top-right of the hero card, aligned with the avatar.
 
-## Scope
+## Change
+In `src/pages/CandidateProfile.tsx` hero section (lines ~278-396):
 
-### 1. Icon-only action buttons
-Convert these action buttons (currently icon + label) to icon-only with tooltips for accessibility:
+- Restructure the hero so the avatar and action icon row are siblings in a top row: avatar on the left, action icons on the right (top-aligned, `ml-auto`, `flex-wrap justify-end`).
+- Move the icon button group (`canEdit` Edit, `isPoliticianOwner` Answer Questions, `ClaimProfileDialog`, `RecipientAIAnalysisDialog`, `ShareProfileButton`) out from below the name and into this top-right slot.
+- Keep name, office/state, party badge, verified/overridden badges where they are (below avatar on mobile, beside on desktop).
+- Remove the now-empty action-row container below the badges.
+- Ensure on mobile the icons still wrap nicely (sit next to avatar at the top — avatar is fixed width so there is room for 4 small icons at 430px viewport).
 
-- **Candidate profile header** (visible in screenshot): Edit, Claim This Profile, AI Analysis, Share
-- **Recipient profile header**: equivalent action row
-- **Donor profile header**: equivalent action row
-- **Bill detail header**: equivalent action row
-- Any other profile/detail header action rows that follow the same pattern (Refresh, Regenerate, Copy, Export)
+Apply the same pattern to the equivalent header in `src/pages/CommitteeProfile.tsx` if it has the same empty-space layout (will confirm during build).
 
-Implementation:
-- Use shadcn `Button` with `size="icon"` and `variant="outline"`.
-- Wrap each in `Tooltip` so the label still appears on hover/long-press.
-- Add `aria-label` matching the removed text for screen readers.
-- Keep the same click handlers and ordering.
-
-Out of scope: primary CTAs in forms ("Save", "Submit", "Sign in"), nav links, and buttons inside tables/lists that already rely on text.
-
-### 2. Responsive card refit
-On the same profile cards (candidate score card, AI Stance Analysis card, and sibling cards on donor/recipient/bill profiles):
-
-- Replace fixed paddings (`p-6`, `p-8`) with responsive `p-4 sm:p-6`.
-- Let the score row wrap: `flex-col sm:flex-row` with `gap-3`, so "R6.09 / RIGHT-LEANING" and "22% MATCH WITH YOU" stack cleanly on narrow screens instead of crowding.
-- Constrain the big score number with responsive type (`text-4xl sm:text-5xl`) so it doesn't dominate mobile width.
-- Action button row becomes `flex flex-wrap gap-2` (now trivial since icons are small).
-- Ensure cards use `w-full` and the page container uses `max-w-screen-md mx-auto px-4` consistently.
-
-### 3. Verification
-After changes, open the candidate, donor, recipient, and bill profiles in the preview at mobile and desktop widths to confirm:
-- Buttons show icon only with working tooltip.
-- Cards no longer overflow or feel cramped at 375px.
-- No regressions on desktop spacing.
-
-## Technical notes
-- Files likely touched: `src/components/candidate/CandidateProfileHeader.tsx` (or equivalent), donor/recipient/bill header components, and the shared score card component. Will confirm exact paths during build.
-- Tooltip provider is already mounted globally in this project; no new setup needed.
-- No backend, data, or business-logic changes.
+## Out of scope
+No changes to icons themselves, score card, or other sections.
