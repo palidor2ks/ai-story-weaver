@@ -88,6 +88,19 @@ Deno.serve(async (req) => {
       return json({ error: "entity_kind, entity_id and entity_name are required" }, 400);
     }
 
+    const cycle = body.cycle ? String(body.cycle).trim() : null;
+    const cacheKey = {
+      kind: "recipient" as const,
+      subject_id: `${entity_kind}:${entity_id}`,
+      cycle: cycle && cycle !== "all" ? cycle : null,
+    };
+    if (!body.force_refresh) {
+      const cached = await readCache<Record<string, unknown>>(cacheKey);
+      if (cached) {
+        return json({ ...cached.payload, cached: true, updated_at: cached.updated_at });
+      }
+    }
+
     const admin = createClient(supabaseUrl, serviceKey);
 
     // Pull aggregate finance signals for the recipient as anchors.
