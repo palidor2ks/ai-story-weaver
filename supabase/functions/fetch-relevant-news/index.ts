@@ -804,19 +804,47 @@ Deno.serve(async (req: Request) => {
         else it.url = '';
       }
     }));
-    const items = sliced
-      .filter(it => !!it.title && !!it.url && !isGoogleHost(it.url))
-      .map((it) => {
-        const matchedQuestion = questionMeta.find(q => it.matchedTopics.includes((q.topic_name || '').toLowerCase()) || topics.includes((q.topic_name || '').toLowerCase()));
-        const { ageHours: _a, ...rest } = it;
-        return {
-          ...rest,
-          topicLabel: matchedQuestion?.topic_name || rest.matchedTopics[0],
-          relatedQuestion: matchedQuestion?.text,
-        };
-      });
+    const filtered = sliced.filter(it => !!it.title && !!it.url && !isGoogleHost(it.url));
 
-    // Persist into cache for future requests scoped to these questions.
+    // AI classification: per-article topic + best-matching question(s).
+    const topicsForClassifier = Array.from(
+      new Map(
+        questionMeta
+          .filter(q => q.topic_id && q.topic_name)
+          .map(q => [q.topic_id as string, { id: q.topic_id as string, name: q.topic_name as string }]),
+      ).values(),
+    );
+    const classifierInput = filtered.map((it, i) => ({
+      idx: i,
+      title: it.title,
+      snippet: it.snippet || '',
+    }));
+    const classifications = await classifyArticles(
+      classifierInput,
+      topicsForClassifier,
+      questionMeta.map(q => ({ id: q.id, text: q.text, topic_name: q.topic_name })),
+    );
+
+    const items = filtered.map((it, i) => {
+      const cls = classifications.get(i);
+      const showLabels = !!cls && cls.is_policy_relevant && cls.confidence !== 'low';
+      const topicMeta = showLabels && cls!.topic_id
+        ? topicsForClassifier.find(t => t.id === cls!.topic_id)
+        : undefined;
+      const firstQ = showLabels && cls!.question_ids.length > 0
+        ? questionMeta.find(q => q.id === cls!.question_ids[0])
+        : undefined;
+      const { ageHours: _a, ...rest } = it;
+      return {
+        ...rest,
+        topicLabel: topicMeta?.name || firstQ?.topic_name || undefined,
+        relatedQuestion: firstQ?.text || undefined,
+        _classifiedQuestionIds: cls && showLabels ? cls.question_ids : [],
+        _classifiedTopicId: topicMeta?.id || null,
+      } as FeedNewsItem & { _classifiedQuestionIds: string[]; _classifiedTopicId: string | null };
+    });
+
+    // Persist into cache. Only attach articles to questions the classifier picked.
     if (items.length > 0 && questionIds.length > 0) {
       EdgeRuntime.waitUntil((async () => {
         try {
@@ -835,13 +863,15 @@ Deno.serve(async (req: Request) => {
 
             if (!article?.id) continue;
 
-            for (const questionId of questionIds) {
+            const targetQuestionIds = item._classifiedQuestionIds.filter(q => questionIds.includes(q));
+            for (const questionId of targetQuestionIds) {
+              const topicTag = item._classifiedTopicId ? [item._classifiedTopicId] : [];
               await supabase.from('news_article_questions').upsert({
                 article_id: article.id,
                 question_id: questionId,
                 relevance_score: item.relevanceScore,
                 matched_people: item.matchedPeople,
-                matched_topics: item.matchedTopics,
+                matched_topics: topicTag,
               }, { onConflict: 'article_id,question_id' });
 
               await supabase.from('question_news_feed_cache').upsert({
@@ -858,6 +888,13 @@ Deno.serve(async (req: Request) => {
         }
       })());
     }
+
+    // Strip internal fields before responding.
+    const responseItems = items.map(({ _classifiedQuestionIds, _classifiedTopicId, ...rest }) => rest);
+
+    return new Response(JSON.stringify({ items: responseItems, window: windowLabel }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
     return new Response(JSON.stringify({ items, window: windowLabel }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
