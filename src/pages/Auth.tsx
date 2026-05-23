@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Sparkles, Mail, Lock, User, ArrowRight } from 'lucide-react';
 import { z } from 'zod';
 import { Seo } from '@/components/Seo';
+import { BetaBadge } from '@/components/BetaBadge';
 
 const emailSchema = z.string().email('Please enter a valid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
