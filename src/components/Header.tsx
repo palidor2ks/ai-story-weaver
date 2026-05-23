@@ -38,8 +38,9 @@ export const Header = () => {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
-        <Link to="/feed" className="flex items-center">
+        <Link to="/feed" className="flex items-center gap-2">
           <img src={logoImg} alt="Pulse" className="w-10 h-10 object-contain" />
+          <BetaBadge />
         </Link>
 
         {/* Desktop Navigation */}
