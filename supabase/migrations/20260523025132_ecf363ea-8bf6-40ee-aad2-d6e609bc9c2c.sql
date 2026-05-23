@@ -1,0 +1,2 @@
+ALTER TABLE public.committee_topics
+DROP CONSTRAINT IF EXISTS committee_topics_primary_topic_id_fkey;

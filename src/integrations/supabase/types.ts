@@ -935,13 +935,6 @@ export type Database = {
             referencedRelation: "committee_causes"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "committee_topics_primary_topic_id_fkey"
-            columns: ["primary_cause_id"]
-            isOneToOne: false
-            referencedRelation: "topics"
-            referencedColumns: ["id"]
-          },
         ]
       }
       conduit_organizations: {
