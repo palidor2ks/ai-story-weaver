@@ -1,76 +1,41 @@
 ## Goal
+Reduce visual clutter by converting text+icon action buttons to icon-only across the app, and tighten card layouts so they adapt better to small screens.
 
-Persist every AI analysis the first time it's generated, then serve cached results on subsequent visits. Replace the "click to generate" flow with auto-load from cache + a Refresh button for manual regeneration.
+## Scope
 
-## In scope (4 AI surfaces)
+### 1. Icon-only action buttons
+Convert these action buttons (currently icon + label) to icon-only with tooltips for accessibility:
 
-| Surface | Component | Edge fn | Cache key | Scope |
-|---|---|---|---|---|
-| Candidate AI Stance Analysis | `AIExplanation` | `ai-candidate-explanation` | candidate_id + user_id (+ user-scores fingerprint) | per-user |
-| Donor AI Analysis | `DonorAIAnalysisDialog` | `ai-donor-analysis` | donor_id + cycle | global |
-| Recipient AI Analysis | `RecipientAIAnalysisDialog` | `ai-recipient-analysis` | committee_id + cycle | global |
-| Bill AI Analysis | `BillAIAnalysisDialog` | `ai-bill-analysis` | bill_id | global |
+- **Candidate profile header** (visible in screenshot): Edit, Claim This Profile, AI Analysis, Share
+- **Recipient profile header**: equivalent action row
+- **Donor profile header**: equivalent action row
+- **Bill detail header**: equivalent action row
+- Any other profile/detail header action rows that follow the same pattern (Refresh, Regenerate, Copy, Export)
 
-## Schema (single new table)
+Implementation:
+- Use shadcn `Button` with `size="icon"` and `variant="outline"`.
+- Wrap each in `Tooltip` so the label still appears on hover/long-press.
+- Add `aria-label` matching the removed text for screen readers.
+- Keep the same click handlers and ordering.
 
-```sql
-create table public.ai_analysis_cache (
-  id uuid primary key default gen_random_uuid(),
-  kind text not null,                -- 'candidate' | 'donor' | 'recipient' | 'bill'
-  subject_id text not null,          -- candidate_id / donor_id / committee_id / bill_id
-  cycle text,                        -- nullable; used by donor + recipient
-  user_id uuid references auth.users(id) on delete cascade,  -- null for global kinds
-  input_fingerprint text,            -- hash of user-scores blob for candidate; null otherwise
-  payload jsonb not null,            -- raw analysis JSON returned by the edge fn
-  model text,                        -- e.g. 'google/gemini-3-flash-preview'
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  unique (kind, subject_id, cycle, user_id, input_fingerprint)
-);
-```
+Out of scope: primary CTAs in forms ("Save", "Submit", "Sign in"), nav links, and buttons inside tables/lists that already rely on text.
 
-RLS:
-- Global rows (`user_id is null`) — `SELECT` to `public`.
-- Per-user rows — `SELECT/INSERT/UPDATE/DELETE` only when `auth.uid() = user_id`.
-- Service role full access (writes happen from edge functions).
+### 2. Responsive card refit
+On the same profile cards (candidate score card, AI Stance Analysis card, and sibling cards on donor/recipient/bill profiles):
 
-## Edge function changes (shared cache-read + cache-write helper)
+- Replace fixed paddings (`p-6`, `p-8`) with responsive `p-4 sm:p-6`.
+- Let the score row wrap: `flex-col sm:flex-row` with `gap-3`, so "R6.09 / RIGHT-LEANING" and "22% MATCH WITH YOU" stack cleanly on narrow screens instead of crowding.
+- Constrain the big score number with responsive type (`text-4xl sm:text-5xl`) so it doesn't dominate mobile width.
+- Action button row becomes `flex flex-wrap gap-2` (now trivial since icons are small).
+- Ensure cards use `w-full` and the page container uses `max-w-screen-md mx-auto px-4` consistently.
 
-Each of the four edge functions gets the same wrapper:
+### 3. Verification
+After changes, open the candidate, donor, recipient, and bill profiles in the preview at mobile and desktop widths to confirm:
+- Buttons show icon only with working tooltip.
+- Cards no longer overflow or feel cramped at 375px.
+- No regressions on desktop spacing.
 
-1. Compute cache key (kind/subject/cycle/user_id/input_fingerprint).
-2. Look up `ai_analysis_cache`. If a row exists AND the request did not pass `force_refresh: true`, return `payload`.
-3. Otherwise call the model, upsert into `ai_analysis_cache`, then return.
-
-Edge fn signature additions: optional `force_refresh: boolean` in the request body. For per-user kinds, the function reads `auth.uid()` from the verified JWT (already passed by `supabase.functions.invoke` when the user is signed in); anonymous users skip cache and behave as today.
-
-`input_fingerprint` (candidate kind only): SHA-256 of canonicalized `userTopicScores` JSON. Different score profile → different cache row; same profile → reuse.
-
-## Frontend changes
-
-In each of `AIExplanation`, `DonorAIAnalysisDialog`, `RecipientAIAnalysisDialog`, `BillAIAnalysisDialog`:
-
-- Replace the "click to generate" gate with an auto-fetch on mount/open (the cache lookup is cheap; first-render shows skeleton while the edge fn returns a cached payload).
-- Add a small "Refresh" icon button (RefreshCw) in the header that calls the same edge fn with `force_refresh: true` and overwrites the local state.
-- Show last-generated timestamp ("Updated 5/12/2026") under the title, sourced from `ai_analysis_cache.updated_at` returned alongside the payload.
-- Keep the existing error / retry handling.
-
-For `AIExplanation` specifically: today it auto-shows the "Click below to generate…" placeholder. After the change, that placeholder is gone — content loads automatically and the Refresh button regenerates with the current `userTopicScores`.
-
-## Anonymous users
-
-- Global kinds (donor/recipient/bill): full cache benefit for everyone.
-- Per-user candidate analysis: anonymous visitors still get the generic (no-user-scores) variant, cached as a single global row with `user_id = null` and `input_fingerprint = null`.
-
-## Out of scope
-
-- Background pre-warming, cache TTL/expiration (refresh is manual).
-- Caching admin-only tools (`generate-ai-bill-summaries` already persists into `bills.summary` and is unchanged).
-- UI changes beyond the 4 components above.
-
-## Verification
-
-1. Open Trump's profile → AI Stance Analysis loads from cache on second visit, no spinner.
-2. Click Refresh → spinner, new content, `updated_at` advances.
-3. Sign out → generic analysis cached/served from a separate row.
-4. Open a donor / committee / bill dialog twice → second open is instant; Refresh regenerates.
+## Technical notes
+- Files likely touched: `src/components/candidate/CandidateProfileHeader.tsx` (or equivalent), donor/recipient/bill header components, and the shared score card component. Will confirm exact paths during build.
+- Tooltip provider is already mounted globally in this project; no new setup needed.
+- No backend, data, or business-logic changes.
