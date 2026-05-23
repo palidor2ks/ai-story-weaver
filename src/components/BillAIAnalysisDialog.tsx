@@ -177,7 +177,7 @@ export const BillAIAnalysisDialog = ({
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
-            <Button size="sm" variant="outline" onClick={fetchAnalysis}>Retry</Button>
+            <Button size="sm" variant="outline" onClick={() => fetchAnalysis(false)}>Retry</Button>
           </div>
         )}
 
