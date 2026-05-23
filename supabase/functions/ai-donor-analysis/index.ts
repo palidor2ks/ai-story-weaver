@@ -92,6 +92,14 @@ Deno.serve(async (req) => {
       return json({ error: "donor_id and donor_name are required" }, 400);
     }
 
+    const cacheKey = { kind: "donor" as const, subject_id: donor_id, cycle };
+    if (!body.force_refresh) {
+      const cached = await readCache<Record<string, unknown>>(cacheKey);
+      if (cached) {
+        return json({ ...cached.payload, cached: true, updated_at: cached.updated_at });
+      }
+    }
+
     const admin = createClient(supabaseUrl, serviceKey);
 
     // Gather donor finance signals (used as anchors for the search query
