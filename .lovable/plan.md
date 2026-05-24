@@ -1,25 +1,17 @@
-# Fix: candidate photo missing on share card
+## Plan
 
-## Root cause
+1. **Stop hiding valid photos while conversion is pending**
+   - Update `ShareProfileButton` so the share modal gets the original `candidateImage` immediately, then swaps to the base64 version if conversion succeeds.
+   - Track image conversion state separately so a slow or blocked conversion does not force initials (`TM`).
 
-`CandidateStatCard` renders `<img src={image} crossOrigin="anonymous" />`. The `crossOrigin` attribute is required so `html2canvas` can serialize the card to PNG without tainting the canvas. But the candidate photo URL (Bioguide / external host) does not return `Access-Control-Allow-Origin`, so the browser blocks the image and only the `alt` text shows. That's why the photo box appears empty with "Thomas Massie" text in the corner.
+2. **Add safer federal headshot fallback**
+   - For Bioguide-style candidate IDs like `M001184`, generate the official Bioguide photo URL as a fallback if the candidate image is missing or fails conversion.
+   - Try the provided URL first, then the Bioguide fallback.
 
-Removing `crossOrigin` would let the image display in the live preview but would break the PNG export (canvas tainting). The correct fix is to fetch the image once on the client, convert it to a base64 data URL, and pass that data URL into the card. Data URLs are same-origin and bypass CORS entirely.
+3. **Fix the card image fallback behavior**
+   - Update `CandidateStatCard` so if an image fails in the card preview, it falls back cleanly to initials rather than leaving a hidden/blank image element.
 
-## Changes
+## Technical details
 
-**`src/components/ShareProfileButton.tsx`**
-- Add a small helper `imageUrlToBase64(url)` (fetch → blob → FileReader.readAsDataURL).
-- When the modal opens (or in a `useEffect` keyed on `candidateImage`), convert `candidateImage` to a data URL and store it in local state `resolvedImage`.
-- Pass `resolvedImage ?? candidateImage` as `candidateImage` into `ShareCardModal` / `CardData`.
-- If the fetch fails, fall back to `null` so the card shows the initials placeholder instead of a broken image.
-
-**`src/components/share/templates/CandidateStatCard.tsx`**
-- No structural changes. Keep `crossOrigin="anonymous"` (harmless for data URLs, still needed if a non-converted URL ever flows through).
-- Optional: add `onError` on the `<img>` to swap to the initials placeholder if the image fails for any reason.
-
-## Notes
-
-- No backend / edge-function work needed; conversion happens in the browser.
-- This also fixes the exported PNG, which currently would either be missing the photo or fail entirely due to the tainted canvas.
-- No other share templates use a remote candidate photo today, so the scope stays inside `ShareProfileButton` + `CandidateStatCard`.
+- The current issue is likely that `ShareProfileButton` passes `resolvedImage ?? null`, so the card only gets a photo after client-side fetch/base64 conversion succeeds. If that fetch is blocked by CORS or still pending, the modal shows initials.
+- Passing the original URL first lets the visible card render the normal browser image path while preserving base64 conversion for PNG export when possible.
