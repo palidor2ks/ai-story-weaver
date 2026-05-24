@@ -39,6 +39,8 @@ const fmtMoneyShort = (n?: number | null) => {
 const truncate = (s: string, max = 30) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
 
 export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
+  const [imgFailed, setImgFailed] = (require('react') as typeof import('react')).useState(false);
+
   const textColor = FLAG_WHITE;
   const mutedColor = 'hsl(214 35% 82%)';
   const panelBg = 'hsl(220 50% 14% / 0.78)';
