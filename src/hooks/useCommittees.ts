@@ -532,7 +532,7 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
 
       const summary: CommitteeSummary = {
         id: committeeId,
-        name: contribRow?.recipient_committee_name ?? committeeId,
+        name: pickBetter(contribRow?.recipient_committee_name ?? null),
         aliasName: null,
         fecCommitteeId: committeeId,
         designation: null,
