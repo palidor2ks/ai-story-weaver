@@ -841,8 +841,18 @@ Deno.serve(async (req: Request) => {
     else if (week.length > 0) { chosen = week; windowLabel = 'week'; }
     else if (month.length > 0) { chosen = month; windowLabel = 'month'; }
 
+    // Prioritize Google top-story matches BEFORE truncating to limit so genuine
+    // top stories can be promoted across the cutoff.
+    chosen.sort((a, b) => {
+      const aTop = (a as any)._isTopStory ? 1 : 0;
+      const bTop = (b as any)._isTopStory ? 1 : 0;
+      if (aTop !== bTop) return bTop - aTop;
+      return b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt);
+    });
+
     // Resolve Google News redirect URLs to publisher URLs (only for chosen items)
     const sliced = chosen.slice(0, limit);
+
     await Promise.all(sliced.map(async (it) => {
       if (isGoogleHost(it.url)) {
         const resolved = await resolveGoogleNewsUrl(it.url);
