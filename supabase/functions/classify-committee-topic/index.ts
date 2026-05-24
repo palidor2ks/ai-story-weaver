@@ -255,6 +255,9 @@ async function processIds(supabase: any, ids: string[], force: boolean) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
+  const gate = await requireAdmin(req);
+  if (!gate.ok) return gate.res;
+
   try {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
     const body = await req.json().catch(() => ({}));
