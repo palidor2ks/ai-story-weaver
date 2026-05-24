@@ -112,36 +112,69 @@ export const useCommitteeIE = (
   });
 };
 
-export const useCandidateIE = (candidateId: string | null | undefined) => {
+export const useCandidateIE = (
+  candidateId: string | null | undefined,
+  cycle?: string | null,
+) => {
   return useQuery({
-    queryKey: ['ie-candidate-totals', candidateId],
+    queryKey: ['ie-candidate-totals', candidateId, cycle ?? 'all'],
     enabled: !!candidateId,
     staleTime: 1000 * 60 * 10,
     queryFn: async () => {
-      const [totalsRes, rowsRes] = await Promise.all([
-        supabase
-          .from('candidate_independent_expenditure_totals')
-          .select('expenditure_count, total_amount, support_amount, oppose_amount')
-          .eq('candidate_id', candidateId!)
-          .maybeSingle(),
+      const filtered = !!cycle && cycle !== 'all';
+
+      let rowsQ = supabase
+        .from('independent_expenditures')
+        .select(
+          'id, expenditure_date, amount, support_oppose_indicator, purpose, spending_committee_fec_id, spending_committee_name, candidate_id, target_fec_candidate_id, target_candidate_name, cycle',
+        )
+        .eq('candidate_id', candidateId!)
+        .order('amount', { ascending: false });
+      if (filtered) rowsQ = rowsQ.eq('cycle', cycle!);
+      else rowsQ = rowsQ.limit(50);
+
+      const [totalsRes, rowsRes, cyclesRes] = await Promise.all([
+        filtered
+          ? Promise.resolve({ data: null })
+          : supabase
+              .from('candidate_independent_expenditure_totals')
+              .select('expenditure_count, total_amount, support_amount, oppose_amount')
+              .eq('candidate_id', candidateId!)
+              .maybeSingle(),
+        rowsQ,
         supabase
           .from('independent_expenditures')
-          .select(
-            'id, expenditure_date, amount, support_oppose_indicator, purpose, spending_committee_fec_id, spending_committee_name, candidate_id, target_fec_candidate_id, target_candidate_name, cycle',
-          )
+          .select('cycle')
           .eq('candidate_id', candidateId!)
-          .order('amount', { ascending: false })
-          .limit(50),
+          .not('cycle', 'is', null),
       ]);
-      const t = totalsRes.data;
-      const totals: IETotals = {
-        expenditure_count: num(t?.expenditure_count),
-        total_amount: num(t?.total_amount),
-        support_amount: num(t?.support_amount),
-        oppose_amount: num(t?.oppose_amount),
-      };
+
       const rows = (rowsRes.data ?? []) as IERow[];
-      // Aggregate top spenders
+
+      let totals: IETotals;
+      if (filtered) {
+        totals = { expenditure_count: rows.length, total_amount: 0, support_amount: 0, oppose_amount: 0 };
+        rows.forEach((r) => {
+          const amt = num(r.amount);
+          totals.total_amount += amt;
+          if (r.support_oppose_indicator === 'S') totals.support_amount += amt;
+          else totals.oppose_amount += amt;
+        });
+      } else {
+        const t = (totalsRes as any).data;
+        totals = {
+          expenditure_count: num(t?.expenditure_count),
+          total_amount: num(t?.total_amount),
+          support_amount: num(t?.support_amount),
+          oppose_amount: num(t?.oppose_amount),
+        };
+      }
+
+      const availableCycles = Array.from(
+        new Set((cyclesRes.data ?? []).map((r: any) => String(r.cycle))),
+      ).sort((a, b) => b.localeCompare(a));
+
+      // Aggregate top spenders from rows
       const spenderMap = new Map<
         string,
         { name: string; support: number; oppose: number; total: number; count: number }
@@ -161,10 +194,11 @@ export const useCandidateIE = (candidateId: string | null | undefined) => {
         .map(([fecId, v]) => ({ fecId, ...v }))
         .sort((a, b) => b.total - a.total)
         .slice(0, 10);
-      return { totals, rows, topSpenders };
+      return { totals, rows, topSpenders, availableCycles };
     },
   });
 };
+
 
 export type IETotalsMap = Map<string, IETotals>;
 
