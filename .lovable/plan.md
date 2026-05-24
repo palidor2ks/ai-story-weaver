@@ -1,11 +1,24 @@
-Root cause: the alias table now maps `UIHLEIN, RICHARD...` to `Uihlein Family`, but `public.donors.display_name` and the donor materialized views are cached and still contain `Uihlein, Richard`. The donors page reads those cached values, so it keeps showing the old name.
+## Problem
 
-Plan:
-1. Backfill cached donor display names for active aliases so existing `public.donors` rows immediately reflect `Uihlein Family` and any other renamed aliases.
-2. Refresh the three donor materialized views so `/donors` reads the corrected display names.
-3. Add/adjust a database function so future alias renames can refresh affected donor display names without needing manual SQL, then verify `private.donor_consolidated_all_mv` shows one `Uihlein Family` group instead of a separate `Uihlein, Richard` group.
+“Richard” is still showing because the donor materialized views are grouping rows by the cached `donors.display_name`. The raw `donors` rows now show `Uihlein Family`, but `private.donor_consolidated_mv` is still using an older grouping result where Richard rows remain under `Uihlein, Richard`.
 
-Technical details:
-- Use `resolve_donor_display_name(name, type)` to update only cached donor display names.
-- Refresh `private.donor_consolidated_mv`, `private.donor_consolidated_all_mv`, and `private.donor_consolidated_counts_mv` after the backfill.
-- Avoid frontend changes; this is a database cache invalidation issue.
+## Plan
+
+1. **Refresh the donor materialized views again**
+   - Refresh `private.donor_consolidated_mv`
+   - Refresh `private.donor_consolidated_all_mv`
+   - Refresh `private.donor_consolidated_counts_mv`
+
+2. **Verify the public donor RPC output**
+   - Check `public.get_donors_paginated(... search='uihlein' ...)`
+   - Confirm only `Uihlein Family` remains for Richard/Elizabeth Uihlein alias rows
+   - Confirm the combined total includes the former Richard amount
+
+3. **If refresh still leaves stale data, rebuild the MV definitions**
+   - Keep the current columns/indexes/API stable
+   - Change the grouping key to resolve aliases at query time using `public.resolve_donor_display_name(d.name, d.type::text)` instead of relying only on cached `d.display_name`
+   - Refresh and re-verify the RPC output
+
+## Expected result
+
+The Donors page search/list should show one consolidated `Uihlein Family` row instead of a separate `Uihlein, Richard` row.
