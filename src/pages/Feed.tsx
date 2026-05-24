@@ -21,6 +21,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { usePersonalizedScoreMap } from '@/hooks/usePersonalizedScoreMap';
 
 export const Feed = () => {
   const queryClient = useQueryClient();
