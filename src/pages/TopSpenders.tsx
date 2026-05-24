@@ -369,7 +369,29 @@ function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowIte
       >
         <span className="w-8 text-right text-sm font-mono text-muted-foreground">{i + 1}</span>
         <div className="min-w-0">
-          <p className="font-medium truncate">{r.spending_committee_name ?? r.spending_committee_fec_id}</p>
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="font-medium truncate">{r.spending_committee_name ?? r.spending_committee_fec_id}</p>
+            {(() => {
+              const cause = causeMap?.get(r.spending_committee_fec_id);
+              if (!cause) return null;
+              const stance = (cause.stance ?? '').toLowerCase();
+              const cls =
+                stance === 'pro'
+                  ? 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                  : stance === 'anti'
+                    ? 'border-rose-500/40 text-rose-700 dark:text-rose-300'
+                    : 'border-border text-muted-foreground';
+              return (
+                <Badge
+                  variant="outline"
+                  className={`shrink-0 text-[10px] font-normal px-1.5 py-0 max-w-[200px] truncate ${cls}`}
+                  title={cause.issue ?? cause.label}
+                >
+                  {cause.label}
+                </Badge>
+              );
+            })()}
+          </div>
           <p className="text-[11px] text-muted-foreground font-mono truncate">
             {r.spending_committee_fec_id} · {r.expenditure_count.toLocaleString()} expenditure{r.expenditure_count === 1 ? '' : 's'}
             {(() => {
