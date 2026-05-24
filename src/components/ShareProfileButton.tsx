@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Share2 } from 'lucide-react';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
-import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
+import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
 
 interface TopicComparison {
   topicName: string;
@@ -24,7 +24,7 @@ interface ShareProfileButtonProps {
   incumbent?: boolean;
   coverageTier?: string;
   confidence?: string;
-  votingRecordPct?: number | null;
+  topDonors?: { name: string; amount: number }[];
 }
 
 export const ShareProfileButton = ({
@@ -42,14 +42,36 @@ export const ShareProfileButton = ({
   incumbent,
   coverageTier,
   confidence,
-  votingRecordPct,
+  topDonors,
 }: ShareProfileButtonProps) => {
   const [open, setOpen] = useState(false);
   const brandHost =
     typeof window !== 'undefined' ? window.location.host.replace(/^www\./, '') : 'polipulseapp.com';
 
-  const { data: ieMap } = useCandidatesIE(candidateId ? [candidateId] : []);
-  const ie = candidateId ? ieMap?.get(candidateId) : undefined;
+  // Pull latest-cycle IE rows for top spenders
+  const { data: ieData } = useCandidateIE(candidateId ?? null);
+  const { topSpenders, ieCycle } = useMemo(() => {
+    const cycles = ieData?.availableCycles ?? [];
+    const latest = cycles[0] ?? null;
+    const rows = (ieData?.rows ?? []).filter((r) => (latest ? String(r.cycle) === latest : true));
+    const map = new Map<string, { name: string; support: number; oppose: number }>();
+    rows.forEach((r) => {
+      const key = r.spending_committee_fec_id;
+      const cur = map.get(key) ?? {
+        name: r.spending_committee_name ?? key,
+        support: 0,
+        oppose: 0,
+      };
+      const amt = Number(r.amount ?? 0);
+      if (r.support_oppose_indicator === 'S') cur.support += amt;
+      else cur.oppose += amt;
+      map.set(key, cur);
+    });
+    const ts = Array.from(map.values())
+      .sort((a, b) => b.support + b.oppose - (a.support + a.oppose))
+      .slice(0, 2);
+    return { topSpenders: ts, ieCycle: latest };
+  }, [ieData]);
 
   return (
     <>
@@ -77,10 +99,9 @@ export const ShareProfileButton = ({
           incumbent,
           coverageTier,
           confidence,
-          votingRecordPct: votingRecordPct ?? null,
-          ieSupport: ie?.support_amount ?? null,
-          ieOppose: ie?.oppose_amount ?? null,
-          ieCycle: ie?.cycle ?? null,
+          ieCycle,
+          topSpenders,
+          topDonors,
         }}
         caption={{
           surface: 'candidate_profile',

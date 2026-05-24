@@ -25,10 +25,9 @@ export interface CardData {
   incumbent?: boolean;
   coverageTier?: string;
   confidence?: string;
-  votingRecordPct?: number | null;
-  ieSupport?: string | number | null;
-  ieOppose?: string | number | null;
   ieCycle?: string | null;
+  topDonors?: { name: string; amount: number }[];
+  topSpenders?: { name: string; support: number; oppose: number }[];
   // User profile
   userName?: string | null;
   userScore?: number | null;
