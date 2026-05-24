@@ -37,7 +37,17 @@ import Poll from "./pages/Poll";
 import PollResultsPage from "./pages/PollResultsPage";
 import TopSpenders from "./pages/TopSpenders";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      retry: 1,
+    },
+  },
+});
 
 // Consolidated route guard with configurable auth and onboarding requirements
 interface RouteGuardProps {
