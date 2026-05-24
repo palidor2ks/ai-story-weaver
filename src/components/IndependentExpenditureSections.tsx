@@ -194,3 +194,21 @@ const Stat = ({ label, value, tone, icon }: { label: string; value: string; tone
     <div className={`text-lg font-bold mt-1 ${tone === 'agree' ? 'text-agree' : tone === 'disagree' ? 'text-disagree' : 'text-foreground'}`}>{value}</div>
   </div>
 );
+
+const PartyBadge = ({ party }: { party: string }) => {
+  const p = party.toLowerCase();
+  const letter = party.charAt(0).toUpperCase();
+  const cls =
+    p.startsWith('dem')
+      ? 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-300'
+      : p.startsWith('rep')
+        ? 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300'
+        : p.startsWith('ind')
+          ? 'border-purple-500/40 bg-purple-500/10 text-purple-600 dark:text-purple-300'
+          : 'border-border bg-muted text-muted-foreground';
+  return (
+    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 font-semibold ${cls}`} title={party}>
+      {letter}
+    </Badge>
+  );
+};
