@@ -321,12 +321,12 @@ export const Feed = () => {
   }));
 
   const bestMatch = useMemo(() => {
-    if (transformedCandidates.length === 0) return 0;
-    const matches = transformedCandidates.map(c =>
+    if (personalizedCandidates.length === 0) return 0;
+    const matches = personalizedCandidates.map(c =>
       c.matchScore ?? calculateMatchScore(profile?.overall_score ?? 0, c.overallScore)
     );
     return Math.max(...matches);
-  }, [transformedCandidates, profile?.overall_score]);
+  }, [personalizedCandidates, profile?.overall_score]);
 
   const newsPeople = useMemo(() => {
     const seen = new Set<string>();
