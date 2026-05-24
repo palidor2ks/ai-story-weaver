@@ -73,13 +73,16 @@ export const CommitteeIESection = ({ committeeFecId }: { committeeFecId: string 
                 {targets.map((t) => (
                   <tr key={t.key} className="border-t">
                     <td className="p-2 truncate max-w-[260px]">
-                      {t.candidateId ? (
-                        <Link to={`/candidate/${t.candidateId}`} className="font-medium hover:text-primary hover:underline">
-                          {t.name}
-                        </Link>
-                      ) : (
-                        <span className="font-medium">{t.name}</span>
-                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {t.candidateId ? (
+                          <Link to={`/candidate/${t.candidateId}`} className="font-medium hover:text-primary hover:underline">
+                            {t.name}
+                          </Link>
+                        ) : (
+                          <span className="font-medium">{t.name}</span>
+                        )}
+                        {t.party && <PartyBadge party={t.party} />}
+                      </div>
                       {t.fecId && <div className="text-xs text-muted-foreground">{t.fecId}</div>}
                     </td>
                     <td className="p-2 text-right text-agree">{t.support > 0 ? fmt(t.support) : '—'}</td>
