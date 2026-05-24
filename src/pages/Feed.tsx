@@ -232,7 +232,7 @@ export const Feed = () => {
   const { isHidden } = useHiddenStates();
 
   const filteredAndSortedCandidates = useMemo(() => {
-    let result = transformedCandidates.filter(c => !isHidden(c.state));
+    let result = personalizedCandidates.filter(c => !isHidden(c.state));
 
     // Filter by search query
     if (searchQuery) {
