@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding, useUpdateProfile } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
-import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
+import { usePersonalizedScoreMap } from '@/hooks/usePersonalizedScoreMap';
 import { usePartyMatchScores } from '@/hooks/usePartyMatchScores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -80,15 +80,14 @@ export const UserProfile = () => {
     return ids.filter(Boolean);
   }, [federalReps, civicData]);
 
-  // Fetch saved scores from DB (candidates + candidate_overrides)
-  const { data: scoreMap } = useCandidateScoreMap(allOfficialIds);
+  // Personalized score map: rep score averaged ONLY across the questions the
+  // current user answered (apples-to-apples comparison).
+  const { data: scoreMap } = usePersonalizedScoreMap(allOfficialIds);
 
-  // Helper to get the resolved score for an official
-  const getResolvedScore = (id: string, fallbackScore: number | null): number | null => {
-    if (scoreMap?.has(id)) {
-      return scoreMap.get(id) ?? null;
-    }
-    return fallbackScore;
+  // Helper to get the resolved score for an official. Returns null (NA) when
+  // there is no overlap between the user's answers and the rep's answers.
+  const getResolvedScore = (id: string, _fallbackScore: number | null): number | null => {
+    return scoreMap?.get(id) ?? null;
   };
 
   const topicScoresList = userTopicScores.map(ts => ({
