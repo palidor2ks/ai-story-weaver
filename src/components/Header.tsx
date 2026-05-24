@@ -15,7 +15,6 @@ export const Header = () => {
   const { data: adminData, isLoading: adminLoading } = useAdminRole();
   const { data: politicianData, isLoading: politicianLoading } = usePoliticianRole();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  // Only treat role flags as true once their queries have settled, to prevent flash of admin/politician icons.
   const isAdmin = !!user && !adminLoading && !!adminData?.isAdmin;
   const isPolitician = !!user && !politicianLoading && !!politicianData?.isPolitician;
 
@@ -31,48 +30,49 @@ export const Header = () => {
     { path: '/profile', label: 'Profile', icon: User, requiresAuth: true },
   ];
 
-  // While auth is loading, render only public (non-auth) items to avoid flashing auth-gated links.
   const visibleNavItems = navItems.filter((item) => (item.requiresAuth ? !authLoading && !!user : true));
 
   const isActive = (path: string) => location.pathname === path;
 
+  const userName = (user?.user_metadata as any)?.name || user?.email;
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between">
-        <Link to="/feed" className="flex items-center gap-2">
+      <div className="container flex h-16 items-center justify-between gap-2">
+        <Link to="/feed" className="flex items-center gap-2 shrink-0">
           <img src={logoImg} alt="Pulse" className="w-10 h-10 object-contain" />
-          <BetaBadge />
+          <span className="hidden sm:inline-flex"><BetaBadge /></span>
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-1">
+        <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 min-w-0">
           {visibleNavItems.map(item => (
-            <Link key={item.path} to={item.path}>
-              <Button 
+            <Link key={item.path} to={item.path} title={item.label}>
+              <Button
                 variant={isActive(item.path) ? "secondary" : "ghost"}
                 className={cn(
-                  "gap-2",
+                  "gap-1.5 px-2 xl:px-3",
                   isActive(item.path) && "bg-secondary text-foreground"
                 )}
               >
-                <item.icon className="w-4 h-4" />
-                {item.label}
+                <item.icon className="w-4 h-4 shrink-0" />
+                <span className="hidden xl:inline">{item.label}</span>
               </Button>
             </Link>
           ))}
           {!authLoading && user && (
-            <Link to="/how-scoring-works">
-              <Button variant="ghost" size="icon" className="ml-2">
+            <Link to="/how-scoring-works" title="How scoring works">
+              <Button variant="ghost" size="icon" className="ml-1">
                 <HelpCircle className="w-4 h-4" />
               </Button>
             </Link>
           )}
           {isPolitician && (
             <Link to="/politician">
-              <Button 
+              <Button
                 variant={isActive('/politician') ? "secondary" : "ghost"}
                 size="icon"
-                className="ml-1"
+                className="ml-0.5"
                 title="Politician Dashboard"
               >
                 <FileText className="w-4 h-4" />
@@ -81,10 +81,10 @@ export const Header = () => {
           )}
           {isAdmin && (
             <Link to="/admin">
-              <Button 
+              <Button
                 variant={isActive('/admin') ? "secondary" : "ghost"}
                 size="icon"
-                className="ml-1"
+                className="ml-0.5"
                 title="Admin"
               >
                 <Shield className="w-4 h-4" />
@@ -94,13 +94,13 @@ export const Header = () => {
         </nav>
 
         {/* User Info */}
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden lg:flex items-center gap-3 shrink-0">
           {user && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary">
-              <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                <User className="w-3 h-3 text-primary-foreground" />
+            <div className="flex items-center gap-2 lg:px-1.5 xl:px-3 lg:py-1 xl:py-1.5 rounded-full lg:bg-transparent xl:bg-secondary">
+              <div className="w-7 h-7 xl:w-6 xl:h-6 rounded-full bg-primary flex items-center justify-center">
+                <User className="w-3.5 h-3.5 xl:w-3 xl:h-3 text-primary-foreground" />
               </div>
-              <span className="text-sm font-medium text-foreground">{(user.user_metadata as any)?.name || user.email}</span>
+              <span className="hidden xl:inline text-sm font-medium text-foreground max-w-[140px] truncate">{userName}</span>
             </div>
           )}
         </div>
@@ -109,7 +109,7 @@ export const Header = () => {
         <Button
           variant="ghost"
           size="icon"
-          className="md:hidden"
+          className="lg:hidden"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -118,15 +118,15 @@ export const Header = () => {
 
       {/* Mobile Navigation */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-border bg-background animate-slide-up">
+        <div className="lg:hidden border-t border-border bg-background animate-slide-up">
           <nav className="container py-4 space-y-2">
             {visibleNavItems.map(item => (
-              <Link 
-                key={item.path} 
+              <Link
+                key={item.path}
                 to={item.path}
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <Button 
+                <Button
                   variant={isActive(item.path) ? "secondary" : "ghost"}
                   className="w-full justify-start gap-3"
                 >
@@ -136,7 +136,7 @@ export const Header = () => {
               </Link>
             ))}
             {!authLoading && user && (
-              <Link 
+              <Link
                 to="/how-scoring-works"
                 onClick={() => setMobileMenuOpen(false)}
               >
@@ -147,11 +147,11 @@ export const Header = () => {
               </Link>
             )}
             {isPolitician && (
-              <Link 
+              <Link
                 to="/politician"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <Button 
+                <Button
                   variant={isActive('/politician') ? "secondary" : "ghost"}
                   className="w-full justify-start gap-3"
                 >
@@ -161,11 +161,11 @@ export const Header = () => {
               </Link>
             )}
             {isAdmin && (
-              <Link 
+              <Link
                 to="/admin"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <Button 
+                <Button
                   variant={isActive('/admin') ? "secondary" : "ghost"}
                   className="w-full justify-start gap-3"
                 >
