@@ -897,11 +897,15 @@ Deno.serve(async (req: Request) => {
         relatedQuestion: firstQ?.text || undefined,
         _classifiedQuestionIds: cls && showLabels ? cls.question_ids : [],
         _classifiedTopicId: topicMeta?.id || null,
-      } as FeedNewsItem & { _classifiedQuestionIds: string[]; _classifiedTopicId: string | null };
+      } as FeedNewsItem & { _classifiedQuestionIds: string[]; _classifiedTopicId: string | null; _isTopStory?: boolean };
     });
 
+    // Tighten output: only keep items that have both an explicit topic and a related question.
+    const qualifiedItems = items.filter(it => !!it.topicLabel && !!it.relatedQuestion);
+
     // Persist into cache. Only attach articles to questions the classifier picked.
-    if (items.length > 0 && questionIds.length > 0) {
+    if (qualifiedItems.length > 0 && questionIds.length > 0) {
+
       EdgeRuntime.waitUntil((async () => {
         try {
           for (const item of items) {
