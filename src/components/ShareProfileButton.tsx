@@ -58,6 +58,30 @@ export const ShareProfileButton = ({
   topDonors,
 }: ShareProfileButtonProps) => {
   const [open, setOpen] = useState(false);
+  const [resolvedImage, setResolvedImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!candidateImage) {
+      setResolvedImage(null);
+      return;
+    }
+    if (candidateImage.startsWith('data:')) {
+      setResolvedImage(candidateImage);
+      return;
+    }
+    imageUrlToBase64(candidateImage)
+      .then((b64) => {
+        if (!cancelled) setResolvedImage(b64);
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedImage(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [candidateImage]);
+
   const brandHost =
     typeof window !== 'undefined' ? window.location.host.replace(/^www\./, '') : 'polipulseapp.com';
 
