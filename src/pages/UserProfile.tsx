@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useProfile, useUserTopics, useUserTopicScores, useResetOnboarding, useUpdateProfile } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
-import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
+import { usePersonalizedScoreMap } from '@/hooks/usePersonalizedScoreMap';
 import { usePartyMatchScores } from '@/hooks/usePartyMatchScores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
