@@ -1,74 +1,41 @@
-# Candidate Stat Card (Baseball-Style)
+# Stat Card v2 — Flag Colors, Donors & Spenders
 
-Add a new share-card template designed specifically for candidates — modeled on a baseball card's front-of-card stat line. Reuses the existing share modal infrastructure; no backend changes.
+Refine `CandidateStatCard` based on feedback. No backend changes.
 
-## What the card shows
+## Visual changes (`src/components/share/templates/CandidateStatCard.tsx`)
+- **Remove diagonal stripe pattern** entirely (`repeating-linear-gradient`).
+- **Tighter US-flag palette**: navy → red gradient backdrop, white inner border, white star accents. No purple/holo/night variants needed for this card — render a single flag-themed look.
+- Keep ideology hero, name/photo row, footer.
 
-**Header (identity)**
-- Avatar (candidate photo, large, top-left)
-- Name (display font, large)
-- Party chip (D/R/I color)
-- Office · State/District
-- Incumbent badge + Tier/Confidence dots (small, top-right)
+## Stat layout changes
+Replace the 3-stat grid with two focused sections:
 
-**Hero stat (the "batting average")**
-- Pulse Score — huge, formatted L1–R10 with 2 decimals (e.g. `CR2.45`)
-- Small label: "Ideology Score"
+**Outside Spending strip** (top, 2 columns)
+- Top 2 spending committees for the latest cycle
+- Each: committee name, ↑support / ↓oppose amounts
+- Heading: `Top Outside Spenders · {cycle}`
 
-**3-stat grid (the stat line)**
-1. **Match %** — viewer's alignment (falls back to "—" if not signed in)
-2. **Voting Record** — votes cast (or party-unity %, whichever data is present)
-3. **Outside Spending (latest cycle)** — `↑$X · ↓$Y` with cycle label, reusing data from `useCandidatesIE`
+**Top Donors strip** (below, single row of 3)
+- Top 3 donor names + amount
+- Heading: `Top Donors · {cycle}`
 
-**Footer**
-- Top 3 topic scores as mini horizontal bars (topic name + L/R chip)
-- Brand host (polipulseapp.com)
+If a section is empty, hide it gracefully and let the ideology hero + topics take the space.
 
-## Technical details
+## Data wiring
 
-**New file:** `src/components/share/templates/CandidateStatCard.tsx`
-- 1080×1080, follows the same `forwardRef<HTMLDivElement, { data: CardData }>` pattern as `BaseballCard.tsx`
-- Three visual variants (`classic` / `holo` / `night`) reusing `BaseballCard`'s palette tokens for consistency
-- Reads from existing `CardData` fields: `candidateName`, `candidateOffice`, `candidateParty`, `candidateImage`, `candidateScore`, `matchScore`, `agreements`, `disagreements`
+**`CardData`** (`src/components/share/templates/types.ts`) — add:
+- `topDonors?: { name: string; amount: number }[]`
+- `topSpenders?: { name: string; support: number; oppose: number }[]`
+- Remove unused: `votingRecordPct`, `ieSupport`, `ieOppose` (keep `ieCycle` for label)
 
-**Extend `CardData`** in `src/components/share/templates/types.ts` with optional fields:
-- `votingRecordPct?: number` (e.g. 97 = "97% votes cast")
-- `ieSupport?: string` / `ieOppose?: string` / `ieCycle?: string | null`
-- `incumbent?: boolean`
-- `coverageTier?: string` / `confidence?: string`
+**`ShareProfileButton.tsx`**
+- Drop `votingRecordPct` prop and `matchScore`-as-stat usage (keep matchScore in `CardData` for other templates that still use it).
+- Call `useCandidateIE(candidateId, latestCycle)` to get `topSpenders` (slice 2) and cycle.
+- Accept new `topDonors` prop (computed by the candidate profile page from the donors it already loads).
 
-**Wire data** in `src/components/ShareProfileButton.tsx`:
-- Pass `incumbent`, `coverageTier`, `confidence` from the `Candidate` object
-- Pass IE numbers from `useCandidatesIE` (already used on the candidate profile page)
-- Voting record % — pull from existing voting record data if available on the profile, otherwise omit gracefully
-
-**Register the template** in `src/components/share/ShareCardModal.tsx`:
-- Add `CandidateStatCard` as a new option under `TEMPLATES_BY_KIND['candidate-alignment']`
-- Replace the generic `BaseballCard` slot (or add as a 4th option labeled "Stat Card")
+**`CandidateProfile.tsx`**
+- Compute top 3 donors from existing `donors` array (aggregate by `display_name || name`, exclude conduits, sort by amount desc, slice 3) and pass to `ShareProfileButton`.
 
 ## Out of scope
-- No new DB queries or edge functions
-- No changes to `BaseballCard.tsx` (used for donor/user/invite kinds)
-- Voting-record % stat is best-effort — if data isn't already on the candidate profile page, that slot shows "—" and we can wire it in a follow-up
-
-## Layout sketch
-
-```text
-┌─────────────────────────────────────────┐
-│ [photo]  NAME (D)              ★ ✓ 🛡   │
-│          U.S. Senator · TX              │
-│─────────────────────────────────────────│
-│                                         │
-│              CR 2.45                    │
-│           Ideology Score                │
-│                                         │
-│─────────────────────────────────────────│
-│   78%       97%        ↑$4M ↓$10M       │
-│  Match    Votes Cast   Outside '24      │
-│─────────────────────────────────────────│
-│  Economy        ▓▓▓▓▓▓▓░░  CR3          │
-│  Healthcare     ▓▓▓▓░░░░░  C            │
-│  Immigration    ▓▓▓▓▓▓▓▓░  R2           │
-│                       polipulseapp.com  │
-└─────────────────────────────────────────┘
-```
+- No new DB queries beyond the existing `useCandidateIE` already used elsewhere.
+- Other templates (Patriot Card, Issue Breakdown, Editorial) untouched.

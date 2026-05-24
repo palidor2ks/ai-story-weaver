@@ -374,7 +374,21 @@ export const CandidateProfile = () => {
                     incumbent={candidate.is_incumbent ?? true}
                     coverageTier={candidate.coverage_tier ?? undefined}
                     confidence={candidate.confidence ?? undefined}
+                    topDonors={(() => {
+                      const agg = new Map<string, number>();
+                      donors
+                        .filter((d) => !isConduitDonor(d) && !d.is_transfer)
+                        .forEach((d) => {
+                          const n = (d.display_name || d.name || 'Unknown').trim();
+                          agg.set(n, (agg.get(n) ?? 0) + Number(d.amount ?? 0));
+                        });
+                      return Array.from(agg.entries())
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 3)
+                        .map(([name, amount]) => ({ name, amount }));
+                    })()}
                   />
+
 
                 </div>
               </div>
