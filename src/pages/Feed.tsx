@@ -21,6 +21,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { usePersonalizedScoreMap } from '@/hooks/usePersonalizedScoreMap';
 
 export const Feed = () => {
   const queryClient = useQueryClient();
@@ -191,6 +192,25 @@ export const Feed = () => {
     return out;
   }, [unified.myReps, unified.federalExec, unified.stateExec, unified.stateLeg, unified.local, upcomingElections]);
 
+  // Personalized score: rep's avg across ONLY the questions the user answered.
+  // Falls back to the rep's global overallScore when there is no overlap so the
+  // feed still renders something meaningful for unscored reps.
+  const allCandidateIds = useMemo(
+    () => transformedCandidates.map((c) => c.id),
+    [transformedCandidates],
+  );
+  const { data: personalizedScoreMap } = usePersonalizedScoreMap(allCandidateIds);
+
+  const personalizedCandidates: Candidate[] = useMemo(() => {
+    if (!personalizedScoreMap || personalizedScoreMap.size === 0) {
+      return transformedCandidates;
+    }
+    return transformedCandidates.map((c) => {
+      const personalized = personalizedScoreMap.get(c.id);
+      return personalized !== undefined ? { ...c, overallScore: personalized } : c;
+    });
+  }, [transformedCandidates, personalizedScoreMap]);
+
   // Track if we've shown the toast this session to avoid duplicates
   const toastShownRef = useRef(false);
   const aiAnswersGenerated = useMemo(
@@ -212,7 +232,7 @@ export const Feed = () => {
   const { isHidden } = useHiddenStates();
 
   const filteredAndSortedCandidates = useMemo(() => {
-    let result = transformedCandidates.filter(c => !isHidden(c.state));
+    let result = personalizedCandidates.filter(c => !isHidden(c.state));
 
     // Filter by search query
     if (searchQuery) {
@@ -291,7 +311,7 @@ export const Feed = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, transformedCandidates, profile, isHidden]);
+  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, personalizedCandidates, profile, isHidden]);
 
   const userTopicsList = userTopics.map(ut => ({
     id: ut.topics?.id || ut.topic_id,
@@ -301,12 +321,12 @@ export const Feed = () => {
   }));
 
   const bestMatch = useMemo(() => {
-    if (transformedCandidates.length === 0) return 0;
-    const matches = transformedCandidates.map(c =>
+    if (personalizedCandidates.length === 0) return 0;
+    const matches = personalizedCandidates.map(c =>
       c.matchScore ?? calculateMatchScore(profile?.overall_score ?? 0, c.overallScore)
     );
     return Math.max(...matches);
-  }, [transformedCandidates, profile?.overall_score]);
+  }, [personalizedCandidates, profile?.overall_score]);
 
   const newsPeople = useMemo(() => {
     const seen = new Set<string>();
