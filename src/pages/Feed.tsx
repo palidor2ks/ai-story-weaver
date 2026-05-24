@@ -33,7 +33,7 @@ export const Feed = () => {
       const { data, error } = await supabase
         .from('quiz_answers')
         .select('question_id')
-        .order('updated_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(150);
 
       if (error) throw error;
