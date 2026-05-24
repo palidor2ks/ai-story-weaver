@@ -24,6 +24,7 @@ const staticEntries: SitemapEntry[] = [
   { path: "/how-scoring-works", changefreq: "monthly", priority: "0.6" },
   { path: "/blog", changefreq: "weekly", priority: "0.7" },
   { path: "/feed", changefreq: "daily", priority: "0.5" },
+  { path: "/quiz", changefreq: "monthly", priority: "0.7" },
   { path: "/quiz-library", changefreq: "monthly", priority: "0.5" },
   { path: "/terms", changefreq: "yearly", priority: "0.3" },
   { path: "/privacy", changefreq: "yearly", priority: "0.3" },
