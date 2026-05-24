@@ -1,60 +1,44 @@
-# Fix committee search error
+# Show real committee names (e.g., "House Majority PAC" for HMP)
 
-## Problem
+## Why "HMP" shows up
 
-Searching "israel" (or any text) on `/committees` fails with:
+The Top Spenders list renders `spending_committee_name` straight from `independent_expenditures`. For C00495028, FEC's IE filings record the committee name as the filer-supplied short name **"HMP"** — that's literally what's in the IE file. The full registered name "HOUSE MAJORITY PAC" only lives on FEC's `/committees/` endpoint, which we mirror into `external_pacs.name`.
 
-> Unable to load committees: "failed to parse logic tree ((name.ilike.%israel%,fec_committee_id.ilike.%israel%,candidates.name.ilike.%israel%))" (line 1, column 67)
+We currently have no record for C00495028 in `external_pacs` and no resolver in TopSpenders, so the abbreviation wins.
 
-## Root cause
+## Fix
 
-In `src/hooks/useCommittees.ts` line 305, the search filter mixes a column on the base table with a column on an embedded relation inside a single top-level `.or()`:
+Resolve every spender's display name from `external_pacs` first, falling back to the IE filer name, then the FEC ID.
 
-```ts
-committeeQuery.or(
-  `name.ilike.%${search}%,fec_committee_id.ilike.%${search}%,candidates.name.ilike.%${search}%`
-);
-```
+### Step 1 — Backfill external_pacs for all IE spenders
 
-PostgREST does not allow referencing an embedded resource column (`candidates.name`) as a sibling term inside a base-table `or()` — it tries to parse `candidates.name.ilike...` as a column on `candidate_committees` and fails. Filtering an embedded resource requires `.or(..., { foreignTable: 'candidates' })`, which would filter *which candidates get embedded* rather than which committees match — a different query shape.
+Trigger `sync-fec-committees` so every active committee (including C00495028 / House Majority PAC) is mirrored with its real registered name. Already implemented; just needs to be run / re-run. As a one-shot supplement, ensure the sync also covers committee_types `Y/W/O/U/N/Q/V/X/Z` for cycles back to 2018 so historical IE filers are covered.
 
-The search input also isn't escaped, so values containing `,` `(` `)` would break the logic tree even after the fix.
+### Step 2 — Join display names into the TopSpenders query
 
-## Fix (Step 1 — narrow, ships the fix)
+In `src/pages/TopSpenders.tsx` / `useTopSpenders`:
 
-Restrict the `.or()` to columns that actually live on `candidate_committees`:
+1. After fetching the top 100–200 spender rows, collect the `fec_committee_id`s.
+2. Fetch matching `external_pacs` rows: `select fec_committee_id, name`.
+3. Build a `Map<fec_id, displayName>` and overwrite `spending_committee_name` with `external_pacs.name` when present (preferring the longer, registered name).
 
-```ts
-const safe = search.replace(/[,()*]/g, ' ').trim();
-if (safe) {
-  committeeQuery = committeeQuery.or(
-    `name.ilike.%${safe}%,fec_committee_id.ilike.%${safe}%`
-  );
-}
-```
+This adds one bounded query per page render, gated by the existing react-query cache.
 
-This removes the invalid `candidates.name.ilike...` term and sanitizes the input. The search bar will match committee name and FEC committee ID — covering the vast majority of real searches (e.g., "israel" matches committee names containing the word).
+### Step 3 — Reuse on the committee profile header
 
-## Fix (Step 2 — optional, adds candidate-name search back)
+`/committee/:fecId` (CommitteeProfile) should apply the same resolver so the header reads "House Majority PAC" instead of "HMP". One-line fix: prefer `external_pacs.name` over the IE-derived name.
 
-If we still want "search by the candidate the committee belongs to":
+## Optional: manual alias override
 
-1. Run a parallel lookup: `supabase.from('candidates').select('id').ilike('name', `%${safe}%`)` → array of candidate IDs.
-2. Combine into the committee query as:
-   ```ts
-   committeeQuery.or(
-     `name.ilike.%${safe}%,fec_committee_id.ilike.%${safe}%,candidate_id.in.(${ids.join(',')})`
-   );
-   ```
-   (skip the `candidate_id.in.()` term when the lookup returns zero rows).
-
-Step 2 is only needed if product wants candidate-name search on this page — Step 1 alone unblocks the user.
+For cases where FEC's registered name is still cryptic, add a tiny `committee_display_overrides` table (`fec_committee_id` PK, `display_name`, admin-managed). The resolver checks override → external_pacs → IE name. Out of scope unless the user wants it now.
 
 ## Files touched
 
-- `src/hooks/useCommittees.ts` — line ~305 only
+- `src/pages/TopSpenders.tsx` (resolver + join)
+- `src/pages/CommitteeProfile.tsx` (header fallback)
+- Run `sync-fec-committees` once (no code change beyond a button click in admin, or invoke via UI)
 
 ## Out of scope
 
-- TopSpenders page (uses a different code path, no error there).
-- Reworking the committees search UX or adding a separate "search by candidate" filter.
+- Touching how IE rows are stored (don't rewrite `independent_expenditures.spending_committee_name`).
+- Search-by-alias on TopSpenders (separate request).
