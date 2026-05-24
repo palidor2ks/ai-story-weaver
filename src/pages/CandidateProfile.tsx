@@ -954,6 +954,10 @@ export const CandidateProfile = () => {
                                         </div>
                                         <div className="flex flex-wrap items-center gap-2 mt-1">
                                           <Badge variant="secondary">{donor.type}</Badge>
+                                          {(() => {
+                                            const cause = getDonorCause(donorCauseMap, displayName, donor.type);
+                                            return cause ? <CauseBadge cause={cause} /> : null;
+                                          })()}
                                           {isConduit && (
                                             <span className="text-xs text-amber-600">Pass-through</span>
                                           )}
