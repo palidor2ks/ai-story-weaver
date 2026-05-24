@@ -1,41 +1,25 @@
-# Stat Card v2 — Flag Colors, Donors & Spenders
+# Fix: candidate photo missing on share card
 
-Refine `CandidateStatCard` based on feedback. No backend changes.
+## Root cause
 
-## Visual changes (`src/components/share/templates/CandidateStatCard.tsx`)
-- **Remove diagonal stripe pattern** entirely (`repeating-linear-gradient`).
-- **Tighter US-flag palette**: navy → red gradient backdrop, white inner border, white star accents. No purple/holo/night variants needed for this card — render a single flag-themed look.
-- Keep ideology hero, name/photo row, footer.
+`CandidateStatCard` renders `<img src={image} crossOrigin="anonymous" />`. The `crossOrigin` attribute is required so `html2canvas` can serialize the card to PNG without tainting the canvas. But the candidate photo URL (Bioguide / external host) does not return `Access-Control-Allow-Origin`, so the browser blocks the image and only the `alt` text shows. That's why the photo box appears empty with "Thomas Massie" text in the corner.
 
-## Stat layout changes
-Replace the 3-stat grid with two focused sections:
+Removing `crossOrigin` would let the image display in the live preview but would break the PNG export (canvas tainting). The correct fix is to fetch the image once on the client, convert it to a base64 data URL, and pass that data URL into the card. Data URLs are same-origin and bypass CORS entirely.
 
-**Outside Spending strip** (top, 2 columns)
-- Top 2 spending committees for the latest cycle
-- Each: committee name, ↑support / ↓oppose amounts
-- Heading: `Top Outside Spenders · {cycle}`
+## Changes
 
-**Top Donors strip** (below, single row of 3)
-- Top 3 donor names + amount
-- Heading: `Top Donors · {cycle}`
+**`src/components/ShareProfileButton.tsx`**
+- Add a small helper `imageUrlToBase64(url)` (fetch → blob → FileReader.readAsDataURL).
+- When the modal opens (or in a `useEffect` keyed on `candidateImage`), convert `candidateImage` to a data URL and store it in local state `resolvedImage`.
+- Pass `resolvedImage ?? candidateImage` as `candidateImage` into `ShareCardModal` / `CardData`.
+- If the fetch fails, fall back to `null` so the card shows the initials placeholder instead of a broken image.
 
-If a section is empty, hide it gracefully and let the ideology hero + topics take the space.
+**`src/components/share/templates/CandidateStatCard.tsx`**
+- No structural changes. Keep `crossOrigin="anonymous"` (harmless for data URLs, still needed if a non-converted URL ever flows through).
+- Optional: add `onError` on the `<img>` to swap to the initials placeholder if the image fails for any reason.
 
-## Data wiring
+## Notes
 
-**`CardData`** (`src/components/share/templates/types.ts`) — add:
-- `topDonors?: { name: string; amount: number }[]`
-- `topSpenders?: { name: string; support: number; oppose: number }[]`
-- Remove unused: `votingRecordPct`, `ieSupport`, `ieOppose` (keep `ieCycle` for label)
-
-**`ShareProfileButton.tsx`**
-- Drop `votingRecordPct` prop and `matchScore`-as-stat usage (keep matchScore in `CardData` for other templates that still use it).
-- Call `useCandidateIE(candidateId, latestCycle)` to get `topSpenders` (slice 2) and cycle.
-- Accept new `topDonors` prop (computed by the candidate profile page from the donors it already loads).
-
-**`CandidateProfile.tsx`**
-- Compute top 3 donors from existing `donors` array (aggregate by `display_name || name`, exclude conduits, sort by amount desc, slice 3) and pass to `ShareProfileButton`.
-
-## Out of scope
-- No new DB queries beyond the existing `useCandidateIE` already used elsewhere.
-- Other templates (Patriot Card, Issue Breakdown, Editorial) untouched.
+- No backend / edge-function work needed; conversion happens in the browser.
+- This also fixes the exported PNG, which currently would either be missing the photo or fail entirely due to the tainted canvas.
+- No other share templates use a remote candidate photo today, so the scope stays inside `ShareProfileButton` + `CandidateStatCard`.

@@ -1,4 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+const imageUrlToBase64 = async (url: string): Promise<string> => {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const blob = await response.blob();
+  if (blob.type.includes('text/html')) throw new Error('Not an image');
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
 import { Share2 } from 'lucide-react';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
@@ -45,6 +58,30 @@ export const ShareProfileButton = ({
   topDonors,
 }: ShareProfileButtonProps) => {
   const [open, setOpen] = useState(false);
+  const [resolvedImage, setResolvedImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!candidateImage) {
+      setResolvedImage(null);
+      return;
+    }
+    if (candidateImage.startsWith('data:')) {
+      setResolvedImage(candidateImage);
+      return;
+    }
+    imageUrlToBase64(candidateImage)
+      .then((b64) => {
+        if (!cancelled) setResolvedImage(b64);
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedImage(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [candidateImage]);
+
   const brandHost =
     typeof window !== 'undefined' ? window.location.host.replace(/^www\./, '') : 'polipulseapp.com';
 
@@ -90,7 +127,7 @@ export const ShareProfileButton = ({
           candidateName,
           candidateOffice,
           candidateParty,
-          candidateImage: candidateImage ?? null,
+          candidateImage: resolvedImage ?? null,
           candidateScore,
           userScore,
           matchScore,
