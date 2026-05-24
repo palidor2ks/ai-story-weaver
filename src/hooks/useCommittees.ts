@@ -302,7 +302,12 @@ const fetchCommitteePage = async (
   }
 
   if (search) {
-    committeeQuery = committeeQuery.or(`name.ilike.%${search}%,fec_committee_id.ilike.%${search}%,candidates.name.ilike.%${search}%`);
+    const safe = search.replace(/[,()*]/g, ' ').trim();
+    if (safe) {
+      committeeQuery = committeeQuery.or(
+        `name.ilike.%${safe}%,fec_committee_id.ilike.%${safe}%`
+      );
+    }
   }
 
   const { data: committees, error: committeeError, count } = await committeeQuery.returns<CommitteeRow[]>();

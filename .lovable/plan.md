@@ -1,66 +1,60 @@
-## Goal
+# Fix committee search error
 
-Stop vendors like **GAMBIT STRATEGIES LLC** (Democratic media-buying firm) from showing up as donors on candidate / committee / donor list pages, and prevent it going forward.
+## Problem
 
-## Root causes (confirmed from data)
+Searching "israel" (or any text) on `/committees` fails with:
 
-1. The donor import is inserting rows with `line_number = '20A'` (operating expenditures — money paid *to* a vendor) into `donors`. Every Gambit row tied to HARRIS FOR PRESIDENT, FIGHT FOR THE PEOPLE PAC, NIKKI FOR CONGRESS came in this way.
-2. There is no vendor reference list. Vendor refunds / offsets on lines 14/15/17 (e.g. Beasley $32k, Priorities USA $239k) have no way to be flagged and excluded the way `conduit_organizations` flags ActBlue.
+> Unable to load committees: "failed to parse logic tree ((name.ilike.%israel%,fec_committee_id.ilike.%israel%,candidates.name.ilike.%israel%))" (line 1, column 67)
 
-## Changes
+## Root cause
 
-### 1. New table `vendor_organizations`
+In `src/hooks/useCommittees.ts` line 305, the search filter mixes a column on the base table with a column on an embedded relation inside a single top-level `.or()`:
 
-Mirror of `conduit_organizations`:
-
-```text
-vendor_organizations
-  id uuid pk
-  name text not null  (UPPER-cased canonical form)
-  aliases text[] default '{}'
-  category text   ('media_buyer' | 'consulting' | 'fundraising' | 'legal' | 'tech' | 'other')
-  notes text
-  is_active bool default true
-  created_at / updated_at
+```ts
+committeeQuery.or(
+  `name.ilike.%${search}%,fec_committee_id.ilike.%${search}%,candidates.name.ilike.%${search}%`
+);
 ```
 
-RLS: public SELECT, admin ALL, service_role ALL. Seed with `GAMBIT STRATEGIES`, `GAMBIT STRATEGIES LLC`, `GAMBIT STRATEGIES, LLC`.
+PostgREST does not allow referencing an embedded resource column (`candidates.name`) as a sibling term inside a base-table `or()` — it tries to parse `candidates.name.ilike...` as a column on `candidate_committees` and fails. Filtering an embedded resource requires `.or(..., { foreignTable: 'candidates' })`, which would filter *which candidates get embedded* rather than which committees match — a different query shape.
 
-### 2. Backfill cleanup (data migration via insert tool / SQL)
+The search input also isn't escaped, so values containing `,` `(` `)` would break the logic tree even after the fix.
 
-- `DELETE FROM donors WHERE line_number LIKE '20%'` — these are disbursements, never donations.
-- `DELETE FROM contributions WHERE line_number LIKE '20%'` (same reason).
-- `DELETE FROM donors d WHERE EXISTS (vendor match on UPPER(name))` — removes the Gambit refund-style rows on lines 14/15/17 from donor views. They remain available via `contributions` for the vendor-refunds admin panel.
+## Fix (Step 1 — narrow, ships the fix)
 
-### 3. RPC + hook updates
+Restrict the `.or()` to columns that actually live on `candidate_committees`:
 
-- Update `get_donors_paginated`, `search_donors_by_name`, `search_raw_donors_by_name`, and the candidate-donor RPC to LEFT JOIN `vendor_organizations` on `UPPER(name) = vo.name OR UPPER(name) = ANY(vo.aliases)` and exclude active matches (unless caller passes `p_include_vendors = true`).
-- Add an `is_vendor_org` flag on returned rows so admin views can still see them with a badge.
+```ts
+const safe = search.replace(/[,()*]/g, ' ').trim();
+if (safe) {
+  committeeQuery = committeeQuery.or(
+    `name.ilike.%${safe}%,fec_committee_id.ilike.%${safe}%`
+  );
+}
+```
 
-### 4. Import-time guard (edge function)
+This removes the invalid `candidates.name.ilike...` term and sanitizes the input. The search bar will match committee name and FEC committee ID — covering the vast majority of real searches (e.g., "israel" matches committee names containing the word).
 
-In the FEC / CSV donor import edge function:
+## Fix (Step 2 — optional, adds candidate-name search back)
 
-- Skip any row where `line_number` starts with `'20'` (operating expenditure / loan repayment / refund of contribution to candidate) — log to `donor_import_sessions.undo_summary.skipped_disbursements`.
-- For lines 14/15/17, look up the contributor name against `vendor_organizations`. If matched, insert into `contributions` only (for refund tracking) but **not** into `donors`.
+If we still want "search by the candidate the committee belongs to":
 
-### 5. Admin UI
+1. Run a parallel lookup: `supabase.from('candidates').select('id').ilike('name', `%${safe}%`)` → array of candidate IDs.
+2. Combine into the committee query as:
+   ```ts
+   committeeQuery.or(
+     `name.ilike.%${safe}%,fec_committee_id.ilike.%${safe}%,candidate_id.in.(${ids.join(',')})`
+   );
+   ```
+   (skip the `candidate_id.in.()` term when the lookup returns zero rows).
 
-- New "Vendors" panel under the existing Donor admin section (sibling of `DonorAliasesPanel`), reusing the same patterns: list, add, edit aliases, deactivate. No new design system tokens.
-- Add a small "Vendor" badge on any admin donor row that matches.
+Step 2 is only needed if product wants candidate-name search on this page — Step 1 alone unblocks the user.
+
+## Files touched
+
+- `src/hooks/useCommittees.ts` — line ~305 only
 
 ## Out of scope
 
-- AI-assisted vendor detection.
-- Re-classifying historical Gambit *contributions* as offsets in `finance_reconciliation` (separate follow-up).
-- Touching `external_committee_finance` or IE flows.
-
-## Order of operations
-
-1. Create `vendor_organizations` migration + seed.
-2. Update RPCs to exclude vendors.
-3. Backfill delete of line 20x rows + Gambit donor rows.
-4. Edge function import guard.
-5. Admin "Vendors" panel.
-
-Each step is independently shippable; user-visible fix (Gambit disappears from candidate donor lists) lands after step 3.
+- TopSpenders page (uses a different code path, no error there).
+- Reworking the committees search UX or adding a separate "search by candidate" filter.
