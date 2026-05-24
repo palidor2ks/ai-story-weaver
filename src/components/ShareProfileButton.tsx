@@ -58,29 +58,47 @@ export const ShareProfileButton = ({
   topDonors,
 }: ShareProfileButtonProps) => {
   const [open, setOpen] = useState(false);
-  const [resolvedImage, setResolvedImage] = useState<string | null>(null);
+
+  // Try the provided URL first; fall back to Bioguide for federal IDs (e.g. M001184).
+  const candidateImages = useMemo(() => {
+    const urls: string[] = [];
+    if (candidateImage) urls.push(candidateImage);
+    if (candidateId && /^[A-Z]\d{6}$/.test(candidateId)) {
+      const bg = `https://bioguide.congress.gov/bioguide/photo/${candidateId[0]}/${candidateId}.jpg`;
+      if (!urls.includes(bg)) urls.push(bg);
+    }
+    return urls;
+  }, [candidateImage, candidateId]);
+
+  // Show the original URL immediately so the preview is never blank while
+  // base64 conversion (used to make PNG export CORS-safe) is pending.
+  const [resolvedImage, setResolvedImage] = useState<string | null>(
+    candidateImages[0] ?? null,
+  );
 
   useEffect(() => {
+    setResolvedImage(candidateImages[0] ?? null);
+    if (candidateImages.length === 0) return;
     let cancelled = false;
-    if (!candidateImage) {
-      setResolvedImage(null);
-      return;
-    }
-    if (candidateImage.startsWith('data:')) {
-      setResolvedImage(candidateImage);
-      return;
-    }
-    imageUrlToBase64(candidateImage)
-      .then((b64) => {
-        if (!cancelled) setResolvedImage(b64);
-      })
-      .catch(() => {
-        if (!cancelled) setResolvedImage(null);
-      });
+    (async () => {
+      for (const url of candidateImages) {
+        if (url.startsWith('data:')) {
+          if (!cancelled) setResolvedImage(url);
+          return;
+        }
+        try {
+          const b64 = await imageUrlToBase64(url);
+          if (!cancelled) setResolvedImage(b64);
+          return;
+        } catch {
+          // try next fallback URL
+        }
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [candidateImage]);
+  }, [candidateImages]);
 
   const brandHost =
     typeof window !== 'undefined' ? window.location.host.replace(/^www\./, '') : 'polipulseapp.com';
