@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useEffect, useState } from 'react';
 import { CardData, CARD_SIZE, formatScoreSafe } from './types';
 import { PulseMark } from './PulseMark';
 
@@ -39,6 +39,12 @@ const fmtMoneyShort = (n?: number | null) => {
 const truncate = (s: string, max = 30) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
 
 export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
+  const [imgFailed, setImgFailed] = useState(false);
+  useEffect(() => {
+    setImgFailed(false);
+  }, [data.candidateImage]);
+
+
   const textColor = FLAG_WHITE;
   const mutedColor = 'hsl(214 35% 82%)';
   const panelBg = 'hsl(220 50% 14% / 0.78)';
@@ -149,15 +155,13 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                 justifyContent: 'center',
               }}
             >
-              {image ? (
+              {image && !imgFailed ? (
                 <img
                   src={image}
                   alt=""
                   crossOrigin="anonymous"
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = 'none';
-                  }}
+                  onError={() => setImgFailed(true)}
                 />
               ) : (
                 <div style={{ fontSize: 64, fontWeight: 900, color: mutedColor }}>
