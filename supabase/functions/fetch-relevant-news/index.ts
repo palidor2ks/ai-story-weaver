@@ -786,7 +786,7 @@ Deno.serve(async (req: Request) => {
       if (ageHours <= 24) score += 2;
       else if (ageHours <= 72) score += 1;
 
-      const item: FeedNewsItem & { ageHours: number } = {
+      const item: FeedNewsItem & { ageHours: number; _isTopStory?: boolean } = {
         id: hashId(key),
         title: cleanedTitle,
         url: finalUrl,
@@ -799,7 +799,9 @@ Deno.serve(async (req: Request) => {
         isTopTopicHit: matchedTopics.length > 0,
         isNew: ageHours <= 48,
         ageHours,
+        _isTopStory: !!it.isTopStory,
       };
+
 
       if (matchedPeople.length === 0) continue;
       if (score < 3) {
