@@ -950,7 +950,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Strip internal fields before responding.
-    const responseItems = items.map(({ _classifiedQuestionIds, _classifiedTopicId, ...rest }) => rest);
+    const responseItems = qualifiedItems.map(({ _classifiedQuestionIds, _classifiedTopicId, _isTopStory, ...rest }: any) => rest);
 
     return new Response(JSON.stringify({ items: responseItems, window: windowLabel }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
