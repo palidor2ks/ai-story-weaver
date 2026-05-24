@@ -166,6 +166,29 @@ export default function TopSpenders() {
     },
   });
 
+  const { data: causeMap } = useQuery({
+    queryKey: ['top-spenders-causes', visibleIds],
+    enabled: visibleIds.length > 0,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('committee_topics')
+        .select('fec_committee_id, primary_cause:primary_cause_id(label, stance, issue)')
+        .in('fec_committee_id', visibleIds);
+      const map = new Map<string, { label: string; stance: string | null; issue: string | null }>();
+      (data ?? []).forEach((r: any) => {
+        if (r.primary_cause?.label) {
+          map.set(r.fec_committee_id, {
+            label: r.primary_cause.label,
+            stance: r.primary_cause.stance ?? null,
+            issue: r.primary_cause.issue ?? null,
+          });
+        }
+      });
+      return map;
+    },
+  });
+
   const summary = useMemo(() => {
     const list = rows ?? [];
     return {
