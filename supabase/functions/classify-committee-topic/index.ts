@@ -46,11 +46,12 @@ interface Cause {
 }
 
 async function gatherInfo(supabase: any, fecId: string): Promise<CommitteeInfo | null> {
-  const { data: cmte } = await supabase
+  const { data: cmteRows } = await supabase
     .from('candidate_committees')
     .select('fec_committee_id, name, designation')
     .eq('fec_committee_id', fecId)
-    .maybeSingle();
+    .limit(1);
+  const cmte = cmteRows?.[0];
 
   let name: string | null = cmte?.name ?? null;
   let designation: string | null = cmte?.designation ?? null;
@@ -66,14 +67,16 @@ async function gatherInfo(supabase: any, fecId: string): Promise<CommitteeInfo |
   }
 
   if (!name) {
-    const { data: ext } = await supabase
+    const { data: extRows } = await supabase
       .from('external_pacs')
       .select('name, designation')
       .eq('fec_committee_id', fecId)
-      .maybeSingle();
+      .limit(1);
+    const ext = extRows?.[0];
     name = ext?.name ?? null;
     designation = designation ?? ext?.designation ?? null;
   }
+
 
   if (!name) return null;
 
