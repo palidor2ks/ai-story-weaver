@@ -80,15 +80,14 @@ export const UserProfile = () => {
     return ids.filter(Boolean);
   }, [federalReps, civicData]);
 
-  // Fetch saved scores from DB (candidates + candidate_overrides)
-  const { data: scoreMap } = useCandidateScoreMap(allOfficialIds);
+  // Personalized score map: rep score averaged ONLY across the questions the
+  // current user answered (apples-to-apples comparison).
+  const { data: scoreMap } = usePersonalizedScoreMap(allOfficialIds);
 
-  // Helper to get the resolved score for an official
-  const getResolvedScore = (id: string, fallbackScore: number | null): number | null => {
-    if (scoreMap?.has(id)) {
-      return scoreMap.get(id) ?? null;
-    }
-    return fallbackScore;
+  // Helper to get the resolved score for an official. Returns null (NA) when
+  // there is no overlap between the user's answers and the rep's answers.
+  const getResolvedScore = (id: string, _fallbackScore: number | null): number | null => {
+    return scoreMap?.get(id) ?? null;
   };
 
   const topicScoresList = userTopicScores.map(ts => ({
