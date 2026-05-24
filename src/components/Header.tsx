@@ -41,7 +41,7 @@ export const Header = () => {
       <div className="container flex h-16 items-center justify-between gap-2">
         <Link to="/feed" className="flex items-center gap-2 shrink-0">
           <img src={logoImg} alt="Pulse" className="w-10 h-10 object-contain" />
-          <span className="hidden sm:inline-flex"><BetaBadge /></span>
+          <BetaBadge size="xs" />
         </Link>
 
         {/* Desktop Navigation */}
