@@ -59,6 +59,9 @@ export const CandidateProfile = () => {
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
+  const { data: donorCauseMap } = useDonorCauses(
+    donors.map(d => ({ name: d.display_name || d.name, type: d.type }))
+  );
   const { data: votes = [] } = useCandidateVotes(id);
   const { data: representativeDetails } = useRepresentativeDetails(id);
   const { data: adminData } = useAdminRole();
