@@ -1,4 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+const imageUrlToBase64 = async (url: string): Promise<string> => {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const blob = await response.blob();
+  if (blob.type.includes('text/html')) throw new Error('Not an image');
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
 import { Share2 } from 'lucide-react';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
