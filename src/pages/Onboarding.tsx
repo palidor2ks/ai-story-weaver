@@ -575,23 +575,44 @@ export const Onboarding = () => {
         
         return (
           <div className="max-w-2xl mx-auto">
-            {currentQuestionTopic && (
-              <div className="flex items-center justify-center gap-2 mb-4">
-                <TopicIcon name={currentQuestionTopic.icon} className="w-6 h-6" />
-                <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                  {currentQuestionTopic.name}
+            <div className="sticky top-0 z-20 -mx-4 px-4 pt-3 pb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border">
+              {currentQuestionTopic && (
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <TopicIcon name={currentQuestionTopic.icon} className="w-6 h-6" />
+                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                    {currentQuestionTopic.name}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Question {currentQuestionIndex + 1} of {activeQuestions.length}
                 </span>
+                <div className="flex-1 mx-4 h-2 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-hero transition-all duration-500 ease-out"
+                    style={{ width: `${((currentQuestionIndex + 1) / activeQuestions.length) * 100}%` }}
+                  />
+                </div>
               </div>
-            )}
-            
-            <QuizQuestion
-              question={currentQuestion}
-              selectedOptionId={currentAnswer?.selectedOptionId || null}
-              onSelect={handleOptionSelect}
-              onSkip={handleSkipQuestion}
-              questionNumber={currentQuestionIndex + 1}
-              totalQuestions={activeQuestions.length}
-            />
+              <h2 className="font-display text-lg md:text-xl font-semibold text-foreground leading-snug text-center">
+                {currentQuestion.text}
+              </h2>
+            </div>
+
+            <div className="mt-6">
+              <QuizQuestion
+                question={currentQuestion}
+                selectedOptionId={currentAnswer?.selectedOptionId || null}
+                onSelect={handleOptionSelect}
+                onSkip={handleSkipQuestion}
+                questionNumber={currentQuestionIndex + 1}
+                totalQuestions={activeQuestions.length}
+                hideHeader
+                hideQuestionText
+              />
+            </div>
+
 
             <div className="flex justify-between mt-8">
               <Button 
@@ -705,27 +726,48 @@ export const Onboarding = () => {
 
         return (
           <div className="max-w-2xl mx-auto">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <MapPin className="w-4 h-4 text-primary" />
-              <span className="text-xs font-medium text-primary uppercase tracking-wide">Local Issues</span>
-            </div>
-            {currentLocalQuestionTopic && (
-              <div className="flex items-center justify-center gap-2 mb-4">
-                <TopicIcon name={currentLocalQuestionTopic.icon} className="w-6 h-6" />
-                <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                  {currentLocalQuestionTopic.displayName || currentLocalQuestionTopic.name}
-                </span>
+            <div className="sticky top-0 z-20 -mx-4 px-4 pt-3 pb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <MapPin className="w-4 h-4 text-primary" />
+                <span className="text-xs font-medium text-primary uppercase tracking-wide">Local Issues</span>
               </div>
-            )}
+              {currentLocalQuestionTopic && (
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <TopicIcon name={currentLocalQuestionTopic.icon} className="w-6 h-6" />
+                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                    {currentLocalQuestionTopic.displayName || currentLocalQuestionTopic.name}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Question {currentLocalQuestionIndex + 1} of {activeLocalQuestions.length}
+                </span>
+                <div className="flex-1 mx-4 h-2 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-hero transition-all duration-500 ease-out"
+                    style={{ width: `${((currentLocalQuestionIndex + 1) / activeLocalQuestions.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+              <h2 className="font-display text-lg md:text-xl font-semibold text-foreground leading-snug text-center">
+                {currentLocalQuestion.text}
+              </h2>
+            </div>
 
-            <QuizQuestion
-              question={currentLocalQuestion}
-              selectedOptionId={currentLocalAnswer?.selectedOptionId || null}
-              onSelect={handleLocalOptionSelect}
-              onSkip={handleLocalSkipQuestion}
-              questionNumber={currentLocalQuestionIndex + 1}
-              totalQuestions={activeLocalQuestions.length}
-            />
+            <div className="mt-6">
+              <QuizQuestion
+                question={currentLocalQuestion}
+                selectedOptionId={currentLocalAnswer?.selectedOptionId || null}
+                onSelect={handleLocalOptionSelect}
+                onSkip={handleLocalSkipQuestion}
+                questionNumber={currentLocalQuestionIndex + 1}
+                totalQuestions={activeLocalQuestions.length}
+                hideHeader
+                hideQuestionText
+              />
+            </div>
+
 
             <div className="flex justify-between mt-8">
               <Button 
