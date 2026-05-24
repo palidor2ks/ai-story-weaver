@@ -1,46 +1,66 @@
 ## Goal
 
-On the candidate profile donor list (e.g. DELOITTE PAC row), show the PAC's **primary cause** as a small badge next to the "PAC" type badge, sourced from the existing `committee_topics` + `committee_causes` tables.
+Stop vendors like **GAMBIT STRATEGIES LLC** (Democratic media-buying firm) from showing up as donors on candidate / committee / donor list pages, and prevent it going forward.
 
-## Where it appears
+## Root causes (confirmed from data)
 
-`src/pages/CandidateProfile.tsx`, donor row rendering around lines 950–1010, only for sources where `source.sourceType === 'donor'` and `donor.type === 'PAC'` (or `'Organization'`).
+1. The donor import is inserting rows with `line_number = '20A'` (operating expenditures — money paid *to* a vendor) into `donors`. Every Gambit row tied to HARRIS FOR PRESIDENT, FIGHT FOR THE PEOPLE PAC, NIKKI FOR CONGRESS came in this way.
+2. There is no vendor reference list. Vendor refunds / offsets on lines 14/15/17 (e.g. Beasley $32k, Priorities USA $239k) have no way to be flagged and excluded the way `conduit_organizations` flags ActBlue.
 
-Render after the existing `<Badge>{donor.type}</Badge>`:
+## Changes
 
+### 1. New table `vendor_organizations`
+
+Mirror of `conduit_organizations`:
+
+```text
+vendor_organizations
+  id uuid pk
+  name text not null  (UPPER-cased canonical form)
+  aliases text[] default '{}'
+  category text   ('media_buyer' | 'consulting' | 'fundraising' | 'legal' | 'tech' | 'other')
+  notes text
+  is_active bool default true
+  created_at / updated_at
 ```
-PAC  • Tech industry (primary cause)  • WASHINGTON, DC
-```
 
-Style: `variant="outline"`, neutral muted color, tooltip showing the cause `description` and "Assigned by AI / Admin" based on `assigned_by` / `admin_overridden`.
+RLS: public SELECT, admin ALL, service_role ALL. Seed with `GAMBIT STRATEGIES`, `GAMBIT STRATEGIES LLC`, `GAMBIT STRATEGIES, LLC`.
 
-## Data path
+### 2. Backfill cleanup (data migration via insert tool / SQL)
 
-PAC donor rows don't carry the PAC's own FEC committee ID. We resolve PAC name → committee ID via existing `donor_aliases`:
+- `DELETE FROM donors WHERE line_number LIKE '20%'` — these are disbursements, never donations.
+- `DELETE FROM contributions WHERE line_number LIKE '20%'` (same reason).
+- `DELETE FROM donors d WHERE EXISTS (vendor match on UPPER(name))` — removes the Gambit refund-style rows on lines 14/15/17 from donor views. They remain available via `contributions` for the vendor-refunds admin panel.
 
-1. `donor_aliases` (active) has `canonical_name` + `fec_committee_id` and `fec_committee_ids[]`.
-2. `donor_alias_members` links raw `donor_name` + `donor_type` → `alias_id`.
-3. `committee_topics.fec_committee_id` → `primary_cause_id` (+ `ai_confidence`, `assigned_by`, `admin_overridden`).
-4. `committee_causes.id` → `label`, `description`, `stance`, `quiz_topic_id`.
+### 3. RPC + hook updates
 
-## Implementation
+- Update `get_donors_paginated`, `search_donors_by_name`, `search_raw_donors_by_name`, and the candidate-donor RPC to LEFT JOIN `vendor_organizations` on `UPPER(name) = vo.name OR UPPER(name) = ANY(vo.aliases)` and exclude active matches (unless caller passes `p_include_vendors = true`).
+- Add an `is_vendor_org` flag on returned rows so admin views can still see them with a badge.
 
-1. **New hook** `src/hooks/useDonorCauses.ts`:
-   - Input: list of `{ name, type }` from the visible PAC/Organization donors.
-   - Query `donor_alias_members` + joined `donor_aliases` for those name/type pairs (chunked `.in()`), collect `fec_committee_id` and `fec_committee_ids[]`.
-   - Query `committee_topics` for those committee IDs, join `committee_causes` on `primary_cause_id`.
-   - Return `Map<normalizedName, { causeId, label, description, confidence, adminOverridden }>`.
-   - 5 min `staleTime`; key includes sorted name list hash.
+### 4. Import-time guard (edge function)
 
-2. **Wire into `CandidateProfile.tsx`**:
-   - Compute `pacDonorNames` from `donors.filter(d => d.type === 'PAC' || d.type === 'Organization')`.
-   - Call `useDonorCauses(pacDonorNames)`.
-   - In the PAC donor row meta line, render a `CauseBadge` when a cause is found, with `<Tooltip>` showing description + source.
+In the FEC / CSV donor import edge function:
 
-3. **Small `CauseBadge` component** in `src/components/CauseBadge.tsx` (reusable later for the donor profile and committee profile).
+- Skip any row where `line_number` starts with `'20'` (operating expenditure / loan repayment / refund of contribution to candidate) — log to `donor_import_sessions.undo_summary.skipped_disbursements`.
+- For lines 14/15/17, look up the contributor name against `vendor_organizations`. If matched, insert into `contributions` only (for refund tracking) but **not** into `donors`.
+
+### 5. Admin UI
+
+- New "Vendors" panel under the existing Donor admin section (sibling of `DonorAliasesPanel`), reusing the same patterns: list, add, edit aliases, deactivate. No new design system tokens.
+- Add a small "Vendor" badge on any admin donor row that matches.
 
 ## Out of scope
 
-- No DB changes; no edge functions; no AI assignment changes.
-- Cause is not shown on non-PAC rows (individuals, transfers, small donors).
-- Filter/sort by cause is a follow-up.
+- AI-assisted vendor detection.
+- Re-classifying historical Gambit *contributions* as offsets in `finance_reconciliation` (separate follow-up).
+- Touching `external_committee_finance` or IE flows.
+
+## Order of operations
+
+1. Create `vendor_organizations` migration + seed.
+2. Update RPCs to exclude vendors.
+3. Backfill delete of line 20x rows + Gambit donor rows.
+4. Edge function import guard.
+5. Admin "Vendors" panel.
+
+Each step is independently shippable; user-visible fix (Gambit disappears from candidate donor lists) lands after step 3.
