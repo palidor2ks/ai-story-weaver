@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Megaphone, TrendingUp, TrendingDown, Search, ExternalLink, EyeOff, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { formatIECompact } from '@/components/IESummaryInline';
 import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
 import { useAdminRole } from '@/hooks/useAdminRole';
