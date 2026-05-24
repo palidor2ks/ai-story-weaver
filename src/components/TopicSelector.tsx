@@ -1,8 +1,8 @@
 import { Topic } from '@/types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Check } from 'lucide-react';
 import { TopicIcon } from '@/components/TopicIcon';
+
 
 interface TopicSelectorProps {
   topics: Topic[];
@@ -25,9 +25,10 @@ export const TopicSelector = ({
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
       {topics.map((topic, index) => {
-        const selected = isSelected(topic);
+        const selectedIndex = selectedTopics.findIndex(t => t.id === topic.id);
+        const selected = selectedIndex !== -1;
         const disabled = !selected && !canSelectMore;
-        
+
         return (
           <Button
             key={topic.id}
@@ -45,13 +46,14 @@ export const TopicSelector = ({
               {topic.displayName || topic.name}
             </span>
             {selected && (
-              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                <Check className="w-3 h-3 text-primary-foreground" />
+              <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center text-[11px] font-bold text-primary-foreground leading-none">
+                {selectedIndex + 1}
               </div>
             )}
           </Button>
         );
       })}
     </div>
+
   );
 };
