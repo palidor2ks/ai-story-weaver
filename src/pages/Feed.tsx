@@ -192,6 +192,25 @@ export const Feed = () => {
     return out;
   }, [unified.myReps, unified.federalExec, unified.stateExec, unified.stateLeg, unified.local, upcomingElections]);
 
+  // Personalized score: rep's avg across ONLY the questions the user answered.
+  // Falls back to the rep's global overallScore when there is no overlap so the
+  // feed still renders something meaningful for unscored reps.
+  const allCandidateIds = useMemo(
+    () => transformedCandidates.map((c) => c.id),
+    [transformedCandidates],
+  );
+  const { data: personalizedScoreMap } = usePersonalizedScoreMap(allCandidateIds);
+
+  const personalizedCandidates: Candidate[] = useMemo(() => {
+    if (!personalizedScoreMap || personalizedScoreMap.size === 0) {
+      return transformedCandidates;
+    }
+    return transformedCandidates.map((c) => {
+      const personalized = personalizedScoreMap.get(c.id);
+      return personalized !== undefined ? { ...c, overallScore: personalized } : c;
+    });
+  }, [transformedCandidates, personalizedScoreMap]);
+
   // Track if we've shown the toast this session to avoid duplicates
   const toastShownRef = useRef(false);
   const aiAnswersGenerated = useMemo(
