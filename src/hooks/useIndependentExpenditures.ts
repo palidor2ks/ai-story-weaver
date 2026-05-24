@@ -6,6 +6,7 @@ export interface IETotals {
   total_amount: number;
   support_amount: number;
   oppose_amount: number;
+  cycle?: string | null;
 }
 
 export interface IERow {
