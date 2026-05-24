@@ -152,9 +152,12 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
               {image ? (
                 <img
                   src={image}
-                  alt={name}
+                  alt=""
                   crossOrigin="anonymous"
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  }}
                 />
               ) : (
                 <div style={{ fontSize: 64, fontWeight: 900, color: mutedColor }}>
