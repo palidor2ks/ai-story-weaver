@@ -57,7 +57,7 @@ const TEMPLATES_BY_KIND = {
 } as const;
 
 
-type TemplateId = 'classic' | 'holo' | 'night';
+type TemplateId = 'classic' | 'holo' | 'night' | 'stat';
 
 interface ShareCardModalProps {
   open: boolean;
@@ -122,6 +122,7 @@ export const ShareCardModal = ({
     classic: null,
     holo: null,
     night: null,
+    stat: null,
   });
 
   const defaultBody = useMemo(() => generateShortCaption(caption), [caption]);
