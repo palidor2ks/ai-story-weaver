@@ -713,10 +713,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const queries = buildQueries(people, body.state, body.district);
-    const topStoryItems = await fetchGoogleTopStories(limit);
-    const bingItems = await fetchBingRssSequentially(queries, limit);
-    const gdeltItems = await fetchGdeltNews(people, limit);
-    const rssItems: ParsedItem[] = await fetchRssSequentially(queries, limit);
+    const [topStoryItems, bingItems, gdeltItems, rssItems] = await Promise.all([
+      fetchGoogleTopStories(limit),
+      fetchBingRssSequentially(queries, limit),
+      fetchGdeltNews(people, limit),
+      fetchRssSequentially(queries, limit),
+    ]);
     const allItems = [...topStoryItems, ...rssItems, ...bingItems, ...gdeltItems];
     console.info('relevant-news rss results', { queries: queries.length, topStories: topStoryItems.length, googleItems: rssItems.length, bingItems: bingItems.length, gdeltItems: gdeltItems.length, allItems: allItems.length });
 
@@ -844,6 +846,9 @@ Deno.serve(async (req: Request) => {
       questionMeta.map(q => ({ id: q.id, text: q.text, topic_name: q.topic_name })),
     );
 
+    const topStoryUrlKeys = new Set(
+      topStoryItems.map((top) => urlKey(extractPublisherUrl(top.description, top.link))),
+    );
     const items = filtered.map((it, i) => {
       const cls = classifications.get(i);
       const showLabels = !!cls && cls.is_policy_relevant && cls.confidence !== 'low';
@@ -860,8 +865,8 @@ Deno.serve(async (req: Request) => {
         relatedQuestion: firstQ?.text || undefined,
         _classifiedQuestionIds: cls && showLabels ? cls.question_ids : [],
         _classifiedTopicId: topicMeta?.id || null,
-        _isTopStory: topStoryItems.some((top) => urlKey(extractPublisherUrl(top.description, top.link)) === urlKey(it.url)),
-      } as FeedNewsItem & { _classifiedQuestionIds: string[]; _classifiedTopicId: string | null };
+        _isTopStory: topStoryUrlKeys.has(urlKey(it.url)),
+      } as FeedNewsItem & { _classifiedQuestionIds: string[]; _classifiedTopicId: string | null; _isTopStory: boolean };
     });
 
     // Only keep news that has BOTH a matched topic and related question.
@@ -919,7 +924,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Strip internal fields before responding.
-    const responseItems = qualifiedItems.map(({ _classifiedQuestionIds, _classifiedTopicId, ...rest }) => rest);
+    const responseItems = qualifiedItems.map(({ _classifiedQuestionIds, _classifiedTopicId, _isTopStory, ...rest }) => rest);
 
     return new Response(JSON.stringify({ items: responseItems, window: windowLabel }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
