@@ -908,7 +908,7 @@ Deno.serve(async (req: Request) => {
 
       EdgeRuntime.waitUntil((async () => {
         try {
-          for (const item of items) {
+          for (const item of qualifiedItems) {
             const { data: article } = await supabase
               .from('news_articles')
               .upsert({
