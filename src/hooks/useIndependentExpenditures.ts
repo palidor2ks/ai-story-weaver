@@ -29,6 +29,7 @@ export interface IETargetSummary {
   name: string;
   fecId: string | null;
   candidateId: string | null;
+  party: string | null;
   support: number;
   oppose: number;
   total: number;
