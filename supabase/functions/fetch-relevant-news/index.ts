@@ -283,6 +283,7 @@ interface ParsedItem {
   pubDate: string;
   source: string;
   description: string;
+  isTopStory?: boolean;
 }
 
 interface GdeltArticle {
