@@ -356,7 +356,29 @@ async function fetchBingRss(query: string): Promise<ParsedItem[]> {
   } catch (e) {
     console.error('bing rss fetch failed', query, e);
     return [];
+}
+
+async function fetchGoogleTopStories(): Promise<ParsedItem[]> {
+  const url = 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en';
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)',
+      },
+    });
+    if (!res.ok) {
+      console.warn('google top stories non-ok', { status: res.status });
+      return [];
+    }
+    const parsed = parseRss(await res.text());
+    return parsed.map(p => ({ ...p, isTopStory: true }));
+  } catch (e) {
+    console.error('google top stories fetch failed', e);
+    return [];
   }
+}
 }
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
