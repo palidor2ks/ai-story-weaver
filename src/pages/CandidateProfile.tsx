@@ -46,6 +46,8 @@ import { ShareProfileButton } from '@/components/ShareProfileButton';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDonorCauses, getDonorCause } from '@/hooks/useDonorCauses';
+import { CauseBadge } from '@/components/CauseBadge';
 
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
