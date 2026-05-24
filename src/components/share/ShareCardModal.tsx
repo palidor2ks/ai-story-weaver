@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Check, Copy, Download, Eye, Facebook, Linkedin, Loader2, RotateCcw, Share2, Twitter } from 'lucide-react';
 import { toast } from 'sonner';
 import { BaseballCard } from './templates/BaseballCard';
+import { CandidateStatCard } from './templates/CandidateStatCard';
 import { DataCard } from './templates/DataCard';
 import { EditorialCard } from './templates/EditorialCard';
 import { DonorStatsCard } from './templates/DonorStatsCard';
@@ -33,6 +34,7 @@ import { trackEvent } from '@/lib/analytics';
 
 const TEMPLATES_BY_KIND = {
   'candidate-alignment': [
+    { id: 'stat', label: 'Stat Card', Component: (props: { data: CardData }) => <CandidateStatCard {...props} variant='classic' /> },
     { id: 'classic', label: 'Patriot Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
     { id: 'holo', label: 'Issue Breakdown', Component: (props: { data: CardData }) => <DataCard {...props} /> },
     { id: 'night', label: 'Editorial Match', Component: (props: { data: CardData }) => <EditorialCard {...props} /> },
@@ -55,7 +57,7 @@ const TEMPLATES_BY_KIND = {
 } as const;
 
 
-type TemplateId = 'classic' | 'holo' | 'night';
+type TemplateId = 'classic' | 'holo' | 'night' | 'stat';
 
 interface ShareCardModalProps {
   open: boolean;
@@ -120,6 +122,7 @@ export const ShareCardModal = ({
     classic: null,
     holo: null,
     night: null,
+    stat: null,
   });
 
   const defaultBody = useMemo(() => generateShortCaption(caption), [caption]);
