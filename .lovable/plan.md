@@ -1,44 +1,38 @@
-# Show real committee names (e.g., "House Majority PAC" for HMP)
+# Fix Campaign Donors page timeout
 
-## Why "HMP" shows up
+## Problem
 
-The Top Spenders list renders `spending_committee_name` straight from `independent_expenditures`. For C00495028, FEC's IE filings record the committee name as the filer-supplied short name **"HMP"** — that's literally what's in the IE file. The full registered name "HOUSE MAJORITY PAC" only lives on FEC's `/committees/` endpoint, which we mirror into `external_pacs.name`.
+`/donors` shows "Error loading donors: canceling statement due to statement timeout".
 
-We currently have no record for C00495028 in `external_pacs` and no resolver in TopSpenders, so the abbreviation wins.
+Root cause: `get_donors_paginated` runs a correlated `NOT EXISTS` subquery against `vendor_refund_organizations` for **every** row of the consolidated MV using `upper(display_name) LIKE '%'||upper(v.name)||'%'`. With ~600K rows in `donor_consolidated_all_mv` and 16 active refund patterns, that's ~9.6M ILIKE evaluations per request — and it runs before pagination because the function also computes `count(*)` over the full filtered set. The default Donors page (no filters) hits this on every load.
 
 ## Fix
 
-Resolve every spender's display name from `external_pacs` first, falling back to the IE filer name, then the FEC ID.
+Rewrite `get_donors_paginated` so the vendor-refund exclusion is evaluated once per query, not per row:
 
-### Step 1 — Backfill external_pacs for all IE spenders
+1. Build the refund pattern list into a single CTE: `SELECT upper(name) AS pat FROM vendor_refund_organizations WHERE is_active`.
+2. Replace the correlated `NOT EXISTS … LIKE '%'||v.name||'%'` with a single `NOT (upper(display_name) ~* <combined_regex>)` where the regex is built from the active vendor names (anchored with `.*` alternation), OR keep the array form but pre-uppercase the display_name once via a lateral.
+3. Apply the same change to both branches (cycle-specific and `all` cycles).
+4. Keep the `count(*)` over filtered — it's fine once the per-row predicate is cheap. If still slow, switch the count to use `count(*) OVER ()` window inside the paginated select to avoid double-scanning.
 
-Trigger `sync-fec-committees` so every active committee (including C00495028 / House Majority PAC) is mirrored with its real registered name. Already implemented; just needs to be run / re-run. As a one-shot supplement, ensure the sync also covers committee_types `Y/W/O/U/N/Q/V/X/Z` for cycles back to 2018 so historical IE filers are covered.
-
-### Step 2 — Join display names into the TopSpenders query
-
-In `src/pages/TopSpenders.tsx` / `useTopSpenders`:
-
-1. After fetching the top 100–200 spender rows, collect the `fec_committee_id`s.
-2. Fetch matching `external_pacs` rows: `select fec_committee_id, name`.
-3. Build a `Map<fec_id, displayName>` and overwrite `spending_committee_name` with `external_pacs.name` when present (preferring the longer, registered name).
-
-This adds one bounded query per page render, gated by the existing react-query cache.
-
-### Step 3 — Reuse on the committee profile header
-
-`/committee/:fecId` (CommitteeProfile) should apply the same resolver so the header reads "House Majority PAC" instead of "HMP". One-line fix: prefer `external_pacs.name` over the IE-derived name.
-
-## Optional: manual alias override
-
-For cases where FEC's registered name is still cryptic, add a tiny `committee_display_overrides` table (`fec_committee_id` PK, `display_name`, admin-managed). The resolver checks override → external_pacs → IE name. Out of scope unless the user wants it now.
-
-## Files touched
-
-- `src/pages/TopSpenders.tsx` (resolver + join)
-- `src/pages/CommitteeProfile.tsx` (header fallback)
-- Run `sync-fec-committees` once (no code change beyond a button click in admin, or invoke via UI)
+No schema or MV changes. No frontend changes. Just a `CREATE OR REPLACE FUNCTION` migration for `get_donors_paginated`.
 
 ## Out of scope
 
-- Touching how IE rows are stored (don't rewrite `independent_expenditures.spending_committee_name`).
-- Search-by-alias on TopSpenders (separate request).
+- Refreshing/reshaping the MVs
+- Adding a precomputed `is_refund_vendor` column (could be a follow-up if regex is still slow)
+- Any UI changes on `/donors`
+
+## Technical detail
+
+New predicate sketch:
+
+```sql
+WITH refund_pat AS (
+  SELECT string_agg(upper(name), '|') AS rx
+  FROM public.vendor_refund_organizations WHERE is_active
+)
+... WHERE (rp.rx IS NULL OR upper(m.display_name) !~ rp.rx) ...
+```
+
+This collapses 16 LIKEs per row into one regex test per row, and removes the correlated-subquery planner cost that's currently causing the timeout.
