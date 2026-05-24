@@ -1,36 +1,41 @@
-## Goal
-The header currently shows 9 nav items + admin/politician/help icons + user pill, all rendered inline on `md+` (≥768px). Between ~768px and ~1280px the row overflows or crowds the logo, and on the user's 1309px viewport the items barely fit. Mobile uses a hamburger only below 768px, which is too aggressive a cutoff.
+# Improve Relevant News Quality & Freshness (PR #81, fixed)
 
-## Plan
+Implement the three goals from upstream PR #81 in `supabase/functions/fetch-relevant-news/index.ts`, but avoid the two Codex review problems (P1 cache-key mismatch and P2 top-story sort happening after truncation).
 
-**1. Tier the breakpoints in `src/components/Header.tsx`**
-- Mobile (`< 1024px`, i.e. `lg`): hamburger menu (raise current `md` breakpoint to `lg`). This covers phones and most tablets and avoids the cramped 768–1024 zone.
-- Desktop compact (`lg` to `xl`, 1024–1280): show nav items as icon-only buttons with `title` tooltips. Hide the user-name pill (keep just the avatar circle).
-- Desktop full (`xl+`, ≥1280): show icon + label as today, plus the full user pill with name.
+All changes are confined to `supabase/functions/fetch-relevant-news/index.ts`.
 
-**2. Condense item rendering**
-- Replace per-item `<Button>` with a single map that toggles label visibility via `hidden xl:inline` on the label span. Keeps one source of truth, no duplication.
-- Tighten button padding at `lg` (`lg:px-2 xl:px-3`) and gap (`gap-1 xl:gap-2`) so 9 items + 3 icon buttons fit at 1024px.
+## Changes
 
-**3. User pill responsiveness**
-- `lg`: render avatar circle only (no name, no background pill).
-- `xl+`: full pill with name as today.
-- Truncate long names with `max-w-[140px] truncate`.
+### 1. Add Google News top-stories source
+- Add `fetchGoogleTopStories()` that fetches `https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en` and parses it with the existing RSS parser.
+- Merge its results into the candidate pool alongside `bingItems` and `gdeltItems`.
+- Tag each parsed top-story `ParsedItem` with an internal `_isTopStory = true` flag (carry it through to the `FeedNewsItem`).
 
-**4. Logo area**
-- Keep logo + Beta badge; hide Beta badge below `sm` to save space on very narrow phones.
+### 2. Tighten output to require topic + question
+- After classification, only keep items where both `topicLabel` and `relatedQuestion` are present (`qualifiedItems`).
+- Use `qualifiedItems` for both the response payload and the cache persistence loop.
 
-**5. Mobile menu (already exists)**
-- Update the `md:hidden` toggle button to `lg:hidden` and the mobile drawer's `md:hidden` wrapper to `lg:hidden` so it matches the new breakpoint.
+### 3. Extend cache freshness — without the P1 staleness bug
+Codex P1: extending TTL while the cache lookup is only keyed by `question_id` returns context-mismatched results across different `people` / `state` / `district`.
 
-## Out of scope
-- No changes to nav items themselves, routes, auth gating, or admin/politician visibility logic.
-- No restyling of dropdowns or the mobile drawer's contents.
-- No changes to `CommitteesViewSwitcher` or other sub-nav.
+Fix: extend `freshnessCutoff` to 48 hours **and** scope the cache hit to the current request context:
+- After fetching cached rows by `question_id`, filter in memory so an article only counts as a cache hit when at least one of its `matched_people` (stored in `news_article_questions`) overlaps with the current request's `people` names (case-insensitive).
+- If no rows survive that filter, fall through to the live fetch path instead of returning stale cross-context items.
+- Keep `last_seen_at` / `rank_score` ordering; only the freshness window and the in-memory people filter change.
 
-## Files touched
-- `src/components/Header.tsx` (only file).
+### 4. Prioritize top stories before applying the limit — fix P2
+Codex P2: the top-story sort runs after `chosen.slice(0, limit)` so promotions cannot cross the cutoff.
+
+Fix:
+- Sort `chosen` with `_isTopStory` as the primary key (top stories first), then `relevanceScore`, then `publishedAt` — **before** `chosen.slice(0, limit)`.
+- Remove any post-slice top-story re-sort so the ranking is decided once, pre-truncation.
+
+## Technical notes
+- `_isTopStory` is an internal flag only; strip it (alongside the existing `_classifiedQuestionIds` / `_classifiedTopicId`) before responding.
+- Cache people-overlap filter reads `matched_people` from the existing `news_article_questions` select; no schema change.
+- 48h cutoff constant: `new Date(Date.now() - 48 * 36e5).toISOString()`.
+- No migrations, no other files touched.
 
 ## Verification
-- Check at 360, 768, 1024, 1280, 1440 widths via preview viewport.
-- Confirm no horizontal scroll on header at any breakpoint, all items reachable, tooltips appear at `lg` compact tier.
+- Type-check via the standard build (Deno check is unavailable in-sandbox, same as upstream PR).
+- Smoke: confirm cached path only returns when `matched_people` overlaps current request; confirm top-story tagged items appear above same-score non-top items after slicing.

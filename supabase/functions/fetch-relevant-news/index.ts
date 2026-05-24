@@ -283,6 +283,7 @@ interface ParsedItem {
   pubDate: string;
   source: string;
   description: string;
+  isTopStory?: boolean;
 }
 
 interface GdeltArticle {
@@ -355,7 +356,29 @@ async function fetchBingRss(query: string): Promise<ParsedItem[]> {
   } catch (e) {
     console.error('bing rss fetch failed', query, e);
     return [];
+}
+
+async function fetchGoogleTopStories(): Promise<ParsedItem[]> {
+  const url = 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en';
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)',
+      },
+    });
+    if (!res.ok) {
+      console.warn('google top stories non-ok', { status: res.status });
+      return [];
+    }
+    const parsed = parseRss(await res.text());
+    return parsed.map(p => ({ ...p, isTopStory: true }));
+  } catch (e) {
+    console.error('google top stories fetch failed', e);
+    return [];
   }
+}
 }
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -656,18 +679,32 @@ Deno.serve(async (req: Request) => {
     const questionById = new Map(questionMeta.map(q => [q.id, q]));
 
     if (questionIds.length > 0) {
-      const freshnessCutoff = new Date(Date.now() - 1000 * 60 * 30).toISOString();
+      // 48h freshness window; we scope to current request context in-memory below
+      // to avoid returning stale items for a different people/state/district.
+      const freshnessCutoff = new Date(Date.now() - 48 * 36e5).toISOString();
       const { data: cachedRows } = await supabase
         .from('question_news_feed_cache')
-        .select('rank_score, window_label, last_seen_at, question_id, article:news_articles!inner(id,title,url,source,published_at,snippet), qa:news_article_questions(question_id,matched_topics,question:questions(text,topics:topic_id(name)))')
+        .select('rank_score, window_label, last_seen_at, question_id, article:news_articles!inner(id,title,url,source,published_at,snippet), qa:news_article_questions(question_id,matched_topics,matched_people,question:questions(text,topics:topic_id(name)))')
         .in('question_id', questionIds)
         .gte('last_seen_at', freshnessCutoff)
         .order('rank_score', { ascending: false })
         .limit(limit * 3);
 
-      if ((cachedRows || []).length > 0) {
+      // People-overlap filter: only treat a cached row as a hit when the stored
+      // article was previously matched to at least one person in this request.
+      const requestPeopleLower = new Set(people.map(p => (p.name || '').toLowerCase()).filter(Boolean));
+      const contextMatchedRows = (cachedRows || []).filter(row => {
+        const qa = (row as any)?.qa;
+        const stored: string[] = Array.isArray(qa)
+          ? qa.flatMap((q: any) => Array.isArray(q?.matched_people) ? q.matched_people : [])
+          : Array.isArray(qa?.matched_people) ? qa.matched_people : [];
+        if (stored.length === 0) return false;
+        return stored.some((n: string) => requestPeopleLower.has(String(n || '').toLowerCase()));
+      });
+
+      if (contextMatchedRows.length > 0) {
         const dedupCache = new Map<string, FeedNewsItem>();
-        for (const row of cachedRows || []) {
+        for (const row of contextMatchedRows) {
           const article = (row as any).article;
           if (!article?.url || dedupCache.has(article.url)) continue;
           dedupCache.set(article.url, {
@@ -686,20 +723,27 @@ Deno.serve(async (req: Request) => {
             relatedQuestion: (row as any)?.qa?.[0]?.question?.text || questionById.get((row as any).question_id)?.text || undefined,
           });
         }
-        const cachedItems = Array.from(dedupCache.values()).slice(0, limit);
-        const cachedWindow = ((cachedRows?.[0] as any)?.window_label as 'today' | 'week' | 'month' | 'none') || 'none';
-        return new Response(JSON.stringify({ items: cachedItems, window: cachedWindow }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        const cachedItems = Array.from(dedupCache.values())
+          .filter(it => !!it.topicLabel && !!it.relatedQuestion)
+          .slice(0, limit);
+        if (cachedItems.length > 0) {
+          const cachedWindow = ((contextMatchedRows[0] as any)?.window_label as 'today' | 'week' | 'month' | 'none') || 'none';
+          return new Response(JSON.stringify({ items: cachedItems, window: cachedWindow }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       }
     }
+
 
     const queries = buildQueries(people, body.state, body.district);
     const bingItems = await fetchBingRssSequentially(queries, limit);
     const gdeltItems = await fetchGdeltNews(people, limit);
+    const topStoryItems = await fetchGoogleTopStories();
     const rssItems: ParsedItem[] = [];
-    const allItems = [...rssItems, ...bingItems, ...gdeltItems];
-    console.info('relevant-news rss results', { queries: queries.length, googleItems: rssItems.length, bingItems: bingItems.length, gdeltItems: gdeltItems.length, allItems: allItems.length });
+    const allItems = [...rssItems, ...bingItems, ...gdeltItems, ...topStoryItems];
+    console.info('relevant-news rss results', { queries: queries.length, googleItems: rssItems.length, bingItems: bingItems.length, gdeltItems: gdeltItems.length, topStoryItems: topStoryItems.length, allItems: allItems.length });
+
 
     const now = Date.now();
     const dedup = new Map<string, FeedNewsItem & { ageHours: number }>();
@@ -742,7 +786,7 @@ Deno.serve(async (req: Request) => {
       if (ageHours <= 24) score += 2;
       else if (ageHours <= 72) score += 1;
 
-      const item: FeedNewsItem & { ageHours: number } = {
+      const item: FeedNewsItem & { ageHours: number; _isTopStory?: boolean } = {
         id: hashId(key),
         title: cleanedTitle,
         url: finalUrl,
@@ -755,7 +799,9 @@ Deno.serve(async (req: Request) => {
         isTopTopicHit: matchedTopics.length > 0,
         isNew: ageHours <= 48,
         ageHours,
+        _isTopStory: !!it.isTopStory,
       };
+
 
       if (matchedPeople.length === 0) continue;
       if (score < 3) {
@@ -795,8 +841,18 @@ Deno.serve(async (req: Request) => {
     else if (week.length > 0) { chosen = week; windowLabel = 'week'; }
     else if (month.length > 0) { chosen = month; windowLabel = 'month'; }
 
+    // Prioritize Google top-story matches BEFORE truncating to limit so genuine
+    // top stories can be promoted across the cutoff.
+    chosen.sort((a, b) => {
+      const aTop = (a as any)._isTopStory ? 1 : 0;
+      const bTop = (b as any)._isTopStory ? 1 : 0;
+      if (aTop !== bTop) return bTop - aTop;
+      return b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt);
+    });
+
     // Resolve Google News redirect URLs to publisher URLs (only for chosen items)
     const sliced = chosen.slice(0, limit);
+
     await Promise.all(sliced.map(async (it) => {
       if (isGoogleHost(it.url)) {
         const resolved = await resolveGoogleNewsUrl(it.url);
@@ -841,14 +897,18 @@ Deno.serve(async (req: Request) => {
         relatedQuestion: firstQ?.text || undefined,
         _classifiedQuestionIds: cls && showLabels ? cls.question_ids : [],
         _classifiedTopicId: topicMeta?.id || null,
-      } as FeedNewsItem & { _classifiedQuestionIds: string[]; _classifiedTopicId: string | null };
+      } as FeedNewsItem & { _classifiedQuestionIds: string[]; _classifiedTopicId: string | null; _isTopStory?: boolean };
     });
 
+    // Tighten output: only keep items that have both an explicit topic and a related question.
+    const qualifiedItems = items.filter(it => !!it.topicLabel && !!it.relatedQuestion);
+
     // Persist into cache. Only attach articles to questions the classifier picked.
-    if (items.length > 0 && questionIds.length > 0) {
+    if (qualifiedItems.length > 0 && questionIds.length > 0) {
+
       EdgeRuntime.waitUntil((async () => {
         try {
-          for (const item of items) {
+          for (const item of qualifiedItems) {
             const { data: article } = await supabase
               .from('news_articles')
               .upsert({
@@ -890,7 +950,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Strip internal fields before responding.
-    const responseItems = items.map(({ _classifiedQuestionIds, _classifiedTopicId, ...rest }) => rest);
+    const responseItems = qualifiedItems.map(({ _classifiedQuestionIds, _classifiedTopicId, _isTopStory, ...rest }: any) => rest);
 
     return new Response(JSON.stringify({ items: responseItems, window: windowLabel }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
