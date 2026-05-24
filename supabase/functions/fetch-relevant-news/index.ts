@@ -679,18 +679,32 @@ Deno.serve(async (req: Request) => {
     const questionById = new Map(questionMeta.map(q => [q.id, q]));
 
     if (questionIds.length > 0) {
-      const freshnessCutoff = new Date(Date.now() - 1000 * 60 * 30).toISOString();
+      // 48h freshness window; we scope to current request context in-memory below
+      // to avoid returning stale items for a different people/state/district.
+      const freshnessCutoff = new Date(Date.now() - 48 * 36e5).toISOString();
       const { data: cachedRows } = await supabase
         .from('question_news_feed_cache')
-        .select('rank_score, window_label, last_seen_at, question_id, article:news_articles!inner(id,title,url,source,published_at,snippet), qa:news_article_questions(question_id,matched_topics,question:questions(text,topics:topic_id(name)))')
+        .select('rank_score, window_label, last_seen_at, question_id, article:news_articles!inner(id,title,url,source,published_at,snippet), qa:news_article_questions(question_id,matched_topics,matched_people,question:questions(text,topics:topic_id(name)))')
         .in('question_id', questionIds)
         .gte('last_seen_at', freshnessCutoff)
         .order('rank_score', { ascending: false })
         .limit(limit * 3);
 
-      if ((cachedRows || []).length > 0) {
+      // People-overlap filter: only treat a cached row as a hit when the stored
+      // article was previously matched to at least one person in this request.
+      const requestPeopleLower = new Set(people.map(p => (p.name || '').toLowerCase()).filter(Boolean));
+      const contextMatchedRows = (cachedRows || []).filter(row => {
+        const qa = (row as any)?.qa;
+        const stored: string[] = Array.isArray(qa)
+          ? qa.flatMap((q: any) => Array.isArray(q?.matched_people) ? q.matched_people : [])
+          : Array.isArray(qa?.matched_people) ? qa.matched_people : [];
+        if (stored.length === 0) return false;
+        return stored.some((n: string) => requestPeopleLower.has(String(n || '').toLowerCase()));
+      });
+
+      if (contextMatchedRows.length > 0) {
         const dedupCache = new Map<string, FeedNewsItem>();
-        for (const row of cachedRows || []) {
+        for (const row of contextMatchedRows) {
           const article = (row as any).article;
           if (!article?.url || dedupCache.has(article.url)) continue;
           dedupCache.set(article.url, {
@@ -709,13 +723,18 @@ Deno.serve(async (req: Request) => {
             relatedQuestion: (row as any)?.qa?.[0]?.question?.text || questionById.get((row as any).question_id)?.text || undefined,
           });
         }
-        const cachedItems = Array.from(dedupCache.values()).slice(0, limit);
-        const cachedWindow = ((cachedRows?.[0] as any)?.window_label as 'today' | 'week' | 'month' | 'none') || 'none';
-        return new Response(JSON.stringify({ items: cachedItems, window: cachedWindow }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        const cachedItems = Array.from(dedupCache.values())
+          .filter(it => !!it.topicLabel && !!it.relatedQuestion)
+          .slice(0, limit);
+        if (cachedItems.length > 0) {
+          const cachedWindow = ((contextMatchedRows[0] as any)?.window_label as 'today' | 'week' | 'month' | 'none') || 'none';
+          return new Response(JSON.stringify({ items: cachedItems, window: cachedWindow }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       }
     }
+
 
     const queries = buildQueries(people, body.state, body.district);
     const bingItems = await fetchBingRssSequentially(queries, limit);
