@@ -1,8 +1,8 @@
 import { Topic } from '@/types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Check } from 'lucide-react';
 import { TopicIcon } from '@/components/TopicIcon';
+
 
 interface TopicSelectorProps {
   topics: Topic[];
