@@ -340,6 +340,24 @@ async function fetchRss(query: string): Promise<ParsedItem[]> {
   }
 }
 
+async function fetchGoogleTopStories(limit: number): Promise<ParsedItem[]> {
+  const url = 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en';
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (compatible; PoliPulse/1.0; +https://polipulseapp.com)',
+      },
+    });
+    if (!res.ok) return [];
+    return parseRss(await res.text()).slice(0, Math.max(limit * 2, 12));
+  } catch (e) {
+    console.error('google top stories fetch failed', e);
+    return [];
+  }
+}
+
 async function fetchBingRss(query: string): Promise<ParsedItem[]> {
   const url = `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss`;
   try {
@@ -656,7 +674,7 @@ Deno.serve(async (req: Request) => {
     const questionById = new Map(questionMeta.map(q => [q.id, q]));
 
     if (questionIds.length > 0) {
-      const freshnessCutoff = new Date(Date.now() - 1000 * 60 * 30).toISOString();
+      const freshnessCutoff = new Date(Date.now() - 48 * 36e5).toISOString();
       const { data: cachedRows } = await supabase
         .from('question_news_feed_cache')
         .select('rank_score, window_label, last_seen_at, question_id, article:news_articles!inner(id,title,url,source,published_at,snippet), qa:news_article_questions(question_id,matched_topics,question:questions(text,topics:topic_id(name)))')
@@ -695,11 +713,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const queries = buildQueries(people, body.state, body.district);
+    const topStoryItems = await fetchGoogleTopStories(limit);
     const bingItems = await fetchBingRssSequentially(queries, limit);
     const gdeltItems = await fetchGdeltNews(people, limit);
-    const rssItems: ParsedItem[] = [];
-    const allItems = [...rssItems, ...bingItems, ...gdeltItems];
-    console.info('relevant-news rss results', { queries: queries.length, googleItems: rssItems.length, bingItems: bingItems.length, gdeltItems: gdeltItems.length, allItems: allItems.length });
+    const rssItems: ParsedItem[] = await fetchRssSequentially(queries, limit);
+    const allItems = [...topStoryItems, ...rssItems, ...bingItems, ...gdeltItems];
+    console.info('relevant-news rss results', { queries: queries.length, topStories: topStoryItems.length, googleItems: rssItems.length, bingItems: bingItems.length, gdeltItems: gdeltItems.length, allItems: allItems.length });
 
     const now = Date.now();
     const dedup = new Map<string, FeedNewsItem & { ageHours: number }>();
@@ -841,14 +860,24 @@ Deno.serve(async (req: Request) => {
         relatedQuestion: firstQ?.text || undefined,
         _classifiedQuestionIds: cls && showLabels ? cls.question_ids : [],
         _classifiedTopicId: topicMeta?.id || null,
+        _isTopStory: topStoryItems.some((top) => urlKey(extractPublisherUrl(top.description, top.link)) === urlKey(it.url)),
       } as FeedNewsItem & { _classifiedQuestionIds: string[]; _classifiedTopicId: string | null };
     });
 
+    // Only keep news that has BOTH a matched topic and related question.
+    const qualifiedItems = items.filter((item) => !!item.topicLabel && !!item.relatedQuestion);
+    qualifiedItems.sort((a, b) => {
+      const aTop = (a as any)._isTopStory ? 1 : 0;
+      const bTop = (b as any)._isTopStory ? 1 : 0;
+      if (aTop !== bTop) return bTop - aTop;
+      return b.relevanceScore - a.relevanceScore || +new Date(b.publishedAt) - +new Date(a.publishedAt);
+    });
+
     // Persist into cache. Only attach articles to questions the classifier picked.
-    if (items.length > 0 && questionIds.length > 0) {
+    if (qualifiedItems.length > 0 && questionIds.length > 0) {
       EdgeRuntime.waitUntil((async () => {
         try {
-          for (const item of items) {
+          for (const item of qualifiedItems) {
             const { data: article } = await supabase
               .from('news_articles')
               .upsert({
@@ -890,7 +919,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Strip internal fields before responding.
-    const responseItems = items.map(({ _classifiedQuestionIds, _classifiedTopicId, ...rest }) => rest);
+    const responseItems = qualifiedItems.map(({ _classifiedQuestionIds, _classifiedTopicId, ...rest }) => rest);
 
     return new Response(JSON.stringify({ items: responseItems, window: windowLabel }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
