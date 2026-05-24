@@ -411,8 +411,26 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
     queryKey: ['committee', committeeId, cycle],
     queryFn: async () => {
       if (!committeeId) return null;
+
+      // Look up the registered FEC committee name once — used to upgrade any
+      // abbreviated filer-supplied names (e.g. "HMP" → "HOUSE MAJORITY PAC").
+      const { data: pacRow } = await supabase
+        .from('external_pacs')
+        .select('name')
+        .eq('fec_committee_id', committeeId)
+        .maybeSingle();
+      const registeredName = (pacRow?.name ?? null) as string | null;
+      const pickBetter = (current: string | null | undefined) => {
+        const cur = (current ?? '').trim();
+        if (!registeredName) return cur || committeeId;
+        if (!cur) return registeredName;
+        return registeredName.length > cur.length + 2 ? registeredName : cur;
+      };
+
       const committees = await fetchCommittees(cycle, committeeId);
-      if (committees[0]) return committees[0];
+      if (committees[0]) {
+        return { ...committees[0], name: pickBetter(committees[0].name) };
+      }
 
       // Fallback: committee not in candidate_committees — synthesize from contributions + rollups
       const { data: contribRow } = await supabase
@@ -442,7 +460,7 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
         }
 
         const rows = ieRows as Array<{ spending_committee_name: string | null; cycle: string | null; expenditure_date: string | null }>;
-        const ieName = rows.find((r) => r.spending_committee_name)?.spending_committee_name ?? committeeId;
+        const ieName = pickBetter(rows.find((r) => r.spending_committee_name)?.spending_committee_name ?? null);
         const ieCycles = Array.from(
           new Set(rows.map((r) => r.cycle).filter(Boolean) as string[]),
         ).sort((a, b) => Number(b) - Number(a));
@@ -514,7 +532,7 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
 
       const summary: CommitteeSummary = {
         id: committeeId,
-        name: contribRow?.recipient_committee_name ?? committeeId,
+        name: pickBetter(contribRow?.recipient_committee_name ?? null),
         aliasName: null,
         fecCommitteeId: committeeId,
         designation: null,

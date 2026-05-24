@@ -34,6 +34,20 @@ interface SpenderRow {
 
 const num = (v: unknown) => Number(v ?? 0);
 
+async function resolveDisplayNames(ids: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (unique.length === 0) return map;
+  const { data } = await supabase
+    .from('external_pacs')
+    .select('fec_committee_id, name')
+    .in('fec_committee_id', unique);
+  (data ?? []).forEach((r: { fec_committee_id: string; name: string | null }) => {
+    if (r.name) map.set(r.fec_committee_id, r.name);
+  });
+  return map;
+}
+
 const useTopSpenders = (cycle: string | 'all', stance: Stance, excludedIds: string[]) => {
   const excludedKey = [...excludedIds].sort().join(',');
   const excludedSet = new Set(excludedIds);
@@ -41,6 +55,7 @@ const useTopSpenders = (cycle: string | 'all', stance: Stance, excludedIds: stri
     queryKey: ['top-spenders', cycle, stance, excludedKey],
     staleTime: 1000 * 60 * 10,
     queryFn: async (): Promise<SpenderRow[]> => {
+      let rows: SpenderRow[];
       // If a specific cycle is selected we must aggregate from the base table.
       // Otherwise we can use the pre-aggregated view for speed.
       if (cycle === 'all' && stance === 'all') {
@@ -50,7 +65,7 @@ const useTopSpenders = (cycle: string | 'all', stance: Stance, excludedIds: stri
           .order('total_amount', { ascending: false })
           .limit(200);
         if (error) throw error;
-        return (data ?? [])
+        rows = (data ?? [])
           .filter((r) => !excludedSet.has(r.spending_committee_fec_id))
           .slice(0, 100)
           .map((r) => ({
@@ -61,49 +76,64 @@ const useTopSpenders = (cycle: string | 'all', stance: Stance, excludedIds: stri
             support_amount: num(r.support_amount),
             oppose_amount: num(r.oppose_amount),
           }));
+      } else {
+        // Aggregate from base table with filters.
+        let q = supabase
+          .from('independent_expenditures')
+          .select('spending_committee_fec_id, spending_committee_name, amount, support_oppose_indicator, cycle')
+          .limit(50000);
+        if (cycle !== 'all') q = q.eq('cycle', cycle);
+        if (stance === 'support') q = q.eq('support_oppose_indicator', 'S');
+        if (stance === 'oppose') q = q.eq('support_oppose_indicator', 'O');
+
+        const { data, error } = await q;
+        if (error) throw error;
+
+        const map = new Map<string, SpenderRow>();
+        (data ?? []).forEach((r) => {
+          const key = r.spending_committee_fec_id;
+          if (!key) return;
+          if (excludedSet.has(key)) return;
+          const cur = map.get(key) ?? {
+            spending_committee_fec_id: key,
+            spending_committee_name: r.spending_committee_name ?? null,
+            expenditure_count: 0,
+            total_amount: 0,
+            support_amount: 0,
+            oppose_amount: 0,
+          };
+          const amt = num(r.amount);
+          cur.expenditure_count += 1;
+          cur.total_amount += amt;
+          if (r.support_oppose_indicator === 'S') cur.support_amount += amt;
+          else if (r.support_oppose_indicator === 'O') cur.oppose_amount += amt;
+          if (!cur.spending_committee_name && r.spending_committee_name) {
+            cur.spending_committee_name = r.spending_committee_name;
+          }
+          map.set(key, cur);
+        });
+        rows = Array.from(map.values())
+          .sort((a, b) => b.total_amount - a.total_amount)
+          .slice(0, 100);
       }
 
-      // Aggregate from base table with filters.
-      let q = supabase
-        .from('independent_expenditures')
-        .select('spending_committee_fec_id, spending_committee_name, amount, support_oppose_indicator, cycle')
-        .limit(50000);
-      if (cycle !== 'all') q = q.eq('cycle', cycle);
-      if (stance === 'support') q = q.eq('support_oppose_indicator', 'S');
-      if (stance === 'oppose') q = q.eq('support_oppose_indicator', 'O');
-
-      const { data, error } = await q;
-      if (error) throw error;
-
-      const map = new Map<string, SpenderRow>();
-      (data ?? []).forEach((r) => {
-        const key = r.spending_committee_fec_id;
-        if (!key) return;
-        if (excludedSet.has(key)) return;
-        const cur = map.get(key) ?? {
-          spending_committee_fec_id: key,
-          spending_committee_name: r.spending_committee_name ?? null,
-          expenditure_count: 0,
-          total_amount: 0,
-          support_amount: 0,
-          oppose_amount: 0,
-        };
-        const amt = num(r.amount);
-        cur.expenditure_count += 1;
-        cur.total_amount += amt;
-        if (r.support_oppose_indicator === 'S') cur.support_amount += amt;
-        else if (r.support_oppose_indicator === 'O') cur.oppose_amount += amt;
-        if (!cur.spending_committee_name && r.spending_committee_name) {
-          cur.spending_committee_name = r.spending_committee_name;
+      // Override short/abbreviated IE filer names with the registered FEC committee
+      // name when we have it in external_pacs (e.g. "HMP" → "HOUSE MAJORITY PAC").
+      const nameMap = await resolveDisplayNames(rows.map((r) => r.spending_committee_fec_id));
+      return rows.map((r) => {
+        const better = nameMap.get(r.spending_committee_fec_id);
+        if (!better) return r;
+        const current = r.spending_committee_name ?? '';
+        // Prefer external_pacs name if current is empty or noticeably shorter (likely an abbreviation).
+        if (!current || better.length > current.length + 2) {
+          return { ...r, spending_committee_name: better };
         }
-        map.set(key, cur);
+        return r;
       });
-      return Array.from(map.values())
-        .sort((a, b) => b.total_amount - a.total_amount)
-        .slice(0, 100);
     },
   });
 };
+
 
 const useIECycles = () => {
   return useQuery({
