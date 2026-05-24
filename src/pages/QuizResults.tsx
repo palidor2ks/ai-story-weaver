@@ -78,7 +78,7 @@ export const QuizResults = () => {
     return ids.filter(Boolean);
   }, [federalReps, civicData, upcomingElections]);
 
-  const { data: scoreMap } = useCandidateScoreMap(allOfficialIds);
+  const { data: scoreMap } = usePersonalizedScoreMap(allOfficialIds);
 
   // Sort topic scores by weight (user's ranking) for the share card
   const topTopicsForShare = useMemo(() => {
@@ -95,11 +95,10 @@ export const QuizResults = () => {
       }));
   }, [userTopicScores, userTopics]);
 
-  const getResolvedScore = (id: string, fallbackScore: number | null): number | null => {
-    if (scoreMap?.has(id)) {
-      return scoreMap.get(id) ?? null;
-    }
-    return fallbackScore;
+  // Personalized: returns rep's score averaged only across the questions the
+  // user answered. Returns null (NA) when there is no overlap.
+  const getResolvedScore = (id: string, _fallbackScore: number | null): number | null => {
+    return scoreMap?.get(id) ?? null;
   };
 
   // Fetch AI profile analysis on mount
