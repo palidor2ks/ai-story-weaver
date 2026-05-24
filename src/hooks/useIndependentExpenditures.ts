@@ -6,6 +6,7 @@ export interface IETotals {
   total_amount: number;
   support_amount: number;
   oppose_amount: number;
+  cycle?: string | null;
 }
 
 export interface IERow {
@@ -229,32 +230,48 @@ export type IETotalsMap = Map<string, IETotals>;
 export const useCandidatesIE = (candidateIds: string[]) => {
   const sortedKey = [...candidateIds].sort().join(',');
   return useQuery({
-    queryKey: ['ie-candidates-bulk', sortedKey],
+    queryKey: ['ie-candidates-bulk-latest-cycle', sortedKey],
     enabled: candidateIds.length > 0,
     staleTime: 1000 * 60 * 10,
     queryFn: async (): Promise<IETotalsMap> => {
       const { data, error } = await supabase
-        .from('candidate_independent_expenditure_totals')
-        .select('candidate_id, expenditure_count, total_amount, support_amount, oppose_amount')
-        .in('candidate_id', candidateIds);
+        .from('independent_expenditures')
+        .select('candidate_id, amount, support_oppose_indicator, cycle')
+        .in('candidate_id', candidateIds)
+        .limit(50000);
       if (error) throw error;
-      const map: IETotalsMap = new Map();
-      (data ?? []).forEach((row) => {
-        if (!row.candidate_id) return;
-        const cur = map.get(row.candidate_id) ?? {
+
+      // Group by candidate_id -> cycle -> totals
+      const byCand = new Map<string, Map<string, IETotals>>();
+      (data ?? []).forEach((r: any) => {
+        if (!r.candidate_id) return;
+        const cycle = r.cycle ? String(r.cycle) : '';
+        const cyclesMap = byCand.get(r.candidate_id) ?? new Map<string, IETotals>();
+        const cur = cyclesMap.get(cycle) ?? {
           expenditure_count: 0,
           total_amount: 0,
           support_amount: 0,
           oppose_amount: 0,
+          cycle: cycle || null,
         };
-        cur.expenditure_count += num(row.expenditure_count);
-        cur.total_amount += num(row.total_amount);
-        cur.support_amount += num(row.support_amount);
-        cur.oppose_amount += num(row.oppose_amount);
-        map.set(row.candidate_id, cur);
+        const amt = num(r.amount);
+        cur.expenditure_count += 1;
+        cur.total_amount += amt;
+        if (r.support_oppose_indicator === 'S') cur.support_amount += amt;
+        else cur.oppose_amount += amt;
+        cyclesMap.set(cycle, cur);
+        byCand.set(r.candidate_id, cyclesMap);
+      });
+
+      const map: IETotalsMap = new Map();
+      byCand.forEach((cyclesMap, candId) => {
+        const latest = Array.from(cyclesMap.keys()).sort((a, b) => b.localeCompare(a))[0];
+        const t = cyclesMap.get(latest);
+        if (t) map.set(candId, t);
       });
       return map;
     },
   });
 };
+
 

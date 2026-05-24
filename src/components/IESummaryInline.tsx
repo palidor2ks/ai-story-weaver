@@ -21,6 +21,7 @@ interface Props {
 export const IESummaryInline = ({ totals, size = 'xs', className, hideIfEmpty = true }: Props) => {
   const support = totals?.support_amount ?? 0;
   const oppose = totals?.oppose_amount ?? 0;
+  const cycle = totals?.cycle ?? null;
   const total = support + oppose;
 
   if (total === 0 && hideIfEmpty) return null;
@@ -32,7 +33,7 @@ export const IESummaryInline = ({ totals, size = 'xs', className, hideIfEmpty = 
   const iconSize = size === 'xs' ? 'w-3 h-3' : 'w-3.5 h-3.5';
 
   return (
-    <div className={cn('flex items-center gap-2 font-medium', textSize, className)} title="Independent expenditures (outside money)">
+    <div className={cn('flex items-center gap-2 font-medium', textSize, className)} title={`Outside money${cycle ? ` (${cycle} cycle)` : ''}`}>
       {support > 0 && (
         <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
           <TrendingUp className={iconSize} aria-hidden />
@@ -44,6 +45,9 @@ export const IESummaryInline = ({ totals, size = 'xs', className, hideIfEmpty = 
           <TrendingDown className={iconSize} aria-hidden />
           {compact(oppose)}
         </span>
+      )}
+      {cycle && (
+        <span className="text-muted-foreground font-normal">· {cycle}</span>
       )}
     </div>
   );

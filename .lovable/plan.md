@@ -1,15 +1,16 @@
-# Show candidate party in committee Independent Expenditures table
+# Show only latest-cycle outside spending on candidate cards
 
-Add a party indicator next to each target candidate name in the `CommitteeIESection` table (the screenshot's "MORENO, BERNIE", "PELTOLA, MARY", etc.).
+The candidate cards on the Politicians list currently show all-time independent expenditure totals (support/oppose), aggregated across every election cycle. Change this so each card shows only the most recent cycle's outside money, and label which cycle that is.
 
 ## Changes
 
-**`src/hooks/useIndependentExpenditures.ts`** — in `useCommitteeIE`, after aggregating `targets`, fetch parties in one query:
-- Collect all `candidateId`s and all `fecId`s from targets.
-- `supabase.from('candidates').select('id, fec_id, party').or('id.in.(...),fec_id.in.(...)')`.
-- Build a lookup and attach `party` (string | null) to each target row.
+**`src/hooks/useIndependentExpenditures.ts`** — rewrite `useCandidatesIE`:
+- Query `independent_expenditures` directly for `candidate_id IN (...)` selecting `candidate_id, amount, support_oppose_indicator, cycle` (limit high, e.g. 50000).
+- For each `candidate_id`, group rows by `cycle`, find the max cycle, and sum `support_amount`/`oppose_amount`/`expenditure_count`/`total_amount` from rows in that cycle only.
+- Extend `IETotalsMap`'s value type to include `cycle: string | null`. Return one entry per candidate with the latest-cycle totals.
 
-**`src/components/IndependentExpenditureSections.tsx`** — in the committee target row:
-- Render a small colored Party `Badge` next to the target name (Democrat blue, Republican red, Independent purple, others muted), reusing the existing party color pattern from `RepresentativeComparisonCard`. Show only when `t.party` is set.
+**`src/components/IESummaryInline.tsx`** — accept an optional `cycle?: string | null` prop and render a small muted `' 2024'` (or similar) suffix next to the support/oppose figures when present, e.g. `↑$4.0M ↓$10M · 2024`.
 
-No backend/schema changes.
+**`src/components/CandidateCard.tsx`** — pass `cycle={ieTotals?.cycle}` through to `IESummaryInline`.
+
+No backend or schema changes.
