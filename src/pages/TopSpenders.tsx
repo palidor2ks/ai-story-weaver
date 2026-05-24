@@ -311,7 +311,7 @@ export default function TopSpenders() {
             ) : (
               <div className="divide-y divide-border">
                 {filtered.map((r, i) => (
-                  <SpenderRowItem key={r.spending_committee_fec_id} row={r} index={i} raisedMap={raisedMap} />
+                  <SpenderRowItem key={r.spending_committee_fec_id} row={r} index={i} raisedMap={raisedMap} causeMap={causeMap} />
                 ))}
               </div>
             )}
