@@ -11,6 +11,8 @@ interface QuizQuestionProps {
   onSkip?: () => void;
   questionNumber: number;
   totalQuestions: number;
+  hideHeader?: boolean;
+  hideQuestionText?: boolean;
 }
 
 export const QuizQuestion = ({
@@ -20,6 +22,8 @@ export const QuizQuestion = ({
   onSkip,
   questionNumber,
   totalQuestions,
+  hideHeader = false,
+  hideQuestionText = false,
 }: QuizQuestionProps) => {
   // Separate regular options from skip option
   const regularOptions = question.options.filter(opt => !opt.is_skip_option);
@@ -27,23 +31,28 @@ export const QuizQuestion = ({
 
   return (
     <div className="animate-fade-in">
-      <div className="flex items-center justify-between mb-6">
-        <span className="text-sm font-medium text-muted-foreground">
-          Question {questionNumber} of {totalQuestions}
-        </span>
-        <div className="flex-1 mx-4 h-2 bg-secondary rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-gradient-hero transition-all duration-500 ease-out"
-            style={{ width: `${(questionNumber / totalQuestions) * 100}%` }}
-          />
+      {!hideHeader && (
+        <div className="flex items-center justify-between mb-6">
+          <span className="text-sm font-medium text-muted-foreground">
+            Question {questionNumber} of {totalQuestions}
+          </span>
+          <div className="flex-1 mx-4 h-2 bg-secondary rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-hero transition-all duration-500 ease-out"
+              style={{ width: `${(questionNumber / totalQuestions) * 100}%` }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <Card className="bg-card border-border shadow-elevated">
         <CardContent className="p-6 md:p-8">
-          <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-8 leading-relaxed">
-            {question.text}
-          </h2>
+          {!hideQuestionText && (
+            <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-8 leading-relaxed">
+              {question.text}
+            </h2>
+          )}
+
 
           <div className="space-y-3">
             {regularOptions.map((option, index) => {
