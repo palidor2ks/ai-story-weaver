@@ -73,13 +73,16 @@ export const CommitteeIESection = ({ committeeFecId }: { committeeFecId: string 
                 {targets.map((t) => (
                   <tr key={t.key} className="border-t">
                     <td className="p-2 truncate max-w-[260px]">
-                      {t.candidateId ? (
-                        <Link to={`/candidate/${t.candidateId}`} className="font-medium hover:text-primary hover:underline">
-                          {t.name}
-                        </Link>
-                      ) : (
-                        <span className="font-medium">{t.name}</span>
-                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {t.candidateId ? (
+                          <Link to={`/candidate/${t.candidateId}`} className="font-medium hover:text-primary hover:underline">
+                            {t.name}
+                          </Link>
+                        ) : (
+                          <span className="font-medium">{t.name}</span>
+                        )}
+                        {t.party && <PartyBadge party={t.party} />}
+                      </div>
                       {t.fecId && <div className="text-xs text-muted-foreground">{t.fecId}</div>}
                     </td>
                     <td className="p-2 text-right text-agree">{t.support > 0 ? fmt(t.support) : '—'}</td>
@@ -191,3 +194,21 @@ const Stat = ({ label, value, tone, icon }: { label: string; value: string; tone
     <div className={`text-lg font-bold mt-1 ${tone === 'agree' ? 'text-agree' : tone === 'disagree' ? 'text-disagree' : 'text-foreground'}`}>{value}</div>
   </div>
 );
+
+const PartyBadge = ({ party }: { party: string }) => {
+  const p = party.toLowerCase();
+  const letter = party.charAt(0).toUpperCase();
+  const cls =
+    p.startsWith('dem')
+      ? 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-300'
+      : p.startsWith('rep')
+        ? 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300'
+        : p.startsWith('ind')
+          ? 'border-purple-500/40 bg-purple-500/10 text-purple-600 dark:text-purple-300'
+          : 'border-border bg-muted text-muted-foreground';
+  return (
+    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 font-semibold ${cls}`} title={party}>
+      {letter}
+    </Badge>
+  );
+};

@@ -1,19 +1,15 @@
-# Add cycle filter to candidate Outside Spending
+# Show candidate party in committee Independent Expenditures table
 
-The `Outside Spending` card on candidate profiles currently shows all-time totals and aggregates top spenders across every cycle, with no way to scope to a specific election cycle (unlike the committee version which already has a cycle dropdown).
+Add a party indicator next to each target candidate name in the `CommitteeIESection` table (the screenshot's "MORENO, BERNIE", "PELTOLA, MARY", etc.).
 
 ## Changes
 
-**`src/hooks/useIndependentExpenditures.ts`** — extend `useCandidateIE`:
-- Accept an optional `cycle: string | null` argument; include it in the query key.
-- Fetch the candidate's available cycles in parallel (distinct `cycle` from `independent_expenditures` where `candidate_id = ...`).
-- When `cycle && cycle !== 'all'`, filter the `independent_expenditures` query by `.eq('cycle', cycle)` AND compute totals from the filtered rows (sum amount / S vs O split / count) instead of reading the all-cycle `candidate_independent_expenditure_totals` view.
-- When cycle is `'all'` (default), keep current behavior: totals from the view, rows aggregated for top spenders.
-- Return `{ totals, rows, topSpenders, availableCycles }`.
+**`src/hooks/useIndependentExpenditures.ts`** — in `useCommitteeIE`, after aggregating `targets`, fetch parties in one query:
+- Collect all `candidateId`s and all `fecId`s from targets.
+- `supabase.from('candidates').select('id, fec_id, party').or('id.in.(...),fec_id.in.(...)')`.
+- Build a lookup and attach `party` (string | null) to each target row.
 
-**`src/components/IndependentExpenditureSections.tsx`** — update `CandidateIESection`:
-- Add `useState<string>('all')` for cycle, pass it to `useCandidateIE`.
-- Render a `Select` cycle dropdown in the `CardHeader` (right-aligned), mirroring the committee section's styling, populated from `availableCycles` with an `All cycles` option.
-- Show "No expenditures for this cycle." when filtered totals are zero but other cycles exist.
+**`src/components/IndependentExpenditureSections.tsx`** — in the committee target row:
+- Render a small colored Party `Badge` next to the target name (Democrat blue, Republican red, Independent purple, others muted), reusing the existing party color pattern from `RepresentativeComparisonCard`. Show only when `t.party` is set.
 
-No DB or schema changes.
+No backend/schema changes.

@@ -29,6 +29,7 @@ export interface IETargetSummary {
   name: string;
   fecId: string | null;
   candidateId: string | null;
+  party: string | null;
   support: number;
   oppose: number;
   total: number;
@@ -86,13 +87,14 @@ export const useCommitteeIE = (
 
         const key =
           r.target_fec_candidate_id ?? r.candidate_id ?? r.target_candidate_name ?? 'unknown';
-        const cur =
+        const cur: IETargetSummary =
           map.get(key) ??
           {
             key,
             name: r.target_candidate_name ?? r.target_fec_candidate_id ?? 'Unknown target',
             fecId: r.target_fec_candidate_id,
             candidateId: r.candidate_id,
+            party: null,
             support: 0,
             oppose: 0,
             total: 0,
@@ -106,6 +108,28 @@ export const useCommitteeIE = (
         map.set(key, cur);
       });
       const targets = Array.from(map.values()).sort((a, b) => b.total - a.total);
+
+      // Fetch party for candidate targets
+      const candIds = Array.from(new Set(targets.map((t) => t.candidateId).filter(Boolean) as string[]));
+      const fecIds = Array.from(new Set(targets.map((t) => t.fecId).filter(Boolean) as string[]));
+      if (candIds.length || fecIds.length) {
+        const filters: string[] = [];
+        if (candIds.length) filters.push(`id.in.(${candIds.join(',')})`);
+        if (fecIds.length) filters.push(`fec_id.in.(${fecIds.join(',')})`);
+        const { data: cands } = await supabase
+          .from('candidates')
+          .select('id, fec_id, party')
+          .or(filters.join(','));
+        const byId = new Map<string, string | null>();
+        const byFec = new Map<string, string | null>();
+        (cands ?? []).forEach((c: any) => {
+          if (c.id) byId.set(c.id, c.party ?? null);
+          if (c.fec_id) byFec.set(c.fec_id, c.party ?? null);
+        });
+        targets.forEach((t) => {
+          t.party = (t.candidateId && byId.get(t.candidateId)) || (t.fecId && byFec.get(t.fecId)) || null;
+        });
+      }
 
       return { totals, targets, availableCycles };
     },
