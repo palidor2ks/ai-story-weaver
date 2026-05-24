@@ -1,6 +1,8 @@
 project_id = "ornnzinjrcyigazecctf"
 
 [functions]
+  [functions.classify-committee-topic]
+    verify_jwt = true
   [functions.ai-candidate-explanation]
     verify_jwt = true
   [functions.ai-donor-analysis]

@@ -5,8 +5,28 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!;
+
+async function requireAdmin(req: Request): Promise<{ ok: true } | { ok: false; res: Response }> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { ok: false, res: new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+  }
+  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+  const token = authHeader.replace('Bearer ', '');
+  const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
+  if (claimsErr || !claims?.claims?.sub) {
+    return { ok: false, res: new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+  }
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+  const { data: roleRow } = await admin.from('user_roles').select('role').eq('user_id', claims.claims.sub).eq('role', 'admin').maybeSingle();
+  if (!roleRow) {
+    return { ok: false, res: new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
+  }
+  return { ok: true };
+}
 
 interface CommitteeInfo {
   fec_committee_id: string;
@@ -234,6 +254,9 @@ async function processIds(supabase: any, ids: string[], force: boolean) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  const gate = await requireAdmin(req);
+  if (!gate.ok) return gate.res;
 
   try {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
