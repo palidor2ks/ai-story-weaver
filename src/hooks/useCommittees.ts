@@ -460,7 +460,7 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
         }
 
         const rows = ieRows as Array<{ spending_committee_name: string | null; cycle: string | null; expenditure_date: string | null }>;
-        const ieName = rows.find((r) => r.spending_committee_name)?.spending_committee_name ?? committeeId;
+        const ieName = pickBetter(rows.find((r) => r.spending_committee_name)?.spending_committee_name ?? null);
         const ieCycles = Array.from(
           new Set(rows.map((r) => r.cycle).filter(Boolean) as string[]),
         ).sort((a, b) => Number(b) - Number(a));
