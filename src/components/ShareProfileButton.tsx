@@ -127,7 +127,7 @@ export const ShareProfileButton = ({
           candidateName,
           candidateOffice,
           candidateParty,
-          candidateImage: candidateImage ?? null,
+          candidateImage: resolvedImage ?? null,
           candidateScore,
           userScore,
           matchScore,
