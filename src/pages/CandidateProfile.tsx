@@ -46,6 +46,8 @@ import { ShareProfileButton } from '@/components/ShareProfileButton';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDonorCauses, getDonorCause } from '@/hooks/useDonorCauses';
+import { CauseBadge } from '@/components/CauseBadge';
 
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
@@ -57,6 +59,9 @@ export const CandidateProfile = () => {
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
+  const { data: donorCauseMap } = useDonorCauses(
+    donors.map(d => ({ name: d.display_name || d.name, type: d.type }))
+  );
   const { data: votes = [] } = useCandidateVotes(id);
   const { data: representativeDetails } = useRepresentativeDetails(id);
   const { data: adminData } = useAdminRole();
@@ -949,6 +954,10 @@ export const CandidateProfile = () => {
                                         </div>
                                         <div className="flex flex-wrap items-center gap-2 mt-1">
                                           <Badge variant="secondary">{donor.type}</Badge>
+                                          {(() => {
+                                            const cause = getDonorCause(donorCauseMap, displayName, donor.type);
+                                            return cause ? <CauseBadge cause={cause} /> : null;
+                                          })()}
                                           {isConduit && (
                                             <span className="text-xs text-amber-600">Pass-through</span>
                                           )}
