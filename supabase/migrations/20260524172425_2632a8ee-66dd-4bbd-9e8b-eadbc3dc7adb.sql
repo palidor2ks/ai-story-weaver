@@ -1,0 +1,1 @@
+GRANT SELECT ON public.ie_excluded_committees_public TO anon, authenticated;
