@@ -311,7 +311,7 @@ export const Feed = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, transformedCandidates, profile, isHidden]);
+  }, [searchQuery, sortBy, partyFilter, incumbentFilter, levelFilter, personalizedCandidates, profile, isHidden]);
 
   const userTopicsList = userTopics.map(ut => ({
     id: ut.topics?.id || ut.topic_id,
