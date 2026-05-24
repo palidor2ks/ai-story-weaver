@@ -1,0 +1,143 @@
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
+export interface DonorCauseInfo {
+  causeId: string;
+  label: string;
+  description: string | null;
+  stance: string | null;
+  quizTopicId: string | null;
+  confidence: string | null;
+  assignedBy: string;
+  adminOverridden: boolean;
+  fecCommitteeId: string;
+}
+
+const norm = (s: string) => s.trim().toUpperCase();
+
+export interface DonorNameInput {
+  name: string;
+  type: string; // 'PAC' | 'Organization' | ...
+}
+
+export function useDonorCauses(inputs: DonorNameInput[]) {
+  // Stable key from sorted unique name+type pairs
+  const pairs = Array.from(
+    new Set(
+      inputs
+        .filter(d => d.name && (d.type === 'PAC' || d.type === 'Organization'))
+        .map(d => `${norm(d.name)}|${d.type}`)
+    )
+  ).sort();
+
+  return useQuery({
+    queryKey: ['donor-causes', pairs],
+    enabled: pairs.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<Map<string, DonorCauseInfo>> => {
+      const result = new Map<string, DonorCauseInfo>();
+      if (pairs.length === 0) return result;
+
+      const names = Array.from(new Set(pairs.map(p => p.split('|')[0])));
+      const types = Array.from(new Set(pairs.map(p => p.split('|')[1])));
+
+      // 1. Resolve names -> aliases (and fec_committee_ids)
+      const { data: members, error: mErr } = await supabase
+        .from('donor_alias_members')
+        .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active)')
+        .in('donor_name', names)
+        .in('donor_type', types);
+      if (mErr) throw mErr;
+
+      // name|type -> set of committee ids
+      const nameToCommittees = new Map<string, string[]>();
+      const allCommitteeIds = new Set<string>();
+      for (const m of (members ?? []) as any[]) {
+        const alias = m.donor_aliases;
+        if (!alias?.is_active) continue;
+        const ids: string[] = [];
+        if (alias.fec_committee_id) ids.push(alias.fec_committee_id);
+        if (Array.isArray(alias.fec_committee_ids)) ids.push(...alias.fec_committee_ids);
+        if (ids.length === 0) continue;
+        const key = `${norm(m.donor_name)}|${m.donor_type}`;
+        nameToCommittees.set(key, ids);
+        ids.forEach(id => allCommitteeIds.add(id));
+      }
+
+      if (allCommitteeIds.size === 0) return result;
+
+      // 2. Fetch topics + causes for those committees
+      const { data: topics, error: tErr } = await supabase
+        .from('committee_topics')
+        .select('fec_committee_id, primary_cause_id, ai_confidence, assigned_by, admin_overridden, committee_causes!committee_topics_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
+        .in('fec_committee_id', Array.from(allCommitteeIds));
+
+      // Fallback if FK name differs: do a manual join
+      let causeByCommittee = new Map<string, DonorCauseInfo>();
+      if (tErr || !topics) {
+        const { data: topicsPlain } = await supabase
+          .from('committee_topics')
+          .select('fec_committee_id, primary_cause_id, ai_confidence, assigned_by, admin_overridden')
+          .in('fec_committee_id', Array.from(allCommitteeIds));
+        const causeIds = Array.from(new Set((topicsPlain ?? []).map(t => t.primary_cause_id).filter(Boolean)));
+        const { data: causes } = await supabase
+          .from('committee_causes')
+          .select('id, label, description, stance, quiz_topic_id')
+          .in('id', causeIds);
+        const causeMap = new Map((causes ?? []).map(c => [c.id, c]));
+        for (const t of topicsPlain ?? []) {
+          const c = causeMap.get(t.primary_cause_id);
+          if (!c) continue;
+          causeByCommittee.set(t.fec_committee_id, {
+            causeId: c.id,
+            label: c.label,
+            description: c.description,
+            stance: c.stance,
+            quizTopicId: c.quiz_topic_id,
+            confidence: t.ai_confidence,
+            assignedBy: t.assigned_by,
+            adminOverridden: t.admin_overridden,
+            fecCommitteeId: t.fec_committee_id,
+          });
+        }
+      } else {
+        for (const t of topics as any[]) {
+          const c = t.committee_causes;
+          if (!c) continue;
+          causeByCommittee.set(t.fec_committee_id, {
+            causeId: c.id,
+            label: c.label,
+            description: c.description,
+            stance: c.stance,
+            quizTopicId: c.quiz_topic_id,
+            confidence: t.ai_confidence,
+            assignedBy: t.assigned_by,
+            adminOverridden: t.admin_overridden,
+            fecCommitteeId: t.fec_committee_id,
+          });
+        }
+      }
+
+      // 3. Map donor name|type -> cause (prefer first committee with a cause)
+      for (const [key, ids] of nameToCommittees.entries()) {
+        for (const id of ids) {
+          const c = causeByCommittee.get(id);
+          if (c) {
+            result.set(key, c);
+            break;
+          }
+        }
+      }
+      return result;
+    },
+  });
+}
+
+export function getDonorCause(
+  map: Map<string, DonorCauseInfo> | undefined,
+  name: string,
+  type: string
+): DonorCauseInfo | undefined {
+  if (!map) return undefined;
+  return map.get(`${norm(name)}|${type}`);
+}
