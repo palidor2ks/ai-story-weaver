@@ -10,7 +10,7 @@ import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { useProfile, useUserTopicScores, useUserTopics } from '@/hooks/useProfile';
 import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial, OfficeLevelType } from '@/hooks/useCivicOfficials';
-import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
+import { usePersonalizedScoreMap } from '@/hooks/usePersonalizedScoreMap';
 import { useUpcomingElections } from '@/hooks/useUpcomingElections';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 import { unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
