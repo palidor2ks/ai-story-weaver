@@ -334,9 +334,10 @@ interface SpenderRowItemProps {
   row: SpenderRow;
   index: number;
   raisedMap?: Map<string, number>;
+  causeMap?: Map<string, { label: string; stance: string | null; issue: string | null }>;
 }
 
-function SpenderRowItem({ row: r, index: i, raisedMap }: SpenderRowItemProps) {
+function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowItemProps) {
   const { data: adminData } = useAdminRole();
   const isAdmin = adminData?.isAdmin ?? false;
   const exclude = useExcludeCommittee();
