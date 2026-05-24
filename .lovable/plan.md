@@ -1,69 +1,36 @@
-# Improve news topic/question accuracy
+## Goal
+The header currently shows 9 nav items + admin/politician/help icons + user pill, all rendered inline on `md+` (≥768px). Between ~768px and ~1280px the row overflows or crowds the logo, and on the user's 1309px viewport the items barely fit. Mobile uses a hamburger only below 768px, which is too aggressive a cutoff.
 
-## Problem
+## Plan
 
-In `fetch-relevant-news`, every fetched article is attached to **every** candidate question (`news_article_questions` insert loops over all `questionIds` with no relevance check). Topic matching is a literal substring scan against title+snippet, so most articles end up with `matched_topics = []`. At display time the UI picks an arbitrary question, which is why a horse-race story about Vance abandoning 2028 is labeled "Economy → Should the federal government increase regulation of large corporations?".
+**1. Tier the breakpoints in `src/components/Header.tsx`**
+- Mobile (`< 1024px`, i.e. `lg`): hamburger menu (raise current `md` breakpoint to `lg`). This covers phones and most tablets and avoids the cramped 768–1024 zone.
+- Desktop compact (`lg` to `xl`, 1024–1280): show nav items as icon-only buttons with `title` tooltips. Hide the user-name pill (keep just the avatar circle).
+- Desktop full (`xl+`, ≥1280): show icon + label as today, plus the full user pill with name.
 
-## Fix
+**2. Condense item rendering**
+- Replace per-item `<Button>` with a single map that toggles label visibility via `hidden xl:inline` on the label span. Keeps one source of truth, no duplication.
+- Tighten button padding at `lg` (`lg:px-2 xl:px-3`) and gap (`gap-1 xl:gap-2`) so 9 items + 3 icon buttons fit at 1024px.
 
-### 1. Add AI classification step (`fetch-relevant-news`)
+**3. User pill responsiveness**
+- `lg`: render avatar circle only (no name, no background pill).
+- `xl+`: full pill with name as today.
+- Truncate long names with `max-w-[140px] truncate`.
 
-For each chosen article (the small `sliced` array, max ~5–10), call Lovable AI Gateway (`google/gemini-3-flash-preview`, tool-calling for structured output) once with:
-- Article title + snippet
-- The candidate's allowed topic list (12 federal or 5 local, per scope memory)
-- The candidate's question list (`id`, `text`, `topic_name`)
+**4. Logo area**
+- Keep logo + Beta badge; hide Beta badge below `sm` to save space on very narrow phones.
 
-Return:
-```
-{
-  "is_policy_relevant": boolean,
-  "topic_id": string | null,        // must be one of provided topic_ids, else null
-  "question_ids": string[],         // 0–2 best-matching question IDs, empty if none
-  "confidence": "high" | "medium" | "low"
-}
-```
-
-Rules baked into the prompt:
-- Horse-race / campaign-strategy / personnel stories → `is_policy_relevant=false`, no topic, no question.
-- Only emit `question_ids` when the article clearly evidences a candidate position or action on that specific question.
-- Confidence `low` → drop the topic/question from display.
-
-### 2. Replace blanket persistence
-
-In the `EdgeRuntime.waitUntil` block (lines 711–751):
-- Insert into `news_articles` as today.
-- Insert into `news_article_questions` **only** for the AI-returned `question_ids` (0–2 rows, not N).
-- Insert into `question_news_feed_cache` for the AI-returned question(s); if none, still cache the article under a synthetic "no-question" path so it can render without a label (option: add nullable `question_id` cache path, or simply skip cache and rely on the live feed for unlabeled articles — recommend the latter to avoid schema churn).
-
-### 3. Display-time guardrails
-
-- In the response mapper (lines 698–708) and the cached path (lines 562–586), only set `topicLabel` / `relatedQuestion` when they came from the AI classifier (high/medium confidence). Otherwise omit both fields.
-- Frontend `NewsCard` (or equivalent) already renders the badges conditionally on those fields, so no UI change needed — they just disappear when absent.
-
-### 4. One-time backfill / cleanup
-
-New SQL migration to clear the bad mappings so the cache stops serving them:
-```sql
-DELETE FROM public.question_news_feed_cache
- WHERE article_id IN (
-   SELECT id FROM public.news_articles WHERE published_at > now() - interval '60 days'
- );
-DELETE FROM public.news_article_questions
- WHERE matched_topics = '{}'::text[];
-```
-(Keeps older curated rows; forces fresh classification on next fetch.)
-
-### 5. Cost / latency note
-
-Adds one AI call per fetch cycle per candidate (batched across ~5–10 articles in a single request). Cached path stays free. With existing `fetch-relevant-news` cache TTL the per-user cost is negligible.
-
-## Files touched
-
-- `supabase/functions/fetch-relevant-news/index.ts` — add classifier, replace persistence loop, guard display fields.
-- New migration — purge stale mappings.
+**5. Mobile menu (already exists)**
+- Update the `md:hidden` toggle button to `lg:hidden` and the mobile drawer's `md:hidden` wrapper to `lg:hidden` so it matches the new breakpoint.
 
 ## Out of scope
+- No changes to nav items themselves, routes, auth gating, or admin/politician visibility logic.
+- No restyling of dropdowns or the mobile drawer's contents.
+- No changes to `CommitteesViewSwitcher` or other sub-nav.
 
-- No changes to the news fetch sources, ranking score, dedup, or window logic.
-- No changes to `questions`, `topics`, or candidate position pipeline.
-- No UI changes beyond the badges naturally hiding when fields are absent.
+## Files touched
+- `src/components/Header.tsx` (only file).
+
+## Verification
+- Check at 360, 768, 1024, 1280, 1440 widths via preview viewport.
+- Confirm no horizontal scroll on header at any breakpoint, all items reachable, tooltips appear at `lg` compact tier.
