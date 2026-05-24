@@ -5736,6 +5736,26 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://www.polipulseapp.com/p/deciphering-voter-motivations-in-recent-elections-virbh</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/p/deciphering-voter-motivations-in-recent-elections-virbh/results</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/p/deciphering-voter-motivations-in-recent-elections-h5wx4</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/p/deciphering-voter-motivations-in-recent-elections-h5wx4/results</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://www.polipulseapp.com/candidate/A000055</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
