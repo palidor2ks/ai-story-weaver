@@ -356,6 +356,7 @@ async function fetchBingRss(query: string): Promise<ParsedItem[]> {
   } catch (e) {
     console.error('bing rss fetch failed', query, e);
     return [];
+  }
 }
 
 async function fetchGoogleTopStories(): Promise<ParsedItem[]> {
@@ -378,7 +379,6 @@ async function fetchGoogleTopStories(): Promise<ParsedItem[]> {
     console.error('google top stories fetch failed', e);
     return [];
   }
-}
 }
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
