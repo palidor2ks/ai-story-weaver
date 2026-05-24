@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Megaphone, TrendingUp, TrendingDown, Search, ExternalLink, EyeOff, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { formatIECompact } from '@/components/IESummaryInline';
 import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
 import { useAdminRole } from '@/hooks/useAdminRole';
@@ -165,6 +166,29 @@ export default function TopSpenders() {
     },
   });
 
+  const { data: causeMap } = useQuery({
+    queryKey: ['top-spenders-causes', visibleIds],
+    enabled: visibleIds.length > 0,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('committee_topics')
+        .select('fec_committee_id, primary_cause:primary_cause_id(label, stance, issue)')
+        .in('fec_committee_id', visibleIds);
+      const map = new Map<string, { label: string; stance: string | null; issue: string | null }>();
+      (data ?? []).forEach((r: any) => {
+        if (r.primary_cause?.label) {
+          map.set(r.fec_committee_id, {
+            label: r.primary_cause.label,
+            stance: r.primary_cause.stance ?? null,
+            issue: r.primary_cause.issue ?? null,
+          });
+        }
+      });
+      return map;
+    },
+  });
+
   const summary = useMemo(() => {
     const list = rows ?? [];
     return {
@@ -287,7 +311,7 @@ export default function TopSpenders() {
             ) : (
               <div className="divide-y divide-border">
                 {filtered.map((r, i) => (
-                  <SpenderRowItem key={r.spending_committee_fec_id} row={r} index={i} raisedMap={raisedMap} />
+                  <SpenderRowItem key={r.spending_committee_fec_id} row={r} index={i} raisedMap={raisedMap} causeMap={causeMap} />
                 ))}
               </div>
             )}
@@ -310,9 +334,10 @@ interface SpenderRowItemProps {
   row: SpenderRow;
   index: number;
   raisedMap?: Map<string, number>;
+  causeMap?: Map<string, { label: string; stance: string | null; issue: string | null }>;
 }
 
-function SpenderRowItem({ row: r, index: i, raisedMap }: SpenderRowItemProps) {
+function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowItemProps) {
   const { data: adminData } = useAdminRole();
   const isAdmin = adminData?.isAdmin ?? false;
   const exclude = useExcludeCommittee();
@@ -344,7 +369,29 @@ function SpenderRowItem({ row: r, index: i, raisedMap }: SpenderRowItemProps) {
       >
         <span className="w-8 text-right text-sm font-mono text-muted-foreground">{i + 1}</span>
         <div className="min-w-0">
-          <p className="font-medium truncate">{r.spending_committee_name ?? r.spending_committee_fec_id}</p>
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="font-medium truncate">{r.spending_committee_name ?? r.spending_committee_fec_id}</p>
+            {(() => {
+              const cause = causeMap?.get(r.spending_committee_fec_id);
+              if (!cause) return null;
+              const stance = (cause.stance ?? '').toLowerCase();
+              const cls =
+                stance === 'pro'
+                  ? 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                  : stance === 'anti'
+                    ? 'border-rose-500/40 text-rose-700 dark:text-rose-300'
+                    : 'border-border text-muted-foreground';
+              return (
+                <Badge
+                  variant="outline"
+                  className={`shrink-0 text-[10px] font-normal px-1.5 py-0 max-w-[200px] truncate ${cls}`}
+                  title={cause.issue ?? cause.label}
+                >
+                  {cause.label}
+                </Badge>
+              );
+            })()}
+          </div>
           <p className="text-[11px] text-muted-foreground font-mono truncate">
             {r.spending_committee_fec_id} · {r.expenditure_count.toLocaleString()} expenditure{r.expenditure_count === 1 ? '' : 's'}
             {(() => {
