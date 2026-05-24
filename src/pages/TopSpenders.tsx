@@ -377,14 +377,14 @@ function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowIte
               const stance = (cause.stance ?? '').toLowerCase();
               const cls =
                 stance === 'pro'
-                  ? 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                  ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                   : stance === 'anti'
-                    ? 'border-rose-500/40 text-rose-700 dark:text-rose-300'
-                    : 'border-border text-muted-foreground';
+                    ? 'border-rose-500/60 bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                    : 'border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300';
               return (
                 <Badge
                   variant="outline"
-                  className={`shrink-0 text-[10px] font-normal px-1.5 py-0 max-w-[200px] truncate ${cls}`}
+                  className={`shrink-0 text-xs font-semibold px-2 py-0.5 max-w-[220px] truncate uppercase tracking-wide ${cls}`}
                   title={cause.issue ?? cause.label}
                 >
                   {cause.label}
