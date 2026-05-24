@@ -2,6 +2,8 @@ import { Topic } from '@/types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { TopicIcon } from '@/components/TopicIcon';
+import { getTopicDescription } from '@/lib/topicDescriptions';
+
 
 
 interface TopicSelectorProps {
@@ -36,7 +38,7 @@ export const TopicSelector = ({
             onClick={() => onToggle(topic)}
             disabled={disabled}
             className={cn(
-              "h-auto min-h-[100px] py-3 px-2 flex flex-col items-center justify-center gap-2 animate-scale-in relative",
+              "h-auto min-h-[120px] py-3 px-2 flex flex-col items-center justify-start gap-1.5 animate-scale-in relative",
               disabled && "opacity-50 cursor-not-allowed"
             )}
             style={{ animationDelay: `${index * 50}ms` }}
@@ -45,6 +47,10 @@ export const TopicSelector = ({
             <span className="text-xs font-medium text-center leading-tight break-words whitespace-normal w-full px-1">
               {topic.displayName || topic.name}
             </span>
+            <span className="text-[10px] leading-snug text-muted-foreground text-center break-words whitespace-normal w-full px-1 line-clamp-2">
+              {getTopicDescription(topic.id)}
+            </span>
+
             {selected && (
               <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center text-[11px] font-bold text-primary-foreground leading-none">
                 {selectedIndex + 1}
