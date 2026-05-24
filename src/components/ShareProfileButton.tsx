@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Share2 } from 'lucide-react';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
+import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
 
 interface TopicComparison {
   topicName: string;
@@ -9,6 +10,7 @@ interface TopicComparison {
 }
 
 interface ShareProfileButtonProps {
+  candidateId?: string;
   candidateName: string;
   candidateOffice: string;
   candidateParty: string;
@@ -19,9 +21,14 @@ interface ShareProfileButtonProps {
   agreements: TopicComparison[];
   disagreements: TopicComparison[];
   profileUrl: string;
+  incumbent?: boolean;
+  coverageTier?: string;
+  confidence?: string;
+  votingRecordPct?: number | null;
 }
 
 export const ShareProfileButton = ({
+  candidateId,
   candidateName,
   candidateOffice,
   candidateParty,
@@ -32,10 +39,17 @@ export const ShareProfileButton = ({
   agreements,
   disagreements,
   profileUrl,
+  incumbent,
+  coverageTier,
+  confidence,
+  votingRecordPct,
 }: ShareProfileButtonProps) => {
   const [open, setOpen] = useState(false);
   const brandHost =
     typeof window !== 'undefined' ? window.location.host.replace(/^www\./, '') : 'polipulseapp.com';
+
+  const { data: ieMap } = useCandidatesIE(candidateId ? [candidateId] : []);
+  const ie = candidateId ? ieMap?.get(candidateId) : undefined;
 
   return (
     <>
@@ -60,6 +74,13 @@ export const ShareProfileButton = ({
           matchScore,
           agreements,
           disagreements,
+          incumbent,
+          coverageTier,
+          confidence,
+          votingRecordPct: votingRecordPct ?? null,
+          ieSupport: ie?.support_amount ?? null,
+          ieOppose: ie?.oppose_amount ?? null,
+          ieCycle: ie?.cycle ?? null,
         }}
         caption={{
           surface: 'candidate_profile',

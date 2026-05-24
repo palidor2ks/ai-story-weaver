@@ -360,6 +360,7 @@ export const CandidateProfile = () => {
                     }
                   />
                   <ShareProfileButton
+                    candidateId={candidate.id}
                     candidateName={candidate.name}
                     candidateOffice={candidate.office}
                     candidateParty={candidate.party}
@@ -370,7 +371,11 @@ export const CandidateProfile = () => {
                     agreements={agreements}
                     disagreements={disagreements}
                     profileUrl={window.location.href}
+                    incumbent={candidate.is_incumbent ?? true}
+                    coverageTier={candidate.coverage_tier ?? undefined}
+                    confidence={candidate.confidence ?? undefined}
                   />
+
                 </div>
               </div>
 
