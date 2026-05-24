@@ -21,6 +21,14 @@ export interface CardData {
   matchScore?: number; // 0-100
   agreements?: { topicName: string; score: number }[];
   disagreements?: { topicName: string; score: number }[];
+  // Candidate stat card extras
+  incumbent?: boolean;
+  coverageTier?: string;
+  confidence?: string;
+  votingRecordPct?: number | null;
+  ieSupport?: string | number | null;
+  ieOppose?: string | number | null;
+  ieCycle?: string | null;
   // User profile
   userName?: string | null;
   userScore?: number | null;
