@@ -86,20 +86,24 @@ interface Question {
   options?: QuestionOption[];
 }
 
+const CANDIDATE_LIST_COLUMNS =
+  'id, name, party, office, state, district, image_url, overall_score, coverage_tier, confidence, is_incumbent, score_version, last_updated, claimed_by_user_id, claimed_at, fec_candidate_id, last_donor_sync';
+
 export const useCandidates = () => {
   return useQuery({
     queryKey: ['candidates'],
+    staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       // Fetch all data in parallel to reduce latency
       const [candidatesResult, topicScoresResult, overridesResult] = await Promise.all([
-        supabase.from('candidates').select('*').order('name'),
+        supabase.from('candidates').select(CANDIDATE_LIST_COLUMNS).order('name'),
         supabase.from('calculated_candidate_topic_scores').select('candidate_id, topic_id, calculated_score'),
         supabase.from('candidate_overrides').select('candidate_id, overall_score, name, party, office, state, district, image_url, coverage_tier, confidence').eq('is_active', true),
       ]);
 
       if (candidatesResult.error) throw candidatesResult.error;
 
-      const candidates = candidatesResult.data;
+      const candidates = candidatesResult.data ?? [];
       const topicScores = topicScoresResult.data || [];
       const overrides = overridesResult.data || [];
 
@@ -114,10 +118,10 @@ export const useCandidates = () => {
       });
 
       // Map and merge data in single pass
-      const candidatesWithScores = candidates.map(candidate => {
+      const candidatesWithScores = candidates.map((candidate: any) => {
         const override = overrideMap.get(candidate.id);
         const candidateTopicScores = topicScoresMap.get(candidate.id) || [];
-        
+
         return {
           id: candidate.id,
           name: override?.name ?? candidate.name,
@@ -147,6 +151,7 @@ export const useCandidates = () => {
     },
   });
 };
+
 
 export interface PriorOffice {
   office: string;
