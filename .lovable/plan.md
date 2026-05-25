@@ -1,49 +1,15 @@
-## Goal
-Port PR #83 from `ai-story-weaver` to this repo: add an admin-managed alias table so operators can override display names for top outside spenders by FEC committee ID. Aliases take precedence over `external_pacs.name` on the Top Spenders page.
+## Fix "Fill Unanswered in View" button
 
-## 1. Migration — `committee_aliases` table
+The button is disabled and shows (0) because it only counts candidates with `answerCount === 0`. Every visible row has 243/251 answers, so none match. The intent is to fill the remaining missing answers, including for partially-covered candidates.
 
-New migration creating:
-- Table `public.committee_aliases (fec_committee_id text PK, alias_name text not null, created_at timestamptz default now(), updated_at timestamptz default now())`.
-- Trigger `touch_committee_aliases_updated_at` to refresh `updated_at` on update.
-- RLS enabled.
-- Policy: public `SELECT` (so the public Top Spenders page can read aliases).
-- Policy: `ALL` restricted to `has_role(auth.uid(), 'admin')` for insert/update/delete.
+### Changes in `src/components/admin/AnswerCoveragePanel.tsx`
 
-Skipping the unrelated `candidate_committees` fkey tweak from the PR — that's specific to the other repo's migration state.
+1. **Redefine "unanswered in view"** — change the predicate from `c.answerCount === 0` to `c.percentage < 100` (i.e. any candidate in the filtered view that isn't fully covered).
 
-## 2. New panel — `src/components/admin/CommitteeAliasesPanel.tsx`
+2. **Update `visibleUnansweredCount`** (line 644) to use the new predicate so the toolbar button shows the real count and becomes enabled.
 
-React Query panel:
-- Lists existing aliases (FEC ID, alias, created_at) with a search box filtering by either field.
-- Form with two inputs (FEC committee ID, alias name) + Save button → upsert on `fec_committee_id`.
-- Per-row Remove button → delete by FEC ID.
-- Invalidates `['committee-aliases']` and `['top-spenders']` queries on mutation.
-- Uses `(supabase as any).from('committee_aliases')` since generated types regenerate after migration apply.
-- shadcn `Card`, `Input`, `Button`, `Table`, `sonner` toast — matches surrounding admin panel patterns.
+3. **Update `handleFillVisibleUnanswered`** (lines 502–517) to use the same predicate when building the batch, capped at 50 as today. Pass `regenerate=false` so only missing answers are filled — existing answers aren't overwritten.
 
-## 3. Wire into Admin tabs — `src/pages/Admin.tsx`
+4. **Relabel** the button from `Fill Unanswered in View (N)` to `Fill Missing in View (N)` to reflect that partial-coverage candidates are included.
 
-- Import `CommitteeAliasesPanel`.
-- Add tab entry `{ value: "committee-aliases", label: "Spender Aliases", Icon: Tags }` next to "committee-topics" in the section list (line ~492).
-- Add matching `<TabsContent value="committee-aliases"><CommitteeAliasesPanel /></TabsContent>` block after the committee-topics one (line ~796).
-
-## 4. Apply aliases on Top Spenders — `src/pages/TopSpenders.tsx`
-
-Update `resolveDisplayNames` (line 37) to fetch from both `external_pacs` and `committee_aliases` in parallel. Apply `external_pacs.name` first, then overlay `committee_aliases.alias_name` so aliases win when both exist.
-
-```ts
-const [{ data: externalNames }, { data: aliases }] = await Promise.all([
-  supabase.from('external_pacs').select('fec_committee_id, name').in('fec_committee_id', unique),
-  (supabase as any).from('committee_aliases').select('fec_committee_id, alias_name').in('fec_committee_id', unique),
-]);
-(externalNames ?? []).forEach((r) => { if (r.name) map.set(r.fec_committee_id, r.name); });
-(aliases ?? []).forEach((r: { fec_committee_id: string; alias_name: string | null }) => {
-  if (r.alias_name) map.set(r.fec_committee_id, r.alias_name);
-});
-```
-
-## Out of scope
-- No edge function or hook changes.
-- No changes to `external_pacs` table.
-- The PR's unrelated migration tweak to `candidate_committees_candidate_id_fkey` is skipped (different repo state).
+No backend / edge function changes. No schema changes. No other handlers touched.

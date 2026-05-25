@@ -502,16 +502,16 @@ export function AnswerCoveragePanel() {
   const handleFillVisibleUnanswered = async () => {
     try {
       const toProcess = filteredCandidates
-        .filter(c => c.answerCount === 0)
+        .filter(c => c.percentage < 100)
         .slice(0, 50)
         .map(c => ({ id: c.id, name: c.name }));
       if (toProcess.length === 0) {
-        toast.info('No unanswered candidates in current view');
+        toast.info('No candidates with missing answers in current view');
         return;
       }
       await populateBatch(toProcess, false);
     } catch (err) {
-      console.error('[Admin] Fill visible unanswered failed:', err);
+      console.error('[Admin] Fill visible missing failed:', err);
       toast.error('Failed to generate AI answers for visible candidates');
     }
   };
@@ -641,7 +641,7 @@ export function AnswerCoveragePanel() {
 
   const noAnswersCount = candidateStats?.noAnswers || 0;
   const lowCoverageCount = candidateStats?.lowCoverage || 0;
-  const visibleUnansweredCount = filteredCandidates.filter(c => c.answerCount === 0).length;
+  const visibleUnansweredCount = filteredCandidates.filter(c => c.percentage < 100).length;
 
   // Only show full loading spinner on initial load (when no cached data exists)
   const isInitialLoading = (statsLoading || votingStatsLoading || fecStatsLoading || syncLoading) && !candidateStatsCache;
@@ -1821,7 +1821,7 @@ export function AnswerCoveragePanel() {
                 disabled={anyBatchRunning || visibleUnansweredCount === 0}
               >
                 <Sparkles className="h-4 w-4 mr-1.5" />
-                Fill Unanswered in View ({Math.min(visibleUnansweredCount, 50)})
+                Fill Missing in View ({Math.min(visibleUnansweredCount, 50)})
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
