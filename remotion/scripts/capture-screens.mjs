@@ -7,11 +7,10 @@ import fs from 'fs/promises';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(__dirname, '../public/screens');
-const BASE = 'https://polipulse.lovable.app';
+const BASE = process.env.BASE_URL || 'https://id-preview--b4a499eb-c11a-4320-8adc-dfe50259459a.lovable.app';
 
 const CANDIDATE_ID = 'K000394';
 const DONOR_ID = 'pac-donor-28f755fb265cc678a1555e7d7c203b7a';
-const BILL_ID = '119-HR.6703';
 
 const targets = [
   { name: 'home',       url: `${BASE}/`,                          width: 1920, height: 1080, full: false },
@@ -19,7 +18,7 @@ const targets = [
   { name: 'quiz',       url: `${BASE}/quiz`,                      width: 1920, height: 1200, full: false },
   { name: 'candidate',  url: `${BASE}/candidate/${CANDIDATE_ID}`, width: 1920, height: 3400, full: false },
   { name: 'donor',      url: `${BASE}/donor/${DONOR_ID}`,         width: 1920, height: 2800, full: false },
-  { name: 'bill',       url: `${BASE}/legislation/${BILL_ID}`,    width: 1920, height: 2200, full: false },
+  { name: 'committees', url: `${BASE}/committees`,                width: 1920, height: 2200, full: false },
   { name: 'spenders',   url: `${BASE}/top-spenders`,              width: 1920, height: 2400, full: false },
 ];
 

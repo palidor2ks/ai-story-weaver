@@ -105,7 +105,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/" element={
-        <RouteGuard requireAuth requireOnboarding={false}>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <Index />
         </RouteGuard>
       } />
@@ -130,7 +130,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/committees" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <Committees />
         </RouteGuard>
       } />
@@ -140,7 +140,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/committee/:id" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <CommitteeProfile />
         </RouteGuard>
       } />
@@ -155,12 +155,12 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/donor/:id" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <DonorProfile />
         </RouteGuard>
       } />
       <Route path="/candidate/:id" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <CandidateProfile />
         </RouteGuard>
       } />
@@ -170,7 +170,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/quiz" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <Quiz />
         </RouteGuard>
       } />
