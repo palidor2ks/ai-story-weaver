@@ -536,7 +536,7 @@ export const Onboarding = () => {
                 }}
                 disabled={selectedTopics.length !== 3}
               >
-                Continue to Quiz (20 questions)
+                Continue to Quiz (12 questions)
                 <ArrowRight className="w-5 h-5" />
               </Button>
             </div>
