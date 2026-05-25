@@ -327,11 +327,13 @@ export const Quiz = () => {
         noIndex
       />
       <main className="container py-8 px-4 max-w-2xl">
-        <div className="text-center mb-6">
-          <h1 className="font-display text-xl font-semibold text-foreground">
-            {getQuizTitle()}
-          </h1>
-        </div>
+        {!topicFilter && (
+          <div className="text-center mb-6">
+            <h1 className="font-display text-xl font-semibold text-foreground">
+              {getQuizTitle()}
+            </h1>
+          </div>
+        )}
 
         {(() => {
           const currentQuestion = questions[currentQuestionIndex];
@@ -347,16 +349,27 @@ export const Quiz = () => {
                     </span>
                   </div>
                 )}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Question {currentQuestionIndex + 1} of {questions.length}
+                <div className="flex items-center justify-between mb-3 gap-3">
+                  <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+                    {currentQuestionIndex + 1} / {questions.length}
                   </span>
-                  <div className="flex-1 mx-4 h-2 bg-secondary rounded-full overflow-hidden">
+                  <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-hero transition-all duration-500 ease-out"
                       style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}
                     />
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="whitespace-nowrap"
+                    onClick={() => {
+                      toast.success('Progress saved');
+                      navigate('/quiz-library');
+                    }}
+                  >
+                    Save & exit
+                  </Button>
                 </div>
                 <h2 className="font-display text-lg md:text-xl font-semibold text-foreground leading-snug text-center">
                   {currentQuestion.text}
