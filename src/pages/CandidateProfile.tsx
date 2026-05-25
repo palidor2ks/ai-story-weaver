@@ -56,6 +56,7 @@ export const CandidateProfile = () => {
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
   const { data: scoreMap } = useCandidateScoreMap(id ? [id] : undefined);
+  const { data: personalized } = useCandidatePersonalizedScore(id);
   const { data: cycleInfo } = useAvailableCycles(id);
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
