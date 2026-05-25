@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { QuizQuestion } from '@/components/QuizQuestion';
+import { TopicIcon } from '@/components/TopicIcon';
 import { ScoreText } from '@/components/ScoreText';
 import { Button } from '@/components/ui/button';
 import { useQuestions, useTopics } from '@/hooks/useCandidates';
