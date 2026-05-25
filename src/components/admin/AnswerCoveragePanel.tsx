@@ -510,6 +510,24 @@ export function AnswerCoveragePanel() {
     }
   };
 
+  const handleFillVisibleUnanswered = async () => {
+    try {
+      const toProcess = paginatedCandidates
+        .filter(c => c.answerCount === 0)
+        .slice(0, 50);
+
+      if (toProcess.length === 0) {
+        toast.info('No unanswered visible reps on this page');
+        return;
+      }
+
+      await populateBatch(toProcess.map(c => ({ id: c.id, name: c.name })), false);
+    } catch (err) {
+      console.error('[Admin] Fill visible unanswered failed:', err);
+      toast.error('Failed to generate answers for visible reps');
+    }
+  };
+
   const handleBatchLinkFECIds = async () => {
     try {
       const toProcess = candidatesWithoutFecId.slice(0, 50).map(c => ({ id: c.id, name: c.name, state: c.state }));
@@ -1790,6 +1808,17 @@ export function AnswerCoveragePanel() {
               </PopoverContent>
             </Popover>
           </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={anyBatchRunning || paginatedCandidates.filter(c => c.answerCount === 0).length === 0}
+            onClick={handleFillVisibleUnanswered}
+            className="ml-auto"
+          >
+            <Sparkles className="h-4 w-4 mr-1.5" />
+            Fill Unanswered (Visible)
+          </Button>
           
           {/* Active filters indicator */}
           {(partyFilter !== 'all' || stateFilter !== 'all' || coverageFilter !== 'all' || syncFilter !== 'all' || deltaFilter !== 'all' || financeFilter !== 'all' || scoreFilter !== 'all' || tierFilter !== 'all' || fecIdFilter !== 'all') && (
