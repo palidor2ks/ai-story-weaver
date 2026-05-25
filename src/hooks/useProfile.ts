@@ -275,6 +275,30 @@ export const useSaveQuizResults = () => {
   });
 };
 
+export const useUpsertQuizAnswer = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation<SaveResult, Error, { questionId: string; selectedOptionId: string; value: number }>({
+    mutationFn: async ({ questionId, selectedOptionId, value }) => {
+      if (!user) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('quiz_answers')
+        .upsert(
+          { user_id: user.id, question_id: questionId, selected_option_id: selectedOptionId, value },
+          { onConflict: 'user_id,question_id' }
+        );
+      if (error) throw error;
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['answered_questions', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['quiz_answers', user?.id] });
+    },
+    onError: (error) => handleMutationError(error, 'Answer save'),
+  });
+};
+
 export const useSaveUserTopics = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
