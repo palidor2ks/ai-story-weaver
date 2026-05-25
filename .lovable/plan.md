@@ -1,43 +1,72 @@
 ## Goal
-Port PR #82 from `ai-story-weaver`: add a page-scoped batch action that fills AI answers only for the currently visible unanswered candidates in the coverage panel, so operators can do quick spot-fills without touching the full dataset.
+Move the new batch action into the Search / High-Volume Mode toolbar row (the highlighted area in the screenshot), and change its scope from "current page" to "all candidates currently visible in the chart" — i.e. everything matching the active filters, not just the paginated slice.
 
 ## Change
 Single file: `src/components/admin/AnswerCoveragePanel.tsx`.
 
-### 1. New handler (next to `handleFillAll`, ~line 491)
+### 1. Rescope handler + count
+Replace `paginatedCandidates` with `filteredCandidates` so it covers every rep visible under the current filter set:
+
 ```ts
+const visibleUnansweredCount = filteredCandidates.filter(c => c.answerCount === 0).length;
+
 const handleFillVisibleUnanswered = async () => {
   try {
-    const toProcess = paginatedCandidates
+    const toProcess = filteredCandidates
       .filter(c => c.answerCount === 0)
       .slice(0, 50)
       .map(c => ({ id: c.id, name: c.name }));
     if (toProcess.length === 0) {
-      toast.info('No unanswered candidates on this page');
+      toast.info('No unanswered candidates in current view');
       return;
     }
     await populateBatch(toProcess, false);
   } catch (err) {
     console.error('[Admin] Fill visible unanswered failed:', err);
-    toast.error('Failed to generate AI answers for visible page');
+    toast.error('Failed to generate AI answers for visible candidates');
   }
 };
 ```
 
-### 2. New derived count (next to `noAnswersCount`)
-```ts
-const visibleUnansweredCount = paginatedCandidates.filter(c => c.answerCount === 0).length;
+Cap stays at 50 to match the other batch actions and existing edge-function limits.
+
+### 2. Remove the dropdown item
+Delete the "Fill Unanswered on This Page" `AlertDialog` block we added inside the AI Actions dropdown (between "Generate for Empty Profiles" and "Refresh Incomplete Profiles", ~lines 711–731).
+
+### 3. Add button to the Search / High-Volume toolbar row
+In the `flex flex-wrap gap-3 items-center` row at ~line 1785, after the High-Volume Mode toggle block, add an `AlertDialog`-wrapped button:
+
+```tsx
+<AlertDialog>
+  <AlertDialogTrigger asChild>
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={anyBatchRunning || visibleUnansweredCount === 0}
+    >
+      <Sparkles className="h-4 w-4 mr-1.5" />
+      Fill Unanswered in View ({Math.min(visibleUnansweredCount, 50)})
+    </Button>
+  </AlertDialogTrigger>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Fill Unanswered in Current View?</AlertDialogTitle>
+      <AlertDialogDescription>
+        Generates AI answers for up to 50 unanswered candidates matching your current filters.
+        Useful for spot-fills scoped to whatever's in the chart right now.
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel>Cancel</AlertDialogCancel>
+      <AlertDialogAction onClick={handleFillVisibleUnanswered}>Generate</AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
 ```
 
-### 3. New dropdown item in the AI Actions menu
-Insert after the existing "Generate for Empty Profiles" `AlertDialog` (~line 708), before "Refresh Incomplete Profiles":
-
-- Label: `Fill Unanswered on This Page ({Math.min(visibleUnansweredCount, 50)})`
-- Disabled when `visibleUnansweredCount === 0`
-- Wrapped in an `AlertDialog` matching the surrounding pattern, with a description noting the scope: "Generates AI answers for up to 50 unanswered candidates on the current page only."
-- Action calls `handleFillVisibleUnanswered`.
+Re-uses existing `Sparkles`, `Button`, and `AlertDialog` imports already in the file.
 
 ## Out of scope
-- No new edge functions, hooks, or schema changes — re-uses `populateBatch` and existing batch progress/pause/resume UI.
-- No change to filters or pagination.
-- Cap kept at 50 to stay consistent with `handleFillAll` / `handleFillLowCoverage` and the project's batch limits.
+- No backend / hook / schema changes — still re-uses `populateBatch`.
+- No filter or pagination changes.
+- No change to the other AI Actions dropdown items.
