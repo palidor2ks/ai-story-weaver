@@ -641,7 +641,7 @@ export function AnswerCoveragePanel() {
 
   const noAnswersCount = candidateStats?.noAnswers || 0;
   const lowCoverageCount = candidateStats?.lowCoverage || 0;
-  const visibleUnansweredCount = paginatedCandidates.filter(c => c.answerCount === 0).length;
+  const visibleUnansweredCount = filteredCandidates.filter(c => c.answerCount === 0).length;
 
   // Only show full loading spinner on initial load (when no cached data exists)
   const isInitialLoading = (statsLoading || votingStatsLoading || fecStatsLoading || syncLoading) && !candidateStatsCache;
