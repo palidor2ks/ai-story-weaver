@@ -502,16 +502,16 @@ export function AnswerCoveragePanel() {
   const handleFillVisibleUnanswered = async () => {
     try {
       const toProcess = filteredCandidates
-        .filter(c => c.answerCount === 0)
+        .filter(c => c.percentage < 100)
         .slice(0, 50)
         .map(c => ({ id: c.id, name: c.name }));
       if (toProcess.length === 0) {
-        toast.info('No unanswered candidates in current view');
+        toast.info('No candidates with missing answers in current view');
         return;
       }
       await populateBatch(toProcess, false);
     } catch (err) {
-      console.error('[Admin] Fill visible unanswered failed:', err);
+      console.error('[Admin] Fill visible missing failed:', err);
       toast.error('Failed to generate AI answers for visible candidates');
     }
   };
