@@ -15,6 +15,7 @@ import { CivicOfficial } from '@/hooks/useCivicOfficials';
 interface RepresentativeComparisonCardProps {
   official: CivicOfficial;
   resolvedScore: number | null;
+  overallScore?: number | null;
 }
 
 const getPartyColor = (party: string) => {
@@ -34,7 +35,7 @@ const getPartyBgColor = (party: string) => {
 
 const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
-export function RepresentativeComparisonCard({ official, resolvedScore }: RepresentativeComparisonCardProps) {
+export function RepresentativeComparisonCard({ official, resolvedScore, overallScore }: RepresentativeComparisonCardProps) {
   const { user } = useAuth();
   const hasImage = official.image_url && official.image_url.trim() !== '';
   const [isGeneratingDeep, setIsGeneratingDeep] = useState(false);
@@ -182,13 +183,26 @@ export function RepresentativeComparisonCard({ official, resolvedScore }: Repres
             )}
           </div>
         </div>
-        {resolvedScore !== null ? (
-          <ScoreText score={resolvedScore} size="md" />
-        ) : (
-          <Badge variant="outline" className="text-xs text-muted-foreground">
-            NA
-          </Badge>
-        )}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className="flex items-baseline gap-1">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Match</span>
+            {resolvedScore !== null ? (
+              <ScoreText score={resolvedScore} size="md" />
+            ) : (
+              <Badge variant="outline" className="text-xs text-muted-foreground">NA</Badge>
+            )}
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Overall</span>
+            {overallScore != null ? (
+              <span className="text-sm font-semibold text-muted-foreground">
+                <ScoreText score={overallScore} size="sm" />
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">—</span>
+            )}
+          </div>
+        </div>
       </Link>
 
       {/* AI Comparison Summary */}
