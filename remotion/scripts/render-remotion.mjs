@@ -28,7 +28,8 @@ await renderMedia({
   codec: "h264",
   outputLocation: process.env.OUT ?? "/tmp/polipulse-noaudio.mp4",
   puppeteerInstance: browser,
-  muted: true,
+  muted: false,
+  enforceAudioTrack: true,
   concurrency: 1,
 });
 
