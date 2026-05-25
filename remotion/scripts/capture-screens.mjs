@@ -28,6 +28,8 @@ const hideCss = `
   [class*="consent" i], [id*="consent" i],
   [data-lovable-badge], iframe[src*="lovable"],
   .lovable-badge { display: none !important; }
+  /* Hide logged-in user name in header pill (avatar stays visible) */
+  header span.truncate { display: none !important; }
   html, body { scroll-behavior: auto !important; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 `;
