@@ -155,12 +155,12 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/donor/:id" element={
-        <RouteGuard requireAuth={false} requireOnboarding={false}>
+        <RouteGuard requireAuth requireOnboarding>
           <DonorProfile />
         </RouteGuard>
       } />
       <Route path="/candidate/:id" element={
-        <RouteGuard requireAuth={false} requireOnboarding={false}>
+        <RouteGuard requireAuth requireOnboarding>
           <CandidateProfile />
         </RouteGuard>
       } />
@@ -170,7 +170,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/quiz" element={
-        <RouteGuard requireAuth={false} requireOnboarding={false}>
+        <RouteGuard requireAuth requireOnboarding>
           <Quiz />
         </RouteGuard>
       } />
