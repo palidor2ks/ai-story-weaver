@@ -667,7 +667,9 @@ export const useQuestions = () => {
       // Single relational query instead of two separate queries
       const { data: questions, error } = await supabase
         .from('questions')
-        .select('*, question_options(*)');
+        .select('*, question_options(*)')
+        .eq('include_in_quiz_library', true);
+      
       
       if (error) throw error;
 
