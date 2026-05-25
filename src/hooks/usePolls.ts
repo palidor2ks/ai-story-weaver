@@ -134,7 +134,7 @@ export const useCreatePoll = () => {
         const { error: qErr } = await supabase.from('questions').insert({
           id: qid,
           text: q.text,
-          topic_id: input.topic_id || 'economy', // fallback topic
+          topic_id: input.topic_id || 'economy-work', // fallback topic
           source: 'poll',
           include_in_politician_quiz: false,
         } as any);

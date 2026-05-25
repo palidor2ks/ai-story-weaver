@@ -1,89 +1,71 @@
 import { Topic, Question, Candidate, Donor, Vote } from '@/types';
 
-// Consolidated 12 Topics (from original 32 Congress.gov Policy Areas)
+// Consolidated 6 federal topics (was 12). Local topics (5) unchanged.
 export const topics: Topic[] = [
-  { id: 'economy', name: 'Economy & Jobs', icon: '💼', weight: 1 },
-  { id: 'healthcare', name: 'Healthcare', icon: '🏥', weight: 1 },
-  { id: 'environment', name: 'Environment & Energy', icon: '🌍', weight: 1 },
-  { id: 'immigration', name: 'Immigration', icon: '🛂', weight: 1 },
-  { id: 'defense', name: 'Defense & Military', icon: '🛡️', weight: 1 },
-  { id: 'foreign-affairs', name: 'Foreign Affairs', icon: '🌐', weight: 1 },
-  { id: 'civil-rights', name: 'Civil Rights & Justice', icon: '⚖️', weight: 1 },
-  { id: 'education', name: 'Education', icon: '📚', weight: 1 },
-  { id: 'social-programs', name: 'Social Programs', icon: '🤝', weight: 1 },
-  { id: 'government', name: 'Government & Democracy', icon: '🏛️', weight: 1 },
-  { id: 'technology', name: 'Technology & Science', icon: '🔬', weight: 1 },
-  { id: 'judicial', name: 'Judicial & Courts', icon: '⚖️', weight: 1 },
+  { id: 'economy-work', name: 'Economy & Work', icon: '💼', weight: 1 },
+  { id: 'health-safety-net', name: 'Health, Education & Social Safety Net', icon: '🤝', weight: 1 },
+  { id: 'environment-energy', name: 'Environment & Energy', icon: '🌍', weight: 1 },
+  { id: 'national-security-borders', name: 'National Security & Borders', icon: '🛡️', weight: 1 },
+  { id: 'rights-justice', name: 'Rights & Justice', icon: '⚖️', weight: 1 },
+  { id: 'government-democracy', name: 'Government & Democracy', icon: '🏛️', weight: 1 },
 ];
 
-// Map from Congress.gov policy area names to consolidated topic IDs (for vote syncing)
+// Map from Congress.gov policy area names to consolidated 6-topic IDs (for vote syncing)
 export const policyAreaToTopicId: Record<string, string> = {
-  // Economy & Jobs
-  'Economics and Public Finance': 'economy',
-  'Labor and Employment': 'economy',
-  'Taxation': 'economy',
-  'Commerce': 'economy',
-  'Finance and Financial Sector': 'economy',
-  'Transportation and Public Works': 'economy',
-  'Agriculture and Food': 'economy',
-  
-  // Healthcare
-  'Health': 'healthcare',
-  'Families': 'healthcare',
-  
+  // Economy & Work (includes Technology & Science)
+  'Economics and Public Finance': 'economy-work',
+  'Labor and Employment': 'economy-work',
+  'Taxation': 'economy-work',
+  'Commerce': 'economy-work',
+  'Finance and Financial Sector': 'economy-work',
+  'Transportation and Public Works': 'economy-work',
+  'Agriculture and Food': 'economy-work',
+  'Science, Technology, Communications': 'economy-work',
+
+  // Health, Education & Social Safety Net
+  'Health': 'health-safety-net',
+  'Families': 'health-safety-net',
+  'Education': 'health-safety-net',
+  'Social Sciences and History': 'health-safety-net',
+  'Social Welfare': 'health-safety-net',
+  'Housing and Community Development': 'health-safety-net',
+
   // Environment & Energy
-  'Energy': 'environment',
-  'Environmental Protection': 'environment',
-  'Water Resources Development': 'environment',
-  'Public Lands and Natural Resources': 'environment',
-  'Animals': 'environment',
-  
-  // Immigration
-  'Immigration': 'immigration',
-  
-  // Defense & Military
-  'Armed Forces and National Security': 'defense',
-  'Emergency Management': 'defense',
-  
-  // Foreign Affairs
-  'International Affairs': 'foreign-affairs',
-  'Foreign Trade and International Finance': 'foreign-affairs',
-  
-  // Civil Rights & Justice (includes arts-culture-religion, sports-recreation)
-  'Civil Rights and Liberties, Minority Issues': 'civil-rights',
-  'Crime and Law Enforcement': 'civil-rights',
-  'Native Americans': 'civil-rights',
-  'Arts, Culture, Religion': 'civil-rights',
-  'Sports and Recreation': 'civil-rights',
-  
-  // Judicial & Courts
-  'Law': 'judicial',
-  'Courts': 'judicial',
-  'Judicial Reform': 'judicial',
-  'Supreme Court': 'judicial',
-  'Federal Judiciary': 'judicial',
-  
-  // Education (includes social-sciences-history)
-  'Education': 'education',
-  'Social Sciences and History': 'education',
-  
-  // Social Programs
-  'Social Welfare': 'social-programs',
-  'Housing and Community Development': 'social-programs',
-  
+  'Energy': 'environment-energy',
+  'Environmental Protection': 'environment-energy',
+  'Water Resources Development': 'environment-energy',
+  'Public Lands and Natural Resources': 'environment-energy',
+  'Animals': 'environment-energy',
+
+  // National Security & Borders (Defense + Immigration + Foreign Affairs)
+  'Armed Forces and National Security': 'national-security-borders',
+  'Emergency Management': 'national-security-borders',
+  'Immigration': 'national-security-borders',
+  'International Affairs': 'national-security-borders',
+  'Foreign Trade and International Finance': 'national-security-borders',
+
+  // Rights & Justice (Civil Rights + Judicial & Courts)
+  'Civil Rights and Liberties, Minority Issues': 'rights-justice',
+  'Crime and Law Enforcement': 'rights-justice',
+  'Native Americans': 'rights-justice',
+  'Arts, Culture, Religion': 'rights-justice',
+  'Sports and Recreation': 'rights-justice',
+  'Law': 'rights-justice',
+  'Courts': 'rights-justice',
+  'Judicial Reform': 'rights-justice',
+  'Supreme Court': 'rights-justice',
+  'Federal Judiciary': 'rights-justice',
+
   // Government & Democracy
-  'Congress': 'government',
-  'Government Operations and Politics': 'government',
-  
-  // Technology & Science
-  'Science, Technology, Communications': 'technology',
+  'Congress': 'government-democracy',
+  'Government Operations and Politics': 'government-democracy',
 };
 
-// Sample questions (will be loaded from database)
+// Sample questions (loaded from database in production)
 export const questions: Question[] = [
   {
     id: 'h01',
-    topicId: 'healthcare',
+    topicId: 'health-safety-net',
     text: 'Should the federal government expand access to public health insurance?',
     options: [
       { id: 'h01-a', text: 'Yes — because universal coverage should be the goal', value: -10 },
@@ -106,15 +88,9 @@ export const getVotesForCandidate = (candidateId: string): Vote[] => {
 };
 
 export const calculateMatchScore = (userScore: number, candidateScore: number): number => {
-  // Convert both scores from -100 to 100 scale to 0-200 scale
   const userNormalized = userScore + 100;
   const candidateNormalized = candidateScore + 100;
-  
-  // Calculate the absolute difference
   const difference = Math.abs(userNormalized - candidateNormalized);
-  
-  // Convert difference to a percentage match (0-200 difference -> 100-0 match)
   const matchPercentage = Math.round(100 - (difference / 2));
-  
   return Math.max(0, Math.min(100, matchPercentage));
 };
