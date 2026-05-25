@@ -141,6 +141,13 @@ export const PollsPanel = () => {
                       {p.status}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={!!p.library_included}
+                      disabled={toggleLibrary.isPending}
+                      onCheckedChange={(v) => toggleLibrary.mutate({ pollId: p.id, include: v })}
+                    />
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {new Date(p.created_at).toLocaleDateString()}
                   </TableCell>
