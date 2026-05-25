@@ -46,8 +46,8 @@ async function resolveDisplayNames(ids: string[]): Promise<Map<string, string>> 
       .in('fec_committee_id', unique),
     (supabase as any)
       .from('committee_aliases')
-      .select('fec_committee_id, alias_name')
-      .in('fec_committee_id', unique),
+      .select('canonical_name, fec_committee_ids, is_active')
+      .overlaps('fec_committee_ids', unique),
   ]);
 
   (externalNames ?? []).forEach((r: { fec_committee_id: string; name: string | null }) => {
@@ -55,9 +55,14 @@ async function resolveDisplayNames(ids: string[]): Promise<Map<string, string>> 
   });
 
   // Admin-managed aliases take precedence over external_pacs.name.
-  (aliases ?? []).forEach((r: { fec_committee_id: string; alias_name: string | null }) => {
-    if (r.alias_name) map.set(r.fec_committee_id, r.alias_name);
-  });
+  (aliases ?? []).forEach(
+    (r: { canonical_name: string; fec_committee_ids: string[]; is_active: boolean }) => {
+      if (!r.is_active || !r.canonical_name) return;
+      r.fec_committee_ids.forEach((id) => {
+        if (unique.includes(id)) map.set(id, r.canonical_name);
+      });
+    },
+  );
 
   return map;
 }

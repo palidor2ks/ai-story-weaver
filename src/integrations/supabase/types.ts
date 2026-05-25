@@ -803,21 +803,30 @@ export type Database = {
       }
       committee_aliases: {
         Row: {
-          alias_name: string
+          canonical_name: string
           created_at: string
-          fec_committee_id: string
+          fec_committee_ids: string[]
+          id: string
+          is_active: boolean
+          notes: string | null
           updated_at: string
         }
         Insert: {
-          alias_name: string
+          canonical_name: string
           created_at?: string
-          fec_committee_id: string
+          fec_committee_ids?: string[]
+          id?: string
+          is_active?: boolean
+          notes?: string | null
           updated_at?: string
         }
         Update: {
-          alias_name?: string
+          canonical_name?: string
           created_at?: string
-          fec_committee_id?: string
+          fec_committee_ids?: string[]
+          id?: string
+          is_active?: boolean
+          notes?: string | null
           updated_at?: string
         }
         Relationships: []
