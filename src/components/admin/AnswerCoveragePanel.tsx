@@ -1811,6 +1811,35 @@ export function AnswerCoveragePanel() {
               </PopoverContent>
             </Popover>
           </div>
+
+          {/* Fill Unanswered in Current View */}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={anyBatchRunning || visibleUnansweredCount === 0}
+              >
+                <Sparkles className="h-4 w-4 mr-1.5" />
+                Fill Unanswered in View ({Math.min(visibleUnansweredCount, 50)})
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Fill Unanswered in Current View?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Generates AI answers for up to 50 unanswered candidates matching your current filters.
+                  Useful for spot-fills scoped to whatever's in the chart right now.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleFillVisibleUnanswered}>Generate</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+
           
           {/* Active filters indicator */}
           {(partyFilter !== 'all' || stateFilter !== 'all' || coverageFilter !== 'all' || syncFilter !== 'all' || deltaFilter !== 'all' || financeFilter !== 'all' || scoreFilter !== 'all' || tierFilter !== 'all' || fecIdFilter !== 'all') && (
