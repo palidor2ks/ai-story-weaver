@@ -18,6 +18,7 @@ export interface Poll {
   share_platforms?: string[] | null;
   auto_post?: boolean | null;
   share_caption?: string | null;
+  library_included?: boolean;
 }
 
 export type SharePlatform = 'twitter' | 'facebook' | 'linkedin' | 'instagram';
