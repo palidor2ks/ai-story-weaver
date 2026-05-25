@@ -7,6 +7,7 @@ import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
 import { usePersonalizedScoreMap } from '@/hooks/usePersonalizedScoreMap';
 import { usePartyMatchScores } from '@/hooks/usePartyMatchScores';
+import { usePartyOverallScores } from '@/hooks/usePartyOverallScores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
