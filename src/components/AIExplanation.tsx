@@ -61,13 +61,22 @@ export const AIExplanation = ({
       if (error) throw error;
 
       setAnalysis(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch AI analysis:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load AI analysis. Please try again.',
-        variant: 'destructive',
-      });
+      const msg = String(error?.message ?? error ?? '');
+      const isRateLimited = msg.includes('429') || /rate.?limit/i.test(msg);
+      if (isRateLimited) {
+        // Soft, non-destructive notice — gateway is busy; cache will catch up.
+        toast({
+          title: 'AI analysis is busy',
+          description: 'High demand right now. Try again in a moment.',
+        });
+      } else {
+        toast({
+          title: 'Couldn’t load AI analysis',
+          description: 'Please try again in a moment.',
+        });
+      }
     } finally {
       setIsLoading(false);
     }
