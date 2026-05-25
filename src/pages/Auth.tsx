@@ -142,7 +142,7 @@ export const Auth = () => {
           <p className="text-muted-foreground mt-2">
             Your political alignment companion
           </p>
-          <p className="text-xs text-muted-foreground/80 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             You're using an early beta — expect rapid changes.
           </p>
         </div>

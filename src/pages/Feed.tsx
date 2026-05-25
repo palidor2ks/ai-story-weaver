@@ -538,7 +538,7 @@ export const Feed = () => {
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
                       <Icon className="w-4 h-4" />
                       {g.title}
-                      <span className="text-xs font-normal text-muted-foreground/70">({g.items.length})</span>
+                      <span className="text-xs font-normal text-muted-foreground">({g.items.length})</span>
                     </h2>
                     {empty ? (
                       <div className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
@@ -564,7 +564,7 @@ export const Feed = () => {
                             <div key={subgroup.key} className="space-y-3">
                               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 {subgroup.title}
-                                <span className="ml-1 text-muted-foreground/70">({subgroup.items.length})</span>
+                                <span className="ml-1 text-muted-foreground">({subgroup.items.length})</span>
                               </h3>
                               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                                 {subgroup.items.map((candidate, index) => (
