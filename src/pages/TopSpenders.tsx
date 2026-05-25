@@ -395,12 +395,12 @@ function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowIte
       <Link
         to={`/committee/${r.spending_committee_fec_id}`}
         state={{ from: '/top-spenders' }}
-        className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 px-4 py-3 hover:bg-accent/40 transition-colors"
+        className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-[auto_1fr_auto_auto_auto] items-center gap-2 sm:gap-3 px-4 py-3 hover:bg-accent/40 transition-colors"
       >
         <span className="w-8 text-right text-sm font-mono text-muted-foreground">{i + 1}</span>
         <div className="min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <p className="font-medium truncate">{r.spending_committee_name ?? r.spending_committee_fec_id}</p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 gap-1 min-w-0">
+            <p className="font-medium text-sm sm:text-base line-clamp-2 sm:truncate">{r.spending_committee_name ?? r.spending_committee_fec_id}</p>
             {(() => {
               const cause = causeMap?.get(r.spending_committee_fec_id);
               if (!cause) return null;
@@ -414,7 +414,7 @@ function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowIte
               return (
                 <Badge
                   variant="outline"
-                  className={`shrink-0 text-xs font-semibold px-2 py-0.5 max-w-[220px] truncate uppercase tracking-wide ${cls}`}
+                  className={`shrink-0 self-start text-[10px] sm:text-xs font-semibold px-2 py-0.5 max-w-[160px] sm:max-w-[220px] truncate uppercase tracking-wide ${cls}`}
                   title={cause.issue ?? cause.label}
                 >
                   {cause.label}
@@ -422,7 +422,7 @@ function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowIte
               );
             })()}
           </div>
-          <p className="text-[11px] text-muted-foreground font-mono truncate">
+          <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">
             {r.spending_committee_fec_id} · {r.expenditure_count.toLocaleString()} expenditure{r.expenditure_count === 1 ? '' : 's'}
             {(() => {
               const raised = raisedMap?.get(r.spending_committee_fec_id) ?? 0;
@@ -432,6 +432,7 @@ function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowIte
             })()}
           </p>
         </div>
+
 
         <span className="hidden sm:inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
           <TrendingUp className="w-3 h-3" />{formatIECompact(r.support_amount)}
