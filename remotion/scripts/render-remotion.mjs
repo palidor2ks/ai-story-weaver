@@ -26,9 +26,9 @@ await renderMedia({
   composition,
   serveUrl: bundled,
   codec: "h264",
-  outputLocation: process.env.OUT ?? "/mnt/documents/polipulse-product-video.mp4",
+  outputLocation: process.env.OUT ?? "/tmp/polipulse-noaudio.mp4",
   puppeteerInstance: browser,
-  muted: false,
+  muted: true,
   concurrency: 1,
 });
 
