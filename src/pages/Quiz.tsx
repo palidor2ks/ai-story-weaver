@@ -327,11 +327,13 @@ export const Quiz = () => {
         noIndex
       />
       <main className="container py-8 px-4 max-w-2xl">
-        <div className="text-center mb-6">
-          <h1 className="font-display text-xl font-semibold text-foreground">
-            {getQuizTitle()}
-          </h1>
-        </div>
+        {!topicFilter && (
+          <div className="text-center mb-6">
+            <h1 className="font-display text-xl font-semibold text-foreground">
+              {getQuizTitle()}
+            </h1>
+          </div>
+        )}
 
         {(() => {
           const currentQuestion = questions[currentQuestionIndex];
