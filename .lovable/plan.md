@@ -1,50 +1,59 @@
-## Goal
-Produce a polished ~60-second Polipulse explainer video using the 9 fresh screenshots the user just uploaded, with a new George voiceover and Remotion scenes that animate the real product UI.
+## Fix: VO/scene sync + remove "slide" wording
 
-## Assets (from this upload)
-Copy uploaded images into `remotion/public/screens/`:
-- `Screenshot_1.png` → `home.png` (Feed hero)
-- `www.polipulseapp.com_feed.png` → `home-tall.png` (full feed pan)
-- `www.polipulseapp.com_candidates.png` → `candidates.png` (all politicians grid)
-- `www.polipulseapp.com_candidates_1.png` → `donor.png` (Campaign Donors page)
-- `committee.png` → `committees.png`
-- `spenders.png` → `spenders.png`
-- `quiz_with_slider.png` → `quiz.png`
-- `top_3_topics.png` → `quiz-topics.png` (new)
-- `onboarding_screen.png` → `onboarding.png` (new)
+**Problem**
+1. The voiceover script says "slide your position from left to right" — but the actual quiz uses tappable buttons (Strongly Disagree → Strongly Agree). Wrong product copy.
+2. VO is 51.6s, video is 60s, and scenes were timed by guess. Audio drifts from visuals throughout.
 
-## Video structure (~60s @ 30fps = 1800 frames)
+**Approach: per-scene VO chunks for frame-accurate sync**
+
+Instead of one monolithic MP3, generate one MP3 per scene, measure each with `ffprobe`, and set each scene's `durationInFrames` to match its audio (+ a small tail for breathing room). Then concatenate the chunks into the final `vo.mp3` so timing is guaranteed to line up.
+
+### 1. Rewrite script (8 scenes, button-based wording)
 
 ```
-1. Hook / Onboarding      0:00–0:07   "Politics is noisy. Polipulse cuts through."
-2. Quiz topics + slider   0:07–0:16   "Pick 3 topics. Answer 24 questions."
-3. Match / Feed           0:16–0:25   "Get matched with every official representing you."
-4. Candidate grid         0:25–0:32   "L10 → R10 scores across 600+ officials."
-5. Donor profile          0:32–0:41   "See who funds them — every dollar tracked."
-6. Committees + Spenders  0:41–0:51   "Top committees and the PACs spending on their behalf."
-7. Outro                  0:51–1:00   "Polipulse — follow the money. Know your vote."
+Onboarding:  "Politics moves fast — and most of us can't keep up with who really represents us. Polipulse fixes that."
+QuizTopics:  "Start by picking the federal issues you actually care about — your top three."
+QuizButtons: "Then answer twenty-four short questions. Tap how strongly you agree or disagree — no jargon, no traps."
+Feed:        "In seconds, we match you with every official representing you, from the President down to your town council."
+Candidates:  "Each one earns a score, from L-ten on the far left to R-ten on the far right — built from real voting records and public statements."
+Donor:       "Then go deeper. See exactly who's funding their campaign — every donor, every PAC, every dollar."
+Committees:  "Browse the top committees raising the most, and the outside groups spending hundreds of millions to sway your vote."
+Closing:     "No spin. No vibes. Just receipts. Polipulse — know your representatives, follow the money, cast a smarter vote."
 ```
 
-Each scene: ken-burns pan/zoom on the relevant screenshot in a laptop-style frame, with kinetic title overlays (Playfair Display + Inter), the Polipulse navy/red accent palette, and `TransitionSeries` fades/wipes between scenes.
+### 2. Rename + rewrite `QuizSlider.tsx` → `QuizButtons.tsx`
 
-## Voiceover
-Generate one MP3 via ElevenLabs `eleven_multilingual_v2`, voice `George` (`JBFqnCBsd6RMkjVDRZzb`), ~150 words, save to `remotion/public/audio/vo.mp3`. Script tuned to 60s and synced to scene durations.
+Replace "Slide your position. Left to right." with "Tap how you feel." sub copy updated to reference the five buttons. Keep using `quiz.png` (which already shows the button row). Update import in `MainVideo.tsx`.
 
-## Implementation steps
-1. Copy 9 uploaded PNGs into `remotion/public/screens/` with the names above.
-2. Write VO script + one-off Bun script that calls ElevenLabs and writes `remotion/public/audio/vo.mp3`.
-3. Update `remotion/src/Root.tsx` → `durationInFrames={1800}`.
-4. Rewrite `remotion/src/MainVideo.tsx` with 7 `TransitionSeries.Sequence`s totaling 1800 frames (accounting for transition overlaps).
-5. Add new scene files under `remotion/src/scenes/`:
-   - `Onboarding.tsx`, `QuizTopics.tsx`, `QuizSlider.tsx`, `Feed.tsx`, `Candidates.tsx`, `Donor.tsx`, `Committees.tsx`, `Outro.tsx`
-   - Each uses a shared `LaptopFrame` component with ken-burns transform driven by `useCurrentFrame` + `interpolate`, plus headline/sub overlay.
-6. Add `remotion/src/components/LaptopFrame.tsx` and `Caption.tsx` helpers.
-7. Render via existing `remotion/scripts/render-remotion.mjs`, output to `/mnt/documents/polipulse-60s.mp4`.
-8. QA: extract 6 stills with `bunx remotion still` at key frames, view them, fix any layout/clipping, re-render if needed.
-9. Deliver MP4 via `<presentation-artifact>`.
+### 3. Update `remotion/scripts/generate-vo.mjs`
 
-## Technical notes
-- All motion via `useCurrentFrame` + `interpolate`/`spring`; no CSS transitions.
-- No `backdropFilter`; light `filter: blur()` only on background accents.
-- VO audio added once at root via `<Audio>` so it spans all scenes.
-- Keep total frames = sum(sequences) − sum(transition overlaps) = exactly 1800.
+- Define `SCENES = [{ id, text }]` array (8 entries above).
+- For each scene: call ElevenLabs, save `public/audio/vo-<id>.mp3`, run `ffprobe` to get duration in seconds, compute `frames = ceil(duration * 30) + 12` (12-frame tail ≈ 0.4s pad).
+- Concatenate all MP3s with `ffmpeg -f concat` into `public/audio/vo.mp3`.
+- Write `public/audio/vo-timings.json` with `{ id, durationInFrames, startFrame }` for each scene.
+
+### 4. Drive `MainVideo.tsx` from the timings file
+
+- Import `vo-timings.json` at build time.
+- Set each `<TransitionSeries.Sequence durationInFrames={...}>` from the JSON.
+- Keep 10-frame fade transitions; subtract `(numTransitions × 10)` worth of overlap by adding it back to total composition duration: `total = sum(sceneFrames) - 7*10`.
+- Update `Root.tsx` `durationInFrames` to that computed total (or export a constant from `MainVideo` and read it in `Root`).
+
+### 5. Re-render
+
+- Run `node remotion/scripts/generate-vo.mjs` (needs `ELEVENLABS_API_KEY`).
+- `node remotion/scripts/render-remotion.mjs` → silent MP4 at `/tmp/polipulse-silent.mp4`.
+- `ffmpeg -i /tmp/polipulse-silent.mp4 -i remotion/public/audio/vo.mp3 -c:v copy -c:a aac -b:a 192k /mnt/documents/polipulse-60s_v2.mp4`.
+- Spot-check: extract stills at the boundary frame of each scene, confirm caption matches what the VO is saying at that moment.
+
+### Files touched
+- `remotion/scripts/generate-vo.mjs` (rewrite)
+- `remotion/src/scenes/QuizSlider.tsx` → `QuizButtons.tsx` (rename + copy)
+- `remotion/src/MainVideo.tsx` (import timings, set durations, update import)
+- `remotion/src/Root.tsx` (computed total duration)
+- New: `remotion/public/audio/vo-*.mp3`, `vo-timings.json`
+- Output: `/mnt/documents/polipulse-60s_v2.mp4`
+
+### Notes
+- Final video length will be whatever the VO sums to (likely ~55–62s) — not forced to exactly 60s. Sync > round number.
+- If a scene's VO is shorter than ~5s, pad to a 5s minimum so the visual has time to breathe.
