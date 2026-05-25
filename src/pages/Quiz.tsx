@@ -221,7 +221,7 @@ export const Quiz = () => {
     return 'Full Quiz';
   };
 
-  if (questionsLoading) {
+  if (questionsLoading || (user && answersLoading)) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
