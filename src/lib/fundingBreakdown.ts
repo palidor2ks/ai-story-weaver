@@ -23,6 +23,7 @@ export interface FundingInput {
   fecLoans?: number | null;
   fecCandidateContribution?: number | null;
   fecOtherReceipts?: number | null;
+  fecTotalReceipts?: number | null;
   cycleLabel?: string;
 }
 
@@ -42,7 +43,21 @@ export function computeFundingBreakdown(input: FundingInput): FundingBreakdown {
     { label: 'Self-Funding', amount: self, color: 'hsl(220 14% 65%)' },
   ];
 
-  const total = sources.reduce((s, b) => s + b.amount, 0);
+  const known = sources.reduce((s, b) => s + b.amount, 0);
+  const fecTotal = n(input.fecTotalReceipts);
+
+  // If FEC total receipts is known and exceeds what we've categorized,
+  // surface the gap as "Other / Uncategorized" so the panel reconciles
+  // with the headline FEC Total Receipts figure.
+  if (fecTotal > known + 1) {
+    sources.push({
+      label: 'Other / Uncategorized',
+      amount: fecTotal - known,
+      color: 'hsl(220 9% 55%)',
+    });
+  }
+
+  const total = fecTotal > known ? fecTotal : known;
 
   return { sources, total, cycleLabel: input.cycleLabel };
 }

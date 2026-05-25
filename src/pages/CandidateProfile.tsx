@@ -232,7 +232,7 @@ export const CandidateProfile = () => {
   const fecLoans = financeReconciliation?.fec_loans ?? 0;
   const fecTransfers = financeReconciliation?.fec_transfers ?? 0;
   const fecCandidateContribution = financeReconciliation?.fec_candidate_contribution ?? 0;
-  const fecOtherReceipts = financeReconciliation?.fec_other_receipts ?? 0;
+  const fecOtherReceipts = financeReconciliation?.fec_other_receipts ?? fecTotals?.other_receipts ?? 0;
   
   // Visible donors total (from donors table - may be incomplete due to aggregation)
   const visibleDonorsTotal = donors.filter(d => !isConduitDonor(d)).reduce((sum, d) => sum + d.amount, 0);
@@ -262,6 +262,7 @@ export const CandidateProfile = () => {
     fecLoans,
     fecCandidateContribution,
     fecOtherReceipts,
+    fecTotalReceipts,
     cycleLabel:
       effectiveCycle && effectiveCycle !== 'all'
         ? String(effectiveCycle)
