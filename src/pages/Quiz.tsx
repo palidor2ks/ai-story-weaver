@@ -133,6 +133,13 @@ export const Quiz = () => {
       return [...prev, newAnswer];
     });
 
+    // Autosave this answer immediately so progress persists if user leaves
+    upsertAnswer.mutate({
+      questionId,
+      selectedOptionId: option.id,
+      value: option.value,
+    });
+
     // Auto-advance to next question after a short delay
     setTimeout(() => {
       if (currentQuestionIndex < questions.length - 1) {
