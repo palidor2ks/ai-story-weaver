@@ -1821,7 +1821,7 @@ export function AnswerCoveragePanel() {
                 disabled={anyBatchRunning || visibleUnansweredCount === 0}
               >
                 <Sparkles className="h-4 w-4 mr-1.5" />
-                Fill Unanswered in View ({Math.min(visibleUnansweredCount, 50)})
+                Fill Missing in View ({Math.min(visibleUnansweredCount, 50)})
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
