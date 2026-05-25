@@ -5,6 +5,8 @@ interface CandidateScoreCardProps {
   score: number | null | undefined;
   matchScore?: number;
   userScore?: number | null;
+  personalizedScore?: number | null;
+  personalizedCount?: number;
   className?: string;
 }
 
