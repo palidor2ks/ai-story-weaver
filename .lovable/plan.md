@@ -1,39 +1,26 @@
 ## Problem
 
-The 3 new questions (`civil-rights-q21` guns, `civil-rights-q22` abortion, `government-q21` Citizens United) were inserted without `question_options` rows. Existing questions have 6 options (5 scored: -10/-5/0/+5/+10 + 1 skip). The quiz will render them broken.
+The "Topic Weighting" card on `/how-scoring-works` lists 5 generic priority ranks (Priority #1–#5), implying users rank 5 topics. The actual onboarding flow is different:
+
+- **Federal**: user picks **3** topics and ranks them → weights **3, 2, 1**. Unranked federal topics still receive weight **1** (all 6 federal questions are asked of every user).
+- **Local**: user picks **2** topics and ranks them → weights **2, 1**.
+
+So users rank 3 + 2 = 5 *slots* across two separate flows, not one flat 1–5 list.
 
 ## Fix
 
-Insert 6 `question_options` rows per new question, matching the existing pattern: id `{question_id}-opt-{N}` (skip = `-opt-skip`), values -10/-5/0/+5/+10/0, with `is_skip_option = true` on the skip row.
+Rewrite the "Topic Weighting" card in `src/pages/HowScoringWorks.tsx` to show two grouped sections:
 
-### Proposed option text
+**Federal priorities (pick 3 of 6 topics)**
+- Priority #1 — weight 3 (most influence)
+- Priority #2 — weight 2
+- Priority #3 — weight 1
+- Unranked federal topics — weight 1 (still counted, lowest influence)
 
-**civil-rights-q21 — "Should Congress require universal background checks for all gun sales?"**
-1. (-10) Yes—close all loopholes including private and gun-show sales.
-2. (-5) Yes—expand checks but keep some private-sale exemptions.
-3. (0) Neutral—support modest improvements to current system.
-4. (+5) No—but improve enforcement of existing laws.
-5. (+10) No—current background-check laws are sufficient or too strict.
-6. (skip) Not important to me
+**Local priorities (pick 2 topics)**
+- Priority #1 — weight 2
+- Priority #2 — weight 1
 
-**civil-rights-q22 — "Should federal law protect the right to abortion nationwide?"**
-1. (-10) Yes—codify Roe-level protections in federal law.
-2. (-5) Yes—protect access with reasonable limits (e.g., viability).
-3. (0) Neutral—leave to states with minimum federal standards.
-4. (+5) No—states should decide, with limited federal restrictions.
-5. (+10) No—federal law should restrict or ban abortion.
-6. (skip) Not important to me
+Update the trailing explainer to say: "You rank 3 federal topics and 2 local topics during onboarding. Higher-ranked topics count more in your overall score; unranked federal topics still contribute at the baseline weight."
 
-**government-q21 — "Should Congress act to overturn Citizens United and limit super PAC spending?"**
-1. (-10) Yes—pass a constitutional amendment to overturn it.
-2. (-5) Yes—pass statutory limits on super PAC spending and disclosure.
-3. (0) Neutral—support disclosure rules only.
-4. (+5) No—but tighten foreign-money rules.
-5. (+10) No—Citizens United correctly protects political speech.
-6. (skip) Not important to me
-
-## Implementation
-
-Single migration: 18 INSERT rows into `public.question_options` with `ON CONFLICT (id) DO NOTHING`.
-
-No code changes needed — the quiz reads options from this table automatically.
+No other pages or scoring logic change — this is purely a documentation fix on the How Scoring Works page.
