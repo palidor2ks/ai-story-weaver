@@ -138,6 +138,7 @@ export const useCreatePoll = () => {
           topic_id: input.topic_id || 'economy-work', // fallback topic
           source: 'poll',
           include_in_politician_quiz: false,
+          include_in_quiz_library: input.include_in_quiz_library ?? false,
         } as any);
         if (qErr) throw qErr;
 
