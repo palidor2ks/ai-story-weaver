@@ -499,6 +499,23 @@ export function AnswerCoveragePanel() {
     }
   };
 
+  const handleFillVisibleUnanswered = async () => {
+    try {
+      const toProcess = paginatedCandidates
+        .filter(c => c.answerCount === 0)
+        .slice(0, 50)
+        .map(c => ({ id: c.id, name: c.name }));
+      if (toProcess.length === 0) {
+        toast.info('No unanswered candidates on this page');
+        return;
+      }
+      await populateBatch(toProcess, false);
+    } catch (err) {
+      console.error('[Admin] Fill visible unanswered failed:', err);
+      toast.error('Failed to generate AI answers for visible page');
+    }
+  };
+
   const handleFillLowCoverage = async () => {
     try {
       if (!candidates) return;
@@ -507,24 +524,6 @@ export function AnswerCoveragePanel() {
     } catch (err) {
       console.error('[Admin] Regen low coverage failed:', err);
       toast.error('Failed to regenerate low coverage batch');
-    }
-  };
-
-  const handleFillVisibleUnanswered = async () => {
-    try {
-      const toProcess = paginatedCandidates
-        .filter(c => c.answerCount === 0)
-        .slice(0, 50);
-
-      if (toProcess.length === 0) {
-        toast.info('No unanswered visible reps on this page');
-        return;
-      }
-
-      await populateBatch(toProcess.map(c => ({ id: c.id, name: c.name })), false);
-    } catch (err) {
-      console.error('[Admin] Fill visible unanswered failed:', err);
-      toast.error('Failed to generate answers for visible reps');
     }
   };
 
@@ -642,6 +641,7 @@ export function AnswerCoveragePanel() {
 
   const noAnswersCount = candidateStats?.noAnswers || 0;
   const lowCoverageCount = candidateStats?.lowCoverage || 0;
+  const visibleUnansweredCount = paginatedCandidates.filter(c => c.answerCount === 0).length;
 
   // Only show full loading spinner on initial load (when no cached data exists)
   const isInitialLoading = (statsLoading || votingStatsLoading || fecStatsLoading || syncLoading) && !candidateStatsCache;
@@ -724,6 +724,29 @@ export function AnswerCoveragePanel() {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
+
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} disabled={visibleUnansweredCount === 0}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Fill Unanswered on This Page ({Math.min(visibleUnansweredCount, 50)})
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Fill Unanswered on Current Page?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Generates AI answers for up to 50 unanswered candidates on the current page only.
+                        Useful for spot-fills without processing the entire dataset.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleFillVisibleUnanswered}>Generate</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                
                 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -1808,17 +1831,6 @@ export function AnswerCoveragePanel() {
               </PopoverContent>
             </Popover>
           </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={anyBatchRunning || paginatedCandidates.filter(c => c.answerCount === 0).length === 0}
-            onClick={handleFillVisibleUnanswered}
-            className="ml-auto"
-          >
-            <Sparkles className="h-4 w-4 mr-1.5" />
-            Fill Unanswered (Visible)
-          </Button>
           
           {/* Active filters indicator */}
           {(partyFilter !== 'all' || stateFilter !== 'all' || coverageFilter !== 'all' || syncFilter !== 'all' || deltaFilter !== 'all' || financeFilter !== 'all' || scoreFilter !== 'all' || tierFilter !== 'all' || fecIdFilter !== 'all') && (

@@ -1,29 +1,43 @@
 ## Goal
-The header in several captured screenshots (feed, candidates, committees, quiz, donor, spenders) shows the logged-in user's name in the top-right pill. Hide it so it doesn't appear in the video.
+Port PR #82 from `ai-story-weaver`: add a page-scoped batch action that fills AI answers only for the currently visible unanswered candidates in the coverage panel, so operators can do quick spot-fills without touching the full dataset.
 
-## Approach
-Do it at capture time — cleaner than overlaying blur rectangles in Remotion (which would need per-screen coordinates and rebreak if screenshots are recaptured).
+## Change
+Single file: `src/components/admin/AnswerCoveragePanel.tsx`.
 
-### 1. Update `remotion/scripts/capture-screens.mjs`
-Extend the existing `hideCss` block to hide the username text element in `src/components/Header.tsx`:
-
-```css
-/* Hide logged-in user name in header pill */
-header .max-w-\[140px\].truncate { display: none !important; }
+### 1. New handler (next to `handleFillAll`, ~line 491)
+```ts
+const handleFillVisibleUnanswered = async () => {
+  try {
+    const toProcess = paginatedCandidates
+      .filter(c => c.answerCount === 0)
+      .slice(0, 50)
+      .map(c => ({ id: c.id, name: c.name }));
+    if (toProcess.length === 0) {
+      toast.info('No unanswered candidates on this page');
+      return;
+    }
+    await populateBatch(toProcess, false);
+  } catch (err) {
+    console.error('[Admin] Fill visible unanswered failed:', err);
+    toast.error('Failed to generate AI answers for visible page');
+  }
+};
 ```
 
-That `span` (line ~106 of Header.tsx) is the only place the name renders in the header. The avatar circle stays visible so the pill still reads as "signed in."
+### 2. New derived count (next to `noAnswersCount`)
+```ts
+const visibleUnansweredCount = paginatedCandidates.filter(c => c.answerCount === 0).length;
+```
 
-### 2. Re-run capture
-`cd remotion && node scripts/capture-screens.mjs` to regenerate the 7 affected PNGs in `remotion/public/screens/`.
+### 3. New dropdown item in the AI Actions menu
+Insert after the existing "Generate for Empty Profiles" `AlertDialog` (~line 708), before "Refresh Incomplete Profiles":
 
-### 3. Re-render video
-- `node scripts/render-remotion.mjs` → silent MP4
-- `ffmpeg` mux with `public/audio/vo.mp3` → `/mnt/documents/polipulse-60s_v3.mp4`
+- Label: `Fill Unanswered on This Page ({Math.min(visibleUnansweredCount, 50)})`
+- Disabled when `visibleUnansweredCount === 0`
+- Wrapped in an `AlertDialog` matching the surrounding pattern, with a description noting the scope: "Generates AI answers for up to 50 unanswered candidates on the current page only."
+- Action calls `handleFillVisibleUnanswered`.
 
-No scene code, timings, or VO changes — just fresh screenshots with the name hidden, then a re-render.
-
-## Alternative (if capture isn't desired)
-Add a small `<div>` with `filter: blur(12px)` positioned over the header's top-right region inside `Screenshot.tsx`, gated by a `blurUserName` prop. Less robust (coordinates depend on each screen's crop/zoom) but doesn't require re-capturing.
-
-Which do you prefer — recapture (recommended) or in-Remotion blur overlay?
+## Out of scope
+- No new edge functions, hooks, or schema changes — re-uses `populateBatch` and existing batch progress/pause/resume UI.
+- No change to filters or pagination.
+- Cap kept at 50 to stay consistent with `handleFillAll` / `handleFillLowCoverage` and the project's batch limits.
