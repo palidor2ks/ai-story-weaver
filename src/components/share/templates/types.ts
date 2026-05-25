@@ -32,6 +32,9 @@ export interface CardData {
   userName?: string | null;
   userScore?: number | null;
   topTopics?: { topicName: string; score: number }[];
+  // Funding sources breakdown (candidate cards only)
+  fundingBreakdown?: { label: string; pct: number; color: string }[];
+  fundingCycle?: string;
 }
 
 export const CARD_SIZE = 1080;

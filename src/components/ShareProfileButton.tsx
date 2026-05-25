@@ -38,6 +38,8 @@ interface ShareProfileButtonProps {
   coverageTier?: string;
   confidence?: string;
   topDonors?: { name: string; amount: number }[];
+  fundingBreakdown?: { label: string; pct: number; color: string }[];
+  fundingCycle?: string;
 }
 
 export const ShareProfileButton = ({
@@ -56,6 +58,8 @@ export const ShareProfileButton = ({
   coverageTier,
   confidence,
   topDonors,
+  fundingBreakdown,
+  fundingCycle,
 }: ShareProfileButtonProps) => {
   const [open, setOpen] = useState(false);
 
@@ -157,6 +161,8 @@ export const ShareProfileButton = ({
           ieCycle,
           topSpenders,
           topDonors,
+          fundingBreakdown,
+          fundingCycle,
         }}
         caption={{
           surface: 'candidate_profile',

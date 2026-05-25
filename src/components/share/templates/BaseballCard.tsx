@@ -69,7 +69,7 @@ export const BaseballCard = forwardRef<HTMLDivElement, Props>(({ data, variant =
       <div style={{ height: '100%', border: `5px solid ${v.border}`, borderRadius: 36, overflow: 'hidden', position: 'relative', background: patriotic ? 'hsl(221 40% 14% / 0.58)' : 'hsl(var(--background) / 0.92)' }}>
         <div style={{ position: 'absolute', inset: 0, background: `repeating-linear-gradient(-18deg, ${v.stripe} 0px, ${v.stripe} 36px, transparent 36px, transparent 72px)` }} />
 
-        <div style={{ position: 'relative', height: '100%', padding: 42, display: 'grid', gridTemplateRows: 'auto auto 1fr auto' }}>
+        <div style={{ position: 'relative', height: '100%', padding: 42, display: 'grid', gridTemplateRows: 'auto auto 1fr auto auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><PulseMark size={46} /><span style={{ fontWeight: 800, fontSize: 30 }}>Pulse Share Card</span></div>
             <div style={{ fontSize: 20, letterSpacing: 2, textTransform: 'uppercase', color: mutedColor }}>{variant === 'classic' ? 'usa' : variant}</div>
@@ -86,7 +86,31 @@ export const BaseballCard = forwardRef<HTMLDivElement, Props>(({ data, variant =
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 24, color: mutedColor }}>
+
+          {isCandidate && data.fundingBreakdown && data.fundingBreakdown.length > 0 && (
+            <div style={{ marginTop: 22, border: `2px solid ${v.border}`, borderRadius: 18, padding: '20px 22px', background: patriotic ? 'hsl(220 37% 18% / 0.82)' : 'hsl(var(--card) / 0.75)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <span style={{ fontSize: 16, letterSpacing: 2, textTransform: 'uppercase', color: mutedColor }}>
+                  Funding Sources{data.fundingCycle ? ` · ${data.fundingCycle} Cycle` : ''}
+                </span>
+              </div>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {data.fundingBreakdown.slice(0, 4).map((b) => (
+                  <div key={b.label}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                      <span style={{ fontSize: 20, fontWeight: 600, color: textColor }}>{b.label}</span>
+                      <span style={{ fontSize: 20, fontWeight: 700, color: b.color }}>{b.pct}%</span>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 999, background: patriotic ? 'hsl(0 0% 100% / 0.14)' : 'hsl(var(--muted) / 0.6)', overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.max(2, b.pct)}%`, height: '100%', background: b.color, borderRadius: 999 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 24, color: mutedColor, marginTop: 18 }}>
             <span>{isDonor ? 'Funding Snapshot' : 'Share your civic snapshot'}</span>
             <span style={{ fontWeight: 700, color: textColor }}>{data.brandHost}</span>
           </div>

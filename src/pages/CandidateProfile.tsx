@@ -22,6 +22,8 @@ import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { useCandidatePersonalizedScore } from '@/hooks/useCandidatePersonalizedScore';
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
+import { FundingSourcesBreakdown } from '@/components/FundingSourcesBreakdown';
+import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
 import { cn, formatCompactCurrency } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp, ScrollText, Briefcase } from 'lucide-react';
@@ -249,6 +251,33 @@ export const CandidateProfile = () => {
 
   const formatCurrency = formatCompactCurrency;
 
+  // Shared funding-source input — used for the on-page panel and the
+  // shareable Baseball card so the numbers always match.
+  const fundingInput = {
+    fecItemized,
+    fecUnitemized,
+    fecPacContributions,
+    fecPartyContributions,
+    fecTransfers,
+    fecLoans,
+    fecCandidateContribution,
+    fecOtherReceipts,
+    cycleLabel:
+      effectiveCycle && effectiveCycle !== 'all'
+        ? String(effectiveCycle)
+        : cycleInfo?.defaultCycle
+        ? String(cycleInfo.defaultCycle)
+        : undefined,
+  };
+  const fundingBreakdownComputed = (() => {
+    const b = computeFundingBreakdown(fundingInput);
+    if (b.total <= 0) return undefined;
+    return withPercents(b.sources, b.total)
+      .filter((r) => r.amount > 0)
+      .map((r) => ({ label: r.label, pct: r.pct, color: r.color }));
+  })();
+
+
   return (
     <div className="min-h-screen bg-background">
       <Seo
@@ -394,6 +423,8 @@ export const CandidateProfile = () => {
                         .slice(0, 3)
                         .map(([name, amount]) => ({ name, amount }));
                     })()}
+                    fundingBreakdown={fundingBreakdownComputed}
+                    fundingCycle={fundingInput.cycleLabel}
                   />
 
 
@@ -731,6 +762,10 @@ export const CandidateProfile = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* Funding Sources breakdown — shareable panel */}
+                    <FundingSourcesBreakdown input={fundingInput} className="mb-6" />
+
                     {/* Search Bar */}
                     <div className="mb-4 relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
