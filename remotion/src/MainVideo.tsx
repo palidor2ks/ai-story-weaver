@@ -10,12 +10,29 @@ import { Candidates } from "./scenes/Candidates";
 import { Donor } from "./scenes/Donor";
 import { Committees } from "./scenes/Committees";
 import { Closing } from "./scenes/Closing";
+import timings from "../public/audio/vo-timings.json";
 
-// 8 sequences, 7 fade transitions x 10 frames overlap = 70 overlap.
-// Sum sequences = 1870 → total = 1800 frames = 60s @ 30fps.
+const T = timings.transitionFrames;
+const byId = Object.fromEntries(timings.scenes.map((s: any) => [s.id, s.durationInFrames]));
+
+export const TOTAL_FRAMES =
+  timings.scenes.reduce((a: number, s: any) => a + s.durationInFrames, 0) -
+  (timings.scenes.length - 1) * T;
+
 const fadeT = () => (
-  <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 10 })} />
+  <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: T })} />
 );
+
+const SCENES: Array<[string, React.FC]> = [
+  ["onboarding", Onboarding],
+  ["quizTopics", QuizTopics],
+  ["quizButtons", QuizSlider],
+  ["feed", Feed],
+  ["candidates", Candidates],
+  ["donor", Donor],
+  ["committees", Committees],
+  ["closing", Closing],
+];
 
 export const MainVideo: React.FC = () => {
   return (
@@ -23,21 +40,14 @@ export const MainVideo: React.FC = () => {
       <Grid />
       <Audio src={staticFile("audio/vo.mp3")} volume={1} />
       <TransitionSeries>
-        <TransitionSeries.Sequence durationInFrames={200}><Onboarding /></TransitionSeries.Sequence>
-        {fadeT()}
-        <TransitionSeries.Sequence durationInFrames={240}><QuizTopics /></TransitionSeries.Sequence>
-        {fadeT()}
-        <TransitionSeries.Sequence durationInFrames={260}><QuizSlider /></TransitionSeries.Sequence>
-        {fadeT()}
-        <TransitionSeries.Sequence durationInFrames={270}><Feed /></TransitionSeries.Sequence>
-        {fadeT()}
-        <TransitionSeries.Sequence durationInFrames={230}><Candidates /></TransitionSeries.Sequence>
-        {fadeT()}
-        <TransitionSeries.Sequence durationInFrames={250}><Donor /></TransitionSeries.Sequence>
-        {fadeT()}
-        <TransitionSeries.Sequence durationInFrames={240}><Committees /></TransitionSeries.Sequence>
-        {fadeT()}
-        <TransitionSeries.Sequence durationInFrames={180}><Closing /></TransitionSeries.Sequence>
+        {SCENES.map(([id, Comp], i) => (
+          <>
+            <TransitionSeries.Sequence key={id} durationInFrames={byId[id]}>
+              <Comp />
+            </TransitionSeries.Sequence>
+            {i < SCENES.length - 1 ? fadeT() : null}
+          </>
+        ))}
       </TransitionSeries>
     </AbsoluteFill>
   );

@@ -1,11 +1,11 @@
 import { Composition } from "remotion";
-import { MainVideo } from "./MainVideo";
+import { MainVideo, TOTAL_FRAMES } from "./MainVideo";
 
 export const RemotionRoot = () => (
   <Composition
     id="main"
     component={MainVideo}
-    durationInFrames={1800}
+    durationInFrames={TOTAL_FRAMES}
     fps={30}
     width={1920}
     height={1080}
