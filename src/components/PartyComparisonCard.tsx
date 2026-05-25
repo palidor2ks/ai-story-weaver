@@ -15,6 +15,7 @@ interface PartyComparisonCardProps {
   partyId: string;
   partyName: string;
   score: number | null | undefined;
+  overallScore?: number | null | undefined;
   isLoading?: boolean;
 }
 
