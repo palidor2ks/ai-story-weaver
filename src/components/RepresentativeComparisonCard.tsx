@@ -183,13 +183,26 @@ export function RepresentativeComparisonCard({ official, resolvedScore, overallS
             )}
           </div>
         </div>
-        {resolvedScore !== null ? (
-          <ScoreText score={resolvedScore} size="md" />
-        ) : (
-          <Badge variant="outline" className="text-xs text-muted-foreground">
-            NA
-          </Badge>
-        )}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className="flex items-baseline gap-1">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Match</span>
+            {resolvedScore !== null ? (
+              <ScoreText score={resolvedScore} size="md" />
+            ) : (
+              <Badge variant="outline" className="text-xs text-muted-foreground">NA</Badge>
+            )}
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Overall</span>
+            {overallScore != null ? (
+              <span className="text-sm font-semibold text-muted-foreground">
+                <ScoreText score={overallScore} size="sm" />
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">—</span>
+            )}
+          </div>
+        </div>
       </Link>
 
       {/* AI Comparison Summary */}
