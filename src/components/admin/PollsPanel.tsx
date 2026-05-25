@@ -241,6 +241,19 @@ export const PollsPanel = () => {
               <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} />
             </div>
 
+            <Card className="p-3 bg-muted/30">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label htmlFor="include-library" className="text-base">Include questions in Quiz Library</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Off by default. When on, these questions appear in the user-facing Quiz Library.
+                  </p>
+                </div>
+                <Switch id="include-library" checked={includeInLibrary} onCheckedChange={setIncludeInLibrary} />
+              </div>
+            </Card>
+
+
             <Card className="p-3 space-y-3 bg-muted/30">
               <div className="flex items-center justify-between">
                 <Label className="text-base">Share to social</Label>
