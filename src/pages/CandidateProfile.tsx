@@ -423,6 +423,8 @@ export const CandidateProfile = () => {
                         .slice(0, 3)
                         .map(([name, amount]) => ({ name, amount }));
                     })()}
+                    fundingBreakdown={fundingBreakdownComputed}
+                    fundingCycle={fundingInput.cycleLabel}
                   />
 
 
