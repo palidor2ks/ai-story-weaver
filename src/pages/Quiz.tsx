@@ -96,8 +96,12 @@ export const Quiz = () => {
         const shuffledAnswered = shuffleArray(answeredFromTopTopics);
         filtered = [...filtered, ...shuffledAnswered.slice(0, 6 - filtered.length)];
       }
+    } else {
+      // Full quiz: prefer unanswered questions, fall back to all (review mode)
+      const unanswered = allQuestions.filter(q => !existingAnswers.includes(q.id));
+      filtered = unanswered.length > 0 ? unanswered : allQuestions;
     }
-    
+
     return filtered;
   }, [allQuestions, topicFilter, mode, userTopics, existingAnswers]);
 
