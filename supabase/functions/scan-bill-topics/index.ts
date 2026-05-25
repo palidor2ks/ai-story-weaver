@@ -6,82 +6,95 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Use the 12 canonical topics for consistency with the quiz system
+// Use the 6 canonical federal topics (display labels) for consistency with the quiz system
 const CANONICAL_TOPICS = [
-  'Economy', 'Healthcare', 'Immigration', 'Environment', 'Defense', 'Foreign Affairs',
-  'Education', 'Civil Rights', 'Government', 'Social Programs', 'Technology', 'Judicial'
+  'Economy & Work',
+  'Health, Education & Social Safety Net',
+  'Environment & Energy',
+  'National Security & Borders',
+  'Rights & Justice',
+  'Government & Democracy',
 ];
 
 // Validate and normalize AI-detected topics to canonical topics
 const TOPIC_NORMALIZATION: Record<string, string> = {
-  'Agriculture and Food': 'Economy',
-  'Commerce': 'Economy',
-  'Economics and Public Finance': 'Economy',
-  'Finance and Financial Sector': 'Economy',
-  'Labor and Employment': 'Economy',
-  'Taxation': 'Economy',
-  'Transportation and Public Works': 'Economy',
-  'Health': 'Healthcare',
-  'Families': 'Healthcare',
-  'Energy': 'Environment',
-  'Environmental Protection': 'Environment',
-  'Public Lands and Natural Resources': 'Environment',
-  'Water Resources Development': 'Environment',
-  'Animals': 'Environment',
-  // Defense (military-focused)
-  'Armed Forces and National Security': 'Defense',
-  'Emergency Management': 'Defense',
-  // Foreign Affairs (diplomacy & trade)
-  'International Affairs': 'Foreign Affairs',
-  'Foreign Trade and International Finance': 'Foreign Affairs',
-  'Foreign Policy': 'Foreign Affairs',
-  // Civil Rights
-  'Civil Rights and Liberties, Minority Issues': 'Civil Rights',
-  'Crime and Law Enforcement': 'Civil Rights',
-  'Native Americans': 'Civil Rights',
-  'Arts, Culture, Religion': 'Civil Rights',
-  'Sports and Recreation': 'Civil Rights',
-  'Criminal Justice': 'Civil Rights',
-  'Gun Policy': 'Civil Rights',
-  // Judicial
-  'Law': 'Judicial',
-  'Courts': 'Judicial',
-  'Judicial Reform': 'Judicial',
-  'Supreme Court': 'Judicial',
-  'Federal Courts': 'Judicial',
-  'Judges': 'Judicial',
-  'Legal System': 'Judicial',
-  'Judicial procedure and administration': 'Judicial',
-  // Education
-  'Social Sciences and History': 'Education',
-  // Social Programs
-  'Social Welfare': 'Social Programs',
-  'Housing and Community Development': 'Social Programs',
-  'Social Issues': 'Social Programs',
-  // Government
-  'Congress': 'Government',
-  'Government Operations and Politics': 'Government',
-  'Domestic Policy': 'Government',
-  'Government Reform': 'Government',
-  'General': 'Government',
-  // Technology
-  'Science, Technology, Communications': 'Technology',
+  // Economy & Work (includes Technology & Science)
+  'Economy': 'Economy & Work',
+  'Agriculture and Food': 'Economy & Work',
+  'Commerce': 'Economy & Work',
+  'Economics and Public Finance': 'Economy & Work',
+  'Finance and Financial Sector': 'Economy & Work',
+  'Labor and Employment': 'Economy & Work',
+  'Taxation': 'Economy & Work',
+  'Transportation and Public Works': 'Economy & Work',
+  'Technology': 'Economy & Work',
+  'Science, Technology, Communications': 'Economy & Work',
+
+  // Health, Education & Social Safety Net
+  'Healthcare': 'Health, Education & Social Safety Net',
+  'Health': 'Health, Education & Social Safety Net',
+  'Families': 'Health, Education & Social Safety Net',
+  'Education': 'Health, Education & Social Safety Net',
+  'Social Sciences and History': 'Health, Education & Social Safety Net',
+  'Social Programs': 'Health, Education & Social Safety Net',
+  'Social Welfare': 'Health, Education & Social Safety Net',
+  'Housing and Community Development': 'Health, Education & Social Safety Net',
+  'Social Issues': 'Health, Education & Social Safety Net',
+
+  // Environment & Energy
+  'Environment': 'Environment & Energy',
+  'Energy': 'Environment & Energy',
+  'Environmental Protection': 'Environment & Energy',
+  'Public Lands and Natural Resources': 'Environment & Energy',
+  'Water Resources Development': 'Environment & Energy',
+  'Animals': 'Environment & Energy',
+
+  // National Security & Borders (Defense + Immigration + Foreign Affairs)
+  'Defense': 'National Security & Borders',
+  'Armed Forces and National Security': 'National Security & Borders',
+  'Emergency Management': 'National Security & Borders',
+  'Immigration': 'National Security & Borders',
+  'Foreign Affairs': 'National Security & Borders',
+  'International Affairs': 'National Security & Borders',
+  'Foreign Trade and International Finance': 'National Security & Borders',
+  'Foreign Policy': 'National Security & Borders',
+
+  // Rights & Justice (Civil Rights + Judicial)
+  'Civil Rights': 'Rights & Justice',
+  'Civil Rights and Liberties, Minority Issues': 'Rights & Justice',
+  'Crime and Law Enforcement': 'Rights & Justice',
+  'Native Americans': 'Rights & Justice',
+  'Arts, Culture, Religion': 'Rights & Justice',
+  'Sports and Recreation': 'Rights & Justice',
+  'Criminal Justice': 'Rights & Justice',
+  'Gun Policy': 'Rights & Justice',
+  'Judicial': 'Rights & Justice',
+  'Law': 'Rights & Justice',
+  'Courts': 'Rights & Justice',
+  'Judicial Reform': 'Rights & Justice',
+  'Supreme Court': 'Rights & Justice',
+  'Federal Courts': 'Rights & Justice',
+  'Judges': 'Rights & Justice',
+  'Legal System': 'Rights & Justice',
+  'Judicial procedure and administration': 'Rights & Justice',
+
+  // Government & Democracy
+  'Government': 'Government & Democracy',
+  'Congress': 'Government & Democracy',
+  'Government Operations and Politics': 'Government & Democracy',
+  'Domestic Policy': 'Government & Democracy',
+  'Government Reform': 'Government & Democracy',
+  'General': 'Government & Democracy',
 };
 
 // Detailed topic definitions to guide AI analysis - GOVERNMENT definition is NARROW to prevent over-classification
 const TOPIC_DEFINITIONS = `
-ECONOMY: Jobs, wages, taxation, banking, finance, business regulation, labor laws, commerce, agriculture, transportation infrastructure, supply chains, manufacturing, small business, economic development
-HEALTHCARE: Medical care, health insurance, public health, mental health, drug policy, Medicare, Medicaid, family health services, hospitals, pharmaceuticals, disease prevention, biomedical research, healthcare workforce
-IMMIGRATION: Border policy, visas, citizenship, refugee policy, asylum, deportation, DACA, immigration enforcement, guest workers, naturalization, border security, immigration courts
-ENVIRONMENT: Climate change, pollution, conservation, energy policy (oil, gas, renewables), public lands, water resources, wildlife protection, EPA regulations, clean air/water, national parks, forestry
-DEFENSE: Military operations, veterans affairs, national security, defense spending, military personnel, weapons systems, homeland security, emergency management, military bases, armed forces
-FOREIGN AFFAIRS: International relations, foreign policy, diplomacy, treaties, NATO, UN, foreign aid, trade agreements, tariffs, embassies, international trade, sanctions, foreign governments
-EDUCATION: K-12 schools, higher education, student loans, vocational training, early childhood education, teacher policy, school funding, special education, STEM programs, charter schools
-CIVIL RIGHTS: Voting rights, discrimination (race, gender, disability), criminal justice reform, gun policy, privacy rights, free speech, LGBTQ+ rights, religious freedom, Native American/tribal affairs, policing reform
-GOVERNMENT: ONLY for bills about the INTERNAL operations of government itself - congressional procedures and rules, congressional committee operations, federal employee pay and benefits, government ethics/transparency, postal service operations, census administration, federal building management, election administration, campaign finance rules, lobbying regulations, government procurement procedures. Do NOT use for bills that mention federal agencies - use the POLICY AREA being regulated instead.
-SOCIAL PROGRAMS: Welfare, food assistance (SNAP), housing assistance, unemployment benefits, poverty programs, disability benefits (SSDI/SSI), child welfare, homelessness, community development
-TECHNOLOGY: Cybersecurity, internet regulation, AI policy, telecommunications, data privacy, scientific research, space exploration (NASA), patents, broadband access, digital infrastructure
-JUDICIAL: Federal courts, Supreme Court, judicial appointments, judicial reform, court procedures, sentencing guidelines, legal precedent, federal judges, court administration, case law, constitutional interpretation, judicial ethics, court jurisdiction, appellate process
+ECONOMY & WORK: Jobs, wages, taxation, banking, finance, business regulation, labor laws, commerce, agriculture, transportation infrastructure, manufacturing, small business, trade, AND technology/science policy (cybersecurity, AI, internet regulation, telecom, data privacy, scientific research, broadband, patents).
+HEALTH, EDUCATION & SOCIAL SAFETY NET: Medical care, health insurance, public health, Medicare/Medicaid, pharmaceuticals, family services; K-12 and higher education, student loans, teacher policy, school funding; welfare, food assistance (SNAP), housing assistance, unemployment, disability benefits, child welfare, homelessness.
+ENVIRONMENT & ENERGY: Climate change, pollution, conservation, energy policy (oil, gas, renewables), public lands, water resources, wildlife protection, EPA regulations, clean air/water, national parks.
+NATIONAL SECURITY & BORDERS: Military operations, veterans affairs, defense spending, weapons, homeland security, emergency management; AND immigration, border policy, visas, asylum, deportation, refugees; AND foreign affairs, diplomacy, treaties, NATO/UN, foreign aid, trade agreements, tariffs, sanctions.
+RIGHTS & JUSTICE: Voting rights, discrimination (race, gender, disability), criminal justice reform, gun policy, privacy rights, free speech, LGBTQ+ rights, religious freedom, tribal affairs, policing; AND federal courts, Supreme Court, judicial appointments, court procedures, sentencing guidelines, constitutional interpretation, judicial ethics.
+GOVERNMENT & DEMOCRACY: ONLY for bills about the INTERNAL operations of government itself - congressional procedures, federal employee pay, ethics/transparency, postal service, census, federal building management, election administration, campaign finance, lobbying regulations, procurement. Do NOT use for bills that mention federal agencies - use the POLICY AREA being regulated instead.
 `;
 
 function validateTopic(topic: string): string | null {
