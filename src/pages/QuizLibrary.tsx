@@ -140,7 +140,11 @@ export const QuizLibrary = () => {
                   onClick={() => navigate('/quiz')}
                   className="gap-2"
                 >
-                  Start
+                  {totalAnswered === 0
+                    ? 'Start'
+                    : totalAnswered < totalQuestions
+                    ? 'Continue'
+                    : 'Review'}
                   <ArrowRight className="w-5 h-5" />
                 </Button>
               </div>
