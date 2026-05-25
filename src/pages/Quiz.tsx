@@ -7,7 +7,7 @@ import { TopicIcon } from '@/components/TopicIcon';
 import { ScoreText } from '@/components/ScoreText';
 import { Button } from '@/components/ui/button';
 import { useQuestions, useTopics } from '@/hooks/useCandidates';
-import { useSaveQuizResults, useUserTopics } from '@/hooks/useProfile';
+import { useSaveQuizResults, useUserTopics, useUpsertQuizAnswer } from '@/hooks/useProfile';
 import { QuizAnswer, TopicScore } from '@/types';
 import { ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
