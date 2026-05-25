@@ -273,3 +273,29 @@ export const useGeneratePollQuestions = () => {
     onError: (e: Error) => toast.error(`AI draft failed: ${e.message}`),
   });
 };
+
+export const useTogglePollLibraryInclusion = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pollId, include }: { pollId: string; include: boolean }) => {
+      const { data: pqs, error: pqErr } = await supabase
+        .from('poll_questions')
+        .select('question_id')
+        .eq('poll_id', pollId);
+      if (pqErr) throw pqErr;
+      const ids = (pqs || []).map((r: any) => r.question_id);
+      if (ids.length === 0) return;
+      const { error } = await supabase
+        .from('questions')
+        .update({ include_in_quiz_library: include } as any)
+        .in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['polls'] });
+      qc.invalidateQueries({ queryKey: ['questions'] });
+      toast.success('Quiz Library inclusion updated');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+};
