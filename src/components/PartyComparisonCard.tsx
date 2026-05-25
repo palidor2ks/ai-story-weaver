@@ -46,7 +46,7 @@ const partyStyles: Record<string, { bg: string; border: string; text: string; ic
   },
 };
 
-export function PartyComparisonCard({ partyId, partyName, score, isLoading = false }: PartyComparisonCardProps) {
+export function PartyComparisonCard({ partyId, partyName, score, overallScore, isLoading = false }: PartyComparisonCardProps) {
   const { user } = useAuth();
   const styles = partyStyles[partyId] || partyStyles.democrat;
 
