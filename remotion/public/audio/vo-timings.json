@@ -1,0 +1,54 @@
+{
+  "fps": 30,
+  "transitionFrames": 10,
+  "scenes": [
+    {
+      "id": "onboarding",
+      "durationInFrames": 210,
+      "startFrame": 0,
+      "audioDurationSec": 6.594467
+    },
+    {
+      "id": "quizTopics",
+      "durationInFrames": 155,
+      "startFrame": 200,
+      "audioDurationSec": 4.736871
+    },
+    {
+      "id": "quizButtons",
+      "durationInFrames": 221,
+      "startFrame": 345,
+      "audioDurationSec": 6.965986
+    },
+    {
+      "id": "feed",
+      "durationInFrames": 203,
+      "startFrame": 556,
+      "audioDurationSec": 6.362268
+    },
+    {
+      "id": "candidates",
+      "durationInFrames": 270,
+      "startFrame": 749,
+      "audioDurationSec": 8.591383
+    },
+    {
+      "id": "donor",
+      "durationInFrames": 212,
+      "startFrame": 1009,
+      "audioDurationSec": 6.640907
+    },
+    {
+      "id": "committees",
+      "durationInFrames": 208,
+      "startFrame": 1211,
+      "audioDurationSec": 6.501587
+    },
+    {
+      "id": "closing",
+      "durationInFrames": 254,
+      "startFrame": 1409,
+      "audioDurationSec": 8.034104
+    }
+  ]
+}
