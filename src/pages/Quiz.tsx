@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { QuizQuestion } from '@/components/QuizQuestion';
+import { TopicIcon } from '@/components/TopicIcon';
 import { ScoreText } from '@/components/ScoreText';
 import { Button } from '@/components/ui/button';
 import { useQuestions, useTopics } from '@/hooks/useCandidates';
@@ -317,14 +318,51 @@ export const Quiz = () => {
             {getQuizTitle()}
           </h1>
         </div>
-        
-        <QuizQuestion
-          question={questions[currentQuestionIndex]}
-          selectedOptionId={currentAnswer?.selectedOptionId || null}
-          onSelect={handleOptionSelect}
-          questionNumber={currentQuestionIndex + 1}
-          totalQuestions={questions.length}
-        />
+
+        {(() => {
+          const currentQuestion = questions[currentQuestionIndex];
+          const currentTopic = topics.find(t => t.id === currentQuestion.topicId);
+          return (
+            <>
+              <div className="sticky top-0 z-20 -mx-4 px-4 pt-3 pb-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border">
+                {currentTopic && (
+                  <div className="flex items-center justify-center gap-2 mb-3">
+                    <TopicIcon name={currentTopic.icon} className="w-6 h-6" />
+                    <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                      {currentTopic.name}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Question {currentQuestionIndex + 1} of {questions.length}
+                  </span>
+                  <div className="flex-1 mx-4 h-2 bg-secondary rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-hero transition-all duration-500 ease-out"
+                      style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                <h2 className="font-display text-lg md:text-xl font-semibold text-foreground leading-snug text-center">
+                  {currentQuestion.text}
+                </h2>
+              </div>
+
+              <div className="mt-6">
+                <QuizQuestion
+                  question={currentQuestion}
+                  selectedOptionId={currentAnswer?.selectedOptionId || null}
+                  onSelect={handleOptionSelect}
+                  questionNumber={currentQuestionIndex + 1}
+                  totalQuestions={questions.length}
+                  hideHeader
+                  hideQuestionText
+                />
+              </div>
+            </>
+          );
+        })()}
 
         <div className="flex justify-between mt-8">
           <Button 
