@@ -35,7 +35,7 @@ const getPartyBgColor = (party: string) => {
 
 const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
-export function RepresentativeComparisonCard({ official, resolvedScore }: RepresentativeComparisonCardProps) {
+export function RepresentativeComparisonCard({ official, resolvedScore, overallScore }: RepresentativeComparisonCardProps) {
   const { user } = useAuth();
   const hasImage = official.image_url && official.image_url.trim() !== '';
   const [isGeneratingDeep, setIsGeneratingDeep] = useState(false);
