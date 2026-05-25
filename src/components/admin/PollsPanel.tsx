@@ -77,6 +77,7 @@ export const PollsPanel = () => {
     await createPoll.mutateAsync({
       title, description, type, topic_id: topicId || null, questions, status,
       share_platforms: sharePlatforms, auto_post: autoPost, share_caption: shareCaption || null,
+      include_in_quiz_library: includeInLibrary,
     });
     setOpen(false); reset();
   };
