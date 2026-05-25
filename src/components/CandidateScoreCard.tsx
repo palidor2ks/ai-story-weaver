@@ -28,7 +28,7 @@ function getScoreColor(s: number | null | undefined): string {
   return 'text-purple-600 dark:text-purple-400';
 }
 
-export function CandidateScoreCard({ score, matchScore, userScore, className }: CandidateScoreCardProps) {
+export function CandidateScoreCard({ score, matchScore, userScore, personalizedScore, personalizedCount, className }: CandidateScoreCardProps) {
   const isNA = score === null || score === undefined;
   const scoreText = formatScoreText(score);
   const colorClass = getScoreColor(score);
@@ -45,6 +45,11 @@ export function CandidateScoreCard({ score, matchScore, userScore, className }: 
   const hasUser = userScore !== null && userScore !== undefined;
   const userPct = hasUser ? toPct(userScore as number) : 50;
   const markersClose = hasUser && Math.abs(userPct - markerPct) < 6;
+
+  const hasPersonalized = personalizedScore !== null && personalizedScore !== undefined;
+  const personalizedPct = hasPersonalized ? toPct(personalizedScore as number) : 50;
+  const personalizedColor = getScoreColor(personalizedScore);
+  const personalizedText = formatScoreText(personalizedScore);
 
   return (
     <div
