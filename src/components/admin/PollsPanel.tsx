@@ -39,6 +39,7 @@ export const PollsPanel = () => {
   const deletePoll = useDeletePoll();
   const generate = useGeneratePollQuestions();
   const repost = useRepostPoll();
+  const toggleLibrary = useTogglePollLibraryInclusion();
 
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<'mc' | 'scored' | 'mini_quiz'>('mc');
@@ -50,10 +51,11 @@ export const PollsPanel = () => {
   const [sharePlatforms, setSharePlatforms] = useState<SharePlatform[]>(['twitter']);
   const [autoPost, setAutoPost] = useState(true);
   const [shareCaption, setShareCaption] = useState('');
+  const [includeInLibrary, setIncludeInLibrary] = useState(false);
 
   const reset = () => {
     setType('mc'); setTopicId(''); setPrompt(''); setTitle(''); setDescription(''); setQuestions([]);
-    setSharePlatforms(['twitter']); setAutoPost(true); setShareCaption('');
+    setSharePlatforms(['twitter']); setAutoPost(true); setShareCaption(''); setIncludeInLibrary(false);
   };
 
   const togglePlatform = (p: SharePlatform) => {
