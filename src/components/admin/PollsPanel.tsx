@@ -14,7 +14,8 @@ import { toast } from 'sonner';
 import { useTopics } from '@/hooks/useCandidates';
 import {
   usePolls, useCreatePoll, useUpdatePollStatus, useDeletePoll,
-  useGeneratePollQuestions, useRepostPoll, type PollDraftQuestion, type SharePlatform,
+  useGeneratePollQuestions, useRepostPoll, useTogglePollLibraryInclusion,
+  type PollDraftQuestion, type SharePlatform,
 } from '@/hooks/usePolls';
 
 const PLATFORMS: { id: SharePlatform; label: string; note?: string }[] = [
