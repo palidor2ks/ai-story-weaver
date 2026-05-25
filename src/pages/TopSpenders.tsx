@@ -38,13 +38,27 @@ async function resolveDisplayNames(ids: string[]): Promise<Map<string, string>> 
   const map = new Map<string, string>();
   const unique = Array.from(new Set(ids.filter(Boolean)));
   if (unique.length === 0) return map;
-  const { data } = await supabase
-    .from('external_pacs')
-    .select('fec_committee_id, name')
-    .in('fec_committee_id', unique);
-  (data ?? []).forEach((r: { fec_committee_id: string; name: string | null }) => {
+
+  const [{ data: externalNames }, { data: aliases }] = await Promise.all([
+    supabase
+      .from('external_pacs')
+      .select('fec_committee_id, name')
+      .in('fec_committee_id', unique),
+    (supabase as any)
+      .from('committee_aliases')
+      .select('fec_committee_id, alias_name')
+      .in('fec_committee_id', unique),
+  ]);
+
+  (externalNames ?? []).forEach((r: { fec_committee_id: string; name: string | null }) => {
     if (r.name) map.set(r.fec_committee_id, r.name);
   });
+
+  // Admin-managed aliases take precedence over external_pacs.name.
+  (aliases ?? []).forEach((r: { fec_committee_id: string; alias_name: string | null }) => {
+    if (r.alias_name) map.set(r.fec_committee_id, r.alias_name);
+  });
+
   return map;
 }
 
