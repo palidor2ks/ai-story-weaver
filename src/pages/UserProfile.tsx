@@ -750,6 +750,7 @@ export const UserProfile = () => {
                           key={official.id}
                           official={official}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
+                          overallScore={official.overall_score}
                         />
                       ))}
                     </div>
@@ -785,6 +786,7 @@ export const UserProfile = () => {
                             key={rep.id}
                             official={official}
                             resolvedScore={getResolvedScore(rep.bioguide_id || rep.id, rep.overall_score)}
+                            overallScore={rep.overall_score}
                           />
                         );
                       })}
@@ -805,6 +807,7 @@ export const UserProfile = () => {
                           key={official.id}
                           official={official}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
+                          overallScore={official.overall_score}
                         />
                       ))}
                     </div>
@@ -824,6 +827,7 @@ export const UserProfile = () => {
                           key={official.id}
                           official={official}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
+                          overallScore={official.overall_score}
                         />
                       ))}
                     </div>
@@ -843,6 +847,7 @@ export const UserProfile = () => {
                           key={official.id}
                           official={official}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
+                          overallScore={official.overall_score}
                         />
                       ))}
                     </div>
