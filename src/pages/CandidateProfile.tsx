@@ -400,7 +400,14 @@ export const CandidateProfile = () => {
 
 
               {/* Score Display */}
-              <CandidateScoreCard score={resolvedScore} matchScore={matchScore} userScore={profile?.overall_score ?? null} className="mb-4" />
+              <CandidateScoreCard
+                score={resolvedScore}
+                matchScore={matchScore}
+                userScore={profile?.overall_score ?? null}
+                personalizedScore={personalized?.score ?? null}
+                personalizedCount={personalized?.matchedCount ?? 0}
+                className="mb-4"
+              />
 
               {/* Badges */}
               <div className="flex flex-wrap items-center gap-2 mb-3">
