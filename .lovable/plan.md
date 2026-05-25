@@ -1,86 +1,50 @@
-## 60-Second Product Video — Real App Pages
+## Goal
+Produce a polished ~60-second Polipulse explainer video using the 9 fresh screenshots the user just uploaded, with a new George voiceover and Remotion scenes that animate the real product UI.
 
-A 60-second 1920×1080 30fps Remotion video that walks through the actual Polipulse app. Each scene uses a real, high-res screenshot of a live route, animated inside Remotion with parallax, ken-burns zooms, masked reveals, and call-out overlays. George (ElevenLabs) narrates over the top, with the existing Tech Product aesthetic from the first video so the two read as a series.
+## Assets (from this upload)
+Copy uploaded images into `remotion/public/screens/`:
+- `Screenshot_1.png` → `home.png` (Feed hero)
+- `www.polipulseapp.com_feed.png` → `home-tall.png` (full feed pan)
+- `www.polipulseapp.com_candidates.png` → `candidates.png` (all politicians grid)
+- `www.polipulseapp.com_candidates_1.png` → `donor.png` (Campaign Donors page)
+- `committee.png` → `committees.png`
+- `spenders.png` → `spenders.png`
+- `quiz_with_slider.png` → `quiz.png`
+- `top_3_topics.png` → `quiz-topics.png` (new)
+- `onboarding_screen.png` → `onboarding.png` (new)
 
-### Scene plan (60s = 1800 frames @ 30fps)
-
-| # | Time | Route captured | What happens on screen |
-|---|------|----------------|------------------------|
-| 1 | 0:00 – 0:06 | Logo + tagline cold open | Animated pulse mark, "Your pulse on politics", smash cut into the product |
-| 2 | 0:06 – 0:14 | `/` (home/feed) | Browser-chrome reveal, slow ken-burns up the page, headline call-out: "See what's happening — and who's behind it" |
-| 3 | 0:14 – 0:24 | `/quiz` | Zoom into one issue card, animated slider snaps to a position, "Answer once. Get matched everywhere." |
-| 4 | 0:24 – 0:34 | `/candidate/:id` (real federal incumbent) | Pan from header → score card → voting record → Funding Sources panel (the new one we just shipped). Call-out: "Score, votes, and money — for every candidate." |
-| 5 | 0:34 – 0:42 | `/donor/:id` (top donor) | Cross-fade in, parallax over the donor's recipient list, call-out: "Follow the money to the people who get it." |
-| 6 | 0:42 – 0:50 | `/legislation/:id` (recent bill) | Zoom into bill summary + roll-call breakdown, call-out: "Every bill, every vote, explained." |
-| 7 | 0:50 – 0:57 | `/committees` or `/top-spenders` | Quick montage — list rows stagger-in, then dolly back to reveal the whole page |
-| 8 | 0:57 – 1:00 | Outro | Logo + URL `polipulseapp.com`, soft fade to brand navy |
-
-### Capture pipeline
-
-1. Start a one-off Playwright/Puppeteer script under `remotion/scripts/capture-screens.mjs` that:
-   - Boots a headless Chromium pointed at the **published** site `https://polipulse.lovable.app` (no auth needed for these routes; we already saw they render publicly).
-   - For each route in the table above, sets viewport `1920×1080` (and `1920×3000` for the long candidate/donor/bill pages so we have height to ken-burns through), waits for network-idle + a small settle delay, and writes a PNG to `remotion/public/screens/<scene>.png`.
-   - Hides any cookie banners / dev overlays via CSS injection before screenshot.
-2. Pick stable real entities up front so URLs are deterministic:
-   - Candidate: a current federal incumbent (e.g. House Speaker or similar high-coverage profile from `/candidates` ordered by coverage_tier).
-   - Donor: top donor from `/donors`.
-   - Bill: top bill from `/legislation`.
-   - We'll resolve these IDs once via the public list pages, hard-code them in the capture script, and log them in the plan output so you can swap.
-3. Re-running the capture script regenerates all screens — useful when the UI changes.
-
-### Remotion structure
-
-Reuses the existing `remotion/` project from the last video — no second scaffold. Adds:
+## Video structure (~60s @ 30fps = 1800 frames)
 
 ```
-remotion/
-  public/screens/                          (new — capture output)
-  public/audio/vo-v2.mp3                   (new — 60s narration)
-  scripts/capture-screens.mjs              (new — Playwright capture)
-  scripts/render-remotion.mjs              (existing — re-used)
-  src/
-    Root.tsx                               (add second Composition: `product-tour`)
-    MainVideoTour.tsx                      (new — TransitionSeries of 8 scenes)
-    scenes/tour/
-      Cold.tsx
-      Home.tsx
-      Quiz.tsx
-      Candidate.tsx
-      Donor.tsx
-      Bill.tsx
-      Spenders.tsx
-      Outro.tsx
-    components/
-      BrowserFrame.tsx                     (new — chrome around screenshots: traffic lights, URL bar)
-      ScreenScroll.tsx                     (new — ken-burns pan over tall screenshots via interpolate on translateY)
-      CallOut.tsx                          (new — pill label that springs in, holds, springs out)
+1. Hook / Onboarding      0:00–0:07   "Politics is noisy. Polipulse cuts through."
+2. Quiz topics + slider   0:07–0:16   "Pick 3 topics. Answer 24 questions."
+3. Match / Feed           0:16–0:25   "Get matched with every official representing you."
+4. Candidate grid         0:25–0:32   "L10 → R10 scores across 600+ officials."
+5. Donor profile          0:32–0:41   "See who funds them — every dollar tracked."
+6. Committees + Spenders  0:41–0:51   "Top committees and the PACs spending on their behalf."
+7. Outro                  0:51–1:00   "Polipulse — follow the money. Know your vote."
 ```
 
-Each scene is built the same way: `<BrowserFrame url="...">` wrapping an `<Img>` of the captured screen, animated with `useCurrentFrame()` + `interpolate()` for translate/scale/opacity, with one or two `<CallOut>` overlays that align to specific regions of the screenshot. Scenes are stitched with `<TransitionSeries>` using the same `fade` / `wipe` transitions as the first video so the look is consistent.
+Each scene: ken-burns pan/zoom on the relevant screenshot in a laptop-style frame, with kinetic title overlays (Playfair Display + Inter), the Polipulse navy/red accent palette, and `TransitionSeries` fades/wipes between scenes.
 
-### Voiceover
+## Voiceover
+Generate one MP3 via ElevenLabs `eleven_multilingual_v2`, voice `George` (`JBFqnCBsd6RMkjVDRZzb`), ~150 words, save to `remotion/public/audio/vo.mp3`. Script tuned to 60s and synced to scene durations.
 
-George (`JBFqnCBsd6RMkjVDRZzb`), `eleven_multilingual_v2`, generated server-side via the existing `ELEVENLABS_API_KEY`. ~135 words pacing to ~58s. Draft:
+## Implementation steps
+1. Copy 9 uploaded PNGs into `remotion/public/screens/` with the names above.
+2. Write VO script + one-off Bun script that calls ElevenLabs and writes `remotion/public/audio/vo.mp3`.
+3. Update `remotion/src/Root.tsx` → `durationInFrames={1800}`.
+4. Rewrite `remotion/src/MainVideo.tsx` with 7 `TransitionSeries.Sequence`s totaling 1800 frames (accounting for transition overlaps).
+5. Add new scene files under `remotion/src/scenes/`:
+   - `Onboarding.tsx`, `QuizTopics.tsx`, `QuizSlider.tsx`, `Feed.tsx`, `Candidates.tsx`, `Donor.tsx`, `Committees.tsx`, `Outro.tsx`
+   - Each uses a shared `LaptopFrame` component with ken-burns transform driven by `useCurrentFrame` + `interpolate`, plus headline/sub overlay.
+6. Add `remotion/src/components/LaptopFrame.tsx` and `Caption.tsx` helpers.
+7. Render via existing `remotion/scripts/render-remotion.mjs`, output to `/mnt/documents/polipulse-60s.mp4`.
+8. QA: extract 6 stills with `bunx remotion still` at key frames, view them, fix any layout/clipping, re-render if needed.
+9. Deliver MP4 via `<presentation-artifact>`.
 
-> "Politics moves fast — and it's loud. Polipulse cuts through the noise.
-> Answer one quick issue quiz, and we match you to every candidate on your ballot, from president to school board.
-> Every profile shows their score, their votes, and exactly who funds them — broken down by individuals, PACs, and self-funding.
-> Follow the money the other direction too: see where any donor sends their cash, and which committees back which races.
-> Every bill is explained in plain English, with the full roll call — no spin.
-> One platform. Real data. Your pulse on politics. Polipulseapp.com."
-
-Saved to `remotion/public/audio/vo-v2.mp3`. Mounted as `<Audio src={staticFile('audio/vo-v2.mp3')} />` in `MainVideoTour`.
-
-### Render
-
-Re-uses `scripts/render-remotion.mjs`, switched to the new composition id `product-tour`. Renders muted MP4, then `ffmpeg` muxes `vo-v2.mp3` (matches the proven first-video workflow that avoided the `libfdk_aac` sandbox limitation). Final file: `/mnt/documents/polipulse-product-tour.mp4`.
-
-### QA before delivery
-
-Extract 8 stills (one per scene) with `bunx remotion still` and inspect — verify each screenshot loaded, the call-outs land in the right spot, no text is clipped, and the transitions read cleanly. Re-render if anything is off.
-
-### Notes / risks
-
-- If the published site requires a cookie banner dismissal or has loading shimmer at capture time, the capture script adds a 1.5s settle + injected CSS to hide them.
-- If a chosen route changes data (e.g. a candidate's funding numbers update), re-running `capture-screens.mjs` refreshes everything.
-- File touched outside `remotion/`: none. This is a self-contained video build.
+## Technical notes
+- All motion via `useCurrentFrame` + `interpolate`/`spring`; no CSS transitions.
+- No `backdropFilter`; light `filter: blur()` only on background accents.
+- VO audio added once at root via `<Audio>` so it spans all scenes.
+- Keep total frames = sum(sequences) − sum(transition overlaps) = exactly 1800.
