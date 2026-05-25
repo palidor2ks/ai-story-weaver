@@ -130,7 +130,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/committees" element={
-        <RouteGuard requireAuth={false} requireOnboarding={false}>
+        <RouteGuard requireAuth requireOnboarding>
           <Committees />
         </RouteGuard>
       } />
@@ -140,7 +140,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/committee/:id" element={
-        <RouteGuard requireAuth={false} requireOnboarding={false}>
+        <RouteGuard requireAuth requireOnboarding>
           <CommitteeProfile />
         </RouteGuard>
       } />
