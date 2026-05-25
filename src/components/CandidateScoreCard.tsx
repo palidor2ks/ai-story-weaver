@@ -134,6 +134,16 @@ export function CandidateScoreCard({ score, matchScore, userScore, personalizedS
           </div>
         )}
 
+        {hasPersonalized && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all"
+            style={{ left: `${personalizedPct}%` }}
+            aria-label="Personalized rep position"
+          >
+            <div className="rounded-full border-2 border-dashed border-foreground bg-background shadow-md h-4 w-4" />
+          </div>
+        )}
+
         <div className="mt-8 flex justify-between text-[10px] font-medium text-muted-foreground">
           <span>L10</span>
           <span>C</span>
