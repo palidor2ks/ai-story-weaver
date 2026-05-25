@@ -1,54 +1,42 @@
-## Goal
+## 15s PoliPulse Product Video
 
-Poll questions should not appear in the user-facing Quiz Library by default. Admins can opt-in to library inclusion when creating a poll, and flip that inclusion after the fact from the Polls admin panel.
+Render a 15-second 1920x1080 MP4 with Remotion, AI voiceover via ElevenLabs, kinetic UI mockups in PoliPulse's brand style. Final file: `/mnt/documents/polipulse-product-video.mp4`.
 
-## Current behavior
+### Creative direction
 
-- `usePolls.useCreatePoll` inserts new questions with `source: 'poll'` and `include_in_politician_quiz: false`.
-- `useQuestions` (consumed by `Quiz.tsx` and `QuizLibrary.tsx`) selects **every** row from `questions`, so poll-sourced questions show up alongside curated quiz questions.
-- There is no field on `questions` that controls user-quiz-library inclusion separately from the politician quiz flag.
+- **Aesthetic**: Tech product — dark UI, crisp geometric sans, snappy spring transitions, code/grid layouts.
+- **Palette** (pulled from project): deep navy `#0F172A` background, primary `#3B82F6`, civic red `#EF4444` and civic blue `#1D4ED8` accents, ink `#E2E8F0` text, muted `#64748B`.
+- **Type**: Space Grotesk (display) + Inter (body), via `@remotion/google-fonts`.
+- **Motion**: snappy spring entrances (damping 20, stiffness 200), one fade+slide transition between scenes, persistent subtle grid backdrop.
 
-## Plan
+### Voiceover script (~38 words, ~14s at natural pace)
 
-### 1. Database migration
+> "Politics is noisy. PoliPulse cuts through it. Take a 2-minute quiz, get matched to candidates who actually share your values — backed by voting records, donor data, and evidence. Real transparency. Your pulse on politics."
 
-Add a new boolean column to `public.questions`:
+Voice: George (`JBFqnCBsd6RMkjVDRZzb`), `eleven_multilingual_v2`.
 
-- `include_in_quiz_library boolean not null default true`
+### Scene breakdown (450 frames @ 30fps)
 
-Backfill: set `include_in_quiz_library = false` for every existing row where `source = 'poll'` so previously-created poll questions disappear from the library immediately (matching the user's screenshot example).
+```text
+[0–60]    Hook: "Politics is noisy."  — chaotic headline ticker collapses into logo
+[60–150]  Quiz: animated question card with -10/+10 slider snapping
+[150–240] Match: candidate cards fly in with match % counters animating up
+[240–360] Transparency: split view — voting record rows + donor bars filling
+[360–450] Outro: PoliPulse wordmark + tagline "Your pulse on politics." + URL
+```
 
-No RLS changes needed (column inherits existing table policies).
+### Implementation steps
 
-### 2. Filter the user quiz library + quiz
+1. **Scaffold** `remotion/` project: `bun init`, install `remotion`, `@remotion/cli/renderer/bundler/transitions/google-fonts`, `@remotion/compositor-linux-x64-musl`, React. Fix gnu compositor binary + symlink ffmpeg/ffprobe (per sandbox rules).
+2. **Generate voiceover** with ElevenLabs TTS script → save to `remotion/public/audio/vo.mp3`.
+3. **Build scenes** (5 files under `src/scenes/`) using `useCurrentFrame` + `interpolate`/`spring`. Use `<Audio>` with the VO across the full composition.
+4. **Wire** in `MainVideo.tsx` via `<TransitionSeries>` with fade transitions (~10 frames) between scenes; persistent grid background layer.
+5. **Render** via programmatic `scripts/render-remotion.mjs` (chrome-for-testing, muted:false since we want VO, concurrency 1) → `/mnt/documents/polipulse-product-video.mp4`.
+6. **QA**: render a still at frames 30, 120, 200, 300, 420 to confirm typography + layout, then deliver MP4 via `<presentation-artifact>`.
 
-Update `useQuestions` in `src/hooks/useCandidates.ts` to filter `.eq('include_in_quiz_library', true)` so both `Quiz.tsx` and `QuizLibrary.tsx` automatically exclude poll questions that aren't opted in. No call-site changes needed.
+### Technical notes
 
-### 3. Poll creation: opt-in checkbox
-
-In `src/components/admin/PollsPanel.tsx` "New Poll" dialog, add a Switch labeled **"Include questions in Quiz Library"** (default off). Persist the choice through `useCreatePoll`.
-
-In `src/hooks/usePolls.ts`:
-- Extend `CreatePollInput` with `include_in_quiz_library?: boolean` (default `false`).
-- When inserting each generated question, set `include_in_quiz_library` to that value.
-
-### 4. After-the-fact toggle in admin Polls table
-
-Add a new column **"In Library"** to the polls table in `PollsPanel.tsx` showing a checkbox/switch per poll. Toggling it updates `include_in_quiz_library` on every `questions` row joined via `poll_questions.poll_id = poll.id`.
-
-Implementation:
-- New hook `useTogglePollLibraryInclusion` in `usePolls.ts` that:
-  1. Reads `poll_questions.question_id` for the given `poll_id`.
-  2. Updates `questions.include_in_quiz_library` for those ids.
-  3. Invalidates `['polls']` and `['questions']` query keys.
-- Derive each poll's current inclusion state via a lightweight join (extend `usePolls` to also fetch, per poll, whether any of its questions are in the library). Simple approach: add a `library_included` boolean computed by a second query that aggregates `poll_questions` + `questions.include_in_quiz_library` (any true → checked).
-
-### 5. UI copy tweak
-
-Update the `PollsPanel` CardDescription line that currently says "Scored poll questions appear in the user Quiz Library but are excluded from the politician quiz." to reflect the new opt-in default.
-
-## Out of scope
-
-- No changes to politician quiz logic (`include_in_politician_quiz` stays false for poll questions).
-- No changes to public poll voting page or results.
-- No changes to scoring or party alignment logic.
+- Composition duration accounts for transition overlap (~40 frames total of overlap).
+- Audio not muted in renderer; ensure ffmpeg in PATH symlinks are in place so audio encodes.
+- No `backdropFilter`; use subtle `filter: blur()` only on 1–2 glow accents.
+- All copy and colors live in components — no business logic touched.
