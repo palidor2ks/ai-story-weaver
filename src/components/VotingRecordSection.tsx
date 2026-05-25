@@ -31,22 +31,30 @@ interface VotingRecordSectionProps {
   representativeParty: string;
 }
 
-// Map display topic names to topic IDs
+// Map display topic names to the 6 consolidated federal topic IDs
 const topicNameToId: Record<string, string> = {
-  'Healthcare': 'healthcare',
-  'Economy': 'economy',
-  'Education': 'education',
-  'Environment': 'environment',
-  'Immigration': 'immigration',
-  'Criminal Justice': 'criminal-justice',
-  'Civil Rights': 'civil-rights',
-  'Foreign Policy': 'foreign-policy',
-  'Government Reform': 'government-reform',
-  'Social Issues': 'social-issues',
-  'Technology': 'technology',
-  'Domestic Policy': 'domestic-policy',
-  'Gun Policy': 'gun-policy',
-  'Electoral Reform': 'electoral-reform',
+  'Economy & Work': 'economy-work',
+  'Economy': 'economy-work',
+  'Technology': 'economy-work',
+  'Health, Education & Social Safety Net': 'health-safety-net',
+  'Healthcare': 'health-safety-net',
+  'Education': 'health-safety-net',
+  'Social Programs': 'health-safety-net',
+  'Environment & Energy': 'environment-energy',
+  'Environment': 'environment-energy',
+  'National Security & Borders': 'national-security-borders',
+  'Defense': 'national-security-borders',
+  'Immigration': 'national-security-borders',
+  'Foreign Affairs': 'national-security-borders',
+  'Foreign Policy': 'national-security-borders',
+  'Rights & Justice': 'rights-justice',
+  'Civil Rights': 'rights-justice',
+  'Judicial': 'rights-justice',
+  'Criminal Justice': 'rights-justice',
+  'Gun Policy': 'rights-justice',
+  'Government & Democracy': 'government-democracy',
+  'Government Reform': 'government-democracy',
+  'Electoral Reform': 'government-democracy',
 };
 
 export const VotingRecordSection = ({ 

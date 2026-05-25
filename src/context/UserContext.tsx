@@ -27,14 +27,14 @@ interface UserContextType {
  * question metadata is not available.
  */
 const LEGACY_QUESTION_TOPIC_MAP: { id: string; topicId: string }[] = [
-  { id: 'q1', topicId: 'economy' },
-  { id: 'q2', topicId: 'economy' },
-  { id: 'q3', topicId: 'healthcare' },
-  { id: 'q4', topicId: 'immigration' },
-  { id: 'q5', topicId: 'environment' },
-  { id: 'q6', topicId: 'education' },
-  { id: 'q7', topicId: 'gun-policy' },
-  { id: 'q8', topicId: 'criminal-justice' },
+  { id: 'q1', topicId: 'economy-work' },
+  { id: 'q2', topicId: 'economy-work' },
+  { id: 'q3', topicId: 'health-safety-net' },
+  { id: 'q4', topicId: 'national-security-borders' },
+  { id: 'q5', topicId: 'environment-energy' },
+  { id: 'q6', topicId: 'health-safety-net' },
+  { id: 'q7', topicId: 'rights-justice' },
+  { id: 'q8', topicId: 'rights-justice' },
 ];
 
 // ============= Context =============

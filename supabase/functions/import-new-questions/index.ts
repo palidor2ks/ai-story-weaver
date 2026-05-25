@@ -9,20 +9,14 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-// The consolidated 12-topic architecture
+// The consolidated 6-topic federal architecture
 const TOPICS = [
-  { id: 'economy', name: 'Economy', icon: '💼' },
-  { id: 'healthcare', name: 'Healthcare', icon: '🏥' },
-  { id: 'immigration', name: 'Immigration', icon: '🛂' },
-  { id: 'environment', name: 'Environment', icon: '🌍' },
-  { id: 'defense', name: 'Defense & Military', icon: '🛡️' },
-  { id: 'foreign-affairs', name: 'Foreign Affairs', icon: '🌐' },
-  { id: 'civil-rights', name: 'Civil Rights', icon: '⚖️' },
-  { id: 'education', name: 'Education', icon: '📚' },
-  { id: 'social-programs', name: 'Social Programs', icon: '🤝' },
-  { id: 'government', name: 'Government', icon: '🏛️' },
-  { id: 'technology', name: 'Technology', icon: '🔬' },
-  { id: 'judicial', name: 'Judicial & Courts', icon: '⚖️' },
+  { id: 'economy-work', name: 'Economy & Work', icon: '💼' },
+  { id: 'health-safety-net', name: 'Health, Education & Social Safety Net', icon: '🤝' },
+  { id: 'environment-energy', name: 'Environment & Energy', icon: '🌍' },
+  { id: 'national-security-borders', name: 'National Security & Borders', icon: '🛡️' },
+  { id: 'rights-justice', name: 'Rights & Justice', icon: '⚖️' },
+  { id: 'government-democracy', name: 'Government & Democracy', icon: '🏛️' },
 ];
 
 // Map topic names from document to topic IDs

@@ -235,19 +235,14 @@ function inferTopics(question: string, description: string): {
   const text = `${question} ${description}`.toLowerCase();
   const matchedTopics: Array<{ topic: string; count: number }> = [];
   
-  // Map keywords directly to our 10 canonical topics
+  // Map keywords directly to the 6 canonical federal topics (display labels stored in bills.topic)
   const topicKeywords: Record<string, string[]> = {
-    'Healthcare': ['health', 'medicare', 'medicaid', 'hospital', 'medical', 'drug', 'prescription', 'healthcare', 'mental health', 'opioid', 'fentanyl', 'family', 'child', 'children', 'childcare'],
-    'Defense': ['defense', 'military', 'veteran', 'armed forces', 'pentagon', 'national security', 'army', 'navy', 'marines', 'air force', 'foreign', 'international', 'diplomacy', 'embassy', 'ambassador', 'treaty', 'nato', 'united nations', 'emergency', 'disaster', 'fema'],
-    'Immigration': ['immigration', 'border', 'visa', 'asylum', 'migrant', 'citizenship', 'daca', 'refugee', 'deportation'],
-    'Civil Rights': ['civil rights', 'discrimination', 'voting rights', 'equality', 'lgbtq', 'affirmative action', 'minority', 'crime', 'criminal', 'police', 'law enforcement', 'prison', 'gun', 'firearm', 'weapon', 'fbi', 'atf', 'native american', 'tribal', 'tribe', 'indian', 'reservation', 'arts', 'culture', 'museum', 'library', 'religion', 'religious', 'sports', 'recreation', 'athletics', 'olympic'],
-    'Judicial': ['court', 'judicial', 'judge', 'legal', 'lawsuit', 'litigation', 'sentencing', 'supreme court', 'appellate', 'jurisdiction', 'trial', 'verdict', 'precedent', 'constitutional'],
-    'Education': ['education', 'school', 'student', 'college', 'university', 'pell grant', 'teacher', 'history', 'historical', 'census', 'research'],
-    'Environment': ['energy', 'renewable', 'solar', 'wind', 'oil', 'gas', 'nuclear', 'fossil fuel', 'electricity', 'environment', 'climate', 'carbon', 'pollution', 'conservation', 'wildlife', 'epa', 'clean air', 'clean water', 'public land', 'national park', 'forest', 'wilderness', 'mining', 'drilling', 'water', 'dam', 'flood', 'drought', 'irrigation', 'wastewater', 'animal', 'endangered species'],
-    'Economy': ['budget', 'fiscal', 'debt', 'deficit', 'appropriation', 'spending', 'economic', 'tax', 'taxes', 'taxation', 'irs', 'revenue', 'labor', 'employment', 'worker', 'wage', 'union', 'overtime', 'osha', 'workplace', 'commerce', 'business', 'trade', 'tariff', 'antitrust', 'consumer protection', 'bank', 'banking', 'financial', 'wall street', 'securities', 'cryptocurrency', 'fed', 'interest rate', 'transportation', 'highway', 'road', 'bridge', 'rail', 'transit', 'airport', 'infrastructure', 'agriculture', 'farm', 'food', 'crop', 'usda', 'nutrition', 'rural'],
-    'Social Programs': ['welfare', 'snap', 'food stamp', 'poverty', 'homeless', 'social services', 'benefits', 'housing', 'rent', 'mortgage', 'hud', 'homelessness', 'affordable housing'],
-    'Technology': ['technology', 'cyber', 'internet', 'data', 'privacy', 'broadband', 'ai', 'artificial intelligence'],
-    'Government': ['filibuster', 'congressional', 'house rules', 'senate rules', 'term limit', 'federal agency', 'government', 'oversight', 'transparency', 'whistleblower'],
+    'Health, Education & Social Safety Net': ['health', 'medicare', 'medicaid', 'hospital', 'medical', 'drug', 'prescription', 'healthcare', 'mental health', 'opioid', 'fentanyl', 'family', 'child', 'children', 'childcare', 'education', 'school', 'student', 'college', 'university', 'pell grant', 'teacher', 'history', 'historical', 'census', 'research', 'welfare', 'snap', 'food stamp', 'poverty', 'homeless', 'social services', 'benefits', 'housing', 'rent', 'mortgage', 'hud', 'homelessness', 'affordable housing'],
+    'National Security & Borders': ['defense', 'military', 'veteran', 'armed forces', 'pentagon', 'national security', 'army', 'navy', 'marines', 'air force', 'foreign', 'international', 'diplomacy', 'embassy', 'ambassador', 'treaty', 'nato', 'united nations', 'emergency', 'disaster', 'fema', 'immigration', 'border', 'visa', 'asylum', 'migrant', 'citizenship', 'daca', 'refugee', 'deportation'],
+    'Rights & Justice': ['civil rights', 'discrimination', 'voting rights', 'equality', 'lgbtq', 'affirmative action', 'minority', 'crime', 'criminal', 'police', 'law enforcement', 'prison', 'gun', 'firearm', 'weapon', 'fbi', 'atf', 'native american', 'tribal', 'tribe', 'indian', 'reservation', 'arts', 'culture', 'museum', 'library', 'religion', 'religious', 'sports', 'recreation', 'athletics', 'olympic', 'court', 'judicial', 'judge', 'legal', 'lawsuit', 'litigation', 'sentencing', 'supreme court', 'appellate', 'jurisdiction', 'trial', 'verdict', 'precedent', 'constitutional'],
+    'Environment & Energy': ['energy', 'renewable', 'solar', 'wind', 'oil', 'gas', 'nuclear', 'fossil fuel', 'electricity', 'environment', 'climate', 'carbon', 'pollution', 'conservation', 'wildlife', 'epa', 'clean air', 'clean water', 'public land', 'national park', 'forest', 'wilderness', 'mining', 'drilling', 'water', 'dam', 'flood', 'drought', 'irrigation', 'wastewater', 'animal', 'endangered species'],
+    'Economy & Work': ['budget', 'fiscal', 'debt', 'deficit', 'appropriation', 'spending', 'economic', 'tax', 'taxes', 'taxation', 'irs', 'revenue', 'labor', 'employment', 'worker', 'wage', 'union', 'overtime', 'osha', 'workplace', 'commerce', 'business', 'trade', 'tariff', 'antitrust', 'consumer protection', 'bank', 'banking', 'financial', 'wall street', 'securities', 'cryptocurrency', 'fed', 'interest rate', 'transportation', 'highway', 'road', 'bridge', 'rail', 'transit', 'airport', 'infrastructure', 'agriculture', 'farm', 'food', 'crop', 'usda', 'nutrition', 'rural', 'technology', 'cyber', 'internet', 'data', 'privacy', 'broadband', 'ai', 'artificial intelligence'],
+    'Government & Democracy': ['filibuster', 'congressional', 'house rules', 'senate rules', 'term limit', 'federal agency', 'government', 'oversight', 'transparency', 'whistleblower'],
   };
   
   // Count keyword matches per topic
@@ -262,7 +257,7 @@ function inferTopics(question: string, description: string): {
   matchedTopics.sort((a, b) => b.count - a.count);
   
   const topics = matchedTopics.map(m => m.topic);
-  const primary = topics[0] || 'Government';
+  const primary = topics[0] || 'Government & Democracy';
   const additional = topics.slice(1);
   const topicCount = topics.length;
   
