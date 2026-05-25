@@ -15,6 +15,7 @@ import { CivicOfficial } from '@/hooks/useCivicOfficials';
 interface RepresentativeComparisonCardProps {
   official: CivicOfficial;
   resolvedScore: number | null;
+  overallScore?: number | null;
 }
 
 const getPartyColor = (party: string) => {
