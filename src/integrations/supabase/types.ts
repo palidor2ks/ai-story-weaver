@@ -2775,6 +2775,7 @@ export type Database = {
           created_at: string | null
           id: string
           include_in_politician_quiz: boolean
+          include_in_quiz_library: boolean
           is_onboarding_canonical: boolean | null
           onboarding_slot: number | null
           source: string
@@ -2785,6 +2786,7 @@ export type Database = {
           created_at?: string | null
           id: string
           include_in_politician_quiz?: boolean
+          include_in_quiz_library?: boolean
           is_onboarding_canonical?: boolean | null
           onboarding_slot?: number | null
           source?: string
@@ -2795,6 +2797,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           include_in_politician_quiz?: boolean
+          include_in_quiz_library?: boolean
           is_onboarding_canonical?: boolean | null
           onboarding_slot?: number | null
           source?: string

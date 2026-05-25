@@ -14,7 +14,8 @@ import { toast } from 'sonner';
 import { useTopics } from '@/hooks/useCandidates';
 import {
   usePolls, useCreatePoll, useUpdatePollStatus, useDeletePoll,
-  useGeneratePollQuestions, useRepostPoll, type PollDraftQuestion, type SharePlatform,
+  useGeneratePollQuestions, useRepostPoll, useTogglePollLibraryInclusion,
+  type PollDraftQuestion, type SharePlatform,
 } from '@/hooks/usePolls';
 
 const PLATFORMS: { id: SharePlatform; label: string; note?: string }[] = [
@@ -38,6 +39,7 @@ export const PollsPanel = () => {
   const deletePoll = useDeletePoll();
   const generate = useGeneratePollQuestions();
   const repost = useRepostPoll();
+  const toggleLibrary = useTogglePollLibraryInclusion();
 
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<'mc' | 'scored' | 'mini_quiz'>('mc');
@@ -49,10 +51,11 @@ export const PollsPanel = () => {
   const [sharePlatforms, setSharePlatforms] = useState<SharePlatform[]>(['twitter']);
   const [autoPost, setAutoPost] = useState(true);
   const [shareCaption, setShareCaption] = useState('');
+  const [includeInLibrary, setIncludeInLibrary] = useState(false);
 
   const reset = () => {
     setType('mc'); setTopicId(''); setPrompt(''); setTitle(''); setDescription(''); setQuestions([]);
-    setSharePlatforms(['twitter']); setAutoPost(true); setShareCaption('');
+    setSharePlatforms(['twitter']); setAutoPost(true); setShareCaption(''); setIncludeInLibrary(false);
   };
 
   const togglePlatform = (p: SharePlatform) => {
@@ -74,6 +77,7 @@ export const PollsPanel = () => {
     await createPoll.mutateAsync({
       title, description, type, topic_id: topicId || null, questions, status,
       share_platforms: sharePlatforms, auto_post: autoPost, share_caption: shareCaption || null,
+      include_in_quiz_library: includeInLibrary,
     });
     setOpen(false); reset();
   };
@@ -107,7 +111,7 @@ export const PollsPanel = () => {
           <CardTitle>Polls</CardTitle>
           <CardDescription>
             Generate shareable polls. Visitors answer anonymously, then are prompted to sign up.
-            Scored poll questions appear in the user Quiz Library but are excluded from the politician quiz.
+            Poll questions stay out of the user Quiz Library unless you opt in below or toggle "In Library" later.
           </CardDescription>
         </div>
         <Button onClick={() => { reset(); setOpen(true); }}><Plus className="w-4 h-4 mr-2" />New Poll</Button>
@@ -122,6 +126,7 @@ export const PollsPanel = () => {
                 <TableHead>Title</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>In Library</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -135,6 +140,13 @@ export const PollsPanel = () => {
                     <Badge variant={p.status === 'published' ? 'default' : p.status === 'closed' ? 'secondary' : 'outline'}>
                       {p.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={!!p.library_included}
+                      disabled={toggleLibrary.isPending}
+                      onCheckedChange={(v) => toggleLibrary.mutate({ pollId: p.id, include: v })}
+                    />
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {new Date(p.created_at).toLocaleDateString()}
@@ -228,6 +240,19 @@ export const PollsPanel = () => {
               <Label>Description</Label>
               <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} />
             </div>
+
+            <Card className="p-3 bg-muted/30">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label htmlFor="include-library" className="text-base">Include questions in Quiz Library</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Off by default. When on, these questions appear in the user-facing Quiz Library.
+                  </p>
+                </div>
+                <Switch id="include-library" checked={includeInLibrary} onCheckedChange={setIncludeInLibrary} />
+              </div>
+            </Card>
+
 
             <Card className="p-3 space-y-3 bg-muted/30">
               <div className="flex items-center justify-between">

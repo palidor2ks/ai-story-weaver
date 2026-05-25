@@ -18,6 +18,7 @@ export interface Poll {
   share_platforms?: string[] | null;
   auto_post?: boolean | null;
   share_caption?: string | null;
+  library_included?: boolean;
 }
 
 export type SharePlatform = 'twitter' | 'facebook' | 'linkedin' | 'instagram';
@@ -36,7 +37,23 @@ export const usePolls = () => {
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data || []) as Poll[];
+      const polls = (data || []) as Poll[];
+      if (polls.length === 0) return polls;
+
+      // Determine library-inclusion per poll
+      const { data: pqs } = await supabase
+        .from('poll_questions')
+        .select('poll_id, questions:question_id(include_in_quiz_library)')
+        .in('poll_id', polls.map(p => p.id));
+
+      const includedByPoll = new Map<string, boolean>();
+      for (const row of (pqs || []) as any[]) {
+        const q = row.questions;
+        const included = !!q?.include_in_quiz_library;
+        if (included) includedByPoll.set(row.poll_id, true);
+        else if (!includedByPoll.has(row.poll_id)) includedByPoll.set(row.poll_id, false);
+      }
+      return polls.map(p => ({ ...p, library_included: includedByPoll.get(p.id) ?? false }));
     },
   });
 };
@@ -88,6 +105,7 @@ interface CreatePollInput {
   share_platforms?: SharePlatform[];
   auto_post?: boolean;
   share_caption?: string | null;
+  include_in_quiz_library?: boolean;
 }
 
 function slugify(s: string) {
@@ -137,6 +155,7 @@ export const useCreatePoll = () => {
           topic_id: input.topic_id || 'economy-work', // fallback topic
           source: 'poll',
           include_in_politician_quiz: false,
+          include_in_quiz_library: input.include_in_quiz_library ?? false,
         } as any);
         if (qErr) throw qErr;
 
@@ -252,5 +271,31 @@ export const useGeneratePollQuestions = () => {
       return data as { title: string; description: string; questions: PollDraftQuestion[] };
     },
     onError: (e: Error) => toast.error(`AI draft failed: ${e.message}`),
+  });
+};
+
+export const useTogglePollLibraryInclusion = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pollId, include }: { pollId: string; include: boolean }) => {
+      const { data: pqs, error: pqErr } = await supabase
+        .from('poll_questions')
+        .select('question_id')
+        .eq('poll_id', pollId);
+      if (pqErr) throw pqErr;
+      const ids = (pqs || []).map((r: any) => r.question_id);
+      if (ids.length === 0) return;
+      const { error } = await supabase
+        .from('questions')
+        .update({ include_in_quiz_library: include } as any)
+        .in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['polls'] });
+      qc.invalidateQueries({ queryKey: ['questions'] });
+      toast.success('Quiz Library inclusion updated');
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 };

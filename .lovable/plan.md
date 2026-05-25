@@ -1,44 +1,54 @@
-# Fix "Failed to load AI analysis" error
+## Goal
 
-## Root cause
+Poll questions should not appear in the user-facing Quiz Library by default. Admins can opt-in to library inclusion when creating a poll, and flip that inclusion after the fact from the Polls admin panel.
 
-Edge function logs show two compounding issues:
+## Current behavior
 
-1. **Cache writes never persist.** Every call to `writeCache` fails with:
-   `there is no unique or exclusion constraint matching the ON CONFLICT specification`
+- `usePolls.useCreatePoll` inserts new questions with `source: 'poll'` and `include_in_politician_quiz: false`.
+- `useQuestions` (consumed by `Quiz.tsx` and `QuizLibrary.tsx`) selects **every** row from `questions`, so poll-sourced questions show up alongside curated quiz questions.
+- There is no field on `questions` that controls user-quiz-library inclusion separately from the politician quiz flag.
 
-   The `ai_analysis_cache` table has a unique **expression** index (`COALESCE(cycle,'')`, `COALESCE(user_id::text,'')`, …) instead of a plain unique constraint, so Supabase's `.upsert({ onConflict: "kind,subject_id,cycle,user_id,input_fingerprint" })` cannot match it. The first request returns successfully but the result is never cached, so the next view re-hits the AI gateway.
-
-2. **Gateway rate-limits (HTTP 429)** as a direct consequence — every profile view re-generates the same analysis. The function throws, and `AIExplanation.tsx` shows a destructive red toast.
-
-## Fix
+## Plan
 
 ### 1. Database migration
 
-Replace the expression unique index with a real unique constraint that matches the `onConflict` column list, treating NULLs as equal so a single row per `(kind, subject_id, cycle, user_id, input_fingerprint)` is enforced even when optional columns are null:
+Add a new boolean column to `public.questions`:
 
-```sql
-drop index if exists public.ai_analysis_cache_key_idx;
+- `include_in_quiz_library boolean not null default true`
 
-alter table public.ai_analysis_cache
-  add constraint ai_analysis_cache_key_uniq
-  unique nulls not distinct (kind, subject_id, cycle, user_id, input_fingerprint);
-```
+Backfill: set `include_in_quiz_library = false` for every existing row where `source = 'poll'` so previously-created poll questions disappear from the library immediately (matching the user's screenshot example).
 
-No code change needed in `_shared/ai-cache.ts` — the existing `onConflict` string will then match.
+No RLS changes needed (column inherits existing table policies).
 
-### 2. Soften the user-facing error in `src/components/AIExplanation.tsx`
+### 2. Filter the user quiz library + quiz
 
-- Catch 429 / rate-limit responses specifically and show a non-destructive inline message ("AI analysis is busy — try again in a moment") instead of the red toast.
-- Keep the toast for genuine errors but use `variant: 'default'` and a friendlier copy.
-- Do not auto-retry from the client (would amplify rate limits); the refresh button already exists.
+Update `useQuestions` in `src/hooks/useCandidates.ts` to filter `.eq('include_in_quiz_library', true)` so both `Quiz.tsx` and `QuizLibrary.tsx` automatically exclude poll questions that aren't opted in. No call-site changes needed.
+
+### 3. Poll creation: opt-in checkbox
+
+In `src/components/admin/PollsPanel.tsx` "New Poll" dialog, add a Switch labeled **"Include questions in Quiz Library"** (default off). Persist the choice through `useCreatePoll`.
+
+In `src/hooks/usePolls.ts`:
+- Extend `CreatePollInput` with `include_in_quiz_library?: boolean` (default `false`).
+- When inserting each generated question, set `include_in_quiz_library` to that value.
+
+### 4. After-the-fact toggle in admin Polls table
+
+Add a new column **"In Library"** to the polls table in `PollsPanel.tsx` showing a checkbox/switch per poll. Toggling it updates `include_in_quiz_library` on every `questions` row joined via `poll_questions.poll_id = poll.id`.
+
+Implementation:
+- New hook `useTogglePollLibraryInclusion` in `usePolls.ts` that:
+  1. Reads `poll_questions.question_id` for the given `poll_id`.
+  2. Updates `questions.include_in_quiz_library` for those ids.
+  3. Invalidates `['polls']` and `['questions']` query keys.
+- Derive each poll's current inclusion state via a lightweight join (extend `usePolls` to also fetch, per poll, whether any of its questions are in the library). Simple approach: add a `library_included` boolean computed by a second query that aggregates `poll_questions` + `questions.include_in_quiz_library` (any true → checked).
+
+### 5. UI copy tweak
+
+Update the `PollsPanel` CardDescription line that currently says "Scored poll questions appear in the user Quiz Library but are excluded from the politician quiz." to reflect the new opt-in default.
 
 ## Out of scope
 
-- Personalized rep score, party scores, scoring logic — unchanged.
-- AI prompt, model, or cache TTL — unchanged.
-
-## Verification
-
-- After migration: trigger one profile view → check edge logs show no `ai-cache write error` and a row exists in `ai_analysis_cache`. Reload the profile → second view should return `cached: true` and not call the gateway.
-- 429 path: temporarily simulate by forcing refresh repeatedly → confirm UI shows the soft inline message, not the red error toast.
+- No changes to politician quiz logic (`include_in_politician_quiz` stays false for poll questions).
+- No changes to public poll voting page or results.
+- No changes to scoring or party alignment logic.
