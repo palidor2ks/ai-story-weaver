@@ -15,7 +15,6 @@ interface PartyComparisonCardProps {
   partyId: string;
   partyName: string;
   score: number | null | undefined;
-  overallScore?: number | null | undefined;
   isLoading?: boolean;
 }
 
@@ -46,7 +45,7 @@ const partyStyles: Record<string, { bg: string; border: string; text: string; ic
   },
 };
 
-export function PartyComparisonCard({ partyId, partyName, score, overallScore, isLoading = false }: PartyComparisonCardProps) {
+export function PartyComparisonCard({ partyId, partyName, score, isLoading = false }: PartyComparisonCardProps) {
   const { user } = useAuth();
   const styles = partyStyles[partyId] || partyStyles.democrat;
 
@@ -192,34 +191,16 @@ export function PartyComparisonCard({ partyId, partyName, score, overallScore, i
               <Info className="w-3 h-3 text-muted-foreground cursor-help" />
             </TooltipTrigger>
             <TooltipContent className="max-w-xs">
-              <p className="font-medium mb-1">Two scores</p>
+              <p className="font-medium mb-1">L = Left, R = Right</p>
               <p className="text-sm">
-                <strong>Match</strong> = average on questions you've answered, weighted by your topic priorities.
-                <br />
-                <strong>Overall</strong> = average across every question the {partyName} Party has answered.
+                This score shows the {partyName} Party's average position{' '}
+                <strong>only on the questions you've answered</strong>. Answer more quiz questions to refine this comparison.
               </p>
             </TooltipContent>
           </Tooltip>
         </div>
-        <div className="flex items-end gap-6">
-          <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Match</div>
-            <div className={cn('text-2xl font-bold', styles.text)}>
-              {isLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={score} size="md" />}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Overall</div>
-            <div className="text-base font-semibold text-muted-foreground">
-              {overallScore === undefined ? (
-                <Skeleton className="h-5 w-10" />
-              ) : overallScore === null ? (
-                <span>—</span>
-              ) : (
-                <ScoreText score={overallScore} size="sm" />
-              )}
-            </div>
-          </div>
+        <div className={cn('text-2xl font-bold', styles.text)}>
+          {isLoading ? <Skeleton className="h-8 w-12" /> : <ScoreText score={score} size="md" />}
         </div>
       </Link>
 

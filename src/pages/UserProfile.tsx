@@ -7,7 +7,6 @@ import { useRepresentatives } from '@/hooks/useRepresentatives';
 import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
 import { usePersonalizedScoreMap } from '@/hooks/usePersonalizedScoreMap';
 import { usePartyMatchScores } from '@/hooks/usePartyMatchScores';
-import { usePartyOverallScores } from '@/hooks/usePartyOverallScores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -52,7 +51,6 @@ export const UserProfile = () => {
   const { data: repsData, isLoading: repsLoading, error: repsError, refetch: refetchReps } = useRepresentatives(profile?.address);
   const { data: civicData, isLoading: civicLoading, refetch: refetchCivic } = useCivicOfficials(profile?.address);
   const { data: partyScores, isLoading: partyScoresLoading } = usePartyMatchScores();
-  const { data: partyOverallScores } = usePartyOverallScores();
   const federalReps = repsData?.representatives ?? [];
   const congressionalDistrict = repsData?.district;
   const congressionalState = repsData?.state;
@@ -629,28 +627,24 @@ export const UserProfile = () => {
                   partyId="democrat"
                   partyName="Democratic"
                   score={partyScores?.democrat}
-                  overallScore={partyOverallScores?.democrat}
                   isLoading={partyScoresLoading}
                 />
                 <PartyComparisonCard
                   partyId="republican"
                   partyName="Republican"
                   score={partyScores?.republican}
-                  overallScore={partyOverallScores?.republican}
                   isLoading={partyScoresLoading}
                 />
                 <PartyComparisonCard
                   partyId="green"
                   partyName="Green"
                   score={partyScores?.green}
-                  overallScore={partyOverallScores?.green}
                   isLoading={partyScoresLoading}
                 />
                 <PartyComparisonCard
                   partyId="libertarian"
                   partyName="Libertarian"
                   score={partyScores?.libertarian}
-                  overallScore={partyOverallScores?.libertarian}
                   isLoading={partyScoresLoading}
                 />
               </div>
@@ -750,7 +744,6 @@ export const UserProfile = () => {
                           key={official.id}
                           official={official}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
-                          overallScore={official.overall_score}
                         />
                       ))}
                     </div>
@@ -786,7 +779,6 @@ export const UserProfile = () => {
                             key={rep.id}
                             official={official}
                             resolvedScore={getResolvedScore(rep.bioguide_id || rep.id, rep.overall_score)}
-                            overallScore={rep.overall_score}
                           />
                         );
                       })}
@@ -807,7 +799,6 @@ export const UserProfile = () => {
                           key={official.id}
                           official={official}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
-                          overallScore={official.overall_score}
                         />
                       ))}
                     </div>
@@ -827,7 +818,6 @@ export const UserProfile = () => {
                           key={official.id}
                           official={official}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
-                          overallScore={official.overall_score}
                         />
                       ))}
                     </div>
@@ -847,7 +837,6 @@ export const UserProfile = () => {
                           key={official.id}
                           official={official}
                           resolvedScore={getResolvedScore(official.id, official.overall_score)}
-                          overallScore={official.overall_score}
                         />
                       ))}
                     </div>
