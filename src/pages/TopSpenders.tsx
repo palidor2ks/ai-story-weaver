@@ -427,7 +427,7 @@ function SpenderRowItem({ row: r, index: i, raisedMap, causeMap }: SpenderRowIte
             {(() => {
               const raised = raisedMap?.get(r.spending_committee_fec_id) ?? 0;
               return raised > 0 ? (
-                <span className="ml-2 text-muted-foreground/80">· Raised {formatIECompact(raised)}</span>
+                <span className="ml-2 text-muted-foreground">· Raised {formatIECompact(raised)}</span>
               ) : null;
             })()}
           </p>
