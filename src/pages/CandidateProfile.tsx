@@ -19,6 +19,7 @@ import { useAvailableCycles } from '@/hooks/useAvailableCycles';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBillSponsors } from '@/hooks/useBillSponsors';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
+import { useCandidatePersonalizedScore } from '@/hooks/useCandidatePersonalizedScore';
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
@@ -55,6 +56,7 @@ export const CandidateProfile = () => {
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
   const { data: scoreMap } = useCandidateScoreMap(id ? [id] : undefined);
+  const { data: personalized } = useCandidatePersonalizedScore(id);
   const { data: cycleInfo } = useAvailableCycles(id);
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
@@ -400,7 +402,14 @@ export const CandidateProfile = () => {
 
 
               {/* Score Display */}
-              <CandidateScoreCard score={resolvedScore} matchScore={matchScore} userScore={profile?.overall_score ?? null} className="mb-4" />
+              <CandidateScoreCard
+                score={resolvedScore}
+                matchScore={matchScore}
+                userScore={profile?.overall_score ?? null}
+                personalizedScore={personalized?.score ?? null}
+                personalizedCount={personalized?.matchedCount ?? 0}
+                className="mb-4"
+              />
 
               {/* Badges */}
               <div className="flex flex-wrap items-center gap-2 mb-3">

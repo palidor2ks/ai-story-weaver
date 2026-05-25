@@ -5,6 +5,8 @@ interface CandidateScoreCardProps {
   score: number | null | undefined;
   matchScore?: number;
   userScore?: number | null;
+  personalizedScore?: number | null;
+  personalizedCount?: number;
   className?: string;
 }
 
@@ -26,7 +28,7 @@ function getScoreColor(s: number | null | undefined): string {
   return 'text-purple-600 dark:text-purple-400';
 }
 
-export function CandidateScoreCard({ score, matchScore, userScore, className }: CandidateScoreCardProps) {
+export function CandidateScoreCard({ score, matchScore, userScore, personalizedScore, personalizedCount, className }: CandidateScoreCardProps) {
   const isNA = score === null || score === undefined;
   const scoreText = formatScoreText(score);
   const colorClass = getScoreColor(score);
@@ -43,6 +45,11 @@ export function CandidateScoreCard({ score, matchScore, userScore, className }: 
   const hasUser = userScore !== null && userScore !== undefined;
   const userPct = hasUser ? toPct(userScore as number) : 50;
   const markersClose = hasUser && Math.abs(userPct - markerPct) < 6;
+
+  const hasPersonalized = personalizedScore !== null && personalizedScore !== undefined;
+  const personalizedPct = hasPersonalized ? toPct(personalizedScore as number) : 50;
+  const personalizedColor = getScoreColor(personalizedScore);
+  const personalizedText = formatScoreText(personalizedScore);
 
   return (
     <div
@@ -65,6 +72,17 @@ export function CandidateScoreCard({ score, matchScore, userScore, className }: 
           <div className="mt-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             {label}
           </div>
+          {hasPersonalized && (
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className={cn('text-xl font-bold leading-none', personalizedColor)}>
+                {personalizedText}
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Based on your answers
+                {typeof personalizedCount === 'number' && personalizedCount > 0 && ` · ${personalizedCount} q`}
+              </span>
+            </div>
+          )}
         </div>
         {typeof matchScore === 'number' && !isNA && (
           <div className="sm:text-right">
@@ -113,6 +131,16 @@ export function CandidateScoreCard({ score, matchScore, userScore, className }: 
             <div className="absolute left-1/2 bottom-4 -translate-x-1/2 mb-1 text-[10px] font-semibold uppercase tracking-wider text-primary whitespace-nowrap">
               You
             </div>
+          </div>
+        )}
+
+        {hasPersonalized && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all"
+            style={{ left: `${personalizedPct}%` }}
+            aria-label="Personalized rep position"
+          >
+            <div className="rounded-full border-2 border-dashed border-foreground bg-background shadow-md h-4 w-4" />
           </div>
         )}
 
