@@ -44,6 +44,7 @@ import { AdminUsersPanel } from "@/components/admin/AdminUsersPanel";
 import { PollsPanel } from "@/components/admin/PollsPanel";
 import { IEExclusionsPanel } from "@/components/admin/IEExclusionsPanel";
 import { CommitteeTopicsPanel } from "@/components/admin/CommitteeTopicsPanel";
+import { CommitteeAliasesPanel } from "@/components/admin/CommitteeAliasesPanel";
 
 
 // Only levels that require manual entry (no API available)
@@ -791,8 +792,19 @@ export default function Admin() {
             <IEExclusionsPanel />
           </TabsContent>
 
-          <TabsContent value="committee-topics">
+          <TabsContent value="committee-topics" className="space-y-4">
             <CommitteeTopicsPanel />
+            <Card>
+              <CardHeader>
+                <CardTitle>Outside Spender Aliases</CardTitle>
+                <CardDescription>
+                  Create manual display-name aliases for top outside spenders by FEC committee ID.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CommitteeAliasesPanel />
+              </CardContent>
+            </Card>
           </TabsContent>
 
 
