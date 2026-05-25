@@ -762,6 +762,10 @@ export const CandidateProfile = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* Funding Sources breakdown — shareable panel */}
+                    <FundingSourcesBreakdown input={fundingInput} className="mb-6" />
+
                     {/* Search Bar */}
                     <div className="mb-4 relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
