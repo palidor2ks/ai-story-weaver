@@ -501,18 +501,18 @@ export function AnswerCoveragePanel() {
 
   const handleFillVisibleUnanswered = async () => {
     try {
-      const toProcess = paginatedCandidates
+      const toProcess = filteredCandidates
         .filter(c => c.answerCount === 0)
         .slice(0, 50)
         .map(c => ({ id: c.id, name: c.name }));
       if (toProcess.length === 0) {
-        toast.info('No unanswered candidates on this page');
+        toast.info('No unanswered candidates in current view');
         return;
       }
       await populateBatch(toProcess, false);
     } catch (err) {
       console.error('[Admin] Fill visible unanswered failed:', err);
-      toast.error('Failed to generate AI answers for visible page');
+      toast.error('Failed to generate AI answers for visible candidates');
     }
   };
 
@@ -641,7 +641,7 @@ export function AnswerCoveragePanel() {
 
   const noAnswersCount = candidateStats?.noAnswers || 0;
   const lowCoverageCount = candidateStats?.lowCoverage || 0;
-  const visibleUnansweredCount = paginatedCandidates.filter(c => c.answerCount === 0).length;
+  const visibleUnansweredCount = filteredCandidates.filter(c => c.answerCount === 0).length;
 
   // Only show full loading spinner on initial load (when no cached data exists)
   const isInitialLoading = (statsLoading || votingStatsLoading || fecStatsLoading || syncLoading) && !candidateStatsCache;
@@ -725,27 +725,7 @@ export function AnswerCoveragePanel() {
                   </AlertDialogContent>
                 </AlertDialog>
 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} disabled={visibleUnansweredCount === 0}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Fill Unanswered on This Page ({Math.min(visibleUnansweredCount, 50)})
-                    </DropdownMenuItem>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Fill Unanswered on Current Page?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Generates AI answers for up to 50 unanswered candidates on the current page only.
-                        Useful for spot-fills without processing the entire dataset.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleFillVisibleUnanswered}>Generate</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+
                 
                 
                 <AlertDialog>
@@ -1831,6 +1811,35 @@ export function AnswerCoveragePanel() {
               </PopoverContent>
             </Popover>
           </div>
+
+          {/* Fill Unanswered in Current View */}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={anyBatchRunning || visibleUnansweredCount === 0}
+              >
+                <Sparkles className="h-4 w-4 mr-1.5" />
+                Fill Unanswered in View ({Math.min(visibleUnansweredCount, 50)})
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Fill Unanswered in Current View?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Generates AI answers for up to 50 unanswered candidates matching your current filters.
+                  Useful for spot-fills scoped to whatever's in the chart right now.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleFillVisibleUnanswered}>Generate</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+
           
           {/* Active filters indicator */}
           {(partyFilter !== 'all' || stateFilter !== 'all' || coverageFilter !== 'all' || syncFilter !== 'all' || deltaFilter !== 'all' || financeFilter !== 'all' || scoreFilter !== 'all' || tierFilter !== 'all' || fecIdFilter !== 'all') && (
