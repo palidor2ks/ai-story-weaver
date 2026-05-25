@@ -29,6 +29,7 @@ export const Quiz = () => {
   const { data: dbTopics = [] } = useTopics();
   const { data: userTopics = [] } = useUserTopics();
   const saveQuizResults = useSaveQuizResults();
+  const upsertAnswer = useUpsertQuizAnswer();
   
   // Fetch user's existing answers to filter out already answered questions
   const { data: existingAnswers = [] } = useQuery({
