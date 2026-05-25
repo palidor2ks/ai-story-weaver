@@ -36,7 +36,7 @@ const topicNameToId: Record<string, string> = {
   'Economy & Work': 'economy-work',
   'Economy': 'economy-work',
   'Technology': 'economy-work',
-  'Health, Education & Social Safety Net': 'health-safety-net',
+  'Health, Education & Welfare': 'health-safety-net',
   'Healthcare': 'health-safety-net',
   'Education': 'health-safety-net',
   'Social Programs': 'health-safety-net',

@@ -1,0 +1,2 @@
+UPDATE public.topics SET name = 'Health, Education & Welfare' WHERE id = 'health-safety-net';
+UPDATE public.bills SET topic = 'Health, Education & Welfare' WHERE topic = 'Health, Education & Social Safety Net';

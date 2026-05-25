@@ -9,7 +9,7 @@ const corsHeaders = {
 // Use the 6 canonical federal topics (display labels) for consistency with the quiz system
 const CANONICAL_TOPICS = [
   'Economy & Work',
-  'Health, Education & Social Safety Net',
+  'Health, Education & Welfare',
   'Environment & Energy',
   'National Security & Borders',
   'Rights & Justice',
@@ -30,16 +30,16 @@ const TOPIC_NORMALIZATION: Record<string, string> = {
   'Technology': 'Economy & Work',
   'Science, Technology, Communications': 'Economy & Work',
 
-  // Health, Education & Social Safety Net
-  'Healthcare': 'Health, Education & Social Safety Net',
-  'Health': 'Health, Education & Social Safety Net',
-  'Families': 'Health, Education & Social Safety Net',
-  'Education': 'Health, Education & Social Safety Net',
-  'Social Sciences and History': 'Health, Education & Social Safety Net',
-  'Social Programs': 'Health, Education & Social Safety Net',
-  'Social Welfare': 'Health, Education & Social Safety Net',
-  'Housing and Community Development': 'Health, Education & Social Safety Net',
-  'Social Issues': 'Health, Education & Social Safety Net',
+  // Health, Education & Welfare
+  'Healthcare': 'Health, Education & Welfare',
+  'Health': 'Health, Education & Welfare',
+  'Families': 'Health, Education & Welfare',
+  'Education': 'Health, Education & Welfare',
+  'Social Sciences and History': 'Health, Education & Welfare',
+  'Social Programs': 'Health, Education & Welfare',
+  'Social Welfare': 'Health, Education & Welfare',
+  'Housing and Community Development': 'Health, Education & Welfare',
+  'Social Issues': 'Health, Education & Welfare',
 
   // Environment & Energy
   'Environment': 'Environment & Energy',
@@ -198,7 +198,7 @@ Mark is_omnibus=true if the bill:
 
 Return ONLY this JSON structure:
 {
-  "primary_topic": "Economy & Work" | "Health, Education & Social Safety Net" | "Environment & Energy" | "National Security & Borders" | "Rights & Justice" | "Government & Democracy",
+  "primary_topic": "Economy & Work" | "Health, Education & Welfare" | "Environment & Energy" | "National Security & Borders" | "Rights & Justice" | "Government & Democracy",
   "secondary_topics": ["...", "..."],
   "topic_count": <total unique topics>,
   "is_mismatch": boolean,
@@ -499,7 +499,7 @@ Return a JSON array with one object per bill:
 [
   {
     "bill_index": 1,
-    "primary_topic": "Economy & Work" | "Health, Education & Social Safety Net" | "Environment & Energy" | "National Security & Borders" | "Rights & Justice" | "Government & Democracy",
+    "primary_topic": "Economy & Work" | "Health, Education & Welfare" | "Environment & Energy" | "National Security & Borders" | "Rights & Justice" | "Government & Democracy",
     "secondary_topics": ["...", "..."],
     "topic_count": <total unique topics>,
     "is_mismatch": boolean,

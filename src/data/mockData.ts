@@ -3,7 +3,7 @@ import { Topic, Question, Candidate, Donor, Vote } from '@/types';
 // Consolidated 6 federal topics (was 12). Local topics (5) unchanged.
 export const topics: Topic[] = [
   { id: 'economy-work', name: 'Economy & Work', icon: '💼', weight: 1 },
-  { id: 'health-safety-net', name: 'Health, Education & Social Safety Net', icon: '🤝', weight: 1 },
+  { id: 'health-safety-net', name: 'Health, Education & Welfare', icon: '🤝', weight: 1 },
   { id: 'environment-energy', name: 'Environment & Energy', icon: '🌍', weight: 1 },
   { id: 'national-security-borders', name: 'National Security & Borders', icon: '🛡️', weight: 1 },
   { id: 'rights-justice', name: 'Rights & Justice', icon: '⚖️', weight: 1 },
@@ -22,7 +22,7 @@ export const policyAreaToTopicId: Record<string, string> = {
   'Agriculture and Food': 'economy-work',
   'Science, Technology, Communications': 'economy-work',
 
-  // Health, Education & Social Safety Net
+  // Health, Education & Welfare
   'Health': 'health-safety-net',
   'Families': 'health-safety-net',
   'Education': 'health-safety-net',

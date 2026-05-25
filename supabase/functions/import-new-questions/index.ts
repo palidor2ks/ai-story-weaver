@@ -12,7 +12,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 // The consolidated 6-topic federal architecture
 const TOPICS = [
   { id: 'economy-work', name: 'Economy & Work', icon: '💼' },
-  { id: 'health-safety-net', name: 'Health, Education & Social Safety Net', icon: '🤝' },
+  { id: 'health-safety-net', name: 'Health, Education & Welfare', icon: '🤝' },
   { id: 'environment-energy', name: 'Environment & Energy', icon: '🌍' },
   { id: 'national-security-borders', name: 'National Security & Borders', icon: '🛡️' },
   { id: 'rights-justice', name: 'Rights & Justice', icon: '⚖️' },
