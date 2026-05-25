@@ -111,7 +111,7 @@ export const PollsPanel = () => {
           <CardTitle>Polls</CardTitle>
           <CardDescription>
             Generate shareable polls. Visitors answer anonymously, then are prompted to sign up.
-            Scored poll questions appear in the user Quiz Library but are excluded from the politician quiz.
+            Poll questions stay out of the user Quiz Library unless you opt in below or toggle "In Library" later.
           </CardDescription>
         </div>
         <Button onClick={() => { reset(); setOpen(true); }}><Plus className="w-4 h-4 mr-2" />New Poll</Button>
