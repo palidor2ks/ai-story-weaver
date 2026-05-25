@@ -7,7 +7,7 @@ import { TopicIcon } from '@/components/TopicIcon';
 import { ScoreText } from '@/components/ScoreText';
 import { Button } from '@/components/ui/button';
 import { useQuestions, useTopics } from '@/hooks/useCandidates';
-import { useSaveQuizResults, useUserTopics } from '@/hooks/useProfile';
+import { useSaveQuizResults, useUserTopics, useUpsertQuizAnswer } from '@/hooks/useProfile';
 import { QuizAnswer, TopicScore } from '@/types';
 import { ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,7 @@ export const Quiz = () => {
   const { data: dbTopics = [] } = useTopics();
   const { data: userTopics = [] } = useUserTopics();
   const saveQuizResults = useSaveQuizResults();
+  const upsertAnswer = useUpsertQuizAnswer();
   
   // Fetch user's existing answers to filter out already answered questions
   const { data: existingAnswers = [] } = useQuery({
@@ -70,8 +71,10 @@ export const Quiz = () => {
     let filtered = allQuestions;
     
     if (topicFilter) {
-      // Filter by specific topic
-      filtered = allQuestions.filter(q => q.topicId === topicFilter);
+      // Filter by specific topic, skipping already-answered questions when possible
+      const topicQs = allQuestions.filter(q => q.topicId === topicFilter);
+      const unanswered = topicQs.filter(q => !existingAnswers.includes(q.id));
+      filtered = unanswered.length > 0 ? unanswered : topicQs;
     } else if (mode === 'random') {
       // Get 6 random unanswered questions from user's top 3 topics
       const topTopicIds = userTopics.slice(0, 3).map(ut => ut.topic_id);
@@ -128,6 +131,13 @@ export const Quiz = () => {
         return updated;
       }
       return [...prev, newAnswer];
+    });
+
+    // Autosave this answer immediately so progress persists if user leaves
+    upsertAnswer.mutate({
+      questionId,
+      selectedOptionId: option.id,
+      value: option.value,
     });
 
     // Auto-advance to next question after a short delay
