@@ -564,7 +564,7 @@ export const Feed = () => {
                             <div key={subgroup.key} className="space-y-3">
                               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 {subgroup.title}
-                                <span className="ml-1 text-muted-foreground/70">({subgroup.items.length})</span>
+                                <span className="ml-1 text-muted-foreground">({subgroup.items.length})</span>
                               </h3>
                               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                                 {subgroup.items.map((candidate, index) => (
