@@ -22,6 +22,8 @@ import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
 import { useCandidatePersonalizedScore } from '@/hooks/useCandidatePersonalizedScore';
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
+import { FundingSourcesBreakdown } from '@/components/FundingSourcesBreakdown';
+import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
 import { cn, formatCompactCurrency } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp, ScrollText, Briefcase } from 'lucide-react';
