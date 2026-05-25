@@ -32,7 +32,7 @@ export const Quiz = () => {
   const upsertAnswer = useUpsertQuizAnswer();
   
   // Fetch user's existing answers to filter out already answered questions
-  const { data: existingAnswers = [] } = useQuery({
+  const { data: existingAnswers = [], isLoading: answersLoading } = useQuery({
     queryKey: ['quiz_answers', user?.id],
     queryFn: async () => {
       if (!user) return [];
