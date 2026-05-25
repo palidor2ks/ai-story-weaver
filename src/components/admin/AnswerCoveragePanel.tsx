@@ -725,27 +725,7 @@ export function AnswerCoveragePanel() {
                   </AlertDialogContent>
                 </AlertDialog>
 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} disabled={visibleUnansweredCount === 0}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Fill Unanswered on This Page ({Math.min(visibleUnansweredCount, 50)})
-                    </DropdownMenuItem>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Fill Unanswered on Current Page?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Generates AI answers for up to 50 unanswered candidates on the current page only.
-                        Useful for spot-fills without processing the entire dataset.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleFillVisibleUnanswered}>Generate</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+
                 
                 
                 <AlertDialog>
