@@ -19,6 +19,7 @@ import { useAvailableCycles } from '@/hooks/useAvailableCycles';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBillSponsors } from '@/hooks/useBillSponsors';
 import { useCandidateScoreMap } from '@/hooks/useCandidateScoreMap';
+import { useCandidatePersonalizedScore } from '@/hooks/useCandidatePersonalizedScore';
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
