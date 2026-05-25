@@ -88,6 +88,7 @@ interface CreatePollInput {
   share_platforms?: SharePlatform[];
   auto_post?: boolean;
   share_caption?: string | null;
+  include_in_quiz_library?: boolean;
 }
 
 function slugify(s: string) {
