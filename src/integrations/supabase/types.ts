@@ -801,6 +801,27 @@ export type Database = {
         }
         Relationships: []
       }
+      committee_aliases: {
+        Row: {
+          alias_name: string
+          created_at: string
+          fec_committee_id: string
+          updated_at: string
+        }
+        Insert: {
+          alias_name: string
+          created_at?: string
+          fec_committee_id: string
+          updated_at?: string
+        }
+        Update: {
+          alias_name?: string
+          created_at?: string
+          fec_committee_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       committee_causes: {
         Row: {
           ai_reasoning: string | null
