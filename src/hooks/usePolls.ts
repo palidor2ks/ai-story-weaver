@@ -37,7 +37,23 @@ export const usePolls = () => {
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data || []) as Poll[];
+      const polls = (data || []) as Poll[];
+      if (polls.length === 0) return polls;
+
+      // Determine library-inclusion per poll
+      const { data: pqs } = await supabase
+        .from('poll_questions')
+        .select('poll_id, questions:question_id(include_in_quiz_library)')
+        .in('poll_id', polls.map(p => p.id));
+
+      const includedByPoll = new Map<string, boolean>();
+      for (const row of (pqs || []) as any[]) {
+        const q = row.questions;
+        const included = !!q?.include_in_quiz_library;
+        if (included) includedByPoll.set(row.poll_id, true);
+        else if (!includedByPoll.has(row.poll_id)) includedByPoll.set(row.poll_id, false);
+      }
+      return polls.map(p => ({ ...p, library_included: includedByPoll.get(p.id) ?? false }));
     },
   });
 };
