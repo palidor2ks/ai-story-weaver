@@ -1,42 +1,64 @@
-## 15s PoliPulse Product Video
+## Funding Sources Breakdown — Profile + Baseball Card
 
-Render a 15-second 1920x1080 MP4 with Remotion, AI voiceover via ElevenLabs, kinetic UI mockups in PoliPulse's brand style. Final file: `/mnt/documents/polipulse-product-video.mp4`.
+Add the bar-chart "Funding Sources" panel (the one from the product video) to the candidate profile page and to the shareable Baseball Card. Presentation-only — no new data sources or business logic.
 
-### Creative direction
+### What gets added
 
-- **Aesthetic**: Tech product — dark UI, crisp geometric sans, snappy spring transitions, code/grid layouts.
-- **Palette** (pulled from project): deep navy `#0F172A` background, primary `#3B82F6`, civic red `#EF4444` and civic blue `#1D4ED8` accents, ink `#E2E8F0` text, muted `#64748B`.
-- **Type**: Space Grotesk (display) + Inter (body), via `@remotion/google-fonts`.
-- **Motion**: snappy spring entrances (damping 20, stiffness 200), one fade+slide transition between scenes, persistent subtle grid backdrop.
+**1. New component `src/components/FundingSourcesBreakdown.tsx`**
 
-### Voiceover script (~38 words, ~14s at natural pace)
-
-> "Politics is noisy. PoliPulse cuts through it. Take a 2-minute quiz, get matched to candidates who actually share your values — backed by voting records, donor data, and evidence. Real transparency. Your pulse on politics."
-
-Voice: George (`JBFqnCBsd6RMkjVDRZzb`), `eleven_multilingual_v2`.
-
-### Scene breakdown (450 frames @ 30fps)
+Reusable presentation component that renders the dark panel with 4 horizontal bars:
 
 ```text
-[0–60]    Hook: "Politics is noisy."  — chaotic headline ticker collapses into logo
-[60–150]  Quiz: animated question card with -10/+10 slider snapping
-[150–240] Match: candidate cards fly in with match % counters animating up
-[240–360] Transparency: split view — voting record rows + donor bars filling
-[360–450] Outro: PoliPulse wordmark + tagline "Your pulse on politics." + URL
+FUNDING SOURCES · {CYCLE}
+Individual Donors     ████████████████░░░░  68%
+PACs & Committees     ████░░░░░░░░░░░░░░░░  18%
+Industry / Orgs       ██░░░░░░░░░░░░░░░░░░   9%
+Self-Funding          █░░░░░░░░░░░░░░░░░░░   5%
 ```
 
-### Implementation steps
+Props: `{ sources: { label: string; amount: number; color: string }[]; cycleLabel?: string; variant?: 'panel' | 'compact' }`. Computes percentages off the sum. Empty rows hidden. Uses semantic tokens (`bg-card`, `border-border`, `text-muted-foreground`, `text-primary`) so it matches the rest of the app theme (not raw hex like the video).
 
-1. **Scaffold** `remotion/` project: `bun init`, install `remotion`, `@remotion/cli/renderer/bundler/transitions/google-fonts`, `@remotion/compositor-linux-x64-musl`, React. Fix gnu compositor binary + symlink ffmpeg/ffprobe (per sandbox rules).
-2. **Generate voiceover** with ElevenLabs TTS script → save to `remotion/public/audio/vo.mp3`.
-3. **Build scenes** (5 files under `src/scenes/`) using `useCurrentFrame` + `interpolate`/`spring`. Use `<Audio>` with the VO across the full composition.
-4. **Wire** in `MainVideo.tsx` via `<TransitionSeries>` with fade transitions (~10 frames) between scenes; persistent grid background layer.
-5. **Render** via programmatic `scripts/render-remotion.mjs` (chrome-for-testing, muted:false since we want VO, concurrency 1) → `/mnt/documents/polipulse-product-video.mp4`.
-6. **QA**: render a still at frames 30, 120, 200, 300, 420 to confirm typography + layout, then deliver MP4 via `<presentation-artifact>`.
+**2. Helper `src/lib/fundingBreakdown.ts`**
 
-### Technical notes
+Single pure function `computeFundingBreakdown(input)` that maps the already-derived FEC values on CandidateProfile into the 4 buckets:
 
-- Composition duration accounts for transition overlap (~40 frames total of overlap).
-- Audio not muted in renderer; ensure ffmpeg in PATH symlinks are in place so audio encodes.
-- No `backdropFilter`; use subtle `filter: blur()` only on 1–2 glow accents.
-- All copy and colors live in components — no business logic touched.
+| Bucket | Source |
+|---|---|
+| Individual Donors | itemized non-PAC donor sum + `fecUnitemized` |
+| PACs & Committees | itemized PAC donors + `fecTransfers` |
+| Industry / Organizations | itemized organization donors |
+| Self-Funding | `fecLoans` + `fecCandidateContribution` |
+
+Returns `{ sources, cycleLabel, total }`. Used by both the profile page and the share button so the numbers always match.
+
+**3. CandidateProfile.tsx**
+
+Insert `<FundingSourcesBreakdown … />` directly under the existing "All Contributors & Funding Sources" summary block (~line 733), before the donor search input. No changes to surrounding logic.
+
+**4. Share data — `src/components/share/templates/types.ts`**
+
+Extend `CardData` with:
+
+```ts
+fundingBreakdown?: { label: string; pct: number; color: string }[];
+fundingCycle?: string;
+```
+
+**5. ShareProfileButton.tsx**
+
+Add new optional prop `fundingBreakdown?: { label: string; amount: number; color: string }[]` + `fundingCycle?: string`, pass through to `ShareCardModal` data payload. CandidateProfile passes the same computed breakdown so the share card mirrors what the user sees.
+
+**6. BaseballCard.tsx**
+
+When `isCandidate && data.fundingBreakdown?.length`, replace the existing bottom "Compared Topics" stat tile row's third cell with a compact 4-bar funding mini-chart, OR add a 4th row below the 3-stat grid. Decision: **add a 4th row** (keeps existing 3 stats intact) — a slim panel with 4 horizontal bars + label + percent on the right, sized for the 1080×1080 card. Stays inside the existing card chrome and color variants (classic/holo/night) by using `v.border` and `mutedColor` for chrome and the per-bucket color for the bar fill.
+
+### Out of scope
+
+- No new FEC queries, no schema changes, no scoring changes.
+- Other share templates (`BoldCard`, `MinimalCard`, `EditorialCard`, `DataCard`) are not modified in this pass — only `BaseballCard` per the request.
+- Donor profile / user profile share variants are unchanged.
+
+### Files touched
+
+- New: `src/components/FundingSourcesBreakdown.tsx`, `src/lib/fundingBreakdown.ts`
+- Edited: `src/pages/CandidateProfile.tsx`, `src/components/ShareProfileButton.tsx`, `src/components/share/templates/types.ts`, `src/components/share/templates/BaseballCard.tsx`
