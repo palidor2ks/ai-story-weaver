@@ -198,7 +198,7 @@ Mark is_omnibus=true if the bill:
 
 Return ONLY this JSON structure:
 {
-  "primary_topic": "Economy" | "Healthcare" | "Immigration" | "Environment" | "Defense" | "Foreign Affairs" | "Education" | "Civil Rights" | "Government" | "Social Programs" | "Technology" | "Judicial",
+  "primary_topic": "Economy & Work" | "Health, Education & Social Safety Net" | "Environment & Energy" | "National Security & Borders" | "Rights & Justice" | "Government & Democracy",
   "secondary_topics": ["...", "..."],
   "topic_count": <total unique topics>,
   "is_mismatch": boolean,
@@ -499,7 +499,7 @@ Return a JSON array with one object per bill:
 [
   {
     "bill_index": 1,
-    "primary_topic": "Economy" | "Healthcare" | "Immigration" | "Environment" | "Defense" | "Foreign Affairs" | "Education" | "Civil Rights" | "Government" | "Social Programs" | "Technology" | "Judicial",
+    "primary_topic": "Economy & Work" | "Health, Education & Social Safety Net" | "Environment & Energy" | "National Security & Borders" | "Rights & Justice" | "Government & Democracy",
     "secondary_topics": ["...", "..."],
     "topic_count": <total unique topics>,
     "is_mismatch": boolean,
