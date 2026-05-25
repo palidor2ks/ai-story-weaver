@@ -629,24 +629,28 @@ export const UserProfile = () => {
                   partyId="democrat"
                   partyName="Democratic"
                   score={partyScores?.democrat}
+                  overallScore={partyOverallScores?.democrat}
                   isLoading={partyScoresLoading}
                 />
                 <PartyComparisonCard
                   partyId="republican"
                   partyName="Republican"
                   score={partyScores?.republican}
+                  overallScore={partyOverallScores?.republican}
                   isLoading={partyScoresLoading}
                 />
                 <PartyComparisonCard
                   partyId="green"
                   partyName="Green"
                   score={partyScores?.green}
+                  overallScore={partyOverallScores?.green}
                   isLoading={partyScoresLoading}
                 />
                 <PartyComparisonCard
                   partyId="libertarian"
                   partyName="Libertarian"
                   score={partyScores?.libertarian}
+                  overallScore={partyOverallScores?.libertarian}
                   isLoading={partyScoresLoading}
                 />
               </div>
