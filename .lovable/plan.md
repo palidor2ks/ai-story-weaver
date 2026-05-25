@@ -1,22 +1,48 @@
-## Fix mobile layout for Top Spenders list
+## Goal
 
-The committee name truncates to one or two letters on mobile because the cause badge ("PROGRESSIVE (GENERAL)", "PRO-TRUMP / MAGA", etc.) sits on the same line as the name and reserves up to 220px of width. On a 390px viewport that leaves almost no room for the name.
+On every party and representative alignment card, show two scores side-by-side:
 
-### Changes in `src/pages/TopSpenders.tsx` (row component, lines ~393–443)
+1. **Match score** — averaged only over the questions you've answered (today's behavior, weighted by your topic priorities). This is the apples-to-apples comparison number.
+2. **Full score** — the entity's overall position across **all** questions they've answered, unweighted. This is the same number shown on the entity's own profile page.
 
-1. **Stack the cause badge under the committee name on mobile.**
-   - Wrap `<name>` + `<badge>` so the badge moves to its own line below the name on `< sm` and stays inline at `sm:` and up.
-   - Result on mobile: name gets the full middle column width and no longer truncates to "F…".
+This lets users see "how aligned we are on what I care about" vs. "where this party/rep actually sits overall."
 
-2. **Tighten the badge on small screens.**
-   - Drop `max-w-[220px]` to something like `max-w-[160px]` and keep `truncate` so long labels like "PROGRESSIVE (GENERAL)" shorten gracefully instead of dominating the row.
+## UI
 
-3. **Make the row breathe a bit more.**
-   - Bump the name text from default to `text-sm sm:text-base` and the meta line from `text-[11px]` to `text-xs` so the FEC id / expenditure count is readable.
-   - Reduce the outer column gap from `gap-3` to `gap-2` on mobile (`gap-2 sm:gap-3`) to give the name column more room.
-   - Keep the total amount column right-aligned and unchanged.
+In `PartyComparisonCard` and `RepresentativeComparisonCard`, replace the single big score with a small two-column block:
 
-4. **Allow the name to wrap to two lines on mobile instead of hard-truncating.**
-   - Replace `truncate` on the name with `line-clamp-2 sm:truncate` so on phones the full name is visible across two lines, while desktop keeps the single-line truncation behavior.
+```text
+Match (your answers)     Overall (all questions)
+   L6.91                     L4.20
+```
 
-No data, sorting, or business-logic changes — purely the row's CSS classes and DOM grouping.
+- The Match value is the primary/large one (current styling preserved).
+- The Overall value is smaller, muted, with a short label and an info tooltip explaining the difference.
+- If only one number is available (e.g. user hasn't taken the quiz yet, or the entity has no answers), show the available one and hide the other with a dash.
+- Tooltip wording: "Match = average on questions you've answered, weighted by your topic priorities. Overall = average across every question this {party|representative} has answered."
+
+No layout changes to the AI summary block below.
+
+## Data wiring
+
+### Parties (`PartyComparisonCard`)
+- Already receives `score` (match, from `usePartyMatchScores`). Keep as Match.
+- Add a new hook `usePartyOverallScores()` that fetches all `party_answers` and returns `{ democrat, republican, green, libertarian }` using `calculateEntityScore` (simple average across the party's full answer set). Cache 10 min.
+- Pass `overallScore` into `PartyComparisonCard` from `UserProfile.tsx` (and any other caller) alongside the existing `score`.
+
+### Representatives (`RepresentativeComparisonCard`)
+- Already receives `resolvedScore` from `usePersonalizedScoreMap` (match) — keep as Match.
+- Use the existing `official.overall_score` (already on the official record, computed from all candidate answers) as Overall. No new hook required.
+- Add an `overallScore` prop to `RepresentativeComparisonCard`; pass `official.overall_score` / `rep.overall_score` from `UserProfile.tsx` at every call site (5 places).
+
+## Files
+
+- `src/hooks/usePartyOverallScores.ts` (new) — mirrors `usePartyMatchScores` shape but no user filter, no weighting.
+- `src/components/PartyComparisonCard.tsx` — add `overallScore` prop, render dual-score block, update tooltip.
+- `src/components/RepresentativeComparisonCard.tsx` — add `overallScore` prop, render dual-score block.
+- `src/pages/UserProfile.tsx` — call `usePartyOverallScores`, pass `overallScore` to all four `PartyComparisonCard`s and all five `RepresentativeComparisonCard`s.
+
+## Out of scope
+
+- The user's own overall score, quiz results page, candidate profile pages, and admin views — only the party/rep alignment cards on UserProfile change.
+- Scoring math itself is unchanged; we just expose the existing "entity average across all answers" alongside the existing match number.
