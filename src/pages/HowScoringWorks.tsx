@@ -151,35 +151,67 @@ export const HowScoringWorks = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-foreground">
-                Your overall score is a weighted average of topic scores, using your selected priority weights:
+                Your overall score is a weighted average of topic scores. During onboarding you rank topics in two separate flows:
               </p>
-              
-              <div className="space-y-2">
-                {[
-                  { rank: 1, weight: 'Highest priority', normalized: 'Most influence' },
-                  { rank: 2, weight: 'High priority', normalized: 'More influence' },
-                  { rank: 3, weight: 'Standard priority', normalized: 'Baseline influence' },
-                  { rank: 4, weight: 'Lower priority', normalized: 'Less influence' },
-                  { rank: 5, weight: 'Lowest priority', normalized: 'Least influence' },
-                ].map(({ rank, weight, normalized }) => (
-                  <div key={rank} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
-                        {rank}
-                      </span>
-                      <span className="text-sm">Priority #{rank}</span>
+
+              <div>
+                <p className="font-semibold text-foreground mb-2">Federal priorities — pick 3 of 6 topics</p>
+                <div className="space-y-2">
+                  {[
+                    { rank: 1, weight: 'Weight ×3', normalized: 'Most influence' },
+                    { rank: 2, weight: 'Weight ×2', normalized: 'More influence' },
+                    { rank: 3, weight: 'Weight ×1', normalized: 'Baseline influence' },
+                  ].map(({ rank, weight, normalized }) => (
+                    <div key={rank} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
+                          {rank}
+                        </span>
+                        <span className="text-sm">Priority #{rank}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-muted-foreground">{weight}</span>
+                        <Badge variant="outline">{normalized}</Badge>
+                      </div>
                     </div>
+                  ))}
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/60 border border-dashed border-border">
+                    <span className="text-sm text-muted-foreground">Unranked federal topics</span>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm text-muted-foreground">{weight}</span>
-                      <Badge variant="outline">{normalized}</Badge>
+                      <span className="text-sm text-muted-foreground">Weight ×1</span>
+                      <Badge variant="outline">Still counted</Badge>
                     </div>
                   </div>
-                ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="font-semibold text-foreground mb-2">Local priorities — pick 2 topics</p>
+                <div className="space-y-2">
+                  {[
+                    { rank: 1, weight: 'Weight ×2', normalized: 'More influence' },
+                    { rank: 2, weight: 'Weight ×1', normalized: 'Baseline influence' },
+                  ].map(({ rank, weight, normalized }) => (
+                    <div key={rank} className="flex items-center justify-between p-3 rounded-lg bg-secondary">
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
+                          {rank}
+                        </span>
+                        <span className="text-sm">Priority #{rank}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-muted-foreground">{weight}</span>
+                        <Badge variant="outline">{normalized}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <p className="text-sm text-muted-foreground">
-                The exact numeric weights depend on the flow (for example federal + local onboarding uses different rank weights), but higher-priority topics always count more in your overall score.
+                You rank 3 federal topics and 2 local topics during onboarding. Higher-ranked topics count more in your overall score; unranked federal topics still contribute at the baseline weight.
               </p>
+
             </CardContent>
           </Card>
 
