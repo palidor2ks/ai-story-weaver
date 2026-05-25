@@ -1,53 +1,47 @@
-## Lock Quiz Question Header on Scroll
+## Evidence-Based Onboarding Question Selection (External Salience Data)
 
-The yellow-highlighted area (topic label + "Question X of Y" + progress bar + question text) should stay pinned at the top of the viewport while the user scrolls through the answer options.
+Pick the 2 highest-salience questions per topic by grounding selection in published voter-issue research, not editorial judgment.
 
-### Current state
-- **Onboarding federal quiz** (`src/pages/Onboarding.tsx` line 578) and **local quiz** (line 729) already wrap this header in `sticky top-0 z-20 ...`. The screenshot still shows the old "24" counter, so it likely predates the most recent changes — we'll verify sticky is actually pinning in the live preview and fix the wrapper if not (e.g., ensure no ancestor breaks sticky, tighten `-mx-4 px-4` padding, give it a solid background).
-- **Standalone `/quiz` route** (`src/pages/Quiz.tsx` lines 314–327) does NOT have a sticky header — topic chip, counter, progress bar and question text all scroll away. This is the primary fix.
+### Research sources
 
-### Changes
+Pull recent (2024–2026) salience data from:
+- **Pew Research Center** — annual "Public's Policy Priorities" survey (covers economy, healthcare, immigration, climate, terrorism, education, etc.)
+- **Gallup** — "Most Important Problem Facing the Country" monthly tracker
+- **AP-NORC / KFF** — for healthcare, abortion, and welfare-specific salience
+- **Pew local-government trust surveys & Brookings Metro** — for the 5 local topics (housing affordability, K-12, public safety, cost of living, public health), since national pollsters cover these less consistently
 
-**`src/pages/Quiz.tsx`** — wrap topic title + question header + question text in a sticky container, and tell `QuizQuestion` to hide its internal header/question text:
+Within each topic, rank sub-issues by **% of public calling it a "top priority"**, then map the top 2 sub-issues to the closest existing question in our DB.
+
+### Process
+
+1. **Gather data** — use `websearch--web_search` (and optionally `firecrawl` for full-page extraction) to pull the latest Pew "Top Policy Priorities" report, Gallup MIP, and topic-specific surveys. Cache the source URLs and exact % figures.
+2. **Map sub-issues → topics** — bucket each polled issue under one of our 11 topics:
+   - economy-work, health-safety-net, environment-energy, national-security-borders, rights-justice, government-democracy
+   - local-cost-of-living, local-education, local-housing, local-public-health, local-public-safety
+3. **Pick top 2 sub-issues per topic** by salience %.
+4. **Match to existing questions** — for each chosen sub-issue, find the closest-matching question in our DB (via keyword search against `questions.text`).
+5. **Present a single ranked table** to you for approval — each row shows: topic, sub-issue, salience %, source, matched question ID + text. You approve / swap before anything is written.
+6. **After approval**: update `set-onboarding` action in `supabase/functions/import-new-questions/index.ts` with the 22 chosen IDs, run the action, and update the Onboarding welcome copy from "16 Questions" → "22 Questions / 12 federal + 10 local".
+
+### Deliverable from this round
+
+A markdown table like:
 
 ```
-<div className="sticky top-0 z-20 -mx-4 px-4 pt-3 pb-4 bg-background/95 backdrop-blur
-                supports-[backdrop-filter]:bg-background/80 border-b border-border">
-  {currentTopic && (
-    <div className="flex items-center justify-center gap-2 mb-3">
-      <TopicIcon name={currentTopic.icon} />
-      <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-        {currentTopic.name}
-      </span>
-    </div>
-  )}
-  <div className="flex items-center justify-between mb-3">
-    <span className="text-sm font-medium text-muted-foreground">
-      Question {currentQuestionIndex + 1} of {questions.length}
-    </span>
-    <div className="flex-1 mx-4 h-2 bg-secondary rounded-full overflow-hidden">
-      <div className="h-full bg-gradient-hero transition-all duration-500"
-           style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }} />
-    </div>
-  </div>
-  <h2 className="font-display text-lg md:text-xl font-semibold text-foreground
-                 leading-snug text-center">
-    {questions[currentQuestionIndex].text}
-  </h2>
-</div>
-
-<div className="mt-6">
-  <QuizQuestion ... hideHeader hideQuestionText />
-</div>
+| Topic                | Sub-issue (rank 1)    | Salience | Source | Matched Q ID  | Question text |
+| economy-work         | Inflation/cost-of-liv.| 73% top  | Pew '25| economy-q??   | ...            |
+| economy-work         | Strengthening econ.   | 68%      | Pew '25| economy-q??   | ...            |
+| ...                  | ...                   | ...      | ...    | ...           | ...            |
 ```
 
-- Derive `currentTopic` via `topics.find(t => t.id === questions[currentQuestionIndex].topicId)` (mirrors the `currentQuestionTopic` memo in Onboarding).
-- Keep the existing "Full Quiz / Quick Quiz" title above the sticky bar (non-sticky) so the pinned area stays compact.
+You review and approve before any DB or code changes.
 
-**`src/pages/Onboarding.tsx`** — verify the existing sticky bar (line 578 federal, line 729 local) actually pins in the preview. If it doesn't:
-- Confirm no ancestor sets `overflow-hidden` / `transform` (containing block for sticky).
-- If needed, lift the sticky wrapper out from `max-w-2xl mx-auto` or remove `-mx-4 px-4` in favor of a full-width pinned bar with inner `max-w-2xl` content.
+### Caveats
 
-### Out of scope
-- No changes to question selection logic, scoring, or data flow.
-- No restyle of the answer cards or footer nav.
+- National polls (Pew/Gallup) cover federal topics well but treat local topics thinly. For the 5 local topics I'll lean on Brookings/Pew local-government research plus Bipartisan Policy Center / National League of Cities reports. Where good data doesn't exist for a local sub-issue, I'll flag it and pick the most ideologically-discriminating question as a fallback (clearly labeled).
+- "Salience" measures *how much voters care*, not *how divided they are*. For onboarding we want both — a highly salient + highly divisive question. I'll add a second column noting Pew's partisan-gap % where available so the final picks are both important AND discriminating.
+
+### Out of scope (this round)
+
+- No code or DB changes yet. Plan ends with you reviewing the ranked table.
+- No new question authoring — selection from the existing ~200 questions only.
