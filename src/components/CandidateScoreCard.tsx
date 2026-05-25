@@ -72,6 +72,17 @@ export function CandidateScoreCard({ score, matchScore, userScore, personalizedS
           <div className="mt-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             {label}
           </div>
+          {hasPersonalized && (
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className={cn('text-xl font-bold leading-none', personalizedColor)}>
+                {personalizedText}
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Based on your answers
+                {typeof personalizedCount === 'number' && personalizedCount > 0 && ` · ${personalizedCount} q`}
+              </span>
+            </div>
+          )}
         </div>
         {typeof matchScore === 'number' && !isNA && (
           <div className="sm:text-right">
