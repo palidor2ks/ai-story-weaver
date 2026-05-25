@@ -443,8 +443,8 @@ export const Onboarding = () => {
                   <Sparkles className="w-6 h-6 text-accent" />
                 </div>
                 <div className="text-left">
-                  <h3 className="font-semibold text-foreground">Answer 24 Questions</h3>
-                  <p className="text-sm text-muted-foreground">20 federal questions + 4 local questions</p>
+                  <h3 className="font-semibold text-foreground">Answer 16 Questions</h3>
+                  <p className="text-sm text-muted-foreground">12 federal questions + 4 local questions</p>
                 </div>
               </div>
               
