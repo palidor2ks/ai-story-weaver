@@ -797,6 +797,12 @@ export default function Admin() {
             <CommitteeTopicsPanel />
           </TabsContent>
 
+          <TabsContent value="committee-aliases">
+            <CommitteeAliasesPanel />
+          </TabsContent>
+
+
+
 
         </Tabs>
       </main>
