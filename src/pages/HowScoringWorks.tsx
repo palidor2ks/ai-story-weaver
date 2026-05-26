@@ -67,7 +67,7 @@ export const HowScoringWorks = () => {
       <main className="container py-8 px-4">
         <div className="max-w-3xl mx-auto">
           {/* Back Link */}
-          <Link to="/feed" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6 transition-colors">
+          <Link to="/profile" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6 transition-colors">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Feed
           </Link>

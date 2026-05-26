@@ -18,9 +18,9 @@ const Index = () => {
     return <Navigate to="/auth" replace />;
   }
 
-  // Completed onboarding - redirect to feed
+  // Completed onboarding - redirect to profile
   if (hasCompleted) {
-    return <Navigate to="/feed" replace />;
+    return <Navigate to="/profile" replace />;
   }
 
   // User logged in but hasn't completed onboarding - show onboarding

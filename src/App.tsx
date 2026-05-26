@@ -7,7 +7,6 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { UserProvider } from "./context/UserContext";
 import Index from "./pages/Index";
 import { Auth } from "./pages/Auth";
-import { Feed } from "./pages/Feed";
 import { Candidates } from "./pages/Candidates";
 import { Donors } from "./pages/Donors";
 import { CandidateProfile } from "./pages/CandidateProfile";
@@ -117,11 +116,7 @@ const AppRoutes = () => {
           <QuizResults />
         </RouteGuard>
       } />
-      <Route path="/feed" element={
-        <RouteGuard requireAuth requireOnboarding>
-          <Feed />
-        </RouteGuard>
-      } />
+      <Route path="/feed" element={<Navigate to="/profile" replace />} />
       <Route path="/candidates" element={
         <RouteGuard requireAuth={false} requireOnboarding={false}>
           <Candidates />

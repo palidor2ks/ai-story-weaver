@@ -145,7 +145,7 @@ export const CandidateProfile = () => {
         <Header />
         <main className="container py-8 px-4 text-center">
           <p className="text-muted-foreground">Candidate not found</p>
-          <Link to="/feed">
+          <Link to="/profile">
             <Button className="mt-4">Back to Feed</Button>
           </Link>
         </main>
@@ -305,7 +305,7 @@ export const CandidateProfile = () => {
       
       <main className="container py-8 px-4">
         {/* Back Button */}
-        <Link to="/feed" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6 transition-colors">
+        <Link to="/profile" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6 transition-colors">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Feed
         </Link>

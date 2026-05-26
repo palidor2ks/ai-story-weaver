@@ -176,7 +176,7 @@ export default function PoliticianDashboard() {
                 <li>Submit a claim request with verification information</li>
                 <li>Wait for admin approval</li>
               </ol>
-              <Link to="/feed">
+              <Link to="/profile">
                 <Button>Browse Candidates</Button>
               </Link>
             </CardContent>
