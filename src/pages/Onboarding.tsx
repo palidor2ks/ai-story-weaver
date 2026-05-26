@@ -400,6 +400,7 @@ export const Onboarding = () => {
         political_party: data.political_party,
         age: data.age,
         income: data.income,
+        employment_status: data.employment_status,
         sex: data.sex,
         religion: data.religion,
       });
