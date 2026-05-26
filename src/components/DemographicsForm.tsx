@@ -21,6 +21,7 @@ export interface DemographicsData {
   political_party: string;
   age: number | null;
   income: string;
+  employment_status: string;
   sex: string;
   religion: string;
   education_level: string;
