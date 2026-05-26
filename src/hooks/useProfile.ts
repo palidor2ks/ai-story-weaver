@@ -18,6 +18,7 @@ export interface Profile {
   age: number | null;
   income: string | null;
   sex: string | null;
+  employment_status: string | null;
   religion: string | null;
   education_level: string | null;
   race: string | null;
