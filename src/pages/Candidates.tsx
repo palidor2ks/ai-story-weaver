@@ -169,6 +169,22 @@ export const Candidates = () => {
         title="All Politicians — Pulse"
         description="Browse the President, Congress members, governors, and local representatives. Filter by office, party, and state to find leaders who match your values."
         path="/candidates"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: "All Politicians",
+          url: "https://www.polipulseapp.com/candidates",
+          mainEntity: {
+            "@type": "ItemList",
+            numberOfItems: allCandidates.length,
+            itemListElement: allCandidates.slice(0, 20).map((c, i) => ({
+              "@type": "ListItem",
+              position: i + 1,
+              url: `https://www.polipulseapp.com/candidate/${c.id}`,
+              name: c.name,
+            })),
+          },
+        }}
       />
       <Header />
       
