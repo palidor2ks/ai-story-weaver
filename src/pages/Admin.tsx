@@ -472,7 +472,10 @@ export default function Admin() {
 
         <div className="mb-4">
           <Button asChild variant="outline" size="sm">
-            <Link to="/admin/x-composer">Post a tweet (X)</Link>
+            <Link to="/admin/x-composer">Post to X</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/social-composer">Social composer</Link>
           </Button>
         </div>
 
