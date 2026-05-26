@@ -480,6 +480,7 @@ export const Onboarding = () => {
               political_party: profile?.political_party || '',
               age: profile?.age || null,
               income: profile?.income || '',
+              employment_status: profile?.employment_status || '',
               sex: profile?.sex || '',
               religion: profile?.religion || '',
             }}
