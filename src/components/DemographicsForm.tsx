@@ -46,13 +46,24 @@ const POLITICAL_PARTIES = [
 ];
 
 const INCOME_RANGES = [
-  'Under $25,000',
-  '$25,000 - $49,999',
-  '$50,000 - $74,999',
-  '$75,000 - $99,999',
-  '$100,000 - $149,999',
-  '$150,000 - $199,999',
-  '$200,000+',
+  'Under $50,000',
+  '$50,000 - $100,000',
+  '$100,000 - $200,000',
+  '$200,000 - $500,000',
+  '$500,000 - $1M',
+  '$1M - $5M',
+  '$5M - $20M',
+  '$20M - $100M',
+  'Over $100M',
+  'Prefer not to say',
+];
+
+const EMPLOYMENT_STATUSES = [
+  'Self-employed',
+  'Employed (1 job)',
+  'Employed (multiple jobs)',
+  'Part-time employed',
+  'Student',
   'Prefer not to say',
 ];
 
