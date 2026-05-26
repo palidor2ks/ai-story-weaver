@@ -23,6 +23,44 @@ export const HowScoringWorks = () => {
         title="How Scoring Works — Pulse"
         description="Learn how Pulse scores politicians on a -10 to +10 scale across 17 policy topics using voting records, public statements, and party platforms."
         path="/how-scoring-works"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: [
+            {
+              "@type": "Question",
+              name: "What scale does Pulse use to score politicians?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Pulse uses a -10.00 to +10.00 left-right scale, where negative values indicate left-leaning positions and positive values indicate right-leaning positions.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "What data sources inform a politician's score?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Scores draw on official voting records (Congress.gov), public statements, campaign finance data (FEC), and party platforms, analyzed across 17 policy topics.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "How are individual question scores combined?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Question-level scores are aggregated by topic and weighted by evidence strength (voting record > public statements > inferred party position) to produce a politician's overall alignment.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Are Pulse scores endorsements?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "No. Scores are informational only. Pulse is not affiliated with any candidate, party, or campaign, and scores should not be interpreted as endorsements.",
+              },
+            },
+          ],
+        }}
       />
       <Header />
       

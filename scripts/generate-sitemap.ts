@@ -111,9 +111,12 @@ async function main() {
     if (c?.id) entries.push({ path: `/candidate/${c.id}`, changefreq: "weekly", priority: "0.6" });
   }
 
-  // Donors — intentionally omitted from sitemap. /donor/:id requires
-  // authentication (RLS on `donors` table is authenticated-only) and the
-  // table has >1M rows; these pages are not meant to be indexed.
+  // Intentionally omitted from sitemap (auth-only or private):
+  //   /donor/:id        — RLS authenticated-only, >1M rows, not indexable
+  //   /profile          — user's own profile, requires auth
+  //   /admin, /admin/*  — admin-only surfaces, not for public crawlers
+  //   /admin/users/:id  — admin-only
+  //   /admin/x-composer — admin-only
 
   writeFileSync(resolve("public/sitemap.xml"), xml(entries));
   console.log(`sitemap.xml written (${entries.length} entries)`);
