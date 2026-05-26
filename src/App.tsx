@@ -195,6 +195,11 @@ const AppRoutes = () => {
           <AdminUserProfileView />
         </RouteGuard>
       } />
+      <Route path="/admin/x-composer" element={
+        <RouteGuard requireAuth requireOnboarding>
+          <XComposer />
+        </RouteGuard>
+      } />
       <Route path="/politician" element={
         <RouteGuard requireAuth requireOnboarding>
           <PoliticianDashboard />
