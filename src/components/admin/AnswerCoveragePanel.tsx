@@ -501,15 +501,18 @@ export function AnswerCoveragePanel() {
 
   const handleFillVisibleUnanswered = async () => {
     try {
-      const toProcess = filteredCandidates
+      const allVisibleMissing = filteredCandidates
         .filter(c => c.percentage < 100)
-        .slice(0, 50)
         .map(c => ({ id: c.id, name: c.name }));
-      if (toProcess.length === 0) {
+      if (allVisibleMissing.length === 0) {
         toast.info('No candidates with missing answers in current view');
         return;
       }
-      await populateBatch(toProcess, false);
+
+      for (let start = 0; start < allVisibleMissing.length; start += 50) {
+        const batch = allVisibleMissing.slice(start, start + 50);
+        await populateBatch(batch, false);
+      }
     } catch (err) {
       console.error('[Admin] Fill visible missing failed:', err);
       toast.error('Failed to generate AI answers for visible candidates');
@@ -1821,14 +1824,14 @@ export function AnswerCoveragePanel() {
                 disabled={anyBatchRunning || visibleUnansweredCount === 0}
               >
                 <Sparkles className="h-4 w-4 mr-1.5" />
-                Fill Missing in View ({Math.min(visibleUnansweredCount, 50)})
+                Fill Missing in View ({visibleUnansweredCount})
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Fill Unanswered in Current View?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Generates AI answers for up to 50 unanswered candidates matching your current filters.
+                  Generates AI answers for all unanswered candidates matching your current filters in 50-candidate batches.
                   Useful for spot-fills scoped to whatever's in the chart right now.
                 </AlertDialogDescription>
               </AlertDialogHeader>
