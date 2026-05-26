@@ -229,8 +229,20 @@ Remember: be objective, non-partisan, and analyze ONLY the person identified in 
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('AI Gateway error:', errorText);
-      throw new Error(`AI Gateway error: ${response.status}`);
+      console.error('AI Gateway error:', response.status, errorText);
+      const isFallbackable = response.status === 429 || response.status === 402 || response.status >= 500;
+      return new Response(
+        JSON.stringify({
+          error: response.status === 429
+            ? 'AI service is rate limited, please try again shortly.'
+            : response.status === 402
+            ? 'AI credits exhausted. Add credits in Settings → Workspace → Usage.'
+            : `AI Gateway error: ${response.status}`,
+          status: response.status,
+          fallback: isFallbackable,
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
     }
 
     const data = await response.json();
