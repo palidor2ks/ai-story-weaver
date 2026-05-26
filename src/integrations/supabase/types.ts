@@ -3337,6 +3337,27 @@ export type Database = {
         }
         Relationships: []
       }
+      x_oauth_pending: {
+        Row: {
+          code_verifier: string
+          created_at: string
+          state: string
+          user_id: string
+        }
+        Insert: {
+          code_verifier: string
+          created_at?: string
+          state: string
+          user_id: string
+        }
+        Update: {
+          code_verifier?: string
+          created_at?: string
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       bill_summary_stats: {
