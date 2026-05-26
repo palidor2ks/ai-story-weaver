@@ -115,6 +115,18 @@ export const Auth = () => {
     }
   };
 
+  const handleXSignIn = async () => {
+    setIsSubmitting(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'twitter',
+      options: { redirectTo: `${window.location.origin}/` },
+    });
+    if (error) {
+      setIsSubmitting(false);
+      toast.error(error.message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
