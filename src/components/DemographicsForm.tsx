@@ -237,6 +237,29 @@ export const DemographicsForm = ({
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="employment_status" className="text-foreground">
+              Employment Status
+            </Label>
+            <Select
+              value={formData.employment_status}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, employment_status: value }))}
+            >
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Select employment status" />
+              </SelectTrigger>
+              <SelectContent>
+                {EMPLOYMENT_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+
+
+          <div className="space-y-2">
             <Label htmlFor="sex" className="text-foreground">
               Sex
             </Label>
