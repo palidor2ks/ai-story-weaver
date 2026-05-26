@@ -237,7 +237,9 @@ export function CommitteeAliasesPanel() {
               {filteredAliases.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                    No aliases yet. Create one to get started.
+                    {aliases.length === 0
+                      ? 'No aliases yet. Search only filters existing aliases—click “New Alias” to create one first.'
+                      : 'No aliases match your search.'}
                   </TableCell>
                 </TableRow>
               ) : (
