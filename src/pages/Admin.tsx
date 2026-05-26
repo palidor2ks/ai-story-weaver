@@ -470,6 +470,12 @@ export default function Admin() {
           </Dialog>
         </div>
 
+        <div className="mb-4">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/x-composer">Post a tweet (X)</Link>
+          </Button>
+        </div>
+
         <AnswerCoveragePanel />
 
         {(() => null)()}
