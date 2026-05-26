@@ -259,8 +259,9 @@ Return your response as JSON with this exact structure:
           summary: 'AI analysis temporarily unavailable.',
           democratAlignment,
           republicanAlignment,
+          fallback: true,
         }), {
-          status: 429,
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -270,8 +271,9 @@ Return your response as JSON with this exact structure:
           summary: 'AI analysis unavailable.',
           democratAlignment,
           republicanAlignment,
+          fallback: true,
         }), {
-          status: 402,
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
