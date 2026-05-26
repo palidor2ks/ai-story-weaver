@@ -45,6 +45,7 @@ import { PollsPanel } from "@/components/admin/PollsPanel";
 import { IEExclusionsPanel } from "@/components/admin/IEExclusionsPanel";
 import { CommitteeTopicsPanel } from "@/components/admin/CommitteeTopicsPanel";
 import { CommitteeAliasesPanel } from "@/components/admin/CommitteeAliasesPanel";
+import { JobQueuePanel } from "@/components/admin/JobQueuePanel";
 
 
 // Only levels that require manual entry (no API available)
@@ -498,6 +499,7 @@ export default function Admin() {
               { value: "ie-exclusions", label: "IE Exclusions", Icon: AlertTriangle },
               { value: "committee-topics", label: "Committee Topics", Icon: Tags },
               { value: "committee-aliases", label: "Spender Aliases", Icon: Tags },
+              { value: "job-queue", label: "Job Queue", Icon: Loader2 },
               { value: "visible-states", label: "Visible States", Icon: Shield },
               { value: "users", label: "Users", Icon: Users },
             ];
@@ -805,6 +807,10 @@ export default function Admin() {
 
           <TabsContent value="committee-aliases">
             <CommitteeAliasesPanel />
+          </TabsContent>
+
+          <TabsContent value="job-queue">
+            <JobQueuePanel />
           </TabsContent>
 
 
