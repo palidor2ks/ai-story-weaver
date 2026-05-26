@@ -312,8 +312,27 @@ export const useCandidate = (id: string | undefined) => {
                                id.startsWith('pa_');
       
       if (isNonCongressId) {
-        // For executive IDs not in DB, return basic info from override if available
+        // For executive IDs not in DB, return basic info from override if available.
+        // Try to preserve finance continuity by linking to a prior federal candidate row
+        // (same person) so donor/FEC data does not disappear after role transitions.
         if (override) {
+          let priorFederalFecCandidateId: string | null = null;
+          let priorFederalLastDonorSync: string | null = null;
+
+          if (override.name) {
+            const { data: matchedFederalCandidate } = await supabase
+              .from('candidates')
+              .select('fec_candidate_id, last_donor_sync, last_updated')
+              .eq('name', override.name)
+              .not('fec_candidate_id', 'is', null)
+              .order('last_updated', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            priorFederalFecCandidateId = matchedFederalCandidate?.fec_candidate_id ?? null;
+            priorFederalLastDonorSync = matchedFederalCandidate?.last_donor_sync ?? null;
+          }
+
           return {
             id,
             name: override.name ?? 'Unknown Official',
@@ -330,6 +349,8 @@ export const useCandidate = (id: string | undefined) => {
             last_updated: new Date().toISOString(),
             claimed_by_user_id: null,
             claimed_at: null,
+            fec_candidate_id: priorFederalFecCandidateId,
+            last_donor_sync: priorFederalLastDonorSync,
             topicScores: [],
             hasOverride: true,
             priorOffices: (override.prior_offices as unknown as PriorOffice[]) || [],
