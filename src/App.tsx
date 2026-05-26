@@ -36,6 +36,7 @@ import Unsubscribe from "./pages/Unsubscribe";
 import Poll from "./pages/Poll";
 import PollResultsPage from "./pages/PollResultsPage";
 import TopSpenders from "./pages/TopSpenders";
+import XComposer from "./pages/admin/XComposer";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -192,6 +193,11 @@ const AppRoutes = () => {
       <Route path="/admin/users/:userId" element={
         <RouteGuard requireAuth requireOnboarding>
           <AdminUserProfileView />
+        </RouteGuard>
+      } />
+      <Route path="/admin/x-composer" element={
+        <RouteGuard requireAuth requireOnboarding>
+          <XComposer />
         </RouteGuard>
       } />
       <Route path="/politician" element={
