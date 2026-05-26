@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Sparkles, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
 import { Seo } from '@/components/Seo';
 import { BetaBadge } from '@/components/BetaBadge';
