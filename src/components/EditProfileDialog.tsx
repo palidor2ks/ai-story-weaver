@@ -220,6 +220,27 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="employment_status">Employment Status</Label>
+            <Select
+              value={formData.employment_status}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, employment_status: value }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select employment status" />
+              </SelectTrigger>
+              <SelectContent>
+                {EMPLOYMENT_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+
+
+          <div className="space-y-2">
             <Label htmlFor="political_party">Political Party</Label>
             <Select
               value={formData.political_party}
