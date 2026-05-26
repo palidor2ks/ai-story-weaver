@@ -46,48 +46,14 @@ export function usePopulateCandidateAnswers() {
   const isPausedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Enqueue a worker job (Railway) instead of invoking the edge function directly.
-  const enqueueWorkerJob = async (
-    candidateId: string,
-    opts: { forceRegenerate?: boolean; questionIds?: string[] } = {}
-  ): Promise<{ jobId: string; status: string; deduplicated: boolean } | null> => {
-    try {
-      const { data, error } = await supabase.functions.invoke('enqueue-answer-job', {
-        body: {
-          candidateId,
-          forceRegenerate: !!opts.forceRegenerate,
-          ...(opts.questionIds?.length ? { questionIds: opts.questionIds } : {}),
-        },
-      });
-      if (error) {
-        console.warn('enqueue-answer-job failed, falling back', error);
-        return null;
-      }
-      return data ?? null;
-    } catch (e) {
-      console.warn('enqueue-answer-job threw, falling back', e);
-      return null;
-    }
-  };
-
   const populateCandidate = async (
     candidateId: string, 
     forceRegenerate = false,
     onBackgroundJobStarted?: (job: { questionsQueued: number; estimatedMinutes: number }) => void
   ): Promise<PopulateResult> => {
     setLoadingCandidates(prev => ({ ...prev, [candidateId]: true }));
-
+    
     try {
-      // Prefer Railway worker queue
-      const enq = await enqueueWorkerJob(candidateId, { forceRegenerate });
-      if (enq?.jobId) {
-        toast.info(enq.deduplicated ? 'Job already queued' : 'Deep research queued', {
-          description: `Job ${enq.jobId.slice(0, 8)} · results in ~3 minutes.`,
-        });
-        onBackgroundJobStarted?.({ questionsQueued: 0, estimatedMinutes: 3 });
-        return { success: true, candidateId, generated: 0, existing: 0, missingBefore: 0 };
-      }
-
       const { data, error } = await supabase.functions.invoke('get-candidate-answers', {
         body: { candidateId, forceRegenerate },
       });
@@ -354,23 +320,6 @@ export function usePopulateCandidateAnswers() {
     setLoadingQuestions(prev => ({ ...prev, [loadingKey]: true }));
 
     try {
-      // Prefer Railway worker queue
-      const enq = await enqueueWorkerJob(candidateId, {
-        forceRegenerate: true,
-        questionIds: [questionId],
-      });
-      if (enq?.jobId) {
-        toast.info(`Deep research queued for ${candidateName || 'candidate'}`, {
-          description: enq.deduplicated ? 'Already in queue' : `Job ${enq.jobId.slice(0, 8)} · ~3 min`,
-        });
-        onBackgroundJobStarted?.({
-          questionsQueued: 1,
-          estimatedMinutes: 3,
-          questionIds: [questionId],
-        });
-        return { success: true, isBackground: true };
-      }
-
       const { data, error } = await supabase.functions.invoke('get-candidate-answers', {
         body: { 
           candidateId, 
