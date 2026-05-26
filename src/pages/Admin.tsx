@@ -809,6 +809,10 @@ export default function Admin() {
             <CommitteeAliasesPanel />
           </TabsContent>
 
+          <TabsContent value="job-queue">
+            <JobQueuePanel />
+          </TabsContent>
+
 
 
 
