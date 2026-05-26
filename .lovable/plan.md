@@ -1,32 +1,84 @@
-## Problem
+## X (Twitter) API integration
 
-On Andy Barr's profile the header reads **FEC Total Receipts $8.3M** but the **Funding Sources** panel shows **$4.8M** with Individual Donors at 100%. The two figures should reconcile.
+**Before anything: rotate the credentials you pasted in chat.** They are now in conversation history and must be considered compromised. Generate fresh Client ID / Client Secret in the X Developer Portal, then we store them via Lovable's secure secret form (I will never paste secret values into code).
 
-Root cause: `fundingInput` (in `CandidateProfile.tsx`) reads PAC, party, transfers, loans, candidate, and other-receipts buckets from `financeReconciliation` only and falls back to `0`. For Barr those reconciliation fields are empty, so the breakdown collapses to itemized + unitemized individuals ($4.8M). The live FEC API (`useFECTotals`) does expose `total_receipts` and `other_receipts`, but those are never fed into the breakdown, so the panel total silently disagrees with the headline FEC total.
+### Scope (you answered "All")
 
-## Fix
+Three capabilities, layered:
 
-Edit only `src/components/FundingSourcesBreakdown.tsx` and the `fundingInput` assembly in `src/pages/CandidateProfile.tsx`. No backend / schema changes.
+1. **Sign in with X** (OAuth login on the auth page)
+2. **Post tweets from the backend** (edge function, admin-triggered)
+3. **Fetch candidate / official tweets as evidence** (edge function feeding the social-media evidence system)
 
-1. **Pass FEC total into the breakdown.** Add an optional `fecTotalReceipts` field to `FundingInput` (`src/lib/fundingBreakdown.ts`) and forward `fecTotalReceipts` from `CandidateProfile.tsx` into `fundingInput`.
+### 1. Secrets to store
 
-2. **Fall back to live FEC API for missing buckets.** In `CandidateProfile.tsx`, when `financeReconciliation` is null for a bucket, use the live `fecTotals` equivalents where available:
-   - `fecOtherReceipts` ← `fecTotals.other_receipts`
-   - itemized/unitemized already fall back; keep that.
+Via the `add_secret` tool (secure form — you'll paste the rotated values):
 
-3. **Add a reconciling "Other / Uncategorized" bucket.** In `computeFundingBreakdown`:
-   - Compute `known = individuals + pacs + other + self`.
-   - If `fecTotalReceipts > known + $1`, append a 5th bucket `Other / Uncategorized` = `fecTotalReceipts − known` (muted gray, lower opacity) so the bars always sum to the headline FEC total.
-   - If `known > fecTotalReceipts` (shouldn't happen, but guard), keep current behavior.
-   - When `fecTotalReceipts` is provided, use it as the panel `total` so percentages and the header `$X.XM` match the candidate header.
+- `X_CLIENT_ID` — OAuth 2.0 Client ID
+- `X_CLIENT_SECRET` — OAuth 2.0 Client Secret
+- `X_BEARER_TOKEN` — App-only Bearer Token (needed to read public tweets for evidence fetching; generate in Developer Portal → Keys and tokens)
 
-4. **Header label.** Keep `Funding Sources · {cycle} Cycle`, but the right-hand total now equals FEC Total Receipts. No new copy.
+Note: For posting tweets on behalf of *the app's own X account* (capability 2) we also need user-context tokens. Cleanest path: do that via OAuth 2.0 user-context flow and store the resulting refresh token in a dedicated `x_account_tokens` table (admin-only, RLS locked). Confirm whether the app should post as a single official PoliPulse account, or only as individual users who sign in.
 
-## Result
+### 2. Sign in with X (OAuth)
 
-For Barr the panel will show Individual Donors at ~58 % ($4.8M / $8.3M) plus an "Other / Uncategorized" bucket for the ~$3.5M that isn't broken out, and the panel total will read $8.3M, matching the headline.
+X OAuth is configured in the **Supabase dashboard**, not in code:
 
-## Files
+1. Supabase Dashboard → Authentication → Providers → Twitter → enable
+2. Paste `X_CLIENT_ID` + `X_CLIENT_SECRET` there
+3. Copy the Supabase callback URL it shows (looks like `https://ornnzinjrcyigazecctf.supabase.co/auth/v1/callback`) and add it as a **Callback URI** in the X Developer Portal app settings
+4. In the X app, set **App permissions = Read** (or Read+Write if you also want posting)
 
-- `src/lib/fundingBreakdown.ts` — add `fecTotalReceipts` to `FundingInput`; add uncategorized bucket; use FEC total as denominator when present.
-- `src/pages/CandidateProfile.tsx` — pass `fecTotalReceipts` and fall back to `fecTotals.other_receipts` when assembling `fundingInput`.
+Code changes:
+- `src/pages/Auth.tsx` — add a "Continue with X" button that calls `supabase.auth.signInWithOAuth({ provider: 'twitter', options: { redirectTo: \`${window.location.origin}/\` } })`
+- No changes to `AuthContext` required — the existing `onAuthStateChange` handles the post-redirect session
+
+### 3. Post tweets — edge function
+
+New function: `supabase/functions/x-post-tweet/index.ts`
+- Verifies caller is admin (`has_role(auth.uid(),'admin')`)
+- Uses stored user-context access token (refreshed via OAuth 2.0 refresh flow)
+- Calls `POST https://api.x.com/2/tweets` with `{ text }`
+- Returns tweet ID + URL
+- Admin UI: small composer card in `src/pages/Admin.tsx` (behind a new "X Posting" tab) that calls the function
+
+Adds one table:
+```
+x_account_tokens (
+  id uuid pk, account_handle text, access_token text, refresh_token text,
+  expires_at timestamptz, scope text, created_at, updated_at
+)
+```
+RLS: admin-only select/insert/update, no public access.
+
+### 4. Fetch tweets as evidence — edge function
+
+New function: `supabase/functions/x-fetch-user-tweets/index.ts`
+- Input: `{ handle: string, since?: string, max?: number }`
+- Auth: app-only Bearer token (`X_BEARER_TOKEN`)
+- Calls `GET https://api.x.com/2/users/by/username/{handle}` → user id, then `GET /2/users/{id}/tweets?max_results=...&tweet.fields=created_at,public_metrics,entities`
+- Returns normalized list `[{ id, text, url, created_at, metrics }]`
+- Consumed by the existing evidence pipeline (matches `mem://features/social-media-evidence-handling`): the URL field is the archived `https://x.com/{handle}/status/{id}` source
+
+Rate-limit handling: respect `x-rate-limit-remaining` / `x-rate-limit-reset` headers, return 429 to caller with reset timestamp; caller backs off.
+
+### Tech notes
+
+- Endpoint base is `api.x.com/2` (not `api.twitter.com`)
+- Use `npm:@supabase/supabase-js@2/cors` for CORS headers in both new functions
+- Validate all inputs with Zod, return 400 on parse failure
+- Never log token values
+- Existing `src/integrations/supabase/types.ts` regenerates automatically after the migration adds `x_account_tokens`
+
+### Order of operations after you approve
+
+1. You rotate keys in X Developer Portal
+2. I call `add_secret` for `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_BEARER_TOKEN` — you paste the rotated values
+3. I create the migration for `x_account_tokens` + RLS
+4. I add the two edge functions and the "Continue with X" button
+5. You configure the Twitter provider in Supabase dashboard (I'll give exact steps and the callback URL)
+6. We test each capability end-to-end
+
+### Open question
+
+Capability 2 (posting): post as one official PoliPulse account, or only let users who sign in post as themselves? That changes whether we need the `x_account_tokens` table at all.
