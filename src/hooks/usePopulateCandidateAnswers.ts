@@ -76,8 +76,18 @@ export function usePopulateCandidateAnswers() {
     onBackgroundJobStarted?: (job: { questionsQueued: number; estimatedMinutes: number }) => void
   ): Promise<PopulateResult> => {
     setLoadingCandidates(prev => ({ ...prev, [candidateId]: true }));
-    
+
     try {
+      // Prefer Railway worker queue
+      const enq = await enqueueWorkerJob(candidateId, { forceRegenerate });
+      if (enq?.jobId) {
+        toast.info(enq.deduplicated ? 'Job already queued' : 'Deep research queued', {
+          description: `Job ${enq.jobId.slice(0, 8)} · results in ~3 minutes.`,
+        });
+        onBackgroundJobStarted?.({ questionsQueued: 0, estimatedMinutes: 3 });
+        return { success: true, candidateId, generated: 0, existing: 0, missingBefore: 0 };
+      }
+
       const { data, error } = await supabase.functions.invoke('get-candidate-answers', {
         body: { candidateId, forceRegenerate },
       });
