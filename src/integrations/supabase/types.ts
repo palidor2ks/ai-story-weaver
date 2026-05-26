@@ -3751,6 +3751,7 @@ export type Database = {
           coverage_tier: Database["public"]["Enums"]["coverage_tier"]
         }[]
       }
+      cancel_job: { Args: { p_id: string }; Returns: undefined }
       claim_anon_poll_responses: {
         Args: { p_anon_session_id: string }
         Returns: number
@@ -3939,6 +3940,7 @@ export type Database = {
         Returns: string
       }
       retag_vendor_refunds: { Args: never; Returns: number }
+      retry_job: { Args: { p_id: string }; Returns: undefined }
       save_quiz_results: {
         Args: {
           p_answers: Json
