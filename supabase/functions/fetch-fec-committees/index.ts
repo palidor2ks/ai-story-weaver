@@ -125,49 +125,47 @@ serve(async (req) => {
     
     let overallPrimaryCommittee: { id: string; name: string } | null = null;
 
-    // Fetch committees for each FEC candidate ID
-    for (const fecIdRecord of fecIdsToFetch) {
-      // Fetch ALL committee designations: P=Principal, A=Authorized, J=Joint Fundraising, U=Unauthorized/Leadership, B=Lobbyist, D=Delegate
-      const url = `https://api.open.fec.gov/v1/candidate/${fecIdRecord.fecCandidateId}/committees/?api_key=${fecApiKey}&designation=P&designation=A&designation=J&designation=U&designation=B&designation=D&per_page=50`;
-      
-      let response: Response;
-      try {
-        response = await fetchWithRetry(url);
-      } catch (err) {
-        console.error('[FEC-COMMITTEES] Failed after retries for', fecIdRecord.fecCandidateId, ':', err);
-        continue; // Skip this FEC ID but continue with others
-      }
-      
-      if (!response.ok) {
-        const errorBody = await response.text();
-        console.error('[FEC-COMMITTEES] FEC API error for', fecIdRecord.fecCandidateId, ':', response.status, errorBody);
-        continue;
-      }
+    // Pre-fetch all existing committees for this candidate in one query (avoid N+1)
+    const { data: existingRows } = await supabase
+      .from('candidate_committees')
+      .select('fec_committee_id, active')
+      .eq('candidate_id', candidateId);
+    const existingActiveMap = new Map<string, boolean>(
+      (existingRows || []).map(r => [r.fec_committee_id, r.active])
+    );
 
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        console.error('[FEC-COMMITTEES] Failed to parse response for', fecIdRecord.fecCandidateId);
-        continue;
-      }
+    // Fetch committees for each FEC candidate ID in parallel
+    const fecResults = await Promise.all(
+      fecIdsToFetch.map(async (fecIdRecord) => {
+        const url = `https://api.open.fec.gov/v1/candidate/${fecIdRecord.fecCandidateId}/committees/?api_key=${fecApiKey}&designation=P&designation=A&designation=J&designation=U&designation=B&designation=D&per_page=50`;
+        try {
+          const response = await fetchWithRetry(url);
+          if (!response.ok) {
+            console.error('[FEC-COMMITTEES] FEC API error for', fecIdRecord.fecCandidateId, ':', response.status, await response.text());
+            return { fecIdRecord, committees: [] as CommitteeResult[] };
+          }
+          const data = await response.json();
+          return { fecIdRecord, committees: (data?.results || []) as CommitteeResult[] };
+        } catch (err) {
+          console.error('[FEC-COMMITTEES] Fetch failed for', fecIdRecord.fecCandidateId, ':', err);
+          return { fecIdRecord, committees: [] as CommitteeResult[] };
+        }
+      })
+    );
 
-      const committees: CommitteeResult[] = data?.results || [];
+    // Build all upsert rows
+    const upsertRows: any[] = [];
+    const nowIso = new Date().toISOString();
+
+    for (const { fecIdRecord, committees } of fecResults) {
       console.log('[FEC-COMMITTEES] Found', committees.length, 'committees for', fecIdRecord.fecCandidateId);
-
-      // Find primary committee for this FEC ID
       const primaryCommittee = committees.find(c => c.designation === 'P') || committees[0];
-      
-      // Track overall primary (from the primary FEC ID)
       if (fecIdRecord.isPrimary && primaryCommittee && !overallPrimaryCommittee) {
         overallPrimaryCommittee = { id: primaryCommittee.committee_id, name: primaryCommittee.name };
       }
 
-      // Store all committees with source tracking
       for (const cmte of committees) {
         const isPrimary = cmte.committee_id === primaryCommittee?.committee_id && fecIdRecord.isPrimary;
-        
-        // Determine role based on designation
         const isNonPrimaryDesignation = ['J', 'U', 'B', 'D'].includes(cmte.designation);
         let role = 'authorized';
         if (cmte.designation === 'P') role = 'principal';
@@ -176,51 +174,26 @@ serve(async (req) => {
         else if (cmte.designation === 'B') role = 'lobbyist';
         else if (cmte.designation === 'D') role = 'delegate';
 
-        // Convert cycles array to string array for storage
         const cyclesAsStrings = cmte.cycles?.map(c => String(c)) || [];
-        
-        // FEC considers a committee terminated if is_active is false
         const isTerminated = cmte.is_active === false;
-
-        // CRITICAL: Only P (Principal) and A (Authorized) committees should default to active
-        // J, U, B, D committees default to inactive and require manual activation
-        const isCampaignCommittee = ['P', 'A'].includes(cmte.designation);
-        const defaultActive = isCampaignCommittee;
-        
-        // Check if committee already exists to preserve existing active status
-        const { data: existingCommittee } = await supabase
-          .from('candidate_committees')
-          .select('active')
-          .eq('candidate_id', candidateId)
-          .eq('fec_committee_id', cmte.committee_id)
-          .maybeSingle();
-        
-        // Preserve existing active status if committee exists, otherwise use default
-        const activeStatus = existingCommittee !== null 
-          ? existingCommittee.active 
+        const defaultActive = ['P', 'A'].includes(cmte.designation);
+        const activeStatus = existingActiveMap.has(cmte.committee_id)
+          ? existingActiveMap.get(cmte.committee_id)!
           : defaultActive;
-        
-        const { error: upsertError } = await supabase
-          .from('candidate_committees')
-          .upsert({
-            candidate_id: candidateId,
-            fec_committee_id: cmte.committee_id,
-            name: cmte.name,
-            designation: cmte.designation,
-            designation_full: cmte.designation_full,
-            role,
-            active: activeStatus, // Preserve existing or default based on designation
-            cycles: cyclesAsStrings,
-            is_terminated: isTerminated,
-            source_fec_candidate_id: fecIdRecord.fecCandidateId,
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'candidate_id,fec_committee_id'
-          });
 
-        if (upsertError) {
-          console.warn('[FEC-COMMITTEES] Failed to upsert committee:', cmte.committee_id, upsertError);
-        }
+        upsertRows.push({
+          candidate_id: candidateId,
+          fec_committee_id: cmte.committee_id,
+          name: cmte.name,
+          designation: cmte.designation,
+          designation_full: cmte.designation_full,
+          role,
+          active: activeStatus,
+          cycles: cyclesAsStrings,
+          is_terminated: isTerminated,
+          source_fec_candidate_id: fecIdRecord.fecCandidateId,
+          updated_at: nowIso,
+        });
 
         allCommittees.push({
           id: cmte.committee_id,
@@ -228,11 +201,21 @@ serve(async (req) => {
           designation: cmte.designation,
           designationFull: cmte.designation_full,
           isPrimary,
-          active: true, // All committees are active
+          active: true,
           isNonPrimaryDesignation,
           sourceFecCandidateId: fecIdRecord.fecCandidateId,
-          sourceOffice: fecIdRecord.office
+          sourceOffice: fecIdRecord.office,
         });
+      }
+    }
+
+    // Single bulk upsert
+    if (upsertRows.length > 0) {
+      const { error: upsertError } = await supabase
+        .from('candidate_committees')
+        .upsert(upsertRows, { onConflict: 'candidate_id,fec_committee_id' });
+      if (upsertError) {
+        console.warn('[FEC-COMMITTEES] Bulk upsert error:', upsertError);
       }
     }
 
