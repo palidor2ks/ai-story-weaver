@@ -241,7 +241,7 @@ export function DonorAliasesPanel() {
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search aliases..."
+                placeholder="Search existing aliases..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
@@ -269,7 +269,7 @@ export function DonorAliasesPanel() {
                   {filteredAliases.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                        No aliases yet. Create one to get started.
+                        No aliases yet. Search only filters existing aliases—click “New Alias” to create one first.
                       </TableCell>
                     </TableRow>
                   ) : (
