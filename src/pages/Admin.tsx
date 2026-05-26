@@ -45,6 +45,7 @@ import { PollsPanel } from "@/components/admin/PollsPanel";
 import { IEExclusionsPanel } from "@/components/admin/IEExclusionsPanel";
 import { CommitteeTopicsPanel } from "@/components/admin/CommitteeTopicsPanel";
 import { CommitteeAliasesPanel } from "@/components/admin/CommitteeAliasesPanel";
+import { JobQueuePanel } from "@/components/admin/JobQueuePanel";
 
 
 // Only levels that require manual entry (no API available)
