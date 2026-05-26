@@ -402,6 +402,8 @@ export const Onboarding = () => {
         income: data.income,
         sex: data.sex,
         religion: data.religion,
+        education_level: data.education_level,
+        race: data.race,
       });
       setStep('topics');
     } catch (error) {

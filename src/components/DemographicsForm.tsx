@@ -23,6 +23,8 @@ export interface DemographicsData {
   income: string;
   sex: string;
   religion: string;
+  education_level: string;
+  race: string;
 }
 
 interface DemographicsFormProps {
@@ -63,6 +65,31 @@ const SEX_OPTIONS = [
 
 
 
+
+const EDUCATION_LEVELS = [
+  'Less than high school',
+  'High school diploma or GED',
+  'Some college',
+  'Associate degree',
+  'Bachelor's degree',
+  'Master's degree',
+  'Doctorate or professional degree',
+  'Prefer not to say',
+];
+
+const RACE_OPTIONS = [
+  'American Indian or Alaska Native',
+  'Asian',
+  'Black or African American',
+  'Hispanic or Latino',
+  'Middle Eastern or North African',
+  'Native Hawaiian or Other Pacific Islander',
+  'White',
+  'Multiracial',
+  'Other',
+  'Prefer not to say',
+];
+
 export const DemographicsForm = ({
   initialData,
   onSubmit,
@@ -76,6 +103,8 @@ export const DemographicsForm = ({
     income: initialData?.income || '',
     sex: initialData?.sex || '',
     religion: initialData?.religion || '',
+    education_level: initialData?.education_level || '',
+    race: initialData?.race || '',
   });
 
   const [addressState, setAddressState] = useState<{ code: string; name: string } | null>(null);
@@ -87,7 +116,7 @@ export const DemographicsForm = ({
     onSubmit(formData);
   };
 
-  const isFormValid = formData.address && formData.political_party && formData.age && formData.income && formData.sex && formData.religion;
+  const isFormValid = formData.address && formData.political_party && formData.age && formData.income && formData.sex && formData.religion && formData.education_level && formData.race;
 
   return (
     <div className="max-w-xl mx-auto animate-fade-in">
@@ -214,6 +243,49 @@ export const DemographicsForm = ({
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="education_level" className="text-foreground">
+              Education Level
+            </Label>
+            <Select
+              value={formData.education_level}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, education_level: value }))}
+            >
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Select your education level" />
+              </SelectTrigger>
+              <SelectContent>
+                {EDUCATION_LEVELS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="race" className="text-foreground">
+              Race
+            </Label>
+            <Select
+              value={formData.race}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, race: value }))}
+            >
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Select your race" />
+              </SelectTrigger>
+              <SelectContent>
+                {RACE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
 
           <div className="space-y-2">
             <Label htmlFor="religion" className="text-foreground">
