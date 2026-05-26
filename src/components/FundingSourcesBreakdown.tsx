@@ -18,7 +18,9 @@ interface Props {
 export function FundingSourcesBreakdown({ input, className, title = 'Funding Sources' }: Props) {
   const { sources, total } = computeFundingBreakdown(input);
   if (total <= 0) return null;
-  const rows = withPercents(sources, total).filter((r) => r.amount > 0);
+  const rows = withPercents(sources, total)
+    .filter((r) => r.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
 
   return (
     <div
