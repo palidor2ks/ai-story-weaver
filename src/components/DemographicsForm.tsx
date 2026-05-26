@@ -129,7 +129,7 @@ export const DemographicsForm = ({
     onSubmit(formData);
   };
 
-  const isFormValid = formData.address && formData.political_party && formData.age && formData.income && formData.sex && formData.religion && formData.education_level && formData.race;
+  const isFormValid = formData.address && formData.political_party && formData.age && formData.income && formData.employment_status && formData.sex && formData.religion && formData.education_level && formData.race;
 
   return (
     <div className="max-w-xl mx-auto animate-fade-in">
