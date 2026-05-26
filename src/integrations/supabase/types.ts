@@ -3304,6 +3304,39 @@ export type Database = {
         }
         Relationships: []
       }
+      x_account_tokens: {
+        Row: {
+          access_token: string
+          account_handle: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          refresh_token: string | null
+          scope: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          account_handle: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          refresh_token?: string | null
+          scope?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          account_handle?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          refresh_token?: string | null
+          scope?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       bill_summary_stats: {
