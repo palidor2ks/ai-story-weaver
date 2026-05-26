@@ -1919,6 +1919,152 @@ export type Database = {
           },
         ]
       }
+      job_dead_letters: {
+        Row: {
+          attempts: number
+          failed_at: string
+          id: string
+          job_type: string
+          last_error: string | null
+          metadata: Json
+          original_queue_id: string | null
+          payload: Json
+        }
+        Insert: {
+          attempts: number
+          failed_at?: string
+          id?: string
+          job_type: string
+          last_error?: string | null
+          metadata?: Json
+          original_queue_id?: string | null
+          payload: Json
+        }
+        Update: {
+          attempts?: number
+          failed_at?: string
+          id?: string
+          job_type?: string
+          last_error?: string | null
+          metadata?: Json
+          original_queue_id?: string | null
+          payload?: Json
+        }
+        Relationships: []
+      }
+      job_queue: {
+        Row: {
+          attempts: number
+          available_at: string
+          created_at: string
+          created_by: string | null
+          finished_at: string | null
+          id: string
+          idempotency_key: string | null
+          job_type: string
+          last_error: string | null
+          lock_expires_at: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          payload: Json
+          priority: number
+          status: Database["public"]["Enums"]["job_status"]
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          available_at?: string
+          created_at?: string
+          created_by?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          job_type: string
+          last_error?: string | null
+          lock_expires_at?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          payload?: Json
+          priority?: number
+          status?: Database["public"]["Enums"]["job_status"]
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          available_at?: string
+          created_at?: string
+          created_by?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          job_type?: string
+          last_error?: string | null
+          lock_expires_at?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          payload?: Json
+          priority?: number
+          status?: Database["public"]["Enums"]["job_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      job_runs: {
+        Row: {
+          attempt: number
+          checkpoint: Json | null
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          job_type: string
+          metadata: Json
+          queue_id: string | null
+          started_at: string
+          status: Database["public"]["Enums"]["job_status"]
+          worker_id: string | null
+        }
+        Insert: {
+          attempt?: number
+          checkpoint?: Json | null
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          job_type: string
+          metadata?: Json
+          queue_id?: string | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["job_status"]
+          worker_id?: string | null
+        }
+        Update: {
+          attempt?: number
+          checkpoint?: Json | null
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          job_type?: string
+          metadata?: Json
+          queue_id?: string | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["job_status"]
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_runs_queue_id_fkey"
+            columns: ["queue_id"]
+            isOneToOne: false
+            referencedRelation: "job_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mayor_fetch_queue: {
         Row: {
           attempts: number
@@ -3609,6 +3755,44 @@ export type Database = {
         Args: { p_anon_session_id: string }
         Returns: number
       }
+      claim_jobs: {
+        Args: {
+          p_batch_size?: number
+          p_job_type: string
+          p_lock_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempts: number
+          available_at: string
+          created_at: string
+          created_by: string | null
+          finished_at: string | null
+          id: string
+          idempotency_key: string | null
+          job_type: string
+          last_error: string | null
+          lock_expires_at: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          payload: Json
+          priority: number
+          status: Database["public"]["Enums"]["job_status"]
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "job_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      complete_job: { Args: { p_id: string }; Returns: undefined }
+      fail_job: {
+        Args: { p_error: string; p_id: string; p_retry_delay_seconds?: number }
+        Returns: undefined
+      }
       get_committee_cycles: { Args: never; Returns: string[] }
       get_contribution_totals: {
         Args: { p_candidate_id: string; p_cycle: string }
@@ -3805,6 +3989,7 @@ export type Database = {
       confidence_level: "high" | "medium" | "low"
       coverage_tier: "tier_1" | "tier_2" | "tier_3"
       donor_type: "Individual" | "PAC" | "Organization" | "Unknown"
+      job_status: "pending" | "running" | "done" | "failed" | "dead"
       party_type: "Democrat" | "Republican" | "Independent" | "Other"
       vote_position:
         | "Yea"
@@ -3944,6 +4129,7 @@ export const Constants = {
       confidence_level: ["high", "medium", "low"],
       coverage_tier: ["tier_1", "tier_2", "tier_3"],
       donor_type: ["Individual", "PAC", "Organization", "Unknown"],
+      job_status: ["pending", "running", "done", "failed", "dead"],
       party_type: ["Democrat", "Republican", "Independent", "Other"],
       vote_position: [
         "Yea",
