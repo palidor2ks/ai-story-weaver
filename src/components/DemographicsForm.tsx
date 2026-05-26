@@ -113,6 +113,7 @@ export const DemographicsForm = ({
     political_party: initialData?.political_party || '',
     age: initialData?.age || null,
     income: initialData?.income || '',
+    employment_status: initialData?.employment_status || '',
     sex: initialData?.sex || '',
     religion: initialData?.religion || '',
     education_level: initialData?.education_level || '',
