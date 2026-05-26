@@ -71,8 +71,8 @@ const EDUCATION_LEVELS = [
   'High school diploma or GED',
   'Some college',
   'Associate degree',
-  'Bachelor's degree',
-  'Master's degree',
+  "Bachelor's degree",
+  "Master's degree",
   'Doctorate or professional degree',
   'Prefer not to say',
 ];
