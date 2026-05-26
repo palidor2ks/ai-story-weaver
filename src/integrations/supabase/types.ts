@@ -2751,6 +2751,7 @@ export type Database = {
           avatar_url: string | null
           birth_date: string | null
           created_at: string | null
+          education_level: string | null
           email: string | null
           employment_status: string | null
           id: string
@@ -2763,6 +2764,7 @@ export type Database = {
           name: string
           overall_score: number | null
           political_party: string | null
+          race: string | null
           religion: string | null
           score_version: string | null
           sex: string | null
@@ -2778,6 +2780,7 @@ export type Database = {
           avatar_url?: string | null
           birth_date?: string | null
           created_at?: string | null
+          education_level?: string | null
           email?: string | null
           employment_status?: string | null
           id: string
@@ -2790,6 +2793,7 @@ export type Database = {
           name: string
           overall_score?: number | null
           political_party?: string | null
+          race?: string | null
           religion?: string | null
           score_version?: string | null
           sex?: string | null
@@ -2805,6 +2809,7 @@ export type Database = {
           avatar_url?: string | null
           birth_date?: string | null
           created_at?: string | null
+          education_level?: string | null
           email?: string | null
           employment_status?: string | null
           id?: string
@@ -2817,6 +2822,7 @@ export type Database = {
           name?: string
           overall_score?: number | null
           political_party?: string | null
+          race?: string | null
           religion?: string | null
           score_version?: string | null
           sex?: string | null
