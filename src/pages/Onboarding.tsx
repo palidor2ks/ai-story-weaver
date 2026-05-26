@@ -401,6 +401,7 @@ export const Onboarding = () => {
         age: data.age,
         income: data.income,
         sex: data.sex,
+        employment_status: data.employment_status,
         religion: data.religion,
       });
       setStep('topics');
@@ -480,6 +481,7 @@ export const Onboarding = () => {
               age: profile?.age || null,
               income: profile?.income || '',
               sex: profile?.sex || '',
+              employment_status: profile?.employment_status || '',
               religion: profile?.religion || '',
             }}
             onSubmit={handleDemographicsSubmit}

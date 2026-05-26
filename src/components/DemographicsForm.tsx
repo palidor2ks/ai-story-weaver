@@ -21,6 +21,7 @@ export interface DemographicsData {
   political_party: string;
   age: number | null;
   income: string;
+  employment_status: string;
   sex: string;
   religion: string;
   education_level: string;
@@ -45,13 +46,24 @@ const POLITICAL_PARTIES = [
 ];
 
 const INCOME_RANGES = [
-  'Under $25,000',
-  '$25,000 - $49,999',
-  '$50,000 - $74,999',
-  '$75,000 - $99,999',
-  '$100,000 - $149,999',
-  '$150,000 - $199,999',
-  '$200,000+',
+  'Under $50,000',
+  '$50,000 - $100,000',
+  '$100,000 - $200,000',
+  '$200,000 - $500,000',
+  '$500,000 - $1M',
+  '$1M - $5M',
+  '$5M - $20M',
+  '$20M - $100M',
+  'Over $100M',
+  'Prefer not to say',
+];
+
+const EMPLOYMENT_STATUSES = [
+  'Self-employed',
+  'Employed (1 job)',
+  'Employed (multiple jobs)',
+  'Part-time employed',
+  'Student',
   'Prefer not to say',
 ];
 
@@ -102,6 +114,7 @@ export const DemographicsForm = ({
     age: initialData?.age || null,
     income: initialData?.income || '',
     sex: initialData?.sex || '',
+    employment_status: initialData?.employment_status || '',
     religion: initialData?.religion || '',
     education_level: initialData?.education_level || '',
     race: initialData?.race || '',
@@ -116,7 +129,7 @@ export const DemographicsForm = ({
     onSubmit(formData);
   };
 
-  const isFormValid = formData.address && formData.political_party && formData.age && formData.income && formData.sex && formData.religion && formData.education_level && formData.race;
+  const isFormValid = formData.address && formData.political_party && formData.age && formData.income && formData.sex && formData.employment_status && formData.religion && formData.education_level && formData.race;
 
   return (
     <div className="max-w-xl mx-auto animate-fade-in">
@@ -217,6 +230,28 @@ export const DemographicsForm = ({
                 {INCOME_RANGES.map((range) => (
                   <SelectItem key={range} value={range}>
                     {range}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+
+          <div className="space-y-2">
+            <Label htmlFor="employment_status" className="text-foreground">
+              Employment Status
+            </Label>
+            <Select
+              value={formData.employment_status}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, employment_status: value }))}
+            >
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Select employment status" />
+              </SelectTrigger>
+              <SelectContent>
+                {EMPLOYMENT_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status}
                   </SelectItem>
                 ))}
               </SelectContent>
