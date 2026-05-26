@@ -671,7 +671,7 @@ export const QuizResults = () => {
         <div className="text-center animate-slide-up" style={{ animationDelay: '300ms' }}>
           <Button 
             size="lg" 
-            onClick={() => navigate('/feed')}
+            onClick={() => navigate('/profile')}
             className="gap-2"
           >
             Find Your Candidates

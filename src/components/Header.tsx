@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
-import { User, LayoutGrid, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper, Megaphone } from 'lucide-react';
+import { User, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper, Megaphone } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
@@ -19,7 +19,6 @@ export const Header = () => {
   const isPolitician = !!user && !politicianLoading && !!politicianData?.isPolitician;
 
   const navItems = [
-    { path: '/feed', label: 'Feed', icon: LayoutGrid, requiresAuth: true },
     { path: '/candidates', label: 'Candidates', icon: Users, requiresAuth: false },
     { path: '/parties', label: 'Parties', icon: Building2, requiresAuth: true },
     { path: '/donors', label: 'Donors', icon: DollarSign, requiresAuth: false },
@@ -39,7 +38,7 @@ export const Header = () => {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between gap-2">
-        <Link to="/feed" className="flex items-center gap-2 shrink-0">
+        <Link to="/profile" className="flex items-center gap-2 shrink-0">
           <img src={logoImg} alt="Pulse" width={40} height={40} fetchPriority="high" decoding="async" className="w-10 h-10 object-contain" />
           <BetaBadge size="xs" />
         </Link>
