@@ -34,13 +34,24 @@ const POLITICAL_PARTIES = [
 ];
 
 const INCOME_RANGES = [
-  'Under $25,000',
-  '$25,000 - $49,999',
-  '$50,000 - $74,999',
-  '$75,000 - $99,999',
-  '$100,000 - $149,999',
-  '$150,000 - $199,999',
-  '$200,000+',
+  'Under $50,000',
+  '$50,000 - $100,000',
+  '$100,000 - $200,000',
+  '$200,000 - $500,000',
+  '$500,000 - $1M',
+  '$1M - $5M',
+  '$5M - $20M',
+  '$20M - $100M',
+  'Over $100M',
+  'Prefer not to say',
+];
+
+const EMPLOYMENT_STATUSES = [
+  'Self-employed',
+  'Employed (1 job)',
+  'Employed (multiple jobs)',
+  'Part-time employed',
+  'Student',
   'Prefer not to say',
 ];
 
@@ -90,6 +101,7 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
     age: profile.age || null,
     sex: profile.sex || '',
     income: profile.income || '',
+    employment_status: profile.employment_status || '',
     political_party: profile.political_party || '',
     religion: profile.religion || '',
     education_level: profile.education_level || '',
@@ -104,6 +116,7 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
         age: profile.age || null,
         sex: profile.sex || '',
         income: profile.income || '',
+        employment_status: profile.employment_status || '',
         political_party: profile.political_party || '',
         religion: profile.religion || '',
         education_level: profile.education_level || '',
@@ -119,6 +132,7 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
       age: formData.age,
       sex: formData.sex || null,
       income: formData.income || null,
+      employment_status: formData.employment_status || null,
       political_party: formData.political_party || null,
       religion: formData.religion || null,
       education_level: formData.education_level || null,
@@ -204,6 +218,27 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="employment_status">Employment Status</Label>
+            <Select
+              value={formData.employment_status}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, employment_status: value }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select employment status" />
+              </SelectTrigger>
+              <SelectContent>
+                {EMPLOYMENT_STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+
 
           <div className="space-y-2">
             <Label htmlFor="political_party">Political Party</Label>

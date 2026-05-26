@@ -2752,6 +2752,7 @@ export type Database = {
           birth_date: string | null
           created_at: string | null
           email: string | null
+          employment_status: string | null
           id: string
           identity_provider: string | null
           identity_verification_id: string | null
@@ -2778,6 +2779,7 @@ export type Database = {
           birth_date?: string | null
           created_at?: string | null
           email?: string | null
+          employment_status?: string | null
           id: string
           identity_provider?: string | null
           identity_verification_id?: string | null
@@ -2804,6 +2806,7 @@ export type Database = {
           birth_date?: string | null
           created_at?: string | null
           email?: string | null
+          employment_status?: string | null
           id?: string
           identity_provider?: string | null
           identity_verification_id?: string | null
