@@ -19,6 +19,8 @@ export interface Profile {
   income: string | null;
   sex: string | null;
   religion: string | null;
+  education_level: string | null;
+  race: string | null;
   score_version: string;
   // Verification fields
   identity_verified: boolean | null;

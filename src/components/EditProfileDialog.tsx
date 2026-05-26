@@ -52,6 +52,29 @@ const SEX_OPTIONS = [
   'Prefer not to say',
 ];
 
+const EDUCATION_LEVELS = [
+  'Less than high school',
+  'High school diploma or GED',
+  'Some college',
+  'Associate degree',
+  "Bachelor's degree",
+  "Master's degree",
+  'Doctorate or professional degree',
+  'Prefer not to say',
+];
+
+const RACE_OPTIONS = [
+  'American Indian or Alaska Native',
+  'Asian',
+  'Black or African American',
+  'Hispanic or Latino',
+  'Middle Eastern or North African',
+  'Native Hawaiian or Other Pacific Islander',
+  'White',
+  'Multiracial',
+  'Other',
+  'Prefer not to say',
+];
 
 
 interface EditProfileDialogProps {
@@ -69,6 +92,8 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
     income: profile.income || '',
     political_party: profile.political_party || '',
     religion: profile.religion || '',
+    education_level: profile.education_level || '',
+    race: profile.race || '',
   });
 
   const handleOpen = (isOpen: boolean) => {
@@ -81,6 +106,8 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
         income: profile.income || '',
         political_party: profile.political_party || '',
         religion: profile.religion || '',
+        education_level: profile.education_level || '',
+        race: profile.race || '',
       });
     }
     setOpen(isOpen);
@@ -94,6 +121,8 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
       income: formData.income || null,
       political_party: formData.political_party || null,
       religion: formData.religion || null,
+      education_level: formData.education_level || null,
+      race: formData.race || null,
     });
     setOpen(false);
   };
@@ -189,6 +218,44 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
                 {POLITICAL_PARTIES.map((party) => (
                   <SelectItem key={party} value={party}>
                     {party}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="education_level">Education Level</Label>
+            <Select
+              value={formData.education_level}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, education_level: value }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select your education level" />
+              </SelectTrigger>
+              <SelectContent>
+                {EDUCATION_LEVELS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="race">Race</Label>
+            <Select
+              value={formData.race}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, race: value }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select your race" />
+              </SelectTrigger>
+              <SelectContent>
+                {RACE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
                   </SelectItem>
                 ))}
               </SelectContent>
