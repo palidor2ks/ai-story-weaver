@@ -46,6 +46,30 @@ export function usePopulateCandidateAnswers() {
   const isPausedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Enqueue a worker job (Railway) instead of invoking the edge function directly.
+  const enqueueWorkerJob = async (
+    candidateId: string,
+    opts: { forceRegenerate?: boolean; questionIds?: string[] } = {}
+  ): Promise<{ jobId: string; status: string; deduplicated: boolean } | null> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('enqueue-answer-job', {
+        body: {
+          candidateId,
+          forceRegenerate: !!opts.forceRegenerate,
+          ...(opts.questionIds?.length ? { questionIds: opts.questionIds } : {}),
+        },
+      });
+      if (error) {
+        console.warn('enqueue-answer-job failed, falling back', error);
+        return null;
+      }
+      return data ?? null;
+    } catch (e) {
+      console.warn('enqueue-answer-job threw, falling back', e);
+      return null;
+    }
+  };
+
   const populateCandidate = async (
     candidateId: string, 
     forceRegenerate = false,
