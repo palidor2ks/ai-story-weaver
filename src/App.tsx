@@ -37,6 +37,7 @@ import Poll from "./pages/Poll";
 import PollResultsPage from "./pages/PollResultsPage";
 import TopSpenders from "./pages/TopSpenders";
 import XComposer from "./pages/admin/XComposer";
+import XConnectCallback from "./pages/admin/XConnectCallback";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -198,6 +199,11 @@ const AppRoutes = () => {
       <Route path="/admin/x-composer" element={
         <RouteGuard requireAuth requireOnboarding>
           <XComposer />
+        </RouteGuard>
+      } />
+      <Route path="/admin/x-connect/callback" element={
+        <RouteGuard requireAuth requireOnboarding>
+          <XConnectCallback />
         </RouteGuard>
       } />
       <Route path="/politician" element={
