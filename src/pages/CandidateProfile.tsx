@@ -286,6 +286,20 @@ export const CandidateProfile = () => {
         description={`See ${candidate.name}'s positions, voting record, donors, and how they align with your views on the issues that matter most.`}
         path={`/candidate/${candidate.id}`}
         type="article"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "Person",
+          name: candidate.name,
+          jobTitle: candidate.office,
+          ...(candidate.image_url ? { image: candidate.image_url } : {}),
+          ...(candidate.party
+            ? { affiliation: { "@type": "Organization", name: candidate.party } }
+            : {}),
+          ...(candidate.state
+            ? { homeLocation: { "@type": "Place", name: candidate.state } }
+            : {}),
+          url: `https://www.polipulseapp.com/candidate/${candidate.id}`,
+        }}
       />
       <Header />
       
