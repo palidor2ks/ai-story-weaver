@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Sparkles, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
 import { Seo } from '@/components/Seo';
 import { BetaBadge } from '@/components/BetaBadge';
@@ -114,6 +115,18 @@ export const Auth = () => {
     }
   };
 
+  const handleXSignIn = async () => {
+    setIsSubmitting(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'twitter',
+      options: { redirectTo: `${window.location.origin}/` },
+    });
+    if (error) {
+      setIsSubmitting(false);
+      toast.error(error.message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -157,6 +170,27 @@ export const Auth = () => {
             </CardHeader>
             
             <CardContent>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full mb-4"
+                onClick={handleXSignIn}
+                disabled={isSubmitting}
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+                Continue with X
+              </Button>
+              <div className="relative mb-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">Or with email</span>
+                </div>
+              </div>
+
               <TabsContent value="signin" className="mt-0">
                 <CardDescription className="mb-4">
                   Welcome back! Sign in to continue exploring.
