@@ -185,7 +185,7 @@ export const Donors = () => {
                 nameVariations={donor.name_variations}
                 recipientCount={donor.recipient_count}
                 cycle={effectiveCycle}
-                primaryCauseLabel={getDonorCause(donorCauseMap, donor.name, donor.type)?.label}
+                primaryCause={getDonorCause(donorCauseMap, donor.name, donor.type)}
               />
             ))}
           </div>
