@@ -1,33 +1,75 @@
-## Issues
+# Plan: Representative X feed on candidate profiles
 
-1. **Mobile overflow** — The "Independent Expenditures" target table in `CommitteeIESection` (`src/components/IndependentExpenditureSections.tsx`) renders 5 columns (Target, Supporting, Opposing, Total, Filings). On a 430px viewport this exceeds the card width and the Opposing/Total/Filings columns get clipped off the right edge (visible in screenshot).
+Adopt the substance of PR #101 (read-only X feed card on `CandidateProfile`) with fixes for the project's conventions and add the missing ingestion path so the section isn't permanently empty.
 
-2. **GALLREIN not clickable** — Massie links to a candidate profile but Gallrein doesn't. The target row only renders a `<Link>` when `t.candidateId` (our internal UUID) is present. Gallrein's IE rows have a `target_fec_candidate_id` (`H6KY04171`) but no resolved internal `candidate_id`, so the link is skipped even though we likely have a candidate row keyed by `fec_id`.
+## 1. Database — `representative_social_posts`
 
-## Plan
+New migration `supabase/migrations/<ts>_add_representative_social_posts.sql`:
 
-### 1. Make the table fit on mobile
+- Table columns:
+  - `id uuid pk default gen_random_uuid()`
+  - `candidate_id uuid not null references public.candidates(id) on delete cascade` *(replaces PR's free-text slug — we already have stable IDs)*
+  - `platform text not null default 'x' check (platform in ('x'))`
+  - `handle text not null`
+  - `post_id text not null`
+  - `post_url text not null`
+  - `post_text text`
+  - `posted_at timestamptz not null`
+  - `fetched_at timestamptz not null default now()`
+  - `metadata jsonb not null default '{}'::jsonb`
+  - `created_at timestamptz not null default now()`
+  - `unique (platform, post_id)`
+- Index: `(candidate_id, posted_at desc)`
+- **GRANTs (required by project rules):**
+  ```sql
+  GRANT SELECT ON public.representative_social_posts TO anon, authenticated;
+  GRANT ALL ON public.representative_social_posts TO service_role;
+  ```
+- RLS:
+  - Enable RLS
+  - `SELECT` policy `USING (true)` (public read)
+  - `ALL` policy for authenticated `WHERE public.has_role(auth.uid(), 'admin'::app_role)` (admin write)
 
-In `src/components/IndependentExpenditureSections.tsx` `CommitteeIESection` table:
+## 2. Ingestion — new edge function `sync-representative-x-posts`
 
-- Wrap the `<table>` in a horizontal scroll container: `<div className="overflow-x-auto">` so nothing gets clipped on narrow screens.
-- Drop the per-cell `truncate max-w-[260px]` on the Target column and replace with a sensible min-width on the table (`min-w-[560px]`) so columns size naturally and the target name can wrap.
-- On mobile, hide the lowest-value column (`Filings`) using `hidden sm:table-cell` on both the header and cell to reduce horizontal pressure. Keep Supporting / Opposing / Total visible (those are the numbers shown in the screenshot).
-- Tighten cell padding on mobile (`p-2 sm:p-3` stays; numeric cells use `whitespace-nowrap` so currency amounts like `$6.2M` never wrap mid-value).
+`supabase/functions/sync-representative-x-posts/index.ts`:
 
-Apply the same `overflow-x-auto` + `whitespace-nowrap` numeric treatment to the "Top spending committees" table in `CandidateIESection` for consistency.
+- Admin-only invocation (check `has_role`).
+- Inputs: optional `candidate_id` (single) or batch mode (all candidates with an `x_handle`).
+- For each candidate, call X API v2 `users/by/username/{handle}/tweets` using existing X credentials (reuse the secret already wired for `XComposer` / `XConnectCallback`; if a separate read token is needed, add via `secrets`).
+- Upsert into `representative_social_posts` on `(platform, post_id)` with `candidate_id` from the candidate row.
+- Background batch via `EdgeRuntime.waitUntil()` with backoff on 429.
+- Add a small admin trigger button (later — out of scope for this PR's UI, but expose a way to run it manually from Admin → Sync panel).
 
-### 2. Resolve FEC candidate IDs so targets like Gallrein link
+Prereq: ensure `candidates` has an `x_handle` (or equivalent) column. If missing, add it in the same migration and surface in `CandidateEditDialog`.
 
-In `src/hooks/useIndependentExpenditures.ts` `useCommitteeIE`:
+## 3. Frontend — adopt PR components with fixes
 
-- After building `targets`, collect every `t.fecId` that has no `candidateId`.
-- Reuse the existing `candidates` lookup query (it already fetches `id, fec_id, party` via `or(id.in.(...), fec_id.in.(...))`) and, when populating party, also backfill `candidateId` from the matching row's `id` when the target was matched by `fec_id`. No new query needed.
+### `src/hooks/useRepresentativeSocialFeed.ts`
+- Switch signature to `useRepresentativeSocialFeed(candidateId?: string, limit = 6)`.
+- Drop `getRepresentativeSlug` helper.
+- Query by `.eq('candidate_id', candidateId)`.
+- Remove `(supabase as any)` cast after regenerating Supabase types from the migration.
 
-In `CommitteeIESection` target row:
+### `src/components/RepresentativeSocialFeed.tsx`
+- Props: `{ candidateId: string }`.
+- Keep card + skeleton + empty state + time-ago.
+- **Fix link rendering** (the PR diff shows `post.post_url` literalized in href): each item is an anchor with `href={post.post_url}`, `target="_blank"`, `rel="noopener noreferrer"`, `ExternalLink` icon, `@{handle}`, `timeAgo(posted_at)`, and `post_text`.
+- Use semantic tokens only (no raw colors).
 
-- Keep current behavior: if `t.candidateId` exists → link to `/candidate/${t.candidateId}`. With the backfill above, Gallrein will now have a `candidateId` and become clickable just like Massie. If a target genuinely has no internal candidate row, it stays plain text (current fallback).
+### `src/pages/CandidateProfile.tsx`
+- Render `<RepresentativeSocialFeed candidateId={candidate.id} />` in the same slot the PR chose (above "Latest News").
+- Only render when `candidate.x_handle` exists (or always render — empty state is benign).
 
-### Scope
+## 4. Types
+- After migration applies, regenerate `src/integrations/supabase/types.ts` so the hook can drop the `as any` cast.
 
-UI + a small data-shaping tweak in the existing hook. No schema or backend changes.
+## 5. Out of scope (follow-ups)
+- Cron schedule for the sync function.
+- Caching/dedupe of tweet media.
+- Other platforms (Facebook, Instagram).
+
+## Technical notes
+- The Supabase Bot failure on the PR (`candidate_committees_candidate_id_fkey already exists`) is unrelated to this change and pre-exists on the branch DB — no action here.
+- Keying by `candidate_id` eliminates the name/state/district slug drift risk that exists in the PR as-written.
+- Public SELECT + GRANTs are the only way the card renders for signed-out visitors; without GRANTs PostgREST returns permission errors regardless of RLS.
