@@ -140,6 +140,16 @@ function HandleRow({
       <TableCell className="text-sm">{stat?.post_count ?? 0}</TableCell>
       <TableCell>
         <div className="flex gap-2 justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={discover}
+            disabled={discovering || !!candidate.x_handle}
+            title={candidate.x_handle ? "Already has a handle" : "Discover handle from X"}
+          >
+            <Search className={`h-3 w-3 mr-1 ${discovering ? "animate-pulse" : ""}`} />
+            {discovering ? "Searching" : "Discover"}
+          </Button>
           <Button size="sm" variant="outline" onClick={save} disabled={!dirty || saving}>
             <Save className="h-3 w-3 mr-1" />
             {saving ? "Saving" : "Save"}
