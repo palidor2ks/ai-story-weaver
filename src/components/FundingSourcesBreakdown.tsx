@@ -11,7 +11,7 @@ interface Props {
   title?: string;
 }
 
-const formatPercent = (pct: number) => (Number.isInteger(pct) ? `${pct}%` : `${pct.toFixed(1)}%`);
+const formatPercent = (pct: number) => `${pct.toFixed(1)}%`;
 
 /**
  * Funding Sources panel — 4 horizontal bars showing where a candidate's
