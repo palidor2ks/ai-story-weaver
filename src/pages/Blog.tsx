@@ -24,6 +24,13 @@ export default function Blog() {
         title="Blog — Pulse"
         description="Latest updates, articles, and product news from the Pulse team."
         path="/blog"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: "Pulse Blog",
+          description: "Latest updates, articles, and product news from the Pulse team.",
+          url: "https://www.polipulseapp.com/blog",
+        }}
       />
       <Header />
       <main className="container mx-auto py-8">
