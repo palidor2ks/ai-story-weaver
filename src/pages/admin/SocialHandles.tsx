@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, RefreshCw, Save } from "lucide-react";
+import { ArrowLeft, RefreshCw, Save, Search } from "lucide-react";
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,6 +49,7 @@ function HandleRow({
   const [value, setValue] = useState(candidate.x_handle ?? "");
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
 
   const dirty = (value.trim().replace(/^@/, "")) !== (candidate.x_handle ?? "");
 
@@ -87,6 +88,29 @@ function HandleRow({
     console.log("sync result", data);
   };
 
+  const discover = async () => {
+    setDiscovering(true);
+    const { data, error } = await supabase.functions.invoke("discover-representative-x-handles", {
+      body: { candidate_id: candidate.id, overwrite: false },
+    });
+    setDiscovering(false);
+    if (error) {
+      toast.error(`Discovery failed: ${error.message}`);
+      return;
+    }
+    const result = (data?.results ?? [])[0];
+    if (result?.status === "updated") {
+      toast.success(`Found @${result.handle}`);
+      onSaved();
+    } else if (result?.status === "skipped_existing") {
+      toast.info("Already has a handle");
+    } else if (result?.status === "rate_limited") {
+      toast.error("X rate limited; try again later");
+    } else {
+      toast.warning(`No confident match (${result?.reason ?? "unknown"})`);
+    }
+  };
+
   return (
     <TableRow>
       <TableCell>
@@ -116,6 +140,16 @@ function HandleRow({
       <TableCell className="text-sm">{stat?.post_count ?? 0}</TableCell>
       <TableCell>
         <div className="flex gap-2 justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={discover}
+            disabled={discovering || !!candidate.x_handle}
+            title={candidate.x_handle ? "Already has a handle" : "Discover handle from X"}
+          >
+            <Search className={`h-3 w-3 mr-1 ${discovering ? "animate-pulse" : ""}`} />
+            {discovering ? "Searching" : "Discover"}
+          </Button>
           <Button size="sm" variant="outline" onClick={save} disabled={!dirty || saving}>
             <Save className="h-3 w-3 mr-1" />
             {saving ? "Saving" : "Save"}
@@ -141,6 +175,7 @@ export default function SocialHandles() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "with" | "without">("all");
   const [syncingAll, setSyncingAll] = useState(false);
+  const [discoveringAll, setDiscoveringAll] = useState(false);
 
   const candidatesQuery = useQuery({
     queryKey: ["admin-social-handles"],
@@ -221,6 +256,20 @@ export default function SocialHandles() {
     setTimeout(refresh, 5000);
   };
 
+  const discoverAll = async () => {
+    setDiscoveringAll(true);
+    const { error } = await supabase.functions.invoke("discover-representative-x-handles", {
+      body: { limit: 100, overwrite: false },
+    });
+    setDiscoveringAll(false);
+    if (error) {
+      toast.error(`Discovery failed: ${error.message}`);
+      return;
+    }
+    toast.success("Discovery running in background. Refresh in a minute to see results.");
+    setTimeout(refresh, 60000);
+  };
+
   if (adminLoading) return <LoadingScreen />;
   if (!adminData?.isAdmin) return <Navigate to="/" replace />;
 
@@ -242,10 +291,16 @@ export default function SocialHandles() {
                 Latest from X feed on candidate profiles.
               </CardDescription>
             </div>
-            <Button onClick={syncAll} disabled={syncingAll}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${syncingAll ? "animate-spin" : ""}`} />
-              Sync all with handles
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={discoverAll} disabled={discoveringAll}>
+                <Search className={`h-4 w-4 mr-2 ${discoveringAll ? "animate-pulse" : ""}`} />
+                Discover all missing
+              </Button>
+              <Button onClick={syncAll} disabled={syncingAll}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${syncingAll ? "animate-spin" : ""}`} />
+                Sync all with handles
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
