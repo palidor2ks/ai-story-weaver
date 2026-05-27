@@ -39,6 +39,7 @@ import { AIExplanation } from '@/components/AIExplanation';
 import { AIFeedback, ReportIssueButton } from '@/components/AIFeedback';
 import { ContactInfoCard } from '@/components/ContactInfoCard';
 import { RelevantNewsFeed } from '@/components/RelevantNewsFeed';
+import { RepresentativeSocialFeed } from '@/components/RepresentativeSocialFeed';
 import { CandidatePositions } from '@/components/CandidatePositions';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { CandidateEditDialog } from '@/components/admin/CandidateEditDialog';
@@ -551,6 +552,17 @@ export const CandidateProfile = () => {
         {representativeDetails && (
           <div className="mb-8">
             <ContactInfoCard representative={representativeDetails} />
+          </div>
+        )}
+
+        {/* X Feed Section */}
+        {candidate && (
+          <div className="mb-8">
+            <RepresentativeSocialFeed
+              candidateName={candidate.name}
+              state={candidate.state}
+              district={candidate.district}
+            />
           </div>
         )}
 
