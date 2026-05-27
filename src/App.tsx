@@ -129,7 +129,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/top-spenders" element={
-        <RouteGuard requireAuth requireOnboarding={false}>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <TopSpenders />
         </RouteGuard>
       } />
