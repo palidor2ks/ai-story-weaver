@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Sparkles, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
 import { Seo } from '@/components/Seo';
@@ -115,17 +115,6 @@ export const Auth = () => {
     }
   };
 
-  const handleXSignIn = async () => {
-    setIsSubmitting(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'twitter',
-      options: { redirectTo: `${window.location.origin}/` },
-    });
-    if (error) {
-      setIsSubmitting(false);
-      toast.error(error.message);
-    }
-  };
 
   if (loading) {
     return (
@@ -145,9 +134,11 @@ export const Auth = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-hero mx-auto mb-4 flex items-center justify-center shadow-glow">
-            <Sparkles className="w-8 h-8 text-primary-foreground" />
-          </div>
+          <img
+            src="/icon-192.png"
+            alt="Pulse app icon"
+            className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-glow"
+          />
           <h1 className="font-display text-3xl font-bold text-foreground flex items-center justify-center gap-2">
             <span className="text-gradient">Pulse</span>
             <BetaBadge size="md" />
@@ -170,26 +161,7 @@ export const Auth = () => {
             </CardHeader>
             
             <CardContent>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full mb-4"
-                onClick={handleXSignIn}
-                disabled={isSubmitting}
-              >
-                <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                </svg>
-                Continue with X
-              </Button>
-              <div className="relative mb-4">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">Or with email</span>
-                </div>
-              </div>
+
 
               <TabsContent value="signin" className="mt-0">
                 <CardDescription className="mb-4">
