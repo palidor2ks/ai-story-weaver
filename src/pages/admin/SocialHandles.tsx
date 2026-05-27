@@ -176,6 +176,7 @@ export default function SocialHandles() {
   const [filter, setFilter] = useState<"all" | "with" | "without">("all");
   const [syncingAll, setSyncingAll] = useState(false);
   const [discoveringAll, setDiscoveringAll] = useState(false);
+  const [pressGallerySyncing, setPressGallerySyncing] = useState(false);
 
   const candidatesQuery = useQuery({
     queryKey: ["admin-social-handles"],
