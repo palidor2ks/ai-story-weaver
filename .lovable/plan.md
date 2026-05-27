@@ -1,24 +1,28 @@
-## Problem
+The strange Top Spenders are back because the exclusion rows still exist, but public queries can no longer see/use them.
 
-BLITZ CANVASSING LLC shows up as a top "donor" on Trump's committee with ~$1.9M. It's actually a vendor refund (FEC line 15), not a contribution. The committee donor query in `src/hooks/useCommittees.ts` already filters out names in the `vendor_refund_organizations` table, but `BLITZ CANVASSING` isn't in that list yet — so it leaks through.
+I checked the shown IDs:
+- `C00944025` APPLE INC. DJIA/ SP/DOW USA — already marked excluded as `Junk`
+- `C00946087` WARREN BUFFET APPLE INC. — already marked excluded as `Junk`
+- `C00945709` SHAWN BETTIS — already marked excluded as `Junk`
+- `C00875427` THE COURT OF DIVINE JUSTICE — already marked excluded as `Junk`
 
-The donors list on `/donors` and the donor profile also pull from `donors`/`contributions` and would benefit from the same exclusion.
+## Why they came back
+A prior security hardening made `ie_excluded_committees` admin-only, then exposed `ie_excluded_committees_public` as a `security_invoker` view. That protects the base table, but it also means anonymous/public users see an empty exclusion list. Since the Top Spenders rollup view also relies on that exclusion table, public visitors get rollups as if no exclusions exist, so the junk FEC filings reappear.
 
-## Fix
+## Plan
+1. **Fix the database exclusion mechanism**
+   - Add a safe `SECURITY DEFINER` helper function that checks whether a committee ID is excluded without exposing admin-only columns.
+   - Recreate the independent-expenditure rollup views to filter with that helper, so exclusions apply for public users too.
+   - Recreate the public exclusion view/RPC so the frontend can fetch only safe fields: committee ID, reason, excluded date.
 
-1. **Migration**: Insert `BLITZ CANVASSING` into `public.vendor_refund_organizations` with `is_active = true`. Using the shorter token so it matches both `BLITZ CANVASSING` and `BLITZ CANVASSING LLC` (the existing filter uses `includes()` on uppercased name).
+2. **Seed any missing junk IDs**
+   - Keep the four already-excluded junk IDs.
+   - Add `C00669259` / `FF PAC` only if you want it excluded too; it appears in the screenshot but has real-looking aggregate volume, so I won’t remove it unless you confirm it is also junk.
 
-   ```sql
-   INSERT INTO public.vendor_refund_organizations (name, is_active)
-   VALUES ('BLITZ CANVASSING', true)
-   ON CONFLICT (name) DO UPDATE SET is_active = true;
-   ```
+3. **No line-number donor filtering changes**
+   - This fix is only for Top Outside Spenders / independent expenditures.
+   - It won’t reintroduce the prior donor line filters you asked to undo.
 
-2. **No code changes needed** — `useCommitteeDonors` already consults this table and filters matches out. The committee page will drop Blitz Canvassing on next refresh.
-
-## Out of scope
-
-- Not touching line-number filters (`15`, `11AI`, etc.) — that was previously reverted per your instruction.
-- Not adding a broader vendor heuristic; just this one entry as requested.
-
-If `/donors` (the global list) still shows Blitz Canvassing after this, that page reads from the `donors` table directly and would need a separate exclusion pass — say the word and I'll extend the fix there too.
+4. **Validate after migration**
+   - Query the public rollup view for the junk IDs and confirm the four excluded IDs no longer appear.
+   - Confirm `/top-spenders` uses the corrected rollup/filter path.
