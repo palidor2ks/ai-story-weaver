@@ -1,12 +1,5 @@
-## Goal
-In the candidate "Outside Spending → Top spending committees" table, make each spender clickable so it navigates to that committee's profile.
+## Changes to `src/pages/Auth.tsx`
 
-## Change
-In `src/components/IndependentExpenditureSections.tsx` (`CandidateIESection`, top-spenders table rows):
-
-- Wrap the committee name in a `<Link to={`/committee/${s.fecId}`}>` with the existing hover styles (`hover:text-primary hover:underline`).
-- Also wrap the `{s.fecId}` text in the sub-line with the same link so the FEC ID is clickable.
-- Keep the topic badge outside the link so it stays its own pill.
-- If `s.fecId` is missing, render as plain text (no link).
-
-No route changes (`/committee/:id` already exists in `App.tsx`). No data or API changes.
+1. Replace the Sparkles gradient square logo with the app icon (`/icon-192.png` — the American-flag Pulse mark used as the PWA/app icon). Render as an `<img>` at the same 64×64 size, with rounded corners and the existing glow shadow.
+2. Remove the "Continue with X" button, its `handleXSignIn` handler, and the "Or with email" divider (no longer needed since email is the only option).
+3. Remove the now-unused `Sparkles` import.
