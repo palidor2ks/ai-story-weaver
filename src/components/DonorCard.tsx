@@ -128,7 +128,7 @@ export const DonorCard = ({
                   {type}
                 </Badge>
               )}
-              {primaryCauseLabel && <CauseBadge cause={{ label: primaryCauseLabel }} />}
+              {primaryCause && <CauseBadge cause={primaryCause} />}
             </div>
           </div>
 
