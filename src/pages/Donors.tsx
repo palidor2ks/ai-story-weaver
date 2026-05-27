@@ -79,6 +79,13 @@ export const Donors = () => {
         title="Campaign Donors — Pulse"
         description="Explore individual and PAC contributions to political candidates. Filter by cycle, state, and donor type to follow the money."
         path="/donors"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: "Campaign Donors",
+          description: "Individual and PAC contributions to political candidates, filterable by cycle, state, and donor type.",
+          url: "https://www.polipulseapp.com/donors",
+        }}
       />
       <Header />
       
