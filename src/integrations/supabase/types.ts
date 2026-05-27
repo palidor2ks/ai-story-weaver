@@ -714,6 +714,7 @@ export type Database = {
           party: Database["public"]["Enums"]["party_type"]
           score_version: string | null
           state: string
+          x_handle: string | null
         }
         Insert: {
           answers_source?: string | null
@@ -738,6 +739,7 @@ export type Database = {
           party: Database["public"]["Enums"]["party_type"]
           score_version?: string | null
           state: string
+          x_handle?: string | null
         }
         Update: {
           answers_source?: string | null
@@ -762,6 +764,7 @@ export type Database = {
           party?: Database["public"]["Enums"]["party_type"]
           score_version?: string | null
           state?: string
+          x_handle?: string | null
         }
         Relationships: []
       }
@@ -3044,6 +3047,63 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      representative_social_posts: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          fetched_at: string
+          handle: string
+          id: string
+          metadata: Json
+          platform: string
+          post_id: string
+          post_text: string | null
+          post_url: string
+          posted_at: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          fetched_at?: string
+          handle: string
+          id?: string
+          metadata?: Json
+          platform?: string
+          post_id: string
+          post_text?: string | null
+          post_url: string
+          posted_at: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          fetched_at?: string
+          handle?: string
+          id?: string
+          metadata?: Json
+          platform?: string
+          post_id?: string
+          post_text?: string | null
+          post_url?: string
+          posted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "representative_social_posts_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_voting_coverage"
+            referencedColumns: ["candidate_id"]
+          },
+          {
+            foreignKeyName: "representative_social_posts_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
             referencedColumns: ["id"]
           },
         ]
