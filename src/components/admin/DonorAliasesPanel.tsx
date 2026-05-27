@@ -106,6 +106,7 @@ export function DonorAliasesPanel() {
 
   // Current alias attached to each search result row
   const [rowAliasMap, setRowAliasMap] = useState<Record<string, DonorAlias | null>>({});
+  const [rowTreasurerMap, setRowTreasurerMap] = useState<Record<string, string>>({});
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -128,6 +129,43 @@ export function DonorAliasesPanel() {
         map[`${m.donor_name}|${m.donor_type}`] = m.donor_aliases as DonorAlias;
       });
       setRowAliasMap(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchResults]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (searchResults.length === 0) {
+        setRowTreasurerMap({});
+        return;
+      }
+
+      const names = Array.from(new Set(searchResults.map((r) => r.name)));
+      const types = Array.from(new Set(searchResults.map((r) => r.type)));
+      const { data } = await (supabase as any)
+        .from('donors')
+        .select('name, type, committees:recipient_committee_id(treasurer_name)')
+        .in('name', names)
+        .in('type', types);
+
+      if (cancelled) return;
+      const next: Record<string, Set<string>> = {};
+      (data || []).forEach((row: any) => {
+        const treasurer = row?.committees?.treasurer_name;
+        if (!treasurer) return;
+        const key = `${row.name}|${row.type}`;
+        if (!next[key]) next[key] = new Set<string>();
+        next[key].add(treasurer);
+      });
+
+      const flattened: Record<string, string> = {};
+      Object.entries(next).forEach(([key, namesSet]) => {
+        flattened[key] = Array.from(namesSet).sort().join(', ');
+      });
+      setRowTreasurerMap(flattened);
     })();
     return () => {
       cancelled = true;
@@ -404,6 +442,7 @@ export function DonorAliasesPanel() {
                   <TableRow>
                     <TableHead className="w-10"></TableHead>
                     <TableHead>Name</TableHead>
+                    <TableHead>Treasurer</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Current alias</TableHead>
                     <TableHead className="w-48">Actions</TableHead>
@@ -428,6 +467,7 @@ export function DonorAliasesPanel() {
                     searchResults.map((r) => {
                       const key = `${r.name}|${r.type}`;
                       const currentAlias = rowAliasMap[key];
+                      const treasurer = rowTreasurerMap[key];
                       return (
                         <TableRow key={key}>
                           <TableCell>
@@ -437,6 +477,7 @@ export function DonorAliasesPanel() {
                             />
                           </TableCell>
                           <TableCell className="font-medium">{r.name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{treasurer || '—'}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{r.type}</Badge>
                           </TableCell>

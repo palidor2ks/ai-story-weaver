@@ -59,6 +59,7 @@ interface CommitteeAlias {
 interface RawCommitteeSearchResult {
   name: string | null;
   fec_committee_id: string;
+  treasurer_name: string | null;
 }
 
 interface CommitteeAliasInput {
@@ -113,7 +114,7 @@ export function CommitteeAliasesPanel() {
       const safe = debouncedCommitteeSearch.replace(/,/g, ' ').trim();
       const { data, error } = await (supabase as any)
         .from('committees')
-        .select('name, fec_committee_id')
+        .select('name, fec_committee_id, treasurer_name')
         .or(`name.ilike.%${safe}%,fec_committee_id.ilike.%${safe}%`)
         .order('name', { ascending: true })
         .limit(30);
@@ -301,8 +302,8 @@ export function CommitteeAliasesPanel() {
             <div className="space-y-2"><Label>Alias to update</Label><Select value={selectedAttachAliasId} onValueChange={setSelectedAttachAliasId}><SelectTrigger><SelectValue placeholder="Select an active spender alias" /></SelectTrigger><SelectContent>{activeAliases.map((alias) => <SelectItem key={alias.id} value={alias.id}>{alias.canonical_name}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-2"><Label>Search committees</Label><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Type committee name or FEC ID..." value={committeeSearch} onChange={(e) => setCommitteeSearch(e.target.value)} className="pl-9" /></div></div>
           </div>
-          <Card><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Committee</TableHead><TableHead>FEC Committee ID</TableHead><TableHead className="w-36">Action</TableHead></TableRow></TableHeader><TableBody>
-          {committeeSearch.trim().length<2 ? <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">Type at least 2 characters to search committees.</TableCell></TableRow> : committeeSearchLoading ? <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">Searching committees...</TableCell></TableRow> : committeeSearchResults.length===0 ? <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">No committees found for that query.</TableCell></TableRow> : committeeSearchResults.map((row)=> { const alreadyAttached=aliases.some((a)=>a.fec_committee_ids.includes(row.fec_committee_id)); return <TableRow key={row.fec_committee_id}><TableCell className="font-medium">{row.name || 'Unknown committee'}</TableCell><TableCell className="font-mono">{row.fec_committee_id}</TableCell><TableCell><Button size="sm" disabled={!selectedAttachAliasId || updateMutation.isPending || alreadyAttached} onClick={() => handleAddCommitteeId(row.fec_committee_id)}>{alreadyAttached ? 'Already attached' : 'Attach ID'}</Button></TableCell></TableRow>; })}
+          <Card><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Committee</TableHead><TableHead>Treasurer</TableHead><TableHead>FEC Committee ID</TableHead><TableHead className="w-36">Action</TableHead></TableRow></TableHeader><TableBody>
+          {committeeSearch.trim().length<2 ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Type at least 2 characters to search committees.</TableCell></TableRow> : committeeSearchLoading ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Searching committees...</TableCell></TableRow> : committeeSearchResults.length===0 ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No committees found for that query.</TableCell></TableRow> : committeeSearchResults.map((row)=> { const alreadyAttached=aliases.some((a)=>a.fec_committee_ids.includes(row.fec_committee_id)); return <TableRow key={row.fec_committee_id}><TableCell className="font-medium">{row.name || 'Unknown committee'}</TableCell><TableCell className="text-sm text-muted-foreground">{row.treasurer_name || '—'}</TableCell><TableCell className="font-mono">{row.fec_committee_id}</TableCell><TableCell><Button size="sm" disabled={!selectedAttachAliasId || updateMutation.isPending || alreadyAttached} onClick={() => handleAddCommitteeId(row.fec_committee_id)}>{alreadyAttached ? 'Already attached' : 'Attach ID'}</Button></TableCell></TableRow>; })}
           </TableBody></Table></CardContent></Card>
         </TabsContent>
       </Tabs>
