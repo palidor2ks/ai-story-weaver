@@ -113,7 +113,7 @@ export function CommitteeAliasesPanel() {
     queryFn: async (): Promise<RawCommitteeSearchResult[]> => {
       const safe = debouncedCommitteeSearch.replace(/,/g, ' ').trim();
       const { data, error } = await (supabase as any)
-        .from('committees')
+        .from('external_pacs')
         .select('name, fec_committee_id, treasurer_name')
         .or(`name.ilike.%${safe}%,fec_committee_id.ilike.%${safe}%`)
         .order('name', { ascending: true })
