@@ -85,18 +85,18 @@ export const DonorCard = ({
 
   return (
     <Card className="h-full transition-all duration-200 hover:shadow-lg hover:border-primary/30 group hover:scale-[1.01]">
-      <CardContent className="p-5">
+      <CardContent className="p-4 sm:p-5">
         <Link to={`/donor/${id}`} onClick={requireAuth} className="block rounded-md -m-2 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-          <div className="flex items-start justify-between mb-4">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className={`p-2.5 rounded-lg ${getTypeBadgeStyle(type)}`}>
               {getTypeIcon(type)}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-start gap-1.5 sm:justify-end">
               {hasMultipleVariations && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Badge variant="secondary" className="text-xs gap-1">
+                      <Badge variant="secondary" className="gap-1 text-[11px] sm:text-xs">
                         <Layers className="h-3 w-3" />
                         {nameVariations!.length} merged
                       </Badge>
@@ -116,15 +116,15 @@ export const DonorCard = ({
                 </TooltipProvider>
               )}
               {hasMultipleTypes ? (
-                <div className="flex gap-1">
+                <div className="flex flex-wrap gap-1 sm:justify-end">
                   {types!.map(t => (
-                    <Badge key={t} variant="outline" className={`shrink-0 text-xs ${getTypeBadgeStyle(t)}`}>
+                    <Badge key={t} variant="outline" className={`shrink-0 text-[11px] sm:text-xs ${getTypeBadgeStyle(t)}`}>
                       {t === 'Organization' ? 'Org' : t}
                     </Badge>
                   ))}
                 </div>
 ) : (
-                <Badge variant="outline" className={`shrink-0 ${getTypeBadgeStyle(type)}`}>
+                <Badge variant="outline" className={`shrink-0 text-[11px] sm:text-xs ${getTypeBadgeStyle(type)}`}>
                   {type}
                 </Badge>
               )}
@@ -132,31 +132,31 @@ export const DonorCard = ({
             </div>
           </div>
 
-          <h3 className="font-semibold text-foreground mb-4 line-clamp-2 group-hover:text-primary transition-colors">
+          <h3 className="mb-4 line-clamp-2 text-lg font-semibold text-foreground transition-colors group-hover:text-primary sm:text-xl">
             {name}
           </h3>
 
-          <div className="flex items-end justify-between gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <div className="space-y-1">
               <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">
                 {recipientCount ? 'Recipients' : 'Donations'}
               </p>
-              <p className="text-xl font-bold text-foreground">
+              <p className="text-xl font-bold text-foreground sm:text-2xl">
                 {recipientCount
                   ? recipientCount.toLocaleString()
                   : transactionCount.toLocaleString()}
               </p>
             </div>
-            <div className="text-right space-y-1">
+            <div className="space-y-1 text-right">
               <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total</p>
-              <p className="text-2xl font-bold text-agree">{formatAmount(amount)}</p>
+              <p className="text-2xl font-bold leading-none text-agree sm:text-3xl">{formatAmount(amount)}</p>
             </div>
           </div>
         </Link>
 
-        <div className="mt-4 flex items-center justify-between gap-2">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <Link to={`/donor/${id}`} onClick={requireAuth}>
-            <Button variant="ghost" size="sm" className="px-2">View details</Button>
+            <Button variant="ghost" size="sm" className="w-full justify-start px-2 sm:w-auto">View details</Button>
           </Link>
 
           <DonorAIAnalysisDialog
@@ -169,7 +169,7 @@ export const DonorCard = ({
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5"
+                className="w-full gap-1.5 sm:w-auto"
                 onClick={(e) => {
                   if (!user) {
                     e.preventDefault();

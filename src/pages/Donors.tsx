@@ -144,7 +144,7 @@ export const Donors = () => {
 
         {/* Loading state with skeleton cards */}
         {isLoading && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <Card key={i} className="animate-pulse">
                 <CardContent className="p-5">
@@ -171,7 +171,7 @@ export const Donors = () => {
 
         {/* Donor cards grid */}
         {!isLoading && !error && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {donors.map((donor) => (
               <DonorCard
                 key={donor.id}
