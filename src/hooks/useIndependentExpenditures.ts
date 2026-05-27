@@ -121,14 +121,17 @@ export const useCommitteeIE = (
           .from('candidates')
           .select('id, fec_id, party')
           .or(filters.join(','));
-        const byId = new Map<string, string | null>();
-        const byFec = new Map<string, string | null>();
+        const byId = new Map<string, { id: string; party: string | null }>();
+        const byFec = new Map<string, { id: string; party: string | null }>();
         (cands ?? []).forEach((c: any) => {
-          if (c.id) byId.set(c.id, c.party ?? null);
-          if (c.fec_id) byFec.set(c.fec_id, c.party ?? null);
+          if (c.id) byId.set(c.id, { id: c.id, party: c.party ?? null });
+          if (c.fec_id) byFec.set(c.fec_id, { id: c.id, party: c.party ?? null });
         });
         targets.forEach((t) => {
-          t.party = (t.candidateId && byId.get(t.candidateId)) || (t.fecId && byFec.get(t.fecId)) || null;
+          const byIdMatch = t.candidateId ? byId.get(t.candidateId) : undefined;
+          const byFecMatch = t.fecId ? byFec.get(t.fecId) : undefined;
+          t.party = byIdMatch?.party ?? byFecMatch?.party ?? null;
+          if (!t.candidateId && byFecMatch?.id) t.candidateId = byFecMatch.id;
         });
       }
 
