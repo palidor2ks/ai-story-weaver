@@ -285,7 +285,8 @@ export const CandidateProfile = () => {
         title={`${candidate.name} — Pulse`}
         description={`See ${candidate.name}'s positions, voting record, donors, and how they align with your views on the issues that matter most.`}
         path={`/candidate/${candidate.id}`}
-        type="article"
+        type="profile"
+        image={candidate.image_url || undefined}
         jsonLd={{
           "@context": "https://schema.org",
           "@type": "Person",
