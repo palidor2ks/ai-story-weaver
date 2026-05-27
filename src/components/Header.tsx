@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
-import { User, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper, Megaphone } from 'lucide-react';
+import { User, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper, Megaphone, LogIn } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
@@ -98,6 +98,17 @@ export const Header = () => {
           )}
         </div>
 
+        {!authLoading && !user && (
+          <div className="hidden lg:flex items-center shrink-0">
+            <Link to="/auth">
+              <Button variant="default" className="gap-2">
+                <LogIn className="w-4 h-4" />
+                <span>Login / Sign Up</span>
+              </Button>
+            </Link>
+          </div>
+        )}
+
         {/* Mobile Menu Button */}
         <Button
           variant="ghost"
@@ -139,6 +150,17 @@ export const Header = () => {
                 >
                   <FileText className="w-5 h-5" />
                   My Dashboard
+                </Button>
+              </Link>
+            )}
+            {!authLoading && !user && (
+              <Link
+                to="/auth"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Button variant="default" className="w-full justify-start gap-3">
+                  <LogIn className="w-5 h-5" />
+                  Login / Sign Up
                 </Button>
               </Link>
             )}
