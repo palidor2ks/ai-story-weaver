@@ -49,6 +49,7 @@ function HandleRow({
   const [value, setValue] = useState(candidate.x_handle ?? "");
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
 
   const dirty = (value.trim().replace(/^@/, "")) !== (candidate.x_handle ?? "");
 
