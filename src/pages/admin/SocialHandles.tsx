@@ -88,6 +88,29 @@ function HandleRow({
     console.log("sync result", data);
   };
 
+  const discover = async () => {
+    setDiscovering(true);
+    const { data, error } = await supabase.functions.invoke("discover-representative-x-handles", {
+      body: { candidate_id: candidate.id, overwrite: false },
+    });
+    setDiscovering(false);
+    if (error) {
+      toast.error(`Discovery failed: ${error.message}`);
+      return;
+    }
+    const result = (data?.results ?? [])[0];
+    if (result?.status === "updated") {
+      toast.success(`Found @${result.handle}`);
+      onSaved();
+    } else if (result?.status === "skipped_existing") {
+      toast.info("Already has a handle");
+    } else if (result?.status === "rate_limited") {
+      toast.error("X rate limited; try again later");
+    } else {
+      toast.warning(`No confident match (${result?.reason ?? "unknown"})`);
+    }
+  };
+
   return (
     <TableRow>
       <TableCell>
