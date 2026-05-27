@@ -109,6 +109,7 @@ export function DonorAliasesPanel() {
   // Current alias attached to each search result row
   const [rowAliasMap, setRowAliasMap] = useState<Record<string, DonorAlias | null>>({});
   const [rowTreasurerMap, setRowTreasurerMap] = useState<Record<string, string>>({});
+  const [rowCommitteeIdsMap, setRowCommitteeIdsMap] = useState<Record<string, string[]>>({});
   const { data: causes = [] } = useCommitteeCauses(false);
   const upsertCommitteeTopic = useUpsertCommitteeTopic();
   useEffect(() => {
@@ -151,25 +152,36 @@ export function DonorAliasesPanel() {
       const types = Array.from(new Set(searchResults.map((r) => r.type)));
       const { data } = await (supabase as any)
         .from('donors')
-        .select('name, type, committees:recipient_committee_id(treasurer_name)')
+        .select('name, type, recipient_committee_id, committees:recipient_committee_id(treasurer_name)')
         .in('name', names)
         .in('type', types);
 
       if (cancelled) return;
       const next: Record<string, Set<string>> = {};
+      const committeeIds: Record<string, Set<string>> = {};
       (data || []).forEach((row: any) => {
         const treasurer = row?.committees?.treasurer_name;
         if (!treasurer) return;
         const key = `${row.name}|${row.type}`;
         if (!next[key]) next[key] = new Set<string>();
         next[key].add(treasurer);
+        const committeeId = row?.recipient_committee_id;
+        if (committeeId) {
+          if (!committeeIds[key]) committeeIds[key] = new Set<string>();
+          committeeIds[key].add(committeeId);
+        }
       });
 
       const flattened: Record<string, string> = {};
+      const committeeFlattened: Record<string, string[]> = {};
       Object.entries(next).forEach(([key, namesSet]) => {
         flattened[key] = Array.from(namesSet).sort().join(', ');
       });
+      Object.entries(committeeIds).forEach(([key, idsSet]) => {
+        committeeFlattened[key] = Array.from(idsSet).sort();
+      });
       setRowTreasurerMap(flattened);
+      setRowCommitteeIdsMap(committeeFlattened);
     })();
     return () => {
       cancelled = true;
@@ -520,19 +532,20 @@ export function DonorAliasesPanel() {
                     <TableHead>Treasurer</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Current alias</TableHead>
+                    <TableHead>Primary Cause</TableHead>
                     <TableHead className="w-48">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {searchLoading ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         Searching…
                       </TableCell>
                     </TableRow>
                   ) : searchResults.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         {debouncedSearch.length < 3
                           ? 'Type at least 3 characters to search.'
                           : 'No donors found.'}
@@ -543,6 +556,7 @@ export function DonorAliasesPanel() {
                       const key = `${r.name}|${r.type}`;
                       const currentAlias = rowAliasMap[key];
                       const treasurer = rowTreasurerMap[key];
+                      const rowCommitteeIds = rowCommitteeIdsMap[key] || [];
                       return (
                         <TableRow key={key}>
                           <TableCell>
@@ -562,6 +576,53 @@ export function DonorAliasesPanel() {
                             ) : (
                               <span className="text-muted-foreground text-sm">—</span>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            {currentAlias ? (() => {
+                              const aliasIds = currentAlias.fec_committee_ids?.length
+                                ? currentAlias.fec_committee_ids
+                                : currentAlias.fec_committee_id ? [currentAlias.fec_committee_id] : [];
+                              const ids = aliasIds.length ? aliasIds : rowCommitteeIds;
+                              if (ids.length === 0) return <span className="text-xs text-muted-foreground">No FEC ID</span>;
+                              const firstWithCause = ids.find((id) => causeByCommitteeId.has(id));
+                              const currentCauseId = firstWithCause ? causeByCommitteeId.get(firstWithCause) : '';
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <Select
+                                    value={currentCauseId || ''}
+                                    onValueChange={async (causeId) => {
+                                      try {
+                                        await Promise.all(ids.map((fecId) =>
+                                          upsertCommitteeTopic.mutateAsync({ fec_committee_id: fecId, primary_cause_id: causeId, secondary_cause_ids: [] }),
+                                        ));
+                                      } catch (e) {
+                                        console.error(e);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-8 w-[180px]">
+                                      <SelectValue placeholder="Assign cause" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {causes.map((c) => (
+                                        <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Run AI cause classification"
+                                    onClick={async () => {
+                                      const { error } = await supabase.functions.invoke('classify-committee-topic', { body: { fec_committee_ids: ids, force: true } });
+                                      if (error) console.error(error);
+                                    }}
+                                  >
+                                    <Search className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              );
+                            })() : <span className="text-xs text-muted-foreground">Attach to alias first</span>}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
