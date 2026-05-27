@@ -256,6 +256,20 @@ export default function SocialHandles() {
     setTimeout(refresh, 5000);
   };
 
+  const discoverAll = async () => {
+    setDiscoveringAll(true);
+    const { error } = await supabase.functions.invoke("discover-representative-x-handles", {
+      body: { limit: 100, overwrite: false },
+    });
+    setDiscoveringAll(false);
+    if (error) {
+      toast.error(`Discovery failed: ${error.message}`);
+      return;
+    }
+    toast.success("Discovery running in background. Refresh in a minute to see results.");
+    setTimeout(refresh, 60000);
+  };
+
   if (adminLoading) return <LoadingScreen />;
   if (!adminData?.isAdmin) return <Navigate to="/" replace />;
 
