@@ -574,13 +574,7 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all
         employer: string | null;
         occupation: string | null;
         candidate_id: string | null;
-        line_number: string | null;
       }
-
-      // FEC Schedule A line numbers that are NOT real donor contributions:
-      //   15 / 17 / 17A / 17C → vendor refunds / other federal receipts
-      //   11AI               → memo aggregate (backs itemized contributions; would double-count)
-      const NON_DONOR_LINE_NUMBERS = ['15', '17', '17A', '17C', '11AI'];
 
       let contribQuery = supabase
         .from('contributions')
@@ -594,11 +588,9 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all
           contributor_state,
           employer,
           occupation,
-          candidate_id,
-          line_number
+          candidate_id
         `)
-        .eq('recipient_committee_id', committeeId)
-        .or(`line_number.is.null,line_number.not.in.(${NON_DONOR_LINE_NUMBERS.join(',')})`);
+        .eq('recipient_committee_id', committeeId);
 
       if (cycle && cycle !== 'all') {
         contribQuery = contribQuery.eq('cycle', cycle);
