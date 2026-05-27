@@ -122,6 +122,13 @@ export function useFECIntegration() {
     setLoadingIds(prev => new Set(prev).add(candidateId));
     
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        const msg = 'Your session has expired. Please sign in again.';
+        toast.error(msg);
+        return { found: false, error: msg };
+      }
+
       const { data, error } = await supabase.functions.invoke('fetch-fec-candidate-id', {
         body: { candidateId, candidateName, state, updateDatabase }
       });
