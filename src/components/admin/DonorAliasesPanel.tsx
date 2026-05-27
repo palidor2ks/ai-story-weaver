@@ -587,49 +587,17 @@ export function DonorAliasesPanel() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {currentAlias ? (() => {
-                              const aliasIds = getAliasCommitteeIds(currentAlias);
-                              const ids = aliasIds.length ? aliasIds : rowCommitteeIds;
-                              if (ids.length === 0) return <span className="text-xs text-muted-foreground">No committee ID</span>;
-                              const firstWithCause = ids.find((id) => causeByCommitteeId.has(id));
-                              const currentCauseId = firstWithCause ? causeByCommitteeId.get(firstWithCause) : '';
-                              return (
-                                <div className="flex items-center gap-2">
-                                  <Select
-                                    value={currentCauseId || ''}
-                                    onValueChange={async (causeId) => {
-                                      try {
-                                        await Promise.all(ids.map((fecId) =>
-                                          upsertCommitteeTopic.mutateAsync({ fec_committee_id: fecId, primary_cause_id: causeId, secondary_cause_ids: [] }),
-                                        ));
-                                      } catch (e) {
-                                        console.error(e);
-                                      }
-                                    }}
-                                  >
-                                    <SelectTrigger className="h-8 w-[180px]">
-                                      <SelectValue placeholder="Assign cause" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {causes.map((c) => (
-                                        <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    title="Run AI cause classification"
-                                    onClick={async () => {
-                                      const { error } = await supabase.functions.invoke('classify-committee-topic', { body: { fec_committee_ids: ids, force: true } });
-                                      if (error) console.error(error);
-                                    }}
-                                  >
-                                    <Search className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              );
-                            })() : <span className="text-xs text-muted-foreground">Attach to alias first</span>}
+                            {currentAlias ? (
+                              <AliasCauseCell
+                                alias={currentAlias}
+                                causes={causes}
+                                onAssign={(causeId) =>
+                                  updateAliasCause.mutateAsync({ alias_id: currentAlias.id, primary_cause_id: causeId })
+                                }
+                                onAiClassify={() => classifyAliasCause.mutateAsync({ alias_id: currentAlias.id })}
+                                isClassifying={classifyAliasCause.isPending && classifyAliasCause.variables?.alias_id === currentAlias.id}
+                              />
+                            ) : <span className="text-xs text-muted-foreground">Attach to alias first</span>}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
