@@ -68,7 +68,7 @@ export const DonorCard = ({
   nameVariations,
   recipientCount,
   cycle,
-  primaryCauseLabel,
+  primaryCause,
 }: DonorCardProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
