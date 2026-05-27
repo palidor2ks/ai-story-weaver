@@ -1,75 +1,55 @@
-# Plan: Representative X feed on candidate profiles
+# Populate `x_handle` for representatives
 
-Adopt the substance of PR #101 (read-only X feed card on `CandidateProfile`) with fixes for the project's conventions and add the missing ingestion path so the section isn't permanently empty.
+Today `candidates.x_handle` is a plain text column with no UI. You can only set it via SQL in the Supabase dashboard. This plan adds a proper admin workflow.
 
-## 1. Database — `representative_social_posts`
+## Option A — Quick: SQL only (no build needed)
 
-New migration `supabase/migrations/<ts>_add_representative_social_posts.sql`:
+Run in Supabase SQL editor:
 
-- Table columns:
-  - `id uuid pk default gen_random_uuid()`
-  - `candidate_id uuid not null references public.candidates(id) on delete cascade` *(replaces PR's free-text slug — we already have stable IDs)*
-  - `platform text not null default 'x' check (platform in ('x'))`
-  - `handle text not null`
-  - `post_id text not null`
-  - `post_url text not null`
-  - `post_text text`
-  - `posted_at timestamptz not null`
-  - `fetched_at timestamptz not null default now()`
-  - `metadata jsonb not null default '{}'::jsonb`
-  - `created_at timestamptz not null default now()`
-  - `unique (platform, post_id)`
-- Index: `(candidate_id, posted_at desc)`
-- **GRANTs (required by project rules):**
-  ```sql
-  GRANT SELECT ON public.representative_social_posts TO anon, authenticated;
-  GRANT ALL ON public.representative_social_posts TO service_role;
-  ```
-- RLS:
-  - Enable RLS
-  - `SELECT` policy `USING (true)` (public read)
-  - `ALL` policy for authenticated `WHERE public.has_role(auth.uid(), 'admin'::app_role)` (admin write)
+```sql
+UPDATE public.candidates SET x_handle = 'RepThomasMassie' WHERE id = '...';
+UPDATE public.candidates SET x_handle = 'RepGallrein'    WHERE id = '...';
+```
 
-## 2. Ingestion — new edge function `sync-representative-x-posts`
+Then trigger the existing `sync-representative-x-posts` edge function (single or batch mode) to pull tweets.
 
-`supabase/functions/sync-representative-x-posts/index.ts`:
+Good for a one-off seed; bad for ongoing maintenance.
 
-- Admin-only invocation (check `has_role`).
-- Inputs: optional `candidate_id` (single) or batch mode (all candidates with an `x_handle`).
-- For each candidate, call X API v2 `users/by/username/{handle}/tweets` using existing X credentials (reuse the secret already wired for `XComposer` / `XConnectCallback`; if a separate read token is needed, add via `secrets`).
-- Upsert into `representative_social_posts` on `(platform, post_id)` with `candidate_id` from the candidate row.
-- Background batch via `EdgeRuntime.waitUntil()` with backoff on 429.
-- Add a small admin trigger button (later — out of scope for this PR's UI, but expose a way to run it manually from Admin → Sync panel).
+## Option B — Admin UI (recommended)
 
-Prereq: ensure `candidates` has an `x_handle` (or equivalent) column. If missing, add it in the same migration and surface in `CandidateEditDialog`.
+### 1. Admin page: `/admin/social-handles`
 
-## 3. Frontend — adopt PR components with fixes
+A table of candidates (filterable by office/state) with:
 
-### `src/hooks/useRepresentativeSocialFeed.ts`
-- Switch signature to `useRepresentativeSocialFeed(candidateId?: string, limit = 6)`.
-- Drop `getRepresentativeSlug` helper.
-- Query by `.eq('candidate_id', candidateId)`.
-- Remove `(supabase as any)` cast after regenerating Supabase types from the migration.
+- Name, office, state, district
+- Editable `x_handle` input (inline save, validates `^[A-Za-z0-9_]{1,15}$`, strips leading `@`)
+- Last synced timestamp (max `posted_at` from `representative_social_posts`)
+- Post count
+- "Sync now" button per row → invokes `sync-representative-x-posts` with that `candidate_id`
+- "Sync all with handles" button at top → batch mode
 
-### `src/components/RepresentativeSocialFeed.tsx`
-- Props: `{ candidateId: string }`.
-- Keep card + skeleton + empty state + time-ago.
-- **Fix link rendering** (the PR diff shows `post.post_url` literalized in href): each item is an anchor with `href={post.post_url}`, `target="_blank"`, `rel="noopener noreferrer"`, `ExternalLink` icon, `@{handle}`, `timeAgo(posted_at)`, and `post_text`.
-- Use semantic tokens only (no raw colors).
+Admin-only (existing `has_role(auth.uid(), 'admin')` guard, same pattern as other admin pages).
 
-### `src/pages/CandidateProfile.tsx`
-- Render `<RepresentativeSocialFeed candidateId={candidate.id} />` in the same slot the PR chose (above "Latest News").
-- Only render when `candidate.x_handle` exists (or always render — empty state is benign).
+### 2. Inline edit on `CandidateProfile` (admin only)
 
-## 4. Types
-- After migration applies, regenerate `src/integrations/supabase/types.ts` so the hook can drop the `as any` cast.
+Small pencil icon next to the social feed header, visible only to admins, opens a popover to set/clear `x_handle` and immediately trigger a sync.
 
-## 5. Out of scope (follow-ups)
-- Cron schedule for the sync function.
-- Caching/dedupe of tweet media.
-- Other platforms (Facebook, Instagram).
+### 3. Optional: scheduled sync
 
-## Technical notes
-- The Supabase Bot failure on the PR (`candidate_committees_candidate_id_fkey already exists`) is unrelated to this change and pre-exists on the branch DB — no action here.
-- Keying by `candidate_id` eliminates the name/state/district slug drift risk that exists in the PR as-written.
-- Public SELECT + GRANTs are the only way the card renders for signed-out visitors; without GRANTs PostgREST returns permission errors regardless of RLS.
+`pg_cron` job calling `sync-representative-x-posts` in batch mode every 6h so feeds stay fresh without manual clicks.
+
+## Files to add/change (Option B)
+
+- `src/pages/admin/SocialHandles.tsx` — new admin page
+- `src/components/admin/CandidateHandleRow.tsx` — row with edit + sync
+- `src/hooks/useUpdateCandidateHandle.ts` — mutation hook
+- `src/hooks/useSyncRepresentativePosts.ts` — invokes edge function
+- `src/App.tsx` — add `/admin/social-handles` route
+- `src/components/admin/AdminNav.tsx` (or equivalent) — add link
+- `src/pages/CandidateProfile.tsx` — admin pencil affordance
+
+No DB migration needed (`x_handle` column and edge function already exist).
+
+## Recommendation
+
+Do Option B. Tell me which to build (or both) and I'll implement.

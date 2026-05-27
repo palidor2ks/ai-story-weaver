@@ -477,6 +477,9 @@ export default function Admin() {
           <Button asChild variant="outline" size="sm">
             <Link to="/admin/social-composer">Social composer</Link>
           </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/social-handles">Social handles</Link>
+          </Button>
         </div>
 
         <AnswerCoveragePanel />

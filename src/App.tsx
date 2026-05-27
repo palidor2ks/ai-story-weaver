@@ -38,6 +38,7 @@ import TopSpenders from "./pages/TopSpenders";
 import XComposer from "./pages/admin/XComposer";
 import XConnectCallback from "./pages/admin/XConnectCallback";
 import SocialComposer from "./pages/admin/SocialComposer";
+import SocialHandles from "./pages/admin/SocialHandles";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -200,6 +201,11 @@ const AppRoutes = () => {
       <Route path="/admin/social-composer" element={
         <RouteGuard requireAuth requireOnboarding>
           <SocialComposer />
+        </RouteGuard>
+      } />
+      <Route path="/admin/social-handles" element={
+        <RouteGuard requireAuth requireOnboarding>
+          <SocialHandles />
         </RouteGuard>
       } />
       <Route path="/admin/x-connect/callback" element={
