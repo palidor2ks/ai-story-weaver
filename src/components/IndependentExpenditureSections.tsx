@@ -152,22 +152,22 @@ export const CandidateIESection = ({ candidateId }: { candidateId: string | null
             {topSpenders.length > 0 && (
               <div>
                 <h4 className="text-sm font-semibold mb-2 text-muted-foreground">Top spending committees</h4>
-                <div className="rounded-md border overflow-hidden">
-                  <table className="w-full text-sm">
+                <div className="rounded-md border overflow-x-auto">
+                  <table className="w-full text-sm min-w-[480px]">
                     <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
                       <tr><th className="text-left p-2">Committee</th><th className="text-right p-2">For</th><th className="text-right p-2">Against</th><th className="text-right p-2">Total</th></tr>
                     </thead>
                     <tbody>
                       {topSpenders.map((s) => (
                         <tr key={s.fecId} className="border-t">
-                          <td className="p-2 truncate max-w-[260px]">
+                          <td className="p-2 align-top">
                             <div className="font-medium flex items-center gap-2 flex-wrap">
                               {s.fecId ? (
-                                <Link to={`/committee/${s.fecId}`} className="hover:text-primary hover:underline">
+                                <Link to={`/committee/${s.fecId}`} className="hover:text-primary hover:underline break-words">
                                   {s.name}
                                 </Link>
                               ) : (
-                                <span>{s.name}</span>
+                                <span className="break-words">{s.name}</span>
                               )}
                               <CommitteeTopicBadge
                                 fecCommitteeId={s.fecId}
@@ -183,9 +183,9 @@ export const CandidateIESection = ({ candidateId }: { candidateId: string | null
                               {s.fecId ? ' · ' : ''}{s.count} filing{s.count !== 1 ? 's' : ''}
                             </div>
                           </td>
-                          <td className="p-2 text-right text-agree">{fmt(s.support)}</td>
-                          <td className="p-2 text-right text-disagree">{fmt(s.oppose)}</td>
-                          <td className="p-2 text-right font-semibold">{fmt(s.total)}</td>
+                          <td className="p-2 text-right text-agree whitespace-nowrap">{fmt(s.support)}</td>
+                          <td className="p-2 text-right text-disagree whitespace-nowrap">{fmt(s.oppose)}</td>
+                          <td className="p-2 text-right font-semibold whitespace-nowrap">{fmt(s.total)}</td>
                         </tr>
                       ))}
                     </tbody>
