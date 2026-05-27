@@ -52,6 +52,8 @@ import {
   useDetachDonors,
   useAliasMemberCounts,
   useAliasMembers,
+  useUpdateDonorAliasCause,
+  useClassifyDonorAliasCause,
   DonorAlias,
   DonorAliasInput,
 } from '@/hooks/useDonorAliases';
