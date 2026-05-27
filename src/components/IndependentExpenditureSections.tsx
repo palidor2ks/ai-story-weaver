@@ -162,13 +162,26 @@ export const CandidateIESection = ({ candidateId }: { candidateId: string | null
                         <tr key={s.fecId} className="border-t">
                           <td className="p-2 truncate max-w-[260px]">
                             <div className="font-medium flex items-center gap-2 flex-wrap">
-                              <span>{s.name}</span>
+                              {s.fecId ? (
+                                <Link to={`/committee/${s.fecId}`} className="hover:text-primary hover:underline">
+                                  {s.name}
+                                </Link>
+                              ) : (
+                                <span>{s.name}</span>
+                              )}
                               <CommitteeTopicBadge
                                 fecCommitteeId={s.fecId}
                                 row={topicsMap?.get(s.fecId) ?? null}
                               />
                             </div>
-                            <div className="text-xs text-muted-foreground">{s.fecId} · {s.count} filing{s.count !== 1 ? 's' : ''}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {s.fecId ? (
+                                <Link to={`/committee/${s.fecId}`} className="hover:text-primary hover:underline">
+                                  {s.fecId}
+                                </Link>
+                              ) : null}
+                              {s.fecId ? ' · ' : ''}{s.count} filing{s.count !== 1 ? 's' : ''}
+                            </div>
                           </td>
                           <td className="p-2 text-right text-agree">{fmt(s.support)}</td>
                           <td className="p-2 text-right text-disagree">{fmt(s.oppose)}</td>
