@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 import { formatCompactCurrency, formatFullCurrency } from '@/lib/utils';
 import { 
   ArrowLeft, 
@@ -135,6 +136,7 @@ const formatDate = (dateStr: string | null) => {
 
 const DonorProfile = () => {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [cycleFilter, setCycleFilter] = useState<string>('all');
   const [showAllDonations, setShowAllDonations] = useState(false);
   const [committeeFilter, setCommitteeFilter] = useState<string>('all');
@@ -681,7 +683,7 @@ const DonorProfile = () => {
                       <div className="flex items-center justify-end pt-2 border-t border-border">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-agree">{formatAmount(contributor.totalAmount)}</span>
-                          <DonorAIAnalysisDialog
+                          {user && <DonorAIAnalysisDialog
                             id={contributorKey}
                             name={contributor.name}
                             type="Individual"
@@ -698,7 +700,7 @@ const DonorProfile = () => {
                                 <span className="ml-1 text-xs font-semibold">AI</span>
                               </Button>
                             }
-                          />
+                          />}
                         </div>
                       </div>
                     </CardContent>
@@ -761,7 +763,7 @@ const DonorProfile = () => {
                     <div className="flex items-center justify-end pt-2 border-t border-border">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-agree">{formatAmount(record.amount)}</span>
-                        <DonorAIAnalysisDialog
+                        {user && <DonorAIAnalysisDialog
                           id={recipientKey}
                           name={recipientName}
                           type="Organization"
@@ -779,7 +781,7 @@ const DonorProfile = () => {
                               <span className="ml-1 text-xs font-semibold">AI</span>
                             </Button>
                           }
-                        />
+                        />}
                       </div>
                     </div>
                   </CardContent>

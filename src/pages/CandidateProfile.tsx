@@ -413,7 +413,7 @@ export const CandidateProfile = () => {
                     candidateName={candidate.name}
                     isAlreadyClaimed={isClaimed}
                   />
-                  <RecipientAIAnalysisDialog
+                  {user && <RecipientAIAnalysisDialog
                     entityKind="candidate"
                     entityId={candidate.id}
                     entityName={candidate.name}
@@ -427,7 +427,7 @@ export const CandidateProfile = () => {
                         icon={<Sparkles className="h-4 w-4" />}
                       />
                     }
-                  />
+                  />}
                   <ShareProfileButton
                     candidateId={candidate.id}
                     candidateName={candidate.name}
@@ -1281,7 +1281,7 @@ export const CandidateProfile = () => {
                               {bill.bill_type} {bill.bill_number}: {bill.bill_name}
                             </a>
                             <div className="mt-2">
-                              <BillAIAnalysisDialog
+                              {user && <BillAIAnalysisDialog
                                 billId={bill.bill_id}
                                 billType={bill.bill_type}
                                 billNumber={bill.bill_number}
@@ -1302,7 +1302,7 @@ export const CandidateProfile = () => {
                                     Dig Deeper AI Analysis
                                   </Button>
                                 }
-                              />
+                              />}
                             </div>
                             <div className="flex flex-wrap gap-2 mt-2 text-sm text-muted-foreground">
                               {bill.topic && (

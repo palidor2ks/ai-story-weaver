@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { UserProvider } from "./context/UserContext";
-import Index from "./pages/Index";
 import { Auth } from "./pages/Auth";
 import { Candidates } from "./pages/Candidates";
 import { Donors } from "./pages/Donors";
@@ -107,11 +106,7 @@ const AppRoutes = () => {
           <VerifyEmail />
         </RouteGuard>
       } />
-      <Route path="/" element={
-        <RouteGuard requireAuth requireOnboarding={false}>
-          <Index />
-        </RouteGuard>
-      } />
+      <Route path="/" element={<Navigate to="/candidates" replace />} />
       <Route path="/results" element={
         <RouteGuard requireAuth requireOnboarding>
           <QuizResults />
@@ -129,7 +124,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/committees" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <Committees />
         </RouteGuard>
       } />
@@ -139,27 +134,27 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/committee/:id" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <CommitteeProfile />
         </RouteGuard>
       } />
       <Route path="/parties" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <Parties />
         </RouteGuard>
       } />
       <Route path="/party/:id" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <PartyProfile />
         </RouteGuard>
       } />
       <Route path="/donor/:id" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <DonorProfile />
         </RouteGuard>
       } />
       <Route path="/candidate/:id" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <CandidateProfile />
         </RouteGuard>
       } />
@@ -179,7 +174,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/how-scoring-works" element={
-        <RouteGuard requireAuth requireOnboarding>
+        <RouteGuard requireAuth={false} requireOnboarding={false}>
           <HowScoringWorks />
         </RouteGuard>
       } />
