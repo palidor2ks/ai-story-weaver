@@ -149,7 +149,7 @@ const AppRoutes = () => {
         </RouteGuard>
       } />
       <Route path="/donor/:id" element={
-        <RouteGuard requireAuth={false} requireOnboarding={false}>
+        <RouteGuard requireAuth requireOnboarding={false}>
           <DonorProfile />
         </RouteGuard>
       } />
