@@ -126,6 +126,11 @@ async function processBatch(admin: ReturnType<typeof createClient>, rows: Candid
       results.push({ candidate_id: row.id, status: 'skipped_existing', handle: existing });
       continue;
     }
+    // House members should be sourced from the official Press Gallery roster, not scraped.
+    if ((row.office ?? '').trim().toLowerCase() === 'representative') {
+      results.push({ candidate_id: row.id, status: 'skipped_use_press_gallery', reason: 'house_member' });
+      continue;
+    }
     const found = await discoverHandle(row);
     if (found.rateLimited) {
       results.push({ candidate_id: row.id, status: 'rate_limited', reason: found.reason });
