@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, RefreshCw, Save, Search } from "lucide-react";
+import { ArrowLeft, Landmark, RefreshCw, Save, Search } from "lucide-react";
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { supabase } from "@/integrations/supabase/client";
@@ -176,6 +176,7 @@ export default function SocialHandles() {
   const [filter, setFilter] = useState<"all" | "with" | "without">("all");
   const [syncingAll, setSyncingAll] = useState(false);
   const [discoveringAll, setDiscoveringAll] = useState(false);
+  const [pressGallerySyncing, setPressGallerySyncing] = useState(false);
 
   const candidatesQuery = useQuery({
     queryKey: ["admin-social-handles"],
@@ -270,6 +271,26 @@ export default function SocialHandles() {
     setTimeout(refresh, 60000);
   };
 
+  const syncPressGallery = async (dryRun: boolean) => {
+    setPressGallerySyncing(true);
+    const { data, error } = await supabase.functions.invoke("sync-house-press-gallery-handles", {
+      body: { overwrite: false, dry_run: dryRun },
+    });
+    setPressGallerySyncing(false);
+    if (error) {
+      toast.error(`Press gallery sync failed: ${error.message}`);
+      return;
+    }
+    const { scanned = 0, updated = 0, skipped = 0, unmatched = 0, dry_run } = data ?? {};
+    if (dry_run) {
+      toast.info(`Dry run: ${scanned} rows, ${updated === 0 ? "would update " + (data?.results?.filter((r: any) => r.status === "would_update").length ?? 0) : updated} candidates, ${unmatched} unmatched`);
+    } else {
+      toast.success(`Synced ${updated} House handles (${skipped} skipped, ${unmatched} unmatched of ${scanned})`);
+      refresh();
+    }
+    console.log("press gallery sync", data);
+  };
+
   if (adminLoading) return <LoadingScreen />;
   if (!adminData?.isAdmin) return <Navigate to="/" replace />;
 
@@ -291,7 +312,25 @@ export default function SocialHandles() {
                 Latest from X feed on candidate profiles.
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={() => syncPressGallery(true)}
+                disabled={pressGallerySyncing}
+                title="Preview what would change without writing to the database"
+              >
+                <Landmark className={`h-4 w-4 mr-2 ${pressGallerySyncing ? "animate-pulse" : ""}`} />
+                Preview House roster
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => syncPressGallery(false)}
+                disabled={pressGallerySyncing}
+                title="Pull official House X handles from pressgallery.house.gov"
+              >
+                <Landmark className={`h-4 w-4 mr-2 ${pressGallerySyncing ? "animate-pulse" : ""}`} />
+                Sync from House Press Gallery
+              </Button>
               <Button variant="outline" onClick={discoverAll} disabled={discoveringAll}>
                 <Search className={`h-4 w-4 mr-2 ${discoveringAll ? "animate-pulse" : ""}`} />
                 Discover all missing

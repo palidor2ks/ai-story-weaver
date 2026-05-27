@@ -23,7 +23,7 @@ interface CandidateRow {
 
 type ResultEntry = {
   candidate_id: string;
-  status: 'updated' | 'not_found' | 'update_failed' | 'skipped_existing' | 'rate_limited';
+  status: 'updated' | 'not_found' | 'update_failed' | 'skipped_existing' | 'rate_limited' | 'skipped_use_press_gallery';
   handle?: string;
   reason?: string;
   error?: string;
@@ -124,6 +124,11 @@ async function processBatch(admin: ReturnType<typeof createClient>, rows: Candid
     const existing = normalizeHandle(row.x_handle ?? '');
     if (existing && !overwrite) {
       results.push({ candidate_id: row.id, status: 'skipped_existing', handle: existing });
+      continue;
+    }
+    // House members should be sourced from the official Press Gallery roster, not scraped.
+    if ((row.office ?? '').trim().toLowerCase() === 'representative') {
+      results.push({ candidate_id: row.id, status: 'skipped_use_press_gallery', reason: 'house_member' });
       continue;
     }
     const found = await discoverHandle(row);
