@@ -26,6 +26,7 @@ type Stance = 'all' | 'support' | 'oppose';
 interface SpenderRow {
   spending_committee_fec_id: string;
   spending_committee_name: string | null;
+  searchableNames?: string[];
   expenditure_count: number;
   total_amount: number;
   support_amount: number;
@@ -90,6 +91,7 @@ const useTopSpenders = (cycle: string | 'all', stance: Stance, excludedIds: stri
           .map((r) => ({
             spending_committee_fec_id: r.spending_committee_fec_id,
             spending_committee_name: r.spending_committee_name,
+            searchableNames: [r.spending_committee_name ?? ""].filter(Boolean),
             expenditure_count: num(r.expenditure_count),
             total_amount: num(r.total_amount),
             support_amount: num(r.support_amount),
@@ -116,6 +118,7 @@ const useTopSpenders = (cycle: string | 'all', stance: Stance, excludedIds: stri
           const cur = map.get(key) ?? {
             spending_committee_fec_id: key,
             spending_committee_name: r.spending_committee_name ?? null,
+            searchableNames: [r.spending_committee_name ?? ""].filter(Boolean),
             expenditure_count: 0,
             total_amount: 0,
             support_amount: 0,
@@ -126,6 +129,9 @@ const useTopSpenders = (cycle: string | 'all', stance: Stance, excludedIds: stri
           cur.total_amount += amt;
           if (r.support_oppose_indicator === 'S') cur.support_amount += amt;
           else if (r.support_oppose_indicator === 'O') cur.oppose_amount += amt;
+          if (r.spending_committee_name && !cur.searchableNames?.includes(r.spending_committee_name)) {
+            cur.searchableNames = [...(cur.searchableNames ?? []), r.spending_committee_name];
+          }
           if (!cur.spending_committee_name && r.spending_committee_name) {
             cur.spending_committee_name = r.spending_committee_name;
           }
@@ -144,10 +150,11 @@ const useTopSpenders = (cycle: string | 'all', stance: Stance, excludedIds: stri
         if (!better) return r;
         const current = r.spending_committee_name ?? '';
         // Prefer external_pacs name if current is empty or noticeably shorter (likely an abbreviation).
+        const searchableNames = Array.from(new Set([...(r.searchableNames ?? []), current, better].filter(Boolean)));
         if (!current || better.length > current.length + 2) {
-          return { ...r, spending_committee_name: better };
+          return { ...r, spending_committee_name: better, searchableNames };
         }
-        return r;
+        return { ...r, searchableNames };
       });
     },
   });
@@ -186,10 +193,12 @@ export default function TopSpenders() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows ?? [];
-    return (rows ?? []).filter((r) =>
-      (r.spending_committee_name ?? '').toLowerCase().includes(q) ||
-      r.spending_committee_fec_id.toLowerCase().includes(q),
-    );
+    return (rows ?? []).filter((r) => {
+      const nameMatch = (r.searchableNames ?? [r.spending_committee_name ?? '']).some((name) =>
+        name.toLowerCase().includes(q),
+      );
+      return nameMatch || r.spending_committee_fec_id.toLowerCase().includes(q);
+    });
   }, [rows, search]);
 
   // Batched lookup: receipts (raised) for visible spender rows from committee_finance_rollups
