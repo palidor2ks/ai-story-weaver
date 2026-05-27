@@ -494,10 +494,16 @@ const DonorProfile = () => {
   return (
     <div className="min-h-screen bg-background">
       <Seo
-        title={`${donor.name} — Donor Profile — Pulse`}
-        description={`Contributions, recipients, and giving history for donor ${donor.name}.`}
+        title={`${displayName} — Donor Profile — Pulse`}
+        description={`Contributions, recipients, and giving history for donor ${displayName}.`}
         path={`/donor/${donor.id}`}
-        type="article"
+        type="profile"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": donor.type === 'Individual' ? "Person" : "Organization",
+          name: displayName,
+          url: `https://www.polipulseapp.com/donor/${donor.id}`,
+        }}
       />
       <Header />
 
