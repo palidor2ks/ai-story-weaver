@@ -58,37 +58,37 @@ export const CommitteeIESection = ({ committeeFecId }: { committeeFecId: string 
         {targets.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-6">No expenditures for this cycle.</div>
         ) : (
-          <div className="rounded-md border overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-md border overflow-x-auto">
+            <table className="w-full text-sm min-w-[520px]">
               <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="text-left p-2">Target</th>
                   <th className="text-right p-2">Supporting</th>
                   <th className="text-right p-2">Opposing</th>
                   <th className="text-right p-2">Total</th>
-                  <th className="text-right p-2">Filings</th>
+                  <th className="text-right p-2 hidden sm:table-cell">Filings</th>
                 </tr>
               </thead>
               <tbody>
                 {targets.map((t) => (
                   <tr key={t.key} className="border-t">
-                    <td className="p-2 truncate max-w-[260px]">
+                    <td className="p-2 align-top">
                       <div className="flex items-center gap-2 flex-wrap">
                         {t.candidateId ? (
-                          <Link to={`/candidate/${t.candidateId}`} className="font-medium hover:text-primary hover:underline">
+                          <Link to={`/candidate/${t.candidateId}`} className="font-medium hover:text-primary hover:underline break-words">
                             {t.name}
                           </Link>
                         ) : (
-                          <span className="font-medium">{t.name}</span>
+                          <span className="font-medium break-words">{t.name}</span>
                         )}
                         {t.party && <PartyBadge party={t.party} />}
                       </div>
                       {t.fecId && <div className="text-xs text-muted-foreground">{t.fecId}</div>}
                     </td>
-                    <td className="p-2 text-right text-agree">{t.support > 0 ? fmt(t.support) : '—'}</td>
-                    <td className="p-2 text-right text-disagree">{t.oppose > 0 ? fmt(t.oppose) : '—'}</td>
-                    <td className="p-2 text-right font-semibold">{fmt(t.total)}</td>
-                    <td className="p-2 text-right text-muted-foreground">{t.count.toLocaleString()}</td>
+                    <td className="p-2 text-right text-agree whitespace-nowrap">{t.support > 0 ? fmt(t.support) : '—'}</td>
+                    <td className="p-2 text-right text-disagree whitespace-nowrap">{t.oppose > 0 ? fmt(t.oppose) : '—'}</td>
+                    <td className="p-2 text-right font-semibold whitespace-nowrap">{fmt(t.total)}</td>
+                    <td className="p-2 text-right text-muted-foreground whitespace-nowrap hidden sm:table-cell">{t.count.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
