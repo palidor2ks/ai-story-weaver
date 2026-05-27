@@ -312,7 +312,25 @@ export default function SocialHandles() {
                 Latest from X feed on candidate profiles.
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={() => syncPressGallery(true)}
+                disabled={pressGallerySyncing}
+                title="Preview what would change without writing to the database"
+              >
+                <Landmark className={`h-4 w-4 mr-2 ${pressGallerySyncing ? "animate-pulse" : ""}`} />
+                Preview House roster
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => syncPressGallery(false)}
+                disabled={pressGallerySyncing}
+                title="Pull official House X handles from pressgallery.house.gov"
+              >
+                <Landmark className={`h-4 w-4 mr-2 ${pressGallerySyncing ? "animate-pulse" : ""}`} />
+                Sync from House Press Gallery
+              </Button>
               <Button variant="outline" onClick={discoverAll} disabled={discoveringAll}>
                 <Search className={`h-4 w-4 mr-2 ${discoveringAll ? "animate-pulse" : ""}`} />
                 Discover all missing
