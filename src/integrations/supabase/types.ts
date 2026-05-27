@@ -3979,6 +3979,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      ie_excluded_committee_ids: { Args: never; Returns: string[] }
       list_committee_pool: {
         Args: {
           p_assigned?: string
