@@ -18,6 +18,7 @@ import { RecipientAIAnalysisDialog } from '@/components/RecipientAIAnalysisDialo
 import { CommitteeIESection } from '@/components/IndependentExpenditureSections';
 import { CommitteeTopicBadge } from '@/components/CommitteeTopicBadge';
 import { formatCompactCurrency as formatCurrency } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 
 const formatDate = (value: string | null) => {
   if (!value) return '—';
@@ -36,6 +37,7 @@ const formatNumber = (value: number) =>
 
 export const CommitteeProfile = () => {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const location = useLocation();
   const { data: committee, isLoading: committeeLoading } = useCommittee(id);
   const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id);
@@ -185,7 +187,7 @@ export const CommitteeProfile = () => {
                 />
 
 
-                <RecipientAIAnalysisDialog
+                {user && <RecipientAIAnalysisDialog
                   entityKind="committee"
                   entityId={committee.id ?? committee.fecCommitteeId ?? ''}
                   entityName={committee.name || 'Unknown Committee'}
@@ -198,7 +200,7 @@ export const CommitteeProfile = () => {
                       className="ml-1"
                     />
                   }
-                />
+                />}
 
                 {/* Admin Sync Button */}
                 {isAdmin && (

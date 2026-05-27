@@ -20,10 +20,11 @@ export const Header = () => {
 
   const navItems = [
     { path: '/candidates', label: 'Candidates', icon: Users, requiresAuth: false },
-    { path: '/parties', label: 'Parties', icon: Building2, requiresAuth: true },
+    { path: '/parties', label: 'Parties', icon: Building2, requiresAuth: false },
     { path: '/donors', label: 'Donors', icon: DollarSign, requiresAuth: false },
-    { path: '/committees', label: 'Committees', icon: Landmark, requiresAuth: true },
+    { path: '/committees', label: 'Committees', icon: Landmark, requiresAuth: false },
     { path: '/top-spenders', label: 'Top Spenders', icon: Megaphone, requiresAuth: false },
+    { path: '/how-scoring-works', label: 'How it works', icon: HelpCircle, requiresAuth: false },
     { path: '/quiz-library', label: 'Quizzes', icon: BookOpen, requiresAuth: true },
     { path: '/blog', label: 'Blog', icon: Newspaper, requiresAuth: false },
     { path: '/profile', label: 'Profile', icon: User, requiresAuth: true },
@@ -38,7 +39,7 @@ export const Header = () => {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between gap-2">
-        <Link to="/profile" className="flex items-center gap-2 shrink-0">
+        <Link to="/candidates" className="flex items-center gap-2 shrink-0">
           <img src={logoImg} alt="Pulse" width={40} height={40} fetchPriority="high" decoding="async" className="w-10 h-10 object-contain" />
           <BetaBadge size="xs" />
         </Link>
@@ -59,13 +60,6 @@ export const Header = () => {
               </Button>
             </Link>
           ))}
-          {!authLoading && user && (
-            <Link to="/how-scoring-works" title="How scoring works">
-              <Button variant="ghost" size="icon" className="ml-1">
-                <HelpCircle className="w-4 h-4" />
-              </Button>
-            </Link>
-          )}
           {isPolitician && (
             <Link to="/politician">
               <Button
@@ -134,17 +128,6 @@ export const Header = () => {
                 </Button>
               </Link>
             ))}
-            {!authLoading && user && (
-              <Link
-                to="/how-scoring-works"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <Button variant="ghost" className="w-full justify-start gap-3">
-                  <HelpCircle className="w-5 h-5" />
-                  How Scoring Works
-                </Button>
-              </Link>
-            )}
             {isPolitician && (
               <Link
                 to="/politician"
