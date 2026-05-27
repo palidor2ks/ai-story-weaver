@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Search, Link2, Unlink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,6 +57,7 @@ import {
 } from '@/hooks/useDonorAliases';
 import { useSearchRawDonors } from '@/hooks/useDonorsPaginated';
 import { supabase } from '@/integrations/supabase/client';
+import { useCommitteeCauses, useUpsertCommitteeTopic } from '@/hooks/useCommitteeTopics';
 
 const DONOR_TYPES = ['Individual', 'PAC', 'Organization', 'Unknown'];
 
@@ -107,6 +109,8 @@ export function DonorAliasesPanel() {
   // Current alias attached to each search result row
   const [rowAliasMap, setRowAliasMap] = useState<Record<string, DonorAlias | null>>({});
   const [rowTreasurerMap, setRowTreasurerMap] = useState<Record<string, string>>({});
+  const { data: causes = [] } = useCommitteeCauses(false);
+  const upsertCommitteeTopic = useUpsertCommitteeTopic();
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -182,6 +186,32 @@ export function DonorAliasesPanel() {
       if ((aCount === 0) !== (bCount === 0)) return aCount === 0 ? -1 : 1;
       return a.canonical_name.localeCompare(b.canonical_name);
     });
+
+  const aliasCommitteeIds = useMemo(
+    () => Array.from(new Set(
+      aliases.flatMap((a) => (a.fec_committee_ids?.length ? a.fec_committee_ids : (a.fec_committee_id ? [a.fec_committee_id] : [])))
+    )),
+    [aliases],
+  );
+  const { data: committeeCauseRows = [] } = useQuery({
+    queryKey: ['donor-alias-committee-causes', aliasCommitteeIds],
+    enabled: aliasCommitteeIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('committee_topics')
+        .select('fec_committee_id, primary_cause_id')
+        .in('fec_committee_id', aliasCommitteeIds);
+      if (error) throw error;
+      return (data || []) as Array<{ fec_committee_id: string; primary_cause_id: string | null }>;
+    },
+  });
+  const causeByCommitteeId = useMemo(() => {
+    const map = new Map<string, string>();
+    committeeCauseRows.forEach((r) => {
+      if (r.primary_cause_id) map.set(r.fec_committee_id, r.primary_cause_id);
+    });
+    return map;
+  }, [committeeCauseRows]);
 
   const handleOpenCreate = () => {
     setSelectedAlias(null);
@@ -298,6 +328,7 @@ export function DonorAliasesPanel() {
                     <TableHead>Canonical Name</TableHead>
                     <TableHead>Members</TableHead>
                     <TableHead>FEC Committee ID</TableHead>
+                    <TableHead>Primary Cause</TableHead>
                     <TableHead>Active</TableHead>
                     <TableHead>Notes</TableHead>
                     <TableHead className="w-32">Actions</TableHead>
@@ -306,7 +337,7 @@ export function DonorAliasesPanel() {
                 <TableBody>
                   {filteredAliases.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                         No aliases yet. Search only filters existing aliases—click “New Alias” to create one first.
                       </TableCell>
                     </TableRow>
@@ -349,6 +380,50 @@ export function DonorAliasesPanel() {
                                 {ids.map((id) => (
                                   <Badge key={id} variant="outline" className="font-mono text-[10px]">{id}</Badge>
                                 ))}
+                              </div>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const ids = alias.fec_committee_ids?.length ? alias.fec_committee_ids : (alias.fec_committee_id ? [alias.fec_committee_id] : []);
+                            if (ids.length === 0) return <span className="text-xs text-muted-foreground">No FEC ID</span>;
+                            const firstWithCause = ids.find((id) => causeByCommitteeId.has(id));
+                            const currentCauseId = firstWithCause ? causeByCommitteeId.get(firstWithCause) : '';
+                            return (
+                              <div className="flex items-center gap-2">
+                                <Select
+                                  value={currentCauseId || ''}
+                                  onValueChange={async (causeId) => {
+                                    try {
+                                      await Promise.all(ids.map((fecId) =>
+                                        upsertCommitteeTopic.mutateAsync({ fec_committee_id: fecId, primary_cause_id: causeId, secondary_cause_ids: [] }),
+                                      ));
+                                    } catch (e) {
+                                      console.error(e);
+                                    }
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 w-[180px]">
+                                    <SelectValue placeholder="Assign cause" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {causes.map((c) => (
+                                      <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Run AI cause classification"
+                                  onClick={async () => {
+                                    const { error } = await supabase.functions.invoke('classify-committee-topic', { body: { fec_committee_ids: ids, force: true } });
+                                    if (error) console.error(error);
+                                  }}
+                                >
+                                  <Search className="h-4 w-4" />
+                                </Button>
                               </div>
                             );
                           })()}
