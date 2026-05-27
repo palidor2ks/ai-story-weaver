@@ -99,7 +99,7 @@ export default function Poll() {
     <div className="min-h-screen bg-background">
       <Seo
         title={`${poll.title} — PoliPulse Poll`}
-        description={poll.description || 'Take this PoliPulse poll'}
+        description={poll.description || `Take the "${poll.title}" PoliPulse poll, share your views on the issues, and see how the community is voting in real time.`}
         path={`/p/${poll.slug}`}
       />
 
