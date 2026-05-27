@@ -114,6 +114,8 @@ export function DonorAliasesPanel() {
   const [rowCommitteeIdsMap, setRowCommitteeIdsMap] = useState<Record<string, string[]>>({});
   const { data: causes = [] } = useCommitteeCauses(false);
   const upsertCommitteeTopic = useUpsertCommitteeTopic();
+  const updateAliasCause = useUpdateDonorAliasCause();
+  const classifyAliasCause = useClassifyDonorAliasCause();
   useEffect(() => {
     let cancelled = false;
     (async () => {
