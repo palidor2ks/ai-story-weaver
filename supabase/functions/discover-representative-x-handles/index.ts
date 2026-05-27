@@ -23,7 +23,7 @@ interface CandidateRow {
 
 type ResultEntry = {
   candidate_id: string;
-  status: 'updated' | 'not_found' | 'update_failed' | 'skipped_existing' | 'rate_limited';
+  status: 'updated' | 'not_found' | 'update_failed' | 'skipped_existing' | 'rate_limited' | 'skipped_use_press_gallery';
   handle?: string;
   reason?: string;
   error?: string;
