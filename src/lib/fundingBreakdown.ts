@@ -30,14 +30,16 @@ export interface FundingInput {
 const n = (v: number | null | undefined) => (typeof v === 'number' && isFinite(v) ? v : 0);
 
 export function computeFundingBreakdown(input: FundingInput): FundingBreakdown {
-  const individuals = n(input.fecItemized) + n(input.fecUnitemized);
+  const largeIndividualDonors = n(input.fecItemized);
+  const smallDonors = n(input.fecUnitemized);
   const pacs =
     n(input.fecPacContributions) + n(input.fecPartyContributions) + n(input.fecTransfers);
   const other = n(input.fecOtherReceipts);
   const self = n(input.fecLoans) + n(input.fecCandidateContribution);
 
   const sources: FundingBucket[] = [
-    { label: 'Individual Donors', amount: individuals, color: 'hsl(217 91% 60%)' },
+    { label: 'Large Individual Donors', amount: largeIndividualDonors, color: 'hsl(217 91% 60%)' },
+    { label: 'Small Donors (Unitemized)', amount: smallDonors, color: 'hsl(228 94% 67%)' },
     { label: 'PACs & Committees', amount: pacs, color: 'hsl(199 89% 60%)' },
     { label: 'Other Receipts', amount: other, color: 'hsl(280 75% 65%)' },
     { label: 'Self-Funding', amount: self, color: 'hsl(220 14% 65%)' },
