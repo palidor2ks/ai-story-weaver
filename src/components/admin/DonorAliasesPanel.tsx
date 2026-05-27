@@ -225,6 +225,46 @@ export function DonorAliasesPanel() {
     return map;
   }, [committeeCauseRows]);
 
+  const { data: aliasMemberCommitteeRows = [] } = useQuery({
+    queryKey: ['donor-alias-member-committee-ids', aliases.map((a) => a.id).join('|')],
+    enabled: aliases.length > 0,
+    queryFn: async () => {
+      const aliasIds = aliases.map((a) => a.id);
+      if (aliasIds.length === 0) return [] as Array<{ alias_id: string; recipient_committee_id: string | null }>;
+      const { data, error } = await (supabase as any)
+        .from('donor_alias_members')
+        .select('alias_id, donors!inner(recipient_committee_id)')
+        .in('alias_id', aliasIds);
+      if (error) throw error;
+      return (data || []).map((row: any) => ({
+        alias_id: row.alias_id as string,
+        recipient_committee_id: row?.donors?.recipient_committee_id ?? null,
+      }));
+    },
+  });
+
+  const committeeIdsByAliasId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    aliasMemberCommitteeRows.forEach((row) => {
+      if (!row.recipient_committee_id) return;
+      const existing = map.get(row.alias_id) || [];
+      if (!existing.includes(row.recipient_committee_id)) {
+        map.set(row.alias_id, [...existing, row.recipient_committee_id]);
+      }
+    });
+    return map;
+  }, [aliasMemberCommitteeRows]);
+
+  const getAliasCommitteeIds = (alias: DonorAlias): string[] => {
+    const explicit = alias.fec_committee_ids?.length
+      ? alias.fec_committee_ids
+      : alias.fec_committee_id
+        ? [alias.fec_committee_id]
+        : [];
+    if (explicit.length > 0) return explicit;
+    return committeeIdsByAliasId.get(alias.id) || [];
+  };
+
   const handleOpenCreate = () => {
     setSelectedAlias(null);
     setFormData({ canonical_name: '', fec_committee_ids: [], notes: '', is_active: true });
@@ -339,7 +379,7 @@ export function DonorAliasesPanel() {
                   <TableRow>
                     <TableHead>Canonical Name</TableHead>
                     <TableHead>Members</TableHead>
-                    <TableHead>FEC Committee ID</TableHead>
+                    <TableHead>Committee ID(s)</TableHead>
                     <TableHead>Primary Cause</TableHead>
                     <TableHead>Active</TableHead>
                     <TableHead>Notes</TableHead>
@@ -383,9 +423,7 @@ export function DonorAliasesPanel() {
                         </TableCell>
                         <TableCell className="font-mono text-xs">
                           {(() => {
-                            const ids = alias.fec_committee_ids && alias.fec_committee_ids.length
-                              ? alias.fec_committee_ids
-                              : alias.fec_committee_id ? [alias.fec_committee_id] : [];
+                            const ids = getAliasCommitteeIds(alias);
                             if (ids.length === 0) return '—';
                             return (
                               <div className="flex flex-wrap gap-1">
@@ -398,8 +436,8 @@ export function DonorAliasesPanel() {
                         </TableCell>
                         <TableCell>
                           {(() => {
-                            const ids = alias.fec_committee_ids?.length ? alias.fec_committee_ids : (alias.fec_committee_id ? [alias.fec_committee_id] : []);
-                            if (ids.length === 0) return <span className="text-xs text-muted-foreground">No FEC ID</span>;
+                            const ids = getAliasCommitteeIds(alias);
+                            if (ids.length === 0) return <span className="text-xs text-muted-foreground">No committee ID</span>;
                             const firstWithCause = ids.find((id) => causeByCommitteeId.has(id));
                             const currentCauseId = firstWithCause ? causeByCommitteeId.get(firstWithCause) : '';
                             return (
@@ -579,11 +617,9 @@ export function DonorAliasesPanel() {
                           </TableCell>
                           <TableCell>
                             {currentAlias ? (() => {
-                              const aliasIds = currentAlias.fec_committee_ids?.length
-                                ? currentAlias.fec_committee_ids
-                                : currentAlias.fec_committee_id ? [currentAlias.fec_committee_id] : [];
+                              const aliasIds = getAliasCommitteeIds(currentAlias);
                               const ids = aliasIds.length ? aliasIds : rowCommitteeIds;
-                              if (ids.length === 0) return <span className="text-xs text-muted-foreground">No FEC ID</span>;
+                              if (ids.length === 0) return <span className="text-xs text-muted-foreground">No committee ID</span>;
                               const firstWithCause = ids.find((id) => causeByCommitteeId.has(id));
                               const currentCauseId = firstWithCause ? causeByCommitteeId.get(firstWithCause) : '';
                               return (
@@ -676,7 +712,7 @@ export function DonorAliasesPanel() {
               />
             </div>
             <div className="space-y-2">
-              <Label>FEC Committee IDs (optional)</Label>
+              <Label>Committee ID(s)s (optional)</Label>
               <Textarea
                 value={fecIdsText}
                 onChange={(e) => setFecIdsText(e.target.value)}
