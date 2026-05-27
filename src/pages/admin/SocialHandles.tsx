@@ -291,10 +291,16 @@ export default function SocialHandles() {
                 Latest from X feed on candidate profiles.
               </CardDescription>
             </div>
-            <Button onClick={syncAll} disabled={syncingAll}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${syncingAll ? "animate-spin" : ""}`} />
-              Sync all with handles
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={discoverAll} disabled={discoveringAll}>
+                <Search className={`h-4 w-4 mr-2 ${discoveringAll ? "animate-pulse" : ""}`} />
+                Discover all missing
+              </Button>
+              <Button onClick={syncAll} disabled={syncingAll}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${syncingAll ? "animate-spin" : ""}`} />
+                Sync all with handles
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
