@@ -26,7 +26,7 @@ interface DonorCardProps {
   nameVariations?: string[];
   recipientCount?: number;
   cycle?: string;
-  primaryCauseLabel?: string;
+  primaryCause?: import('@/hooks/useDonorCauses').DonorCauseInfo;
 }
 
 
