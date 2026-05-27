@@ -158,10 +158,12 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
 
       // 3. Map donor name|type -> cause (prefer first committee with a cause)
       for (const [key, ids] of nameToCommittees.entries()) {
+        if (result.has(key)) continue; // alias-level cause already set
         for (const id of ids) {
           const c = causeByCommittee.get(id);
           if (c) {
             result.set(key, c);
+            break;
             break;
           }
         }
