@@ -271,6 +271,26 @@ export default function SocialHandles() {
     setTimeout(refresh, 60000);
   };
 
+  const syncPressGallery = async (dryRun: boolean) => {
+    setPressGallerySyncing(true);
+    const { data, error } = await supabase.functions.invoke("sync-house-press-gallery-handles", {
+      body: { overwrite: false, dry_run: dryRun },
+    });
+    setPressGallerySyncing(false);
+    if (error) {
+      toast.error(`Press gallery sync failed: ${error.message}`);
+      return;
+    }
+    const { scanned = 0, updated = 0, skipped = 0, unmatched = 0, dry_run } = data ?? {};
+    if (dry_run) {
+      toast.info(`Dry run: ${scanned} rows, ${updated === 0 ? "would update " + (data?.results?.filter((r: any) => r.status === "would_update").length ?? 0) : updated} candidates, ${unmatched} unmatched`);
+    } else {
+      toast.success(`Synced ${updated} House handles (${skipped} skipped, ${unmatched} unmatched of ${scanned})`);
+      refresh();
+    }
+    console.log("press gallery sync", data);
+  };
+
   if (adminLoading) return <LoadingScreen />;
   if (!adminData?.isAdmin) return <Navigate to="/" replace />;
 
