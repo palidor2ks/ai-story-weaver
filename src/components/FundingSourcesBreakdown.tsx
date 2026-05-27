@@ -11,6 +11,8 @@ interface Props {
   title?: string;
 }
 
+const formatPercent = (pct: number) => (Number.isInteger(pct) ? `${pct}%` : `${pct.toFixed(1)}%`);
+
 /**
  * Funding Sources panel — 4 horizontal bars showing where a candidate's
  * money comes from. Presentation only; computation lives in fundingBreakdown.ts.
@@ -46,7 +48,7 @@ export function FundingSourcesBreakdown({ input, className, title = 'Funding Sou
                 className="text-sm font-semibold tabular-nums"
                 style={{ color: r.color }}
               >
-                {r.pct}%
+                {formatPercent(r.pct)}
               </span>
             </div>
             <div className="h-2 w-full rounded-full bg-muted/60 overflow-hidden">

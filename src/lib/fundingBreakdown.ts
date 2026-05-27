@@ -69,5 +69,5 @@ export function withPercents(
   total: number,
 ): Array<FundingBucket & { pct: number }> {
   if (total <= 0) return sources.map((s) => ({ ...s, pct: 0 }));
-  return sources.map((s) => ({ ...s, pct: Math.round((s.amount / total) * 100) }));
+  return sources.map((s) => ({ ...s, pct: Math.round((s.amount / total) * 1000) / 10 }));
 }
