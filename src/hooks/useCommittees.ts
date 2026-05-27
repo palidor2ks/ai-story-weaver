@@ -574,6 +574,7 @@ export const useCommitteeDonors = (committeeId: string | undefined, cycle = 'all
         employer: string | null;
         occupation: string | null;
         candidate_id: string | null;
+        line_number: string | null;
       }
 
       // FEC Schedule A line numbers that are NOT real donor contributions:
