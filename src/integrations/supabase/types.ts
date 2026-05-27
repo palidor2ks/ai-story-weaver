@@ -1164,35 +1164,58 @@ export type Database = {
       donor_aliases: {
         Row: {
           canonical_name: string
+          cause_ai_confidence: string | null
+          cause_ai_reasoning: string | null
+          cause_assigned_at: string | null
+          cause_assigned_by: string | null
           created_at: string | null
           fec_committee_id: string | null
           fec_committee_ids: string[]
           id: string
           is_active: boolean | null
           notes: string | null
+          primary_cause_id: string | null
           updated_at: string | null
         }
         Insert: {
           canonical_name: string
+          cause_ai_confidence?: string | null
+          cause_ai_reasoning?: string | null
+          cause_assigned_at?: string | null
+          cause_assigned_by?: string | null
           created_at?: string | null
           fec_committee_id?: string | null
           fec_committee_ids?: string[]
           id?: string
           is_active?: boolean | null
           notes?: string | null
+          primary_cause_id?: string | null
           updated_at?: string | null
         }
         Update: {
           canonical_name?: string
+          cause_ai_confidence?: string | null
+          cause_ai_reasoning?: string | null
+          cause_assigned_at?: string | null
+          cause_assigned_by?: string | null
           created_at?: string | null
           fec_committee_id?: string | null
           fec_committee_ids?: string[]
           id?: string
           is_active?: boolean | null
           notes?: string | null
+          primary_cause_id?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "donor_aliases_primary_cause_id_fkey"
+            columns: ["primary_cause_id"]
+            isOneToOne: false
+            referencedRelation: "committee_causes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       donor_import_sessions: {
         Row: {

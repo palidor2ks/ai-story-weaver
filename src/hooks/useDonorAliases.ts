@@ -11,7 +11,59 @@ export interface DonorAlias {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  primary_cause_id: string | null;
+  cause_assigned_by: 'admin' | 'ai' | null;
+  cause_ai_confidence: 'low' | 'medium' | 'high' | null;
+  cause_ai_reasoning: string | null;
+  cause_assigned_at: string | null;
 }
+
+export const useUpdateDonorAliasCause = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ alias_id, primary_cause_id }: { alias_id: string; primary_cause_id: string | null }) => {
+      const { data, error } = await (supabase as any)
+        .from('donor_aliases')
+        .update({
+          primary_cause_id,
+          cause_assigned_by: 'admin',
+          cause_assigned_at: new Date().toISOString(),
+          cause_ai_confidence: null,
+          cause_ai_reasoning: null,
+        })
+        .eq('id', alias_id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as DonorAlias;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
+      toast.success('Primary cause updated');
+    },
+    onError: (error: Error) => toast.error(`Failed to update cause: ${error.message}`),
+  });
+};
+
+export const useClassifyDonorAliasCause = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ alias_id }: { alias_id: string }) => {
+      const { data, error } = await supabase.functions.invoke('classify-donor-alias-cause', {
+        body: { alias_id },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'AI classification failed');
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['donor-aliases'] });
+      toast.success(`AI assigned cause: ${data.primary_cause_label || data.primary_cause_id || '—'}`);
+    },
+    onError: (error: Error) => toast.error(`AI classification failed: ${error.message}`),
+  });
+};
+
 
 export interface DonorAliasInput {
   canonical_name: string;
