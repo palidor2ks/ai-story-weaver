@@ -26,7 +26,7 @@ interface DonorCardProps {
   nameVariations?: string[];
   recipientCount?: number;
   cycle?: string;
-  primaryCauseLabel?: string;
+  primaryCause?: import('@/hooks/useDonorCauses').DonorCauseInfo;
 }
 
 
@@ -68,7 +68,7 @@ export const DonorCard = ({
   nameVariations,
   recipientCount,
   cycle,
-  primaryCauseLabel,
+  primaryCause,
 }: DonorCardProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -128,7 +128,7 @@ export const DonorCard = ({
                   {type}
                 </Badge>
               )}
-              {primaryCauseLabel && <CauseBadge cause={{ label: primaryCauseLabel }} />}
+              {primaryCause && <CauseBadge cause={primaryCause} />}
             </div>
           </div>
 
