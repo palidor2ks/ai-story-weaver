@@ -35,7 +35,7 @@ export default function PollResultsPage() {
     <div className="min-h-screen bg-background">
       <Seo
         title={`${poll.title} — Results`}
-        description={poll.description || 'Live poll results on PoliPulse'}
+        description={poll.description || `View the live results and community consensus for the PoliPulse poll: ${poll.title}.`}
         path={`/p/${poll.slug}/results`}
       />
       <header className="border-b">
