@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Sparkles, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
 import { Seo } from '@/components/Seo';
