@@ -1,51 +1,62 @@
 ## Goal
 
-Bring PR #102 ("Add edge function to discover and store candidate X handles") into the project, fix the issues flagged by the Codex review, and expose it from the existing `/admin/social-handles` page so admins can backfill `candidates.x_handle` automatically.
+Replace the unreliable x.com search-scrape with the official House Press Gallery roster as the primary source of House members' X handles. Keep the existing scrape path as a fallback for Senate and non-House candidates where this list doesn't apply.
 
-## What the PR adds
+## Why this source is better
 
-A new edge function `supabase/functions/discover-representative-x-handles/index.ts` that:
+`https://pressgallery.house.gov/member-data/members-official-x-handles-119th-congress` is:
+- Official and maintained by the House Press Gallery (last updated 04/29/2026).
+- Structured as a clean HTML table: `FirstName | LastName | X Handle | St/Dis | Party`.
+- Covers every sitting House member with a verified handle (e.g. `@RepAdams`, `@RepPeteAguilar`).
+- No JS rendering, no rate limits, no 429s — one HTTP fetch returns everything.
 
-- Admin-only (validates session + `user_roles.role = 'admin'`).
-- Accepts `{ candidate_id?, limit?, overwrite? }`.
-- Selects candidates (optionally one, optionally only those missing `x_handle`).
-- For each candidate: scrapes `x.com/search?...&f=user`, extracts handles via regex, fetches each profile page, scores by name/state/office matches, and accepts the best handle if score ≥ 3.
-- Updates `candidates.x_handle` for accepted matches, returns per-row status (`updated` / `not_found` / `update_failed` / `skipped_existing`).
-- Throttles 400ms between candidates.
+Match key in our DB: `candidates.state` + district (parsed from `St/Dis` like `NC12` → state=NC, district=12) + last name. Office must be a House role.
 
-## Issues to fix before merging
+## What changes
 
-1. **Candidate ID type (Codex P2)** — `candidates.id` is `TEXT` (e.g. `S001150`, `P000197`), not UUID. The PR's `z.string().uuid()` rejects every real ID. Change to `z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/)`.
-2. **Background execution** — scraping N candidates with two HTTP fetches each + 400ms delay easily exceeds the edge function request timeout. Wrap the per-candidate loop in `EdgeRuntime.waitUntil(...)` when no `candidate_id` is provided (batch mode), and return `{ ok: true, scanned: rows.length, mode: 'background' }` immediately. Keep synchronous behavior for single-candidate runs.
-3. **Scraping fragility & rate limits** — x.com's logged-out search returns JS-rendered HTML, so handle extraction will often be empty and 429s are likely. Mitigations:
-   - Treat any non-200 as `not_found` with reason `fetch_failed_<status>`.
-   - On 429, back off (e.g. 2s) and skip remaining candidates in the batch, returning what we have.
-   - Add a small allow-list of reserved/system handles already present, plus skip handles whose profile HTML lacks the candidate's last name entirely.
-4. **Confidence threshold** — keep score ≥ 3, but also require the candidate's last-name token to appear in the profile HTML; otherwise mark as `low_confidence_match`. This avoids assigning unrelated accounts.
-5. **Logging** — log scanned/updated counts and per-candidate reasons so we can debug from edge logs.
-6. **No DB migration needed** — `x_handle` already exists; the Supabase branch error in the PR is unrelated (pre-existing FK constraint conflict).
+### 1. New edge function: `sync-house-press-gallery-handles`
 
-## Admin UI wiring
+New file `supabase/functions/sync-house-press-gallery-handles/index.ts`. Admin-only (same auth pattern as the existing discover function).
 
-Update `src/pages/admin/SocialHandles.tsx` to add:
+Flow:
+1. Fetch the press gallery URL once.
+2. Parse the HTML table rows into `{ firstName, lastName, handle, state, district, party }`. Strip leading `@` and validate against `^[A-Za-z0-9_]{1,15}$`.
+3. Query `candidates` where office matches House (`U.S. House`, `Representative`, etc. — reuse existing office matching used elsewhere in the project).
+4. For each parsed row, find the candidate by `state` + `district` + last-name match (case-insensitive). District `00` → at-large, stored however the project currently stores it.
+5. Update `candidates.x_handle` when:
+   - Candidate has no handle, OR
+   - `overwrite: true` was passed and the existing handle differs.
+6. Return `{ scanned, matched, updated, skipped, unmatched: [...] }` so admins can see which press-gallery rows didn't map to a known candidate.
 
-- A **"Discover handle"** icon button on each row (only enabled when `x_handle` is empty). Calls `discover-representative-x-handles` with `{ candidate_id }`, then on success refetches the row.
-- A **"Discover all missing"** toolbar button next to "Sync all with handles". Calls the function with `{ limit: 100, overwrite: false }`; shows a toast that the job runs in the background and the page will refresh in a minute.
-- A new `useDiscoverRepresentativeHandles` hook (mirrors the existing sync hook pattern).
-- Reuse existing `useAdminRole` guard and `HANDLE_RE` validation already on the page.
+Input schema: `{ overwrite?: boolean, dry_run?: boolean }`. No `candidate_id` — this is a bulk roster sync. Runs synchronously (single fetch + bulk DB update is fast).
 
-No new tables, no new routes, no migration.
+### 2. Update the existing discover function
+
+`supabase/functions/discover-representative-x-handles/index.ts` stays for Senate + non-Congress candidates. Add a small guard: if the candidate's office is a House seat, return `status: 'skipped_use_press_gallery'` instead of scraping x.com, so the two paths don't fight each other.
+
+### 3. Admin UI wiring
+
+In `src/pages/admin/SocialHandles.tsx`:
+- New toolbar button **"Sync from House Press Gallery"** that calls `sync-house-press-gallery-handles` with `{ overwrite: false }`. Show a result toast: "Updated N House members; M unmatched rows".
+- A secondary **"Preview (dry run)"** option (e.g. dropdown menu next to the button) that calls with `{ dry_run: true }` and shows the unmatched list in a dialog so an admin can spot naming mismatches.
+- Keep the existing per-row "Discover" and batch "Discover all missing" buttons as the fallback for Senate / state-level candidates.
+
+### 4. Out of scope (for now)
+
+- Senate equivalent: there is no single comparable Senate Press Gallery handle list; senators stay on the scrape path. We can revisit if a clean source is found.
+- Scheduling: no pg_cron yet. Admin runs the sync manually when the press gallery updates.
+- Storing source/provenance (`x_handle_source = 'press_gallery'`): can be added later if useful for audit.
 
 ## Files
 
 New:
-- `supabase/functions/discover-representative-x-handles/index.ts` — adapted from PR with fixes above.
+- `supabase/functions/sync-house-press-gallery-handles/index.ts`
 
 Edited:
-- `src/pages/admin/SocialHandles.tsx` — add discover buttons + mutation calls.
+- `supabase/functions/discover-representative-x-handles/index.ts` — skip House candidates.
+- `src/pages/admin/SocialHandles.tsx` — add toolbar button + dry-run preview dialog.
 
-## Out of scope
+## Risks
 
-- pg_cron scheduling (can be added later once we confirm scrape reliability).
-- Switching to the official X API for discovery (would need a new paid endpoint).
-- Storing per-candidate discovery audit history.
+- HTML structure could change. Mitigation: defensive parser that logs and aborts cleanly if the expected columns aren't found, rather than silently writing bad data.
+- Name mismatches (nicknames, accented characters like "Barragán"). Mitigation: normalize accents and compare against both `name` and any alternate-name fields; surface unmatched rows in the response so an admin can fix the candidate record.
