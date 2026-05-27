@@ -149,12 +149,12 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
           Edit Profile
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Edit Your Profile</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto pr-1">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input
@@ -322,7 +322,7 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="pt-3 border-t">
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
