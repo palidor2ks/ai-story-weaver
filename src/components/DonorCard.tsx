@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DonorAIAnalysisDialog } from '@/components/DonorAIAnalysisDialog';
+import { CauseBadge } from '@/components/CauseBadge';
 import { useAuth } from '@/context/AuthContext';
 
 interface DonorCardProps {
@@ -25,6 +26,7 @@ interface DonorCardProps {
   nameVariations?: string[];
   recipientCount?: number;
   cycle?: string;
+  primaryCauseLabel?: string;
 }
 
 
@@ -66,6 +68,7 @@ export const DonorCard = ({
   nameVariations,
   recipientCount,
   cycle,
+  primaryCauseLabel,
 }: DonorCardProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -120,11 +123,12 @@ export const DonorCard = ({
                     </Badge>
                   ))}
                 </div>
-              ) : (
+) : (
                 <Badge variant="outline" className={`shrink-0 ${getTypeBadgeStyle(type)}`}>
                   {type}
                 </Badge>
               )}
+              {primaryCauseLabel && <CauseBadge cause={{ label: primaryCauseLabel }} />}
             </div>
           </div>
 

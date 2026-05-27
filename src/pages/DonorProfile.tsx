@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
+import { getDonorCause, useDonorCauses } from '@/hooks/useDonorCauses';
+import { CauseBadge } from '@/components/CauseBadge';
 import { useAuth } from '@/context/AuthContext';
 import { formatCompactCurrency, formatFullCurrency } from '@/lib/utils';
 import { 
@@ -200,6 +202,11 @@ const DonorProfile = () => {
 
   // The display name is the canonical name from alias, or the original name
   const displayName = aliasInfo?.canonical_name || donor?.name || '';
+
+  const { data: donorCauseMap } = useDonorCauses(
+    donor ? [{ name: displayName, type: donor.type }] : []
+  );
+  const donorPrimaryCause = donor ? getDonorCause(donorCauseMap, displayName, donor.type) : undefined;
 
   // Fetch all donor records with the same display name (across all types)
   const { data: donorRecords = [], isLoading: recordsLoading } = useQuery({
@@ -551,6 +558,7 @@ const DonorProfile = () => {
                   ) : (
                     <Badge variant="outline">{donor.type}</Badge>
                   )}
+                  {donorPrimaryCause && <CauseBadge cause={donorPrimaryCause} />}
                   {nameVariations.length > 1 && (
                     <Badge variant="secondary" className="gap-1">
                       <Layers className="h-3 w-3" />
