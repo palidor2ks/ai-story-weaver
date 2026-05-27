@@ -806,3 +806,49 @@ function MembersList({ aliasId }: { aliasId: string | undefined }) {
     </Table>
   );
 }
+
+function AliasCauseCell({
+  alias,
+  causes,
+  onAssign,
+  onAiClassify,
+  isClassifying,
+}: {
+  alias: DonorAlias;
+  causes: { id: string; label: string }[];
+  onAssign: (causeId: string) => Promise<unknown>;
+  onAiClassify: () => Promise<unknown>;
+  isClassifying: boolean;
+}) {
+  const current = alias.primary_cause_id || '';
+  const sourceLabel = alias.cause_assigned_by === 'ai'
+    ? `AI${alias.cause_ai_confidence ? ` · ${alias.cause_ai_confidence}` : ''}`
+    : alias.cause_assigned_by === 'admin' ? 'Admin' : null;
+  return (
+    <div className="flex items-center gap-2">
+      <Select value={current} onValueChange={(v) => onAssign(v)}>
+        <SelectTrigger className="h-8 w-[180px]">
+          <SelectValue placeholder="Assign cause" />
+        </SelectTrigger>
+        <SelectContent>
+          {causes.map((c) => (
+            <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
+        variant="ghost"
+        size="icon"
+        title="Run AI cause classification"
+        disabled={isClassifying}
+        onClick={() => onAiClassify()}
+      >
+        <Sparkles className={`h-4 w-4 ${isClassifying ? 'animate-pulse' : ''}`} />
+      </Button>
+      {sourceLabel && (
+        <Badge variant="outline" className="text-[10px]">{sourceLabel}</Badge>
+      )}
+    </div>
+  );
+}
+
