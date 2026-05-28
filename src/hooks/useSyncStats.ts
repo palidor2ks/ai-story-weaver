@@ -48,7 +48,6 @@ export function useSyncStats() {
         candidatesResult,
         questionsResult,
         topicsResult,
-        answersCountResult,
         lastSyncResult,
         topicAnswerCountsResult,
         // FEC stats queries
@@ -68,10 +67,6 @@ export function useSyncStats() {
           .from('topics')
           .select('id, name, icon')
           .eq('scope', 'all'),
-        // Get total answer count efficiently
-        supabase
-          .from('candidate_answers')
-          .select('*', { count: 'exact', head: true }),
         // Get last sync time from most recently synced candidate
         supabase
           .from('candidates')
@@ -83,6 +78,7 @@ export function useSyncStats() {
         supabase
           .from('topic_answer_counts')
           .select('topic_id, answer_count'),
+
         // FEC: Get candidates with FEC IDs and donor sync info
         supabase
           .from('candidates')
@@ -102,8 +98,20 @@ export function useSyncStats() {
       // Filter questions to only federal topics
       const federalTopicIds = new Set(topics.map(t => t.id));
       const questions = (questionsResult.data || []).filter(q => federalTopicIds.has(q.topic_id));
-      const totalActualAnswers = answersCountResult.count || 0;
-      
+
+      // Build topic answer counts map from aggregated view
+      const topicAnswerCounts = new Map<string, number>();
+      (topicAnswerCountsResult.data || []).forEach(row => {
+        if (row.topic_id) {
+          topicAnswerCounts.set(row.topic_id, Number(row.answer_count) || 0);
+        }
+      });
+
+      // Sum only federal-scope answers so the numerator matches the federal-scope denominator
+      const totalActualAnswers = Array.from(topicAnswerCounts.entries())
+        .filter(([topicId]) => federalTopicIds.has(topicId))
+        .reduce((sum, [, count]) => sum + count, 0);
+
       const totalCandidates = candidates.length;
       const totalQuestions = questions.length;
       const totalPotentialAnswers = totalCandidates * totalQuestions;
@@ -114,13 +122,6 @@ export function useSyncStats() {
       // Get last sync time
       const lastSyncTime = lastSyncResult.data?.[0]?.last_answers_sync || null;
 
-      // Build topic answer counts map from aggregated view
-      const topicAnswerCounts = new Map<string, number>();
-      (topicAnswerCountsResult.data || []).forEach(row => {
-        if (row.topic_id) {
-          topicAnswerCounts.set(row.topic_id, Number(row.answer_count) || 0);
-        }
-      });
 
       // Calculate per-topic coverage
       const topicCoverage: TopicCoverage[] = topics.map(topic => {
