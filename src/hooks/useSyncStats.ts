@@ -48,7 +48,6 @@ export function useSyncStats() {
         candidatesResult,
         questionsResult,
         topicsResult,
-        answersCountResult,
         lastSyncResult,
         topicAnswerCountsResult,
         // FEC stats queries
@@ -68,10 +67,6 @@ export function useSyncStats() {
           .from('topics')
           .select('id, name, icon')
           .eq('scope', 'all'),
-        // Get total answer count efficiently
-        supabase
-          .from('candidate_answers')
-          .select('*', { count: 'exact', head: true }),
         // Get last sync time from most recently synced candidate
         supabase
           .from('candidates')
@@ -83,6 +78,7 @@ export function useSyncStats() {
         supabase
           .from('topic_answer_counts')
           .select('topic_id, answer_count'),
+
         // FEC: Get candidates with FEC IDs and donor sync info
         supabase
           .from('candidates')
