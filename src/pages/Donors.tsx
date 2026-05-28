@@ -105,6 +105,7 @@ export const Donors = () => {
           </p>
         </div>
 
+        <h2 className="sr-only">Donors directory</h2>
         {/* Filters */}
         <div className="mb-6">
           <DonorFilters
