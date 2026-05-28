@@ -82,6 +82,8 @@ export const HowScoringWorks = () => {
             </p>
           </div>
 
+          <h2 className="sr-only">Scoring methodology</h2>
+
           {/* The L/R Scale */}
           <Card className="mb-6 shadow-elevated">
             <CardHeader>
