@@ -39,7 +39,8 @@ export const CommitteeProfile = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const location = useLocation();
-  const { data: committee, isLoading: committeeLoading } = useCommittee(id);
+  // Load committee once (no cycle) to discover available cycles, then re-query scoped to selected cycle below.
+  const { data: committeeBase } = useCommittee(id);
   const { data: adminData } = useAdminRole();
   const { data: ieExclusions = [] } = useIEExclusions();
   const restoreCommittee = useRestoreCommittee();
