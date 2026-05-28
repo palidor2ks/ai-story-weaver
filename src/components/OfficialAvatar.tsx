@@ -86,6 +86,10 @@ export const OfficialAvatar = ({
         <img
           src={imageUrl}
           alt={name}
+          loading="lazy"
+          decoding="async"
+          width="160"
+          height="160"
           className={cn("w-full h-full object-cover object-top", imageClassName)}
           onError={() => setImageError(true)}
         />
