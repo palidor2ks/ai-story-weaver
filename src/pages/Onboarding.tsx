@@ -386,12 +386,17 @@ export const Onboarding = () => {
     return localTopics.find(t => t.id === topicId);
   }, [currentLocalQuestionIndex, activeLocalQuestions, localTopics]);
 
-  if (topicsLoading) {
+  if (topicsLoading || onboardingLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
+  }
+
+  // If already onboarded and not in the middle of an active retake, send to profile
+  if (hasCompleted && step === 'welcome' && quizAnswers.length === 0 && localQuizAnswers.length === 0) {
+    return <Navigate to="/profile" replace />;
   }
 
   const handleDemographicsSubmit = async (data: DemographicsData) => {
