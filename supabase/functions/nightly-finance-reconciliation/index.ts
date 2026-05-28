@@ -154,7 +154,14 @@ serve(async (req) => {
       details: [] as Array<{ candidateId: string; name: string; status: string; deltaPct: number; individualDeltaPct: number; pacDeltaPct: number }>
     };
 
-    for (const candidate of candidates || []) {
+    const candidatesList = candidates || [];
+    // For bulk runs (no specific candidateId), offload processing to background
+    // to avoid the 150s edge function idle timeout. Single-candidate runs stay
+    // synchronous so the admin UI can show immediate results.
+    const runInBackground = !candidateId && candidatesList.length > 1;
+
+    const processCandidates = async () => {
+    for (const candidate of candidatesList) {
       try {
         // Get only Principal (P) and Authorized (A) committees for this candidate
         // Excludes: J (Joint Fundraising), U (Unauthorized/Super PACs), B (Bundler), D (Leadership PAC)
