@@ -198,6 +198,7 @@ export const Candidates = () => {
           </p>
         </div>
 
+        <h2 className="sr-only">Politicians directory</h2>
         {/* Tabs for different views */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
           <TabsList className="flex flex-wrap h-auto gap-1 w-full lg:w-auto lg:inline-flex">

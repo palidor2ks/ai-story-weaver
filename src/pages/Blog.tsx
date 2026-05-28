@@ -34,7 +34,8 @@ export default function Blog() {
       />
       <Header />
       <main className="container mx-auto py-8">
-        <h1 className="sr-only">Blog</h1>
+        <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">Blog</h1>
+        <p className="text-muted-foreground mb-6">Latest updates, articles, and product news from the Pulse team.</p>
         <div id="soro-blog" />
       </main>
     </div>
