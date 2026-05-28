@@ -39,7 +39,8 @@ export const CommitteeProfile = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const location = useLocation();
-  const { data: committee, isLoading: committeeLoading } = useCommittee(id);
+  // Load committee once (no cycle) to discover available cycles, then re-query scoped to selected cycle below.
+  const { data: committeeBase } = useCommittee(id);
   const { data: adminData } = useAdminRole();
   const { data: ieExclusions = [] } = useIEExclusions();
   const restoreCommittee = useRestoreCommittee();
@@ -47,8 +48,8 @@ export const CommitteeProfile = () => {
 
   const isAdmin = adminData?.isAdmin ?? false;
   const exclusion = useMemo(
-    () => ieExclusions.find((e) => e.fec_committee_id === (committee?.fecCommitteeId ?? id)),
-    [ieExclusions, committee?.fecCommitteeId, id],
+    () => ieExclusions.find((e) => e.fec_committee_id === (committeeBase?.fecCommitteeId ?? id)),
+    [ieExclusions, committeeBase?.fecCommitteeId, id],
   );
 
   const handleRestore = async () => {
@@ -64,7 +65,7 @@ export const CommitteeProfile = () => {
   const fromState = (location.state as { from?: string } | null)?.from;
   // If the committee has no candidate-committee receipts, it's an outside-spender (IE-only) committee
   // that lives on /top-spenders rather than /committees.
-  const isOutsideSpenderOnly = !!committee && !committee.totalRaised && !committee.candidate;
+  const isOutsideSpenderOnly = !!committeeBase && !committeeBase.totalRaised && !committeeBase.candidate;
   const backTo = fromState === '/top-spenders' || fromState === '/committees'
     ? fromState
     : isOutsideSpenderOnly ? '/top-spenders' : '/committees';
@@ -74,11 +75,15 @@ export const CommitteeProfile = () => {
     const baseYear = new Date().getFullYear();
     const baseline = baseYear % 2 === 0 ? baseYear : baseYear + 1;
     const set = new Set<string>([String(baseline), String(baseline - 2)]);
-    (committee?.cycles ?? []).forEach((c) => c && set.add(String(c)));
+    (committeeBase?.cycles ?? []).forEach((c) => c && set.add(String(c)));
     return Array.from(set).sort((a, b) => Number(b) - Number(a));
-  }, [committee?.cycles]);
+  }, [committeeBase?.cycles]);
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
   const effectiveCycle = selectedCycle ?? availableCycles[0] ?? '2024';
+
+  // Re-query committee scoped to the selected cycle so totals (raised, donors, contributions) match the filter.
+  const { data: committeeScoped, isLoading: committeeLoading } = useCommittee(id, effectiveCycle);
+  const committee = committeeScoped ?? committeeBase;
 
   const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id, effectiveCycle);
   const isLoading = committeeLoading || donorsLoading;
