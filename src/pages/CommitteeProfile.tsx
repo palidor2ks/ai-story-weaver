@@ -48,8 +48,8 @@ export const CommitteeProfile = () => {
 
   const isAdmin = adminData?.isAdmin ?? false;
   const exclusion = useMemo(
-    () => ieExclusions.find((e) => e.fec_committee_id === (committee?.fecCommitteeId ?? id)),
-    [ieExclusions, committee?.fecCommitteeId, id],
+    () => ieExclusions.find((e) => e.fec_committee_id === (committeeBase?.fecCommitteeId ?? id)),
+    [ieExclusions, committeeBase?.fecCommitteeId, id],
   );
 
   const handleRestore = async () => {
@@ -65,7 +65,7 @@ export const CommitteeProfile = () => {
   const fromState = (location.state as { from?: string } | null)?.from;
   // If the committee has no candidate-committee receipts, it's an outside-spender (IE-only) committee
   // that lives on /top-spenders rather than /committees.
-  const isOutsideSpenderOnly = !!committee && !committee.totalRaised && !committee.candidate;
+  const isOutsideSpenderOnly = !!committeeBase && !committeeBase.totalRaised && !committeeBase.candidate;
   const backTo = fromState === '/top-spenders' || fromState === '/committees'
     ? fromState
     : isOutsideSpenderOnly ? '/top-spenders' : '/committees';
