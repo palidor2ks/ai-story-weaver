@@ -432,8 +432,30 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
       };
 
       const committees = await fetchCommittees(cycle, committeeId);
+
+      // For cycle-scoped views, derive the most recent contribution date within
+      // the selected cycle so the "Last contribution" hint matches the filter.
+      let cycleScopedLastDate: string | null | undefined;
+      if (cycle && cycle !== 'all') {
+        const { data: latest } = await supabase
+          .from('contributions')
+          .select('receipt_date')
+          .eq('recipient_committee_id', committeeId)
+          .eq('cycle', cycle)
+          .order('receipt_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        cycleScopedLastDate = latest?.receipt_date ?? null;
+      }
+
       if (committees[0]) {
-        return { ...committees[0], name: pickBetter(committees[0].name) };
+        return {
+          ...committees[0],
+          name: pickBetter(committees[0].name),
+          ...(cycleScopedLastDate !== undefined
+            ? { lastContributionDate: cycleScopedLastDate }
+            : {}),
+        };
       }
 
       // Fallback: committee not in candidate_committees — synthesize from contributions + rollups
