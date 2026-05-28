@@ -75,11 +75,15 @@ export const CommitteeProfile = () => {
     const baseYear = new Date().getFullYear();
     const baseline = baseYear % 2 === 0 ? baseYear : baseYear + 1;
     const set = new Set<string>([String(baseline), String(baseline - 2)]);
-    (committee?.cycles ?? []).forEach((c) => c && set.add(String(c)));
+    (committeeBase?.cycles ?? []).forEach((c) => c && set.add(String(c)));
     return Array.from(set).sort((a, b) => Number(b) - Number(a));
-  }, [committee?.cycles]);
+  }, [committeeBase?.cycles]);
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
   const effectiveCycle = selectedCycle ?? availableCycles[0] ?? '2024';
+
+  // Re-query committee scoped to the selected cycle so totals (raised, donors, contributions) match the filter.
+  const { data: committeeScoped, isLoading: committeeLoading } = useCommittee(id, effectiveCycle);
+  const committee = committeeScoped ?? committeeBase;
 
   const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id, effectiveCycle);
   const isLoading = committeeLoading || donorsLoading;
