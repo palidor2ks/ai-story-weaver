@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useAdminRole } from "@/hooks/useAdminRole";
@@ -10,7 +10,6 @@ import { ClaimReviewPanel } from "@/components/admin/ClaimReviewPanel";
 import { DonorAliasesPanel } from "@/components/admin/DonorAliasesPanel";
 import { VendorRefundsPanel } from "@/components/admin/VendorRefundsPanel";
 import { ScoreFixesTab } from "@/pages/admin/tabs/ScoreFixesTab";
-import { BillSummaryDashboard } from "@/components/admin/BillSummaryDashboard";
 import { HiddenStatesPanel } from "@/components/admin/HiddenStatesPanel";
 import { BackgroundProcessingProvider } from "@/context/BackgroundProcessingContext";
 
@@ -32,7 +31,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { QuestionManagementPanel } from "@/components/admin/QuestionManagementPanel";
 import { PartyAnswersPanel } from "@/components/admin/PartyAnswersPanel";
-import { EvidenceReviewPanel } from "@/components/admin/EvidenceReviewPanel";
 import TopicReviewPanel from "@/components/admin/TopicReviewPanel";
 import { DonorImportPanel } from "@/components/admin/DonorImportPanel";
 import { BulkDonorSyncCard } from "@/components/admin/BulkDonorSyncCard";
@@ -41,7 +39,6 @@ import { BulkAnswerValidation } from "@/components/admin/BulkAnswerValidation";
 import { IndependentExpenditureImportCard } from "@/components/admin/IndependentExpenditureImportCard";
 import { IndependentExpenditureImportHistory } from "@/components/admin/IndependentExpenditureImportHistory";
 import { AdminUsersPanel } from "@/components/admin/AdminUsersPanel";
-import { PollsPanel } from "@/components/admin/PollsPanel";
 import { IEExclusionsPanel } from "@/components/admin/IEExclusionsPanel";
 import { CommitteeTopicsPanel } from "@/components/admin/CommitteeTopicsPanel";
 import { CommitteeAliasesPanel } from "@/components/admin/CommitteeAliasesPanel";
@@ -55,6 +52,11 @@ const LEVELS = [
 
 const PARTIES = ['Democrat', 'Republican', 'Independent', 'Other'] as const;
 const TIERS = ['tier_1', 'tier_2', 'tier_3'];
+
+const EvidenceReviewPanel = lazy(() => import("@/components/admin/EvidenceReviewPanel").then((m) => ({ default: m.EvidenceReviewPanel })));
+const BillSummaryDashboard = lazy(() => import("@/components/admin/BillSummaryDashboard").then((m) => ({ default: m.BillSummaryDashboard })));
+const PollsPanel = lazy(() => import("@/components/admin/PollsPanel").then((m) => ({ default: m.PollsPanel })));
+
 
 interface OfficialFormData {
   id: string;
@@ -774,11 +776,11 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="evidence">
-            <EvidenceReviewPanel />
+            <Suspense fallback={<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}><EvidenceReviewPanel /></Suspense>
           </TabsContent>
 
           <TabsContent value="voting-records">
-            <BillSummaryDashboard />
+            <Suspense fallback={<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}><BillSummaryDashboard /></Suspense>
           </TabsContent>
 
           <TabsContent value="topic-review">
@@ -798,7 +800,7 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="polls">
-            <PollsPanel />
+            <Suspense fallback={<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}><PollsPanel /></Suspense>
           </TabsContent>
 
           <TabsContent value="ie-exclusions">
