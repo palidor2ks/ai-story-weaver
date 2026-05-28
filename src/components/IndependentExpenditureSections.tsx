@@ -11,8 +11,16 @@ import { formatCompactCurrency } from '@/lib/utils';
 
 const fmt = (n: number) => formatCompactCurrency(n);
 
-export const CommitteeIESection = ({ committeeFecId }: { committeeFecId: string | null | undefined }) => {
-  const [cycle, setCycle] = useState<string>('all');
+export const CommitteeIESection = ({
+  committeeFecId,
+  cycle: cycleProp,
+}: {
+  committeeFecId: string | null | undefined;
+  /** When provided, the section is locked to this cycle and the internal dropdown is hidden. */
+  cycle?: string | null;
+}) => {
+  const [internalCycle, setInternalCycle] = useState<string>('all');
+  const cycle = cycleProp ?? internalCycle;
   const { data, isLoading } = useCommitteeIE(committeeFecId, cycle);
   if (!committeeFecId) return null;
   if (isLoading && !data) {
@@ -33,8 +41,8 @@ export const CommitteeIESection = ({ committeeFecId }: { committeeFecId: string 
             <Megaphone className="w-5 h-5 text-primary" />
             Independent Expenditures
           </CardTitle>
-          {availableCycles.length > 0 && (
-            <Select value={cycle} onValueChange={setCycle}>
+          {cycleProp == null && availableCycles.length > 0 && (
+            <Select value={cycle} onValueChange={setInternalCycle}>
               <SelectTrigger className="w-[160px] h-8 text-xs">
                 <SelectValue placeholder="All cycles" />
               </SelectTrigger>
