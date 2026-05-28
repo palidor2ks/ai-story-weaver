@@ -38,6 +38,17 @@ import XComposer from "./pages/admin/XComposer";
 import XConnectCallback from "./pages/admin/XConnectCallback";
 import SocialComposer from "./pages/admin/SocialComposer";
 import SocialHandles from "./pages/admin/SocialHandles";
+import { Onboarding } from "./pages/Onboarding";
+
+// Root route: route users based on auth + onboarding status
+const RootRedirect = () => {
+  const { user, loading: authLoading } = useAuth();
+  const { data: hasCompleted, isLoading: onboardingLoading } = useHasCompletedOnboarding();
+  if (authLoading || (user && onboardingLoading)) return <LoadingScreen />;
+  if (!user) return <Navigate to="/candidates" replace />;
+  if (!hasCompleted) return <Navigate to="/onboarding" replace />;
+  return <Navigate to="/profile" replace />;
+};
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -106,7 +117,12 @@ const AppRoutes = () => {
           <VerifyEmail />
         </RouteGuard>
       } />
-      <Route path="/" element={<Navigate to="/candidates" replace />} />
+      <Route path="/" element={<RootRedirect />} />
+      <Route path="/onboarding" element={
+        <RouteGuard requireAuth requireOnboarding={false}>
+          <Onboarding />
+        </RouteGuard>
+      } />
       <Route path="/results" element={
         <RouteGuard requireAuth requireOnboarding>
           <QuizResults />

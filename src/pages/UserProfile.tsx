@@ -135,7 +135,7 @@ export const UserProfile = () => {
     try {
       await resetOnboarding.mutateAsync();
       toast.success('Onboarding reset successfully!');
-      navigate('/');
+      navigate('/onboarding');
     } catch (error) {
       console.error('Error resetting onboarding:', error);
       toast.error('Failed to reset onboarding. Please try again.');

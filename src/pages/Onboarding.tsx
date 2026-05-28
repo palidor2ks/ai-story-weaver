@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { TopicSelector } from '@/components/TopicSelector';
 import { TopicIcon } from '@/components/TopicIcon';
@@ -8,7 +8,7 @@ import { ScoreText } from '@/components/ScoreText';
 import { DemographicsForm, DemographicsData } from '@/components/DemographicsForm';
 import { useAuth } from '@/context/AuthContext';
 import { useTopics, useAllCanonicalQuestions, useCanonicalQuestions } from '@/hooks/useCandidates';
-import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile } from '@/hooks/useProfile';
+import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile, useHasCompletedOnboarding } from '@/hooks/useProfile';
 import { OnboardingStep, Topic, QuestionOption, QuizAnswer, TopicScore } from '@/types';
 import { calculateQuizScore } from '@/lib/score';
 import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle, MapPin } from 'lucide-react';
@@ -20,6 +20,7 @@ export const Onboarding = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: profile } = useProfile();
+  const { data: hasCompleted, isLoading: onboardingLoading } = useHasCompletedOnboarding();
   const { data: dbTopics = [], isLoading: topicsLoading } = useTopics();
   
   const saveQuizResults = useSaveQuizResults();
@@ -385,12 +386,17 @@ export const Onboarding = () => {
     return localTopics.find(t => t.id === topicId);
   }, [currentLocalQuestionIndex, activeLocalQuestions, localTopics]);
 
-  if (topicsLoading) {
+  if (topicsLoading || onboardingLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
+  }
+
+  // If already onboarded and not in the middle of an active retake, send to profile
+  if (hasCompleted && step === 'welcome' && quizAnswers.length === 0 && localQuizAnswers.length === 0) {
+    return <Navigate to="/profile" replace />;
   }
 
   const handleDemographicsSubmit = async (data: DemographicsData) => {
