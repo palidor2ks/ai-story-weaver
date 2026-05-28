@@ -1,41 +1,39 @@
-## Why the Spender Aliases panel doesn't work
+# Fix Overall Coverage exceeding 100%
 
-Two independent bugs make the panel silently fail:
+## Problem
 
-1. **`committee_aliases` table has zero Data API grants.** The table has correct RLS policies ("public read", "admin write"), but PostgREST also requires SQL `GRANT` privileges. Currently no role (`anon`, `authenticated`, `service_role`) has any privilege on the table, so every `select` / `insert` / `update` / `delete` from the client returns a permissions error. The table is empty because no row has ever been allowed to insert. This is the same class of bug we just fixed for `ie_excluded_committees`.
+The "Overall Coverage" card on the admin sync page shows **158,024 / 153,361 answers (103%)**. The numerator counts every row in `candidate_answers` (including answers tied to local-scope topics like housing/public safety), while the denominator is `candidates × federal questions only`. The two sides measure different universes, so the ratio can exceed 100%.
 
-2. **"Attach Spenders" tab queries a table that doesn't exist.** `CommitteeAliasesPanel.tsx` line 116 reads `from('committees')` — there is no `public.committees` table in this project. Committee metadata lives in `external_pacs` (and `candidate_committees`). The search always errors and returns nothing.
+Confirmed in the DB:
+- Total answers: 158,692
+- Federal-scope answers: 144,292
+- Federal questions: 251 (of 351 total)
+- Candidates: 611 → denominator 611 × 251 = 153,361 ✓
 
 ## Fix
 
-### 1. Migration — grant Data API access
+In `src/hooks/useSyncStats.ts`, change the `totalActualAnswers` query so it only counts answers whose question belongs to a federal-scope topic. The simplest approach: reuse the existing `topic_answer_counts` aggregated view (already fetched) and sum only the rows whose `topic_id` is in the federal topic set. This avoids a second round-trip and a large `.in(...)` filter on 251 question IDs.
 
-```sql
-GRANT SELECT ON public.committee_aliases TO anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.committee_aliases TO authenticated;
-GRANT ALL ON public.committee_aliases TO service_role;
-```
+Concretely:
 
-RLS already restricts writes to admins via `has_role(auth.uid(),'admin')`, so granting `INSERT/UPDATE/DELETE` to `authenticated` is safe.
+1. Remove the standalone `answersCountResult` query (or keep it only for a separate "all answers" stat if needed elsewhere — currently it isn't).
+2. After building the `federalTopicIds` set, compute:
+   ```ts
+   const totalActualAnswers = (topicAnswerCountsResult.data || [])
+     .filter(r => r.topic_id && federalTopicIds.has(r.topic_id))
+     .reduce((sum, r) => sum + (Number(r.answer_count) || 0), 0);
+   ```
+3. Use that value for `overallCoveragePercent`.
 
-### 2. Frontend — fix the Attach Spenders search
+This guarantees numerator and denominator are both scoped to federal topics, so the bar maxes out at 100%.
 
-In `src/components/admin/CommitteeAliasesPanel.tsx`, change the committee search query from the missing `committees` table to `external_pacs`, which has `name`, `fec_committee_id`, and `treasurer_name`:
+## Verification
 
-```ts
-.from('external_pacs')
-.select('name, fec_committee_id, treasurer_name')
-.or(`name.ilike.%${safe}%,fec_committee_id.ilike.%${safe}%`)
-.order('name', { ascending: true })
-.limit(30);
-```
+- Reload `/admin` sync panel: Overall Coverage should now read ~144,292 / 153,361 (~94%) and the bar should never exceed 100%.
+- Per-topic coverage rows (already federal-scoped) should be unchanged.
 
-(Optionally union with `candidate_committees` later if admins need to alias principal committees too — out of scope for this fix.)
+## Out of scope
 
-### 3. Verify
-
-- Open Admin → Spender Aliases, create a new alias (e.g. canonical "Senate Majority PAC", FEC IDs `C00484642`) and confirm it appears in the table.
-- Switch to "Attach Spenders", search "majority", confirm matching `external_pacs` rows appear and "Attach ID" works.
-- Visit `/top-spenders` and confirm the aliased committee shows the new canonical name.
-
-No other code or rollup views need changes — `TopSpenders.tsx` already reads `committee_aliases` with `is_active` + `overlaps` and overrides the displayed name.
+- No change to local-scope answer storage or to candidate/question data.
+- No DB migration required.
+- Per-candidate coverage panel is unaffected (uses a different hook).
