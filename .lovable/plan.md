@@ -1,40 +1,17 @@
-# Restore access to onboarding after a quiz reset
-
 ## Problem
 
-When the user clicks "Reset Onboarding" on the profile page, `useResetOnboarding` wipes `quiz_answers` / `user_topics` / topic scores, then `handleResetOnboarding` calls `navigate('/')`.
-
-But:
-
-- `/` is hard-coded to `<Navigate to="/candidates" replace />` (`src/App.tsx:109`). The `Index` page that renders `<Onboarding />` is never mounted anywhere.
-- `/profile`, `/quiz`, `/quiz-library`, `/results` all use `RouteGuard requireOnboarding`. With `has_completed_onboarding = false`, the guard bounces back to `/` → `/candidates`.
-- There is no `/onboarding` route and no link in the `Header` to start onboarding.
-
-Result: the profile page disappears and there is no surfaced path back into the quiz. The same dead-end also hits brand-new users right after signup.
+On the Committee profile page, the **Cycle** dropdown changes local state but the displayed "Top Contributors" list never re-queries. The hook `useCommitteeDonors(id)` is invoked without a cycle argument, so it defaults to `'all'` and ignores the user's selection.
 
 ## Fix
 
-1. **Add a dedicated onboarding route** in `src/App.tsx`:
-   - `import { Onboarding } from "./pages/Onboarding";`
-   - `<Route path="/onboarding" element={<RouteGuard requireAuth requireOnboarding={false}><Onboarding /></RouteGuard>} />`
+In `src/pages/CommitteeProfile.tsx`:
 
-2. **Send users without answers to onboarding from `/`.** Replace the static `<Navigate to="/candidates" />` for `/` with a small component that uses `useAuth` + `useHasCompletedOnboarding`:
-   - not logged in → `/auth`
-   - logged in, not onboarded → `/onboarding`
-   - logged in, onboarded → `/candidates`
-   This also fixes new signups (`Auth.tsx` already navigates to `/`).
+1. Compute `effectiveCycle` (already done) *before* calling the donors hook.
+2. Pass it into the hook: `useCommitteeDonors(id, effectiveCycle)`.
+3. Default `selectedCycle` initial value so first render uses `availableCycles[0]` (e.g. `'2024'`) consistently — `effectiveCycle ?? '2024'` fallback to avoid an `undefined` query key flicker.
 
-3. **Update reset flow** in `src/pages/UserProfile.tsx` (`handleResetOnboarding`): `navigate('/onboarding')` instead of `navigate('/')`, so the user lands directly in the quiz after a reset.
+No backend or hook changes needed — `useCommitteeDonors` already accepts and filters by `cycle` (lines 560–597 of `src/hooks/useCommittees.ts`).
 
-4. **Guard the `Onboarding` page itself**: if `useHasCompletedOnboarding` returns true, `Navigate` to `/profile` so users can't accidentally re-enter and double-save. (Small addition at top of `Onboarding.tsx`.)
+## Out of scope
 
-5. **Delete the now-unused `src/pages/Index.tsx`** (it was only reachable via the old `/` route via an older config, but is currently dead code since `/` redirects elsewhere). Optional cleanup — keep if you'd rather not touch it.
-
-## Files touched
-
-- `src/App.tsx` — add `/onboarding` route, replace `/` redirect with conditional component.
-- `src/pages/UserProfile.tsx` — `navigate('/onboarding')` after reset.
-- `src/pages/Onboarding.tsx` — early redirect to `/profile` if already onboarded.
-- (optional) remove `src/pages/Index.tsx`.
-
-No DB, RLS, or business-logic changes.
+- Cycle dropdown is currently rendered only when `isAdmin` (line 206). If non-admin users should also be able to switch cycles, that's a separate UX decision — flag and confirm before moving it out of the admin block.

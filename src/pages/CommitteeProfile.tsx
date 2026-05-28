@@ -40,14 +40,12 @@ export const CommitteeProfile = () => {
   const { user } = useAuth();
   const location = useLocation();
   const { data: committee, isLoading: committeeLoading } = useCommittee(id);
-  const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id);
   const { data: adminData } = useAdminRole();
   const { data: ieExclusions = [] } = useIEExclusions();
   const restoreCommittee = useRestoreCommittee();
   const fetchDonorsMutation = useFetchCommitteeDonors();
 
   const isAdmin = adminData?.isAdmin ?? false;
-  const isLoading = committeeLoading || donorsLoading;
   const exclusion = useMemo(
     () => ieExclusions.find((e) => e.fec_committee_id === (committee?.fecCommitteeId ?? id)),
     [ieExclusions, committee?.fecCommitteeId, id],
@@ -80,7 +78,10 @@ export const CommitteeProfile = () => {
     return Array.from(set).sort((a, b) => Number(b) - Number(a));
   }, [committee?.cycles]);
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
-  const effectiveCycle = selectedCycle ?? availableCycles[0];
+  const effectiveCycle = selectedCycle ?? availableCycles[0] ?? '2024';
+
+  const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id, effectiveCycle);
+  const isLoading = committeeLoading || donorsLoading;
 
   const handleSyncDonors = () => {
     if (!committee?.fecCommitteeId) return;
