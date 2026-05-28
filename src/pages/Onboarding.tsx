@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { TopicSelector } from '@/components/TopicSelector';
 import { TopicIcon } from '@/components/TopicIcon';
@@ -8,7 +8,7 @@ import { ScoreText } from '@/components/ScoreText';
 import { DemographicsForm, DemographicsData } from '@/components/DemographicsForm';
 import { useAuth } from '@/context/AuthContext';
 import { useTopics, useAllCanonicalQuestions, useCanonicalQuestions } from '@/hooks/useCandidates';
-import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile } from '@/hooks/useProfile';
+import { useSaveQuizResults, useSaveUserTopics, useProfile, useUpdateProfile, useHasCompletedOnboarding } from '@/hooks/useProfile';
 import { OnboardingStep, Topic, QuestionOption, QuizAnswer, TopicScore } from '@/types';
 import { calculateQuizScore } from '@/lib/score';
 import { ArrowRight, ArrowLeft, Sparkles, Target, CheckCircle, AlertTriangle, MapPin } from 'lucide-react';
@@ -20,6 +20,7 @@ export const Onboarding = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: profile } = useProfile();
+  const { data: hasCompleted, isLoading: onboardingLoading } = useHasCompletedOnboarding();
   const { data: dbTopics = [], isLoading: topicsLoading } = useTopics();
   
   const saveQuizResults = useSaveQuizResults();
