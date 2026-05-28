@@ -340,7 +340,7 @@ export const CommitteeProfile = () => {
               )}
             </section>
 
-            <CommitteeIESection committeeFecId={committee.fecCommitteeId} />
+            <CommitteeIESection committeeFecId={committee.fecCommitteeId} cycle={effectiveCycle} />
 
 
             <Card>
