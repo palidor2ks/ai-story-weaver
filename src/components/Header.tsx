@@ -40,7 +40,7 @@ export const Header = () => {
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between gap-2">
         <Link to="/candidates" className="flex items-center gap-2 shrink-0">
-          <img src={logoImg} alt="Pulse" width={40} height={40} fetchPriority="high" decoding="async" className="w-10 h-10 object-contain" />
+          <img src={logoImg} alt="Pulse logo" width={40} height={40} fetchPriority="high" decoding="async" className="w-10 h-10 object-contain" />
           <BetaBadge size="xs" />
         </Link>
 
@@ -67,6 +67,7 @@ export const Header = () => {
                 size="icon"
                 className="ml-0.5"
                 title="Politician Dashboard"
+                aria-label="Politician Dashboard"
               >
                 <FileText className="w-4 h-4" />
               </Button>
@@ -79,6 +80,7 @@ export const Header = () => {
                 size="icon"
                 className="ml-0.5"
                 title="Admin"
+                aria-label="Admin"
               >
                 <Shield className="w-4 h-4" />
               </Button>
@@ -115,6 +117,8 @@ export const Header = () => {
           size="icon"
           className="lg:hidden"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={mobileMenuOpen}
         >
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </Button>

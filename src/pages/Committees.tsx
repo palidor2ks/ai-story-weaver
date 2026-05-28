@@ -227,6 +227,8 @@ export const Committees = () => {
                   setHideUnsynced(true);
                 }}
                 disabled={isLoading}
+                aria-label="Reset filters"
+                title="Reset filters"
               >
                 <SlidersHorizontal className="w-4 h-4" />
               </Button>
@@ -329,8 +331,12 @@ export const Committees = () => {
                     </div>
                   </div>
 
-                  <Link to={`/committee/${committee.fecCommitteeId}`} state={{ from: '/committees' }}>
-                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
+                  <Link
+                    to={`/committee/${committee.fecCommitteeId}`}
+                    state={{ from: '/committees' }}
+                    aria-label={`View details for ${committee.aliasName || committee.name || 'committee'}`}
+                  >
+                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" aria-hidden="true" tabIndex={-1}>
                       <ArrowRight className="w-4 h-4" />
                     </Button>
                   </Link>
