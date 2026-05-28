@@ -113,22 +113,26 @@ const buildCommitteeSummaries = (
         )
       : null;
 
-    const totalRaised =
-      matchingRollup?.local_itemized ??
-      matchingRollup?.fec_total_receipts ??
-      matchingRollup?.fec_itemized ??
-      aggregatedRollup?.total_raised ??
-      committee.local_itemized_total ??
-      committee.fec_itemized_total ??
-      0;
+    // When a specific cycle is selected, only use that cycle's rollup row.
+    // Never fall back to all-cycle committee totals — that would make summary
+    // cards stop responding to the cycle filter.
+    const totalRaised = isAllCycles
+      ? (aggregatedRollup?.total_raised ??
+         committee.local_itemized_total ??
+         committee.fec_itemized_total ??
+         0)
+      : (matchingRollup?.local_itemized ??
+         matchingRollup?.fec_total_receipts ??
+         matchingRollup?.fec_itemized ??
+         0);
 
     const hasRollupData = committeeRollups.length > 0;
-    const donorCount = hasRollupData
-      ? (matchingRollup?.donor_count ?? aggregatedRollup?.donor_count ?? 0)
-      : null;
-    const contributionCount = hasRollupData
-      ? (matchingRollup?.contribution_count ?? aggregatedRollup?.contribution_count ?? 0)
-      : null;
+    const donorCount = isAllCycles
+      ? (hasRollupData ? (aggregatedRollup?.donor_count ?? 0) : null)
+      : (matchingRollup?.donor_count ?? 0);
+    const contributionCount = isAllCycles
+      ? (hasRollupData ? (aggregatedRollup?.contribution_count ?? 0) : null)
+      : (matchingRollup?.contribution_count ?? 0);
 
     // Name fallback chain: committee.name → linked candidate name → "Unknown Committee"
     const candidateName = committee.candidates?.name;
@@ -428,8 +432,30 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
       };
 
       const committees = await fetchCommittees(cycle, committeeId);
+
+      // For cycle-scoped views, derive the most recent contribution date within
+      // the selected cycle so the "Last contribution" hint matches the filter.
+      let cycleScopedLastDate: string | null | undefined;
+      if (cycle && cycle !== 'all') {
+        const { data: latest } = await supabase
+          .from('contributions')
+          .select('receipt_date')
+          .eq('recipient_committee_id', committeeId)
+          .eq('cycle', cycle)
+          .order('receipt_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        cycleScopedLastDate = latest?.receipt_date ?? null;
+      }
+
       if (committees[0]) {
-        return { ...committees[0], name: pickBetter(committees[0].name) };
+        return {
+          ...committees[0],
+          name: pickBetter(committees[0].name),
+          ...(cycleScopedLastDate !== undefined
+            ? { lastContributionDate: cycleScopedLastDate }
+            : {}),
+        };
       }
 
       // Fallback: committee not in candidate_committees — synthesize from contributions + rollups
