@@ -453,7 +453,24 @@ serve(async (req) => {
       }
     }
 
-    console.log('[RECONCILIATION] Complete:', results);
+      console.log('[RECONCILIATION] Complete:', results);
+    };
+
+    if (runInBackground) {
+      // @ts-ignore EdgeRuntime is provided by the Supabase edge runtime
+      EdgeRuntime.waitUntil(processCandidates());
+      return new Response(
+        JSON.stringify({
+          success: true,
+          queued: true,
+          candidates: candidatesList.length,
+          message: `Reconciliation started in background for ${candidatesList.length} candidates. Results will appear as each candidate completes.`
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    await processCandidates();
 
     return new Response(
       JSON.stringify({
