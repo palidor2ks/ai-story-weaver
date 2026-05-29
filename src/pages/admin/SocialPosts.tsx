@@ -306,9 +306,9 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
         cardNodeRef.current,
         post.subject_id,
         {
-          candidateName: cardData.candidateName,
-          candidateOffice: cardData.candidateOffice,
-          candidateParty: cardData.candidateParty,
+          candidateName: liveData.candidateName,
+          candidateOffice: liveData.candidateOffice,
+          candidateParty: liveData.candidateParty,
         },
       );
       const { error } = await supabase
