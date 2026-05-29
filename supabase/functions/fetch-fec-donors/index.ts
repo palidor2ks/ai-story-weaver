@@ -9,12 +9,15 @@ const corsHeaders = {
 };
 
 // Rate limiting constants - MORE CONSERVATIVE to reduce 429 errors
-const MAX_REQUESTS_PER_MINUTE = 30; // Reduced from 45 for better rate limit safety
-const REQUEST_DELAY_MS = 350; // Increased from 200 for smoother pacing
+const MAX_REQUESTS_PER_MINUTE = 30;
+const REQUEST_DELAY_MS = 350;
 const MAX_RUNTIME_MS = 25000; // 25 seconds - safe margin to avoid WORKER_LIMIT
-const MAX_RETRIES = 5; // Increased from 3 for better resilience
-const RETRY_BACKOFF_BASE_MS = 3000; // Increased from 2000
-const RATE_LIMIT_BACKOFF_MS = 15000; // 15 second backoff specifically for 429 errors
+const MAX_RETRIES = 3; // Lowered from 5: backoff math could exceed the 150s idle limit
+const RETRY_BACKOFF_BASE_MS = 2000;
+const RATE_LIMIT_BACKOFF_MS = 8000; // Lowered from 15000 for the same reason
+// Hard ceiling enforced inside fetchWithRetry so a single retry chain cannot blow the 150s budget
+const HARD_DEADLINE_MS = 130000;
+let requestStartTime = Date.now();
 
 /**
  * Get the date range for a given FEC election cycle.
@@ -65,38 +68,45 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
   requestCount++;
   
   for (let attempt = 0; attempt < retries; attempt++) {
+    // Hard wall-clock budget: never let retries push the function past the 150s idle limit.
+    const elapsed = Date.now() - requestStartTime;
+    if (elapsed > HARD_DEADLINE_MS) {
+      throw new Error(`Aborting fetch: hard deadline reached (${elapsed}ms elapsed)`);
+    }
+    const remaining = HARD_DEADLINE_MS - elapsed;
+    const perFetchTimeout = Math.min(20000, Math.max(3000, remaining - 1000));
+
     try {
-      // Per-request timeout to avoid hitting the 150s function idle limit on a single hung call
-      const response = await fetch(url, { ...options, signal: AbortSignal.timeout(20000) });
-      
+      const response = await fetch(url, { ...options, signal: AbortSignal.timeout(perFetchTimeout) });
+
       if (response.status === 429) {
-        // LONGER backoff specifically for rate limits
-        const backoffMs = RATE_LIMIT_BACKOFF_MS * Math.pow(1.5, attempt);
+        const backoffMs = Math.min(RATE_LIMIT_BACKOFF_MS * Math.pow(1.5, attempt), remaining - 2000);
+        if (backoffMs <= 0 || attempt >= retries - 1) {
+          hitRateLimitDuringRequest = true;
+          lastRateLimitBackoffMs = 0;
+          return response; // give up gracefully instead of busting the idle limit
+        }
         console.log(`[FEC-DONORS] Rate limited (429), backing off ${Math.round(backoffMs/1000)}s...`);
-        
-        // Track that we hit a rate limit for the response
         hitRateLimitDuringRequest = true;
         lastRateLimitBackoffMs = backoffMs;
-        
-        // Reset the minute counter to force additional waiting
         requestCount = MAX_REQUESTS_PER_MINUTE;
-        
         await new Promise(resolve => setTimeout(resolve, backoffMs));
         continue;
       }
-      
+
       if (response.status >= 500 && attempt < retries - 1) {
-        // Server error - retry with backoff
-        const backoffMs = RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt);
+        const backoffMs = Math.min(RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt), remaining - 2000);
+        if (backoffMs <= 0) return response;
         console.log(`[FEC-DONORS] Server error ${response.status}, retrying in ${backoffMs}ms...`);
         await new Promise(resolve => setTimeout(resolve, backoffMs));
         continue;
       }
-      
+
       return response;
     } catch (error) {
       if (attempt < retries - 1) {
-        const backoffMs = RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt);
+        const backoffMs = Math.min(RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt), remaining - 2000);
+        if (backoffMs <= 0) throw error;
         console.log(`[FEC-DONORS] Fetch error, retrying in ${backoffMs}ms:`, error);
         await new Promise(resolve => setTimeout(resolve, backoffMs));
         continue;
@@ -104,7 +114,7 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
       throw error;
     }
   }
-  
+
   throw new Error('Max retries exceeded');
 }
 
@@ -388,7 +398,8 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
 
 serve(async (req) => {
   const startTime = Date.now();
-  
+  requestStartTime = startTime; // share with fetchWithRetry's hard-deadline guard
+
   // Reset rate limit tracking for this request
   hitRateLimitDuringRequest = false;
   lastRateLimitBackoffMs = 0;
