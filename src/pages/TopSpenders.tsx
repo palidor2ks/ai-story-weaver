@@ -283,6 +283,7 @@ export default function TopSpenders() {
         </div>
 
 
+        <h2 className="sr-only">Top outside spenders</h2>
         {/* KPIs */}
         <div className="grid gap-4 sm:grid-cols-3 mb-6">
           <Card>
