@@ -151,3 +151,9 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = true
   [functions.x-post-tweet]
     verify_jwt = true
+  [functions.pick-daily-stat-card]
+    verify_jwt = false
+  [functions.generate-social-caption]
+    verify_jwt = true
+  [functions.post-social-card]
+    verify_jwt = true

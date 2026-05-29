@@ -40,6 +40,7 @@ const XComposer = lazy(() => import("./pages/admin/XComposer"));
 const XConnectCallback = lazy(() => import("./pages/admin/XConnectCallback"));
 const SocialComposer = lazy(() => import("./pages/admin/SocialComposer"));
 const SocialHandles = lazy(() => import("./pages/admin/SocialHandles"));
+const SocialPosts = lazy(() => import("./pages/admin/SocialPosts"));
 const Onboarding = lazy(() => import("./pages/Onboarding").then((m) => ({ default: m.Onboarding })));
 
 // Root route: route users based on auth + onboarding status
@@ -117,6 +118,7 @@ const AppRoutes = () => (
       <Route path="/admin/x-composer" element={<RouteGuard requireAuth requireOnboarding><XComposer /></RouteGuard>} />
       <Route path="/admin/social-composer" element={<RouteGuard requireAuth requireOnboarding><SocialComposer /></RouteGuard>} />
       <Route path="/admin/social-handles" element={<RouteGuard requireAuth requireOnboarding><SocialHandles /></RouteGuard>} />
+      <Route path="/admin/social-posts" element={<RouteGuard requireAuth requireOnboarding><SocialPosts /></RouteGuard>} />
       <Route path="/admin/x-connect/callback" element={<RouteGuard requireAuth requireOnboarding><XConnectCallback /></RouteGuard>} />
       <Route path="/politician" element={<RouteGuard requireAuth requireOnboarding><PoliticianDashboard /></RouteGuard>} />
       <Route path="/blog" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Blog /></RouteGuard>} />

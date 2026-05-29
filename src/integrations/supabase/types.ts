@@ -3164,6 +3164,164 @@ export type Database = {
         }
         Relationships: []
       }
+      social_post_platforms: {
+        Row: {
+          caption: string | null
+          created_at: string
+          enabled: boolean
+          error_message: string | null
+          external_post_id: string | null
+          external_url: string | null
+          id: string
+          platform: string
+          post_id: string
+          posted_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          enabled?: boolean
+          error_message?: string | null
+          external_post_id?: string | null
+          external_url?: string | null
+          id?: string
+          platform: string
+          post_id: string
+          posted_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          enabled?: boolean
+          error_message?: string | null
+          external_post_id?: string | null
+          external_url?: string | null
+          id?: string
+          platform?: string
+          post_id?: string
+          posted_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_post_platforms_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "social_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_post_settings: {
+        Row: {
+          auto_approve_after_hours: number
+          facebook_enabled: boolean
+          id: number
+          instagram_enabled: boolean
+          mode: string
+          post_time_local: string
+          recent_skip_days: number
+          tiktok_enabled: boolean
+          timezone: string
+          updated_at: string
+          x_enabled: boolean
+        }
+        Insert: {
+          auto_approve_after_hours?: number
+          facebook_enabled?: boolean
+          id?: number
+          instagram_enabled?: boolean
+          mode?: string
+          post_time_local?: string
+          recent_skip_days?: number
+          tiktok_enabled?: boolean
+          timezone?: string
+          updated_at?: string
+          x_enabled?: boolean
+        }
+        Update: {
+          auto_approve_after_hours?: number
+          facebook_enabled?: boolean
+          id?: number
+          instagram_enabled?: boolean
+          mode?: string
+          post_time_local?: string
+          recent_skip_days?: number
+          tiktok_enabled?: boolean
+          timezone?: string
+          updated_at?: string
+          x_enabled?: boolean
+        }
+        Relationships: []
+      }
+      social_posts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          image_path: string | null
+          image_url: string | null
+          posted_at: string | null
+          rejected_reason: string | null
+          reviewed_by: string | null
+          scheduled_for: string | null
+          share_card_id: string | null
+          share_url: string | null
+          stat_key: string | null
+          stat_payload: Json | null
+          status: string
+          subject_id: string
+          subject_label: string | null
+          subject_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          posted_at?: string | null
+          rejected_reason?: string | null
+          reviewed_by?: string | null
+          scheduled_for?: string | null
+          share_card_id?: string | null
+          share_url?: string | null
+          stat_key?: string | null
+          stat_payload?: Json | null
+          status?: string
+          subject_id: string
+          subject_label?: string | null
+          subject_type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          posted_at?: string | null
+          rejected_reason?: string | null
+          reviewed_by?: string | null
+          scheduled_for?: string | null
+          share_card_id?: string | null
+          share_url?: string | null
+          stat_key?: string | null
+          stat_payload?: Json | null
+          status?: string
+          subject_id?: string
+          subject_label?: string | null
+          subject_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       static_officials: {
         Row: {
           bio: string | null
