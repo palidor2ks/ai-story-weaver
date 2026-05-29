@@ -68,38 +68,45 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
   requestCount++;
   
   for (let attempt = 0; attempt < retries; attempt++) {
+    // Hard wall-clock budget: never let retries push the function past the 150s idle limit.
+    const elapsed = Date.now() - requestStartTime;
+    if (elapsed > HARD_DEADLINE_MS) {
+      throw new Error(`Aborting fetch: hard deadline reached (${elapsed}ms elapsed)`);
+    }
+    const remaining = HARD_DEADLINE_MS - elapsed;
+    const perFetchTimeout = Math.min(20000, Math.max(3000, remaining - 1000));
+
     try {
-      // Per-request timeout to avoid hitting the 150s function idle limit on a single hung call
-      const response = await fetch(url, { ...options, signal: AbortSignal.timeout(20000) });
-      
+      const response = await fetch(url, { ...options, signal: AbortSignal.timeout(perFetchTimeout) });
+
       if (response.status === 429) {
-        // LONGER backoff specifically for rate limits
-        const backoffMs = RATE_LIMIT_BACKOFF_MS * Math.pow(1.5, attempt);
+        const backoffMs = Math.min(RATE_LIMIT_BACKOFF_MS * Math.pow(1.5, attempt), remaining - 2000);
+        if (backoffMs <= 0 || attempt >= retries - 1) {
+          hitRateLimitDuringRequest = true;
+          lastRateLimitBackoffMs = 0;
+          return response; // give up gracefully instead of busting the idle limit
+        }
         console.log(`[FEC-DONORS] Rate limited (429), backing off ${Math.round(backoffMs/1000)}s...`);
-        
-        // Track that we hit a rate limit for the response
         hitRateLimitDuringRequest = true;
         lastRateLimitBackoffMs = backoffMs;
-        
-        // Reset the minute counter to force additional waiting
         requestCount = MAX_REQUESTS_PER_MINUTE;
-        
         await new Promise(resolve => setTimeout(resolve, backoffMs));
         continue;
       }
-      
+
       if (response.status >= 500 && attempt < retries - 1) {
-        // Server error - retry with backoff
-        const backoffMs = RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt);
+        const backoffMs = Math.min(RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt), remaining - 2000);
+        if (backoffMs <= 0) return response;
         console.log(`[FEC-DONORS] Server error ${response.status}, retrying in ${backoffMs}ms...`);
         await new Promise(resolve => setTimeout(resolve, backoffMs));
         continue;
       }
-      
+
       return response;
     } catch (error) {
       if (attempt < retries - 1) {
-        const backoffMs = RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt);
+        const backoffMs = Math.min(RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt), remaining - 2000);
+        if (backoffMs <= 0) throw error;
         console.log(`[FEC-DONORS] Fetch error, retrying in ${backoffMs}ms:`, error);
         await new Promise(resolve => setTimeout(resolve, backoffMs));
         continue;
@@ -107,7 +114,7 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
       throw error;
     }
   }
-  
+
   throw new Error('Max retries exceeded');
 }
 
