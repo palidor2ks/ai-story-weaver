@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, useDeferredValue } from 'react';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { CandidateCard } from '@/components/CandidateCard';
@@ -11,10 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X } from 'lucide-react';
+import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X, Loader2 } from 'lucide-react';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
 import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
+
+const PAGE_SIZE = 60;
 
 
 export const Candidates = () => {
@@ -60,22 +62,35 @@ export const Candidates = () => {
   }, []);
 
   const allCandidates = unified.all;
-  const myRepsCombined = unified.myReps.concat(
-    unified.federalExec,
-    unified.stateExec,
-    unified.stateLeg,
-    unified.local,
-  ).filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i);
   const federalExecutiveCandidates = unified.federalExec;
   const stateExecutiveCandidates = unified.stateExec;
   const stateLegislativeCandidates = unified.stateLeg;
   const localCandidates = unified.local;
 
-  // Get unique offices for filter
-  const uniqueOffices = useMemo(() => {
-    const offices = new Set(allCandidates.map(c => c.office));
-    return Array.from(offices).sort();
+  const myRepsCombined = useMemo(() => {
+    const combined = unified.myReps.concat(
+      unified.federalExec,
+      unified.stateExec,
+      unified.stateLeg,
+      unified.local,
+    );
+    return combined.filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i);
+  }, [unified.myReps, unified.federalExec, unified.stateExec, unified.stateLeg, unified.local]);
+
+  // Pre-compute office counts once instead of filtering allCandidates per tab label
+  const officeCounts = useMemo(() => {
+    let senator = 0;
+    let rep = 0;
+    const offices = new Set<string>();
+    for (const c of allCandidates) {
+      offices.add(c.office);
+      if (c.office === 'Senator') senator++;
+      else if (c.office === 'Representative') rep++;
+    }
+    return { senator, rep, uniqueOffices: Array.from(offices).sort() };
   }, [allCandidates]);
+
+  const uniqueOffices = officeCounts.uniqueOffices;
 
   // Get candidates based on active tab
   const tabCandidates = useMemo(() => {
@@ -136,13 +151,43 @@ export const Candidates = () => {
     return result;
   }, [searchQuery, sortBy, partyFilter, officeFilter, tabCandidates, profile, isHidden]);
 
-  const visibleIds = useMemo(
-    () => filteredCandidates.slice(0, 120).map((c) => c.id),
-    [filteredCandidates],
-  );
-  const { data: ieMap } = useCandidatesIE(visibleIds);
+  // Incremental rendering: only mount the first N cards, grow on scroll
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [activeTab, searchQuery, partyFilter, officeFilter, sortBy]);
 
-  const isLoading = profileLoading || unified.isLoading;
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    if (visibleCount >= filteredCandidates.length) return;
+    const el = sentinelRef.current;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        setVisibleCount((n) => Math.min(n + PAGE_SIZE, filteredCandidates.length));
+      }
+    }, { rootMargin: '600px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visibleCount, filteredCandidates.length]);
+
+  const visibleCandidates = useMemo(
+    () => filteredCandidates.slice(0, visibleCount),
+    [filteredCandidates, visibleCount],
+  );
+
+  // Defer IE lookup so typing/filter changes don't synchronously refire
+  const visibleIds = useMemo(
+    () => visibleCandidates.map((c) => c.id),
+    [visibleCandidates],
+  );
+  const deferredVisibleIds = useDeferredValue(visibleIds);
+  const { data: ieMap } = useCandidatesIE(deferredVisibleIds);
+
+  // Only block the page on the fast sources (DB + all-Congress when requested).
+  // Civic + address-based reps stream in progressively.
+  const coreLoading = unified.dbLoading || unified.allLoading || profileLoading;
+  const reposLoading = unified.civicLoading || unified.repsLoading;
 
   // Count for tabs
   const executiveCount = federalExecutiveCandidates.length + stateExecutiveCandidates.length;
@@ -150,7 +195,7 @@ export const Candidates = () => {
   const localCount = localCandidates.length;
 
 
-  if (isLoading) {
+  if (coreLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
@@ -216,11 +261,11 @@ export const Candidates = () => {
             </TabsTrigger>
             <TabsTrigger value="senators" className="gap-2">
               <Users className="w-4 h-4 hidden sm:inline" />
-              Senators ({allCandidates.filter(c => c.office === 'Senator').length})
+              Senators ({officeCounts.senator})
             </TabsTrigger>
             <TabsTrigger value="representatives" className="gap-2">
               <Users className="w-4 h-4 hidden sm:inline" />
-              House ({allCandidates.filter(c => c.office === 'Representative').length})
+              House ({officeCounts.rep})
             </TabsTrigger>
             <TabsTrigger value="state" className="gap-2">
               <Landmark className="w-4 h-4 hidden sm:inline" />
@@ -321,22 +366,30 @@ export const Candidates = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <p className="text-sm text-muted-foreground">
-            Showing {filteredCandidates.length} politician{filteredCandidates.length !== 1 ? 's' : ''}
+            Showing {Math.min(visibleCount, filteredCandidates.length)} of {filteredCandidates.length} politician{filteredCandidates.length !== 1 ? 's' : ''}
           </p>
-          {compareMode && (
-            <p className="text-sm text-primary font-medium">
-              {selectedCandidates.length}/4 selected for comparison
-            </p>
-          )}
+          <div className="flex items-center gap-3">
+            {reposLoading && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading your representatives…
+              </span>
+            )}
+            {compareMode && (
+              <p className="text-sm text-primary font-medium">
+                {selectedCandidates.length}/4 selected for comparison
+              </p>
+            )}
+          </div>
         </div>
 
         <div className={cn(
           "grid gap-4 md:grid-cols-2 lg:grid-cols-3",
-          compareMode && compareReady && selectedCandidates.length > 0 && "pb-[80vh] sm:pb-48" // Space for compare panel (taller on mobile)
+          compareMode && compareReady && selectedCandidates.length > 0 && "pb-[80vh] sm:pb-48"
         )}>
-          {filteredCandidates.map((candidate, index) => (
+          {visibleCandidates.map((candidate, index) => (
             <CandidateCard 
               key={candidate.id} 
               candidate={candidate}
@@ -348,6 +401,12 @@ export const Candidates = () => {
             />
           ))}
         </div>
+
+        {visibleCount < filteredCandidates.length && (
+          <div ref={sentinelRef} className="flex justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        )}
 
         {filteredCandidates.length === 0 && (
           <div className="text-center py-16">
