@@ -176,6 +176,10 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
     return { isContribution: true, isTransfer: false, receiptType: 'contribution', contributionCategory };
   } else if (isLine12) {
     return { isContribution: true, isTransfer: true, receiptType: 'transfer', contributionCategory: 'other' };
+  } else if (isLine14) {
+    // Line 14 = Refunds, Rebates, Returns of Federal Contributions (vendor refunds /
+    // committee returns). NOT a real contribution — exclude from donor lists.
+    return { isContribution: false, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
   } else if (isLine15) {
     // Line 15 = Offsets to Operating Expenditures (vendor refunds/rebates).
     // NOT a real contribution — flag as vendor refund so it stays out of donor lists.
