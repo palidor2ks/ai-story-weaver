@@ -114,6 +114,7 @@ async function main() {
   // Intentionally omitted from sitemap (auth-only or private):
   //   /donor/:id        — RLS authenticated-only, >1M rows, not indexable
   //   /profile          — user's own profile, requires auth
+  //   /quiz             — requires auth + completed onboarding
   //   /admin, /admin/*  — admin-only surfaces, not for public crawlers
   //   /admin/users/:id  — admin-only
   //   /admin/x-composer — admin-only
