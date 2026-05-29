@@ -9,12 +9,15 @@ const corsHeaders = {
 };
 
 // Rate limiting constants - MORE CONSERVATIVE to reduce 429 errors
-const MAX_REQUESTS_PER_MINUTE = 30; // Reduced from 45 for better rate limit safety
-const REQUEST_DELAY_MS = 350; // Increased from 200 for smoother pacing
+const MAX_REQUESTS_PER_MINUTE = 30;
+const REQUEST_DELAY_MS = 350;
 const MAX_RUNTIME_MS = 25000; // 25 seconds - safe margin to avoid WORKER_LIMIT
-const MAX_RETRIES = 5; // Increased from 3 for better resilience
-const RETRY_BACKOFF_BASE_MS = 3000; // Increased from 2000
-const RATE_LIMIT_BACKOFF_MS = 15000; // 15 second backoff specifically for 429 errors
+const MAX_RETRIES = 3; // Lowered from 5: backoff math could exceed the 150s idle limit
+const RETRY_BACKOFF_BASE_MS = 2000;
+const RATE_LIMIT_BACKOFF_MS = 8000; // Lowered from 15000 for the same reason
+// Hard ceiling enforced inside fetchWithRetry so a single retry chain cannot blow the 150s budget
+const HARD_DEADLINE_MS = 130000;
+let requestStartTime = Date.now();
 
 /**
  * Get the date range for a given FEC election cycle.
