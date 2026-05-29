@@ -437,6 +437,8 @@ serve(async (req) => {
             // Overall delta
             delta_amount: deltaAmount,
             delta_pct: deltaPct,
+            total_receipts_delta_amount: totalReceiptsDeltaAmount,
+            total_receipts_delta_pct: totalReceiptsDeltaPct,
             status,
             checked_at: new Date().toISOString()
           }, { onConflict: 'candidate_id,cycle' });
