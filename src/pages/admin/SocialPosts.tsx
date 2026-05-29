@@ -448,6 +448,31 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
             Approve &amp; Post Now
           </Button>
         </div>
+
+        {/* Offscreen full-fidelity card (matches the rep-profile share card) */}
+        {cardData && (
+          <div
+            aria-hidden
+            style={{
+              position: 'fixed',
+              left: -99999,
+              top: 0,
+              width: CARD_SIZE,
+              height: CARD_SIZE,
+              pointerEvents: 'none',
+              opacity: 0,
+            }}
+          >
+            <div
+              ref={(node) => {
+                cardNodeRef.current = node;
+                setCardReady(!!node);
+              }}
+            >
+              <CandidateStatCard data={{ kind: 'candidate-alignment', ...cardData } as any} />
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
