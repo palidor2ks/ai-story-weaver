@@ -665,7 +665,7 @@ serve(async (req) => {
 
       const { data: refreshedCommittees } = await supabase
         .from('candidate_committees')
-        .select('fec_committee_id, designation, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
+        .select('fec_committee_id, designation, last_sync_date, last_contribution_date, last_index, last_sync_completed_at, last_cycle, has_more')
         .eq('candidate_id', candidateId);
 
       (refreshedCommittees || []).forEach(c => {
@@ -674,6 +674,8 @@ serve(async (req) => {
           lastContributionDate: c.last_contribution_date,
           lastIndex: c.last_index,
           lastSyncCompletedAt: c.last_sync_completed_at,
+          lastCycle: c.last_cycle,
+          hasMore: c.has_more,
         });
       });
     }
