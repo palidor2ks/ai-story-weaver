@@ -416,7 +416,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
         </div>
 
         {/* Offscreen full-fidelity card (matches the rep-profile share card) */}
-        {cardData && (
+        {post.subject_type === 'candidate' && (
           <div
             aria-hidden
             style={{
@@ -426,11 +426,10 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
               width: CARD_SIZE,
               height: CARD_SIZE,
               pointerEvents: 'none',
-              opacity: 0,
             }}
           >
-            <div ref={cardNodeRef}>
-              <CandidateStatCard data={{ kind: 'candidate-alignment', ...cardData } as any} />
+            <div ref={cardNodeRef} style={{ width: CARD_SIZE, height: CARD_SIZE }}>
+              {cardData && <CandidateStatCard data={{ kind: 'candidate-alignment', ...cardData } as any} />}
             </div>
           </div>
         )}
