@@ -285,12 +285,23 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
     try {
       // Wait up to 10s for offscreen card data + DOM to settle
       const start = Date.now();
-      while (!(cardReady && cardNodeRef.current && cardData) && Date.now() - start < 10000) {
+      while (
+        !(cardNodeRef.current && cardDataRef.current) &&
+        Date.now() - start < 10000
+      ) {
         await new Promise((r) => setTimeout(r, 150));
       }
-      if (!cardNodeRef.current || !cardData) {
-        throw new Error('Card data not ready — try again in a moment');
+      if (!cardNodeRef.current) {
+        throw new Error('Card renderer did not mount');
       }
+      if (!cardDataRef.current) {
+        throw new Error(
+          cardLoadingRef.current
+            ? 'Card data is still loading — try again'
+            : 'Candidate data not available',
+        );
+      }
+      const liveData = cardDataRef.current;
       const { shareUrl, id, imageUrl } = await captureAndUpload(
         cardNodeRef.current,
         post.subject_id,
