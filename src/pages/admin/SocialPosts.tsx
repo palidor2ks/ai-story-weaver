@@ -66,56 +66,8 @@ interface Settings {
   recent_skip_days: number;
 }
 
-// ---------- Offscreen card renderer ----------
-/**
- * Mounts the full rep-profile share card offscreen, fed by the same hook the
- * rep profile uses. Exposes `capture()` via the imperative handle so the
- * parent's render button can produce a PNG only once data is ready.
- */
-interface HiddenCardRendererHandle {
-  capture: () => Promise<{ shareUrl: string; id: string; imageUrl?: string }>;
-  ready: boolean;
-}
+// ---------- Offscreen card capture ----------
 
-const HiddenCardRenderer = ({
-  candidateId,
-  subjectLabel,
-  onReadyChange,
-  registerRef,
-}: {
-  candidateId: string;
-  subjectLabel: string | null;
-  onReadyChange: (ready: boolean) => void;
-  registerRef: (node: HTMLDivElement | null) => void;
-}) => {
-  const { loading, data } = useCandidateShareCardData(candidateId);
-  const ready = !loading && !!data;
-  useEffect(() => {
-    onReadyChange(ready);
-  }, [ready, onReadyChange]);
-
-  if (!data) return null;
-  const cardData = { kind: 'candidate-alignment' as const, ...data };
-  return (
-    <div
-      aria-hidden
-      style={{
-        position: 'fixed',
-        left: -99999,
-        top: 0,
-        width: CARD_SIZE,
-        height: CARD_SIZE,
-        pointerEvents: 'none',
-        opacity: 0,
-      }}
-    >
-      <div ref={registerRef}>
-        <CandidateStatCard data={cardData as any} />
-      </div>
-      <span className="sr-only">{subjectLabel}</span>
-    </div>
-  );
-};
 
 async function captureAndUpload(
   node: HTMLDivElement,
