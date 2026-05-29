@@ -754,9 +754,13 @@ serve(async (req) => {
     let remainingCommittees = 0;
     
     for (const cmte of committeesToSync) {
-      const hasIncompleteSync = cmte.lastIndex && !cmte.lastSyncCompletedAt;
-      const neverSynced = !cmte.lastSyncCompletedAt;
-      const needsSync = forceFullSync || hasIncompleteSync || neverSynced;
+      // Cursors/completion are scoped to the selected FEC receipt cycle (two-year
+      // transaction period), not the candidate's own election year. A committee
+      // completed for 2024 still needs a fresh 2026 receipt-period sync.
+      const syncMatchesRequestedCycle = cmte.lastCycle === cycle;
+      const hasIncompleteSync = syncMatchesRequestedCycle && cmte.lastIndex && !cmte.lastSyncCompletedAt;
+      const cycleComplete = syncMatchesRequestedCycle && !!cmte.lastSyncCompletedAt && cmte.hasMore !== true;
+      const needsSync = forceFullSync || hasIncompleteSync || !cycleComplete;
       
       if (needsSync) {
         if (!targetCommittee) {
