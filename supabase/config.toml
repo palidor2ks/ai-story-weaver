@@ -145,3 +145,9 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = true
   [functions.post-poll-to-social]
     verify_jwt = true
+  [functions.x-oauth-start]
+    verify_jwt = true
+  [functions.x-oauth-callback]
+    verify_jwt = true
+  [functions.x-post-tweet]
+    verify_jwt = true
