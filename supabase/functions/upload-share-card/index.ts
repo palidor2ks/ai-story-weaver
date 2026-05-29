@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
     if (/[<>"'`\s]/.test(targetUrl)) return json({ error: 'invalid targetUrl characters' }, 400);
     let parsedTarget: URL;
     try { parsedTarget = new URL(targetUrl); } catch { return json({ error: 'invalid targetUrl' }, 400); }
-    const ALLOWED_HOSTS = ['polipulseapp.com', 'polipulse.lovable.app', 'id-preview--b4a499eb-c11a-4320-8adc-dfe50259459a.lovable.app'];
+    const ALLOWED_HOSTS = ['polipulseapp.com', 'polipulse.lovable.app', 'lovable.app', 'lovableproject.com'];
     const host = parsedTarget.hostname.toLowerCase();
     const hostAllowed = ALLOWED_HOSTS.some((d) => host === d || host.endsWith('.' + d));
     if (!hostAllowed) return json({ error: 'targetUrl must be on an allowed domain' }, 400);
