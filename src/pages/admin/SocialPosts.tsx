@@ -207,18 +207,6 @@ function SettingsTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const generateNow = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('pick-daily-stat-card', {
-        body: {},
-        // pass ?force=1
-      });
-      // invoke doesn't pass query params; use direct fetch instead
-      if (error) throw error;
-      return data;
-    },
-  });
-
   const generateForce = useMutation({
     mutationFn: async () => {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pick-daily-stat-card?force=1`;
