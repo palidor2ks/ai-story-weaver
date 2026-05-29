@@ -23,6 +23,7 @@ interface FetchFECIdResult {
 interface FetchDonorsResult {
   success: boolean;
   imported: number;
+  contributionsImported?: number;
   totalRaised?: number;
   cycle?: string;
   message?: string;
@@ -86,6 +87,32 @@ interface SyncAllProgress {
   startTime: number;
 }
 
+
+interface ReceiptSyncAttemptLog {
+  id: string;
+  candidateId: string;
+  candidateName: string;
+  attempt: number;
+  status: 'success' | 'failed' | 'skipped' | 'totals_refreshed' | 'totals_failed';
+  receiptsAttempted: number;
+  receiptsImported: number;
+  startedAt: string;
+  finishedAt: string;
+  hasMore?: boolean;
+  hitRateLimit?: boolean;
+  error?: string;
+}
+
+interface ReceiptSyncRunResult {
+  attemptedCandidates: number;
+  completedCandidates: number;
+  failedCandidates: number;
+  skippedCandidates: number;
+  totalReceiptsAttempted: number;
+  totalImported: number;
+  attempts: ReceiptSyncAttemptLog[];
+}
+
 export function useFECIntegration() {
   // All useState hooks must be in consistent order
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
@@ -103,6 +130,8 @@ export function useFECIntegration() {
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [syncAllProgress, setSyncAllProgress] = useState<SyncAllProgress | null>(null);
   const [totalsProgress, setTotalsProgress] = useState<{ current: number; total: number } | null>(null);
+  const [receiptSyncLog, setReceiptSyncLog] = useState<ReceiptSyncAttemptLog[]>([]);
+  const [isReceiptViewSyncRunning, setIsReceiptViewSyncRunning] = useState(false);
   const cancelSyncAllRef = useRef(false);
 
   const isLoading = (candidateId: string) => loadingIds.has(candidateId);
@@ -961,6 +990,122 @@ export function useFECIntegration() {
     }
   };
 
+  const appendReceiptSyncLog = (entry: ReceiptSyncAttemptLog) => {
+    setReceiptSyncLog(prev => [entry, ...prev].slice(0, 500));
+  };
+
+  const clearReceiptSyncLog = () => setReceiptSyncLog([]);
+
+  const syncReceiptsForCandidates = async (
+    candidates: Array<{ id: string; name: string; fecCandidateId?: string | null }>,
+    cycle = '2024'
+  ): Promise<ReceiptSyncRunResult> => {
+    const runnableCandidates = candidates.filter(c => !!c.fecCandidateId);
+    const result: ReceiptSyncRunResult = {
+      attemptedCandidates: runnableCandidates.length,
+      completedCandidates: 0,
+      failedCandidates: 0,
+      skippedCandidates: candidates.length - runnableCandidates.length,
+      totalReceiptsAttempted: 0,
+      totalImported: 0,
+      attempts: []
+    };
+
+    if (runnableCandidates.length === 0) {
+      return result;
+    }
+
+    setIsReceiptViewSyncRunning(true);
+    setBatchProgress({ current: 0, total: runnableCandidates.length, currentName: 'Starting receipt sync...' });
+
+    try {
+      for (let i = 0; i < runnableCandidates.length; i++) {
+        const candidate = runnableCandidates[i];
+        let hasMore = true;
+        let attempt = 0;
+        let candidateFailed = false;
+        const maxAttempts = 500;
+
+        setBatchProgress({ current: i + 1, total: runnableCandidates.length, currentName: candidate.name });
+
+        while (hasMore && attempt < maxAttempts) {
+          attempt++;
+          const startedAt = new Date().toISOString();
+
+          const syncResult = await fetchFECDonorsSingle(
+            candidate.id,
+            candidate.fecCandidateId!,
+            cycle,
+            false,
+            false
+          );
+
+          const finishedAt = new Date().toISOString();
+          const entry: ReceiptSyncAttemptLog = {
+            id: `${candidate.id}-${startedAt}-${attempt}`,
+            candidateId: candidate.id,
+            candidateName: candidate.name,
+            attempt,
+            status: syncResult.success ? 'success' : 'failed',
+            receiptsAttempted: syncResult.contributionsImported ?? 10000,
+            receiptsImported: syncResult.contributionsImported ?? syncResult.imported ?? 0,
+            startedAt,
+            finishedAt,
+            hasMore: syncResult.hasMore === true,
+            hitRateLimit: syncResult.hitRateLimit === true,
+            error: syncResult.error
+          };
+          appendReceiptSyncLog(entry);
+          result.attempts.push(entry);
+          result.totalReceiptsAttempted += entry.receiptsAttempted;
+          result.totalImported += entry.receiptsImported;
+
+          if (!syncResult.success) {
+            candidateFailed = true;
+            break;
+          }
+
+          hasMore = syncResult.hasMore === true;
+
+          if (hasMore) {
+            await new Promise(resolve => setTimeout(resolve, syncResult.hitRateLimit ? 2000 : 750));
+          }
+        }
+
+        const totalsStartedAt = new Date().toISOString();
+        const totalsResult = await refreshFECTotals(candidate.id, cycle);
+        const totalsEntry: ReceiptSyncAttemptLog = {
+          id: `${candidate.id}-${totalsStartedAt}-totals`,
+          candidateId: candidate.id,
+          candidateName: candidate.name,
+          attempt,
+          status: totalsResult.success ? 'totals_refreshed' : 'totals_failed',
+          receiptsAttempted: 0,
+          receiptsImported: 0,
+          startedAt: totalsStartedAt,
+          finishedAt: new Date().toISOString(),
+          hasMore,
+          error: totalsResult.error
+        };
+        appendReceiptSyncLog(totalsEntry);
+        result.attempts.push(totalsEntry);
+
+        if (candidateFailed || hasMore) {
+          result.failedCandidates++;
+        } else {
+          result.completedCandidates++;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      return result;
+    } finally {
+      setIsReceiptViewSyncRunning(false);
+      setBatchProgress(null);
+    }
+  };
+
   // Batch refresh FEC totals for multiple candidates
   const batchRefreshFECTotals = async (
     candidateIds: string[],
@@ -1008,6 +1153,8 @@ export function useFECIntegration() {
     forceResyncDonors,
     refreshFECTotals,
     batchRefreshFECTotals,
+    syncReceiptsForCandidates,
+    clearReceiptSyncLog,
     isLoading,
     isDonorLoading,
     isCommitteeLoading,
@@ -1019,6 +1166,8 @@ export function useFECIntegration() {
     syncProgress,
     syncAllProgress,
     totalsProgress,
+    receiptSyncLog,
+    isReceiptViewSyncRunning,
     isBatchRunning: batchProgress !== null,
     isSyncAllRunning: syncAllProgress?.isRunning === true,
     isTotalsRefreshing: totalsProgress !== null,
