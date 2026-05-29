@@ -346,6 +346,10 @@ export const useUnifiedCandidates = ({
       dbOnly,
       isLoading: dbLoading || allLoading || repsLoading || civicLoading,
       isAddressLoading: repsLoading || civicLoading,
+      dbLoading,
+      allLoading,
+      repsLoading,
+      civicLoading,
     };
   }, [
     dbCandidates,
