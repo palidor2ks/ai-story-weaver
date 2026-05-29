@@ -250,10 +250,13 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
   // the underlying hooks pre-fetch donor/finance/IE data — by the time the
   // admin clicks "Render", the DOM node is ready to capture.
   const cardNodeRef = useRef<HTMLDivElement | null>(null);
-  const [cardReady, setCardReady] = useState(false);
-  const { data: cardData } = useCandidateShareCardData(
+  const { data: cardData, loading: cardLoading } = useCandidateShareCardData(
     post.subject_type === 'candidate' ? post.subject_id : null,
   );
+  const cardDataRef = useRef(cardData);
+  const cardLoadingRef = useRef(cardLoading);
+  useEffect(() => { cardDataRef.current = cardData; }, [cardData]);
+  useEffect(() => { cardLoadingRef.current = cardLoading; }, [cardLoading]);
 
   const updatePlatform = async (id: string, patch: Partial<PlatformRow>) => {
     setLocalPlatforms((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
@@ -282,19 +285,30 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
     try {
       // Wait up to 10s for offscreen card data + DOM to settle
       const start = Date.now();
-      while (!(cardReady && cardNodeRef.current && cardData) && Date.now() - start < 10000) {
+      while (
+        !(cardNodeRef.current && cardDataRef.current) &&
+        Date.now() - start < 10000
+      ) {
         await new Promise((r) => setTimeout(r, 150));
       }
-      if (!cardNodeRef.current || !cardData) {
-        throw new Error('Card data not ready — try again in a moment');
+      if (!cardNodeRef.current) {
+        throw new Error('Card renderer did not mount');
       }
+      if (!cardDataRef.current) {
+        throw new Error(
+          cardLoadingRef.current
+            ? 'Card data is still loading — try again'
+            : 'Candidate data not available',
+        );
+      }
+      const liveData = cardDataRef.current;
       const { shareUrl, id, imageUrl } = await captureAndUpload(
         cardNodeRef.current,
         post.subject_id,
         {
-          candidateName: cardData.candidateName,
-          candidateOffice: cardData.candidateOffice,
-          candidateParty: cardData.candidateParty,
+          candidateName: liveData.candidateName,
+          candidateOffice: liveData.candidateOffice,
+          candidateParty: liveData.candidateParty,
         },
       );
       const { error } = await supabase
@@ -415,12 +429,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
               opacity: 0,
             }}
           >
-            <div
-              ref={(node) => {
-                cardNodeRef.current = node;
-                setCardReady(!!node);
-              }}
-            >
+            <div ref={cardNodeRef}>
               <CandidateStatCard data={{ kind: 'candidate-alignment', ...cardData } as any} />
             </div>
           </div>
