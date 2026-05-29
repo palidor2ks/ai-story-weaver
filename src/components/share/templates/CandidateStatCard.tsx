@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useState } from 'react';
 import { CardData, CARD_SIZE, formatScoreSafe } from './types';
 import { PulseMark } from './PulseMark';
+import { proxiedImageUrl } from '@/lib/imageProxy';
 
 interface Props {
   data: CardData;
@@ -158,7 +159,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
             >
               {image && !imgFailed ? (
                 <img
-                  src={image}
+                  src={image.startsWith('data:') ? image : proxiedImageUrl(image)}
                   alt=""
                   crossOrigin="anonymous"
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}

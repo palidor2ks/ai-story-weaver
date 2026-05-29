@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import { CardData, CARD_SIZE, formatScoreSafe, labelSafe } from './types';
 import { PulseMark } from './PulseMark';
+import { proxiedImageUrl } from '@/lib/imageProxy';
 
 interface Props {
   data: CardData;
@@ -51,7 +52,7 @@ export const EditorialCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
       >
         {portrait ? (
           <img
-            src={portrait}
+            src={portrait.startsWith('data:') ? portrait : proxiedImageUrl(portrait)}
             alt=""
             crossOrigin="anonymous"
             style={{

@@ -1,59 +1,41 @@
-## Problem
+## Why the photo is missing
 
-`AUTHENTIC CAMPAIGNS, INC.` is showing up on the donor profile for Schiff for Senate as a $720K donor. It's actually a Democratic political-services **vendor** — the $720K is a refund/rebate of operating expenditures the campaign paid them, not a contribution.
+The Stat Card is falling back to initials ("AK") because the candidate image never resolves to a usable source:
 
-Looking at the `donors` table:
-- 3 rows on FEC Schedule A **Line 14** are flagged `is_contribution: true` and `is_vendor_refund: false` (total ~$731K, including the $720K Schiff row).
-- Other Authentic Campaigns rows on Line 15 / 17 are already correctly flagged as vendor refunds.
+1. `ShareProfileButton` and `useCandidateShareCardData` try to convert the photo URL to a base64 data URL via `imageUrlToBase64`, which does a plain `fetch(url)` in the browser.
+2. The photo URL is almost always `https://bioguide.congress.gov/bioguide/photo/...jpg` (or another external host). Bioguide does **not** send `Access-Control-Allow-Origin`, so the browser blocks the `fetch` → `imageUrlToBase64` throws → `resolvedImage` stays as the raw bioguide URL.
+3. `CandidateStatCard` then renders `<img src={bioguideUrl} crossOrigin="anonymous" />`. Because the response has no CORS header, the browser rejects the load and fires `onError`, flipping `imgFailed = true` → initials fallback.
 
-FEC Schedule A Line 14 = "Refunds, Rebates, Returns of Federal Contributions" — money returned to the committee by vendors / other committees. Our ingestion logic only treats Lines 15/17/17A/17C as vendor refunds, so Line 14 leaks through as a real contribution.
+Net result: every cross-origin candidate photo (Bioguide, most state photo CDNs) silently fails. Only same-origin images (e.g. Supabase Storage on our own project) work today.
 
 ## Fix
 
-### 1. Backend ingestion (code)
+Add a tiny image proxy and route all card image loads through it so the bytes come from our own origin with proper CORS + cache headers.
 
-`supabase/functions/fetch-committee-donors/index.ts`
-- Add `'14'` to `NON_CONTRIBUTION_LINES` and `VENDOR_REFUND_LINES`.
+### 1. New edge function `proxy-image` (public, no JWT)
+- `GET /functions/v1/proxy-image?url=<encoded>`
+- Validates the URL: must be `https://`, hostname in an allowlist (`bioguide.congress.gov`, `*.house.gov`, `*.senate.gov`, `*.supabase.co`, `*.openstates.org`, our storage host).
+- Server-side `fetch` the image; pass `content-type` through (must start with `image/`).
+- Respond with the image bytes plus `Access-Control-Allow-Origin: *`, `Cache-Control: public, max-age=31536000, immutable`.
+- Rejects HTML, redirects to non-allowlisted hosts, and oversized payloads (>3 MB).
 
-`supabase/functions/fetch-fec-donors/index.ts` (`classifyLineNumber`)
-- Add an explicit `isLine14` branch returning `{ isContribution: false, isTransfer: false, receiptType: 'other_receipt' }` so future syncs never re-create the same bad rows.
+### 2. Frontend changes
+- New helper `src/lib/imageProxy.ts` exporting `proxiedImageUrl(url)` — returns the original URL if it's same-origin / data URL, otherwise wraps it as `${SUPABASE_URL}/functions/v1/proxy-image?url=...`.
+- Update both `imageUrlToBase64` implementations (`src/components/ShareProfileButton.tsx` and `src/hooks/useCandidateShareCardData.ts`) to call `proxiedImageUrl(url)` before `fetch`. This makes base64 conversion succeed for Bioguide, so the modal preview and the html-to-image PNG export both embed the real photo.
+- In `CandidateStatCard` (and `EditorialCard`, which also reads `candidateImage`), if `image` is still an http(s) URL at render time (base64 conversion in flight or failed), render `<img src={proxiedImageUrl(image)} ...>` instead of the raw URL. Keep the existing `onError` → initials fallback as a last resort.
 
-### 2. Data backfill (migration)
+### 3. Verification
+- Open a Bioguide-backed candidate (e.g. Andy Kim `K000377`) → Share → Stat Card. Photo should now appear in preview and in the downloaded/posted PNG.
+- Network tab should show one `proxy-image?url=...bioguide...` request returning `200 image/jpeg` with `access-control-allow-origin: *`.
+- Initials fallback still kicks in only when the upstream URL truly 404s.
 
-Update existing rows where `line_number` starts with `'14'`:
+### Files touched
+- `supabase/functions/proxy-image/index.ts` (new)
+- `supabase/config.toml` (register function, `verify_jwt = false`)
+- `src/lib/imageProxy.ts` (new)
+- `src/components/ShareProfileButton.tsx`
+- `src/hooks/useCandidateShareCardData.ts`
+- `src/components/share/templates/CandidateStatCard.tsx`
+- `src/components/share/templates/EditorialCard.tsx`
 
-```sql
-UPDATE public.donors
-SET is_contribution = false,
-    is_vendor_refund = true,
-    amount = 0
-WHERE line_number LIKE '14%'
-  AND (is_contribution = true OR is_vendor_refund = false);
-
-UPDATE public.contributions
-SET is_contribution = false
-WHERE line_number LIKE '14%'
-  AND is_contribution = true;
-```
-
-This is the same pattern used by `cleanup-donor-aggregations` for known conduits — zero the amount and flag the row so it's preserved for audit but excluded from aggregates and the donor profile page.
-
-### 3. Reconciliation refresh
-
-For each affected candidate (Schiff S001150 + the handful of others), re-run finance reconciliation so `local_itemized` / `delta_*` drop the $720K. We can either:
-- Extend `cleanup-donor-aggregations` to also handle Line 14, OR
-- Add a one-shot SQL block in the same migration that recomputes `local_itemized`, `local_itemized_net`, `delta_amount`, `delta_pct`, and `status` for candidates touched by the update (mirroring the function's logic).
-
-I'll go with extending the cleanup function so the same logic is reusable next time a vendor slips through.
-
-## Out of scope
-
-- Building a general "known vendors" list / UI — not needed to fix this bug; the line-number rule covers it.
-- Changing the donor profile UI.
-
-## Verification
-
-After applying:
-- `SELECT amount, is_contribution, is_vendor_refund FROM donors WHERE name ILIKE '%authentic campaigns%' AND candidate_id = 'S001150';` → amount 0, flags corrected.
-- Donor profile for Authentic Campaigns no longer shows Schiff (or any Line 14 row) under Top Recipients / Total Given.
-- Schiff finance reconciliation total drops by ~$720K.
+No DB / schema changes.

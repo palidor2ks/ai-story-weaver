@@ -1,6 +1,8 @@
 project_id = "ornnzinjrcyigazecctf"
 
 [functions]
+  [functions.proxy-image]
+    verify_jwt = false
   [functions.classify-committee-topic]
     verify_jwt = true
   [functions.ai-candidate-explanation]
