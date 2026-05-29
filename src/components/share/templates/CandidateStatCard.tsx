@@ -83,7 +83,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
         height: CARD_SIZE,
         background: cardBg,
         color: textColor,
-        padding: 48,
+        padding: 32,
         fontFamily: 'var(--font-sans, ui-sans-serif, system-ui, sans-serif)',
       }}
     >
@@ -104,7 +104,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
             left: 0,
             right: 0,
             bottom: 0,
-            height: 14,
+            height: 10,
             background: FLAG_RED,
           }}
         />
@@ -113,11 +113,11 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
           style={{
             position: 'relative',
             height: '100%',
-            padding: 40,
-            paddingBottom: 54,
+            padding: 28,
+            paddingBottom: 28,
             display: 'grid',
             gridTemplateRows: 'auto auto auto auto auto 1fr auto',
-            gap: 20,
+            gap: 12,
           }}
         >
           {/* Top brand bar */}
