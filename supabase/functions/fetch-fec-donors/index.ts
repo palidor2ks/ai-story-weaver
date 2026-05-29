@@ -398,7 +398,8 @@ async function fetchFECTotals(fecApiKey: string, committeeId: string, cycle: str
 
 serve(async (req) => {
   const startTime = Date.now();
-  
+  requestStartTime = startTime; // share with fetchWithRetry's hard-deadline guard
+
   // Reset rate limit tracking for this request
   hitRateLimitDuringRequest = false;
   lastRateLimitBackoffMs = 0;
