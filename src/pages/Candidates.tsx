@@ -261,11 +261,11 @@ export const Candidates = () => {
             </TabsTrigger>
             <TabsTrigger value="senators" className="gap-2">
               <Users className="w-4 h-4 hidden sm:inline" />
-              Senators ({allCandidates.filter(c => c.office === 'Senator').length})
+              Senators ({officeCounts.senator})
             </TabsTrigger>
             <TabsTrigger value="representatives" className="gap-2">
               <Users className="w-4 h-4 hidden sm:inline" />
-              House ({allCandidates.filter(c => c.office === 'Representative').length})
+              House ({officeCounts.rep})
             </TabsTrigger>
             <TabsTrigger value="state" className="gap-2">
               <Landmark className="w-4 h-4 hidden sm:inline" />
