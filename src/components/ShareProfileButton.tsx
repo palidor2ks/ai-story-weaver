@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import { proxiedImageUrl } from '@/lib/imageProxy';
+
 const imageUrlToBase64 = async (url: string): Promise<string> => {
-  const response = await fetch(url);
+  const response = await fetch(proxiedImageUrl(url));
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const blob = await response.blob();
   if (blob.type.includes('text/html')) throw new Error('Not an image');

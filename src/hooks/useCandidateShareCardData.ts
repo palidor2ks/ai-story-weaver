@@ -7,12 +7,13 @@ import { useFinanceReconciliation } from '@/hooks/useFinanceReconciliation';
 import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
 import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
+import { proxiedImageUrl } from '@/lib/imageProxy';
 
 const CONDUIT_NAMES = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
 
 async function imageUrlToBase64(url: string): Promise<string | null> {
   try {
-    const r = await fetch(url);
+    const r = await fetch(proxiedImageUrl(url));
     if (!r.ok) return null;
     const blob = await r.blob();
     if (blob.type.includes('text/html')) return null;
