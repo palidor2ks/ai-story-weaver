@@ -1,37 +1,45 @@
-## Plan
+## Goal
 
-Update the committee profile so the highlighted cycle dropdown is the single source of truth for all cycle-specific data on the page.
+Port the fixes from `palidor2ks/ai-story-weaver#116` ("Fix X OAuth connect flow") into PoliPulse. The PR addresses two real issues that also exist here:
 
-### Changes
+1. The token exchange uses a static `X_REDIRECT_URI` env var. If the start phase ever uses a different effective callback URL than the callback phase, X rejects the exchange with a `redirect_uri` mismatch.
+2. Token exchange/refresh hard-requires `X_CLIENT_SECRET`. Public OAuth clients (no secret) cannot connect or refresh.
+3. The admin UI silently swallows failures when loading connected accounts.
 
-1. **Keep one page-level cycle state**
-   - Continue using the existing header cycle dropdown.
-   - Use its `effectiveCycle` everywhere cycle-scoped committee data is loaded or displayed.
+## Changes
 
-2. **Fix summary cards for the selected cycle**
-   - Ensure `Total Raised`, `Unique Donors`, and `Contributions` come from the selected cycle’s `committee_finance_rollups` row.
-   - Keep base committee metadata like name, FEC ID, candidate, badges, and available cycles stable from the unfiltered committee lookup.
-   - Avoid falling back to all-cycle totals when a selected cycle has no rollup row; show zero/empty cycle-scoped values instead.
+### 1. DB migration — store redirect URI on PKCE row
+- New migration adds `redirect_uri text` (nullable) to `public.x_oauth_pending`. No grants/policies change (table already configured).
 
-3. **Fix cycle-sensitive dates**
-   - Make `Last contribution` reflect the latest contribution in the selected cycle.
-   - Keep `Last Sync` as the committee-level sync timestamp unless a reliable cycle-level sync field exists.
+### 2. `supabase/functions/x-oauth-start/index.ts`
+- Accept optional `{ redirect_to }` in the JSON body.
+- Resolve the effective redirect URI in this order: request body `redirect_to` → `X_REDIRECT_URI` env → error.
+- Validate it's a well-formed `https://` (or `http://localhost`) URL.
+- Persist `redirect_uri` on the inserted `x_oauth_pending` row.
+- Use the resolved URI in the `authorize_url` params instead of the env var.
 
-4. **Wire the same cycle into page sections**
-   - Pass the selected cycle to the AI analysis trigger.
-   - Pass the selected cycle into the Independent Expenditures section and remove/disable its separate internal cycle dropdown on the committee profile, so it matches the page filter.
-   - Keep Top Contributors and Donor Details already using the selected cycle, but verify they no longer mismatch the summary cards.
+### 3. `supabase/functions/x-oauth-callback/index.ts`
+- Read `pending.redirect_uri` (fallback to `X_REDIRECT_URI`) and use it for the token exchange `redirect_uri` field.
+- Make `X_CLIENT_SECRET` optional:
+  - If present → keep `Authorization: Basic base64(client_id:client_secret)` header.
+  - If absent → drop the Basic header and rely on `client_id` already in the form body (public client auth).
+- Remove the hard `oauth_not_configured` check on `CLIENT_SECRET`; only require `CLIENT_ID` and a resolvable redirect URI.
 
-5. **Validate against the shown committee**
-   - Check `C00879510` data for 2026 vs 2024:
-     - 2026 receipts: about `$80M`, 4 donors, 25 contributions.
-     - 2024 receipts: about `$316M`, 29 donors, 61 contributions.
-   - Confirm changing the page dropdown changes all cycle-scoped numbers/sections consistently.
+### 4. `supabase/functions/x-post-tweet/index.ts`
+- In `refreshIfNeeded`, build `tokenHeaders` conditionally — include Basic auth only when `CLIENT_SECRET` is set; otherwise send `client_id` in the body alone.
+- Keep all existing refresh + update behavior.
 
-### Files to update
+### 5. `src/pages/admin/XComposer.tsx`
+- In `handleConnect`, pass `{ redirect_to: \`${window.location.origin}/admin/x/callback\` }` (the existing callback route) to the start function so start and callback agree on the URI.
+- In `loadAccounts`, surface the error via `toast.error("Failed to load X accounts", { description: error.message })` instead of silently ignoring it.
 
-- `src/pages/CommitteeProfile.tsx`
-- `src/components/IndependentExpenditureSections.tsx`
-- `src/hooks/useCommittees.ts` if needed to prevent all-cycle fallback for selected cycles and derive selected-cycle contribution dates.
+### 6. `supabase/config.toml`
+- Add explicit `[functions.x-oauth-start]`, `[functions.x-oauth-callback]`, `[functions.x-post-tweet]` entries with `verify_jwt = true` (already enforced in code; this aligns config with the in-code requirement).
 
-No database schema change is needed.
+## Out of scope
+- No changes to `x_account_tokens` schema, RLS, or storage policies.
+- No changes to `discover-representative-x-handles`, `sync-representative-x-posts`, or `x-fetch-user-tweets`.
+- `src/integrations/supabase/types.ts` is regenerated automatically after the migration — not hand-edited.
+
+## Risk / verification
+- After deploy: click "Connect X" in `/admin/x-composer`, complete OAuth, confirm account appears and a test tweet posts. If `X_CLIENT_SECRET` is unset, the same flow should still succeed (public client path).
