@@ -519,6 +519,8 @@ serve(async (req) => {
         if (syncInfo?.lastSyncDate && !existing.lastSyncDate) existing.lastSyncDate = syncInfo.lastSyncDate;
         if (syncInfo?.lastContributionDate && !existing.lastContributionDate) existing.lastContributionDate = syncInfo.lastContributionDate;
         if (syncInfo?.lastSyncCompletedAt && !existing.lastSyncCompletedAt) existing.lastSyncCompletedAt = syncInfo.lastSyncCompletedAt;
+        if (syncInfo?.lastCycle && !existing.lastCycle) existing.lastCycle = syncInfo.lastCycle;
+        if (syncInfo?.hasMore !== undefined && existing.hasMore === undefined) existing.hasMore = syncInfo.hasMore;
         return;
       }
       
