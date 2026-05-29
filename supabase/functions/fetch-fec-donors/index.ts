@@ -497,6 +497,7 @@ serve(async (req) => {
       lastContributionDate?: string;
       lastIndex?: string;
       lastSyncCompletedAt?: string;
+      lastCycle?: string | null;
       hasMore?: boolean;
     }
     
