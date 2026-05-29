@@ -234,11 +234,11 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
             <div>
               <div
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   letterSpacing: 2,
                   textTransform: 'uppercase',
                   color: mutedColor,
-                  marginBottom: 8,
+                  marginBottom: 6,
                   fontWeight: 700,
                 }}
               >
