@@ -532,7 +532,7 @@ serve(async (req) => {
     // Fetch existing committee sync info from database
     const { data: existingCommittees } = await supabase
       .from('candidate_committees')
-      .select('fec_committee_id, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
+      .select('fec_committee_id, last_sync_date, last_contribution_date, last_index, last_sync_completed_at, last_cycle, has_more')
       .eq('candidate_id', candidateId);
 
     const committeeSyncInfo = new Map(
@@ -540,7 +540,9 @@ serve(async (req) => {
         lastSyncDate: c.last_sync_date,
         lastContributionDate: c.last_contribution_date,
         lastIndex: c.last_index,
-        lastSyncCompletedAt: c.last_sync_completed_at
+        lastSyncCompletedAt: c.last_sync_completed_at,
+        lastCycle: c.last_cycle,
+        hasMore: c.has_more
       }])
     );
 
