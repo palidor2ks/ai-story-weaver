@@ -241,6 +241,7 @@ export const Candidates = () => {
               placeholder="Search by name, state, or office..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search politicians"
               className="pl-10"
             />
           </div>
