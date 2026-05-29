@@ -368,6 +368,16 @@ serve(async (req) => {
         const effectiveLoans = Math.max(localLoans, fecLoans);
         const effectiveOther = Math.max(localOther, fecOtherReceipts + fecOffsetsToOperatingExpenditures);
         const localTotal = localItemized + effectiveTransfers + effectiveLoans + effectiveOther;
+
+        // Total receipts delta (apples-to-apples with FEC Total Receipts, includes FEC-only items)
+        const localTotalReceipts = localItemized + effectiveTransfers + effectiveLoans + effectiveOther
+          + (fecUnitemized || 0) + (fecCandidateContribution || 0);
+        const totalReceiptsDeltaAmount = fecTotalReceipts > 0
+          ? Math.round(localTotalReceipts - fecTotalReceipts)
+          : null;
+        const totalReceiptsDeltaPct = fecTotalReceipts > 0
+          ? ((localTotalReceipts - fecTotalReceipts) / fecTotalReceipts) * 100
+          : null;
         
         // Compare local vs FEC at the comparable itemized level
         // Use (gross individual + organization) for Line 11A, matching FEC individual_itemized
@@ -427,6 +437,8 @@ serve(async (req) => {
             // Overall delta
             delta_amount: deltaAmount,
             delta_pct: deltaPct,
+            total_receipts_delta_amount: totalReceiptsDeltaAmount,
+            total_receipts_delta_pct: totalReceiptsDeltaPct,
             status,
             checked_at: new Date().toISOString()
           }, { onConflict: 'candidate_id,cycle' });

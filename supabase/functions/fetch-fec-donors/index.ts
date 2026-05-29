@@ -1633,6 +1633,18 @@ serve(async (req) => {
     // Overall status based on individual comparison (apples-to-apples)
     const deltaAmount = individualDeltaAmount; // Use individual delta for status
     const deltaPct = individualDeltaPct;
+
+    // Total receipts delta — compare local total (including FEC-only unitemized) vs FEC total receipts.
+    // We don't have FEC transfers/loans/other breakdown in this function, so we fall back to local values
+    // alone for those line items. refresh-fec-totals later overwrites with the fuller calc when it runs.
+    const localTotalReceiptsForDelta = totalLocalItemized + totalLocalTransfers + (totalFecUnitemized || 0);
+    const totalReceiptsDeltaAmount = totalFecReceipts > 0
+      ? Math.round(localTotalReceiptsForDelta - totalFecReceipts)
+      : null;
+    const totalReceiptsDeltaPct = totalFecReceipts > 0
+      ? ((localTotalReceiptsForDelta - totalFecReceipts) / totalFecReceipts) * 100
+      : null;
+
     let status = 'ok';
     if (Math.abs(deltaPct) > 10) status = 'error';
     else if (Math.abs(deltaPct) > 5) status = 'warning';
@@ -1664,6 +1676,8 @@ serve(async (req) => {
         pac_delta_pct: pacDeltaPct,
         delta_amount: deltaAmount,
         delta_pct: deltaPct,
+        total_receipts_delta_amount: totalReceiptsDeltaAmount,
+        total_receipts_delta_pct: totalReceiptsDeltaPct,
         status,
         checked_at: new Date().toISOString()
       }, { onConflict: 'candidate_id,cycle' });

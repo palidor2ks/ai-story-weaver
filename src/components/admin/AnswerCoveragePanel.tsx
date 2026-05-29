@@ -2613,8 +2613,8 @@ export function AnswerCoveragePanel() {
                           </TableCell>
                           <TableCell className="px-2 py-2 whitespace-nowrap">
                             <DeltaBadge
-                              deltaAmount={candidate.totalReceiptsDeltaAmount ?? calculatedDelta}
-                              deltaPct={candidate.totalReceiptsDeltaPct ?? calculatedDeltaPct}
+                              deltaAmount={calculatedDelta ?? candidate.totalReceiptsDeltaAmount}
+                              deltaPct={calculatedDeltaPct ?? candidate.totalReceiptsDeltaPct}
                               itemizedDeltaAmount={candidate.deltaAmount}
                               itemizedDeltaPct={candidate.deltaPct}
                               individualDeltaPct={candidate.individualDeltaPct}
