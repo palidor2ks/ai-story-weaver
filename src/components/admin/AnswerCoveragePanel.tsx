@@ -93,8 +93,8 @@ function getCoverageColor(percent: number) {
 /**
  * Get the date range description for a given FEC election cycle.
  * FEC cycles are 2-year periods ending in even years:
- * - Cycle 2026 = Jan 1, 2023 - Dec 31, 2024
- * - Cycle 2022 = Jan 1, 2021 - Dec 31, 2022
+ * - Cycle 2026 = Jan 1, 2025 - Dec 31, 2026
+ * - Cycle 2024 = Jan 1, 2023 - Dec 31, 2024
  */
 function getCycleDateRange(cycle: string): string {
   const cycleYear = parseInt(cycle);
