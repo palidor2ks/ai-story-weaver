@@ -863,10 +863,13 @@ serve(async (req) => {
     let lastIndex: string | null = null;
     let lastContributionDate: string | null = null;
     
-    if (resumeFromCursor && !forceFullSync && targetCommittee.lastIndex && targetCommittee.lastContributionDate) {
+    const cursorMatchesRequestedCycle = targetCommittee.lastCycle === cycle;
+    if (resumeFromCursor && !forceFullSync && cursorMatchesRequestedCycle && targetCommittee.lastIndex && targetCommittee.lastContributionDate) {
       lastIndex = targetCommittee.lastIndex;
       lastContributionDate = targetCommittee.lastContributionDate;
-      console.log(`[FEC-DONORS] Resuming ${committeeId} from cursor: ${lastIndex}`);
+      console.log(`[FEC-DONORS] Resuming ${committeeId} from ${cycle} receipt-period cursor: ${lastIndex}`);
+    } else if (resumeFromCursor && !forceFullSync && targetCommittee.lastIndex && !cursorMatchesRequestedCycle) {
+      console.log(`[FEC-DONORS] Ignoring saved cursor for ${committeeId}; cursor cycle ${targetCommittee.lastCycle || 'unknown'} does not match requested receipt cycle ${cycle}`);
     }
 
     // Per-committee aggregation - accumulates across all pages
