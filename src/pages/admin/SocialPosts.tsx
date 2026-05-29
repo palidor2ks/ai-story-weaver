@@ -21,6 +21,7 @@ import { CandidateStatCard } from '@/components/share/templates/CandidateStatCar
 import { CARD_SIZE } from '@/components/share/templates/types';
 import { nodeToBlob } from '@/lib/shareImage';
 import { uploadShareCard } from '@/lib/shareUpload';
+import { useCandidateShareCardData } from '@/hooks/useCandidateShareCardData';
 
 const PLATFORMS = ['x', 'facebook', 'instagram', 'tiktok'] as const;
 type Platform = (typeof PLATFORMS)[number];
@@ -65,81 +66,24 @@ interface Settings {
   recent_skip_days: number;
 }
 
-// ---------- Offscreen card renderer ----------
-async function imageToDataUrl(url: string): Promise<string | null> {
-  try {
-    const r = await fetch(url);
-    if (!r.ok) return null;
-    const blob = await r.blob();
-    if (blob.type.includes('text/html')) return null;
-    return await new Promise<string>((res, rej) => {
-      const fr = new FileReader();
-      fr.onloadend = () => res(fr.result as string);
-      fr.onerror = rej;
-      fr.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
+// ---------- Offscreen card capture ----------
 
-async function renderAndUpload(post: SocialPost): Promise<{ shareUrl: string; id: string; imageUrl?: string }> {
-  const stat = post.stat_payload ?? {};
-  // fetch candidate row for image
-  const { data: cand } = await supabase
-    .from('candidates')
-    .select('image_url, name, office, party, coverage_tier, confidence, is_incumbent')
-    .eq('id', post.subject_id)
-    .maybeSingle();
 
-  const image = cand?.image_url ? await imageToDataUrl(cand.image_url) : null;
-  const brandHost = window.location.host.replace(/^www\./, '');
-
-  // Create hidden container
-  const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.left = '-99999px';
-  container.style.top = '0';
-  container.style.width = `${CARD_SIZE}px`;
-  container.style.height = `${CARD_SIZE}px`;
-  document.body.appendChild(container);
-
-  try {
-    const { createRoot } = await import('react-dom/client');
-    const root = createRoot(container);
-    const data: any = {
-      kind: 'candidate-alignment',
-      brandHost,
-      candidateName: cand?.name ?? post.subject_label ?? 'Candidate',
-      candidateOffice: cand?.office ?? stat.office ?? '',
-      candidateParty: cand?.party ?? stat.party ?? '',
-      candidateImage: image,
-      candidateScore: stat.overall_score ?? null,
-      userScore: null,
-      matchScore: 0,
-      agreements: [],
-      disagreements: [],
-      incumbent: cand?.is_incumbent,
-      coverageTier: cand?.coverage_tier,
-      confidence: cand?.confidence,
-    };
-    root.render(<CandidateStatCard data={data} />);
-    // wait for paint
-    await new Promise((r) => setTimeout(r, 600));
-
-    const blob = await nodeToBlob(container.firstElementChild as HTMLElement);
-    const profileUrl = `${window.location.origin}/candidate/${encodeURIComponent(post.subject_id)}`;
-    const result = await uploadShareCard({
-      blob,
-      targetUrl: profileUrl,
-      ogTitle: `${data.candidateName} — PoliPulse`,
-      ogDescription: `${data.candidateOffice}${data.candidateParty ? ' • ' + data.candidateParty : ''}`,
-    });
-    root.unmount();
-    return result;
-  } finally {
-    document.body.removeChild(container);
-  }
+async function captureAndUpload(
+  node: HTMLDivElement,
+  subjectId: string,
+  data: { candidateName: string; candidateOffice: string; candidateParty: string },
+): Promise<{ shareUrl: string; id: string; imageUrl?: string }> {
+  // Give web fonts / images a tick to settle
+  await new Promise((r) => setTimeout(r, 250));
+  const blob = await nodeToBlob(node);
+  const profileUrl = `${window.location.origin}/candidate/${encodeURIComponent(subjectId)}`;
+  return await uploadShareCard({
+    blob,
+    targetUrl: profileUrl,
+    ogTitle: `${data.candidateName} — PoliPulse`,
+    ogDescription: `${data.candidateOffice}${data.candidateParty ? ' • ' + data.candidateParty : ''}`,
+  });
 }
 
 // ---------- Hooks ----------
@@ -302,6 +246,15 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
   const [localPlatforms, setLocalPlatforms] = useState(platforms);
   useEffect(() => setLocalPlatforms(platforms), [platforms]);
 
+  // Offscreen renderer for the rep-profile share card. We always mount it so
+  // the underlying hooks pre-fetch donor/finance/IE data — by the time the
+  // admin clicks "Render", the DOM node is ready to capture.
+  const cardNodeRef = useRef<HTMLDivElement | null>(null);
+  const [cardReady, setCardReady] = useState(false);
+  const { data: cardData } = useCandidateShareCardData(
+    post.subject_type === 'candidate' ? post.subject_id : null,
+  );
+
   const updatePlatform = async (id: string, patch: Partial<PlatformRow>) => {
     setLocalPlatforms((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
     await supabase.from('social_post_platforms').update(patch).eq('id', id);
@@ -327,7 +280,23 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
   const render = async () => {
     setBusy('render');
     try {
-      const { shareUrl, id, imageUrl } = await renderAndUpload(post);
+      // Wait up to 10s for offscreen card data + DOM to settle
+      const start = Date.now();
+      while (!(cardReady && cardNodeRef.current && cardData) && Date.now() - start < 10000) {
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      if (!cardNodeRef.current || !cardData) {
+        throw new Error('Card data not ready — try again in a moment');
+      }
+      const { shareUrl, id, imageUrl } = await captureAndUpload(
+        cardNodeRef.current,
+        post.subject_id,
+        {
+          candidateName: cardData.candidateName,
+          candidateOffice: cardData.candidateOffice,
+          candidateParty: cardData.candidateParty,
+        },
+      );
       const { error } = await supabase
         .from('social_posts')
         .update({ share_url: shareUrl, share_card_id: id, image_url: imageUrl ?? null })
@@ -431,6 +400,31 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
             Approve &amp; Post Now
           </Button>
         </div>
+
+        {/* Offscreen full-fidelity card (matches the rep-profile share card) */}
+        {cardData && (
+          <div
+            aria-hidden
+            style={{
+              position: 'fixed',
+              left: -99999,
+              top: 0,
+              width: CARD_SIZE,
+              height: CARD_SIZE,
+              pointerEvents: 'none',
+              opacity: 0,
+            }}
+          >
+            <div
+              ref={(node) => {
+                cardNodeRef.current = node;
+                setCardReady(!!node);
+              }}
+            >
+              <CandidateStatCard data={{ kind: 'candidate-alignment', ...cardData } as any} />
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
