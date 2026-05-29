@@ -156,6 +156,7 @@ export const Committees = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by committee name, FEC ID, or candidate"
+                aria-label="Search committees"
                 className="pl-9"
               />
             </div>
