@@ -259,6 +259,10 @@ export function AnswerCoveragePanel() {
     runBatchReconciliation,
     refreshFECTotals,
     batchRefreshFECTotals,
+    syncReceiptsForCandidates,
+    clearReceiptSyncLog,
+    receiptSyncLog,
+    isReceiptViewSyncRunning,
     isLoading: isFECLoading, 
     isDonorLoading,
     isCommitteeLoading,
@@ -475,6 +479,11 @@ export function AnswerCoveragePanel() {
     return result;
   }, [baseFilteredCandidates, financeFilter, deltaFilter, syncFilter, scoreFilter, tierFilter, fecIdFilter]);
 
+  const filteredCandidatesWithFecId = useMemo(() =>
+    filteredCandidates.filter(c => !!c.fecCandidateId),
+    [filteredCandidates]
+  );
+
   // Pagination calculations
   const totalPages = Math.ceil(filteredCandidates.length / PAGE_SIZE);
   const paginatedCandidates = filteredCandidates.slice(
@@ -595,6 +604,43 @@ export function AnswerCoveragePanel() {
     } catch (err) {
       console.error('[Admin] Batch fetch donors failed:', err);
       toast.error('Failed to fetch donors batch');
+    }
+  };
+
+  const handleSyncFilteredReceipts = async () => {
+    const toProcess = filteredCandidatesWithFecId.map(c => ({
+      id: c.id,
+      name: c.name,
+      fecCandidateId: c.fecCandidateId!
+    }));
+
+    if (toProcess.length === 0) {
+      toast.info('No filtered candidates with FEC IDs found. Adjust filters or link FEC IDs first.');
+      return;
+    }
+
+    try {
+      toast.info(`Syncing receipts for ${toProcess.length} filtered representative(s) in 10,000-receipt chunks...`);
+      const results = await syncReceiptsForCandidates(toProcess, financeCycle);
+      toast.success(
+        `Receipt sync finished: ${results.completedCandidates} complete, ` +
+        `${results.failedCandidates} failed, ${results.totalImported.toLocaleString()} imported`
+      );
+      refetchCandidates();
+      refetchSyncStats();
+    } catch (err) {
+      console.error('[Admin] Filtered receipt sync failed:', err);
+      toast.error('Filtered receipt sync failed');
+    }
+  };
+
+  const copyReceiptSyncLog = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(receiptSyncLog, null, 2));
+      toast.success('Receipt sync log copied');
+    } catch (err) {
+      console.error('[Admin] Failed to copy receipt sync log:', err);
+      toast.error('Failed to copy receipt sync log');
     }
   };
 
@@ -1764,6 +1810,46 @@ export function AnswerCoveragePanel() {
           />
         )}
 
+        {receiptSyncLog.length > 0 && (
+          <div className="border rounded-lg p-3 space-y-2 bg-muted/20">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">FEC Receipt Sync Log</span>
+                <Badge variant="outline" className="text-xs">{receiptSyncLog.length} entries</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={copyReceiptSyncLog} className="h-7 text-xs">
+                  <Copy className="h-3 w-3 mr-1" />
+                  Copy JSON
+                </Button>
+                <Button variant="ghost" size="sm" onClick={clearReceiptSyncLog} className="h-7 text-xs">
+                  <X className="h-3 w-3 mr-1" />
+                  Clear
+                </Button>
+              </div>
+            </div>
+            <div className="max-h-32 overflow-y-auto space-y-1 text-xs">
+              {receiptSyncLog.slice(0, 8).map(entry => (
+                <div key={entry.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded bg-background/70 px-2 py-1">
+                  <span className="font-medium min-w-[140px] truncate">{entry.candidateName}</span>
+                  <Badge
+                    variant={entry.status === 'failed' || entry.status === 'totals_failed' ? 'destructive' : 'outline'}
+                    className="text-[10px] h-5"
+                  >
+                    {entry.status.replace('_', ' ')}
+                  </Badge>
+                  <span>Attempt {entry.attempt}</span>
+                  <span>Attempted {entry.receiptsAttempted.toLocaleString()}</span>
+                  <span>Imported {entry.receiptsImported.toLocaleString()}</span>
+                  {entry.hitRateLimit && <span className="text-amber-600">rate limited</span>}
+                  {entry.error && <span className="text-destructive truncate max-w-[360px]">{entry.error}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Search and High-Volume Mode */}
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[200px] max-w-xs">
@@ -1838,6 +1924,38 @@ export function AnswerCoveragePanel() {
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={handleFillVisibleUnanswered}>Generate</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Sync FEC receipts for current filtered view */}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={anyBatchRunning || isReceiptViewSyncRunning || filteredCandidatesWithFecId.length === 0}
+              >
+                {isReceiptViewSyncRunning ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-1.5" />
+                )}
+                Sync FEC Receipts in View ({filteredCandidatesWithFecId.length})
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Sync FEC Receipts for Current View?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Imports itemized FEC receipts only for representatives matching the current filters.
+                  The sync runs one representative at a time in 10,000-receipt chunks, skips duplicate inserts,
+                  logs each attempt, and refreshes FEC totals after each representative finishes.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleSyncFilteredReceipts}>Sync Receipts</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
