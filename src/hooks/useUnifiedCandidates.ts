@@ -137,6 +137,10 @@ export interface UnifiedCandidatesResult {
   dbOnly: Candidate[];
   isLoading: boolean;
   isAddressLoading: boolean;
+  dbLoading: boolean;
+  allLoading: boolean;
+  repsLoading: boolean;
+  civicLoading: boolean;
 }
 
 interface Options {
