@@ -62,22 +62,35 @@ export const Candidates = () => {
   }, []);
 
   const allCandidates = unified.all;
-  const myRepsCombined = unified.myReps.concat(
-    unified.federalExec,
-    unified.stateExec,
-    unified.stateLeg,
-    unified.local,
-  ).filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i);
   const federalExecutiveCandidates = unified.federalExec;
   const stateExecutiveCandidates = unified.stateExec;
   const stateLegislativeCandidates = unified.stateLeg;
   const localCandidates = unified.local;
 
-  // Get unique offices for filter
-  const uniqueOffices = useMemo(() => {
-    const offices = new Set(allCandidates.map(c => c.office));
-    return Array.from(offices).sort();
+  const myRepsCombined = useMemo(() => {
+    const combined = unified.myReps.concat(
+      unified.federalExec,
+      unified.stateExec,
+      unified.stateLeg,
+      unified.local,
+    );
+    return combined.filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i);
+  }, [unified.myReps, unified.federalExec, unified.stateExec, unified.stateLeg, unified.local]);
+
+  // Pre-compute office counts once instead of filtering allCandidates per tab label
+  const officeCounts = useMemo(() => {
+    let senator = 0;
+    let rep = 0;
+    const offices = new Set<string>();
+    for (const c of allCandidates) {
+      offices.add(c.office);
+      if (c.office === 'Senator') senator++;
+      else if (c.office === 'Representative') rep++;
+    }
+    return { senator, rep, uniqueOffices: Array.from(offices).sort() };
   }, [allCandidates]);
+
+  const uniqueOffices = officeCounts.uniqueOffices;
 
   // Get candidates based on active tab
   const tabCandidates = useMemo(() => {
@@ -138,13 +151,43 @@ export const Candidates = () => {
     return result;
   }, [searchQuery, sortBy, partyFilter, officeFilter, tabCandidates, profile, isHidden]);
 
-  const visibleIds = useMemo(
-    () => filteredCandidates.slice(0, 120).map((c) => c.id),
-    [filteredCandidates],
-  );
-  const { data: ieMap } = useCandidatesIE(visibleIds);
+  // Incremental rendering: only mount the first N cards, grow on scroll
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [activeTab, searchQuery, partyFilter, officeFilter, sortBy]);
 
-  const isLoading = profileLoading || unified.isLoading;
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    if (visibleCount >= filteredCandidates.length) return;
+    const el = sentinelRef.current;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        setVisibleCount((n) => Math.min(n + PAGE_SIZE, filteredCandidates.length));
+      }
+    }, { rootMargin: '600px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visibleCount, filteredCandidates.length]);
+
+  const visibleCandidates = useMemo(
+    () => filteredCandidates.slice(0, visibleCount),
+    [filteredCandidates, visibleCount],
+  );
+
+  // Defer IE lookup so typing/filter changes don't synchronously refire
+  const visibleIds = useMemo(
+    () => visibleCandidates.map((c) => c.id),
+    [visibleCandidates],
+  );
+  const deferredVisibleIds = useDeferredValue(visibleIds);
+  const { data: ieMap } = useCandidatesIE(deferredVisibleIds);
+
+  // Only block the page on the fast sources (DB + all-Congress when requested).
+  // Civic + address-based reps stream in progressively.
+  const coreLoading = unified.dbLoading || unified.allLoading || profileLoading;
+  const reposLoading = unified.civicLoading || unified.repsLoading;
 
   // Count for tabs
   const executiveCount = federalExecutiveCandidates.length + stateExecutiveCandidates.length;
@@ -152,7 +195,7 @@ export const Candidates = () => {
   const localCount = localCandidates.length;
 
 
-  if (isLoading) {
+  if (coreLoading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
