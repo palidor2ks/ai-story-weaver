@@ -432,6 +432,8 @@ export const CandidateProfile = () => {
                     candidateId={candidate.id}
                     candidateName={candidate.name}
                     candidateOffice={candidate.office}
+                    candidateState={candidate.state}
+                    candidateDistrict={candidate.district}
                     candidateParty={candidate.party}
                     candidateScore={resolvedScore}
                     candidateImage={representativeDetails?.image_url || candidate.image_url}

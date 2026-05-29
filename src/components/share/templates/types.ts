@@ -15,6 +15,8 @@ export interface CardData {
   // Candidate alignment
   candidateName?: string;
   candidateOffice?: string;
+  candidateState?: string | null;
+  candidateDistrict?: string | null;
   candidateParty?: string;
   candidateImage?: string | null;
   candidateScore?: number | null;

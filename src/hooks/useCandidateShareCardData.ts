@@ -33,6 +33,8 @@ export interface CandidateShareCardData {
   candidateId: string;
   candidateName: string;
   candidateOffice: string;
+  candidateState: string | null;
+  candidateDistrict: string | null;
   candidateParty: string;
   candidateImage: string | null;
   candidateScore: number | null;
@@ -218,6 +220,8 @@ export function useCandidateShareCardData(
       candidateId: id,
       candidateName: candidate.name,
       candidateOffice: candidate.office,
+      candidateState: candidate.state ?? null,
+      candidateDistrict: candidate.district ?? null,
       candidateParty: candidate.party,
       candidateImage: resolvedImage,
       candidateScore: score,
