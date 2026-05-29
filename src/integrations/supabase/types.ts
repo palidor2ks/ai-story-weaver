@@ -3881,6 +3881,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      cleanup_x_oauth_pending: { Args: never; Returns: undefined }
       complete_job: { Args: { p_id: string }; Returns: undefined }
       fail_job: {
         Args: { p_error: string; p_id: string; p_retry_delay_seconds?: number }
