@@ -283,6 +283,7 @@ export default function TopSpenders() {
         </div>
 
 
+        <h2 className="sr-only">Top outside spenders</h2>
         {/* KPIs */}
         <div className="grid gap-4 sm:grid-cols-3 mb-6">
           <Card>
@@ -334,6 +335,7 @@ export default function TopSpenders() {
               placeholder="Search committee name…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search committees"
               className="pl-9"
             />
           </div>
