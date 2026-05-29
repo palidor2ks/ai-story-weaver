@@ -254,7 +254,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         // Committee sync status - filter by candidate IDs
         supabase
           .from('candidate_committees')
-          .select('candidate_id, has_more, last_sync_date, last_sync_completed_at, designation')
+          .select('candidate_id, has_more, last_sync_date, last_sync_completed_at, last_cycle, designation')
           .in('candidate_id', candidateIds),
         // Vote sync status - filter by candidate IDs
         supabase
