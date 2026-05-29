@@ -327,8 +327,11 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
   const render = async () => {
     setBusy('render');
     try {
-      const { shareUrl, id } = await renderAndUpload(post);
-      const { error } = await supabase.from('social_posts').update({ share_url: shareUrl, share_card_id: id }).eq('id', post.id);
+      const { shareUrl, id, imageUrl } = await renderAndUpload(post);
+      const { error } = await supabase
+        .from('social_posts')
+        .update({ share_url: shareUrl, share_card_id: id, image_url: imageUrl ?? null })
+        .eq('id', post.id);
       if (error) throw error;
       toast.success('Card rendered');
       onChanged();
