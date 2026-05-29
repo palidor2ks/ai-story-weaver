@@ -250,10 +250,13 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
   // the underlying hooks pre-fetch donor/finance/IE data — by the time the
   // admin clicks "Render", the DOM node is ready to capture.
   const cardNodeRef = useRef<HTMLDivElement | null>(null);
-  const [cardReady, setCardReady] = useState(false);
-  const { data: cardData } = useCandidateShareCardData(
+  const { data: cardData, loading: cardLoading } = useCandidateShareCardData(
     post.subject_type === 'candidate' ? post.subject_id : null,
   );
+  const cardDataRef = useRef(cardData);
+  const cardLoadingRef = useRef(cardLoading);
+  useEffect(() => { cardDataRef.current = cardData; }, [cardData]);
+  useEffect(() => { cardLoadingRef.current = cardLoading; }, [cardLoading]);
 
   const updatePlatform = async (id: string, patch: Partial<PlatformRow>) => {
     setLocalPlatforms((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
