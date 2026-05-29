@@ -352,9 +352,12 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         // Count ALL committees per candidate (for display purposes)
         committeeCountMap[row.candidate_id] = (committeeCountMap[row.candidate_id] || 0) + 1;
         
-        // Only consider P/A (campaign) committees for sync status
+        // Only consider P/A (campaign) committees for sync status, and only
+        // when their cursor/completion belongs to the selected receipt cycle.
+        // The UI cycle represents the FEC two-year transaction period for
+        // receipts, not the candidate's election year.
         const isCampaignCommittee = ['P', 'A'].includes(row.designation || '');
-        if (!isCampaignCommittee) return;
+        if (!isCampaignCommittee || row.last_cycle !== FINANCE_CYCLE) return;
         
         if (row.has_more === true) {
           partialSyncMap[row.candidate_id] = true;
@@ -362,7 +365,7 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         if (row.last_sync_date) {
           lastSyncMap[row.candidate_id] = row.last_sync_date;
         }
-        if (row.last_sync_completed_at) {
+        if (row.last_sync_completed_at && row.has_more !== true) {
           completeSyncMap[row.candidate_id] = true;
         }
       });
