@@ -380,8 +380,8 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-3">
-          {post.share_url ? (
-            <a href={post.share_url} target="_blank" rel="noreferrer" className="text-sm text-primary inline-flex items-center gap-1">
+          {post.image_url || post.share_url ? (
+            <a href={post.image_url ?? post.share_url ?? '#'} target="_blank" rel="noreferrer" className="text-sm text-primary inline-flex items-center gap-1">
               <ImageIcon className="h-4 w-4" /> View card <ExternalLink className="h-3 w-3" />
             </a>
           ) : (
