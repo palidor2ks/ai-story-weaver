@@ -28,6 +28,8 @@ interface ShareProfileButtonProps {
   candidateId?: string;
   candidateName: string;
   candidateOffice: string;
+  candidateState?: string | null;
+  candidateDistrict?: string | null;
   candidateParty: string;
   candidateScore: number | null;
   candidateImage?: string | null;
@@ -48,6 +50,8 @@ export const ShareProfileButton = ({
   candidateId,
   candidateName,
   candidateOffice,
+  candidateState,
+  candidateDistrict,
   candidateParty,
   candidateScore,
   candidateImage,
@@ -150,6 +154,8 @@ export const ShareProfileButton = ({
           brandHost,
           candidateName,
           candidateOffice,
+          candidateState,
+          candidateDistrict,
           candidateParty,
           candidateImage: resolvedImage ?? null,
           candidateScore,

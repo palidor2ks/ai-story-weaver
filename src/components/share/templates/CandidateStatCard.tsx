@@ -39,6 +39,24 @@ const fmtMoneyShort = (n?: number | null) => {
 
 const truncate = (s: string, max = 30) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
 
+const formatDistrictLabel = (state?: string | null, district?: string | null) => {
+  const cleanedDistrict = district?.trim();
+  if (!cleanedDistrict) return '';
+
+  const cleanedState = state?.trim().toUpperCase();
+  const normalizedDistrict = /^district\s+/i.test(cleanedDistrict)
+    ? cleanedDistrict.replace(/^district\s+/i, '')
+    : cleanedDistrict;
+
+  return cleanedState ? `${cleanedState}-${normalizedDistrict}` : `District ${normalizedDistrict}`;
+};
+
+const formatDataYearLabel = (cycle?: string | null) => {
+  const trimmed = cycle?.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'all') return '';
+  return /cycle/i.test(trimmed) ? trimmed : `${trimmed} Cycle`;
+};
+
 const scoreToPercent = (score?: number | null) => {
   if (score === null || score === undefined || !Number.isFinite(score)) return 50;
   const clamped = Math.max(-10, Math.min(10, score));
@@ -58,6 +76,8 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
 
   const name = data.candidateName ?? 'Candidate';
   const office = data.candidateOffice ?? 'Public Official';
+  const districtLabel = formatDistrictLabel(data.candidateState, data.candidateDistrict);
+  const officeLabel = districtLabel ? `${office} · ${districtLabel}` : office;
   const party = data.candidateParty ?? 'Nonpartisan';
   const image = data.candidateImage;
 
@@ -70,7 +90,11 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
 
   const topSpenders = (data.topSpenders ?? []).slice(0, 2);
   const topDonors = (data.topDonors ?? []).slice(0, 3);
-  const fundingBreakdown = (data.fundingBreakdown ?? []).slice(0, 4);
+  const fundingBreakdown = (data.fundingBreakdown ?? [])
+    .slice()
+    .sort((a, b) => b.pct - a.pct)
+    .slice(0, 4);
+  const dataYearLabel = formatDataYearLabel(data.fundingCycle ?? data.ieCycle);
   const cycleLabel = data.ieCycle ? ` · ${data.ieCycle}` : '';
 
   const topics = [
@@ -132,8 +156,8 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
           }}
         >
           {/* Top brand bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 16 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', minWidth: 0 }}>
               <PulseMark size={44} />
               <span style={{ fontWeight: 800, fontSize: 26, letterSpacing: -0.3 }}>
                 Pulse Stat Card
@@ -145,6 +169,19 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                 letterSpacing: 2,
                 textTransform: 'uppercase',
                 color: mutedColor,
+                fontWeight: 800,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {dataYearLabel}
+            </div>
+            <div
+              style={{
+                fontSize: 18,
+                letterSpacing: 2,
+                textTransform: 'uppercase',
+                color: mutedColor,
+                textAlign: 'right',
               }}
             >
               {data.incumbent ? 'Incumbent' : 'Candidate'}
@@ -210,7 +247,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                   {partyInitial(party)}
                 </span>
               </div>
-              <div style={{ fontSize: 20, marginTop: 4, color: mutedColor }}>{office}</div>
+              <div style={{ fontSize: 20, marginTop: 4, color: mutedColor }}>{officeLabel}</div>
             </div>
           </div>
 
