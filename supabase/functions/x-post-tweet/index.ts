@@ -16,15 +16,17 @@ async function refreshIfNeeded(supabase: any, row: any): Promise<string> {
   if (exp - now > 60_000 && row.access_token) return row.access_token;
 
   if (!row.refresh_token) throw new Error('no_refresh_token');
-  if (!CLIENT_ID || !CLIENT_SECRET) throw new Error('oauth_not_configured');
+  if (!CLIENT_ID) throw new Error('oauth_not_configured');
 
-  const basic = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
+  const tokenHeaders: Record<string, string> = {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  };
+  if (CLIENT_SECRET) {
+    tokenHeaders.Authorization = `Basic ${btoa(`${CLIENT_ID}:${CLIENT_SECRET}`)}`;
+  }
   const res = await fetch('https://api.x.com/2/oauth2/token', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${basic}`,
-    },
+    headers: tokenHeaders,
     body: new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: row.refresh_token,

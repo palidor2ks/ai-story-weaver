@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const CLIENT_ID = Deno.env.get('X_CLIENT_ID');
-const REDIRECT_URI = Deno.env.get('X_REDIRECT_URI');
+const REDIRECT_URI_ENV = Deno.env.get('X_REDIRECT_URI');
 const SCOPES = 'tweet.read tweet.write users.read offline.access';
 
 function b64url(bytes: Uint8Array): string {
@@ -17,11 +17,22 @@ async function sha256(input: string): Promise<Uint8Array> {
   return new Uint8Array(buf);
 }
 
+function isValidRedirect(uri: string): boolean {
+  try {
+    const u = new URL(uri);
+    if (u.protocol === 'https:') return true;
+    if (u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1')) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    if (!CLIENT_ID || !REDIRECT_URI) {
+    if (!CLIENT_ID) {
       return new Response(JSON.stringify({ error: 'oauth_not_configured' }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -59,6 +70,17 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Resolve effective redirect URI: body.redirect_to → env → error
+    let body: Record<string, unknown> = {};
+    try { body = await req.json(); } catch { /* empty body is fine */ }
+    const requested = typeof body.redirect_to === 'string' ? body.redirect_to.trim() : '';
+    const redirectUri = requested || REDIRECT_URI_ENV || '';
+    if (!redirectUri || !isValidRedirect(redirectUri)) {
+      return new Response(JSON.stringify({ error: 'invalid_redirect_uri' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const stateBytes = new Uint8Array(32);
     const verifierBytes = new Uint8Array(48);
     crypto.getRandomValues(stateBytes);
@@ -73,14 +95,14 @@ Deno.serve(async (req) => {
       .lt('created_at', new Date(Date.now() - 15 * 60 * 1000).toISOString());
 
     const { error: insErr } = await admin.from('x_oauth_pending').insert({
-      state, code_verifier: codeVerifier, user_id: userId,
+      state, code_verifier: codeVerifier, user_id: userId, redirect_uri: redirectUri,
     });
     if (insErr) throw insErr;
 
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: CLIENT_ID,
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: redirectUri,
       scope: SCOPES,
       state,
       code_challenge: codeChallenge,

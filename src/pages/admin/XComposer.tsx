@@ -34,7 +34,11 @@ export default function XComposer() {
       .from("x_account_tokens")
       .select("id, account_handle, expires_at, updated_at")
       .order("updated_at", { ascending: false });
-    if (!error) setAccounts((rows ?? []) as ConnectedAccount[]);
+    if (error) {
+      toast.error("Failed to load X accounts", { description: error.message });
+    } else {
+      setAccounts((rows ?? []) as ConnectedAccount[]);
+    }
     setLoadingAccounts(false);
   };
 
@@ -51,7 +55,8 @@ export default function XComposer() {
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      const { data: res, error } = await supabase.functions.invoke("x-oauth-start", { body: {} });
+      const redirect_to = `${window.location.origin}/admin/x/callback`;
+      const { data: res, error } = await supabase.functions.invoke("x-oauth-start", { body: { redirect_to } });
       if (error) throw error;
       if (res?.error) throw new Error(typeof res.error === "string" ? res.error : JSON.stringify(res.error));
       if (!res?.authorize_url) throw new Error("missing authorize_url");
