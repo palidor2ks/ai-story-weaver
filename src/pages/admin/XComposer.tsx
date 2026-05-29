@@ -55,7 +55,7 @@ export default function XComposer() {
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      const redirect_to = `${window.location.origin}/admin/x/callback`;
+      const redirect_to = `${window.location.origin}/admin/x-connect/callback`;
       const { data: res, error } = await supabase.functions.invoke("x-oauth-start", { body: { redirect_to } });
       if (error) throw error;
       if (res?.error) throw new Error(typeof res.error === "string" ? res.error : JSON.stringify(res.error));
