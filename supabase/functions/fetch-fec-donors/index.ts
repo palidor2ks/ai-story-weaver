@@ -880,8 +880,8 @@ serve(async (req) => {
     
     // For resumable syncs, load existing donors from DB to continue accumulating
     // NOTE: For J/U/B/D committees, we load donors with candidate_id = null
-    if (resumeFromCursor && targetCommittee.lastIndex && !forceFullSync) {
-      console.log(`[FEC-DONORS] Loading existing donors from DB to continue accumulation...`);
+    if (resumeFromCursor && cursorMatchesRequestedCycle && targetCommittee.lastIndex && !forceFullSync) {
+      console.log(`[FEC-DONORS] Loading existing ${cycle} receipt-period donors from DB to continue accumulation...`);
       
       let existingDonorsQuery = supabase
         .from('donors')
