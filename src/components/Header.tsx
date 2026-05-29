@@ -47,13 +47,14 @@ export const Header = () => {
         {/* Desktop Navigation */}
         <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 min-w-0">
           {visibleNavItems.map(item => (
-            <Link key={item.path} to={item.path} title={item.label}>
+            <Link key={item.path} to={item.path} title={item.label} aria-label={item.label}>
               <Button
                 variant={isActive(item.path) ? "secondary" : "ghost"}
                 className={cn(
                   "gap-1.5 px-2 xl:px-3",
                   isActive(item.path) && "bg-secondary text-foreground"
                 )}
+                aria-label={item.label}
               >
                 <item.icon className="w-4 h-4 shrink-0" />
                 <span className="hidden xl:inline">{item.label}</span>
