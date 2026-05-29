@@ -150,6 +150,7 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
   const line = lineNumber.toUpperCase();
   const isLine11 = line.startsWith('11'); // Individual contributions
   const isLine12 = line.startsWith('12'); // Authorized committee transfers
+  const isLine14 = line.startsWith('14'); // Refunds/rebates/returns from vendors & committees
   const isLine15 = line.startsWith('15'); // Other receipts (slate mailers, refunds, etc.)
   const isLine17 = line.startsWith('17'); // Other federal receipts
   
