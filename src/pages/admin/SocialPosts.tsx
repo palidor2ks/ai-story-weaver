@@ -429,12 +429,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
               opacity: 0,
             }}
           >
-            <div
-              ref={(node) => {
-                cardNodeRef.current = node;
-                setCardReady(!!node);
-              }}
-            >
+            <div ref={cardNodeRef}>
               <CandidateStatCard data={{ kind: 'candidate-alignment', ...cardData } as any} />
             </div>
           </div>
