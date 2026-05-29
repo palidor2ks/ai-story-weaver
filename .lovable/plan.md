@@ -1,61 +1,35 @@
-## Problem
+## Root cause
 
-The auto-generated stat card on `/admin/social-posts` renders a stripped-down version of `CandidateStatCard`. The rep-profile share button (`ShareProfileButton` → `ShareCardModal`) feeds the card a much richer payload that the admin renderer doesn't compute:
+The admin **Render image / Re-render** button waits on `cardReady` and `cardData` values that were captured when the click handler started. If the hidden card finishes mounting or the hook finishes loading after the click, the loop can keep seeing the old values and time out with `Card data not ready — try again in a moment`.
 
-| Field | Source on rep profile | Missing in admin renderer |
-|---|---|---|
-| `topDonors` | aggregated from `useCandidateDonors`, conduit/transfer filtered, top 3 | — |
-| `fundingBreakdown` + `fundingCycle` | `computeFundingBreakdown(fundingInput)` over FEC reconciliation + live FEC totals | — |
-| `topSpenders` + `ieCycle` | `useCandidateIE` (latest cycle, top 2) | — |
-| `candidateImage` | original URL then base64-converted for CORS-safe PNG export | partially (basic data-url fetch only) |
-| `agreements` / `disagreements` / `matchScore` / `userScore` | per-user, requires a quiz profile | not applicable for an unpersonalized auto-post — keep empty |
+There is also an avoidable risk from calling `setCardReady` inside the ref callback, which can cause extra render churn while the offscreen card mounts.
 
-So the admin card is missing the donor list, funding-source ring, IE spenders, and proper image fallback.
+## Fix plan
 
-## Fix
+1. **Make the render wait loop read live values**
+   - Add refs for the latest `cardData` and hook loading state.
+   - Keep those refs updated with `useEffect`.
+   - In `render()`, poll `cardNodeRef.current`, `cardDataRef.current`, and `loadingRef.current` instead of closed-over state.
 
-Extract the rep-profile share-card data assembly into a single reusable hook and use it from both the rep profile page and the admin renderer.
+2. **Remove the redundant `cardReady` state**
+   - Delete `cardReady` and the `setCardReady` ref callback.
+   - Use a plain `ref={cardNodeRef}` for the offscreen card wrapper.
 
-### 1. New hook: `src/hooks/useCandidateShareCardData.ts`
+3. **Improve the failure message**
+   - If the hook is still loading after the wait, show `Card data is still loading`.
+   - If the hidden DOM node is missing, show `Card renderer did not mount`.
+   - If candidate data is missing, show `Candidate data not available`.
 
-`useCandidateShareCardData(candidateId)` returns:
-```ts
-{
-  loading: boolean;
-  data: null | {
-    candidate;          // useCandidate
-    representativeDetails;
-    candidateImageResolved; // base64-converted URL (bioguide fallback for federal IDs)
-    score;              // from useCandidateScoreMap, falling back to candidate.overall_score
-    cycleLabel;         // from useAvailableCycles
-    topDonors;          // aggregated, conduit/transfer filtered, top 3
-    fundingBreakdown;   // computeFundingBreakdown + withPercents, filtered
-    topSpenders;        // useCandidateIE latest cycle, top 2
-    ieCycle;
-  }
-}
-```
+4. **Keep the full-fidelity card behavior unchanged**
+   - Continue using `useCandidateShareCardData` and `CandidateStatCard` so top donors, funding sources, and outside spenders remain included.
 
-Internally it composes the existing hooks already used by `CandidateProfile.tsx` and `ShareProfileButton.tsx`:
-`useCandidate`, `useCandidateScoreMap`, `useAvailableCycles`, `useCandidateDonors`, `useFECTotals`, `useFinanceReconciliation`, `useRepresentativeDetails`, `useCandidateIE`, plus `computeFundingBreakdown` / `withPercents` / `isConduitDonor`.
+## Files to change
 
-### 2. Refactor consumers to use the hook
-
-- **`src/components/ShareProfileButton.tsx`** — drop the inlined IE / image-conversion logic and accept the resolved data via the hook (or keep it as a thin wrapper that calls the hook). Behavior unchanged.
-- **`src/pages/CandidateProfile.tsx`** — keep all on-page logic as-is, but pass the same hook output to `ShareProfileButton` so there's a single computation. (Profile page still computes its own donor/finance breakdown for tabs.)
-
-### 3. Admin renderer uses the hook
-
-In `src/pages/admin/SocialPosts.tsx`, replace the inline `renderAndUpload` data assembly with the hook output. Since the offscreen render happens inside a click handler (not a React subtree), wrap the renderer in a small component:
-
-- Add `<HiddenCardRenderer postId, candidateId, onReady />` that mounts when the user clicks **Re-render**, runs the hook, waits for `loading === false`, renders `<CandidateStatCard data={...}/>` offscreen, captures via `nodeToBlob`, uploads via `uploadShareCard`, persists `image_url` / `share_url` on `social_posts`, then unmounts.
-- The component is rendered inside the existing `PostCard` so query-client + auth context are available.
-
-For unpersonalized auto-posts: `userScore = null`, `matchScore = 0`, `agreements = []`, `disagreements = []` — the `CandidateStatCard` already handles this (the right-hand "match" area collapses when those are empty, leaving room for the donor + funding sections to dominate).
+- `src/pages/admin/SocialPosts.tsx` only
 
 ## Verification
 
-1. Open `/admin/social-posts` → Queue → click **Re-render** on Mike Bost.
-2. The captured card now shows top donors, funding-source ring with cycle label, and IE top spenders — visually identical to clicking **Share** on `/candidate/B001295`.
-3. Click **View card** → opens the PNG; matches the rep-profile share image.
-4. Open `/candidate/B001295`, click **Share** → modal preview unchanged (regression check on the refactor).
+- Open `/admin/social-posts`.
+- Click **Render image / Re-render** on a pending candidate.
+- Confirm it no longer times out from stale readiness state.
+- Confirm **View card** opens the generated full stat card with donors, funding sources, and outside spenders.
