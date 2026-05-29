@@ -12,7 +12,7 @@ export async function uploadShareCard({
   targetUrl,
   ogTitle,
   ogDescription,
-}: UploadShareCardArgs): Promise<{ shareUrl: string; id: string }> {
+}: UploadShareCardArgs): Promise<{ shareUrl: string; id: string; imageUrl?: string }> {
   const form = new FormData();
   form.append('file', new File([blob], 'card.png', { type: 'image/png' }));
   form.append('targetUrl', targetUrl);
@@ -24,5 +24,5 @@ export async function uploadShareCard({
   });
   if (error) throw error;
   if (!data?.shareUrl) throw new Error('no shareUrl');
-  return data as { shareUrl: string; id: string };
+  return data as { shareUrl: string; id: string; imageUrl?: string };
 }

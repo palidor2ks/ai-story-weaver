@@ -40,6 +40,8 @@ const XComposer = lazy(() => import("./pages/admin/XComposer"));
 const XConnectCallback = lazy(() => import("./pages/admin/XConnectCallback"));
 const SocialComposer = lazy(() => import("./pages/admin/SocialComposer"));
 const SocialHandles = lazy(() => import("./pages/admin/SocialHandles"));
+const SocialStatCards = lazy(() => import("./pages/admin/SocialStatCards"));
+const StatCard = lazy(() => import("./pages/StatCard"));
 const Onboarding = lazy(() => import("./pages/Onboarding").then((m) => ({ default: m.Onboarding })));
 
 // Root route: route users based on auth + onboarding status
@@ -95,6 +97,7 @@ const AppRoutes = () => (
       <Route path="/p/:slug" element={<Poll />} />
       <Route path="/p/:slug/results" element={<PollResultsPage />} />
       <Route path="/verify-email" element={<RouteGuard requireAuth requireVerifiedEmail={false}><VerifyEmail /></RouteGuard>} />
+      <Route path="/stat-card/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><StatCard /></RouteGuard>} />
       <Route path="/" element={<RootRedirect />} />
       <Route path="/onboarding" element={<RouteGuard requireAuth requireOnboarding={false}><Onboarding /></RouteGuard>} />
       <Route path="/results" element={<RouteGuard requireAuth requireOnboarding><QuizResults /></RouteGuard>} />
@@ -117,6 +120,7 @@ const AppRoutes = () => (
       <Route path="/admin/x-composer" element={<RouteGuard requireAuth requireOnboarding><XComposer /></RouteGuard>} />
       <Route path="/admin/social-composer" element={<RouteGuard requireAuth requireOnboarding><SocialComposer /></RouteGuard>} />
       <Route path="/admin/social-handles" element={<RouteGuard requireAuth requireOnboarding><SocialHandles /></RouteGuard>} />
+      <Route path="/admin/social-stat-cards" element={<RouteGuard requireAuth requireOnboarding><SocialStatCards /></RouteGuard>} />
       <Route path="/admin/x-connect/callback" element={<RouteGuard requireAuth requireOnboarding><XConnectCallback /></RouteGuard>} />
       <Route path="/politician" element={<RouteGuard requireAuth requireOnboarding><PoliticianDashboard /></RouteGuard>} />
       <Route path="/blog" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Blog /></RouteGuard>} />

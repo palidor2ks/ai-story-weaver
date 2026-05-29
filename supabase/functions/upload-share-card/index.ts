@@ -95,7 +95,8 @@ Deno.serve(async (req) => {
     }
 
     const shareUrl = `${supaUrl}/functions/v1/share-card-page?id=${id}`;
-    return json({ id, shareUrl });
+    const { data: pub } = admin.storage.from('share-cards').getPublicUrl(path);
+    return json({ id, shareUrl, imageUrl: pub.publicUrl });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
