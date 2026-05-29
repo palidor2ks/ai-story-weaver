@@ -141,12 +141,12 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
           </div>
 
           {/* Identity row: photo + name */}
-          <div style={{ display: 'flex', gap: 26, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 22, alignItems: 'center' }}>
             <div
               style={{
-                width: 160,
-                height: 160,
-                borderRadius: 24,
+                width: 120,
+                height: 120,
+                borderRadius: 20,
                 border: `4px solid ${innerBorder}`,
                 overflow: 'hidden',
                 background: panelBg,
@@ -165,7 +165,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                   onError={() => setImgFailed(true)}
                 />
               ) : (
-                <div style={{ fontSize: 64, fontWeight: 900, color: mutedColor }}>
+                <div style={{ fontSize: 48, fontWeight: 900, color: mutedColor }}>
                   {name
                     .split(' ')
                     .map((s) => s[0])
@@ -175,12 +175,12 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
               )}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <span
                   style={{
-                    fontSize: 58,
+                    fontSize: 46,
                     fontWeight: 900,
-                    letterSpacing: -1.5,
+                    letterSpacing: -1.2,
                     lineHeight: 1.02,
                   }}
                 >
@@ -191,15 +191,15 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                     background: partyChipColor(party),
                     color: FLAG_WHITE,
                     fontWeight: 800,
-                    fontSize: 26,
-                    padding: '6px 18px',
+                    fontSize: 22,
+                    padding: '4px 14px',
                     borderRadius: 999,
                   }}
                 >
                   {partyInitial(party)}
                 </span>
               </div>
-              <div style={{ fontSize: 24, marginTop: 6, color: mutedColor }}>{office}</div>
+              <div style={{ fontSize: 20, marginTop: 4, color: mutedColor }}>{office}</div>
             </div>
           </div>
 
@@ -207,19 +207,19 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
           <div
             style={{
               border: `3px solid ${innerBorder}`,
-              borderRadius: 22,
-              padding: '18px 16px',
+              borderRadius: 20,
+              padding: '12px 16px',
               textAlign: 'center',
               background: panelBg,
             }}
           >
-            <div style={{ fontSize: 78, fontWeight: 900, lineHeight: 1, letterSpacing: -2 }}>
+            <div style={{ fontSize: 60, fontWeight: 900, lineHeight: 1, letterSpacing: -2 }}>
               {ideology}
             </div>
             <div
               style={{
-                fontSize: 16,
-                marginTop: 8,
+                fontSize: 14,
+                marginTop: 6,
                 letterSpacing: 2,
                 textTransform: 'uppercase',
                 color: mutedColor,
