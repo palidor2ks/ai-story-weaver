@@ -83,7 +83,7 @@ async function imageToDataUrl(url: string): Promise<string | null> {
   }
 }
 
-async function renderAndUpload(post: SocialPost): Promise<{ shareUrl: string; id: string }> {
+async function renderAndUpload(post: SocialPost): Promise<{ shareUrl: string; id: string; imageUrl?: string }> {
   const stat = post.stat_payload ?? {};
   // fetch candidate row for image
   const { data: cand } = await supabase
@@ -327,8 +327,11 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
   const render = async () => {
     setBusy('render');
     try {
-      const { shareUrl, id } = await renderAndUpload(post);
-      const { error } = await supabase.from('social_posts').update({ share_url: shareUrl, share_card_id: id }).eq('id', post.id);
+      const { shareUrl, id, imageUrl } = await renderAndUpload(post);
+      const { error } = await supabase
+        .from('social_posts')
+        .update({ share_url: shareUrl, share_card_id: id, image_url: imageUrl ?? null })
+        .eq('id', post.id);
       if (error) throw error;
       toast.success('Card rendered');
       onChanged();
@@ -377,8 +380,8 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-3">
-          {post.share_url ? (
-            <a href={post.share_url} target="_blank" rel="noreferrer" className="text-sm text-primary inline-flex items-center gap-1">
+          {post.image_url || post.share_url ? (
+            <a href={post.image_url ?? post.share_url ?? '#'} target="_blank" rel="noreferrer" className="text-sm text-primary inline-flex items-center gap-1">
               <ImageIcon className="h-4 w-4" /> View card <ExternalLink className="h-3 w-3" />
             </a>
           ) : (
