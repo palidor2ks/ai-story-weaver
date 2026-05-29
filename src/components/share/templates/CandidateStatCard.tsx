@@ -328,24 +328,24 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
               style={{
                 alignSelf: 'end',
                 border: `2px solid ${innerBorder}`,
-                borderRadius: 16,
-                padding: '14px 16px',
+                borderRadius: 14,
+                padding: '10px 14px',
                 background: panelBg,
               }}
             >
               <div
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   letterSpacing: 2,
                   textTransform: 'uppercase',
                   color: mutedColor,
-                  marginBottom: 10,
+                  marginBottom: 6,
                   fontWeight: 700,
                 }}
               >
                 Funding Sources{data.fundingCycle ? ` · ${data.fundingCycle} Cycle` : ''}
               </div>
-              <div style={{ display: 'grid', gap: 8 }}>
+              <div style={{ display: 'grid', gap: 5 }}>
                 {fundingBreakdown.map((b) => (
                   <div key={b.label}>
                     <div
@@ -354,17 +354,17 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                         justifyContent: 'space-between',
                         alignItems: 'baseline',
                         gap: 12,
-                        marginBottom: 3,
+                        marginBottom: 2,
                       }}
                     >
-                      <span style={{ fontSize: 16, fontWeight: 700, color: textColor }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: textColor }}>
                         {truncate(b.label, 38)}
                       </span>
-                      <span style={{ fontSize: 16, fontWeight: 800, color: b.color }}>{b.pct}%</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: b.color }}>{b.pct}%</span>
                     </div>
                     <div
                       style={{
-                        height: 8,
+                        height: 6,
                         borderRadius: 999,
                         background: 'hsl(0 0% 100% / 0.14)',
                         overflow: 'hidden',
