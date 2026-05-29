@@ -3579,18 +3579,21 @@ export type Database = {
         Row: {
           code_verifier: string
           created_at: string
+          redirect_uri: string | null
           state: string
           user_id: string
         }
         Insert: {
           code_verifier: string
           created_at?: string
+          redirect_uri?: string | null
           state: string
           user_id: string
         }
         Update: {
           code_verifier?: string
           created_at?: string
+          redirect_uri?: string | null
           state?: string
           user_id?: string
         }

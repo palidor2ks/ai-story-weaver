@@ -4,7 +4,7 @@ import { z } from 'npm:zod@3.23.8';
 
 const CLIENT_ID = Deno.env.get('X_CLIENT_ID');
 const CLIENT_SECRET = Deno.env.get('X_CLIENT_SECRET');
-const REDIRECT_URI = Deno.env.get('X_REDIRECT_URI');
+const FALLBACK_REDIRECT_URI = Deno.env.get('X_REDIRECT_URI');
 
 const BodySchema = z.object({
   code: z.string().min(1),
@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
+    if (!CLIENT_ID) {
       return new Response(JSON.stringify({ error: 'oauth_not_configured' }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -75,17 +75,27 @@ Deno.serve(async (req) => {
     // Delete after lookup
     await admin.from('x_oauth_pending').delete().eq('state', state);
 
-    const basic = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
+    const redirectUri: string | null = pending.redirect_uri ?? FALLBACK_REDIRECT_URI ?? null;
+    if (!redirectUri) {
+      return new Response(JSON.stringify({ error: 'redirect_uri_not_configured' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const tokenHeaders: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+    if (CLIENT_SECRET) {
+      tokenHeaders.Authorization = `Basic ${btoa(`${CLIENT_ID}:${CLIENT_SECRET}`)}`;
+    }
+
     const tokenRes = await fetch('https://api.x.com/2/oauth2/token', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${basic}`,
-      },
+      headers: tokenHeaders,
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: REDIRECT_URI,
+        redirect_uri: redirectUri,
         code_verifier: pending.code_verifier,
         client_id: CLIENT_ID,
       }).toString(),

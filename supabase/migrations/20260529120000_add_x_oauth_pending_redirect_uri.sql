@@ -1,0 +1,2 @@
+ALTER TABLE public.x_oauth_pending
+ADD COLUMN IF NOT EXISTS redirect_uri text;
