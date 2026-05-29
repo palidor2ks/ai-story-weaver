@@ -1083,6 +1083,7 @@ serve(async (req) => {
         last_sync_date: new Date().toISOString(),
         last_contribution_date: lastContributionDate,
         last_index: hasMore ? lastIndex : null, // Clear cursor when complete
+        last_cycle: cycle,
         local_itemized_total: committeeItemized,
         has_more: hasMore
       };
