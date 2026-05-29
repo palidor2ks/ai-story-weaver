@@ -150,6 +150,7 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
   const line = lineNumber.toUpperCase();
   const isLine11 = line.startsWith('11'); // Individual contributions
   const isLine12 = line.startsWith('12'); // Authorized committee transfers
+  const isLine14 = line.startsWith('14'); // Refunds/rebates/returns from vendors & committees
   const isLine15 = line.startsWith('15'); // Other receipts (slate mailers, refunds, etc.)
   const isLine17 = line.startsWith('17'); // Other federal receipts
   
@@ -175,6 +176,10 @@ function classifyLineNumber(lineNumber: string | null): LineClassification {
     return { isContribution: true, isTransfer: false, receiptType: 'contribution', contributionCategory };
   } else if (isLine12) {
     return { isContribution: true, isTransfer: true, receiptType: 'transfer', contributionCategory: 'other' };
+  } else if (isLine14) {
+    // Line 14 = Refunds, Rebates, Returns of Federal Contributions (vendor refunds /
+    // committee returns). NOT a real contribution — exclude from donor lists.
+    return { isContribution: false, isTransfer: false, receiptType: 'other_receipt', contributionCategory: 'other' };
   } else if (isLine15) {
     // Line 15 = Offsets to Operating Expenditures (vendor refunds/rebates).
     // NOT a real contribution — flag as vendor refund so it stays out of donor lists.

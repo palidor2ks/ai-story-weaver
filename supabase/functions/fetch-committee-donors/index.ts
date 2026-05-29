@@ -295,10 +295,11 @@ serve(async (req) => {
     const donorMap = new Map<string, AggregatedDonor>();
 
     // FEC Schedule A line numbers that are NOT donor contributions:
+    //   14 → refunds/rebates/returns from vendors and other federal committees
     //   15/17/17A/17C → vendor refunds/offsets (Line 15) and other federal receipts (Line 17)
     //   18 → transfers in, 20A → refunds of contributions out, 21 → other disbursements
-    const NON_CONTRIBUTION_LINES = new Set(['15', '17', '17A', '17C', '18', '20A', '21']);
-    const VENDOR_REFUND_LINES = new Set(['15', '17', '17A', '17C']);
+    const NON_CONTRIBUTION_LINES = new Set(['14', '15', '17', '17A', '17C', '18', '20A', '21']);
+    const VENDOR_REFUND_LINES = new Set(['14', '15', '17', '17A', '17C']);
 
     for (const receipt of allReceipts) {
       const contributorName = receipt.contributor_name || 'Unknown';
