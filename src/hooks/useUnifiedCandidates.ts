@@ -162,15 +162,34 @@ export const useUnifiedCandidates = ({
   const stateLegRaw = civicData?.stateLegislative ?? [];
   const localRaw = civicData?.local ?? [];
 
+  // Combined civic list, memoized so downstream useMemos don't churn
+  const civicAll = useMemo(
+    () => [...federalExecRaw, ...stateExecRaw, ...stateLegRaw, ...localRaw],
+    [federalExecRaw, stateExecRaw, stateLegRaw, localRaw],
+  );
+
+  // Build O(1) lookup maps once per data change
+  const lookups = useMemo(() => {
+    const dbById = new Map<string, DbCandidate>();
+    for (const c of dbCandidates) dbById.set(c.id, c);
+    const allById = new Map<string, Representative>();
+    for (const c of allPoliticians) allById.set(c.bioguide_id || c.id, c);
+    const repsById = new Map<string, Representative>();
+    for (const c of userReps) repsById.set(c.bioguide_id || c.id, c);
+    const civicById = new Map<string, CivicOfficial>();
+    for (const c of civicAll) civicById.set(c.id, c);
+    return { dbById, allById, repsById, civicById };
+  }, [dbCandidates, allPoliticians, userReps, civicAll]);
+
   // Collect all ids we need to look up scores for.
   const allIds = useMemo(() => {
     const set = new Set<string>();
     for (const c of dbCandidates) set.add(c.id);
     for (const c of allPoliticians) set.add(c.bioguide_id || c.id);
     for (const c of userReps) set.add(c.bioguide_id || c.id);
-    for (const c of [...federalExecRaw, ...stateExecRaw, ...stateLegRaw, ...localRaw]) set.add(c.id);
+    for (const c of civicAll) set.add(c.id);
     return Array.from(set);
-  }, [dbCandidates, allPoliticians, userReps, federalExecRaw, stateExecRaw, stateLegRaw, localRaw]);
+  }, [dbCandidates, allPoliticians, userReps, civicAll]);
 
   const { data: scoreMap } = useCandidateScoreMap(allIds);
 
@@ -178,25 +197,25 @@ export const useUnifiedCandidates = ({
   const { data: userQuizAnswers = [] } = useUserQuizQuestionIds();
   const repInfoList = useMemo(
     () =>
-      allIds.map((id) => {
-        const fromAll = allPoliticians.find((p) => (p.bioguide_id || p.id) === id);
-        const fromReps = userReps.find((p) => (p.bioguide_id || p.id) === id);
-        const fromCivic = [...federalExecRaw, ...stateExecRaw, ...stateLegRaw, ...localRaw].find(
-          (p) => p.id === id,
-        );
-        const fromDb = dbCandidates.find((p) => p.id === id);
-        const src = fromAll || fromReps || fromCivic || fromDb;
-        return src
-          ? {
-              id,
-              name: (src as any).name,
-              party: (src as any).party,
-              office: (src as any).office,
-              state: (src as any).state,
-            }
-          : null;
-      }).filter(Boolean) as { id: string; name: string; party: string; office: string; state: string }[],
-    [allIds, allPoliticians, userReps, federalExecRaw, stateExecRaw, stateLegRaw, localRaw, dbCandidates],
+      allIds
+        .map((id) => {
+          const src =
+            lookups.allById.get(id) ||
+            lookups.repsById.get(id) ||
+            lookups.civicById.get(id) ||
+            lookups.dbById.get(id);
+          return src
+            ? {
+                id,
+                name: (src as any).name,
+                party: (src as any).party,
+                office: (src as any).office,
+                state: (src as any).state,
+              }
+            : null;
+        })
+        .filter(Boolean) as { id: string; name: string; party: string; office: string; state: string }[],
+    [allIds, lookups],
   );
   const { data: scoresData } = useRepresentativeAnswersAndScores(repInfoList, userQuizAnswers);
   const matchByCandidate = scoresData?.scores ?? {};

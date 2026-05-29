@@ -1,45 +1,38 @@
 ## Goal
-
-Port the fixes from `palidor2ks/ai-story-weaver#116` ("Fix X OAuth connect flow") into PoliPulse. The PR addresses two real issues that also exist here:
-
-1. The token exchange uses a static `X_REDIRECT_URI` env var. If the start phase ever uses a different effective callback URL than the callback phase, X rejects the exchange with a `redirect_uri` mismatch.
-2. Token exchange/refresh hard-requires `X_CLIENT_SECRET`. Public OAuth clients (no secret) cannot connect or refresh.
-3. The admin UI silently swallows failures when loading connected accounts.
+Make the Candidates page feel fast: paint usable content in ~1 s instead of waiting on the slowest edge function, and stop rendering 500+ cards at once.
 
 ## Changes
 
-### 1. DB migration — store redirect URI on PKCE row
-- New migration adds `redirect_uri text` (nullable) to `public.x_oauth_pending`. No grants/policies change (table already configured).
+### 1. Stop blocking the whole page on slow sources (`src/pages/Candidates.tsx`)
+- Show the page as soon as DB candidates + all-Congress are ready. Treat civic officials (`fetch-civic-officials`) and address-bound reps as progressive enhancements.
+- Replace the all-or-nothing spinner with:
+  - Render the page when `dbCandidates` (and `allPoliticians` if `includeAllCongress`) finish.
+  - Show a small inline "Loading your representatives…" badge on the **My Reps**, **State**, **Local**, and **Executive** tabs while `civicLoading` / `repsLoading` are still true.
+- Expose `dbLoading`, `allLoading`, `civicLoading`, `repsLoading` separately from `useUnifiedCandidates` so the page can decide what to gate.
 
-### 2. `supabase/functions/x-oauth-start/index.ts`
-- Accept optional `{ redirect_to }` in the JSON body.
-- Resolve the effective redirect URI in this order: request body `redirect_to` → `X_REDIRECT_URI` env → error.
-- Validate it's a well-formed `https://` (or `http://localhost`) URL.
-- Persist `redirect_uri` on the inserted `x_oauth_pending` row.
-- Use the resolved URI in the `authorize_url` params instead of the env var.
+### 2. Virtualize the candidate grid
+- Add `@tanstack/react-virtual` (already commonly used) — or simple windowed rendering: render the first 60 cards, then load the next batch on scroll via `IntersectionObserver`.
+- Keep the existing grid layout; only the off-screen rows are deferred.
+- This cuts initial DOM nodes from ~500 cards × deep subtree to ~60, which is the single biggest paint win.
 
-### 3. `supabase/functions/x-oauth-callback/index.ts`
-- Read `pending.redirect_uri` (fallback to `X_REDIRECT_URI`) and use it for the token exchange `redirect_uri` field.
-- Make `X_CLIENT_SECRET` optional:
-  - If present → keep `Authorization: Basic base64(client_id:client_secret)` header.
-  - If absent → drop the Basic header and rely on `client_id` already in the form body (public client auth).
-- Remove the hard `oauth_not_configured` check on `CLIENT_SECRET`; only require `CLIENT_ID` and a resolvable redirect URI.
+### 3. Fix the O(N²) work in `useUnifiedCandidates`
+- Build lookup `Map`s once: `allPoliticiansById`, `userRepsById`, `civicById`, `dbById`. Replace the `.find()` calls inside the `allIds.map(...)` with map lookups.
+- Memoize the concatenated `civic` array (`[...federalExecRaw, ...stateExecRaw, ...stateLegRaw, ...localRaw]`) instead of rebuilding it inside `useMemo` deps and inside the per-id `.find()`.
 
-### 4. `supabase/functions/x-post-tweet/index.ts`
-- In `refreshIfNeeded`, build `tokenHeaders` conditionally — include Basic auth only when `CLIENT_SECRET` is set; otherwise send `client_id` in the body alone.
-- Keep all existing refresh + update behavior.
+### 4. Stabilize derived arrays in `Candidates.tsx`
+- Wrap `myRepsCombined` in `useMemo` so it doesn't get a new reference every render (currently invalidates `tabCandidates`).
+- Same for the inline `allCandidates.filter(c => c.office === 'Senator')` calls used in tab labels — compute office counts once.
 
-### 5. `src/pages/admin/XComposer.tsx`
-- In `handleConnect`, pass `{ redirect_to: \`${window.location.origin}/admin/x/callback\` }` (the existing callback route) to the start function so start and callback agree on the URI.
-- In `loadAccounts`, surface the error via `toast.error("Failed to load X accounts", { description: error.message })` instead of silently ignoring it.
+### 5. Defer the IE lookup
+- `useCandidatesIE(visibleIds)` should run on the *actually visible* slice (post-virtualization), not the first 120, and only after the initial paint. Use a `useDeferredValue` on `visibleIds` so filter typing doesn't re-fire it synchronously.
 
-### 6. `supabase/config.toml`
-- Add explicit `[functions.x-oauth-start]`, `[functions.x-oauth-callback]`, `[functions.x-post-tweet]` entries with `verify_jwt = true` (already enforced in code; this aligns config with the in-code requirement).
+## Out of scope (separate follow-ups)
+- Speeding up `fetch-civic-officials` itself (Open States 504s, sequential GitHub downloads) — that's a backend rework.
+- Caching `fetch-representatives` `fetchAll: true` server-side so the GitHub download isn't repeated per cold client.
+- Pagination at the API level for `all-politicians`.
 
-## Out of scope
-- No changes to `x_account_tokens` schema, RLS, or storage policies.
-- No changes to `discover-representative-x-handles`, `sync-representative-x-posts`, or `x-fetch-user-tweets`.
-- `src/integrations/supabase/types.ts` is regenerated automatically after the migration — not hand-edited.
-
-## Risk / verification
-- After deploy: click "Connect X" in `/admin/x-composer`, complete OAuth, confirm account appears and a test tweet posts. If `X_CLIENT_SECRET` is unset, the same flow should still succeed (public client path).
+## Verification
+- Cold-load `/candidates`: time-to-first-card should drop from "waits on civic edge fn (10–25 s)" to under ~2 s (DB + all-politicians only).
+- Scroll-through: no long-task warnings, smooth 60fps on the grid.
+- Filter/search latency: instant (no full-list re-render).
+- `My Reps` tab still shows civic-derived reps once `fetch-civic-officials` returns (with inline loading indicator until then).
