@@ -59,6 +59,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
 
   const topSpenders = (data.topSpenders ?? []).slice(0, 2);
   const topDonors = (data.topDonors ?? []).slice(0, 3);
+  const fundingBreakdown = (data.fundingBreakdown ?? []).slice(0, 4);
   const cycleLabel = data.ieCycle ? ` · ${data.ieCycle}` : '';
 
   const topics = [
@@ -321,50 +322,112 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
             </div>
           )}
 
-          {/* Topics (fills remaining space if present) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'end' }}>
-            {topics.slice(0, 2).map((t) => {
-              const pct = Math.min(100, Math.abs(t.score) * 10);
-              return (
-                <div
-                  key={t.topicName}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '220px 1fr 90px',
-                    alignItems: 'center',
-                    gap: 14,
-                  }}
-                >
-                  <div style={{ fontSize: 18, fontWeight: 600 }}>{truncate(t.topicName, 22)}</div>
-                  <div
-                    style={{
-                      height: 12,
-                      background: 'hsl(0 0% 100% / 0.15)',
-                      borderRadius: 999,
-                      overflow: 'hidden',
-                    }}
-                  >
+          {/* Funding Sources — carried over from the Patriot Card for the Stat Card */}
+          {fundingBreakdown.length > 0 ? (
+            <div
+              style={{
+                alignSelf: 'end',
+                border: `2px solid ${innerBorder}`,
+                borderRadius: 16,
+                padding: '14px 16px',
+                background: panelBg,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 14,
+                  letterSpacing: 2,
+                  textTransform: 'uppercase',
+                  color: mutedColor,
+                  marginBottom: 10,
+                  fontWeight: 700,
+                }}
+              >
+                Funding Sources{data.fundingCycle ? ` · ${data.fundingCycle} Cycle` : ''}
+              </div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {fundingBreakdown.map((b) => (
+                  <div key={b.label}>
                     <div
                       style={{
-                        width: `${pct}%`,
-                        height: '100%',
-                        background:
-                          t.score < 0
-                            ? 'hsl(214 89% 60%)'
-                            : t.score > 0
-                            ? FLAG_RED
-                            : 'hsl(270 60% 60%)',
-                        borderRadius: 999,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'baseline',
+                        gap: 12,
+                        marginBottom: 3,
                       }}
-                    />
+                    >
+                      <span style={{ fontSize: 16, fontWeight: 700, color: textColor }}>
+                        {truncate(b.label, 38)}
+                      </span>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: b.color }}>{b.pct}%</span>
+                    </div>
+                    <div
+                      style={{
+                        height: 8,
+                        borderRadius: 999,
+                        background: 'hsl(0 0% 100% / 0.14)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${Math.max(2, b.pct)}%`,
+                          height: '100%',
+                          background: b.color,
+                          borderRadius: 999,
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div style={{ fontSize: 18, fontWeight: 800, textAlign: 'right' }}>
-                    {formatScoreSafe(t.score)}
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'end' }}>
+              {topics.slice(0, 2).map((t) => {
+                const pct = Math.min(100, Math.abs(t.score) * 10);
+                return (
+                  <div
+                    key={t.topicName}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '220px 1fr 90px',
+                      alignItems: 'center',
+                      gap: 14,
+                    }}
+                  >
+                    <div style={{ fontSize: 18, fontWeight: 600 }}>{truncate(t.topicName, 22)}</div>
+                    <div
+                      style={{
+                        height: 12,
+                        background: 'hsl(0 0% 100% / 0.15)',
+                        borderRadius: 999,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${pct}%`,
+                          height: '100%',
+                          background:
+                            t.score < 0
+                              ? 'hsl(214 89% 60%)'
+                              : t.score > 0
+                              ? FLAG_RED
+                              : 'hsl(270 60% 60%)',
+                          borderRadius: 999,
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 800, textAlign: 'right' }}>
+                      {formatScoreSafe(t.score)}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Footer */}
           <div
