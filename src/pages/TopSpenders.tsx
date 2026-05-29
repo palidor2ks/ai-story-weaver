@@ -335,6 +335,7 @@ export default function TopSpenders() {
               placeholder="Search committee name…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search committees"
               className="pl-9"
             />
           </div>
