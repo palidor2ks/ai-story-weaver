@@ -39,12 +39,17 @@ const fmtMoneyShort = (n?: number | null) => {
 
 const truncate = (s: string, max = 30) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
 
+const scoreToPercent = (score?: number | null) => {
+  if (score === null || score === undefined || !Number.isFinite(score)) return 50;
+  const clamped = Math.max(-10, Math.min(10, score));
+  return ((clamped + 10) / 20) * 100;
+};
+
 export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
   const [imgFailed, setImgFailed] = useState(false);
   useEffect(() => {
     setImgFailed(false);
   }, [data.candidateImage]);
-
 
   const textColor = FLAG_WHITE;
   const mutedColor = 'hsl(214 35% 82%)';
@@ -57,6 +62,11 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
   const image = data.candidateImage;
 
   const ideology = formatScoreSafe(data.candidateScore);
+  const ideologyPosition = scoreToPercent(data.candidateScore);
+  const hasIdeologyScore =
+    data.candidateScore !== null &&
+    data.candidateScore !== undefined &&
+    Number.isFinite(data.candidateScore);
 
   const topSpenders = (data.topSpenders ?? []).slice(0, 2);
   const topDonors = (data.topDonors ?? []).slice(0, 3);
@@ -204,29 +214,110 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
             </div>
           </div>
 
-          {/* Hero ideology score */}
+          {/* Hero ideology spectrum */}
           <div
             style={{
               border: `3px solid ${innerBorder}`,
               borderRadius: 20,
-              padding: '12px 16px',
-              textAlign: 'center',
+              padding: '18px 18px 16px',
               background: panelBg,
             }}
           >
-            <div style={{ fontSize: 60, fontWeight: 900, lineHeight: 1, letterSpacing: -2 }}>
-              {ideology}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                gap: 16,
+                marginBottom: 16,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 14,
+                  letterSpacing: 2,
+                  textTransform: 'uppercase',
+                  color: mutedColor,
+                  fontWeight: 800,
+                }}
+              >
+                Ideology Spectrum
+              </div>
+              <div
+                style={{
+                  fontSize: 28,
+                  fontWeight: 900,
+                  color: hasIdeologyScore ? textColor : mutedColor,
+                  letterSpacing: -0.6,
+                }}
+              >
+                {ideology}
+              </div>
             </div>
             <div
               style={{
-                fontSize: 14,
-                marginTop: 6,
-                letterSpacing: 2,
-                textTransform: 'uppercase',
-                color: mutedColor,
+                position: 'relative',
+                height: 42,
+                margin: '0 4px',
               }}
             >
-              Ideology Score
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 12,
+                  height: 18,
+                  borderRadius: 999,
+                  background:
+                    'linear-gradient(90deg, hsl(214 89% 56%) 0%, hsl(270 72% 66%) 50%, hsl(0 76% 52%) 100%)',
+                  boxShadow:
+                    'inset 0 0 0 2px hsl(0 0% 100% / 0.35), 0 6px 14px hsl(220 80% 4% / 0.35)',
+                  opacity: hasIdeologyScore ? 1 : 0.45,
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: 5,
+                  width: 3,
+                  height: 32,
+                  borderRadius: 999,
+                  background: 'hsl(0 0% 100% / 0.7)',
+                  transform: 'translateX(-50%)',
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${ideologyPosition}%`,
+                  top: 0,
+                  width: 42,
+                  height: 42,
+                  borderRadius: '50%',
+                  border: `5px solid ${FLAG_WHITE}`,
+                  background: hasIdeologyScore ? FLAG_NAVY_DEEP : 'hsl(220 15% 35%)',
+                  transform: 'translateX(-50%)',
+                  boxShadow: '0 7px 18px hsl(220 80% 4% / 0.5)',
+                }}
+              />
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr',
+                color: mutedColor,
+                fontSize: 15,
+                fontWeight: 800,
+                letterSpacing: 1.4,
+                textTransform: 'uppercase',
+                marginTop: 6,
+              }}
+            >
+              <span>Left</span>
+              <span style={{ textAlign: 'center' }}>Center</span>
+              <span style={{ textAlign: 'right' }}>Right</span>
             </div>
           </div>
 
