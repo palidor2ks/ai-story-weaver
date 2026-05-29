@@ -83,7 +83,7 @@ async function imageToDataUrl(url: string): Promise<string | null> {
   }
 }
 
-async function renderAndUpload(post: SocialPost): Promise<{ shareUrl: string; id: string }> {
+async function renderAndUpload(post: SocialPost): Promise<{ shareUrl: string; id: string; imageUrl?: string }> {
   const stat = post.stat_payload ?? {};
   // fetch candidate row for image
   const { data: cand } = await supabase
