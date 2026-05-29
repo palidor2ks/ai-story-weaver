@@ -1,41 +1,34 @@
-## Why the photo is missing
+## Goal
+Apply PR #121 so FEC committee sync cursors are scoped to the selected receipt cycle. A cursor saved while syncing the 2024 receipt period must not be reused (or counted as "complete") when the admin runs a 2026 receipt sync.
 
-The Stat Card is falling back to initials ("AK") because the candidate image never resolves to a usable source:
+## Changes
 
-1. `ShareProfileButton` and `useCandidateShareCardData` try to convert the photo URL to a base64 data URL via `imageUrlToBase64`, which does a plain `fetch(url)` in the browser.
-2. The photo URL is almost always `https://bioguide.congress.gov/bioguide/photo/...jpg` (or another external host). Bioguide does **not** send `Access-Control-Allow-Origin`, so the browser blocks the `fetch` → `imageUrlToBase64` throws → `resolvedImage` stays as the raw bioguide URL.
-3. `CandidateStatCard` then renders `<img src={bioguideUrl} crossOrigin="anonymous" />`. Because the response has no CORS header, the browser rejects the load and fires `onError`, flipping `imgFailed = true` → initials fallback.
+1. **New migration** `supabase/migrations/<timestamp>_track_committee_sync_receipt_cycle.sql`
+   - `ALTER TABLE public.candidate_committees ADD COLUMN IF NOT EXISTS last_cycle text;`
+   - `CREATE INDEX IF NOT EXISTS idx_candidate_committees_last_cycle ON public.candidate_committees(candidate_id, last_cycle);`
 
-Net result: every cross-origin candidate photo (Bioguide, most state photo CDNs) silently fails. Only same-origin images (e.g. Supabase Storage on our own project) work today.
+2. **Edge function** `supabase/functions/fetch-fec-donors/index.ts`
+   - Add `lastCycle?: string | null` and `hasMore?: boolean` to the in-memory committee sync info type and merge logic.
+   - Select `last_cycle, has_more` in both `candidate_committees` queries and store them on the map.
+   - Replace the "needs sync" check so completion/cursor only count when `cmte.lastCycle === cycle`; otherwise treat as needing sync.
+   - When resuming, only use the saved `lastIndex`/`lastContributionDate` if `targetCommittee.lastCycle === cycle`; log when ignoring a stale cursor.
+   - Gate the "load existing donors to continue accumulation" branch on the same cycle-match condition.
+   - Write `last_cycle: cycle` alongside `last_index`/`has_more` when persisting the committee row.
 
-## Fix
+3. **Hook** `src/hooks/useCandidatesAnswerCoverage.ts`
+   - Select `last_cycle` on the `candidate_committees` query.
+   - Skip rows whose `last_cycle !== FINANCE_CYCLE` from sync-status derivation (P/A committees only).
+   - Only mark `completeSyncMap[candidate_id] = true` when `last_sync_completed_at` is set AND `has_more !== true`.
 
-Add a tiny image proxy and route all card image loads through it so the bytes come from our own origin with proper CORS + cache headers.
+4. **Admin panel docs** `src/components/admin/AnswerCoveragePanel.tsx`
+   - Fix the JSDoc cycle ranges: `Cycle 2026 = Jan 1, 2025 – Dec 31, 2026`, `Cycle 2024 = Jan 1, 2023 – Dec 31, 2024`.
 
-### 1. New edge function `proxy-image` (public, no JWT)
-- `GET /functions/v1/proxy-image?url=<encoded>`
-- Validates the URL: must be `https://`, hostname in an allowlist (`bioguide.congress.gov`, `*.house.gov`, `*.senate.gov`, `*.supabase.co`, `*.openstates.org`, our storage host).
-- Server-side `fetch` the image; pass `content-type` through (must start with `image/`).
-- Respond with the image bytes plus `Access-Control-Allow-Origin: *`, `Cache-Control: public, max-age=31536000, immutable`.
-- Rejects HTML, redirects to non-allowlisted hosts, and oversized payloads (>3 MB).
+## Notes
+- Migration is additive (`IF NOT EXISTS`), safe on existing data. Rows with `last_cycle IS NULL` will simply be treated as "not yet synced for this cycle", which is the correct behavior for legacy cursors.
+- No grants needed (column added to existing table; RLS unchanged).
+- The Supabase preview-branch error noted on the PR (`candidate_committees_candidate_id_fkey already exists`) is unrelated to this migration — it's a pre-existing FK migration that fails on the preview branch only.
 
-### 2. Frontend changes
-- New helper `src/lib/imageProxy.ts` exporting `proxiedImageUrl(url)` — returns the original URL if it's same-origin / data URL, otherwise wraps it as `${SUPABASE_URL}/functions/v1/proxy-image?url=...`.
-- Update both `imageUrlToBase64` implementations (`src/components/ShareProfileButton.tsx` and `src/hooks/useCandidateShareCardData.ts`) to call `proxiedImageUrl(url)` before `fetch`. This makes base64 conversion succeed for Bioguide, so the modal preview and the html-to-image PNG export both embed the real photo.
-- In `CandidateStatCard` (and `EditorialCard`, which also reads `candidateImage`), if `image` is still an http(s) URL at render time (base64 conversion in flight or failed), render `<img src={proxiedImageUrl(image)} ...>` instead of the raw URL. Keep the existing `onError` → initials fallback as a last resort.
-
-### 3. Verification
-- Open a Bioguide-backed candidate (e.g. Andy Kim `K000377`) → Share → Stat Card. Photo should now appear in preview and in the downloaded/posted PNG.
-- Network tab should show one `proxy-image?url=...bioguide...` request returning `200 image/jpeg` with `access-control-allow-origin: *`.
-- Initials fallback still kicks in only when the upstream URL truly 404s.
-
-### Files touched
-- `supabase/functions/proxy-image/index.ts` (new)
-- `supabase/config.toml` (register function, `verify_jwt = false`)
-- `src/lib/imageProxy.ts` (new)
-- `src/components/ShareProfileButton.tsx`
-- `src/hooks/useCandidateShareCardData.ts`
-- `src/components/share/templates/CandidateStatCard.tsx`
-- `src/components/share/templates/EditorialCard.tsx`
-
-No DB / schema changes.
+## Verification
+- `npx tsc --noEmit` should be clean.
+- Manually: run a 2026 receipt sync on a candidate whose committees were last completed for 2024 → cursor is ignored, fresh pagination starts, log shows "Ignoring saved cursor … does not match requested receipt cycle 2026".
+- Admin coverage panel: a candidate fully synced for 2024 should NOT show as "complete" when the cycle selector is set to 2026.
