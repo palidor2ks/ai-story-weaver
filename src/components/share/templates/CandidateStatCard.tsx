@@ -244,29 +244,29 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
               >
                 Top Outside Spenders{cycleLabel}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {topSpenders.map((s, i) => (
                   <div
                     key={`${s.name}-${i}`}
                     style={{
                       border: `2px solid ${innerBorder}`,
-                      borderRadius: 16,
-                      padding: '14px 16px',
+                      borderRadius: 14,
+                      padding: '10px 14px',
                       background: panelBg,
                     }}
                   >
                     <div
                       style={{
-                        fontSize: 18,
+                        fontSize: 15,
                         fontWeight: 700,
                         lineHeight: 1.2,
-                        marginBottom: 8,
-                        minHeight: 44,
+                        marginBottom: 6,
+                        minHeight: 36,
                       }}
                     >
                       {truncate(s.name, 42)}
                     </div>
-                    <div style={{ display: 'flex', gap: 16, fontSize: 22, fontWeight: 800 }}>
+                    <div style={{ display: 'flex', gap: 14, fontSize: 18, fontWeight: 800 }}>
                       <span style={{ color: 'hsl(150 70% 70%)' }}>↑ {fmtMoneyShort(s.support)}</span>
                       <span style={{ color: 'hsl(0 80% 72%)' }}>↓ {fmtMoneyShort(s.oppose)}</span>
                     </div>
@@ -281,39 +281,39 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
             <div>
               <div
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   letterSpacing: 2,
                   textTransform: 'uppercase',
                   color: mutedColor,
-                  marginBottom: 8,
+                  marginBottom: 6,
                   fontWeight: 700,
                 }}
               >
                 Top Donors
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                 {topDonors.map((d, i) => (
                   <div
                     key={`${d.name}-${i}`}
                     style={{
                       border: `2px solid ${innerBorder}`,
-                      borderRadius: 14,
-                      padding: '12px 14px',
+                      borderRadius: 12,
+                      padding: '10px 12px',
                       background: panelBg,
                     }}
                   >
                     <div
                       style={{
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: 700,
                         lineHeight: 1.2,
-                        marginBottom: 6,
-                        minHeight: 40,
+                        marginBottom: 4,
+                        minHeight: 34,
                       }}
                     >
                       {truncate(d.name, 32)}
                     </div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: FLAG_WHITE }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: FLAG_WHITE }}>
                       {fmtMoneyShort(d.amount)}
                     </div>
                   </div>
