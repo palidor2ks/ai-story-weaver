@@ -83,7 +83,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
         height: CARD_SIZE,
         background: cardBg,
         color: textColor,
-        padding: 48,
+        padding: 32,
         fontFamily: 'var(--font-sans, ui-sans-serif, system-ui, sans-serif)',
       }}
     >
@@ -104,7 +104,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
             left: 0,
             right: 0,
             bottom: 0,
-            height: 14,
+            height: 10,
             background: FLAG_RED,
           }}
         />
@@ -113,11 +113,11 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
           style={{
             position: 'relative',
             height: '100%',
-            padding: 40,
-            paddingBottom: 54,
+            padding: 28,
+            paddingBottom: 28,
             display: 'grid',
             gridTemplateRows: 'auto auto auto auto auto 1fr auto',
-            gap: 20,
+            gap: 12,
           }}
         >
           {/* Top brand bar */}
@@ -141,12 +141,12 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
           </div>
 
           {/* Identity row: photo + name */}
-          <div style={{ display: 'flex', gap: 26, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 22, alignItems: 'center' }}>
             <div
               style={{
-                width: 160,
-                height: 160,
-                borderRadius: 24,
+                width: 120,
+                height: 120,
+                borderRadius: 20,
                 border: `4px solid ${innerBorder}`,
                 overflow: 'hidden',
                 background: panelBg,
@@ -165,7 +165,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                   onError={() => setImgFailed(true)}
                 />
               ) : (
-                <div style={{ fontSize: 64, fontWeight: 900, color: mutedColor }}>
+                <div style={{ fontSize: 48, fontWeight: 900, color: mutedColor }}>
                   {name
                     .split(' ')
                     .map((s) => s[0])
@@ -175,12 +175,12 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
               )}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <span
                   style={{
-                    fontSize: 58,
+                    fontSize: 46,
                     fontWeight: 900,
-                    letterSpacing: -1.5,
+                    letterSpacing: -1.2,
                     lineHeight: 1.02,
                   }}
                 >
@@ -191,15 +191,15 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                     background: partyChipColor(party),
                     color: FLAG_WHITE,
                     fontWeight: 800,
-                    fontSize: 26,
-                    padding: '6px 18px',
+                    fontSize: 22,
+                    padding: '4px 14px',
                     borderRadius: 999,
                   }}
                 >
                   {partyInitial(party)}
                 </span>
               </div>
-              <div style={{ fontSize: 24, marginTop: 6, color: mutedColor }}>{office}</div>
+              <div style={{ fontSize: 20, marginTop: 4, color: mutedColor }}>{office}</div>
             </div>
           </div>
 
@@ -207,19 +207,19 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
           <div
             style={{
               border: `3px solid ${innerBorder}`,
-              borderRadius: 22,
-              padding: '18px 16px',
+              borderRadius: 20,
+              padding: '12px 16px',
               textAlign: 'center',
               background: panelBg,
             }}
           >
-            <div style={{ fontSize: 78, fontWeight: 900, lineHeight: 1, letterSpacing: -2 }}>
+            <div style={{ fontSize: 60, fontWeight: 900, lineHeight: 1, letterSpacing: -2 }}>
               {ideology}
             </div>
             <div
               style={{
-                fontSize: 16,
-                marginTop: 8,
+                fontSize: 14,
+                marginTop: 6,
                 letterSpacing: 2,
                 textTransform: 'uppercase',
                 color: mutedColor,
@@ -234,39 +234,39 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
             <div>
               <div
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   letterSpacing: 2,
                   textTransform: 'uppercase',
                   color: mutedColor,
-                  marginBottom: 8,
+                  marginBottom: 6,
                   fontWeight: 700,
                 }}
               >
                 Top Outside Spenders{cycleLabel}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {topSpenders.map((s, i) => (
                   <div
                     key={`${s.name}-${i}`}
                     style={{
                       border: `2px solid ${innerBorder}`,
-                      borderRadius: 16,
-                      padding: '14px 16px',
+                      borderRadius: 14,
+                      padding: '10px 14px',
                       background: panelBg,
                     }}
                   >
                     <div
                       style={{
-                        fontSize: 18,
+                        fontSize: 15,
                         fontWeight: 700,
                         lineHeight: 1.2,
-                        marginBottom: 8,
-                        minHeight: 44,
+                        marginBottom: 6,
+                        minHeight: 36,
                       }}
                     >
                       {truncate(s.name, 42)}
                     </div>
-                    <div style={{ display: 'flex', gap: 16, fontSize: 22, fontWeight: 800 }}>
+                    <div style={{ display: 'flex', gap: 14, fontSize: 18, fontWeight: 800 }}>
                       <span style={{ color: 'hsl(150 70% 70%)' }}>↑ {fmtMoneyShort(s.support)}</span>
                       <span style={{ color: 'hsl(0 80% 72%)' }}>↓ {fmtMoneyShort(s.oppose)}</span>
                     </div>
@@ -281,39 +281,39 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
             <div>
               <div
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   letterSpacing: 2,
                   textTransform: 'uppercase',
                   color: mutedColor,
-                  marginBottom: 8,
+                  marginBottom: 6,
                   fontWeight: 700,
                 }}
               >
                 Top Donors
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                 {topDonors.map((d, i) => (
                   <div
                     key={`${d.name}-${i}`}
                     style={{
                       border: `2px solid ${innerBorder}`,
-                      borderRadius: 14,
-                      padding: '12px 14px',
+                      borderRadius: 12,
+                      padding: '10px 12px',
                       background: panelBg,
                     }}
                   >
                     <div
                       style={{
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: 700,
                         lineHeight: 1.2,
-                        marginBottom: 6,
-                        minHeight: 40,
+                        marginBottom: 4,
+                        minHeight: 34,
                       }}
                     >
                       {truncate(d.name, 32)}
                     </div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: FLAG_WHITE }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: FLAG_WHITE }}>
                       {fmtMoneyShort(d.amount)}
                     </div>
                   </div>
@@ -328,24 +328,24 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
               style={{
                 alignSelf: 'end',
                 border: `2px solid ${innerBorder}`,
-                borderRadius: 16,
-                padding: '14px 16px',
+                borderRadius: 14,
+                padding: '10px 14px',
                 background: panelBg,
               }}
             >
               <div
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   letterSpacing: 2,
                   textTransform: 'uppercase',
                   color: mutedColor,
-                  marginBottom: 10,
+                  marginBottom: 6,
                   fontWeight: 700,
                 }}
               >
                 Funding Sources{data.fundingCycle ? ` · ${data.fundingCycle} Cycle` : ''}
               </div>
-              <div style={{ display: 'grid', gap: 8 }}>
+              <div style={{ display: 'grid', gap: 5 }}>
                 {fundingBreakdown.map((b) => (
                   <div key={b.label}>
                     <div
@@ -354,17 +354,17 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                         justifyContent: 'space-between',
                         alignItems: 'baseline',
                         gap: 12,
-                        marginBottom: 3,
+                        marginBottom: 2,
                       }}
                     >
-                      <span style={{ fontSize: 16, fontWeight: 700, color: textColor }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: textColor }}>
                         {truncate(b.label, 38)}
                       </span>
-                      <span style={{ fontSize: 16, fontWeight: 800, color: b.color }}>{b.pct}%</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: b.color }}>{b.pct}%</span>
                     </div>
                     <div
                       style={{
-                        height: 8,
+                        height: 6,
                         borderRadius: 999,
                         background: 'hsl(0 0% 100% / 0.14)',
                         overflow: 'hidden',
