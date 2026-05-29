@@ -245,13 +245,14 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
   const [busy, setBusy] = useState<string | null>(null);
   const [localPlatforms, setLocalPlatforms] = useState(platforms);
   useEffect(() => setLocalPlatforms(platforms), [platforms]);
+  const canRenderProfileCard = post.subject_type === 'candidate' || post.subject_type === 'rep_profile';
 
   // Offscreen renderer for the rep-profile share card. We always mount it so
   // the underlying hooks pre-fetch donor/finance/IE data — by the time the
   // admin clicks "Render", the DOM node is ready to capture.
   const cardNodeRef = useRef<HTMLDivElement | null>(null);
   const { data: cardData, loading: cardLoading } = useCandidateShareCardData(
-    post.subject_type === 'candidate' ? post.subject_id : null,
+    canRenderProfileCard ? post.subject_id : null,
   );
   const cardDataRef = useRef(cardData);
   const cardLoadingRef = useRef(cardLoading);
@@ -416,7 +417,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
         </div>
 
         {/* Offscreen full-fidelity card (matches the rep-profile share card) */}
-        {post.subject_type === 'candidate' && (
+        {canRenderProfileCard && (
           <div
             aria-hidden
             style={{
