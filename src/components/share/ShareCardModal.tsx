@@ -35,9 +35,6 @@ import { trackEvent } from '@/lib/analytics';
 const TEMPLATES_BY_KIND = {
   'candidate-alignment': [
     { id: 'stat', label: 'Stat Card', Component: (props: { data: CardData }) => <CandidateStatCard {...props} variant='classic' /> },
-    { id: 'classic', label: 'Patriot Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
-    { id: 'holo', label: 'Issue Breakdown', Component: (props: { data: CardData }) => <DataCard {...props} /> },
-    { id: 'night', label: 'Editorial Match', Component: (props: { data: CardData }) => <EditorialCard {...props} /> },
   ],
   'donor-stats': [
     { id: 'classic', label: 'Patriot Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
@@ -115,7 +112,8 @@ export const ShareCardModal = ({
   caption,
 }: ShareCardModalProps) => {
   const templates = TEMPLATES_BY_KIND[data.kind];
-  const [selected, setSelected] = useState<TemplateId>('classic');
+  const defaultTemplate = data.kind === 'candidate-alignment' ? 'stat' : 'classic';
+  const [selected, setSelected] = useState<TemplateId>(defaultTemplate);
   const [busy, setBusy] = useState<null | 'download' | 'copy' | 'native'>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const refs = useRef<Record<TemplateId, HTMLDivElement | null>>({
@@ -139,13 +137,14 @@ export const ShareCardModal = ({
       setBody(defaultBody);
       setIncludeHashtags(true);
       editedFiredRef.current = false;
+      setSelected(defaultTemplate);
       trackEvent('share_modal_opened', {
         surface,
         kind: caption.kind,
-        templateDefault: 'classic',
+        templateDefault: defaultTemplate,
       });
     }
-  }, [open, defaultBody, surface, caption.kind]);
+  }, [open, defaultBody, surface, caption.kind, defaultTemplate]);
 
   // Fire once per session when caption first diverges from the suggestion
   useEffect(() => {
@@ -373,7 +372,7 @@ export const ShareCardModal = ({
       setBusy(null);
     }
   };
-  const SelectedComponent = templates.find(t => t.id === selected)!.Component;
+  const SelectedComponent = (templates.find(t => t.id === selected) ?? templates[0]).Component;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
