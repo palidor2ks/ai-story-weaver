@@ -497,6 +497,7 @@ serve(async (req) => {
       lastContributionDate?: string;
       lastIndex?: string;
       lastSyncCompletedAt?: string;
+      lastCycle?: string | null;
       hasMore?: boolean;
     }
     
@@ -518,6 +519,8 @@ serve(async (req) => {
         if (syncInfo?.lastSyncDate && !existing.lastSyncDate) existing.lastSyncDate = syncInfo.lastSyncDate;
         if (syncInfo?.lastContributionDate && !existing.lastContributionDate) existing.lastContributionDate = syncInfo.lastContributionDate;
         if (syncInfo?.lastSyncCompletedAt && !existing.lastSyncCompletedAt) existing.lastSyncCompletedAt = syncInfo.lastSyncCompletedAt;
+        if (syncInfo?.lastCycle && !existing.lastCycle) existing.lastCycle = syncInfo.lastCycle;
+        if (syncInfo?.hasMore !== undefined && existing.hasMore === undefined) existing.hasMore = syncInfo.hasMore;
         return;
       }
       
@@ -529,7 +532,7 @@ serve(async (req) => {
     // Fetch existing committee sync info from database
     const { data: existingCommittees } = await supabase
       .from('candidate_committees')
-      .select('fec_committee_id, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
+      .select('fec_committee_id, last_sync_date, last_contribution_date, last_index, last_sync_completed_at, last_cycle, has_more')
       .eq('candidate_id', candidateId);
 
     const committeeSyncInfo = new Map(
@@ -537,7 +540,9 @@ serve(async (req) => {
         lastSyncDate: c.last_sync_date,
         lastContributionDate: c.last_contribution_date,
         lastIndex: c.last_index,
-        lastSyncCompletedAt: c.last_sync_completed_at
+        lastSyncCompletedAt: c.last_sync_completed_at,
+        lastCycle: c.last_cycle,
+        hasMore: c.has_more
       }])
     );
 
@@ -660,7 +665,7 @@ serve(async (req) => {
 
       const { data: refreshedCommittees } = await supabase
         .from('candidate_committees')
-        .select('fec_committee_id, designation, last_sync_date, last_contribution_date, last_index, last_sync_completed_at')
+        .select('fec_committee_id, designation, last_sync_date, last_contribution_date, last_index, last_sync_completed_at, last_cycle, has_more')
         .eq('candidate_id', candidateId);
 
       (refreshedCommittees || []).forEach(c => {
@@ -669,6 +674,8 @@ serve(async (req) => {
           lastContributionDate: c.last_contribution_date,
           lastIndex: c.last_index,
           lastSyncCompletedAt: c.last_sync_completed_at,
+          lastCycle: c.last_cycle,
+          hasMore: c.has_more,
         });
       });
     }
@@ -747,9 +754,13 @@ serve(async (req) => {
     let remainingCommittees = 0;
     
     for (const cmte of committeesToSync) {
-      const hasIncompleteSync = cmte.lastIndex && !cmte.lastSyncCompletedAt;
-      const neverSynced = !cmte.lastSyncCompletedAt;
-      const needsSync = forceFullSync || hasIncompleteSync || neverSynced;
+      // Cursors/completion are scoped to the selected FEC receipt cycle (two-year
+      // transaction period), not the candidate's own election year. A committee
+      // completed for 2024 still needs a fresh 2026 receipt-period sync.
+      const syncMatchesRequestedCycle = cmte.lastCycle === cycle;
+      const hasIncompleteSync = syncMatchesRequestedCycle && cmte.lastIndex && !cmte.lastSyncCompletedAt;
+      const cycleComplete = syncMatchesRequestedCycle && !!cmte.lastSyncCompletedAt && cmte.hasMore !== true;
+      const needsSync = forceFullSync || hasIncompleteSync || !cycleComplete;
       
       if (needsSync) {
         if (!targetCommittee) {
@@ -852,10 +863,13 @@ serve(async (req) => {
     let lastIndex: string | null = null;
     let lastContributionDate: string | null = null;
     
-    if (resumeFromCursor && !forceFullSync && targetCommittee.lastIndex && targetCommittee.lastContributionDate) {
+    const cursorMatchesRequestedCycle = targetCommittee.lastCycle === cycle;
+    if (resumeFromCursor && !forceFullSync && cursorMatchesRequestedCycle && targetCommittee.lastIndex && targetCommittee.lastContributionDate) {
       lastIndex = targetCommittee.lastIndex;
       lastContributionDate = targetCommittee.lastContributionDate;
-      console.log(`[FEC-DONORS] Resuming ${committeeId} from cursor: ${lastIndex}`);
+      console.log(`[FEC-DONORS] Resuming ${committeeId} from ${cycle} receipt-period cursor: ${lastIndex}`);
+    } else if (resumeFromCursor && !forceFullSync && targetCommittee.lastIndex && !cursorMatchesRequestedCycle) {
+      console.log(`[FEC-DONORS] Ignoring saved cursor for ${committeeId}; cursor cycle ${targetCommittee.lastCycle || 'unknown'} does not match requested receipt cycle ${cycle}`);
     }
 
     // Per-committee aggregation - accumulates across all pages
@@ -866,8 +880,8 @@ serve(async (req) => {
     
     // For resumable syncs, load existing donors from DB to continue accumulating
     // NOTE: For J/U/B/D committees, we load donors with candidate_id = null
-    if (resumeFromCursor && targetCommittee.lastIndex && !forceFullSync) {
-      console.log(`[FEC-DONORS] Loading existing donors from DB to continue accumulation...`);
+    if (resumeFromCursor && cursorMatchesRequestedCycle && targetCommittee.lastIndex && !forceFullSync) {
+      console.log(`[FEC-DONORS] Loading existing ${cycle} receipt-period donors from DB to continue accumulation...`);
       
       let existingDonorsQuery = supabase
         .from('donors')
@@ -1069,6 +1083,7 @@ serve(async (req) => {
         last_sync_date: new Date().toISOString(),
         last_contribution_date: lastContributionDate,
         last_index: hasMore ? lastIndex : null, // Clear cursor when complete
+        last_cycle: cycle,
         local_itemized_total: committeeItemized,
         has_more: hasMore
       };
