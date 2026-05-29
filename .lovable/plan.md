@@ -1,91 +1,26 @@
-# Daily Social Stat-Card Auto-Poster
+## Problem
 
-## What it does
-Every day at 7pm ET, a cron job picks a rep, renders the same stat card that the **Share** button on the rep profile produces, drafts captions per platform, and creates a queued post. An admin page lets you review, edit, approve, reject, and see posted history. A global toggle switches the system between **Manual** (drafts only; nothing posts without click) and **Auto** (drafts auto-post at 7pm). Starts in Manual.
+On `/admin/social-posts`, the **View card** link opens `post.share_url`, which points at the `share-card-page` edge function. That endpoint serves an HTML page designed for social-media unfurling (OG meta tags + redirect to the candidate profile), not the rendered PNG. So clicking "View card" either redirects to the candidate page or shows a blank/unhelpful page — i.e., it "doesn't work" as a way to preview the image.
 
-## Workflow
+The actual PNG is uploaded to the public `share-cards` storage bucket at path `{id}.png`, but its URL is never stored on the `social_posts` row.
 
-```text
-7pm ET cron
-   │
-   ▼
-pick-daily-stat-card  ──► choose rep + stat (rotates, skips recent)
-   │
-   ▼
-render shareable card (reuse rep-profile share image pipeline)
-   │
-   ▼
-generate-social-caption (per platform: X, FB, IG, TikTok)
-   │
-   ▼
-insert row in social_posts (status = 'pending_review')
-   │
-   ▼
-   ┌───────────────┴───────────────┐
-   │ Manual mode                   │ Auto mode
-   │ wait for admin Approve        │ auto-approve after N hours
-   │                               │ unless admin rejects
-   └───────────────┬───────────────┘
-                   ▼
-         post-social-card  ──► X / FB / IG / TikTok
-                   ▼
-         status = 'posted' + per-platform IDs/URLs
-```
+## Fix
 
-## Admin page: `/admin/social-posts`
+Link "View card" to the real image URL.
 
-Three tabs:
-- **Queue** — drafts awaiting approval. Card preview, editable captions per platform, platform checkboxes, **Approve & Post Now**, **Reject**, **Regenerate caption**.
-- **Scheduled / Posted** — history with timestamps, links to each platform post, re-post button.
-- **Settings** — toggle Manual ↔ Auto, default posting time (default 7pm ET), per-platform on/off, source rotation rules ("which rep types to include").
+1. **`supabase/functions/upload-share-card/index.ts`** — also return `imageUrl` (the public storage URL for the uploaded PNG) alongside `shareUrl`.
 
-Also a **Generate now** button to create a draft on demand (useful for testing without waiting for cron).
+2. **`src/lib/shareUpload.ts`** — extend the return type with `imageUrl` and pass it through.
 
-## Source: reusing the rep-profile share card
-- The existing **Share** button on a rep profile page already produces a stat-card image via `upload-share-card`. The new edge function calls that same code path with a chosen rep + stat, so cards look identical to manually shared ones.
-- Schema is generic (`subject_type`, `subject_id`) so we can later add `donor_profile`, `bill`, etc. without migrations.
+3. **`src/pages/admin/SocialPosts.tsx`** —
+   - In `renderAndUpload`, persist `image_url` (the PNG URL) on the `social_posts` row in addition to `share_url`.
+   - Change the "View card" anchor to prefer `post.image_url`, falling back to `post.share_url` for older rows that don't have it.
 
-## Platforms
-- **X** — already wired (`x-post-tweet`, OAuth tokens stored).
-- **Facebook / Instagram** — require a Meta app + Page access token + IG Business account. I'll stub the post functions and request the secrets when you're ready to enable.
-- **TikTok** — requires TikTok Content Posting API approval (slowest). Stubbed for v1, behind the per-platform toggle.
-
-In v1 only X actually posts; FB/IG/TikTok show in the UI as "credentials required" and stay disabled until you add the tokens.
-
----
-
-## Technical details
-
-### Database (new tables)
-- `social_posts` — `id`, `subject_type` ('rep_profile'), `subject_id` (candidate id), `stat_key`, `image_path`, `image_url`, `share_url`, `status` ('pending_review' | 'approved' | 'posted' | 'rejected' | 'failed'), `scheduled_for`, `posted_at`, `created_by`, `reviewed_by`, timestamps. RLS: admins manage, service_role bypass.
-- `social_post_platforms` — `post_id` FK, `platform` ('x'|'facebook'|'instagram'|'tiktok'), `caption`, `status`, `external_post_id`, `external_url`, `error`, `posted_at`. RLS same.
-- `social_post_settings` — singleton row: `mode` ('manual'|'auto'), `post_time_local` (default '19:00'), `timezone` ('America/New_York'), `auto_approve_after_hours`, per-platform enabled flags.
-
-### Edge functions
-- `pick-daily-stat-card` (cron 7pm ET, `verify_jwt = false`): selects next rep using round-robin over reps not featured in last N days, picks a notable stat (score, vote, donor total), calls render + caption, inserts draft. If `mode = 'auto'`, immediately schedules `post-social-card`; otherwise leaves `pending_review`.
-- `generate-stat-card-image` (or reuse existing share-card render path): produces PNG + share URL identical to the rep profile Share output.
-- `generate-social-caption`: Lovable AI Gateway, plain text, per-platform length limits (X 280 incl. share URL reserved, IG/FB longer with hashtags, TikTok caption short).
-- `post-social-card`: posts to each enabled platform, writes per-platform results back. For X reuses existing OAuth + media upload pattern; FB/IG/TikTok stubs return "not configured" until secrets exist.
-- `social-post-actions` (admin-only, JWT verified, `has_role` check): approve, reject, regenerate caption, post now, re-post.
-
-### Cron
-Two pg_cron jobs:
-1. `pick-daily-stat-card` at `0 0 * * *` UTC (= 7pm ET during EST, 8pm during EDT — or we run hourly and let the function check `post_time_local` against current ET to avoid DST drift). I'll use the hourly-with-timezone-check approach so 7pm ET stays correct year-round.
-2. `auto-approve-and-post` hourly: in auto mode, finds pending drafts older than `auto_approve_after_hours` and posts them.
-
-### Frontend
-- `src/pages/admin/SocialPosts.tsx` — three-tab admin UI described above.
-- `src/components/admin/SocialPostCard.tsx` — preview + per-platform editors.
-- Add nav link in `src/pages/Admin.tsx`.
-
-## Out of scope (v1)
-- Real FB/IG/TikTok posting (UI + schema ready; flip on once tokens are added).
-- Donor-profile / bill cards (schema is generic so we add them later by extending `pick-daily-stat-card`).
-- Analytics on post performance (likes, impressions).
-- Per-rep scheduling rules beyond round-robin.
+No DB schema changes needed — `social_posts.image_url` already exists.
 
 ## Verification
-- Click **Generate now** in admin → draft appears in Queue with rendered card matching the rep-profile Share image.
-- Click **Approve & Post Now** with X enabled → tweet appears, status flips to `posted`, link saved.
-- Toggle to Auto mode, set `auto_approve_after_hours = 0`, run cron manually → draft posts to X without admin click.
-- Switch back to Manual → next cron run only creates draft, doesn't post.
+
+- Open `/admin/social-posts` → Queue tab.
+- Click **Re-render** on an existing post → toast succeeds, row refetches.
+- Click **View card** → opens the PNG directly in a new tab.
+- Older rows without `image_url` still open (falling back to the share page).
