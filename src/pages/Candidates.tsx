@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, useDeferredValue } from 'react';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { CandidateCard } from '@/components/CandidateCard';
@@ -11,10 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X } from 'lucide-react';
+import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X, Loader2 } from 'lucide-react';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
 import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
+
+const PAGE_SIZE = 60;
 
 
 export const Candidates = () => {
