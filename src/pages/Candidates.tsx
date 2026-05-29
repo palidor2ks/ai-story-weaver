@@ -366,22 +366,30 @@ export const Candidates = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <p className="text-sm text-muted-foreground">
-            Showing {filteredCandidates.length} politician{filteredCandidates.length !== 1 ? 's' : ''}
+            Showing {Math.min(visibleCount, filteredCandidates.length)} of {filteredCandidates.length} politician{filteredCandidates.length !== 1 ? 's' : ''}
           </p>
-          {compareMode && (
-            <p className="text-sm text-primary font-medium">
-              {selectedCandidates.length}/4 selected for comparison
-            </p>
-          )}
+          <div className="flex items-center gap-3">
+            {reposLoading && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading your representatives…
+              </span>
+            )}
+            {compareMode && (
+              <p className="text-sm text-primary font-medium">
+                {selectedCandidates.length}/4 selected for comparison
+              </p>
+            )}
+          </div>
         </div>
 
         <div className={cn(
           "grid gap-4 md:grid-cols-2 lg:grid-cols-3",
-          compareMode && compareReady && selectedCandidates.length > 0 && "pb-[80vh] sm:pb-48" // Space for compare panel (taller on mobile)
+          compareMode && compareReady && selectedCandidates.length > 0 && "pb-[80vh] sm:pb-48"
         )}>
-          {filteredCandidates.map((candidate, index) => (
+          {visibleCandidates.map((candidate, index) => (
             <CandidateCard 
               key={candidate.id} 
               candidate={candidate}
@@ -393,6 +401,12 @@ export const Candidates = () => {
             />
           ))}
         </div>
+
+        {visibleCount < filteredCandidates.length && (
+          <div ref={sentinelRef} className="flex justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        )}
 
         {filteredCandidates.length === 0 && (
           <div className="text-center py-16">
