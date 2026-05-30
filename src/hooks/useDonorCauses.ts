@@ -14,16 +14,17 @@ export interface DonorCauseInfo {
 }
 
 const norm = (s: string) => s.trim().toUpperCase();
+const CAUSE_ELIGIBLE_DONOR_TYPES = new Set(['Individual', 'PAC', 'Organization']);
 
 export interface DonorNameInput {
   name: string;
-  type: string; // 'PAC' | 'Organization' | ...
+  type: string; // 'Individual' | 'PAC' | 'Organization' | ...
 }
 
 export function useDonorCauses(inputs: DonorNameInput[]) {
   const uniqueInputs = Array.from(
     inputs
-      .filter(d => d.name && (d.type === 'PAC' || d.type === 'Organization'))
+      .filter(d => d.name && CAUSE_ELIGIBLE_DONOR_TYPES.has(d.type))
       .reduce((map, d) => {
         const key = `${norm(d.name)}|${d.type}`;
         if (!map.has(key)) map.set(key, { name: d.name.trim(), type: d.type });
