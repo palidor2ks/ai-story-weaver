@@ -13,6 +13,14 @@ import {
 import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
+export interface RelatedEntity {
+  name: string;
+  fec_id: string | null;
+  relationship: string;
+  evidence: string;
+  citation: string | null;
+}
+
 export interface RecipientAnalysis {
   summary: string;
   analysis: string;
@@ -22,6 +30,7 @@ export interface RecipientAnalysis {
   notable_recipients?: string[];
   controversies?: string[];
   causes?: string[];
+  related_entities?: RelatedEntity[];
   finance_claims?: string[];
   public_context_claims?: string[];
   insufficient_information: boolean;
@@ -31,6 +40,8 @@ export interface RecipientAnalysis {
   sources: { title: string; url: string }[];
   provider?: string;
   provider_errors?: { provider: string; status: number; code: string }[];
+  aliased_fec_ids?: string[];
+  alias_canonical_name?: string | null;
 }
 
 interface Props {
