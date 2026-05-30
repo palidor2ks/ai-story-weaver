@@ -293,7 +293,7 @@ export const UserProfile = () => {
         <div className="flex-1 min-w-0">
           <h4 className="font-semibold text-foreground line-clamp-2 break-words">{official.name}</h4>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-muted-foreground">{official.office}</span>
+            <span className="text-sm text-muted-foreground">{normalizeOfficeName(official.office)}</span>
             <Badge variant="outline" className={cn("text-xs", getPartyColor(official.party))}>
               {official.party}
             </Badge>
