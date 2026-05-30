@@ -442,29 +442,26 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                     >
                       {truncate(d.name, 32)}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                      <span style={{ fontSize: 18, fontWeight: 800, color: FLAG_WHITE, flexShrink: 0 }}>
+                    <div style={{ display: 'grid', gap: 3, minWidth: 0 }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: FLAG_WHITE }}>
                         {fmtMoneyShort(d.amount)}
-                      </span>
+                      </div>
                       {d.primaryCause && (
-                        <span
+                        <div
                           style={{
                             minWidth: 0,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
-                            border: '1px solid hsl(0 0% 100% / 0.45)',
-                            borderRadius: 999,
-                            padding: '2px 7px',
                             color: 'hsl(196 88% 72%)',
-                            background: 'hsl(196 88% 40% / 0.18)',
                             fontSize: 12,
                             fontWeight: 800,
+                            letterSpacing: 0.2,
                             lineHeight: 1.15,
                           }}
                         >
-                          Cause: {truncate(d.primaryCause, 14)}
-                        </span>
+                          Primary cause: {truncate(d.primaryCause, 18)}
+                        </div>
                       )}
                     </div>
                   </div>

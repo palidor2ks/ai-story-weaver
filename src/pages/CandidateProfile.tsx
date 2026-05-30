@@ -477,17 +477,37 @@ export const CandidateProfile = () => {
                     coverageTier={candidate.coverage_tier ?? undefined}
                     confidence={candidate.confidence ?? undefined}
                     topDonors={(() => {
-                      const agg = new Map<string, number>();
+                      const agg = new Map<
+                        string,
+                        { name: string; amount: number; type: (typeof donors)[number]['type'] }
+                      >();
                       donors
                         .filter((d) => !isConduitDonor(d) && !d.is_transfer)
                         .forEach((d) => {
-                          const n = (d.display_name || d.name || 'Unknown').trim();
-                          agg.set(n, (agg.get(n) ?? 0) + Number(d.amount ?? 0));
+                          const name = (d.display_name || d.name || 'Unknown').trim();
+                          const current = agg.get(name);
+                          if (current) {
+                            current.amount += Number(d.amount ?? 0);
+                            if (current.type === 'Unknown' && d.type !== 'Unknown') {
+                              current.type = d.type;
+                            }
+                            return;
+                          }
+                          agg.set(name, {
+                            name,
+                            amount: Number(d.amount ?? 0),
+                            type: d.type,
+                          });
                         });
-                      return Array.from(agg.entries())
-                        .sort((a, b) => b[1] - a[1])
+                      return Array.from(agg.values())
+                        .sort((a, b) => b.amount - a.amount)
                         .slice(0, 3)
-                        .map(([name, amount]) => ({ name, amount }));
+                        .map((donor) => ({
+                          name: donor.name,
+                          amount: donor.amount,
+                          primaryCause:
+                            getDonorCause(donorCauseMap, donor.name, donor.type)?.label ?? null,
+                        }));
                     })()}
                     fundingBreakdown={fundingBreakdownComputed}
                     fundingCycle={fundingInput.cycleLabel}

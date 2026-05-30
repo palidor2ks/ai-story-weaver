@@ -41,7 +41,7 @@ interface ShareProfileButtonProps {
   incumbent?: boolean;
   coverageTier?: string;
   confidence?: string;
-  topDonors?: { name: string; amount: number }[];
+  topDonors?: { name: string; amount: number; primaryCause?: string | null }[];
   fundingBreakdown?: { label: string; pct: number; color: string }[];
   fundingCycle?: string;
 }
