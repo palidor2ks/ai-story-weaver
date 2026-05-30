@@ -312,7 +312,7 @@ const DonorProfile = () => {
       // Step 2: pull contributions to those committees from the donors table.
       const { data, error } = await supabase
         .from('donors')
-        .select('name, display_name, type, amount, transaction_count')
+        .select('name, display_name, type, amount, transaction_count, cycle')
         .in('recipient_committee_id', Array.from(resolvedCommitteeIds))
         .order('amount', { ascending: false })
         .limit(5000);
@@ -325,17 +325,25 @@ const DonorProfile = () => {
         if (!contributorName) return;
         const amount = Number(row.amount || 0);
         const txns = Number(row.transaction_count || 1);
+        const cycle = String(row.cycle || '');
 
-        const existing = grouped.get(contributorName);
-        if (existing) {
-          existing.totalAmount += amount;
-          existing.contributionCount += txns;
-        } else {
-          grouped.set(contributorName, {
+        let entry = grouped.get(contributorName);
+        if (!entry) {
+          entry = {
             name: contributorName,
-            totalAmount: amount,
-            contributionCount: txns,
-          });
+            totalAmount: 0,
+            contributionCount: 0,
+            byCycle: {},
+          };
+          grouped.set(contributorName, entry);
+        }
+        entry.totalAmount += amount;
+        entry.contributionCount += txns;
+        if (cycle) {
+          const cur = entry.byCycle[cycle] || { totalAmount: 0, contributionCount: 0 };
+          cur.totalAmount += amount;
+          cur.contributionCount += txns;
+          entry.byCycle[cycle] = cur;
         }
       });
 
