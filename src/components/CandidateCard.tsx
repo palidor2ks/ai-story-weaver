@@ -11,6 +11,7 @@ import { OfficialAvatar } from './OfficialAvatar';
 import { useAuth } from '@/context/AuthContext';
 import { IESummaryInline } from './IESummaryInline';
 import type { IETotals } from '@/hooks/useIndependentExpenditures';
+import { normalizeOfficeName } from '@/lib/officeLabel';
 
 interface CandidateCardProps {
   candidate: Candidate;
