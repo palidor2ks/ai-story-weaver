@@ -1038,7 +1038,7 @@ const DonorProfile = () => {
                                 {contribution.candidates.name}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                {contribution.candidates.office} • {contribution.candidates.state}
+                                {normalizeOfficeName(contribution.candidates.office)} • {contribution.candidates.state}
                               </p>
                             </Link>
                           ) : contribution.recipient_committee_id ? (
