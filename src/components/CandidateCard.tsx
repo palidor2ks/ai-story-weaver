@@ -116,6 +116,7 @@ export const CandidateCard = ({
                   checked={isSelected}
                   onCheckedChange={() => onToggleSelect?.(candidate)}
                   className="w-5 h-5"
+                  aria-label={`Compare ${candidate.name}`}
                 />
               </div>
             )}
