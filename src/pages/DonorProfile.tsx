@@ -363,7 +363,10 @@ const DonorProfile = () => {
     }>();
 
     if (contributions.length > 0) {
-      contributions.forEach((contribution) => {
+      const src = profileCycleFilter === 'all'
+        ? contributions
+        : contributions.filter(c => c.cycle === profileCycleFilter);
+      src.forEach((contribution) => {
         const key = contribution.candidate_id || contribution.recipient_committee_id || contribution.recipient_committee_name || `unknown-${contribution.id}`;
         const existing = grouped.get(key);
         if (existing) {
@@ -378,7 +381,10 @@ const DonorProfile = () => {
         }
       });
     } else {
-      donorRecords.forEach((record) => {
+      const src = profileCycleFilter === 'all'
+        ? donorRecords
+        : donorRecords.filter(r => r.cycle === profileCycleFilter);
+      src.forEach((record) => {
         const key = record.candidate_id || record.recipient_committee_name || `unknown-${record.id}`;
         const existing = grouped.get(key);
         if (existing) {
@@ -395,7 +401,7 @@ const DonorProfile = () => {
     }
 
     return Array.from(grouped.values()).sort((a, b) => b.amount - a.amount);
-  }, [contributions, donorRecords]);
+  }, [contributions, donorRecords, profileCycleFilter]);
 
   // Get unique cycles for filter
   const availableCycles = useMemo(() => {
