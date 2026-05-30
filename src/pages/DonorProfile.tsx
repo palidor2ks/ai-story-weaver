@@ -802,9 +802,12 @@ const DonorProfile = () => {
 
         {/* Top Recipients */}
         <section>
-          <div className="flex items-center gap-3 mb-4">
-            <TrendingUp className="w-5 h-5 text-primary" />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-4 min-w-0">
+            <TrendingUp className="w-5 h-5 text-primary shrink-0" />
             <h2 className="font-display text-xl font-bold">Top Recipients</h2>
+            {profileCycleFilter !== 'all' && (
+              <span className="text-sm text-muted-foreground">({topRecipients.length} in {profileCycleFilter})</span>
+            )}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -814,7 +817,7 @@ const DonorProfile = () => {
               return (
                 <Card
                   key={`${record.candidate_id || recipientName || 'unknown'}-${index}`}
-                  className="h-full transition-all hover:shadow-md hover:border-primary/30 group"
+                  className="h-full transition-all hover:shadow-md hover:border-primary/30 group min-w-0"
                 >
                   <CardContent className="p-4">
                     <Link
