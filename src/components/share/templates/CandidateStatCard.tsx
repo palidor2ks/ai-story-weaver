@@ -226,8 +226,8 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
             height: '100%',
             padding: 28,
             paddingBottom: 28,
-            display: 'grid',
-            gridTemplateRows: 'auto auto auto auto auto 1fr auto',
+            display: 'flex',
+            flexDirection: 'column',
             gap: 12,
           }}
         >
@@ -585,7 +585,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
           {fundingBreakdown.length > 0 ? (
             <div
               style={{
-                alignSelf: 'end',
+                marginTop: 'auto',
                 border: `2px solid ${innerBorder}`,
                 borderRadius: 14,
                 padding: '10px 14px',
@@ -645,13 +645,17 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
           ) : hasAIAnalysisContent || data.aiAnalysisLoading ? (
             <div
               style={{
-                alignSelf: 'end',
+                marginTop: 'auto',
+                flex: '1 1 auto',
+                minHeight: 0,
                 border: `2px solid ${innerBorder}`,
                 borderRadius: 14,
-                padding: '12px 14px',
+                padding: '14px 16px',
                 background: panelBg,
-                display: 'grid',
-                gap: 9,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                gap: 10,
               }}
             >
               <div
@@ -674,17 +678,32 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                   {aiPositions.length > 0 && (
                     <div style={{ display: 'grid', gap: 5 }}>
                       {aiPositions.slice(0, 4).map((position) => (
-                        <div key={`${position.topic}-${position.stance}`} style={{ fontSize: 18, lineHeight: 1.22 }}>
-                          <span style={{ fontWeight: 900 }}>{truncate(position.topic, 24)}:</span>{' '}
-                          <span style={{ color: mutedColor, fontWeight: 600 }}>{truncate(position.stance, 76)}</span>
+                        <div
+                          key={`${position.topic}-${position.stance}`}
+                          style={{
+                            fontSize: 17,
+                            lineHeight: 1.22,
+                            overflowWrap: 'anywhere',
+                            wordBreak: 'normal',
+                          }}
+                        >
+                          <span style={{ fontWeight: 900 }}>{position.topic.trim()}:</span>{' '}
+                          <span style={{ color: mutedColor, fontWeight: 600 }}>{position.stance.trim()}</span>
                         </div>
                       ))}
                     </div>
                   )}
                   {aiGoals.length > 0 && (
-                    <div style={{ fontSize: 17, lineHeight: 1.28 }}>
+                    <div
+                      style={{
+                        fontSize: 16,
+                        lineHeight: 1.28,
+                        overflowWrap: 'anywhere',
+                        wordBreak: 'normal',
+                      }}
+                    >
                       <span style={{ fontWeight: 900 }}>Goals:</span>{' '}
-                      <span style={{ color: mutedColor, fontWeight: 600 }}>{truncate(toSentence(aiGoals), 170)}</span>
+                      <span style={{ color: mutedColor, fontWeight: 600 }}>{toSentence(aiGoals)}</span>
                     </div>
                   )}
                   {aiCauses.length > 0 && (
@@ -697,11 +716,14 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                             padding: '5px 10px',
                             background: 'hsl(0 0% 100% / 0.1)',
                             color: textColor,
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight: 800,
+                            lineHeight: 1.15,
+                            overflowWrap: 'anywhere',
+                            wordBreak: 'normal',
                           }}
                         >
-                          {truncate(cause, 34)}
+                          {cause.trim()}
                         </span>
                       ))}
                     </div>
@@ -710,7 +732,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
               )}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 'auto' }}>
               {topics.slice(0, 2).map((t) => {
                 const pct = Math.min(100, Math.abs(t.score) * 10);
                 return (
@@ -761,6 +783,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
+              marginTop: 0,
               fontSize: 18,
               color: mutedColor,
             }}
