@@ -53,6 +53,35 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useDonorCauses, getDonorCause } from '@/hooks/useDonorCauses';
 import { CauseBadge } from '@/components/CauseBadge';
 
+const normalizeDistrictLabel = (district: string | null | undefined) => {
+  const normalized = district?.toString().trim();
+  if (!normalized) return null;
+
+  if (/^district\b/i.test(normalized)) return normalized;
+
+  return `District ${normalized.replace(/^0+/, '') || normalized}`;
+};
+
+const getLocationLabel = (
+  state: string | null | undefined,
+  district: string | null | undefined,
+) => {
+  const stateLabel = state?.trim();
+  const districtLabel = normalizeDistrictLabel(district);
+
+  if (stateLabel && districtLabel) return `${stateLabel} · ${districtLabel}`;
+  return stateLabel ?? districtLabel ?? 'Location unavailable';
+};
+
+const getOfficeLocationLabel = (
+  office: string | null | undefined,
+  state: string | null | undefined,
+  district: string | null | undefined,
+) => {
+  const officeLabel = office?.trim() || 'Official';
+  return `${officeLabel} ${getLocationLabel(state, district)}`;
+};
+
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
   const { data: profile } = useProfile();
@@ -153,6 +182,9 @@ export const CandidateProfile = () => {
       </div>
     );
   }
+
+  const locationLabel = getLocationLabel(candidate.state, candidate.district);
+  const officeLocationLabel = getOfficeLocationLabel(candidate.office, candidate.state, candidate.district);
 
   const userScore = profile?.overall_score ?? 0;
   const matchScore = calculateMatchScore(userScore, resolvedScore);
@@ -323,7 +355,7 @@ export const CandidateProfile = () => {
           />
           <div className="min-w-0 flex-1">
             <p className="font-display font-bold text-sm truncate">{candidate.name}</p>
-            <p className="text-xs text-muted-foreground truncate">{candidate.party} · {candidate.office} {candidate.state}</p>
+            <p className="text-xs text-muted-foreground truncate">{candidate.party} · {officeLocationLabel}</p>
           </div>
         </div>
         <div className="hidden md:flex sticky top-16 z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border items-center gap-3 mb-6">
@@ -337,8 +369,7 @@ export const CandidateProfile = () => {
           <div className="min-w-0">
             <p className="font-display font-bold text-base truncate">{candidate.name}</p>
             <p className="text-sm text-muted-foreground truncate">
-              {candidate.office} {candidate.state}
-              {candidate.district ? ` (${candidate.district})` : ''}
+              {officeLocationLabel}
             </p>
           </div>
         </div>
@@ -370,7 +401,7 @@ export const CandidateProfile = () => {
                     <span>•</span>
                     <span className="flex items-center gap-1">
                       <MapPin className="w-4 h-4" />
-                      {candidate.state} {candidate.district && `(${candidate.district})`}
+                      {locationLabel}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
