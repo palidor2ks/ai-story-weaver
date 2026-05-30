@@ -23,6 +23,7 @@ import { useCandidatePersonalizedScore } from '@/hooks/useCandidatePersonalizedS
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { FundingSourcesBreakdown } from '@/components/FundingSourcesBreakdown';
+import { normalizeOfficeName } from '@/lib/officeLabel';
 import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
 import { cn, formatCompactCurrency } from '@/lib/utils';
@@ -440,7 +441,7 @@ export const CandidateProfile = () => {
                     {candidate.name}
                   </h1>
                   <div className="flex flex-wrap items-center gap-3 mt-2 text-muted-foreground">
-                    <span className="font-medium">{candidate.office}</span>
+                    <span className="font-medium">{normalizeOfficeName(candidate.office)}</span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
                       <MapPin className="w-4 h-4" />
@@ -621,7 +622,7 @@ export const CandidateProfile = () => {
                   {candidate.priorOffices.map((po, idx) => (
                     <div key={idx} className="flex items-center justify-between py-2 border-b last:border-b-0 border-border">
                       <div>
-                        <span className="font-medium">{po.office}</span>
+                        <span className="font-medium">{normalizeOfficeName(po.office)}</span>
                         {po.district && <span className="text-muted-foreground">, District {po.district}</span>}
                         <span className="text-muted-foreground"> — {po.state}</span>
                       </div>

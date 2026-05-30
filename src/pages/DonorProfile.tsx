@@ -15,6 +15,7 @@ import { getDonorCause, useDonorCauses } from '@/hooks/useDonorCauses';
 import { CauseBadge } from '@/components/CauseBadge';
 import { useAuth } from '@/context/AuthContext';
 import { formatCompactCurrency, formatFullCurrency } from '@/lib/utils';
+import { normalizeOfficeName } from '@/lib/officeLabel';
 import { 
   ArrowLeft, 
   Building2, 
@@ -830,7 +831,7 @@ const DonorProfile = () => {
                             {recipientName}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {record.candidates?.office} • {record.candidates?.state}
+                            {normalizeOfficeName(record.candidates?.office)} • {record.candidates?.state}
                           </p>
                         </div>
                         {record.candidates?.party && (
@@ -1037,7 +1038,7 @@ const DonorProfile = () => {
                                 {contribution.candidates.name}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                {contribution.candidates.office} • {contribution.candidates.state}
+                                {normalizeOfficeName(contribution.candidates.office)} • {contribution.candidates.state}
                               </p>
                             </Link>
                           ) : contribution.recipient_committee_id ? (

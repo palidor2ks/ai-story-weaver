@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { CivicOfficial } from '@/hooks/useCivicOfficials';
+import { normalizeOfficeName } from '@/lib/officeLabel';
 
 interface RepresentativeComparisonCardProps {
   official: CivicOfficial;
@@ -170,7 +171,7 @@ export function RepresentativeComparisonCard({ official, resolvedScore }: Repres
         <div className="flex-1 min-w-0">
           <h4 className="font-semibold text-foreground line-clamp-2 break-words">{official.name}</h4>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-muted-foreground">{official.office}</span>
+            <span className="text-sm text-muted-foreground">{normalizeOfficeName(official.office)}</span>
             <Badge variant="outline" className={cn("text-xs", getPartyColor(official.party))}>
               {official.party}
             </Badge>

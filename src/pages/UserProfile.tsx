@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { normalizeOfficeName } from '@/lib/officeLabel';
 import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info, Share2 } from 'lucide-react';
 import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
@@ -292,7 +293,7 @@ export const UserProfile = () => {
         <div className="flex-1 min-w-0">
           <h4 className="font-semibold text-foreground line-clamp-2 break-words">{official.name}</h4>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-muted-foreground">{official.office}</span>
+            <span className="text-sm text-muted-foreground">{normalizeOfficeName(official.office)}</span>
             <Badge variant="outline" className={cn("text-xs", getPartyColor(official.party))}>
               {official.party}
             </Badge>

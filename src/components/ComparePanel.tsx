@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useFinanceCycles } from '@/hooks/useFinanceCycles';
 import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
+import { normalizeOfficeName } from '@/lib/officeLabel';
 import { IESummaryInline } from './IESummaryInline';
 
 interface ComparePanelProps {
@@ -228,7 +229,7 @@ export const ComparePanel = ({
                     <div className="flex-1 min-w-0">
                       <h4 className="font-semibold text-sm text-foreground truncate">{candidate.name}</h4>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs text-muted-foreground truncate">{candidate.office}</span>
+                        <span className="text-xs text-muted-foreground truncate">{normalizeOfficeName(candidate.office)}</span>
                         <Badge variant="outline" className={cn('text-[10px] px-1 py-0', getPartyColor(candidate.party))}>
                           {candidate.party.charAt(0)}
                         </Badge>
