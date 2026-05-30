@@ -202,9 +202,13 @@ Deno.serve(async (req) => {
 
     const kindLabel = entity_kind === "candidate" ? "political candidate" : "political committee/PAC";
 
+    const sameEntityRule = isAliasedGroup
+      ? `All of the FEC IDs above (${aliasedFecIds.join(", ")}) are the SAME organization — analyze them together as one entity. Do not treat them as separate filers.`
+      : `Confirm you're looking at the SAME entity by matching the FEC ID, office, state, and donor profile above. If your search surfaces a DIFFERENT committee that shares the name (e.g. a predecessor, successor, or unrelated PAC), DO NOT stop — instead, analyze the anchored entity using whatever filings/news you can find for it, and list the same-named other committees in "related_entities" with relationship="possibly_related" or "same_name_distinct" and an evidence sentence explaining the link.`;
+
     const searchPrompt = `Research the ${kindLabel} "${entity_name}"${anchorBits ? ` (${anchorBits})` : ""}.
 
-Use FEC.gov, OpenSecrets, ProPublica, FollowTheMoney, Ballotpedia, Vote Smart, the entity's official site, and major news outlets. Confirm you're looking at the SAME entity by matching the FEC ID, office, state, and donor profile above. If results describe a different same-named entity, say so and stop.
+Use FEC.gov, OpenSecrets, ProPublica, FollowTheMoney, Ballotpedia, Vote Smart, the entity's official site, and major news outlets. ${sameEntityRule}
 
 Produce a structured analysis covering:
 - summary: 2-3 sentences identifying who they are
@@ -213,9 +217,10 @@ Produce a structured analysis covering:
 - key_people: ${entity_kind === "candidate" ? "campaign leadership, key endorsers" : "founders, treasurer, leadership, affiliated lawmakers"}
 - notable_recipients: ${entity_kind === "candidate" ? "key endorsements RECEIVED or coalitions joined" : "candidates and causes this committee SPENDS ON, with brief rationale"}
 - controversies: documented controversies, FEC complaints, ethics issues (with [n] cites)
+- related_entities: same-named or affiliated committees that are DISTINCT FEC filers (only when found). Each: {name, fec_id (or null), relationship: "predecessor"|"successor"|"affiliated"|"same_name_distinct"|"possibly_related", evidence (one sentence), citation (URL or null)}
 - finance_claims: factual claims from FEC/finance signals above
 - public_context_claims: claims from your web search, each ending with [n] citation
-- insufficient_information: true if you can't confidently identify the entity
+- insufficient_information: true ONLY if you cannot identify the anchored entity at all (no filings, no news, nothing). If you found a same-named related committee, set this to false and use related_entities.
 - confidence: 0-100
 - confidence_rationale: one sentence
 
@@ -229,6 +234,7 @@ Output ONLY a JSON object, no prose:
   "notable_recipients": [string],
   "controversies": [string],
   "causes": [string],
+  "related_entities": [{"name": string, "fec_id": string|null, "relationship": string, "evidence": string, "citation": string|null}],
   "finance_claims": [string],
   "public_context_claims": [string],
   "insufficient_information": boolean,
@@ -237,7 +243,7 @@ Output ONLY a JSON object, no prose:
 }`;
 
     const systemPrompt =
-      "You are a nonpartisan campaign-finance and politics analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, or quotes. If results describe a different entity than anchored, set insufficient_information=true and cap confidence at 20. Output strict JSON only.";
+      "You are a nonpartisan campaign-finance and politics analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, or quotes. When the user prompt provides multiple FEC IDs as one aliased group, treat them as ONE organization. Same-named but distinct committees go in related_entities, not insufficient_information. Output strict JSON only.";
     const geminiSystemPrompt =
       "You are a nonpartisan campaign-finance and politics analyst. You do not have live web search — ground every claim in the FEC/finance context provided in the user prompt and well-known public knowledge. Never invent dollar figures, FEC IDs, or quotes. If you cannot confidently identify the entity, set insufficient_information=true and cap confidence at 30. Output strict JSON only.";
 
