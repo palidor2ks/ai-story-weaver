@@ -511,6 +511,7 @@ export const CandidateProfile = () => {
                     candidateParty={candidate.party}
                     candidateScore={resolvedScore}
                     candidateImage={representativeDetails?.image_url || candidate.image_url}
+                    fecId={candidate.fec_candidate_id ?? null}
                     userScore={userScore}
                     matchScore={matchScore}
                     agreements={agreements}

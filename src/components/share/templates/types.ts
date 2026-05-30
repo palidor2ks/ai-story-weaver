@@ -30,6 +30,10 @@ export interface CardData {
   ieCycle?: string | null;
   topDonors?: { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null }[];
   topSpenders?: { name: string; support: number; oppose: number; primaryCause?: string | null; primaryCauseStance?: string | null }[];
+  aiPositions?: { topic: string; stance: string }[];
+  aiGoals?: string[];
+  aiCauses?: string[];
+  aiAnalysisLoading?: boolean;
   // User profile
   userName?: string | null;
   userScore?: number | null;

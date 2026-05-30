@@ -21,6 +21,8 @@ import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { choosePrimaryCauseLabel } from '@/lib/committeeCauseDisplay';
+import { useAuth } from '@/context/AuthContext';
+import { normalizeInvokeError } from '@/components/RecipientAIAnalysisDialog';
 
 interface TopicComparison {
   topicName: string;
@@ -36,6 +38,7 @@ interface ShareProfileButtonProps {
   candidateParty: string;
   candidateScore: number | null;
   candidateImage?: string | null;
+  fecId?: string | null;
   userScore: number | null;
   matchScore: number;
   agreements: TopicComparison[];
@@ -58,6 +61,7 @@ export const ShareProfileButton = ({
   candidateParty,
   candidateScore,
   candidateImage,
+  fecId,
   userScore,
   matchScore,
   agreements,
@@ -71,6 +75,7 @@ export const ShareProfileButton = ({
   fundingCycle,
 }: ShareProfileButtonProps) => {
   const [open, setOpen] = useState(false);
+  const { user } = useAuth();
 
   // Try the provided URL first; fall back to Bioguide for federal IDs (e.g. M001184).
   const candidateImages = useMemo(() => {
@@ -118,7 +123,7 @@ export const ShareProfileButton = ({
 
   // Pull IE rows for the same cycle as the rest of the finance card.
   const requestedIeCycle = fundingCycle && fundingCycle !== 'all' ? fundingCycle : null;
-  const { data: ieData } = useCandidateIE(candidateId ?? null, requestedIeCycle);
+  const { data: ieData, isLoading: ieLoading, isFetching: ieFetching } = useCandidateIE(candidateId ?? null, requestedIeCycle);
   const { topSpenders, ieCycle } = useMemo(() => {
     const cycles = ieData?.availableCycles ?? [];
     const displayCycle = requestedIeCycle ?? cycles[0] ?? null;
@@ -202,6 +207,56 @@ export const ShareProfileButton = ({
     [topSpenders, spenderCauseMap],
   );
 
+  const hasFinanceCardInfo =
+    (fundingBreakdown?.length ?? 0) > 0 ||
+    (topDonors?.length ?? 0) > 0 ||
+    topSpendersWithCauses.length > 0;
+  const shouldUseAIAnalysis =
+    open &&
+    !!user &&
+    !!candidateId &&
+    !hasFinanceCardInfo &&
+    !ieLoading &&
+    !ieFetching;
+
+  const { data: aiAnalysis, isLoading: aiAnalysisLoading } = useQuery({
+    queryKey: [
+      'share-profile-ai-analysis',
+      candidateId,
+      candidateName,
+      fecId ?? null,
+      candidateParty,
+      candidateOffice,
+      candidateState ?? null,
+    ],
+    enabled: shouldUseAIAnalysis,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('ai-recipient-analysis', {
+        body: {
+          entity_kind: 'candidate',
+          entity_id: candidateId,
+          entity_name: candidateName,
+          fec_id: fecId ?? null,
+          party: candidateParty ?? null,
+          office: candidateOffice ?? null,
+          state: candidateState ?? null,
+          cycle: null,
+          force_refresh: false,
+        },
+      });
+      if (error) throw new Error(normalizeInvokeError(error));
+      if ((data as { error?: string } | undefined)?.error) {
+        throw new Error(String((data as { error: string }).error));
+      }
+      return data as {
+        positions?: { topic: string; stance: string }[];
+        goals?: string[];
+        causes?: string[];
+      };
+    },
+  });
+
   return (
     <>
       <IconActionButton
@@ -235,6 +290,10 @@ export const ShareProfileButton = ({
           topDonors,
           fundingBreakdown,
           fundingCycle,
+          aiPositions: !hasFinanceCardInfo ? aiAnalysis?.positions : undefined,
+          aiGoals: !hasFinanceCardInfo ? aiAnalysis?.goals : undefined,
+          aiCauses: !hasFinanceCardInfo ? aiAnalysis?.causes : undefined,
+          aiAnalysisLoading: !hasFinanceCardInfo && shouldUseAIAnalysis && aiAnalysisLoading,
         }}
         caption={{
           surface: 'candidate_profile',
