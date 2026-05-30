@@ -83,6 +83,7 @@ interface PACContributor {
   name: string;
   totalAmount: number;
   contributionCount: number;
+  byCycle: Record<string, { totalAmount: number; contributionCount: number }>;
 }
 const getPartyColor = (party: string) => {
   switch (party) {
