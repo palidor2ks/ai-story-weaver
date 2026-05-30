@@ -39,6 +39,23 @@ const fmtMoneyShort = (n?: number | null) => {
 
 const truncate = (s: string, max = 30) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
 
+const fitNameFontSize = (name: string, baseSize: number, minSize: number) => {
+  const length = name.trim().length;
+  if (length >= 58) return minSize;
+  if (length >= 46) return minSize + 1;
+  if (length >= 34) return minSize + 2;
+  return baseSize;
+};
+
+const fittedNameTextStyle = {
+  display: '-webkit-box',
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: 2,
+  overflow: 'hidden',
+  overflowWrap: 'anywhere',
+  wordBreak: 'break-word',
+} as const;
+
 const formatDistrictLabel = (state?: string | null, district?: string | null) => {
   const cleanedDistrict = district?.trim();
   if (!cleanedDistrict) return '';
@@ -422,14 +439,15 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                   >
                     <div
                       style={{
-                        fontSize: 15,
+                        ...fittedNameTextStyle,
+                        fontSize: fitNameFontSize(s.name, 15, 11),
                         fontWeight: 700,
-                        lineHeight: 1.2,
+                        lineHeight: 1.18,
                         marginBottom: 6,
                         minHeight: 36,
                       }}
                     >
-                      {truncate(s.name, 42)}
+                      {s.name}
                     </div>
                     <div style={{ display: 'flex', gap: 14, fontSize: 18, fontWeight: 800 }}>
                       <span style={{ color: 'hsl(150 70% 70%)' }}>↑ {fmtMoneyShort(s.support)}</span>
@@ -490,14 +508,15 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                   >
                     <div
                       style={{
-                        fontSize: 14,
+                        ...fittedNameTextStyle,
+                        fontSize: fitNameFontSize(d.name, 14, 10),
                         fontWeight: 700,
-                        lineHeight: 1.2,
+                        lineHeight: 1.15,
                         marginBottom: 4,
                         minHeight: 34,
                       }}
                     >
-                      {truncate(d.name, 32)}
+                      {d.name}
                     </div>
                     <div style={{ fontSize: 18, fontWeight: 800, color: FLAG_WHITE }}>
                       {fmtMoneyShort(d.amount)}
