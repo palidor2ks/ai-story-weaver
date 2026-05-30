@@ -115,12 +115,15 @@ export const ShareProfileButton = ({
   const brandHost =
     typeof window !== 'undefined' ? window.location.host.replace(/^www\./, '') : 'polipulseapp.com';
 
-  // Pull latest-cycle IE rows for top spenders
-  const { data: ieData } = useCandidateIE(candidateId ?? null);
+  // Pull IE rows for the same cycle as the rest of the finance card.
+  const requestedIeCycle = fundingCycle && fundingCycle !== 'all' ? fundingCycle : null;
+  const { data: ieData } = useCandidateIE(candidateId ?? null, requestedIeCycle);
   const { topSpenders, ieCycle } = useMemo(() => {
     const cycles = ieData?.availableCycles ?? [];
-    const latest = cycles[0] ?? null;
-    const rows = (ieData?.rows ?? []).filter((r) => (latest ? String(r.cycle) === latest : true));
+    const displayCycle = requestedIeCycle ?? cycles[0] ?? null;
+    const rows = (ieData?.rows ?? []).filter((r) =>
+      displayCycle ? String(r.cycle) === displayCycle : true,
+    );
     const map = new Map<string, { fecId: string; name: string; support: number; oppose: number }>();
     rows.forEach((r) => {
       const key = r.spending_committee_fec_id;
@@ -138,8 +141,8 @@ export const ShareProfileButton = ({
     const ts = Array.from(map.values())
       .sort((a, b) => b.support + b.oppose - (a.support + a.oppose))
       .slice(0, 2);
-    return { topSpenders: ts, ieCycle: latest };
-  }, [ieData]);
+    return { topSpenders: ts, ieCycle: displayCycle };
+  }, [ieData, requestedIeCycle]);
 
   const topSpenderIds = useMemo(
     () => topSpenders.map((s) => s.fecId).filter(Boolean).sort(),
