@@ -197,7 +197,7 @@ export const Donors = () => {
                 key={donor.id}
                 id={donor.id}
                 name={donor.name}
-                type={donor.type as 'Individual' | 'PAC' | 'Organization' | 'Unknown'}
+                type={donor.type as 'Individual' | 'PAC' | 'Organization' | 'Unknown' | 'Org/PAC'}
                 types={donor.types}
                 amount={donor.amount}
                 transactionCount={donor.transaction_count || 1}
