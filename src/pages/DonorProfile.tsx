@@ -841,7 +841,7 @@ const DonorProfile = () => {
                       </div>
                     </Link>
                     <div className="flex items-center justify-end pt-2 border-t border-border">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         <span className="font-bold text-agree">{formatAmount(record.amount)}</span>
                         {user && <DonorAIAnalysisDialog
                           id={recipientKey}
