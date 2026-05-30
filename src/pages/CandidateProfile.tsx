@@ -441,7 +441,7 @@ export const CandidateProfile = () => {
                     {candidate.name}
                   </h1>
                   <div className="flex flex-wrap items-center gap-3 mt-2 text-muted-foreground">
-                    <span className="font-medium">{candidate.office}</span>
+                    <span className="font-medium">{normalizeOfficeName(candidate.office)}</span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
                       <MapPin className="w-4 h-4" />
