@@ -622,7 +622,7 @@ export const CandidateProfile = () => {
                   {candidate.priorOffices.map((po, idx) => (
                     <div key={idx} className="flex items-center justify-between py-2 border-b last:border-b-0 border-border">
                       <div>
-                        <span className="font-medium">{po.office}</span>
+                        <span className="font-medium">{normalizeOfficeName(po.office)}</span>
                         {po.district && <span className="text-muted-foreground">, District {po.district}</span>}
                         <span className="text-muted-foreground"> — {po.state}</span>
                       </div>
