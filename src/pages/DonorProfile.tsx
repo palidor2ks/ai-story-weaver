@@ -15,6 +15,7 @@ import { getDonorCause, useDonorCauses } from '@/hooks/useDonorCauses';
 import { CauseBadge } from '@/components/CauseBadge';
 import { useAuth } from '@/context/AuthContext';
 import { formatCompactCurrency, formatFullCurrency } from '@/lib/utils';
+import { normalizeOfficeName } from '@/lib/officeLabel';
 import { 
   ArrowLeft, 
   Building2, 
