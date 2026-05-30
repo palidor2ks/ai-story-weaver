@@ -51,10 +51,30 @@ const formatDistrictLabel = (state?: string | null, district?: string | null) =>
   return cleanedState ? `${cleanedState}-${normalizedDistrict}` : `District ${normalizedDistrict}`;
 };
 
+const extractCycleYear = (cycle?: string | null) => {
+  const trimmed = cycle?.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'all') return null;
+
+  const match = trimmed.match(/\b(19|20)\d{2}\b/);
+  if (!match) return null;
+
+  return Number.parseInt(match[0], 10);
+};
+
 const formatDataYearLabel = (cycle?: string | null) => {
   const trimmed = cycle?.trim();
   if (!trimmed || trimmed.toLowerCase() === 'all') return '';
   return /cycle/i.test(trimmed) ? trimmed : `${trimmed} Cycle`;
+};
+
+const formatCycleDateRange = (cycle?: string | null) => {
+  const cycleYear = extractCycleYear(cycle);
+  if (!cycleYear) return '';
+
+  const startYear = String((cycleYear - 1) % 100).padStart(2, '0');
+  const endYear = String(cycleYear % 100).padStart(2, '0');
+
+  return `1/${startYear} - 12/${endYear}`;
 };
 
 const scoreToPercent = (score?: number | null) => {
@@ -94,7 +114,9 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
     .slice()
     .sort((a, b) => b.pct - a.pct)
     .slice(0, 4);
-  const dataYearLabel = formatDataYearLabel(data.fundingCycle ?? data.ieCycle);
+  const displayCycle = data.fundingCycle ?? data.ieCycle;
+  const dataYearLabel = formatDataYearLabel(displayCycle);
+  const cycleDateRange = formatCycleDateRange(displayCycle);
   const cycleLabel = data.ieCycle ? ` · ${data.ieCycle}` : '';
 
   const topics = [
@@ -156,7 +178,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
           }}
         >
           {/* Top brand bar */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', alignItems: 'center', gap: 16 }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', minWidth: 0 }}>
               <PulseMark size={44} />
               <span style={{ fontWeight: 800, fontSize: 26, letterSpacing: -0.3 }}>
@@ -175,6 +197,20 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
             >
               {dataYearLabel}
             </div>
+            {cycleDateRange && (
+              <div
+                style={{
+                  fontSize: 17,
+                  letterSpacing: 1.4,
+                  textTransform: 'uppercase',
+                  color: mutedColor,
+                  fontWeight: 800,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {cycleDateRange}
+              </div>
+            )}
             <div
               style={{
                 fontSize: 18,
