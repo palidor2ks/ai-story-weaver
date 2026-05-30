@@ -128,13 +128,18 @@ export const DonorCard = ({
                   {type}
                 </Badge>
               )}
-              {primaryCause && <CauseBadge cause={primaryCause} />}
             </div>
           </div>
 
-          <h3 className="mb-4 line-clamp-2 text-lg font-semibold text-foreground transition-colors group-hover:text-primary sm:text-xl">
+          <h3 className="mb-3 line-clamp-2 text-lg font-semibold text-foreground transition-colors group-hover:text-primary sm:text-xl">
             {name}
           </h3>
+
+          {primaryCause && (
+            <div className="mb-4">
+              <CauseBadge cause={primaryCause} compact={false} />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <div className="space-y-1">

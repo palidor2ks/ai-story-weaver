@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, ChevronsRight, Loader2 } from 'lucide-react'
 import { DonorFilters } from '@/components/DonorFilters';
 import { DonorCard } from '@/components/DonorCard';
 import { useDonorsPaginated, useAvailableDonorFilters, type DonorFilters as DonorFiltersType } from '@/hooks/useDonorsPaginated';
-import { getDonorCause, useDonorCauses } from '@/hooks/useDonorCauses';
+import { getDonorCause, useDonorCauses, type DonorCauseInfo } from '@/hooks/useDonorCauses';
 
 export const Donors = () => {
   const { data: filterOptions, isLoading: optionsLoading } = useAvailableDonorFilters();
@@ -56,9 +56,28 @@ export const Donors = () => {
   const currentPage = filters.page || 1;
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  const { data: donorCauseMap } = useDonorCauses(
-    donors.map(donor => ({ name: donor.name, type: donor.type }))
-  );
+  const donorCauseInputs = useMemo(() => (
+    donors.flatMap(donor => {
+      const names = [donor.name, ...(donor.name_variations || [])];
+      return Array.from(new Set(names.filter(Boolean))).map(name => ({
+        name,
+        type: donor.type,
+      }));
+    })
+  ), [donors]);
+
+  const { data: donorCauseMap } = useDonorCauses(donorCauseInputs);
+
+  const getCardPrimaryCause = (donor: typeof donors[number]): DonorCauseInfo | undefined => {
+    const names = [donor.name, ...(donor.name_variations || [])];
+
+    for (const name of names) {
+      const cause = getDonorCause(donorCauseMap, name, donor.type);
+      if (cause) return cause;
+    }
+
+    return undefined;
+  };
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -186,7 +205,7 @@ export const Donors = () => {
                 nameVariations={donor.name_variations}
                 recipientCount={donor.recipient_count}
                 cycle={effectiveCycle}
-                primaryCause={getDonorCause(donorCauseMap, donor.name, donor.type)}
+                primaryCause={getCardPrimaryCause(donor)}
               />
             ))}
           </div>
