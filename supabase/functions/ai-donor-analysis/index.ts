@@ -26,22 +26,61 @@ function json(body: unknown, status = 200) {
   });
 }
 
-// Try to extract a JSON object out of any Perplexity reply (handles
-// chain-of-thought wrappers and markdown fences from sonar-reasoning models).
+// Try to extract a JSON object out of any model reply (handles chain-of-thought
+// wrappers, markdown code fences, and stray prose before/after the JSON block).
 function extractJson(raw: string): any | null {
   if (!raw) return null;
-  const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  // Strip leading/trailing markdown fences (```json ... ``` or ``` ... ```)
+  cleaned = cleaned.replace(/^\s*```(?:json|JSON)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
+  const candidates: string[] = [];
   const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidates = [
-    fence?.[1]?.trim(),
-    cleaned,
-    cleaned.slice(cleaned.indexOf("{"), cleaned.lastIndexOf("}") + 1),
-  ].filter(Boolean) as string[];
+  if (fence?.[1]) candidates.push(fence[1].trim());
+  candidates.push(cleaned);
+
+  // Brace-balanced extraction of the first {...} block (ignoring braces inside strings).
+  const balanced = extractBalancedObject(cleaned);
+  if (balanced) candidates.push(balanced);
+
+  // Naive first { to last } slice as last resort.
+  const first = cleaned.indexOf("{");
+  const last = cleaned.lastIndexOf("}");
+  if (first !== -1 && last > first) candidates.push(cleaned.slice(first, last + 1));
+
   for (const c of candidates) {
+    if (!c) continue;
     try { return JSON.parse(c); } catch { /* try next */ }
+    // Try after stripping trailing commas (`,}` / `,]`).
+    try { return JSON.parse(c.replace(/,(\s*[}\]])/g, "$1")); } catch { /* try next */ }
   }
   return null;
 }
+
+function extractBalancedObject(s: string): string | null {
+  const start = s.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (esc) { esc = false; continue; }
+      if (ch === "\\") { esc = true; continue; }
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
