@@ -139,7 +139,7 @@ export const CandidateCard = ({
                 </span>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="line-clamp-2 break-words">{candidate.office}</span>
+                <span className="line-clamp-2 break-words">{normalizeOfficeName(candidate.office)}</span>
                 <span className="flex-shrink-0">•</span>
                 <MapPin className="w-3 h-3 flex-shrink-0" />
                 <span className="flex-shrink-0">{candidate.state}</span>
