@@ -20,6 +20,7 @@ import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { choosePrimaryCauseLabel } from '@/lib/committeeCauseDisplay';
 
 interface TopicComparison {
   topicName: string;
@@ -155,14 +156,36 @@ export const ShareProfileButton = ({
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from('committee_topics')
-        .select('fec_committee_id, primary_cause:primary_cause_id(label, stance)')
+        .select(
+          'fec_committee_id, secondary_cause_ids, primary_cause:primary_cause_id(id, label, stance)',
+        )
         .in('fec_committee_id', topSpenderIds);
+      const secondaryIds = Array.from(
+        new Set((data ?? []).flatMap((r: any) => r.secondary_cause_ids ?? [])),
+      );
+      const { data: secondaryCauses } =
+        secondaryIds.length > 0
+          ? await (supabase as any)
+              .from('committee_causes')
+              .select('id, label')
+              .in('id', secondaryIds)
+          : { data: [] };
+      const causeById = new Map(
+        (secondaryCauses ?? []).map((cause: any) => [cause.id, cause]),
+      );
       const map = new Map<string, { label: string; stance: string | null }>();
       (data ?? []).forEach((r: any) => {
-        if (r.fec_committee_id && r.primary_cause?.label) {
+        if (!r.fec_committee_id) return;
+        const label = choosePrimaryCauseLabel(
+          r.primary_cause,
+          (r.secondary_cause_ids ?? [])
+            .map((secondaryId: string) => causeById.get(secondaryId))
+            .filter(Boolean) as any,
+        );
+        if (label) {
           map.set(r.fec_committee_id, {
-            label: r.primary_cause.label,
-            stance: r.primary_cause.stance ?? null,
+            label,
+            stance: r.primary_cause?.stance ?? null,
           });
         }
       });

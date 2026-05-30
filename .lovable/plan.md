@@ -1,50 +1,41 @@
-# Fix Delta column to account for FEC unitemized receipts
+# Implement PR #132 — Prefer specific committee causes over generic partisan buckets
 
 ## Why
 
-The Delta column on the admin Answer Coverage grid currently looks wrong because the value persisted in `finance_reconciliation.total_receipts_delta_amount` (which the UI prefers) is often missing or stale — it is only written by `refresh-fec-totals`. `fetch-fec-donors` (the function that runs on every donor sync) and `nightly-finance-reconciliation` both upsert reconciliation rows *without* `total_receipts_delta_amount`, so after any sync the Delta badge falls back to whatever older value was stored — which does not subtract unitemized + candidate self-fund + FEC-only top-ups. Result: balanced candidates still show large deltas.
-
-The frontend already has the correct formula inline (`AnswerCoveragePanel.tsx` L2282-2299): `localTotal = localItemized + max(transfers) + max(loans) + max(other) + fecUnitemized + fecCandidateSelfFund`, then `delta = localTotal − fecTotalReceipts`. The fix is to (a) prefer this inline value over the stale DB value in the UI, and (b) keep the DB column in sync from the two writers that currently skip it.
+Today, when a committee is classified as generic `Progressive (general)` / `Conservative (general)` / `Libertarian (general)` as primary, with a specific issue cause (e.g. `Pro-Immigration`) only in `secondary_cause_ids`, the share-card UI displays the generic bucket. PR #132 promotes the specific cause to primary so users see the meaningful label.
 
 ## Changes
 
-### 1. `src/components/admin/AnswerCoveragePanel.tsx` — prefer recomputed delta
-- L2616-2617: swap the fallback order so the freshly computed `calculatedDelta` / `calculatedDeltaPct` is used as the primary value, and `candidate.totalReceiptsDeltaAmount` / `totalReceiptsDeltaPct` is only the fallback when FEC totals are missing.
+### 1. New shared helper — `src/lib/committeeCauseDisplay.ts`
+Exports `isGenericCause()` and `choosePrimaryCauseLabel(primary, secondaries[])`. Generic = id in `{progressive, conservative, libertarian}` or label matching `/\(general\)/i`. When primary is generic and any non-generic secondary exists, return that secondary's label; otherwise fall through to primary then first secondary.
 
-```tsx
-deltaAmount={calculatedDelta ?? candidate.totalReceiptsDeltaAmount}
-deltaPct={calculatedDeltaPct ?? candidate.totalReceiptsDeltaPct}
-```
+### 2. `src/hooks/useCandidateShareCardData.ts` (L155-168)
+Apply the diff as-is: select `id` on primary cause, also fetch `secondary_cause_ids`, then resolve secondary cause labels via a second `committee_causes` lookup and use `choosePrimaryCauseLabel` to populate the map.
 
-This guarantees the Delta column always reflects the same math the breakdown popover already shows the user, regardless of which edge function last wrote the row.
-
-### 2. `supabase/functions/fetch-fec-donors/index.ts` — write `total_receipts_delta_amount` on sync
-Around L1620-1669, after the existing per-category deltas, compute the same total-receipts delta `refresh-fec-totals` already uses and include it in the upsert:
+### 3. `src/components/ShareProfileButton.tsx` (L151-171) — diverges from PR
+The PR's base did not include the `stance` field that's now in the query/map value. **Fix:** keep selecting `stance` on `primary_cause`, keep the map value shape `{ label, stance }`, but pick `label` via `choosePrimaryCauseLabel`. Stance stays from the primary cause row (semantically the underlying ideological stance does not change when we surface a more specific label). Add the same secondary-cause lookup as in the hook.
 
 ```ts
-const effectiveTransfers = Math.max(totalLocalTransfers, totalFecTransfers ?? 0);
-const effectiveLoans     = Math.max(totalLocalLoans ?? 0, totalFecLoans ?? 0);
-const effectiveOther     = Math.max(totalLocalOther ?? 0, (totalFecOtherReceipts ?? 0) + (totalFecOffsetsToOperatingExpenditures ?? 0));
-const localTotalReceipts = totalLocalItemized + effectiveTransfers + effectiveLoans + effectiveOther
-                         + (totalFecUnitemized ?? 0) + (totalFecCandidateContribution ?? 0);
-const totalReceiptsDeltaAmount = totalFecReceipts > 0 ? Math.round(localTotalReceipts - totalFecReceipts) : null;
-const totalReceiptsDeltaPct    = totalFecReceipts > 0 ? ((localTotalReceipts - totalFecReceipts) / totalFecReceipts) * 100 : null;
+.select('fec_committee_id, secondary_cause_ids, primary_cause:primary_cause_id(id, label, stance)')
+// ... fetch secondary causes by id
+const label = choosePrimaryCauseLabel(r.primary_cause, secondaries);
+if (label) map.set(r.fec_committee_id, { label, stance: r.primary_cause?.stance ?? null });
 ```
 
-Add `total_receipts_delta_amount` and `total_receipts_delta_pct` to the upsert payload. Pull the missing locals/FECs (`totalLocalLoans`, `totalLocalOther`, `totalFecTransfers`, `totalFecLoans`, `totalFecOtherReceipts`, `totalFecOffsetsToOperatingExpenditures`, `totalFecCandidateContribution`) from the same rollup aggregation loop that already produces `totalFecUnitemized` / `totalFecReceipts`; default any missing source to 0 so the formula degrades gracefully when the function is invoked before `refresh-fec-totals` has populated full FEC breakdowns.
+### 4. `supabase/functions/classify-committee-topic/index.ts`
+Apply prompt + system-message wording changes verbatim (instruct model to prefer specific over generic when evidence supports it).
 
-### 3. `supabase/functions/nightly-finance-reconciliation/index.ts` — same write
-Around L411-430, mirror the same `localTotalReceipts` calc and add `total_receipts_delta_amount` / `total_receipts_delta_pct` to the upsert. All required inputs (`localItemized`, `localTransfers`, `localLoans`, `localOther`, `totalFecTransfers`, `totalFecLoans`, `totalFecOtherReceipts`, `totalFecOffsetsToOperatingExpenditures`, `totalFecUnitemized`, `totalFecCandidateContribution`, `totalFecReceipts`) are already in scope at L411 — the function just has not been writing the field.
+### 5. New migration — rename to project convention
+PR's filename `20260530000000_prefer_specific_committee_primary_causes.sql` is fine as a timestamp but our convention uses a uuid suffix. Create as `supabase/migrations/<new-timestamp>_prefer_specific_committee_primary_causes.sql` with the SQL from the PR unchanged: for every `committee_topics` row whose `primary_cause_id` is `progressive`/`conservative`/`libertarian` and which has a non-generic secondary, promote the first non-generic secondary to primary and demote the old generic primary into secondary_cause_ids (deduped, ordering preserved).
 
 ## Out of scope
 
-- No DB migration. `total_receipts_delta_amount` / `total_receipts_delta_pct` columns already exist.
-- No changes to `delta_amount` / `delta_pct` (itemized-only) or `individual_delta_amount` / `pac_delta_amount` — those remain apples-to-apples integrity checks.
-- No change to sync logic, cursor handling, or what Schedule A returns. Unitemized donors will still not appear as individual rows (FEC does not expose them).
+- No change to `committee_causes` table.
+- No re-classification run; this is a one-shot re-ordering of already-classified rows plus a forward-going prompt nudge.
 
 ## Verification
 
-1. Reload `/admin` Answer Coverage grid for cycle 2026.
-2. Candidates whose breakdown popover shows Local ≈ FEC (e.g. Gallego, Grijalva) should now show Delta ≈ $0 / 0%.
-3. Candidates with large unitemized flow (Schweikert, Crane, Gosar, Kelly, Hamadeh) should show a much smaller Delta — what remains is the actual missing-itemized-equivalent gap, not the unitemized floor.
-4. Run a single-candidate FEC donor sync and confirm the freshly upserted `finance_reconciliation` row now has `total_receipts_delta_amount` populated (not null) and matches the UI's calculated value.
+1. After migration, spot-check `committee_topics` rows that previously had `primary_cause_id='progressive'` and a specific secondary — primary should now be the specific cause, `progressive` should appear in `secondary_cause_ids`.
+2. Open a candidate share card whose top spender was affected — chip should now read e.g. `Pro-Immigration` instead of `Progressive (general)`.
+3. ShareProfileButton popover still shows correct stance color (driven by `stance`).
+4. `npx tsc --noEmit` clean.
