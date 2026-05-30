@@ -8,6 +8,8 @@ import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
 import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { proxiedImageUrl } from '@/lib/imageProxy';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 
 const CONDUIT_NAMES = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
 
@@ -46,7 +48,7 @@ export interface CandidateShareCardData {
   coverageTier: string | undefined;
   confidence: string | undefined;
   ieCycle: string | null;
-  topSpenders: { name: string; support: number; oppose: number }[];
+  topSpenders: { name: string; support: number; oppose: number; primaryCause?: string | null }[];
   topDonors: { name: string; amount: number }[];
   fundingBreakdown:
     | { label: string; pct: number; color: string }[]
@@ -85,6 +87,45 @@ export function useCandidateShareCardData(
     effectiveCycle,
   );
   const { data: ieData } = useCandidateIE(id ?? null);
+
+
+  const topSpenderIds = useMemo(() => {
+    const cycles = ieData?.availableCycles ?? [];
+    const ieCycle = cycles[0] ?? null;
+    const rows = (ieData?.rows ?? []).filter((r) =>
+      ieCycle ? String(r.cycle) === ieCycle : true,
+    );
+    const spenderTotals = new Map<string, number>();
+    rows.forEach((r) => {
+      const key = r.spending_committee_fec_id;
+      if (!key) return;
+      spenderTotals.set(key, (spenderTotals.get(key) ?? 0) + Number(r.amount ?? 0));
+    });
+    return Array.from(spenderTotals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([fecId]) => fecId)
+      .sort();
+  }, [ieData]);
+
+  const { data: spenderCauseMap } = useQuery({
+    queryKey: ['candidate-share-card-spender-causes', topSpenderIds],
+    enabled: topSpenderIds.length > 0,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('committee_topics')
+        .select('fec_committee_id, primary_cause:primary_cause_id(label)')
+        .in('fec_committee_id', topSpenderIds);
+      const map = new Map<string, string>();
+      (data ?? []).forEach((r: any) => {
+        if (r.fec_committee_id && r.primary_cause?.label) {
+          map.set(r.fec_committee_id, r.primary_cause.label);
+        }
+      });
+      return map;
+    },
+  });
 
   const [resolvedImage, setResolvedImage] = useState<string | null>(null);
   const rawImage =
@@ -192,11 +233,12 @@ export function useCandidateShareCardData(
     );
     const spenderMap = new Map<
       string,
-      { name: string; support: number; oppose: number }
+      { fecId: string; name: string; support: number; oppose: number }
     >();
     rows.forEach((r) => {
       const key = r.spending_committee_fec_id;
       const cur = spenderMap.get(key) ?? {
+        fecId: key,
         name: r.spending_committee_name ?? key,
         support: 0,
         oppose: 0,
@@ -208,7 +250,11 @@ export function useCandidateShareCardData(
     });
     const topSpenders = Array.from(spenderMap.values())
       .sort((a, b) => b.support + b.oppose - (a.support + a.oppose))
-      .slice(0, 2);
+      .slice(0, 2)
+      .map(({ fecId, ...spender }) => ({
+        ...spender,
+        primaryCause: spenderCauseMap?.get(fecId) ?? null,
+      }));
 
     const brandHost =
       typeof window !== 'undefined'
@@ -246,6 +292,7 @@ export function useCandidateShareCardData(
     financeReconciliation,
     fecTotals,
     ieData,
+    spenderCauseMap,
     resolvedImage,
     effectiveCycle,
     cycleInfo,

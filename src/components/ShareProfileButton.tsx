@@ -18,6 +18,8 @@ import { Share2 } from 'lucide-react';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TopicComparison {
   topicName: string;
@@ -119,10 +121,11 @@ export const ShareProfileButton = ({
     const cycles = ieData?.availableCycles ?? [];
     const latest = cycles[0] ?? null;
     const rows = (ieData?.rows ?? []).filter((r) => (latest ? String(r.cycle) === latest : true));
-    const map = new Map<string, { name: string; support: number; oppose: number }>();
+    const map = new Map<string, { fecId: string; name: string; support: number; oppose: number }>();
     rows.forEach((r) => {
       const key = r.spending_committee_fec_id;
       const cur = map.get(key) ?? {
+        fecId: key,
         name: r.spending_committee_name ?? key,
         support: 0,
         oppose: 0,
@@ -137,6 +140,37 @@ export const ShareProfileButton = ({
       .slice(0, 2);
     return { topSpenders: ts, ieCycle: latest };
   }, [ieData]);
+
+  const topSpenderIds = useMemo(
+    () => topSpenders.map((s) => s.fecId).filter(Boolean).sort(),
+    [topSpenders],
+  );
+  const { data: spenderCauseMap } = useQuery({
+    queryKey: ['share-profile-spender-causes', topSpenderIds],
+    enabled: topSpenderIds.length > 0,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('committee_topics')
+        .select('fec_committee_id, primary_cause:primary_cause_id(label)')
+        .in('fec_committee_id', topSpenderIds);
+      const map = new Map<string, string>();
+      (data ?? []).forEach((r: any) => {
+        if (r.fec_committee_id && r.primary_cause?.label) {
+          map.set(r.fec_committee_id, r.primary_cause.label);
+        }
+      });
+      return map;
+    },
+  });
+
+  const topSpendersWithCauses = useMemo(
+    () => topSpenders.map(({ fecId, ...spender }) => ({
+      ...spender,
+      primaryCause: spenderCauseMap?.get(fecId) ?? null,
+    })),
+    [topSpenders, spenderCauseMap],
+  );
 
   return (
     <>
@@ -167,7 +201,7 @@ export const ShareProfileButton = ({
           coverageTier,
           confidence,
           ieCycle,
-          topSpenders,
+          topSpenders: topSpendersWithCauses,
           topDonors,
           fundingBreakdown,
           fundingCycle,

@@ -399,6 +399,27 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                       <span style={{ color: 'hsl(150 70% 70%)' }}>↑ {fmtMoneyShort(s.support)}</span>
                       <span style={{ color: 'hsl(0 80% 72%)' }}>↓ {fmtMoneyShort(s.oppose)}</span>
                     </div>
+                    {s.primaryCause && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          maxWidth: '100%',
+                          border: '1px solid hsl(0 0% 100% / 0.35)',
+                          borderRadius: 999,
+                          padding: '4px 10px',
+                          color: 'hsl(214 35% 90%)',
+                          background: 'hsl(0 0% 100% / 0.08)',
+                          fontSize: 13,
+                          fontWeight: 800,
+                          letterSpacing: 0.6,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Primary cause: {truncate(s.primaryCause, 24)}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
