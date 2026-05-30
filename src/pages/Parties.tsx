@@ -66,6 +66,7 @@ export default function Parties() {
         </div>
 
         {/* Party Cards */}
+        <h2 className="sr-only">Political parties</h2>
         {partiesLoading ? (
           <div className="space-y-4">
             {[1, 2, 3, 4].map(i => (
