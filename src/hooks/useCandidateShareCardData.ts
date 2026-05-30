@@ -87,7 +87,8 @@ export function useCandidateShareCardData(
     id,
     effectiveCycle,
   );
-  const { data: ieData } = useCandidateIE(id ?? null);
+  const requestedIeCycle = effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : null;
+  const { data: ieData } = useCandidateIE(id ?? null, requestedIeCycle);
 
   const topDonorSummaries = useMemo(() => {
     const isConduitDonor = (d: (typeof donors)[number]) =>
@@ -130,7 +131,7 @@ export function useCandidateShareCardData(
 
   const topSpenderIds = useMemo(() => {
     const cycles = ieData?.availableCycles ?? [];
-    const ieCycle = cycles[0] ?? null;
+    const ieCycle = requestedIeCycle ?? cycles[0] ?? null;
     const rows = (ieData?.rows ?? []).filter((r) =>
       ieCycle ? String(r.cycle) === ieCycle : true,
     );
@@ -145,7 +146,7 @@ export function useCandidateShareCardData(
       .slice(0, 2)
       .map(([fecId]) => fecId)
       .sort();
-  }, [ieData]);
+  }, [ieData, requestedIeCycle]);
 
   const { data: spenderCauseMap } = useQuery({
     queryKey: ['candidate-share-card-spender-causes', topSpenderIds],
@@ -254,7 +255,7 @@ export function useCandidateShareCardData(
         : undefined;
 
     const cycles = ieData?.availableCycles ?? [];
-    const ieCycle = cycles[0] ?? null;
+    const ieCycle = requestedIeCycle ?? cycles[0] ?? null;
     const rows = (ieData?.rows ?? []).filter((r) =>
       ieCycle ? String(r.cycle) === ieCycle : true,
     );
@@ -323,6 +324,7 @@ export function useCandidateShareCardData(
     spenderCauseMap,
     resolvedImage,
     effectiveCycle,
+    requestedIeCycle,
     cycleInfo,
   ]);
 
