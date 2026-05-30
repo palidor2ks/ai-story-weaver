@@ -118,8 +118,7 @@ export const DonorFilters = ({
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
               <SelectItem value="Individual">Individual</SelectItem>
-              <SelectItem value="PAC">PAC</SelectItem>
-              <SelectItem value="Organization">Organization</SelectItem>
+              <SelectItem value="Org/PAC">Org/PAC</SelectItem>
             </SelectContent>
           </Select>
 

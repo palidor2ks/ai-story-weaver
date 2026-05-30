@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { getPrimaryDonorEntityType, toDonorTypeFilterValue } from '@/lib/donorType';
 
 export interface DonorFilters {
   page: number;
@@ -23,7 +24,7 @@ export interface DonorWithCandidate {
   name: string;
   amount: number;
   type: string;
-  types?: string[]; // All types for consolidated donors
+  types?: string[]; // One display entity type for consolidated donors
   cycle: string;
   candidate_id: string;
   contributor_state: string | null;
@@ -119,7 +120,7 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
         p_sort_by: sortBy,
         p_sort_order: sortOrder,
         p_cycle: cycle && cycle !== 'all' ? cycle : null,
-        p_type: type && type !== 'all' ? type : null,
+        p_type: toDonorTypeFilterValue(type),
         p_search: search || null,
         p_min_amount: minAmount,
       });
@@ -130,8 +131,8 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
         id: d.primary_id,
         name: d.display_name,
         amount: d.total_amount,
-        type: d.type,
-        types: d.types, // All types for this donor
+        type: getPrimaryDonorEntityType(d.type, d.types),
+        types: [getPrimaryDonorEntityType(d.type, d.types)], // One display entity type per donor
         cycle: d.cycle,
         candidate_id: '',
         contributor_state: null,
@@ -164,7 +165,7 @@ export const useSearchDonors = (searchTerm: string, donorType?: string) => {
 
       const { data, error } = await supabase.rpc('search_donors_by_name', {
         p_search: searchTerm,
-        p_type: donorType && donorType !== 'all' ? donorType : null,
+        p_type: toDonorTypeFilterValue(donorType),
         p_limit: 50,
       });
       if (error) throw error;

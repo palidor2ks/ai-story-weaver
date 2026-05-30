@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import {
   Building2,
   User as UserIcon,
-  Users,
   TrendingUp,
   Layers,
   Sparkles,
@@ -14,11 +13,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { DonorAIAnalysisDialog } from '@/components/DonorAIAnalysisDialog';
 import { CauseBadge } from '@/components/CauseBadge';
 import { useAuth } from '@/context/AuthContext';
+import { getPrimaryDonorEntityType, type DonorEntityType } from '@/lib/donorType';
 
 interface DonorCardProps {
   id: string;
   name: string;
-  type: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
+  type: 'Individual' | 'PAC' | 'Organization' | 'Unknown' | 'Org/PAC';
   types?: string[];
   amount: number;
   transactionCount: number;
@@ -36,22 +36,19 @@ const formatAmount = (amount: number) => {
   return `$${amount}`;
 };
 
-const getTypeIcon = (type: string) => {
+const getTypeIcon = (type: DonorEntityType) => {
   switch (type) {
     case 'Individual': return <UserIcon className="w-5 h-5" />;
-    case 'PAC': return <Users className="w-5 h-5" />;
-    case 'Organization': return <Building2 className="w-5 h-5" />;
+    case 'Org/PAC': return <Building2 className="w-5 h-5" />;
     default: return <TrendingUp className="w-5 h-5" />;
   }
 };
 
-const getTypeBadgeStyle = (type: string) => {
+const getTypeBadgeStyle = (type: DonorEntityType) => {
   switch (type) {
     case 'Individual':
       return 'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-400';
-    case 'PAC':
-      return 'bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400';
-    case 'Organization':
+    case 'Org/PAC':
       return 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-400';
     default:
       return 'bg-muted text-muted-foreground';
@@ -73,7 +70,7 @@ export const DonorCard = ({
   const { user } = useAuth();
   const navigate = useNavigate();
   const hasMultipleVariations = nameVariations && nameVariations.length > 1;
-  const hasMultipleTypes = types && types.length > 1;
+  const entityType = getPrimaryDonorEntityType(type, types);
 
   const requireAuth = (e: React.MouseEvent) => {
     if (user) return false;
@@ -88,8 +85,8 @@ export const DonorCard = ({
       <CardContent className="p-4 sm:p-5">
         <Link to={`/donor/${id}`} onClick={requireAuth} className="block rounded-md -m-2 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className={`p-2.5 rounded-lg ${getTypeBadgeStyle(type)}`}>
-              {getTypeIcon(type)}
+            <div className={`p-2.5 rounded-lg ${getTypeBadgeStyle(entityType)}`}>
+              {getTypeIcon(entityType)}
             </div>
             <div className="flex flex-wrap items-center justify-start gap-1.5 sm:justify-end">
               {hasMultipleVariations && (
@@ -115,19 +112,9 @@ export const DonorCard = ({
                   </Tooltip>
                 </TooltipProvider>
               )}
-              {hasMultipleTypes ? (
-                <div className="flex flex-wrap gap-1 sm:justify-end">
-                  {types!.map(t => (
-                    <Badge key={t} variant="outline" className={`shrink-0 text-[11px] sm:text-xs ${getTypeBadgeStyle(t)}`}>
-                      {t === 'Organization' ? 'Org' : t}
-                    </Badge>
-                  ))}
-                </div>
-) : (
-                <Badge variant="outline" className={`shrink-0 text-[11px] sm:text-xs ${getTypeBadgeStyle(type)}`}>
-                  {type}
-                </Badge>
-              )}
+              <Badge variant="outline" className={`shrink-0 text-[11px] sm:text-xs ${getTypeBadgeStyle(entityType)}`}>
+                {entityType}
+              </Badge>
             </div>
           </div>
 
