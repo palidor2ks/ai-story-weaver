@@ -45,7 +45,7 @@ interface Props {
   trigger: ReactNode;
 }
 
-const normalizeInvokeError = (raw: unknown): string => {
+export const normalizeInvokeError = (raw: unknown): string => {
   const message = typeof raw === 'string'
     ? raw
     : (typeof raw === 'object' && raw !== null && 'message' in raw && typeof (raw as { message?: unknown }).message === 'string')

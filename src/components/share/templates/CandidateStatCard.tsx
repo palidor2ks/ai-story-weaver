@@ -39,6 +39,13 @@ const fmtMoneyShort = (n?: number | null) => {
 
 const truncate = (s: string, max = 30) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
 
+const toSentence = (items?: string[]) => {
+  const parts = (items ?? [])
+    .map((item) => item.trim().replace(/\.$/, ''))
+    .filter(Boolean);
+  return parts.length > 0 ? `${parts.join('; ')}.` : '';
+};
+
 
 const causeBadgeStyle = (stance?: string | null) => {
   const normalized = (stance ?? '').toLowerCase();
@@ -167,6 +174,12 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
     .slice()
     .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
     .slice(0, 3);
+  const aiPositions = (data.aiPositions ?? [])
+    .filter((position) => position.topic?.trim() && position.stance?.trim())
+    .slice(0, 5);
+  const aiGoals = (data.aiGoals ?? []).filter((goal) => goal.trim()).slice(0, 4);
+  const aiCauses = (data.aiCauses ?? []).filter((cause) => cause.trim()).slice(0, 6);
+  const hasAIAnalysisContent = aiPositions.length > 0 || aiGoals.length > 0 || aiCauses.length > 0;
 
   // Outer background = full US flag gradient
   const cardBg = `linear-gradient(160deg, ${FLAG_NAVY_DEEP} 0%, ${FLAG_NAVY} 50%, ${FLAG_RED} 100%)`;
@@ -628,6 +641,73 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                   </div>
                 ))}
               </div>
+            </div>
+          ) : hasAIAnalysisContent || data.aiAnalysisLoading ? (
+            <div
+              style={{
+                alignSelf: 'end',
+                border: `2px solid ${innerBorder}`,
+                borderRadius: 14,
+                padding: '12px 14px',
+                background: panelBg,
+                display: 'grid',
+                gap: 9,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 13,
+                  letterSpacing: 2,
+                  textTransform: 'uppercase',
+                  color: mutedColor,
+                  fontWeight: 700,
+                }}
+              >
+                AI Analysis Highlights
+              </div>
+              {data.aiAnalysisLoading && !hasAIAnalysisContent ? (
+                <div style={{ fontSize: 18, fontWeight: 700, color: mutedColor }}>
+                  Generating public-context analysis…
+                </div>
+              ) : (
+                <>
+                  {aiPositions.length > 0 && (
+                    <div style={{ display: 'grid', gap: 5 }}>
+                      {aiPositions.slice(0, 4).map((position) => (
+                        <div key={`${position.topic}-${position.stance}`} style={{ fontSize: 18, lineHeight: 1.22 }}>
+                          <span style={{ fontWeight: 900 }}>{truncate(position.topic, 24)}:</span>{' '}
+                          <span style={{ color: mutedColor, fontWeight: 600 }}>{truncate(position.stance, 76)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {aiGoals.length > 0 && (
+                    <div style={{ fontSize: 17, lineHeight: 1.28 }}>
+                      <span style={{ fontWeight: 900 }}>Goals:</span>{' '}
+                      <span style={{ color: mutedColor, fontWeight: 600 }}>{truncate(toSentence(aiGoals), 170)}</span>
+                    </div>
+                  )}
+                  {aiCauses.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                      {aiCauses.map((cause) => (
+                        <span
+                          key={cause}
+                          style={{
+                            borderRadius: 999,
+                            padding: '5px 10px',
+                            background: 'hsl(0 0% 100% / 0.1)',
+                            color: textColor,
+                            fontSize: 14,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {truncate(cause, 34)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'end' }}>
