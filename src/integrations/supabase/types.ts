@@ -4190,6 +4190,7 @@ export type Database = {
       refresh_bill_summary_stats: { Args: never; Returns: undefined }
       refresh_committee_pool: { Args: never; Returns: undefined }
       refresh_donor_consolidated_mv: { Args: never; Returns: undefined }
+      resolve_committee_alias: { Args: { p_fec_id: string }; Returns: string[] }
       resolve_donor_display_name: {
         Args: { p_donor_name: string; p_donor_type: string }
         Returns: string

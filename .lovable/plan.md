@@ -1,57 +1,67 @@
-## Goal
+# Committee AI Analysis: Related Entities + FEC ID Aliasing
 
-On the donor profile (e.g. Harris Victory Fund) add a cycle filter that scopes both the "Top Contributors to this PAC" and "Top Recipients" sections, and fix horizontal overflow on mobile.
+## Problem
 
-## Changes — `src/pages/DonorProfile.tsx`
+`ai-recipient-analysis` anchors hard on a single FEC ID and instructs Perplexity to discard any results that describe a "different same-named entity." This is too strict in two real cases:
 
-### 1. Shared cycle filter state
+1. **Same-named successor / sibling committees.** A brand-new 2026-cycle committee (`C00897926` PROGRESSIVE PROMISE) gets flagged as "Insufficient public information / 20/100 Low" because Perplexity correctly finds the older `C00744789` America's Progressive Promise PAC and is told to stop.
+2. **Multiple FEC IDs for the same operation.** Donor aliases exist today, but there is no committee alias concept. Even if a user manually links two FEC IDs as the same org, the recipient AI panel still only analyzes one and rejects the other.
 
-- Add `const [profileCycleFilter, setProfileCycleFilter] = useState<string>('all')`.
-- Derive `profileAvailableCycles` from the union of cycles found in `donorRecords`, `contributions`, and `pacContributors` byCycle keys (sorted desc).
+## Solution Overview
 
-### 2. Top Contributors — per-cycle breakdown
+Add a committee-alias concept, teach `ai-recipient-analysis` to aggregate across aliased FEC IDs, and let it report on same-named related committees with a clear disclaimer instead of discarding them.
 
-In the `pac-contributors` query (around L311):
-- Add `cycle` to the `.select(...)` from `donors`.
-- Group results so each contributor has `byCycle: Record<string, { totalAmount: number; contributionCount: number }>` plus the existing overall totals.
-- Extend `PACContributor` type with `byCycle`.
+## Changes
 
-Derive `filteredPacContributors`:
-- If `profileCycleFilter === 'all'`, use existing totals.
-- Otherwise map each contributor to its `byCycle[profileCycleFilter]`, drop empties, re-sort desc.
+### 1. Database: committee alias model
 
-### 3. Top Recipients — cycle scoping
+New table `public.committee_aliases`:
+- `id uuid pk`
+- `canonical_fec_id text not null` — the "primary" FEC ID for the alias group
+- `member_fec_id text not null unique` — every FEC ID in the group, including the canonical one
+- `display_name text` — optional override label
+- `notes text` — admin note explaining why these are grouped
+- `created_by uuid`, `created_at`, `updated_at`
+- Unique `(canonical_fec_id, member_fec_id)`; index on `member_fec_id`
+- RLS: read by `authenticated`; write restricted to `admin`/`editor` roles
+- GRANTs for `authenticated` (select) and `service_role` (all)
 
-`topRecipients` (L347–388) already aggregates from `contributions` / `donorRecords`. Add a cycle gate inside the `useMemo`:
-- When `profileCycleFilter !== 'all'`, filter `contributions` to `c.cycle === profileCycleFilter` (and fallback `donorRecords` to `r.cycle === profileCycleFilter`) before grouping.
-- Empty-state copy when no recipients match the cycle.
+Helper SQL function `public.resolve_committee_alias(fec text)` returning `text[]` (all member FEC IDs for the group, or `ARRAY[fec]` if not aliased).
 
-### 4. UI — section headers
+### 2. Edge function: `ai-recipient-analysis`
 
-Render the cycle Select once, at the top of the donor profile (just below the donor header card / above the first of the two sections) so it visibly controls both. Layout: `flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between`, label "Filter by cycle" + Select. Only render when `profileAvailableCycles.length > 1`. Options: "All cycles" + each cycle.
+- On entry, resolve `fec_id` via `committee_aliases` to get the full member list.
+- Aggregate finance signals (donors, totals, top donors, spending) across **all** member FEC IDs instead of just `entity_id`.
+- Pass the full FEC ID list into the Perplexity prompt: "These FEC filings (`C00...`, `C00...`) are the same operation under different registrations — analyze them together."
+- Relax the same-entity guardrail: any FEC ID in the alias group is allowed. For non-aliased same-named entities, allow Perplexity to return them in a new `related_entities` array with `{name, fec_id, relationship, evidence, citation}` instead of discarding.
+- Tier the confidence cap:
+  - Unidentifiable → cap 20 (current).
+  - Identifiable but thin (matches a known sibling/predecessor) → cap 40 with caveat.
+  - Fully identified or aliased group → no cap.
+- Cache key becomes `canonical_fec_id` (or sorted member-list hash) instead of raw FEC ID. Bump cache version to invalidate existing "20/100" results.
 
-Both section headers (`Top Contributors to this PAC` count, `Top Recipients`) reflect the filtered length / show the cycle-scoped empty state.
+### 3. JSON schema additions
 
-The bottom "Contribution History" panel keeps its own existing `cycleFilter` / committee / date filters — independent and unchanged.
+Extend the Perplexity output schema and `RecipientAIAnalysisDialog` rendering:
+- `related_entities: [{name, fec_id, relationship, evidence, citation}]` — rendered as "Possibly related committees" with a "distinct FEC filer" disclaimer.
+- `aliased_fec_ids: string[]` — rendered as a chip strip in the dialog header showing every FEC ID being analyzed together.
 
-### 5. Mobile overflow fix
+### 4. Admin UI: manage committee aliases
 
-The screenshot shows the entire page pushed off-screen on iOS Safari. Audit and fix:
-- Add `min-w-0` to the outer column wrappers in the donor header card so long names / name-variation chips can't force a horizontal scroll.
-- Ensure the name-variations strip (`HARRIS VICTORY FUND - UNITEMIZED`, etc.) uses `flex-wrap` with `min-w-0` so chips wrap instead of overflowing.
-- In both Contributor and Recipient cards, keep `min-w-0` on the name column and add `flex-shrink-0` on the amount + AI button cluster so `$1.9M AI` never expands the card past its grid track.
-- Wrap the page's outermost `<div>` with `overflow-x-hidden` as a safety net.
-- Spot-check at 375px and 430px — no horizontal page scroll.
+In the existing committee admin surface, add:
+- "Link to another FEC ID" action on a committee → modal to pick another committee and merge them into an alias group.
+- "Unlink" action to remove a member from the group.
+- List view of current alias members on the committee detail page.
 
-### Technical notes
+### 5. Verification
 
-- Cycle filter is in-memory; no extra network calls for Contributors (data already present once `cycle` is added to select). Recipients reuse the already-fetched `contributions` / `donorRecords`.
-- Per-cycle Contributor totals come from the same `donors`-table rows that power the section today.
-- No schema changes, no edge function changes.
+- Open `C00897926` panel → AI now returns a populated analysis with `related_entities` flagging `C00744789` and "different filer" disclaimer.
+- Alias `C00897926` ↔ `C00744789` → AI panel on either committee returns combined analysis, header shows both FEC IDs, confidence cap lifted.
+- Existing recipient panels with cached "20/100" results regenerate on next open.
 
-## Verification
+## Technical Notes
 
-- At 430px viewport, donor profile shows a single "Filter by cycle" Select above the two sections; changing it updates both Contributors and Recipients counts, ordering, and cards.
-- "All cycles" matches the current totals.
-- No horizontal page scroll at 375px or 430px.
-- Contribution History panel below still works with its own filters independently.
+- No changes to the donor-side alias system (`apply-donor-alias`, `ai-donor-analysis`) — this is purely recipient-side.
+- Finance aggregation queries inside `ai-recipient-analysis` switch from `.eq("candidate_id", entity_id)` to `.in("committee_fec_id", memberFecIds)` (or equivalent for the candidate path).
+- Confidence rationale string must mention when an alias group or related-entity caveat is in effect, so the UI tooltip explains the score.
+- Cache invalidation: increment the `kind` discriminator (e.g. `recipient_v2`) so old cached payloads are bypassed without a manual purge.

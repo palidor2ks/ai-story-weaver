@@ -13,6 +13,14 @@ import {
 import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
+export interface RelatedEntity {
+  name: string;
+  fec_id: string | null;
+  relationship: string;
+  evidence: string;
+  citation: string | null;
+}
+
 export interface RecipientAnalysis {
   summary: string;
   analysis: string;
@@ -22,6 +30,7 @@ export interface RecipientAnalysis {
   notable_recipients?: string[];
   controversies?: string[];
   causes?: string[];
+  related_entities?: RelatedEntity[];
   finance_claims?: string[];
   public_context_claims?: string[];
   insufficient_information: boolean;
@@ -31,6 +40,8 @@ export interface RecipientAnalysis {
   sources: { title: string; url: string }[];
   provider?: string;
   provider_errors?: { provider: string; status: number; code: string }[];
+  aliased_fec_ids?: string[];
+  alias_canonical_name?: string | null;
 }
 
 interface Props {
@@ -121,11 +132,23 @@ export const RecipientAIAnalysisDialog = ({
             <div className="space-y-1.5 min-w-0">
               <DialogTitle className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
-                {entityName}
+                {analysis?.alias_canonical_name || entityName}
               </DialogTitle>
               <DialogDescription>
                 AI-generated analysis of this {entityKind}'s positions, goals, and political activity — grounded in live web search.
               </DialogDescription>
+              {analysis?.aliased_fec_ids && analysis.aliased_fec_ids.length > 1 && (
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                    Combined across:
+                  </span>
+                  {analysis.aliased_fec_ids.map((id) => (
+                    <Badge key={id} variant="secondary" className="font-mono text-[10px]">
+                      {id}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
             {analysis && !isLoading && (
               <div className="flex items-center gap-2 shrink-0">
@@ -270,6 +293,35 @@ export const RecipientAIAnalysisDialog = ({
                 <p className="text-sm text-foreground leading-relaxed">
                   <strong>Controversies:</strong> {toOneSentence(analysis.controversies)}
                 </p>
+              </div>
+            )}
+
+            {analysis.related_entities && analysis.related_entities.length > 0 && (
+              <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+                <h4 className="font-semibold text-foreground flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                  Possibly related committees (distinct FEC filers)
+                </h4>
+                <p className="text-[11px] text-muted-foreground italic">
+                  These share a similar name but are separate FEC registrations. If you believe any of these are the same organization, an admin can link them as an alias to combine the analysis.
+                </p>
+                <ul className="space-y-2">
+                  {analysis.related_entities.map((r, i) => (
+                    <li key={i} className="text-sm">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-foreground">{r.name || 'Unknown'}</span>
+                        {r.fec_id && <Badge variant="outline" className="font-mono text-[10px]">{r.fec_id}</Badge>}
+                        <Badge variant="secondary" className="text-[10px]">{r.relationship.replace(/_/g, ' ')}</Badge>
+                      </div>
+                      {r.evidence && <p className="text-xs text-muted-foreground mt-0.5">{r.evidence}</p>}
+                      {r.citation && (
+                        <a href={r.citation} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-0.5">
+                          <ExternalLink className="h-3 w-3" /> source
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

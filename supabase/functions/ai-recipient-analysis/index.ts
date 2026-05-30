@@ -89,9 +89,40 @@ Deno.serve(async (req) => {
     }
 
     const cycle = body.cycle ? String(body.cycle).trim() : null;
+
+    const admin = createClient(supabaseUrl, serviceKey);
+
+    // ─── Resolve committee alias group ─────────────────────────────────────
+    // If this committee's FEC ID is part of an alias group, expand to all
+    // member FEC IDs so finance and AI analysis cover the whole organization.
+    let aliasedFecIds: string[] = fec_id ? [fec_id] : [];
+    let aliasCanonicalName: string | null = null;
+    if (entity_kind === "committee" && fec_id) {
+      const { data: aliasRow } = await admin
+        .from("committee_aliases")
+        .select("canonical_name, fec_committee_ids")
+        .eq("is_active", true)
+        .contains("fec_committee_ids", [fec_id])
+        .limit(1)
+        .maybeSingle();
+      if (aliasRow?.fec_committee_ids?.length) {
+        aliasedFecIds = Array.from(
+          new Set([fec_id, ...(aliasRow.fec_committee_ids as string[])]
+            .map((s) => String(s).toUpperCase())),
+        );
+        aliasCanonicalName = (aliasRow as any).canonical_name ?? null;
+      }
+    }
+    const isAliasedGroup = aliasedFecIds.length > 1;
+
+    // Cache key bumped to v2 so existing "20/100 Low" payloads are bypassed,
+    // and keyed by the canonical alias subject when applicable.
+    const aliasSubject = isAliasedGroup
+      ? `alias:${[...aliasedFecIds].sort().join(",")}`
+      : `${entity_kind}:${entity_id}`;
     const cacheKey = {
       kind: "recipient" as const,
-      subject_id: `${entity_kind}:${entity_id}`,
+      subject_id: `v2:${aliasSubject}`,
       cycle: cycle && cycle !== "all" ? cycle : null,
     };
     if (!body.force_refresh) {
@@ -100,8 +131,6 @@ Deno.serve(async (req) => {
         return json({ ...cached.payload, cached: true, updated_at: cached.updated_at });
       }
     }
-
-    const admin = createClient(supabaseUrl, serviceKey);
 
     // Pull aggregate finance signals for the recipient as anchors.
     let totalReceived = 0;
@@ -127,6 +156,28 @@ Deno.serve(async (req) => {
           .slice(0, 8)
           .map(([name, amount]) => ({ name, amount })),
       );
+    } else if (entity_kind === "committee" && aliasedFecIds.length > 0) {
+      // Aggregate contributions across every aliased FEC committee ID.
+      const { data: cRows } = await admin
+        .from("contributions")
+        .select("contributor_name, amount")
+        .in("recipient_committee_id", aliasedFecIds)
+        .limit(5000);
+      const byContrib: Record<string, number> = {};
+      for (const r of (cRows ?? []) as any[]) {
+        const amt = Number(r.amount ?? 0);
+        if (!Number.isFinite(amt) || amt <= 0) continue;
+        totalReceived += amt;
+        const k = String(r.contributor_name ?? "Unknown");
+        byContrib[k] = (byContrib[k] ?? 0) + amt;
+      }
+      donorCount = Object.keys(byContrib).length;
+      topDonors.push(
+        ...Object.entries(byContrib)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 8)
+          .map(([name, amount]) => ({ name, amount })),
+      );
     }
 
     const data_coverage: "none" | "sparse" | "moderate" | "rich" =
@@ -135,8 +186,14 @@ Deno.serve(async (req) => {
         : totalReceived < 1_000_000 ? "moderate"
         : "rich";
 
+    const fecIdAnchor = isAliasedGroup
+      ? `FEC IDs ${aliasedFecIds.join(", ")} (the same operation under multiple registrations${aliasCanonicalName ? `, known as "${aliasCanonicalName}"` : ""})`
+      : fec_id
+      ? `FEC ID ${fec_id}`
+      : null;
+
     const anchorBits = [
-      fec_id ? `FEC ID ${fec_id}` : null,
+      fecIdAnchor,
       party ? `${party} party` : null,
       office ? `running for ${office}` : null,
       state ? `in ${state}` : null,
@@ -145,9 +202,13 @@ Deno.serve(async (req) => {
 
     const kindLabel = entity_kind === "candidate" ? "political candidate" : "political committee/PAC";
 
+    const sameEntityRule = isAliasedGroup
+      ? `All of the FEC IDs above (${aliasedFecIds.join(", ")}) are the SAME organization — analyze them together as one entity. Do not treat them as separate filers.`
+      : `Confirm you're looking at the SAME entity by matching the FEC ID, office, state, and donor profile above. If your search surfaces a DIFFERENT committee that shares the name (e.g. a predecessor, successor, or unrelated PAC), DO NOT stop — instead, analyze the anchored entity using whatever filings/news you can find for it, and list the same-named other committees in "related_entities" with relationship="possibly_related" or "same_name_distinct" and an evidence sentence explaining the link.`;
+
     const searchPrompt = `Research the ${kindLabel} "${entity_name}"${anchorBits ? ` (${anchorBits})` : ""}.
 
-Use FEC.gov, OpenSecrets, ProPublica, FollowTheMoney, Ballotpedia, Vote Smart, the entity's official site, and major news outlets. Confirm you're looking at the SAME entity by matching the FEC ID, office, state, and donor profile above. If results describe a different same-named entity, say so and stop.
+Use FEC.gov, OpenSecrets, ProPublica, FollowTheMoney, Ballotpedia, Vote Smart, the entity's official site, and major news outlets. ${sameEntityRule}
 
 Produce a structured analysis covering:
 - summary: 2-3 sentences identifying who they are
@@ -156,9 +217,10 @@ Produce a structured analysis covering:
 - key_people: ${entity_kind === "candidate" ? "campaign leadership, key endorsers" : "founders, treasurer, leadership, affiliated lawmakers"}
 - notable_recipients: ${entity_kind === "candidate" ? "key endorsements RECEIVED or coalitions joined" : "candidates and causes this committee SPENDS ON, with brief rationale"}
 - controversies: documented controversies, FEC complaints, ethics issues (with [n] cites)
+- related_entities: same-named or affiliated committees that are DISTINCT FEC filers (only when found). Each: {name, fec_id (or null), relationship: "predecessor"|"successor"|"affiliated"|"same_name_distinct"|"possibly_related", evidence (one sentence), citation (URL or null)}
 - finance_claims: factual claims from FEC/finance signals above
 - public_context_claims: claims from your web search, each ending with [n] citation
-- insufficient_information: true if you can't confidently identify the entity
+- insufficient_information: true ONLY if you cannot identify the anchored entity at all (no filings, no news, nothing). If you found a same-named related committee, set this to false and use related_entities.
 - confidence: 0-100
 - confidence_rationale: one sentence
 
@@ -172,6 +234,7 @@ Output ONLY a JSON object, no prose:
   "notable_recipients": [string],
   "controversies": [string],
   "causes": [string],
+  "related_entities": [{"name": string, "fec_id": string|null, "relationship": string, "evidence": string, "citation": string|null}],
   "finance_claims": [string],
   "public_context_claims": [string],
   "insufficient_information": boolean,
@@ -180,7 +243,7 @@ Output ONLY a JSON object, no prose:
 }`;
 
     const systemPrompt =
-      "You are a nonpartisan campaign-finance and politics analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, or quotes. If results describe a different entity than anchored, set insufficient_information=true and cap confidence at 20. Output strict JSON only.";
+      "You are a nonpartisan campaign-finance and politics analyst. Ground every claim in the search results. Never invent dollar figures, FEC IDs, or quotes. When the user prompt provides multiple FEC IDs as one aliased group, treat them as ONE organization. Same-named but distinct committees go in related_entities, not insufficient_information. Output strict JSON only.";
     const geminiSystemPrompt =
       "You are a nonpartisan campaign-finance and politics analyst. You do not have live web search — ground every claim in the FEC/finance context provided in the user prompt and well-known public knowledge. Never invent dollar figures, FEC IDs, or quotes. If you cannot confidently identify the entity, set insufficient_information=true and cap confidence at 30. Output strict JSON only.";
 
@@ -321,16 +384,43 @@ Output ONLY a JSON object, no prose:
     // Deterministic confidence from verified provider citations only (NOT model-emitted parsed.sources).
     let confidence = computeDeterministicConfidence(grounded);
     let insufficient = Boolean(parsed.insufficient_information);
-    if (grounded.length === 0) {
+    const relatedEntities = Array.isArray(parsed.related_entities)
+      ? parsed.related_entities
+          .filter((r: any) => r && (r.name || r.fec_id))
+          .map((r: any) => ({
+            name: String(r.name ?? "").trim(),
+            fec_id: r.fec_id ? String(r.fec_id).trim().toUpperCase() : null,
+            relationship: String(r.relationship ?? "possibly_related"),
+            evidence: String(r.evidence ?? "").trim(),
+            citation: r.citation ? String(r.citation).trim() : null,
+          }))
+      : [];
+    const hasRelatedSiblings = relatedEntities.length > 0;
+    if (grounded.length === 0 && !isAliasedGroup) {
       insufficient = true;
     }
-    if (insufficient) {
+    // Tier the confidence cap:
+    //  - aliased group → no cap (we know it's the same org)
+    //  - unidentified entity → cap 20
+    //  - identifiable but thin (has related siblings, no aliased group) → cap 40
+    if (insufficient && !isAliasedGroup) {
       confidence = Math.min(confidence, 20);
+    } else if (hasRelatedSiblings && !isAliasedGroup) {
+      confidence = Math.min(confidence, 40);
     }
     const groundedFailed = providerErrors.length > 0 && grounded.length === 0;
-    const confidence_rationale = groundedFailed
-      ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
-      : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
+    const rationaleParts: string[] = [];
+    if (groundedFailed) {
+      rationaleParts.push(`Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model cannot return external citations — treat as tentative.`);
+    } else {
+      rationaleParts.push(`Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`);
+    }
+    if (isAliasedGroup) {
+      rationaleParts.push(`Combined analysis across ${aliasedFecIds.length} aliased FEC IDs (${aliasedFecIds.join(", ")}).`);
+    } else if (hasRelatedSiblings) {
+      rationaleParts.push(`${relatedEntities.length} same-named related committee(s) reported separately — confidence capped at 40 until aliased.`);
+    }
+    const confidence_rationale = rationaleParts.join(" ");
 
     const responseBody = {
       provider,
@@ -343,6 +433,7 @@ Output ONLY a JSON object, no prose:
       notable_recipients: Array.isArray(parsed.notable_recipients) ? parsed.notable_recipients : [],
       controversies: Array.isArray(parsed.controversies) ? parsed.controversies : [],
       causes: Array.isArray(parsed.causes) ? parsed.causes : [],
+      related_entities: relatedEntities,
       finance_claims: Array.isArray(parsed.finance_claims) ? parsed.finance_claims : [],
       public_context_claims: Array.isArray(parsed.public_context_claims) ? parsed.public_context_claims : [],
       insufficient_information: insufficient,
@@ -355,7 +446,11 @@ Output ONLY a JSON object, no prose:
         donor_count: donorCount,
         top_donors: topDonors,
         fec_id,
+        aliased_fec_ids: aliasedFecIds,
+        alias_canonical_name: aliasCanonicalName,
       },
+      aliased_fec_ids: aliasedFecIds,
+      alias_canonical_name: aliasCanonicalName,
     };
     const saved = await writeCache(cacheKey, responseBody, provider);
     return json({ ...responseBody, cached: false, updated_at: saved?.updated_at });
