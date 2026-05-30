@@ -23,6 +23,7 @@ import { useCandidatePersonalizedScore } from '@/hooks/useCandidatePersonalizedS
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { FundingSourcesBreakdown } from '@/components/FundingSourcesBreakdown';
+import { normalizeOfficeName } from '@/lib/officeLabel';
 import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
 import { cn, formatCompactCurrency } from '@/lib/utils';
