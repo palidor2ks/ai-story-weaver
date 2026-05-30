@@ -21,14 +21,21 @@ export interface DonorNameInput {
 }
 
 export function useDonorCauses(inputs: DonorNameInput[]) {
-  // Stable key from sorted unique name+type pairs
-  const pairs = Array.from(
-    new Set(
-      inputs
-        .filter(d => d.name && (d.type === 'PAC' || d.type === 'Organization'))
-        .map(d => `${norm(d.name)}|${d.type}`)
-    )
-  ).sort();
+  const uniqueInputs = Array.from(
+    inputs
+      .filter(d => d.name && (d.type === 'PAC' || d.type === 'Organization'))
+      .reduce((map, d) => {
+        const key = `${norm(d.name)}|${d.type}`;
+        if (!map.has(key)) map.set(key, { name: d.name.trim(), type: d.type });
+        return map;
+      }, new Map<string, DonorNameInput>())
+      .values()
+  );
+
+  // Stable key from sorted unique name+type pairs. Keep the original-cased
+  // names above for Supabase equality filters; donor_alias_members stores the
+  // FEC/display name as imported, not normalized uppercase.
+  const pairs = uniqueInputs.map(d => `${norm(d.name)}|${d.type}`).sort();
 
   return useQuery({
     queryKey: ['donor-causes', pairs],
@@ -38,8 +45,8 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       const result = new Map<string, DonorCauseInfo>();
       if (pairs.length === 0) return result;
 
-      const names = Array.from(new Set(pairs.map(p => p.split('|')[0])));
-      const types = Array.from(new Set(pairs.map(p => p.split('|')[1])));
+      const names = Array.from(new Set(uniqueInputs.map(d => d.name)));
+      const types = Array.from(new Set(uniqueInputs.map(d => d.type)));
 
       // 1. Resolve names -> aliases (and fec_committee_ids + alias-level cause)
       const { data: members, error: mErr } = await supabase
@@ -163,7 +170,6 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
           const c = causeByCommittee.get(id);
           if (c) {
             result.set(key, c);
-            break;
             break;
           }
         }

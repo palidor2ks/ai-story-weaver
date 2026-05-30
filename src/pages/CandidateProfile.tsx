@@ -48,10 +48,11 @@ import { OfficialAvatar } from '@/components/OfficialAvatar';
 import { VotingRecordSection } from '@/components/VotingRecordSection';
 import { ShareProfileButton } from '@/components/ShareProfileButton';
 import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDonorCauses, getDonorCause } from '@/hooks/useDonorCauses';
 import { CauseBadge } from '@/components/CauseBadge';
+import { supabase } from '@/integrations/supabase/client';
 
 const normalizeDistrictLabel = (district: string | null | undefined) => {
   const normalized = district?.toString().trim();
@@ -93,9 +94,51 @@ export const CandidateProfile = () => {
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
-  const { data: donorCauseMap } = useDonorCauses(
-    donors.map(d => ({ name: d.display_name || d.name, type: d.type }))
+  const donorCauseInputs = useMemo(
+    () => donors.flatMap(d => {
+      const inputs = [{ name: d.name, type: d.type }];
+      if (d.display_name && d.display_name !== d.name) {
+        inputs.push({ name: d.display_name, type: d.type });
+      }
+      return inputs;
+    }),
+    [donors],
   );
+  const { data: donorCauseMap } = useDonorCauses(donorCauseInputs);
+
+  const donorAliasLookupInputs = useMemo(() => {
+    return Array.from(
+      donors.reduce((map, d) => {
+        if (!d.name || (d.type !== 'PAC' && d.type !== 'Organization')) return map;
+        const key = `${d.name.trim().toUpperCase()}|${d.type}`;
+        if (!map.has(key)) map.set(key, { name: d.name.trim(), type: d.type });
+        return map;
+      }, new Map<string, { name: string; type: string }>()).values(),
+    );
+  }, [donors]);
+
+  const { data: donorAliasNameMap } = useQuery({
+    queryKey: ['candidate-donor-alias-names', donorAliasLookupInputs],
+    enabled: donorAliasLookupInputs.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const names = Array.from(new Set(donorAliasLookupInputs.map(d => d.name)));
+      const types = Array.from(new Set(donorAliasLookupInputs.map(d => d.type)));
+      const { data, error } = await supabase
+        .from('donor_alias_members')
+        .select('donor_name, donor_type, donor_aliases!inner(canonical_name, is_active)')
+        .in('donor_name', names)
+        .in('donor_type', types);
+      if (error) throw error;
+
+      const map = new Map<string, string>();
+      for (const row of (data ?? []) as any[]) {
+        if (!row.donor_aliases?.is_active || !row.donor_aliases?.canonical_name) continue;
+        map.set(`${row.donor_name.trim().toUpperCase()}|${row.donor_type}`, row.donor_aliases.canonical_name);
+      }
+      return map;
+    },
+  });
   const { data: votes = [] } = useCandidateVotes(id);
   const { data: representativeDetails } = useRepresentativeDetails(id);
   const { data: adminData } = useAdminRole();
@@ -477,17 +520,30 @@ export const CandidateProfile = () => {
                     coverageTier={candidate.coverage_tier ?? undefined}
                     confidence={candidate.confidence ?? undefined}
                     topDonors={(() => {
-                      const agg = new Map<string, number>();
+                      const agg = new Map<string, { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null }>();
                       donors
                         .filter((d) => !isConduitDonor(d) && !d.is_transfer)
                         .forEach((d) => {
-                          const n = (d.display_name || d.name || 'Unknown').trim();
-                          agg.set(n, (agg.get(n) ?? 0) + Number(d.amount ?? 0));
+                          const aliasName = donorAliasNameMap?.get(`${d.name.trim().toUpperCase()}|${d.type}`);
+                          const n = (aliasName || d.display_name || d.name || 'Unknown').trim();
+                          const cause = getDonorCause(donorCauseMap, d.name, d.type) ?? getDonorCause(donorCauseMap, n, d.type);
+                          const key = `${n.toUpperCase()}|${d.type}`;
+                          const current = agg.get(key) ?? {
+                            name: n,
+                            amount: 0,
+                            primaryCause: cause?.label ?? null,
+                            primaryCauseStance: cause?.stance ?? null,
+                          };
+                          current.amount += Number(d.amount ?? 0);
+                          if (!current.primaryCause && cause?.label) {
+                            current.primaryCause = cause.label;
+                            current.primaryCauseStance = cause.stance ?? null;
+                          }
+                          agg.set(key, current);
                         });
-                      return Array.from(agg.entries())
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 3)
-                        .map(([name, amount]) => ({ name, amount }));
+                      return Array.from(agg.values())
+                        .sort((a, b) => b.amount - a.amount)
+                        .slice(0, 3);
                     })()}
                     fundingBreakdown={fundingBreakdownComputed}
                     fundingCycle={fundingInput.cycleLabel}

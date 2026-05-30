@@ -28,8 +28,8 @@ export interface CardData {
   coverageTier?: string;
   confidence?: string;
   ieCycle?: string | null;
-  topDonors?: { name: string; amount: number; primaryCause?: string | null }[];
-  topSpenders?: { name: string; support: number; oppose: number; primaryCause?: string | null }[];
+  topDonors?: { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null }[];
+  topSpenders?: { name: string; support: number; oppose: number; primaryCause?: string | null; primaryCauseStance?: string | null }[];
   // User profile
   userName?: string | null;
   userScore?: number | null;

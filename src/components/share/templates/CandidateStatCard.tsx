@@ -39,6 +39,30 @@ const fmtMoneyShort = (n?: number | null) => {
 
 const truncate = (s: string, max = 30) => (s.length > max ? s.slice(0, max - 1) + '…' : s);
 
+
+const causeBadgeStyle = (stance?: string | null) => {
+  const normalized = (stance ?? '').toLowerCase();
+  if (normalized === 'pro') {
+    return {
+      border: '1px solid hsl(142 72% 56% / 0.6)',
+      color: 'hsl(142 76% 82%)',
+      background: 'hsl(142 72% 35% / 0.18)',
+    };
+  }
+  if (normalized === 'anti') {
+    return {
+      border: '1px solid hsl(348 84% 60% / 0.6)',
+      color: 'hsl(348 90% 84%)',
+      background: 'hsl(348 84% 45% / 0.18)',
+    };
+  }
+  return {
+    border: '1px solid hsl(38 92% 58% / 0.65)',
+    color: 'hsl(45 96% 82%)',
+    background: 'hsl(38 92% 45% / 0.18)',
+  };
+};
+
 const fitNameFontSize = (name: string, baseSize: number, minSize: number) => {
   const length = name.trim().length;
   if (length >= 58) return minSize;
@@ -460,18 +484,16 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                           display: 'inline-flex',
                           alignItems: 'center',
                           maxWidth: '100%',
-                          border: '1px solid hsl(0 0% 100% / 0.35)',
+                          ...causeBadgeStyle(s.primaryCauseStance),
                           borderRadius: 999,
                           padding: '4px 10px',
-                          color: 'hsl(214 35% 90%)',
-                          background: 'hsl(0 0% 100% / 0.08)',
                           fontSize: 13,
                           fontWeight: 800,
                           letterSpacing: 0.6,
                           textTransform: 'uppercase',
                         }}
                       >
-                        Primary cause: {truncate(s.primaryCause, 24)}
+                        {truncate(s.primaryCause, 24)}
                       </div>
                     )}
                   </div>
@@ -528,18 +550,16 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                           display: 'inline-flex',
                           alignItems: 'center',
                           maxWidth: '100%',
-                          border: '1px solid hsl(0 0% 100% / 0.35)',
+                          ...causeBadgeStyle(d.primaryCauseStance),
                           borderRadius: 999,
                           padding: '4px 8px',
-                          color: 'hsl(214 35% 90%)',
-                          background: 'hsl(0 0% 100% / 0.08)',
                           fontSize: 11,
                           fontWeight: 800,
                           letterSpacing: 0.5,
                           textTransform: 'uppercase',
                         }}
                       >
-                        Primary cause: {truncate(d.primaryCause, 18)}
+                        {truncate(d.primaryCause, 18)}
                       </div>
                     )}
                   </div>
