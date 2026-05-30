@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { CivicOfficial } from '@/hooks/useCivicOfficials';
+import { normalizeOfficeName } from '@/lib/officeLabel';
 
 interface RepresentativeComparisonCardProps {
   official: CivicOfficial;
