@@ -89,9 +89,40 @@ Deno.serve(async (req) => {
     }
 
     const cycle = body.cycle ? String(body.cycle).trim() : null;
+
+    const admin = createClient(supabaseUrl, serviceKey);
+
+    // ─── Resolve committee alias group ─────────────────────────────────────
+    // If this committee's FEC ID is part of an alias group, expand to all
+    // member FEC IDs so finance and AI analysis cover the whole organization.
+    let aliasedFecIds: string[] = fec_id ? [fec_id] : [];
+    let aliasCanonicalName: string | null = null;
+    if (entity_kind === "committee" && fec_id) {
+      const { data: aliasRow } = await admin
+        .from("committee_aliases")
+        .select("canonical_name, fec_committee_ids")
+        .eq("is_active", true)
+        .contains("fec_committee_ids", [fec_id])
+        .limit(1)
+        .maybeSingle();
+      if (aliasRow?.fec_committee_ids?.length) {
+        aliasedFecIds = Array.from(
+          new Set([fec_id, ...(aliasRow.fec_committee_ids as string[])]
+            .map((s) => String(s).toUpperCase())),
+        );
+        aliasCanonicalName = (aliasRow as any).canonical_name ?? null;
+      }
+    }
+    const isAliasedGroup = aliasedFecIds.length > 1;
+
+    // Cache key bumped to v2 so existing "20/100 Low" payloads are bypassed,
+    // and keyed by the canonical alias subject when applicable.
+    const aliasSubject = isAliasedGroup
+      ? `alias:${[...aliasedFecIds].sort().join(",")}`
+      : `${entity_kind}:${entity_id}`;
     const cacheKey = {
       kind: "recipient" as const,
-      subject_id: `${entity_kind}:${entity_id}`,
+      subject_id: `v2:${aliasSubject}`,
       cycle: cycle && cycle !== "all" ? cycle : null,
     };
     if (!body.force_refresh) {
@@ -100,8 +131,6 @@ Deno.serve(async (req) => {
         return json({ ...cached.payload, cached: true, updated_at: cached.updated_at });
       }
     }
-
-    const admin = createClient(supabaseUrl, serviceKey);
 
     // Pull aggregate finance signals for the recipient as anchors.
     let totalReceived = 0;
@@ -127,6 +156,28 @@ Deno.serve(async (req) => {
           .slice(0, 8)
           .map(([name, amount]) => ({ name, amount })),
       );
+    } else if (entity_kind === "committee" && aliasedFecIds.length > 0) {
+      // Aggregate contributions across every aliased FEC committee ID.
+      const { data: cRows } = await admin
+        .from("contributions")
+        .select("contributor_name, amount")
+        .in("recipient_committee_id", aliasedFecIds)
+        .limit(5000);
+      const byContrib: Record<string, number> = {};
+      for (const r of (cRows ?? []) as any[]) {
+        const amt = Number(r.amount ?? 0);
+        if (!Number.isFinite(amt) || amt <= 0) continue;
+        totalReceived += amt;
+        const k = String(r.contributor_name ?? "Unknown");
+        byContrib[k] = (byContrib[k] ?? 0) + amt;
+      }
+      donorCount = Object.keys(byContrib).length;
+      topDonors.push(
+        ...Object.entries(byContrib)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 8)
+          .map(([name, amount]) => ({ name, amount })),
+      );
     }
 
     const data_coverage: "none" | "sparse" | "moderate" | "rich" =
@@ -135,8 +186,14 @@ Deno.serve(async (req) => {
         : totalReceived < 1_000_000 ? "moderate"
         : "rich";
 
+    const fecIdAnchor = isAliasedGroup
+      ? `FEC IDs ${aliasedFecIds.join(", ")} (the same operation under multiple registrations${aliasCanonicalName ? `, known as "${aliasCanonicalName}"` : ""})`
+      : fec_id
+      ? `FEC ID ${fec_id}`
+      : null;
+
     const anchorBits = [
-      fec_id ? `FEC ID ${fec_id}` : null,
+      fecIdAnchor,
       party ? `${party} party` : null,
       office ? `running for ${office}` : null,
       state ? `in ${state}` : null,
