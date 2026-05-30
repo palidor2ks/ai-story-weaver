@@ -29,7 +29,7 @@ export interface CardData {
   confidence?: string;
   ieCycle?: string | null;
   topDonors?: { name: string; amount: number }[];
-  topSpenders?: { name: string; support: number; oppose: number }[];
+  topSpenders?: { name: string; support: number; oppose: number; primaryCause?: string | null }[];
   // User profile
   userName?: string | null;
   userScore?: number | null;
