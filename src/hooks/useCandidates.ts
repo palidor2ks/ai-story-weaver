@@ -417,12 +417,19 @@ export interface ViaCommittee {
   amount: number;
 }
 
+export interface DonorCycleBreakdown {
+  cycle: string;
+  amount: number;
+  transaction_count: number;
+}
+
 export interface DonorWithCanonical extends Donor {
   display_name: string;
   is_consolidated: boolean;
   name_variations?: string[];
   via_committees?: ViaCommittee[];
   is_external_only?: boolean;
+  cycle_breakdown?: DonorCycleBreakdown[];
 }
 
 export const useCandidateDonors = (candidateId: string | undefined, cycle?: string) => {
@@ -499,6 +506,10 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
       // an authorized Trump campaign committee).
       const isAuthorizedRecipient = (d: string | null) =>
         d === 'P' || d === 'A' || d === 'J';
+      const conduitOrgNames = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
+      const isConduitDonor = (d: { display_name?: string | null; name: string; is_conduit_org?: boolean | null }) =>
+        Boolean(d.is_conduit_org) ||
+        conduitOrgNames.some(c => (d.display_name || d.name).toUpperCase().includes(c));
 
       // Fetch IE-excluded committees so we drop their donor rows too.
       const { data: ieExcludedRows } = await (supabase as any)
@@ -524,20 +535,57 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
       allowedRawDonors.forEach(donor => {
         const canonicalName = donor.display_name || donor.name;
         const isConsolidated = !!donor.display_name && donor.display_name !== donor.name;
+        const isConduit = isConduitDonor(donor);
 
-        // Group by display_name and cycle (removes type to consolidate same entity across types)
-        const groupKey = `${canonicalName}|${donor.cycle}`;
+        // Group by display_name and cycle for ordinary donors. Conduit processors
+        // (ActBlue, WinRed, Democracy Engine) are pass-through processors, so merge
+        // the same conduit name across cycles and keep a visible cycle breakdown.
+        const groupKey = isConduit
+          ? `conduit|${canonicalName}`
+          : `${canonicalName}|${donor.cycle}`;
 
         const existing = canonicalGroups.get(groupKey);
         if (existing) {
           // Merge with existing donor
           existing.amount += donor.amount;
           existing.transaction_count += donor.transaction_count;
+          if (isConduit) {
+            const breakdown = existing.cycle_breakdown ?? [{
+              cycle: existing.cycle,
+              amount: existing.amount - donor.amount,
+              transaction_count: existing.transaction_count - donor.transaction_count,
+            }];
+            const cycleEntry = breakdown.find(entry => entry.cycle === donor.cycle);
+            if (cycleEntry) {
+              cycleEntry.amount += donor.amount;
+              cycleEntry.transaction_count += donor.transaction_count;
+            } else {
+              breakdown.push({
+                cycle: donor.cycle,
+                amount: donor.amount,
+                transaction_count: donor.transaction_count,
+              });
+            }
+            existing.cycle_breakdown = breakdown;
+            existing.cycle = breakdown.length > 1
+              ? 'Multiple cycles'
+              : breakdown[0].cycle;
+          }
           if (!existing.name_variations) existing.name_variations = [existing.name];
           if (!existing.name_variations.includes(donor.name)) {
             existing.name_variations.push(donor.name);
           }
           existing.is_consolidated = true;
+          if (donor.first_receipt_date &&
+            (!existing.first_receipt_date || donor.first_receipt_date < existing.first_receipt_date)
+          ) {
+            existing.first_receipt_date = donor.first_receipt_date;
+          }
+          if (donor.last_receipt_date &&
+            (!existing.last_receipt_date || donor.last_receipt_date > existing.last_receipt_date)
+          ) {
+            existing.last_receipt_date = donor.last_receipt_date;
+          }
           // Accumulate recipient committee tallies
           if (donor.recipient_committee_id) {
             const meta = committeeMap.get(donor.recipient_committee_id);
@@ -572,12 +620,27 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
             is_consolidated: isConsolidated,
             name_variations: isConsolidated ? [donor.name] : undefined,
             via_committees: via,
+            cycle_breakdown: isConduit ? [{
+              cycle: donor.cycle,
+              amount: donor.amount,
+              transaction_count: donor.transaction_count,
+            }] : undefined,
           });
         }
       });
 
-      // Compute is_external_only: every contribution went through a non-principal/non-authorized committee
+      // Compute is_external_only and normalize conduit cycle breakdown ordering.
       canonicalGroups.forEach(group => {
+        if (group.cycle_breakdown) {
+          group.cycle_breakdown = group.cycle_breakdown
+            .filter(entry => entry.amount !== 0 || entry.transaction_count > 0)
+            .sort((a, b) => Number(b.cycle) - Number(a.cycle));
+          if (group.cycle_breakdown.length > 1) {
+            group.cycle = 'Multiple cycles';
+          } else if (group.cycle_breakdown.length === 1) {
+            group.cycle = group.cycle_breakdown[0].cycle;
+          }
+        }
         const via = group.via_committees ?? [];
         if (via.length === 0) {
           group.is_external_only = false;
