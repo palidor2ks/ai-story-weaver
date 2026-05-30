@@ -703,71 +703,97 @@ const DonorProfile = () => {
           </div>
         </div>
 
+        {/* Shared cycle filter for Contributors + Recipients */}
+        {profileAvailableCycles.length > 1 && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium text-muted-foreground">Filter by cycle</p>
+            <Select value={profileCycleFilter} onValueChange={setProfileCycleFilter}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All cycles</SelectItem>
+                {profileAvailableCycles.map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         {/* Top Contributors to this PAC (PAC/Org only, shown first) */}
         {(donor.type === 'PAC' || donor.type === 'Organization') && pacContributors.length > 0 && (
           <section>
-            <div className="flex items-center gap-3 mb-4">
-              <Users className="w-5 h-5 text-primary" />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-4 min-w-0">
+              <Users className="w-5 h-5 text-primary shrink-0" />
               <h2 className="font-display text-xl font-bold">Top Contributors to this PAC</h2>
-              <span className="text-sm text-muted-foreground">({pacContributors.length} total)</span>
+              <span className="text-sm text-muted-foreground">({filteredPacContributors.length} {profileCycleFilter === 'all' ? 'total' : `in ${profileCycleFilter}`})</span>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {(showAllContributors ? pacContributors : pacContributors.slice(0, 6)).map((contributor, index) => {
-                const contributorKey = `contributor:${contributor.name}`;
-                return (
-                  <Card
-                    key={`${contributor.name}-${index}`}
-                    className="h-full transition-all hover:shadow-md hover:border-primary/30 group"
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-                            {contributor.name}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {formatCompactNumber(contributor.contributionCount)} contribution{contributor.contributionCount === 1 ? '' : 's'}
-                          </p>
+            {filteredPacContributors.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  No contributors in cycle {profileCycleFilter}.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {(showAllContributors ? filteredPacContributors : filteredPacContributors.slice(0, 6)).map((contributor, index) => {
+                  const contributorKey = `contributor:${contributor.name}`;
+                  return (
+                    <Card
+                      key={`${contributor.name}-${index}`}
+                      className="h-full transition-all hover:shadow-md hover:border-primary/30 group min-w-0"
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-3 mb-2 min-w-0">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                              {contributor.name}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {formatCompactNumber(contributor.contributionCount)} contribution{contributor.contributionCount === 1 ? '' : 's'}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center justify-end pt-2 border-t border-border">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-agree">{formatAmount(contributor.totalAmount)}</span>
-                          {user && <DonorAIAnalysisDialog
-                            id={contributorKey}
-                            name={contributor.name}
-                            type="Individual"
-                            trigger={
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2 text-primary hover:text-primary"
-                                aria-label="Open AI analysis"
-                                title="Open AI analysis"
-                              >
-                                <Sparkles className="h-3.5 w-3.5" />
-                                <span className="ml-1 text-xs font-semibold">AI</span>
-                              </Button>
-                            }
-                          />}
+                        <div className="flex items-center justify-end pt-2 border-t border-border">
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-bold text-agree">{formatAmount(contributor.totalAmount)}</span>
+                            {user && <DonorAIAnalysisDialog
+                              id={contributorKey}
+                              name={contributor.name}
+                              type="Individual"
+                              trigger={
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-primary hover:text-primary"
+                                  aria-label="Open AI analysis"
+                                  title="Open AI analysis"
+                                >
+                                  <Sparkles className="h-3.5 w-3.5" />
+                                  <span className="ml-1 text-xs font-semibold">AI</span>
+                                </Button>
+                              }
+                            />}
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
 
-            {pacContributors.length > 6 && (
+            {filteredPacContributors.length > 6 && (
               <div className="mt-4">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setShowAllContributors(!showAllContributors)}
                 >
-                  {showAllContributors ? 'Show Top 6' : `View All Contributors (${pacContributors.length})`}
+                  {showAllContributors ? 'Show Top 6' : `View All Contributors (${filteredPacContributors.length})`}
                 </Button>
               </div>
             )}
