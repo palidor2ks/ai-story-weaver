@@ -831,7 +831,7 @@ const DonorProfile = () => {
                             {recipientName}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {record.candidates?.office} • {record.candidates?.state}
+                            {normalizeOfficeName(record.candidates?.office)} • {record.candidates?.state}
                           </p>
                         </div>
                         {record.candidates?.party && (
