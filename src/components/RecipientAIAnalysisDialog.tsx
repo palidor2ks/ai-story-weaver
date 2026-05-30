@@ -296,6 +296,35 @@ export const RecipientAIAnalysisDialog = ({
               </div>
             )}
 
+            {analysis.related_entities && analysis.related_entities.length > 0 && (
+              <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+                <h4 className="font-semibold text-foreground flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                  Possibly related committees (distinct FEC filers)
+                </h4>
+                <p className="text-[11px] text-muted-foreground italic">
+                  These share a similar name but are separate FEC registrations. If you believe any of these are the same organization, an admin can link them as an alias to combine the analysis.
+                </p>
+                <ul className="space-y-2">
+                  {analysis.related_entities.map((r, i) => (
+                    <li key={i} className="text-sm">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-foreground">{r.name || 'Unknown'}</span>
+                        {r.fec_id && <Badge variant="outline" className="font-mono text-[10px]">{r.fec_id}</Badge>}
+                        <Badge variant="secondary" className="text-[10px]">{r.relationship.replace(/_/g, ' ')}</Badge>
+                      </div>
+                      {r.evidence && <p className="text-xs text-muted-foreground mt-0.5">{r.evidence}</p>}
+                      {r.citation && (
+                        <a href={r.citation} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-0.5">
+                          <ExternalLink className="h-3 w-3" /> source
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {analysis.finance_claims && analysis.finance_claims.length > 0 && (
               <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
                 <h4 className="font-semibold text-foreground flex items-center gap-1.5 text-xs uppercase tracking-wide">
