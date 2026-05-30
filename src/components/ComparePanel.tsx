@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useFinanceCycles } from '@/hooks/useFinanceCycles';
 import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
+import { normalizeOfficeName } from '@/lib/officeLabel';
 import { IESummaryInline } from './IESummaryInline';
 
 interface ComparePanelProps {
