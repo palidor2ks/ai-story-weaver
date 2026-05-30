@@ -6,15 +6,16 @@ import { Seo } from '@/components/Seo';
 import { Card, CardContent } from '@/components/ui/card';
 import { DonorAIAnalysisDialog } from '@/components/DonorAIAnalysisDialog';
 import { ShareDonorButton } from '@/components/ShareDonorButton';
-import { Badge } from '@/components/ui/badge';
+import { Badge, badgeVariants } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { getDonorCause, useDonorCauses } from '@/hooks/useDonorCauses';
 import { CauseBadge } from '@/components/CauseBadge';
 import { useAuth } from '@/context/AuthContext';
-import { formatCompactCurrency, formatFullCurrency } from '@/lib/utils';
+import { cn, formatCompactCurrency, formatFullCurrency } from '@/lib/utils';
 import { normalizeOfficeName } from '@/lib/officeLabel';
 import { 
   ArrowLeft, 
@@ -604,10 +605,35 @@ const DonorProfile = () => {
                   )}
                   {donorPrimaryCause && <CauseBadge cause={donorPrimaryCause} />}
                   {nameVariations.length > 1 && (
-                    <Badge variant="secondary" className="gap-1">
-                      <Layers className="h-3 w-3" />
-                      {nameVariations.length} name variations
-                    </Badge>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+                          className={cn(badgeVariants({ variant: 'secondary' }), 'gap-1 cursor-pointer hover:bg-secondary/80')}
+                          aria-label={`View all ${nameVariations.length} name variations`}
+                        >
+                          <Layers className="h-3 w-3" />
+                          {nameVariations.length} name variations
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                          <DialogTitle>Name variations included</DialogTitle>
+                          <DialogDescription>
+                            All donor names grouped under {displayName}.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="max-h-[60vh] overflow-y-auto pr-1">
+                          <div className="flex flex-wrap gap-2">
+                            {nameVariations.map((name, i) => (
+                              <Badge key={`${name}-${i}`} variant="outline" className="text-xs font-normal">
+                                {name}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   )}
                   {donor.contributor_city && donor.contributor_state && (
                     <span className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -621,25 +647,7 @@ const DonorProfile = () => {
                     {donor.occupation}{donor.occupation && donor.employer && ' at '}{donor.employer}
                   </p>
                 )}
-                
-                {/* Show name variations if there are multiple */}
-                {nameVariations.length > 1 && (
-                  <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Name variations included:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {nameVariations.slice(0, 8).map((name, i) => (
-                        <Badge key={i} variant="outline" className="text-xs font-normal">
-                          {name}
-                        </Badge>
-                      ))}
-                      {nameVariations.length > 8 && (
-                        <Badge variant="outline" className="text-xs font-normal">
-                          +{nameVariations.length - 8} more
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
+
               </div>
             </div>
 
