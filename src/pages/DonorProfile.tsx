@@ -520,7 +520,7 @@ const DonorProfile = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
         <Header />
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
