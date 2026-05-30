@@ -132,11 +132,23 @@ export const RecipientAIAnalysisDialog = ({
             <div className="space-y-1.5 min-w-0">
               <DialogTitle className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
-                {entityName}
+                {analysis?.alias_canonical_name || entityName}
               </DialogTitle>
               <DialogDescription>
                 AI-generated analysis of this {entityKind}'s positions, goals, and political activity — grounded in live web search.
               </DialogDescription>
+              {analysis?.aliased_fec_ids && analysis.aliased_fec_ids.length > 1 && (
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                    Combined across:
+                  </span>
+                  {analysis.aliased_fec_ids.map((id) => (
+                    <Badge key={id} variant="secondary" className="font-mono text-[10px]">
+                      {id}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
             {analysis && !isLoading && (
               <div className="flex items-center gap-2 shrink-0">
