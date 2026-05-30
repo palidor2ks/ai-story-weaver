@@ -384,16 +384,43 @@ Output ONLY a JSON object, no prose:
     // Deterministic confidence from verified provider citations only (NOT model-emitted parsed.sources).
     let confidence = computeDeterministicConfidence(grounded);
     let insufficient = Boolean(parsed.insufficient_information);
-    if (grounded.length === 0) {
+    const relatedEntities = Array.isArray(parsed.related_entities)
+      ? parsed.related_entities
+          .filter((r: any) => r && (r.name || r.fec_id))
+          .map((r: any) => ({
+            name: String(r.name ?? "").trim(),
+            fec_id: r.fec_id ? String(r.fec_id).trim().toUpperCase() : null,
+            relationship: String(r.relationship ?? "possibly_related"),
+            evidence: String(r.evidence ?? "").trim(),
+            citation: r.citation ? String(r.citation).trim() : null,
+          }))
+      : [];
+    const hasRelatedSiblings = relatedEntities.length > 0;
+    if (grounded.length === 0 && !isAliasedGroup) {
       insufficient = true;
     }
-    if (insufficient) {
+    // Tier the confidence cap:
+    //  - aliased group → no cap (we know it's the same org)
+    //  - unidentified entity → cap 20
+    //  - identifiable but thin (has related siblings, no aliased group) → cap 40
+    if (insufficient && !isAliasedGroup) {
       confidence = Math.min(confidence, 20);
+    } else if (hasRelatedSiblings && !isAliasedGroup) {
+      confidence = Math.min(confidence, 40);
     }
     const groundedFailed = providerErrors.length > 0 && grounded.length === 0;
-    const confidence_rationale = groundedFailed
-      ? `Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model (Gemini) cannot return external citations — treat as tentative.`
-      : `Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`;
+    const rationaleParts: string[] = [];
+    if (groundedFailed) {
+      rationaleParts.push(`Grounded search providers unavailable (${providerErrors.map(p => `${p.provider}:${p.status}`).join(", ")}). Fallback model cannot return external citations — treat as tentative.`);
+    } else {
+      rationaleParts.push(`Deterministic score from ${grounded.length} verified provider citation(s); weighted 55% source count (saturating at 6) + 45% domain reliability.`);
+    }
+    if (isAliasedGroup) {
+      rationaleParts.push(`Combined analysis across ${aliasedFecIds.length} aliased FEC IDs (${aliasedFecIds.join(", ")}).`);
+    } else if (hasRelatedSiblings) {
+      rationaleParts.push(`${relatedEntities.length} same-named related committee(s) reported separately — confidence capped at 40 until aliased.`);
+    }
+    const confidence_rationale = rationaleParts.join(" ");
 
     const responseBody = {
       provider,
@@ -406,6 +433,7 @@ Output ONLY a JSON object, no prose:
       notable_recipients: Array.isArray(parsed.notable_recipients) ? parsed.notable_recipients : [],
       controversies: Array.isArray(parsed.controversies) ? parsed.controversies : [],
       causes: Array.isArray(parsed.causes) ? parsed.causes : [],
+      related_entities: relatedEntities,
       finance_claims: Array.isArray(parsed.finance_claims) ? parsed.finance_claims : [],
       public_context_claims: Array.isArray(parsed.public_context_claims) ? parsed.public_context_claims : [],
       insufficient_information: insufficient,
@@ -418,7 +446,11 @@ Output ONLY a JSON object, no prose:
         donor_count: donorCount,
         top_donors: topDonors,
         fec_id,
+        aliased_fec_ids: aliasedFecIds,
+        alias_canonical_name: aliasCanonicalName,
       },
+      aliased_fec_ids: aliasedFecIds,
+      alias_canonical_name: aliasCanonicalName,
     };
     const saved = await writeCache(cacheKey, responseBody, provider);
     return json({ ...responseBody, cached: false, updated_at: saved?.updated_at });
