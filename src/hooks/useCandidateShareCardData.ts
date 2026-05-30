@@ -10,6 +10,7 @@ import { getDonorCause, useDonorCauses } from '@/hooks/useDonorCauses';
 import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { proxiedImageUrl } from '@/lib/imageProxy';
 import { supabase } from '@/integrations/supabase/client';
+import { choosePrimaryCauseLabel } from '@/lib/committeeCauseDisplay';
 import { useQuery } from '@tanstack/react-query';
 
 const CONDUIT_NAMES = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
