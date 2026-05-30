@@ -1013,7 +1013,12 @@ export const CandidateProfile = () => {
                                 const donor = source.donor;
                                 const displayName = donor.display_name || donor.name;
                                 const conduitOrgs = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
-                                const isConduit = conduitOrgs.some(c => displayName.toUpperCase().includes(c));
+                                const isConduit = donor.is_conduit_org || conduitOrgs.some(c => displayName.toUpperCase().includes(c));
+                                const cycleBreakdown = donor.cycle_breakdown ?? [];
+                                const hasCycleBreakdown = isConduit && cycleBreakdown.length > 1;
+                                const cycleBreakdownLabel = cycleBreakdown
+                                  .map(entry => `${entry.cycle}: ${formatCurrency(entry.amount)}`)
+                                  .join(' · ');
                                 
                                 return (
                                   <Link
@@ -1078,6 +1083,27 @@ export const CandidateProfile = () => {
                                           {isConduit && (
                                             <span className="text-xs text-amber-600">Pass-through</span>
                                           )}
+                                          {hasCycleBreakdown && (
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-700 bg-amber-500/10 dark:text-amber-400">
+                                                    {cycleBreakdown.length} cycles merged
+                                                  </Badge>
+                                                </TooltipTrigger>
+                                                <TooltipContent className="max-w-xs">
+                                                  <p className="font-medium mb-1">Cycle breakdown</p>
+                                                  <ul className="text-xs space-y-0.5">
+                                                    {cycleBreakdown.map(entry => (
+                                                      <li key={entry.cycle}>
+                                                        {entry.cycle}: ${entry.amount.toLocaleString()} · {entry.transaction_count.toLocaleString()} contributions
+                                                      </li>
+                                                    ))}
+                                                  </ul>
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </TooltipProvider>
+                                          )}
                                           {(() => {
                                             const via = donor.via_committees ?? [];
                                             const external = via.filter(v => v.designation !== 'P' && v.designation !== 'A');
@@ -1135,13 +1161,22 @@ export const CandidateProfile = () => {
                                             </span>
                                           )}
                                         </div>
+                                        {hasCycleBreakdown && (
+                                          <p className="text-xs text-muted-foreground mt-1">
+                                            {cycleBreakdownLabel}
+                                          </p>
+                                        )}
                                       </div>
                                       <div className="text-right">
                                         <p className={cn("font-bold", isConduit ? "text-amber-600" : "text-foreground")}>
                                           ${donor.amount.toLocaleString()}
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                          {donor.transaction_count > 1 ? `${donor.transaction_count} contributions` : donor.cycle}
+                                          {hasCycleBreakdown
+                                            ? `${donor.transaction_count.toLocaleString()} contributions · ${cycleBreakdown.length} cycles`
+                                            : donor.transaction_count > 1
+                                              ? `${donor.transaction_count.toLocaleString()} contributions`
+                                              : donor.cycle}
                                         </p>
                                       </div>
                                     </div>
