@@ -174,7 +174,11 @@ export const DonorFilters = ({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground ml-auto">
+                <button
+                  type="button"
+                  aria-label="About donor data grouping"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground ml-auto"
+                >
                   <Info className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Data info</span>
                 </button>
