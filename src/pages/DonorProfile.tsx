@@ -403,13 +403,40 @@ const DonorProfile = () => {
     return Array.from(grouped.values()).sort((a, b) => b.amount - a.amount);
   }, [contributions, donorRecords, profileCycleFilter]);
 
-  // Get unique cycles for filter
+  // Get unique cycles for filter (contributions/recipients panel)
   const availableCycles = useMemo(() => {
     const cycles = new Set<string>();
     contributions.forEach(c => cycles.add(c.cycle));
     donorRecords.forEach(r => cycles.add(r.cycle));
     return Array.from(cycles).sort().reverse();
   }, [contributions, donorRecords]);
+
+  // Cycles available across the whole profile (Contributors + Recipients)
+  const profileAvailableCycles = useMemo(() => {
+    const cycles = new Set<string>();
+    contributions.forEach(c => c.cycle && cycles.add(String(c.cycle)));
+    donorRecords.forEach(r => r.cycle && cycles.add(String(r.cycle)));
+    pacContributors.forEach(p => Object.keys(p.byCycle).forEach(c => cycles.add(c)));
+    return Array.from(cycles).filter(Boolean).sort().reverse();
+  }, [contributions, donorRecords, pacContributors]);
+
+  // PAC contributors filtered by selected cycle
+  const filteredPacContributors = useMemo(() => {
+    if (profileCycleFilter === 'all') return pacContributors;
+    return pacContributors
+      .map(p => {
+        const c = p.byCycle[profileCycleFilter];
+        if (!c || c.totalAmount <= 0) return null;
+        return {
+          name: p.name,
+          totalAmount: c.totalAmount,
+          contributionCount: c.contributionCount,
+          byCycle: p.byCycle,
+        } as PACContributor;
+      })
+      .filter((x): x is PACContributor => x !== null)
+      .sort((a, b) => b.totalAmount - a.totalAmount);
+  }, [pacContributors, profileCycleFilter]);
 
   // Get unique committees for filter
   const availableCommittees = useMemo(() => {
