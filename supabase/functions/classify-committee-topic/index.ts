@@ -110,7 +110,7 @@ Designation: ${info.designation ?? 'unknown'}
 Top IE targets: ${info.top_targets.join(', ') || 'none'}
 IE expenditure purposes: ${info.ie_purposes.slice(0, 10).join(' | ') || 'none'}
 
-Pick ONE primary cause id from the list below that best describes this committee's focus, plus 0-2 optional secondary cause ids if clearly relevant. Use "low" confidence for generic partisan committees with no clear single-issue focus.
+Pick ONE primary cause id from the list below that best describes this committee's focus, plus 0-2 optional secondary cause ids if clearly relevant. If a specific issue cause is clearly supported by the committee name, IE targets, or expenditure purposes, make that specific cause primary and put any generic partisan bucket only in secondary_cause_ids. Use "low" confidence for generic partisan committees with no clear single-issue focus.
 
 If NO cause fits well, you may also propose a single new cause (suggested_new_cause) — but ONLY if there's a clear, specific issue not represented (e.g. "Pro-cannabis"). Do not propose duplicates.
 
@@ -123,7 +123,7 @@ ${causeMenu}`;
     body: JSON.stringify({
       model: 'google/gemini-3-flash-preview',
       messages: [
-        { role: 'system', content: 'You categorize US political committees (PACs, SuperPACs, party committees) by cause/stance (e.g. Pro-Israel, Pro-gun). Be conservative; prefer "conservative" or "progressive" generic buckets over forcing a specific cause when unclear.' },
+        { role: 'system', content: 'You categorize US political committees (PACs, SuperPACs, party committees) by cause/stance (e.g. Pro-Israel, Pro-gun). Be conservative, but when there is clear evidence for a specific issue cause, prefer that over generic "conservative" or "progressive" buckets; use generic buckets only when the issue focus is unclear.' },
         { role: 'user', content: userMsg },
       ],
       tools: [{

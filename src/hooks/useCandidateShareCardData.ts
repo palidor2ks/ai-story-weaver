@@ -10,6 +10,7 @@ import { getDonorCause, useDonorCauses } from '@/hooks/useDonorCauses';
 import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { proxiedImageUrl } from '@/lib/imageProxy';
 import { supabase } from '@/integrations/supabase/client';
+import { choosePrimaryCauseLabel } from '@/lib/committeeCauseDisplay';
 import { useQuery } from '@tanstack/react-query';
 
 const CONDUIT_NAMES = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
@@ -155,13 +156,33 @@ export function useCandidateShareCardData(
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from('committee_topics')
-        .select('fec_committee_id, primary_cause:primary_cause_id(label)')
+        .select(
+          'fec_committee_id, secondary_cause_ids, primary_cause:primary_cause_id(id, label)',
+        )
         .in('fec_committee_id', topSpenderIds);
+      const secondaryIds = Array.from(
+        new Set((data ?? []).flatMap((r: any) => r.secondary_cause_ids ?? [])),
+      );
+      const { data: secondaryCauses } =
+        secondaryIds.length > 0
+          ? await (supabase as any)
+              .from('committee_causes')
+              .select('id, label')
+              .in('id', secondaryIds)
+          : { data: [] };
+      const causeById = new Map(
+        (secondaryCauses ?? []).map((cause: any) => [cause.id, cause]),
+      );
       const map = new Map<string, string>();
       (data ?? []).forEach((r: any) => {
-        if (r.fec_committee_id && r.primary_cause?.label) {
-          map.set(r.fec_committee_id, r.primary_cause.label);
-        }
+        if (!r.fec_committee_id) return;
+        const label = choosePrimaryCauseLabel(
+          r.primary_cause,
+          (r.secondary_cause_ids ?? [])
+            .map((secondaryId: string) => causeById.get(secondaryId))
+            .filter(Boolean),
+        );
+        if (label) map.set(r.fec_committee_id, label);
       });
       return map;
     },
