@@ -6,6 +6,7 @@ import { useFECTotals } from '@/hooks/useFECTotals';
 import { useFinanceReconciliation } from '@/hooks/useFinanceReconciliation';
 import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
+import { getDonorCause, useDonorCauses } from '@/hooks/useDonorCauses';
 import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { proxiedImageUrl } from '@/lib/imageProxy';
 import { supabase } from '@/integrations/supabase/client';
@@ -49,7 +50,7 @@ export interface CandidateShareCardData {
   confidence: string | undefined;
   ieCycle: string | null;
   topSpenders: { name: string; support: number; oppose: number; primaryCause?: string | null }[];
-  topDonors: { name: string; amount: number }[];
+  topDonors: { name: string; amount: number; primaryCause?: string | null }[];
   fundingBreakdown:
     | { label: string; pct: number; color: string }[]
     | undefined;
@@ -88,6 +89,44 @@ export function useCandidateShareCardData(
   );
   const { data: ieData } = useCandidateIE(id ?? null);
 
+  const topDonorSummaries = useMemo(() => {
+    const isConduitDonor = (d: (typeof donors)[number]) =>
+      d.is_conduit_org ||
+      CONDUIT_NAMES.some((c) =>
+        (d.display_name || d.name || '').toUpperCase().includes(c),
+      );
+
+    const donorAgg = new Map<
+      string,
+      { name: string; amount: number; type: (typeof donors)[number]['type'] }
+    >();
+    donors
+      .filter((d) => !isConduitDonor(d) && !d.is_transfer)
+      .forEach((d) => {
+        const name = (d.display_name || d.name || 'Unknown').trim();
+        const existing = donorAgg.get(name);
+        if (existing) {
+          existing.amount += Number(d.amount ?? 0);
+          if (existing.type !== 'PAC' && existing.type !== 'Organization') {
+            existing.type = d.type;
+          }
+        } else {
+          donorAgg.set(name, {
+            name,
+            amount: Number(d.amount ?? 0),
+            type: d.type,
+          });
+        }
+      });
+
+    return Array.from(donorAgg.values())
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 3);
+  }, [donors]);
+
+  const { data: donorCauseMap } = useDonorCauses(
+    topDonorSummaries.map((d) => ({ name: d.name, type: d.type })),
+  );
 
   const topSpenderIds = useMemo(() => {
     const cycles = ieData?.availableCycles ?? [];
@@ -165,23 +204,11 @@ export function useCandidateShareCardData(
 
     const score = scoreMap?.get(id) ?? candidate.overall_score ?? null;
 
-    const isConduitDonor = (d: (typeof donors)[number]) =>
-      d.is_conduit_org ||
-      CONDUIT_NAMES.some((c) =>
-        (d.display_name || d.name || '').toUpperCase().includes(c),
-      );
-
-    const donorAgg = new Map<string, number>();
-    donors
-      .filter((d) => !isConduitDonor(d) && !d.is_transfer)
-      .forEach((d) => {
-        const n = (d.display_name || d.name || 'Unknown').trim();
-        donorAgg.set(n, (donorAgg.get(n) ?? 0) + Number(d.amount ?? 0));
-      });
-    const topDonors = Array.from(donorAgg.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([name, amount]) => ({ name, amount }));
+    const topDonors = topDonorSummaries.map((donor) => ({
+      name: donor.name,
+      amount: donor.amount,
+      primaryCause: getDonorCause(donorCauseMap, donor.name, donor.type)?.label ?? null,
+    }));
 
     const fecItemized =
       financeReconciliation?.fec_itemized ??
@@ -288,7 +315,8 @@ export function useCandidateShareCardData(
     id,
     candidate,
     scoreMap,
-    donors,
+    topDonorSummaries,
+    donorCauseMap,
     financeReconciliation,
     fecTotals,
     ieData,
