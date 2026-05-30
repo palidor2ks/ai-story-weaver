@@ -123,7 +123,7 @@ ${causeMenu}`;
     body: JSON.stringify({
       model: 'google/gemini-3-flash-preview',
       messages: [
-        { role: 'system', content: 'You categorize US political committees (PACs, SuperPACs, party committees) by cause/stance (e.g. Pro-Israel, Pro-gun). Be conservative; prefer "conservative" or "progressive" generic buckets over forcing a specific cause when unclear.' },
+        { role: 'system', content: 'You categorize US political committees (PACs, SuperPACs, party committees) by cause/stance (e.g. Pro-Israel, Pro-gun). Be conservative, but when there is clear evidence for a specific issue cause, prefer that over generic "conservative" or "progressive" buckets; use generic buckets only when the issue focus is unclear.' },
         { role: 'user', content: userMsg },
       ],
       tools: [{
