@@ -20,6 +20,7 @@ import { ShareCardModal } from '@/components/share/ShareCardModal';
 import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { choosePrimaryCauseLabel } from '@/lib/committeeCauseDisplay';
 
 interface TopicComparison {
   topicName: string;
