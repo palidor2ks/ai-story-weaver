@@ -616,7 +616,20 @@ export function DonorAliasesPanel() {
                                 onAiClassify={() => classifyAliasCause.mutateAsync({ alias_id: currentAlias.id })}
                                 isClassifying={classifyAliasCause.isPending && classifyAliasCause.variables?.alias_id === currentAlias.id}
                               />
-                            ) : <span className="text-xs text-muted-foreground">Attach to alias first</span>}
+                            ) : (
+                              <DirectDonorCauseCell
+                                value={direct?.primary_cause_id || ''}
+                                source={direct?.assigned_by || null}
+                                causes={causes}
+                                onAssign={(causeId) =>
+                                  updateDirectDonorCause.mutateAsync({
+                                    name: r.name,
+                                    type: r.type,
+                                    primary_cause_id: causeId,
+                                  })
+                                }
+                              />
+                            )}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
