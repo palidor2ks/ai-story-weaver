@@ -113,7 +113,7 @@ export function DonorAliasesPanel() {
   // Current alias attached to each search result row
   const [rowAliasMap, setRowAliasMap] = useState<Record<string, DonorAlias | null>>({});
   const [rowTreasurerMap, setRowTreasurerMap] = useState<Record<string, string>>({});
-  const [rowCommitteeIdsMap, setRowCommitteeIdsMap] = useState<Record<string, string[]>>({});
+  
   const { data: causes = [] } = useCommitteeCauses(false);
   const updateAliasCause = useUpdateDonorAliasCause();
   const classifyAliasCause = useClassifyDonorAliasCause();
