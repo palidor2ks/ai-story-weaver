@@ -884,3 +884,35 @@ function AliasCauseCell({
   );
 }
 
+
+function DirectDonorCauseCell({
+  value,
+  source,
+  causes,
+  onAssign,
+}: {
+  value: string;
+  source: string | null;
+  causes: { id: string; label: string }[];
+  onAssign: (causeId: string) => Promise<unknown>;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Select value={value} onValueChange={(v) => onAssign(v)}>
+        <SelectTrigger className="h-8 w-[180px]">
+          <SelectValue placeholder="Assign cause" />
+        </SelectTrigger>
+        <SelectContent>
+          {causes.map((c) => (
+            <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {source && (
+        <Badge variant="outline" className="text-[10px]">
+          {source === 'admin' ? 'Admin' : source}
+        </Badge>
+      )}
+    </div>
+  );
+}
