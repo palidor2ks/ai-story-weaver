@@ -115,9 +115,62 @@ export function DonorAliasesPanel() {
   const [rowTreasurerMap, setRowTreasurerMap] = useState<Record<string, string>>({});
   const [rowCommitteeIdsMap, setRowCommitteeIdsMap] = useState<Record<string, string[]>>({});
   const { data: causes = [] } = useCommitteeCauses(false);
-  const upsertCommitteeTopic = useUpsertCommitteeTopic();
   const updateAliasCause = useUpdateDonorAliasCause();
   const classifyAliasCause = useClassifyDonorAliasCause();
+  const { data: directDonorCauseRows = [] } = useQuery({
+    queryKey: ['donor-cause-overrides', searchResults.map((r) => `${r.name}|${r.type}`).sort().join('|')],
+    enabled: searchResults.length > 0,
+    queryFn: async () => {
+      const names = Array.from(new Set(searchResults.map((r) => r.name)));
+      const types = Array.from(new Set(searchResults.map((r) => r.type)));
+      const { data, error } = await (supabase as any)
+        .from('donor_cause_overrides')
+        .select('donor_name, donor_type, primary_cause_id, assigned_by')
+        .in('donor_name', names)
+        .in('donor_type', types);
+      if (error) throw error;
+      return (data || []) as Array<{
+        donor_name: string;
+        donor_type: string;
+        primary_cause_id: string;
+        assigned_by: string;
+      }>;
+    },
+  });
+  const directCauseByDonorKey = useMemo(() => {
+    const map = new Map<string, { primary_cause_id: string; assigned_by: string }>();
+    directDonorCauseRows.forEach((row) => {
+      map.set(`${row.donor_name}|${row.donor_type}`, {
+        primary_cause_id: row.primary_cause_id,
+        assigned_by: row.assigned_by,
+      });
+    });
+    return map;
+  }, [directDonorCauseRows]);
+  const updateDirectDonorCause = useMutation({
+    mutationFn: async ({ name, type, primary_cause_id }: { name: string; type: string; primary_cause_id: string }) => {
+      const { data, error } = await (supabase as any)
+        .from('donor_cause_overrides')
+        .upsert({
+          donor_name: name,
+          donor_type: type,
+          primary_cause_id,
+          assigned_by: 'admin',
+          assigned_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'donor_name,donor_type' })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['donor-cause-overrides'] });
+      queryClient.invalidateQueries({ queryKey: ['donor-causes'] });
+      toast.success('Primary cause updated');
+    },
+    onError: (error: Error) => toast.error(`Failed to update cause: ${error.message}`),
+  });
   useEffect(() => {
     let cancelled = false;
     (async () => {
