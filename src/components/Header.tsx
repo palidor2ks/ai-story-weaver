@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
-import { User, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper, Megaphone, LogIn } from 'lucide-react';
+import { User, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper, Megaphone, LogIn, Briefcase } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
@@ -27,6 +27,7 @@ export const Header = () => {
     { path: '/how-scoring-works', label: 'How it works', icon: HelpCircle, requiresAuth: false },
     { path: '/quiz-library', label: 'Quizzes', icon: BookOpen, requiresAuth: true },
     { path: '/blog', label: 'Blog', icon: Newspaper, requiresAuth: false },
+    { path: '/jobs', label: 'Jobs', icon: Briefcase, requiresAuth: false },
     { path: '/profile', label: 'Profile', icon: User, requiresAuth: true },
   ];
 
