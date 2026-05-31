@@ -1227,7 +1227,7 @@ export const CandidateProfile = () => {
                                       </div>
                                       <div className="text-right">
                                         <p className={cn("font-bold", isConduit ? "text-amber-600" : "text-foreground")}>
-                                          ${donor.amount.toLocaleString()}
+                                          {formatCurrency(donor.amount)}
                                         </p>
                                         <p className="text-xs text-muted-foreground">
                                           {hasCycleBreakdown
