@@ -1217,6 +1217,47 @@ export type Database = {
           },
         ]
       }
+      donor_cause_overrides: {
+        Row: {
+          assigned_at: string
+          assigned_by: string
+          created_at: string
+          donor_name: string
+          donor_type: string
+          id: string
+          primary_cause_id: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string
+          created_at?: string
+          donor_name: string
+          donor_type: string
+          id?: string
+          primary_cause_id: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string
+          created_at?: string
+          donor_name?: string
+          donor_type?: string
+          id?: string
+          primary_cause_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donor_cause_overrides_primary_cause_id_fkey"
+            columns: ["primary_cause_id"]
+            isOneToOne: false
+            referencedRelation: "committee_causes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       donor_import_sessions: {
         Row: {
           candidate_id: string | null
