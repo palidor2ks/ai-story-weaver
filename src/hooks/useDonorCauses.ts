@@ -14,7 +14,14 @@ export interface DonorCauseInfo {
 }
 
 const norm = (s: string) => s.trim().toUpperCase();
-const CAUSE_ELIGIBLE_DONOR_TYPES = new Set(['Individual', 'PAC', 'Organization']);
+const CAUSE_ELIGIBLE_DONOR_TYPES = new Set(['Individual', 'PAC', 'Organization', 'Org/PAC']);
+
+const getCauseLookupTypes = (type: string) => {
+  // Donor cards collapse raw PAC and Organization records into an Org/PAC
+  // display bucket, but donor_alias_members stores the raw donor_type values.
+  if (type === 'Org/PAC') return ['PAC', 'Organization'];
+  return CAUSE_ELIGIBLE_DONOR_TYPES.has(type) ? [type] : [];
+};
 
 export interface DonorNameInput {
   name: string;
@@ -25,6 +32,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
   const uniqueInputs = Array.from(
     inputs
       .filter(d => d.name && CAUSE_ELIGIBLE_DONOR_TYPES.has(d.type))
+      .flatMap(d => getCauseLookupTypes(d.type).map(type => ({ name: d.name, type })))
       .reduce((map, d) => {
         const key = `${norm(d.name)}|${d.type}`;
         if (!map.has(key)) map.set(key, { name: d.name.trim(), type: d.type });
@@ -186,5 +194,11 @@ export function getDonorCause(
   type: string
 ): DonorCauseInfo | undefined {
   if (!map) return undefined;
-  return map.get(`${norm(name)}|${type}`);
+
+  for (const lookupType of getCauseLookupTypes(type)) {
+    const cause = map.get(`${norm(name)}|${lookupType}`);
+    if (cause) return cause;
+  }
+
+  return undefined;
 }
