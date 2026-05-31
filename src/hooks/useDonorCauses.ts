@@ -145,7 +145,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       if (allCommitteeIds.size === 0) return result;
 
 
-      // 2. Fetch topics + causes for those committees
+      // 3. Fetch topics + causes for those committees
       const { data: topics, error: tErr } = await supabase
         .from('committee_topics')
         .select('fec_committee_id, primary_cause_id, ai_confidence, assigned_by, admin_overridden, committee_causes!committee_topics_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
