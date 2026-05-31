@@ -247,31 +247,6 @@ export function DonorAliasesPanel() {
       return a.canonical_name.localeCompare(b.canonical_name);
     });
 
-  const aliasCommitteeIds = useMemo(
-    () => Array.from(new Set(
-      aliases.flatMap((a) => (a.fec_committee_ids?.length ? a.fec_committee_ids : (a.fec_committee_id ? [a.fec_committee_id] : [])))
-    )),
-    [aliases],
-  );
-  const { data: committeeCauseRows = [] } = useQuery({
-    queryKey: ['donor-alias-committee-causes', aliasCommitteeIds],
-    enabled: aliasCommitteeIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('committee_topics')
-        .select('fec_committee_id, primary_cause_id')
-        .in('fec_committee_id', aliasCommitteeIds);
-      if (error) throw error;
-      return (data || []) as Array<{ fec_committee_id: string; primary_cause_id: string | null }>;
-    },
-  });
-  const causeByCommitteeId = useMemo(() => {
-    const map = new Map<string, string>();
-    committeeCauseRows.forEach((r) => {
-      if (r.primary_cause_id) map.set(r.fec_committee_id, r.primary_cause_id);
-    });
-    return map;
-  }, [committeeCauseRows]);
 
   const { data: aliasMemberCommitteeRows = [] } = useQuery({
     queryKey: ['donor-alias-member-committee-ids', aliases.map((a) => a.id).join('|')],
