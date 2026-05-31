@@ -32,6 +32,7 @@ const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Committees = lazy(() => import("./pages/Committees").then((m) => ({ default: m.Committees })));
 const CommitteeProfile = lazy(() => import("./pages/CommitteeProfile").then((m) => ({ default: m.CommitteeProfile })));
 const Blog = lazy(() => import("./pages/Blog"));
+const Jobs = lazy(() => import("./pages/Jobs"));
 const Unsubscribe = lazy(() => import("./pages/Unsubscribe"));
 const Poll = lazy(() => import("./pages/Poll"));
 const PollResultsPage = lazy(() => import("./pages/PollResultsPage"));
@@ -122,6 +123,7 @@ const AppRoutes = () => (
       <Route path="/admin/x-connect/callback" element={<RouteGuard requireAuth requireOnboarding><XConnectCallback /></RouteGuard>} />
       <Route path="/politician" element={<RouteGuard requireAuth requireOnboarding><PoliticianDashboard /></RouteGuard>} />
       <Route path="/blog" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Blog /></RouteGuard>} />
+      <Route path="/jobs" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Jobs /></RouteGuard>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </Suspense>
