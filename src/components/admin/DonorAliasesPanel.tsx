@@ -217,30 +217,19 @@ export function DonorAliasesPanel() {
 
       if (cancelled) return;
       const next: Record<string, Set<string>> = {};
-      const committeeIds: Record<string, Set<string>> = {};
       (data || []).forEach((row: any) => {
         const treasurer = row?.committees?.treasurer_name;
         if (!treasurer) return;
         const key = `${row.name}|${row.type}`;
         if (!next[key]) next[key] = new Set<string>();
         next[key].add(treasurer);
-        const committeeId = row?.recipient_committee_id;
-        if (committeeId) {
-          if (!committeeIds[key]) committeeIds[key] = new Set<string>();
-          committeeIds[key].add(committeeId);
-        }
       });
 
       const flattened: Record<string, string> = {};
-      const committeeFlattened: Record<string, string[]> = {};
       Object.entries(next).forEach(([key, namesSet]) => {
         flattened[key] = Array.from(namesSet).sort().join(', ');
       });
-      Object.entries(committeeIds).forEach(([key, idsSet]) => {
-        committeeFlattened[key] = Array.from(idsSet).sort();
-      });
       setRowTreasurerMap(flattened);
-      setRowCommitteeIdsMap(committeeFlattened);
     })();
     return () => {
       cancelled = true;
