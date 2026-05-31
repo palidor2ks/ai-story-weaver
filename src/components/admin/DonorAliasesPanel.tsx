@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Search, Link2, Unlink, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,11 +59,13 @@ import {
 } from '@/hooks/useDonorAliases';
 import { useSearchRawDonors } from '@/hooks/useDonorsPaginated';
 import { supabase } from '@/integrations/supabase/client';
-import { useCommitteeCauses, useUpsertCommitteeTopic } from '@/hooks/useCommitteeTopics';
+import { toast } from 'sonner';
+import { useCommitteeCauses } from '@/hooks/useCommitteeTopics';
 
 const DONOR_TYPES = ['Individual', 'PAC', 'Organization', 'Unknown'];
 
 export function DonorAliasesPanel() {
+  const queryClient = useQueryClient();
   const { data: aliases = [], isLoading } = useDonorAliases();
   const { data: memberCounts = {} } = useAliasMemberCounts();
   const createMutation = useCreateDonorAlias();
@@ -111,11 +113,64 @@ export function DonorAliasesPanel() {
   // Current alias attached to each search result row
   const [rowAliasMap, setRowAliasMap] = useState<Record<string, DonorAlias | null>>({});
   const [rowTreasurerMap, setRowTreasurerMap] = useState<Record<string, string>>({});
-  const [rowCommitteeIdsMap, setRowCommitteeIdsMap] = useState<Record<string, string[]>>({});
+  
   const { data: causes = [] } = useCommitteeCauses(false);
-  const upsertCommitteeTopic = useUpsertCommitteeTopic();
   const updateAliasCause = useUpdateDonorAliasCause();
   const classifyAliasCause = useClassifyDonorAliasCause();
+  const { data: directDonorCauseRows = [] } = useQuery({
+    queryKey: ['donor-cause-overrides', searchResults.map((r) => `${r.name}|${r.type}`).sort().join('|')],
+    enabled: searchResults.length > 0,
+    queryFn: async () => {
+      const names = Array.from(new Set(searchResults.map((r) => r.name)));
+      const types = Array.from(new Set(searchResults.map((r) => r.type)));
+      const { data, error } = await (supabase as any)
+        .from('donor_cause_overrides')
+        .select('donor_name, donor_type, primary_cause_id, assigned_by')
+        .in('donor_name', names)
+        .in('donor_type', types);
+      if (error) throw error;
+      return (data || []) as Array<{
+        donor_name: string;
+        donor_type: string;
+        primary_cause_id: string;
+        assigned_by: string;
+      }>;
+    },
+  });
+  const directCauseByDonorKey = useMemo(() => {
+    const map = new Map<string, { primary_cause_id: string; assigned_by: string }>();
+    directDonorCauseRows.forEach((row) => {
+      map.set(`${row.donor_name}|${row.donor_type}`, {
+        primary_cause_id: row.primary_cause_id,
+        assigned_by: row.assigned_by,
+      });
+    });
+    return map;
+  }, [directDonorCauseRows]);
+  const updateDirectDonorCause = useMutation({
+    mutationFn: async ({ name, type, primary_cause_id }: { name: string; type: string; primary_cause_id: string }) => {
+      const { data, error } = await (supabase as any)
+        .from('donor_cause_overrides')
+        .upsert({
+          donor_name: name,
+          donor_type: type,
+          primary_cause_id,
+          assigned_by: 'admin',
+          assigned_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'donor_name,donor_type' })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['donor-cause-overrides'] });
+      queryClient.invalidateQueries({ queryKey: ['donor-causes'] });
+      toast.success('Primary cause updated');
+    },
+    onError: (error: Error) => toast.error(`Failed to update cause: ${error.message}`),
+  });
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -162,30 +217,19 @@ export function DonorAliasesPanel() {
 
       if (cancelled) return;
       const next: Record<string, Set<string>> = {};
-      const committeeIds: Record<string, Set<string>> = {};
       (data || []).forEach((row: any) => {
         const treasurer = row?.committees?.treasurer_name;
         if (!treasurer) return;
         const key = `${row.name}|${row.type}`;
         if (!next[key]) next[key] = new Set<string>();
         next[key].add(treasurer);
-        const committeeId = row?.recipient_committee_id;
-        if (committeeId) {
-          if (!committeeIds[key]) committeeIds[key] = new Set<string>();
-          committeeIds[key].add(committeeId);
-        }
       });
 
       const flattened: Record<string, string> = {};
-      const committeeFlattened: Record<string, string[]> = {};
       Object.entries(next).forEach(([key, namesSet]) => {
         flattened[key] = Array.from(namesSet).sort().join(', ');
       });
-      Object.entries(committeeIds).forEach(([key, idsSet]) => {
-        committeeFlattened[key] = Array.from(idsSet).sort();
-      });
       setRowTreasurerMap(flattened);
-      setRowCommitteeIdsMap(committeeFlattened);
     })();
     return () => {
       cancelled = true;
@@ -203,31 +247,6 @@ export function DonorAliasesPanel() {
       return a.canonical_name.localeCompare(b.canonical_name);
     });
 
-  const aliasCommitteeIds = useMemo(
-    () => Array.from(new Set(
-      aliases.flatMap((a) => (a.fec_committee_ids?.length ? a.fec_committee_ids : (a.fec_committee_id ? [a.fec_committee_id] : [])))
-    )),
-    [aliases],
-  );
-  const { data: committeeCauseRows = [] } = useQuery({
-    queryKey: ['donor-alias-committee-causes', aliasCommitteeIds],
-    enabled: aliasCommitteeIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('committee_topics')
-        .select('fec_committee_id, primary_cause_id')
-        .in('fec_committee_id', aliasCommitteeIds);
-      if (error) throw error;
-      return (data || []) as Array<{ fec_committee_id: string; primary_cause_id: string | null }>;
-    },
-  });
-  const causeByCommitteeId = useMemo(() => {
-    const map = new Map<string, string>();
-    committeeCauseRows.forEach((r) => {
-      if (r.primary_cause_id) map.set(r.fec_committee_id, r.primary_cause_id);
-    });
-    return map;
-  }, [committeeCauseRows]);
 
   const { data: aliasMemberCommitteeRows = [] } = useQuery({
     queryKey: ['donor-alias-member-committee-ids', aliases.map((a) => a.id).join('|')],
@@ -565,7 +584,7 @@ export function DonorAliasesPanel() {
                       const key = `${r.name}|${r.type}`;
                       const currentAlias = rowAliasMap[key];
                       const treasurer = rowTreasurerMap[key];
-                      const rowCommitteeIds = rowCommitteeIdsMap[key] || [];
+                      const direct = directCauseByDonorKey.get(key);
                       return (
                         <TableRow key={key}>
                           <TableCell>
@@ -597,7 +616,20 @@ export function DonorAliasesPanel() {
                                 onAiClassify={() => classifyAliasCause.mutateAsync({ alias_id: currentAlias.id })}
                                 isClassifying={classifyAliasCause.isPending && classifyAliasCause.variables?.alias_id === currentAlias.id}
                               />
-                            ) : <span className="text-xs text-muted-foreground">Attach to alias first</span>}
+                            ) : (
+                              <DirectDonorCauseCell
+                                value={direct?.primary_cause_id || ''}
+                                source={direct?.assigned_by || null}
+                                causes={causes}
+                                onAssign={(causeId) =>
+                                  updateDirectDonorCause.mutateAsync({
+                                    name: r.name,
+                                    type: r.type,
+                                    primary_cause_id: causeId,
+                                  })
+                                }
+                              />
+                            )}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
@@ -852,3 +884,35 @@ function AliasCauseCell({
   );
 }
 
+
+function DirectDonorCauseCell({
+  value,
+  source,
+  causes,
+  onAssign,
+}: {
+  value: string;
+  source: string | null;
+  causes: { id: string; label: string }[];
+  onAssign: (causeId: string) => Promise<unknown>;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Select value={value} onValueChange={(v) => onAssign(v)}>
+        <SelectTrigger className="h-8 w-[180px]">
+          <SelectValue placeholder="Assign cause" />
+        </SelectTrigger>
+        <SelectContent>
+          {causes.map((c) => (
+            <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {source && (
+        <Badge variant="outline" className="text-[10px]">
+          {source === 'admin' ? 'Admin' : source}
+        </Badge>
+      )}
+    </div>
+  );
+}
