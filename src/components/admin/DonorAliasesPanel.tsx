@@ -65,6 +65,8 @@ import { useCommitteeCauses } from '@/hooks/useCommitteeTopics';
 const DONOR_TYPES = ['Individual', 'PAC', 'Organization', 'Unknown'];
 
 export function DonorAliasesPanel() {
+export function DonorAliasesPanel() {
+  const queryClient = useQueryClient();
   const { data: aliases = [], isLoading } = useDonorAliases();
   const { data: memberCounts = {} } = useAliasMemberCounts();
   const createMutation = useCreateDonorAlias();
