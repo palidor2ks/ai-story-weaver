@@ -584,7 +584,7 @@ export function DonorAliasesPanel() {
                       const key = `${r.name}|${r.type}`;
                       const currentAlias = rowAliasMap[key];
                       const treasurer = rowTreasurerMap[key];
-                      const rowCommitteeIds = rowCommitteeIdsMap[key] || [];
+                      const direct = directCauseByDonorKey.get(key);
                       return (
                         <TableRow key={key}>
                           <TableCell>
