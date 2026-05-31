@@ -59,7 +59,8 @@ import {
 } from '@/hooks/useDonorAliases';
 import { useSearchRawDonors } from '@/hooks/useDonorsPaginated';
 import { supabase } from '@/integrations/supabase/client';
-import { useCommitteeCauses, useUpsertCommitteeTopic } from '@/hooks/useCommitteeTopics';
+import { toast } from 'sonner';
+import { useCommitteeCauses } from '@/hooks/useCommitteeTopics';
 
 const DONOR_TYPES = ['Individual', 'PAC', 'Organization', 'Unknown'];
 
