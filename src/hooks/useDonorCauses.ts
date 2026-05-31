@@ -107,7 +107,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
           nameToCommittees.set(key, ids);
           ids.forEach(id => allCommitteeIds.add(id));
         }
-        if (alias.primary_cause_id) {
+        if (alias.primary_cause_id && !result.has(key)) {
           aliasLevelCause.set(key, {
             causeId: alias.primary_cause_id,
             assignedBy: alias.cause_assigned_by || 'admin',
