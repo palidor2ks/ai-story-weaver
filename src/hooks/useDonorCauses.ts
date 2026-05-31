@@ -57,7 +57,32 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       const names = Array.from(new Set(uniqueInputs.map(d => d.name)));
       const types = Array.from(new Set(uniqueInputs.map(d => d.type)));
 
-      // 1. Resolve names -> aliases (and fec_committee_ids + alias-level cause)
+      // 1. Apply direct donor-level cause overrides first. These let admins tag
+      //    a donor search result without creating a donor alias.
+      const { data: directOverrides, error: directErr } = await (supabase as any)
+        .from('donor_cause_overrides')
+        .select('donor_name, donor_type, primary_cause_id, assigned_by, committee_causes!donor_cause_overrides_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
+        .in('donor_name', names)
+        .in('donor_type', types);
+      if (directErr) throw directErr;
+
+      for (const row of (directOverrides ?? []) as any[]) {
+        const c = row.committee_causes;
+        if (!c) continue;
+        result.set(`${norm(row.donor_name)}|${row.donor_type}`, {
+          causeId: c.id,
+          label: c.label,
+          description: c.description,
+          stance: c.stance,
+          quizTopicId: c.quiz_topic_id,
+          confidence: null,
+          assignedBy: row.assigned_by || 'admin',
+          adminOverridden: row.assigned_by === 'admin',
+          fecCommitteeId: '',
+        });
+      }
+
+      // 2. Resolve names -> aliases (and fec_committee_ids + alias-level cause)
       const { data: members, error: mErr } = await supabase
         .from('donor_alias_members')
         .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
