@@ -1,51 +1,41 @@
-## Goal
+## Confirmed: the C (0.00) is wrong
 
-Apply the changes from PR #139 (allow admins to assign a primary cause directly to a donor search result without requiring an alias) and fix issues in the PR before landing.
+For profile `Rajae Eltemawi` (id `dee436f4`), the database has these per-topic scores and weights:
 
-## Issues found in the PR (to fix while implementing)
+| Topic | Score | Weight |
+|---|---|---|
+| Economy & Work | -5.00 | 5 |
+| National Security & Borders | 0.00 | 4 |
+| Health, Education & Welfare | -7.50 | 3 |
+| Local Cost of Living | 0.00 | 2 |
+| Local Housing | -5.00 | 1 |
 
-1. **Missing GRANTs on the new public table.** Project rule requires explicit grants for every new `public` table; the PR migration only sets RLS. Without grants, PostgREST returns permission errors at runtime.
-2. **Migration timestamp is older than existing migrations** (`20260530000000` vs. latest `20260530123856`). Rename to a fresh timestamp so it runs after current head on every environment.
-3. **Supabase branch build error in the PR is unrelated** — it's a pre-existing `candidate_committees_candidate_id_fkey` conflict in an older migration on the preview branch, not caused by this PR. No action needed here.
-4. **Minor:** PR uses `(supabase as any)` because generated types don't yet include the new table. Acceptable until `types.ts` regenerates; keep the cast.
+Weighted overall = (-5·5 + 0·4 + -7.5·3 + 0·2 + -5·1) / 15 = **-3.50** → should display **CL3.50 (Center-Left)**, not C.
 
-## Changes
+The stored `profiles.overall_score = 0.00` is stale/incorrect.
 
-### 1. New migration `supabase/migrations/<fresh-ts>_donor_cause_overrides.sql`
-- Create `public.donor_cause_overrides` (id, donor_name, donor_type, primary_cause_id text FK → `committee_causes(id)`, assigned_by, assigned_at, created_at, updated_at, UNIQUE(donor_name, donor_type)).
-- Indexes on `(donor_name, donor_type)` and `(primary_cause_id)`.
-- **Add grants** (this is the fix vs. PR):
-  ```sql
-  GRANT SELECT ON public.donor_cause_overrides TO anon, authenticated;
-  GRANT SELECT, INSERT, UPDATE, DELETE ON public.donor_cause_overrides TO authenticated;
-  GRANT ALL ON public.donor_cause_overrides TO service_role;
-  ```
-- Enable RLS.
-- Policies: public SELECT (overrides are non-sensitive lookups), admin ALL via `has_role(auth.uid(),'admin')`, service_role ALL.
+## Root cause
 
-### 2. `src/components/admin/DonorAliasesPanel.tsx`
-Apply PR diff verbatim:
-- Import `useMutation`, `useQueryClient`, `toast`; drop `useUpsertCommitteeTopic`.
-- Remove `rowCommitteeIdsMap` state and its population in the treasurer effect.
-- Remove dead `aliasCommitteeIds` / `committeeCauseRows` / `causeByCommitteeId` block.
-- Add `directDonorCauseRows` query and `directCauseByDonorKey` memo keyed on `name|type`.
-- Add `updateDirectDonorCause` mutation that upserts into `donor_cause_overrides` and invalidates `['donor-cause-overrides']` + `['donor-causes']`.
-- In the search-results row render: when there is no `currentAlias`, render the new `DirectDonorCauseCell` (Select of causes + "Admin" source chip) instead of the "Attach to alias first" placeholder.
-- Add `DirectDonorCauseCell` component at bottom of file.
+In `src/pages/Quiz.tsx`, `calculateUserScoreFromAnswers()` (line 160) builds the overall score from the in-memory `quizAnswers` state, which only holds answers entered in the **current quiz session** (e.g. the 6 questions from "Answer More Questions" or one topic quiz). When `handleComplete` saves results, `save_quiz_results` RPC overwrites `profiles.overall_score` with that subset-only weighted average.
 
-### 3. `src/hooks/useDonorCauses.ts`
-Apply PR diff verbatim:
-- New **step 1**: fetch `donor_cause_overrides` (with embedded `committee_causes`) for the requested names/types and seed `result` map first.
-- Renumber existing comments to 2/3/4.
-- When seeding alias-level cause, skip if `result.has(key)` is already set by an override (`if (alias.primary_cause_id && !result.has(key))`).
+The per-topic table (`user_topic_scores`) is upserted, so it accumulates correctly across sessions — but the overall score does not. After any partial quiz with near-neutral answers, the overall snaps toward 0 and stops matching the topic breakdown.
 
-## Out of scope
-- Regenerating `src/integrations/supabase/types.ts` (will refresh after the migration runs; PR uses `as any` to bridge in the meantime).
-- Fixing the unrelated `candidate_committees_candidate_id_fkey` migration conflict surfaced on the PR's Supabase preview branch.
-- Mirroring this UI anywhere outside the Donor Aliases admin panel.
+`src/pages/Onboarding.tsx` (full onboarding flow) works correctly because all answers are in state at completion.
+
+## Fix
+
+Recompute the overall score from the **full set of stored answers + topic scores**, not just the current session.
+
+### 1. `src/pages/Quiz.tsx`
+- In `calculateUserScoreFromAnswers`, merge the freshly-answered `quizAnswers` with the user's existing stored quiz answers (fetch full rows, not just `question_id`, in the existing `quiz_answers` query) before calling `calculateQuizScore`. Newest answers for the same `questionId` win.
+- This way the saved `overallScore` reflects every answer the user has given, weighted by their selected topics.
+
+### 2. Backfill the affected profile(s)
+Add a one-off migration (or RPC) that recomputes `profiles.overall_score` for all users from `user_topic_scores` × `user_topics.weight`. Same formula as `calculateWeightedOverallScore`. This corrects existing stale values like Rajae's 0.00 → -3.50.
+
+### 3. (Defense in depth) Update `save_quiz_results` RPC
+After upserting topic scores, recompute `overall_score` server-side from `user_topic_scores` joined with `user_topics` weights, so any future client that passes a subset-only score still gets corrected. Then ignore the client-provided `p_overall_score` (or keep it as a fallback when the user has no `user_topics` set).
 
 ## Verification
-- TypeScript compiles.
-- Open Admin → Donor Aliases → search a donor that is **not** attached to any alias → the new cause Select appears and an upsert succeeds (toast + the chip flips to "Admin" on refetch).
-- For a donor with an override, `useDonorCauses` returns the override cause regardless of any alias/committee-derived cause (override wins).
-- Removing the alias-attached cause still falls back to committee-topic cause when no override exists.
+- After fix + backfill: Rajae's profile should display **CL3.50** with the same per-topic scores.
+- Re-run an "Answer More Questions" session with neutral answers and confirm overall stays consistent with the topic breakdown.
