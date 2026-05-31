@@ -67,8 +67,8 @@ export function DonorImportPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentSessionRef = useRef<string | null>(null);
 
-  const BATCH_SIZE = 500;
-  const DELAY_MS = 150;  // Slightly more delay for stability
+  const BATCH_SIZE = 1500;
+  const DELAY_MS = 0;  // Retry backoff handles throttling; avoid slowing successful batches
   const MAX_RETRIES = 5;
 
   // Cancel the current import session
@@ -96,7 +96,7 @@ export function DonorImportPanel() {
     setLastDebugInfo(null);
     setCommitteePreview(null);
 
-    // Parse first 500 rows to detect committee and check file health
+    // Parse a preview slice to detect committee and check file health
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
@@ -506,8 +506,8 @@ export function DonorImportPanel() {
               });
             }
 
-            // Rate limiting delay between batches
-            if (i + BATCH_SIZE < totalRows) {
+            // Retry backoff handles throttling; keep an optional delay knob for future tuning.
+            if (DELAY_MS > 0 && i + BATCH_SIZE < totalRows) {
               await new Promise(resolve => setTimeout(resolve, DELAY_MS));
             }
           }

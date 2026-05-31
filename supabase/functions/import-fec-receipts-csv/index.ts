@@ -93,6 +93,64 @@ function isCorruptedSubId(subId: string): boolean {
   return false;
 }
 
+
+function isRetryableDbError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String((err as { message?: string } | null)?.message || err || '');
+  const code = (err as { code?: string } | null)?.code;
+  return (
+    message.includes('57014') ||
+    message.includes('statement timeout') ||
+    message.includes('upstream request timeout') ||
+    message.includes('connection closed') ||
+    message.includes('fetch failed') ||
+    code === '57014'
+  );
+}
+
+async function upsertAdaptiveChunks<T>(
+  supabase: any,
+  table: string,
+  rows: T[],
+  options: Record<string, unknown>,
+  initialChunkSize: number,
+  minChunkSize: number,
+  label: string,
+  errors: string[],
+): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  let succeeded = 0;
+
+  const upsertRange = async (rangeRows: T[], chunkSize: number): Promise<void> => {
+    for (let i = 0; i < rangeRows.length; i += chunkSize) {
+      const chunk = rangeRows.slice(i, i + chunkSize);
+      try {
+        await retryWithBackoff(async () => {
+          const { error } = await supabase
+            .from(table)
+            .upsert(chunk, options);
+
+          if (error) throw error;
+        }, 3, 500);
+        succeeded += chunk.length;
+      } catch (err: any) {
+        if (chunkSize > minChunkSize && isRetryableDbError(err)) {
+          const nextChunkSize = Math.max(minChunkSize, Math.ceil(chunkSize / 2));
+          console.warn(`[CSV-IMPORT] ${label} chunk of ${chunk.length} failed; retrying with chunk size ${nextChunkSize}: ${err.message}`);
+          await upsertRange(chunk, nextChunkSize);
+          continue;
+        }
+
+        console.error(`[CSV-IMPORT] ${label} chunk FAILED:`, err.message);
+        errors.push(`${label} chunk (${chunk.length} rows): ${err.message}`);
+      }
+    }
+  };
+
+  await upsertRange(rows, initialChunkSize);
+  return succeeded;
+}
+
 // Generate identity hash for deduplication
 // Uses sub_id if valid, otherwise falls back to a composite key
 async function generateContributionHash(
@@ -612,40 +670,28 @@ Deno.serve(async (req) => {
     
     console.log(`[CSV-IMPORT] Pre-check: ${newContributions.length} new, ${skippedDuplicates} existing (will skip)`);
 
-    // Upsert contributions in small chunks with retry - INSERT ONLY (skip existing)
+    // Upsert only known-new contributions. The pre-check above already identified duplicates,
+    // so sending duplicate rows again only burns conflict-check time without improving accuracy.
     let insertedContributions = 0;
     let actualInserts = 0;
-    const CONTRIBUTION_CHUNK_SIZE = 100;  // Larger chunks since we're skipping conflicts
-    const DONOR_CHUNK_SIZE = 25;
-    const totalContribChunks = Math.ceil(contributions.length / CONTRIBUTION_CHUNK_SIZE);
+    const CONTRIBUTION_CHUNK_SIZE = 250;
+    const DONOR_CHUNK_SIZE = 75;
     
     const contribStartTime = Date.now();
-    
-    for (let i = 0; i < contributions.length; i += CONTRIBUTION_CHUNK_SIZE) {
-      const chunkNum = Math.floor(i / CONTRIBUTION_CHUNK_SIZE) + 1;
-      const chunk = contributions.slice(i, i + CONTRIBUTION_CHUNK_SIZE);
-      const newInChunk = chunk.filter(c => !existingHashSet.has(c.identity_hash)).length;
-      
-      try {
-        await retryWithBackoff(async () => {
-          const { error } = await supabase
-            .from('contributions')
-            .upsert(chunk, { 
-              onConflict: 'identity_hash,cycle',
-              ignoreDuplicates: true  // INSERT ONLY - skip existing rows, much faster
-            });
-          
-          if (error) {
-            throw error;
-          }
-          insertedContributions += chunk.length;
-          actualInserts += newInChunk;
-        }, 3, 500);
-      } catch (err: any) {
-        console.error(`[CSV-IMPORT] Contribution chunk ${chunkNum}/${totalContribChunks} FAILED:`, err.message);
-        errors.push(`Contribution chunk ${chunkNum}: ${err.message}`);
-      }
-    }
+    insertedContributions = await upsertAdaptiveChunks(
+      supabase,
+      'contributions',
+      newContributions,
+      {
+        onConflict: 'identity_hash,cycle',
+        ignoreDuplicates: true
+      },
+      CONTRIBUTION_CHUNK_SIZE,
+      50,
+      'Contribution',
+      errors,
+    );
+    actualInserts = insertedContributions;
     
     const contribTime = Date.now() - contribStartTime;
 
@@ -690,52 +736,35 @@ Deno.serve(async (req) => {
       import_session_id: (sessionId && !existingDonorIds.has(d.id)) ? sessionId : null
     }));
 
-    const totalDonorChunks = Math.ceil(donorRows.length / DONOR_CHUNK_SIZE);
     const donorStartTime = Date.now();
-    
-    for (let i = 0; i < donorRows.length; i += DONOR_CHUNK_SIZE) {
-      const chunkNum = Math.floor(i / DONOR_CHUNK_SIZE) + 1;
-      const chunk = donorRows.slice(i, i + DONOR_CHUNK_SIZE);
-      
-      try {
-        await retryWithBackoff(async () => {
-          const { error } = await supabase
-            .from('donors')
-            .upsert(chunk, {
-              onConflict: 'id',
-              ignoreDuplicates: false // Donors need updates for aggregation
-            });
-          
-          if (error) {
-            throw error;
-          }
-          insertedDonors += chunk.length;
-        }, 3, 500);
-      } catch (err: any) {
-        console.error(`[CSV-IMPORT] Donor chunk ${chunkNum}/${totalDonorChunks} FAILED:`, err.message);
-        errors.push(`Donor chunk ${chunkNum}: ${err.message}`);
-      }
-    }
+    insertedDonors = await upsertAdaptiveChunks(
+      supabase,
+      'donors',
+      donorRows,
+      {
+        onConflict: 'id',
+        ignoreDuplicates: false // Donors need updates for aggregation
+      },
+      DONOR_CHUNK_SIZE,
+      25,
+      'Donor',
+      errors,
+    );
     
     const donorTime = Date.now() - donorStartTime;
     const totalTime = Date.now() - startTime;
 
-    // Increment session counters per batch (best-effort)
+    // Increment session counters per batch (best-effort). Use an atomic RPC so counters
+    // remain accurate if future imports run batches concurrently.
     if (sessionId) {
       try {
-        const { data: cur } = await supabase
-          .from('donor_import_sessions')
-          .select('row_count, inserted_contributions, inserted_donors')
-          .eq('id', sessionId)
-          .maybeSingle();
-        await supabase
-          .from('donor_import_sessions')
-          .update({
-            row_count: (cur?.row_count || 0) + rows.length,
-            inserted_contributions: (cur?.inserted_contributions || 0) + actualInserts,
-            inserted_donors: (cur?.inserted_donors || 0) + insertedDonors,
-          })
-          .eq('id', sessionId);
+        const { error: counterErr } = await supabase.rpc('increment_donor_import_session', {
+          p_session_id: sessionId,
+          p_rows: rows.length,
+          p_inserted_contributions: actualInserts,
+          p_inserted_donors: insertedDonors,
+        });
+        if (counterErr) throw counterErr;
       } catch (e) {
         console.warn('[CSV-IMPORT] session counter update failed:', (e as Error).message);
       }
