@@ -121,15 +121,24 @@ export const ShareProfileButton = ({
   const brandHost =
     typeof window !== 'undefined' ? window.location.host.replace(/^www\./, '') : 'polipulseapp.com';
 
-  // Pull IE rows for the same cycle as the rest of the finance card.
+  // Prefer IE rows for the same cycle as the finance card, but fall back to
+  // the latest available IE cycle when the current finance cycle has no IE data.
   const requestedIeCycle = fundingCycle && fundingCycle !== 'all' ? fundingCycle : null;
-  const { data: ieData, isLoading: ieLoading, isFetching: ieFetching } = useCandidateIE(candidateId ?? null, requestedIeCycle);
+  const { data: cycleIeData, isLoading: cycleIeLoading, isFetching: cycleIeFetching } = useCandidateIE(candidateId ?? null, requestedIeCycle);
+  const { data: latestIeData, isLoading: latestIeLoading, isFetching: latestIeFetching } = useCandidateIE(candidateId ?? null, null);
   const { topSpenders, ieCycle } = useMemo(() => {
-    const cycles = ieData?.availableCycles ?? [];
-    const displayCycle = requestedIeCycle ?? cycles[0] ?? null;
-    const rows = (ieData?.rows ?? []).filter((r) =>
-      displayCycle ? String(r.cycle) === displayCycle : true,
-    );
+    const requestedRows = requestedIeCycle
+      ? (cycleIeData?.rows ?? []).filter((r) => String(r.cycle) === requestedIeCycle)
+      : [];
+    const useRequestedCycle = !!requestedIeCycle && requestedRows.length > 0;
+    const sourceIeData = useRequestedCycle ? cycleIeData : latestIeData;
+    const cycles = sourceIeData?.availableCycles ?? [];
+    const displayCycle = useRequestedCycle ? requestedIeCycle : cycles[0] ?? null;
+    const rows = useRequestedCycle
+      ? requestedRows
+      : (sourceIeData?.rows ?? []).filter((r) =>
+          displayCycle ? String(r.cycle) === displayCycle : true,
+        );
     const map = new Map<string, { fecId: string; name: string; support: number; oppose: number }>();
     rows.forEach((r) => {
       const key = r.spending_committee_fec_id;
@@ -148,7 +157,7 @@ export const ShareProfileButton = ({
       .sort((a, b) => b.support + b.oppose - (a.support + a.oppose))
       .slice(0, 2);
     return { topSpenders: ts, ieCycle: displayCycle };
-  }, [ieData, requestedIeCycle]);
+  }, [cycleIeData, latestIeData, requestedIeCycle]);
 
   const topSpenderIds = useMemo(
     () => topSpenders.map((s) => s.fecId).filter(Boolean).sort(),
@@ -216,8 +225,10 @@ export const ShareProfileButton = ({
     !!user &&
     !!candidateId &&
     !hasFinanceCardInfo &&
-    !ieLoading &&
-    !ieFetching;
+    !cycleIeLoading &&
+    !cycleIeFetching &&
+    !latestIeLoading &&
+    !latestIeFetching;
 
   const { data: aiAnalysis, isLoading: aiAnalysisLoading } = useQuery({
     queryKey: [

@@ -89,7 +89,8 @@ export function useCandidateShareCardData(
     effectiveCycle,
   );
   const requestedIeCycle = effectiveCycle && effectiveCycle !== 'all' ? effectiveCycle : null;
-  const { data: ieData } = useCandidateIE(id ?? null, requestedIeCycle);
+  const { data: cycleIeData, isLoading: cycleIeLoading, isFetching: cycleIeFetching } = useCandidateIE(id ?? null, requestedIeCycle);
+  const { data: latestIeData, isLoading: latestIeLoading, isFetching: latestIeFetching } = useCandidateIE(id ?? null, null);
 
   const topDonorSummaries = useMemo(() => {
     const isConduitDonor = (d: (typeof donors)[number]) =>
@@ -131,11 +132,18 @@ export function useCandidateShareCardData(
   );
 
   const topSpenderIds = useMemo(() => {
-    const cycles = ieData?.availableCycles ?? [];
-    const ieCycle = requestedIeCycle ?? cycles[0] ?? null;
-    const rows = (ieData?.rows ?? []).filter((r) =>
-      ieCycle ? String(r.cycle) === ieCycle : true,
-    );
+    const requestedRows = requestedIeCycle
+      ? (cycleIeData?.rows ?? []).filter((r) => String(r.cycle) === requestedIeCycle)
+      : [];
+    const useRequestedCycle = !!requestedIeCycle && requestedRows.length > 0;
+    const sourceIeData = useRequestedCycle ? cycleIeData : latestIeData;
+    const cycles = sourceIeData?.availableCycles ?? [];
+    const ieCycle = useRequestedCycle ? requestedIeCycle : cycles[0] ?? null;
+    const rows = useRequestedCycle
+      ? requestedRows
+      : (sourceIeData?.rows ?? []).filter((r) =>
+          ieCycle ? String(r.cycle) === ieCycle : true,
+        );
     const spenderTotals = new Map<string, number>();
     rows.forEach((r) => {
       const key = r.spending_committee_fec_id;
@@ -147,7 +155,7 @@ export function useCandidateShareCardData(
       .slice(0, 2)
       .map(([fecId]) => fecId)
       .sort();
-  }, [ieData, requestedIeCycle]);
+  }, [cycleIeData, latestIeData, requestedIeCycle]);
 
   const { data: spenderCauseMap } = useQuery({
     queryKey: ['candidate-share-card-spender-causes', topSpenderIds],
@@ -275,11 +283,18 @@ export function useCandidateShareCardData(
             .map((r) => ({ label: r.label, pct: r.pct, color: r.color }))
         : undefined;
 
-    const cycles = ieData?.availableCycles ?? [];
-    const ieCycle = requestedIeCycle ?? cycles[0] ?? null;
-    const rows = (ieData?.rows ?? []).filter((r) =>
-      ieCycle ? String(r.cycle) === ieCycle : true,
-    );
+    const requestedRows = requestedIeCycle
+      ? (cycleIeData?.rows ?? []).filter((r) => String(r.cycle) === requestedIeCycle)
+      : [];
+    const useRequestedCycle = !!requestedIeCycle && requestedRows.length > 0;
+    const sourceIeData = useRequestedCycle ? cycleIeData : latestIeData;
+    const cycles = sourceIeData?.availableCycles ?? [];
+    const ieCycle = useRequestedCycle ? requestedIeCycle : cycles[0] ?? null;
+    const rows = useRequestedCycle
+      ? requestedRows
+      : (sourceIeData?.rows ?? []).filter((r) =>
+          ieCycle ? String(r.cycle) === ieCycle : true,
+        );
     const spenderMap = new Map<
       string,
       { fecId: string; name: string; support: number; oppose: number }
@@ -341,7 +356,8 @@ export function useCandidateShareCardData(
     donorCauseMap,
     financeReconciliation,
     fecTotals,
-    ieData,
+    cycleIeData,
+    latestIeData,
     spenderCauseMap,
     resolvedImage,
     effectiveCycle,
@@ -349,6 +365,13 @@ export function useCandidateShareCardData(
     cycleInfo,
   ]);
 
-  const loading = candidateLoading || cyclesLoading || donorsLoading;
+  const loading =
+    candidateLoading ||
+    cyclesLoading ||
+    donorsLoading ||
+    cycleIeLoading ||
+    latestIeLoading ||
+    cycleIeFetching ||
+    latestIeFetching;
   return { loading, data };
 }
