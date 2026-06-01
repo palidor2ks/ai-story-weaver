@@ -910,6 +910,9 @@ export const UserProfile = () => {
         {/* Upcoming Elections */}
         <UpcomingElectionsCard address={profile?.address} />
 
+        {/* Badges */}
+        <BadgeShelf userId={session?.user?.id} family="voter" />
+
         {/* Priority Topics */}
         <Card className="shadow-elevated">
           <CardHeader>
