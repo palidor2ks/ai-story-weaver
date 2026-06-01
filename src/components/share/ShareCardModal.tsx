@@ -311,6 +311,7 @@ export const ShareCardModal = ({
       }
       await navigator.clipboard.writeText(shareUrl);
       toast.success('Share link copied to clipboard.');
+      fireShareCompleted('copy_link');
     } catch {
       toast.error('Could not copy link.');
     }
