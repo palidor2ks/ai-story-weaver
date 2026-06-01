@@ -141,6 +141,8 @@ export function AutomatedJobsCard() {
   const [runError, setRunError] = useState<RunError | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [statusDrawerOpen, setStatusDrawerOpen] = useState(false);
+
+  const { data: runs, isLoading } = useQuery({
     queryKey: ['donor-sync-runs'],
     queryFn: async (): Promise<DonorSyncRun[]> => {
       const { data, error } = await supabase
