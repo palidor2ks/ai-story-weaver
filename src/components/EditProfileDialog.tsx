@@ -22,6 +22,7 @@ import {
 import { RELIGION_GROUPS } from '@/data/religionOptions';
 import { Pencil } from 'lucide-react';
 import { Profile } from '@/hooks/useProfile';
+import { logBadgeEvent } from '@/lib/badges';
 
 const POLITICAL_PARTIES = [
   'Democrat',
