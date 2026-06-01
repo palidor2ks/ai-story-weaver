@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useCandidatesIE, type IETotalsMap } from '@/hooks/useIndependentExpenditures';
 import { IESummaryInline } from '@/components/IESummaryInline';
+import { logBadgeEvent } from '@/lib/badges';
 
 interface Props {
   address: string | null | undefined;
