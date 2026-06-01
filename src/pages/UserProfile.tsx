@@ -28,6 +28,7 @@ import { RepresentativeComparisonCard } from '@/components/RepresentativeCompari
 import { PartyComparisonCard } from '@/components/PartyComparisonCard';
 import { VerificationBadges } from '@/components/VerificationBadges';
 import { UpcomingElectionsCard } from '@/components/profile/UpcomingElectionsCard';
+import { BadgeShelf } from '@/components/BadgeShelf';
 
 interface ProfileAnalysis {
   summary: string;
@@ -908,6 +909,9 @@ export const UserProfile = () => {
 
         {/* Upcoming Elections */}
         <UpcomingElectionsCard address={profile?.address} />
+
+        {/* Badges */}
+        <BadgeShelf userId={session?.user?.id} family="voter" />
 
         {/* Priority Topics */}
         <Card className="shadow-elevated">

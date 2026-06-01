@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { UserProvider } from "./context/UserContext";
 import { useHasCompletedOnboarding } from "./hooks/useProfile";
 import { LoadingScreen } from "./components/LoadingScreen";
+import { BadgeAwardToast } from "./components/BadgeAwardToast";
 
 const Auth = lazy(() => import("./pages/Auth").then((m) => ({ default: m.Auth })));
 const Candidates = lazy(() => import("./pages/Candidates").then((m) => ({ default: m.Candidates })));
@@ -137,6 +138,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <BadgeAwardToast />
             <AppRoutes />
           </BrowserRouter>
         </TooltipProvider>

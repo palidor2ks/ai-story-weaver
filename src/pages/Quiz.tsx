@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { shuffleArray, calculateQuizScore } from '@/lib/score';
+import { logBadgeEvent } from '@/lib/badges';
 
 export const Quiz = () => {
   const navigate = useNavigate();
@@ -193,6 +194,14 @@ export const Quiz = () => {
         })),
         answers: quizAnswers,
       });
+
+      // Fire badge events (fire-and-forget). One question_answered per answer
+      // in this session, with topic_id so topic-depth checker runs per topic.
+      const questionTopicMap = new Map(questions.map(q => [q.id, q.topicId]));
+      for (const ans of quizAnswers) {
+        const topicId = questionTopicMap.get(ans.questionId);
+        logBadgeEvent('question_answered', { question_id: ans.questionId, topic_id: topicId });
+      }
 
       toast.success('Quiz results saved!');
       navigate('/profile');
