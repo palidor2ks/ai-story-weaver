@@ -1103,9 +1103,14 @@ serve(async (req) => {
     while (pageCount < maxPages) {
       // Check runtime guard during pagination
       if (Date.now() - startTime > MAX_RUNTIME_MS) {
-        console.log('[FEC-DONORS] Runtime limit reached mid-pagination');
+        console.log('[FEC-DONORS] Runtime limit reached mid-pagination — flushing cursor and exiting fast');
         committeeHasMore = true;
         stoppedDueToTimeout = true;
+        // Persist what we have NOW, then bail out before the heavy final flush / rollup
+        // queries (those took ~100s for Josh Riley and blew the 110s parent timeout).
+        try { await saveContributionBatch(); } catch (e) { console.error('[FEC-DONORS] timeout flush contribs error:', e); }
+        try { await saveDonorBatch(); } catch (e) { console.error('[FEC-DONORS] timeout flush donors error:', e); }
+        try { await saveCursor(true); } catch (e) { console.error('[FEC-DONORS] timeout saveCursor error:', e); }
         break;
       }
 
@@ -1393,22 +1398,30 @@ serve(async (req) => {
       await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY_MS));
     }
 
-    // Save remaining contributions and donors (final flush)
-    await saveContributionBatch();
-    await saveDonorBatch(true); // Final flush - save all donors
+    // Save remaining contributions and donors (final flush) — but skip if we already
+    // saved a cursor in the timeout branch above; running saveDonorBatch(true) on a
+    // resumed sync re-flushes thousands of pre-loaded donors and can burn 100+ seconds.
+    if (!stoppedDueToTimeout) {
+      await saveContributionBatch();
+      await saveDonorBatch(true); // Final flush - save all donors
 
-    totalDonors = aggregatedDonors.size; // Actual unique donor count
-    totalContributions = committeeContributionsSaved;
-    totalRaised = committeeItemized;
+      totalDonors = aggregatedDonors.size; // Actual unique donor count
+      totalContributions = committeeContributionsSaved;
+      totalRaised = committeeItemized;
 
-    // Update committee sync cursors
-    await saveCursor(committeeHasMore);
+      // Update committee sync cursors
+      await saveCursor(committeeHasMore);
+    } else {
+      totalDonors = aggregatedDonors.size;
+      totalContributions = committeeContributionsSaved;
+      totalRaised = committeeItemized;
+    }
 
     // Update rollups for EVERY sync batch (not just when complete)
     // This ensures the dashboard shows accurate dollar amounts during partial syncs
     // CRITICAL: Only store rollups for P/A (campaign) committees with the candidate_id
     // External committees (J/U/B/D) should NOT contribute to candidate totals
-    if (!isExternalCommittee) {
+    if (!isExternalCommittee && !stoppedDueToTimeout) {
       // Query actual totals from contributions table for accuracy
       const { data: dbTotals } = await supabase.rpc(
         'get_contribution_totals_by_committee',

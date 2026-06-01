@@ -204,14 +204,24 @@ serve(async (req) => {
         await new Promise((r) => setTimeout(r, 1000));
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
-        results.failed++;
         const timedOut = err instanceof DOMException && err.name === 'TimeoutError';
-        const wrappedMsg = timedOut ? `${msg}; nested donor import exceeded ${Math.round(candidateTimeoutMs / 1000)}s budget` : msg;
-        results.errors.push(`${candidate.name}: ${wrappedMsg}`);
-        perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs: Date.now() - t0, error: wrappedMsg });
+        if (timedOut) {
+          // Cursor is persisted incrementally inside fetch-fec-donors, so the next cron
+          // tick will resume this candidate where it left off. Classify as partial, not
+          // failed, so we don't permanently mark big candidates (e.g. Josh Riley) as failed.
+          results.partial++;
+          const partialMsg = `partial — nested donor import still running after ${Math.round(candidateTimeoutMs / 1000)}s; cursor saved, will resume next tick`;
+          results.errors.push(`${candidate.name}: ${partialMsg}`);
+          perCandidate.push({ ...base, status: 'success', imported: 0, totalRaised: 0, durationMs: Date.now() - t0, hasMore: true, stoppedDueToTimeout: true, error: partialMsg });
+        } else {
+          results.failed++;
+          results.errors.push(`${candidate.name}: ${msg}`);
+          perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs: Date.now() - t0, error: msg });
+        }
         // Do NOT break on timeout — the loop-top runtime-budget check stops the run if there's no headroom left.
       }
     }
+
 
     // remaining = queue depth before this batch, minus fully completed ones
     const processedCount = perCandidate.length;
