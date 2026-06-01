@@ -729,7 +729,7 @@ export const UserProfile = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-center gap-3 py-4 text-muted-foreground">
                   <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent" />
-                  <span>Finding your representatives...</span>
+                  <span>Finding your current representatives...</span>
                 </div>
                 {[1, 2, 3].map(i => (
                   <div key={i} className="flex items-center gap-4 p-4 rounded-lg border border-border animate-pulse">
