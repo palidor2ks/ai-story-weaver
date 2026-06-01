@@ -168,7 +168,7 @@ export function UpcomingElectionsCard({ address }: Props) {
             </div>
           ) : total === 0 ? (
             <p className="text-muted-foreground text-sm">
-              No upcoming elections found for your address yet. Check back closer to election day.
+              No upcoming ballot candidates found for your address yet. Check back closer to election day or tap Refresh to re-check available sources.
             </p>
           ) : (
             <div className="space-y-6">
