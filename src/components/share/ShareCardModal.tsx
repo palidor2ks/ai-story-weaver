@@ -31,6 +31,7 @@ import {
 } from '@/lib/shareIntents';
 import { cn } from '@/lib/utils';
 import { trackEvent } from '@/lib/analytics';
+import { logBadgeEvent } from '@/lib/badges';
 
 const TEMPLATES_BY_KIND = {
   'candidate-alignment': [
