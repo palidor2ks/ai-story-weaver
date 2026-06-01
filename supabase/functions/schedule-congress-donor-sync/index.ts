@@ -70,9 +70,11 @@ serve(async (req) => {
   // Simpler: rely on cron not stacking + 150s edge timeout. (No-op here.)
   void lockRow;
 
-  // Step 1 — fill missing FEC IDs (defensive; today this is 0 rows in scope)
+  // Step 1 — discover candidates missing FEC IDs (full list for diagnostics, attempt fill for top N)
   let fecIdsFilled = 0;
   const fecIdErrors: string[] = [];
+  type MissingFec = { id: string; name: string; state: string | null; office: string | null; attempted: boolean; filled?: boolean; error?: string };
+  const missingFec: MissingFec[] = [];
   try {
     let q = supabase
       .from('candidates')
@@ -86,19 +88,28 @@ serve(async (req) => {
         q = q.not('state', 'in', `(${hiddenCodes.map((c) => `"${c}"`).join(',')})`);
       }
     }
-    const { data: missing } = await q.limit(5);
-    for (const c of missing ?? []) {
-      try {
-        const r = await fetch(`${supabaseUrl}/functions/v1/fetch-fec-candidate-id`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}`, 'apikey': anonKey },
-          body: JSON.stringify({ candidateId: c.id, name: c.name, state: c.state, office: c.office }),
-        });
-        if (r.ok) fecIdsFilled++;
-        else fecIdErrors.push(`${c.name}: HTTP ${r.status}`);
-      } catch (e) {
-        fecIdErrors.push(`${c.name}: ${e instanceof Error ? e.message : 'err'}`);
+    const { data: missing } = await q.limit(100);
+    const list = missing ?? [];
+    const attemptCount = Math.min(5, list.length);
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      const entry: MissingFec = { id: c.id, name: c.name, state: c.state, office: c.office, attempted: i < attemptCount };
+      if (i < attemptCount) {
+        try {
+          const r = await fetch(`${supabaseUrl}/functions/v1/fetch-fec-candidate-id`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}`, 'apikey': anonKey },
+            body: JSON.stringify({ candidateId: c.id, name: c.name, state: c.state, office: c.office }),
+          });
+          if (r.ok) { fecIdsFilled++; entry.filled = true; }
+          else { entry.filled = false; entry.error = `HTTP ${r.status}`; fecIdErrors.push(`${c.name}: HTTP ${r.status}`); }
+        } catch (e) {
+          entry.filled = false;
+          entry.error = e instanceof Error ? e.message : 'err';
+          fecIdErrors.push(`${c.name}: ${entry.error}`);
+        }
       }
+      missingFec.push(entry);
     }
   } catch (e) {
     console.error('[schedule] fec-id step error:', e);
@@ -144,6 +155,8 @@ serve(async (req) => {
   return new Response(JSON.stringify({
     ok: !syncError,
     fecIdsFilled,
+    missingFec,
+    missingFecCount: missingFec.length,
     syncResult,
     error: syncError,
   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

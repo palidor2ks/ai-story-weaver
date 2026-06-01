@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, Play, Loader2, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Clock, Play, Loader2, RefreshCw, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
@@ -24,9 +24,52 @@ interface DonorSyncRun {
   notes: string | null;
 }
 
+interface CandidateResult {
+  candidateId: string;
+  name: string;
+  state: string | null;
+  office: string | null;
+  fecCandidateId: string | null;
+  status: 'success' | 'failed';
+  imported: number;
+  totalRaised: number;
+  durationMs: number;
+  error?: string;
+  previousSync: string | null;
+}
+
+interface MissingFec {
+  id: string;
+  name: string;
+  state: string | null;
+  office: string | null;
+  attempted: boolean;
+  filled?: boolean;
+  error?: string;
+}
+
+interface RunDiagnostics {
+  mode: string;
+  ranAt: string;
+  ok: boolean;
+  error: string | null;
+  fecIdsFilled: number;
+  missingFec: MissingFec[];
+  missingFecCount: number;
+  processed: number;
+  successCount: number;
+  failedCount: number;
+  totalDonorsImported: number;
+  totalRaised: number;
+  remaining: number | null;
+  candidates: CandidateResult[];
+  errors: string[];
+}
+
 export function AutomatedJobsCard() {
   const qc = useQueryClient();
   const [runningMode, setRunningMode] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<RunDiagnostics | null>(null);
 
   const { data: runs, isLoading } = useQuery({
     queryKey: ['donor-sync-runs'],
@@ -49,14 +92,50 @@ export function AutomatedJobsCard() {
 
   const runNow = async (mode: 'backfill' | 'refresh') => {
     setRunningMode(mode);
+    setDiagnostics(null);
     const toastId = toast.loading(`Running ${mode}…`);
     try {
       const { data, error } = await supabase.functions.invoke('schedule-congress-donor-sync', {
         body: { scope: 'congress_visible', mode, limit: mode === 'backfill' ? 10 : 25, cycle: '2024' },
       });
       if (error) throw error;
-      const r = data as { syncResult?: { message?: string }; error?: string };
-      toast.success(r?.syncResult?.message ?? `${mode} run complete`, { id: toastId });
+      const r = data as {
+        ok: boolean;
+        error: string | null;
+        fecIdsFilled: number;
+        missingFec: MissingFec[];
+        missingFecCount: number;
+        syncResult: {
+          message?: string;
+          processed?: number;
+          successCount?: number;
+          failedCount?: number;
+          totalDonorsImported?: number;
+          totalRaised?: number;
+          remaining?: number | null;
+          candidates?: CandidateResult[];
+          errors?: string[];
+        };
+      };
+      const s = r.syncResult ?? {};
+      setDiagnostics({
+        mode,
+        ranAt: new Date().toISOString(),
+        ok: r.ok,
+        error: r.error,
+        fecIdsFilled: r.fecIdsFilled ?? 0,
+        missingFec: r.missingFec ?? [],
+        missingFecCount: r.missingFecCount ?? 0,
+        processed: s.processed ?? 0,
+        successCount: s.successCount ?? 0,
+        failedCount: s.failedCount ?? 0,
+        totalDonorsImported: s.totalDonorsImported ?? 0,
+        totalRaised: s.totalRaised ?? 0,
+        remaining: s.remaining ?? null,
+        candidates: s.candidates ?? [],
+        errors: s.errors ?? [],
+      });
+      toast.success(s.message ?? `${mode} run complete`, { id: toastId });
       qc.invalidateQueries({ queryKey: ['donor-sync-runs'] });
     } catch (err) {
       toast.error(`${mode} failed: ${err instanceof Error ? err.message : 'Unknown error'}`, { id: toastId });
@@ -100,6 +179,8 @@ export function AutomatedJobsCard() {
             />
           </div>
         )}
+
+        {diagnostics && <DiagnosticsPanel d={diagnostics} onDismiss={() => setDiagnostics(null)} />}
 
         {runs && runs.length > 0 && (
           <details className="rounded-lg border bg-muted/30 p-3 text-sm">
@@ -178,6 +259,140 @@ function JobBlock({
       ) : (
         <p className="text-xs text-muted-foreground">No runs yet.</p>
       )}
+    </div>
+  );
+}
+
+function DiagnosticsPanel({ d, onDismiss }: { d: RunDiagnostics; onDismiss: () => void }) {
+  const money = (n: number) =>
+    n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+  return (
+    <div className="rounded-lg border-2 border-primary/40 bg-primary/5 p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-semibold text-sm flex items-center gap-2">
+            {d.ok ? (
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+            ) : (
+              <XCircle className="h-4 w-4 text-destructive" />
+            )}
+            Last manual run — {d.mode}
+            <span className="text-xs font-normal text-muted-foreground">
+              {formatDistanceToNow(new Date(d.ranAt), { addSuffix: true })}
+            </span>
+          </p>
+          {d.error && <p className="text-xs text-destructive mt-1">{d.error}</p>}
+        </div>
+        <Button size="sm" variant="ghost" onClick={onDismiss}>Dismiss</Button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+        <Stat label="Processed" value={d.processed} />
+        <Stat label="Success" value={d.successCount} accent="text-green-600" />
+        <Stat label="Failed" value={d.failedCount} accent={d.failedCount > 0 ? 'text-destructive' : ''} />
+        <Stat label="Donors imported" value={d.totalDonorsImported.toLocaleString()} />
+        <Stat label="Total raised" value={money(d.totalRaised)} />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+        <Stat label="Remaining in queue" value={d.remaining ?? '—'} />
+        <Stat label="Missing FEC IDs" value={d.missingFecCount} accent={d.missingFecCount > 0 ? 'text-amber-600' : ''} />
+        <Stat label="FEC IDs auto-filled" value={d.fecIdsFilled} />
+      </div>
+
+      {d.candidates.length > 0 && (
+        <details open className="rounded-md border bg-background p-2">
+          <summary className="cursor-pointer text-xs font-medium">
+            Per-candidate progress ({d.candidates.length})
+          </summary>
+          <div className="mt-2 max-h-72 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="text-muted-foreground">
+                <tr className="text-left">
+                  <th className="py-1 pr-2">Candidate</th>
+                  <th className="py-1 pr-2">State</th>
+                  <th className="py-1 pr-2">FEC ID</th>
+                  <th className="py-1 pr-2 text-right">Donors</th>
+                  <th className="py-1 pr-2 text-right">Raised</th>
+                  <th className="py-1 pr-2 text-right">Time</th>
+                  <th className="py-1">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.candidates.map((c) => (
+                  <tr key={c.candidateId} className="border-t border-border/40">
+                    <td className="py-1 pr-2">{c.name}</td>
+                    <td className="py-1 pr-2 text-muted-foreground">{c.state ?? '—'}</td>
+                    <td className="py-1 pr-2 font-mono text-[10px] text-muted-foreground">
+                      {c.fecCandidateId ?? '—'}
+                    </td>
+                    <td className="py-1 pr-2 text-right">{c.imported.toLocaleString()}</td>
+                    <td className="py-1 pr-2 text-right">{money(c.totalRaised)}</td>
+                    <td className="py-1 pr-2 text-right text-muted-foreground">
+                      {(c.durationMs / 1000).toFixed(1)}s
+                    </td>
+                    <td className="py-1">
+                      {c.status === 'success' ? (
+                        <Badge variant="secondary" className="text-[10px]">ok</Badge>
+                      ) : (
+                        <span className="text-destructive text-[10px]" title={c.error}>
+                          {c.error ?? 'failed'}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+
+      {d.missingFec.length > 0 && (
+        <details className="rounded-md border bg-background p-2">
+          <summary className="cursor-pointer text-xs font-medium text-amber-700">
+            Candidates missing FEC IDs ({d.missingFecCount})
+          </summary>
+          <div className="mt-2 max-h-60 overflow-y-auto space-y-1">
+            {d.missingFec.map((m) => (
+              <div key={m.id} className="flex flex-wrap items-center gap-2 text-xs border-b border-border/40 pb-1 last:border-0">
+                <span className="font-medium">{m.name}</span>
+                <span className="text-muted-foreground">{m.state ?? '—'} · {m.office ?? '—'}</span>
+                {m.attempted ? (
+                  m.filled ? (
+                    <Badge variant="secondary" className="text-[10px]">filled</Badge>
+                  ) : (
+                    <span className="text-destructive text-[10px]">attempt failed{m.error ? `: ${m.error}` : ''}</span>
+                  )
+                ) : (
+                  <span className="text-muted-foreground text-[10px]">not attempted this run</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {d.errors.length > 0 && (
+        <details className="rounded-md border bg-background p-2">
+          <summary className="cursor-pointer text-xs font-medium text-destructive">
+            Errors ({d.errors.length})
+          </summary>
+          <ul className="mt-2 space-y-1 text-xs text-destructive max-h-40 overflow-y-auto">
+            {d.errors.map((e, i) => <li key={i}>• {e}</li>)}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: string | number; accent?: string }) {
+  return (
+    <div className="rounded border bg-background px-2 py-1.5">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`text-sm font-semibold ${accent ?? ''}`}>{value}</div>
     </div>
   );
 }

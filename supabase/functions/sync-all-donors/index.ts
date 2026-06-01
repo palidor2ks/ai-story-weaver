@@ -118,10 +118,34 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    type CandidateResult = {
+      candidateId: string;
+      name: string;
+      state: string | null;
+      office: string | null;
+      fecCandidateId: string | null;
+      status: 'success' | 'failed';
+      imported: number;
+      totalRaised: number;
+      durationMs: number;
+      error?: string;
+      previousSync: string | null;
+    };
+
     const results = { success: 0, failed: 0, totalDonorsImported: 0, totalRaised: 0, errors: [] as string[] };
+    const perCandidate: CandidateResult[] = [];
     const fetchFecDonorsUrl = `${supabaseUrl}/functions/v1/fetch-fec-donors`;
 
     for (const candidate of candidates) {
+      const t0 = Date.now();
+      const base = {
+        candidateId: candidate.id,
+        name: candidate.name,
+        state: candidate.state ?? null,
+        office: candidate.office ?? null,
+        fecCandidateId: candidate.fec_candidate_id ?? null,
+        previousSync: candidate.last_donor_sync ?? null,
+      };
       try {
         const resp = await fetch(fetchFecDonorsUrl, {
           method: 'POST',
@@ -133,21 +157,31 @@ serve(async (req) => {
           body: JSON.stringify({ candidateId: candidate.id, fecCandidateId: candidate.fec_candidate_id, cycle }),
         });
         const data = await resp.json().catch(() => ({}));
+        const durationMs = Date.now() - t0;
         if (!resp.ok) {
           results.failed++;
-          results.errors.push(`${candidate.name}: HTTP ${resp.status} ${data?.error || ''}`.trim());
+          const msg = `HTTP ${resp.status} ${data?.error || ''}`.trim();
+          results.errors.push(`${candidate.name}: ${msg}`);
+          perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs, error: msg });
         } else if (data?.success) {
           results.success++;
-          results.totalDonorsImported += data.imported || 0;
-          results.totalRaised += data.totalRaised || 0;
+          const imported = data.imported || 0;
+          const totalRaised = data.totalRaised || 0;
+          results.totalDonorsImported += imported;
+          results.totalRaised += totalRaised;
+          perCandidate.push({ ...base, status: 'success', imported, totalRaised, durationMs });
         } else {
           results.failed++;
-          results.errors.push(`${candidate.name}: ${data?.error || 'Unknown error'}`);
+          const msg = data?.error || 'Unknown error';
+          results.errors.push(`${candidate.name}: ${msg}`);
+          perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs, error: msg });
         }
         await new Promise((r) => setTimeout(r, 1000));
       } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
         results.failed++;
-        results.errors.push(`${candidate.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        results.errors.push(`${candidate.name}: ${msg}`);
+        perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs: Date.now() - t0, error: msg });
       }
     }
 
@@ -160,9 +194,11 @@ serve(async (req) => {
       totalDonorsImported: results.totalDonorsImported,
       totalRaised: results.totalRaised,
       errors: results.errors,
+      candidates: perCandidate,
       remaining,
+      queueBefore: queueBefore ?? null,
       scope, mode, cycle,
-      message: `Synced ${results.success}/${candidates.length} (scope=${scope}, mode=${mode}). Remaining in queue: ${remaining}.`,
+      message: `Synced ${results.success}/${candidates.length} (scope=${scope}, mode=${mode}). ${results.totalDonorsImported} donors imported. Remaining in queue: ${remaining}.`,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {
