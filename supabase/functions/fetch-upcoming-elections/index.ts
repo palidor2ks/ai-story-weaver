@@ -697,7 +697,7 @@ Deno.serve(async (req) => {
     const todayIso = new Date().toISOString().slice(0, 10);
     const { data: elections } = await supabase
       .from('elections')
-      .select('id, election_date, election_type, level, state, jurisdiction, name, source')
+      .select('id, election_date, election_type, level, state, jurisdiction, name, source, source_url, confidence')
       .gte('election_date', todayIso)
       .or(`state.eq.${state},state.is.null`)
       .order('election_date', { ascending: true });
@@ -705,7 +705,7 @@ Deno.serve(async (req) => {
     const electionIds = (elections ?? []).map(e => e.id);
     const { data: ec } = await supabase
       .from('election_candidates')
-      .select('election_id, candidate_id, office, is_incumbent, status')
+      .select('election_id, candidate_id, office, is_incumbent, status, source, source_ref')
       .in('election_id', electionIds.length ? electionIds : ['00000000-0000-0000-0000-000000000000']);
 
     const candidateIds = Array.from(new Set((ec ?? []).map(r => r.candidate_id)));
