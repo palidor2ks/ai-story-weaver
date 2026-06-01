@@ -89,9 +89,23 @@ export const CommitteeProfile = () => {
   const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id, effectiveCycle);
   const isLoading = committeeLoading || donorsLoading;
 
-  const handleSyncDonors = () => {
+  const handleSyncDonors = async () => {
     if (!committee?.fecCommitteeId) return;
-    fetchDonorsMutation.mutate({ committeeId: committee.fecCommitteeId, cycle: effectiveCycle ?? '2024' });
+    const fecId = committee.fecCommitteeId;
+    const cycle = effectiveCycle ?? '2024';
+    try {
+      await fetchDonorsMutation.mutateAsync({ committeeId: fecId, cycle });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/Committee not found/i.test(msg)) {
+        try {
+          await importCommitteeMutation.mutateAsync(fecId);
+          await fetchDonorsMutation.mutateAsync({ committeeId: fecId, cycle });
+        } catch {
+          /* toast already shown by mutation onError */
+        }
+      }
+    }
   };
 
   return (
