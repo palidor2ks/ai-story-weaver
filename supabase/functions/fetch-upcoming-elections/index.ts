@@ -42,6 +42,7 @@ interface CandidatePayload {
   source: string;
   source_ref?: string | null;
   status?: string;
+  confidence?: 'high' | 'medium' | 'low';
 }
 
 interface ElectionPayload {
@@ -53,6 +54,8 @@ interface ElectionPayload {
   name: string;
   source: string;
   source_ref?: string | null;
+  source_url?: string | null;
+  confidence?: 'high' | 'medium' | 'low';
   candidates: CandidatePayload[];
 }
 
@@ -65,6 +68,8 @@ interface ElectionResponseRow {
   jurisdiction: string | null;
   name: string;
   source: string;
+  source_url?: string | null;
+  confidence?: string | null;
   candidates: Array<{
     candidate_id: string;
     name: string;
