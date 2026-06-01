@@ -91,7 +91,7 @@ export function useUpcomingElections(address: string | null | undefined) {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const queryKey = ['upcoming-elections', geocode?.state, geocode?.district, 'v1'];
+  const queryKey = ['upcoming-elections', geocode?.state, geocode?.district, geocode?.city, 'v2'];
 
   const query = useQuery({
     queryKey,
