@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowLeft, DollarSign, Users, Landmark, MapPin, Calendar, RefreshCw, TrendingUp, Sparkles } from 'lucide-react';
 import { useCommittee, useCommitteeDonors } from '@/hooks/useCommittees';
-import { useFetchCommitteeDonors } from '@/hooks/useImportExternalCommittee';
+import { useFetchCommitteeDonors, useImportExternalCommittee } from '@/hooks/useImportExternalCommittee';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { useIEExclusions, useRestoreCommittee } from '@/hooks/useIEExclusions';
 import { toast } from 'sonner';
@@ -45,6 +45,7 @@ export const CommitteeProfile = () => {
   const { data: ieExclusions = [] } = useIEExclusions();
   const restoreCommittee = useRestoreCommittee();
   const fetchDonorsMutation = useFetchCommitteeDonors();
+  const importCommitteeMutation = useImportExternalCommittee();
 
   const isAdmin = adminData?.isAdmin ?? false;
   const exclusion = useMemo(
@@ -88,9 +89,23 @@ export const CommitteeProfile = () => {
   const { data: donors = [], isLoading: donorsLoading } = useCommitteeDonors(id, effectiveCycle);
   const isLoading = committeeLoading || donorsLoading;
 
-  const handleSyncDonors = () => {
+  const handleSyncDonors = async () => {
     if (!committee?.fecCommitteeId) return;
-    fetchDonorsMutation.mutate({ committeeId: committee.fecCommitteeId, cycle: effectiveCycle ?? '2024' });
+    const fecId = committee.fecCommitteeId;
+    const cycle = effectiveCycle ?? '2024';
+    try {
+      await fetchDonorsMutation.mutateAsync({ committeeId: fecId, cycle });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/Committee not found/i.test(msg)) {
+        try {
+          await importCommitteeMutation.mutateAsync(fecId);
+          await fetchDonorsMutation.mutateAsync({ committeeId: fecId, cycle });
+        } catch {
+          /* toast already shown by mutation onError */
+        }
+      }
+    }
   };
 
   return (
