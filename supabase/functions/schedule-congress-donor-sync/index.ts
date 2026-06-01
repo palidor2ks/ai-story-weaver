@@ -151,15 +151,28 @@ serve(async (req) => {
       ...(syncError ? [{ step: 'donor_sync', message: syncError }] : []),
     ];
 
+    const processed = (syncResult as { processed?: number }).processed ?? 0;
+    const successCount = (syncResult as { successCount?: number }).successCount ?? 0;
+    const failedCount = (syncResult as { failedCount?: number }).failedCount ?? 0;
+    const partialCount = (syncResult as { partialCount?: number }).partialCount ?? 0;
+    const remaining = (syncResult as { remaining?: number }).remaining ?? null;
+
+    let notes: string;
+    if (syncError) notes = `error: ${syncError}`;
+    else if (processed === 0) notes = 'completed — no candidates matched selection';
+    else if (failedCount > 0 && successCount === 0) notes = `failed: ${failedCount}/${processed}`;
+    else if (partialCount > 0) notes = `partial — ${successCount} done, ${partialCount} need rerun, ${failedCount} failed`;
+    else notes = `completed — ${successCount}/${processed} synced`;
+
     const update = {
       finished_at: new Date().toISOString(),
-      processed: (syncResult as { processed?: number }).processed ?? 0,
-      success_count: (syncResult as { successCount?: number }).successCount ?? 0,
-      failed_count: (syncResult as { failedCount?: number }).failedCount ?? 0,
-      remaining: (syncResult as { remaining?: number }).remaining ?? null,
+      processed,
+      success_count: successCount,
+      failed_count: failedCount,
+      remaining,
       fec_ids_filled: fecIdsFilled,
       errors,
-      notes: syncError ?? null,
+      notes,
     };
     if (runId) {
       await supabase.from('donor_sync_runs').update(update).eq('id', runId);

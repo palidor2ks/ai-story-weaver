@@ -132,8 +132,8 @@ serve(async (req) => {
       previousSync: string | null;
     };
 
-    const results = { success: 0, failed: 0, totalDonorsImported: 0, totalRaised: 0, errors: [] as string[] };
-    const perCandidate: CandidateResult[] = [];
+    const results = { success: 0, failed: 0, partial: 0, totalDonorsImported: 0, totalRaised: 0, errors: [] as string[] };
+    const perCandidate: (CandidateResult & { hasMore?: boolean; stoppedDueToTimeout?: boolean })[] = [];
     const fetchFecDonorsUrl = `${supabaseUrl}/functions/v1/fetch-fec-donors`;
 
     for (const candidate of candidates) {
@@ -164,12 +164,20 @@ serve(async (req) => {
           results.errors.push(`${candidate.name}: ${msg}`);
           perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs, error: msg });
         } else if (data?.success) {
-          results.success++;
           const imported = data.imported || 0;
           const totalRaised = data.totalRaised || 0;
+          const hasMore = !!data.hasMore;
+          const stoppedDueToTimeout = !!data.stoppedDueToTimeout;
           results.totalDonorsImported += imported;
           results.totalRaised += totalRaised;
-          perCandidate.push({ ...base, status: 'success', imported, totalRaised, durationMs });
+          if (hasMore) {
+            results.partial++;
+            results.errors.push(`${candidate.name}: partial — ${imported} donors imported, more pages remain (rerun to continue)`);
+            perCandidate.push({ ...base, status: 'success', imported, totalRaised, durationMs, hasMore, stoppedDueToTimeout, error: 'partial (rerun)' });
+          } else {
+            results.success++;
+            perCandidate.push({ ...base, status: 'success', imported, totalRaised, durationMs, hasMore, stoppedDueToTimeout });
+          }
         } else {
           results.failed++;
           const msg = data?.error || 'Unknown error';
@@ -185,11 +193,14 @@ serve(async (req) => {
       }
     }
 
+    // remaining = queue depth before this batch, minus fully completed ones
     const remaining = Math.max(0, (queueBefore ?? candidates.length) - results.success);
 
     return new Response(JSON.stringify({
+      success: true,
       processed: candidates.length,
       successCount: results.success,
+      partialCount: results.partial,
       failedCount: results.failed,
       totalDonorsImported: results.totalDonorsImported,
       totalRaised: results.totalRaised,
@@ -198,7 +209,7 @@ serve(async (req) => {
       remaining,
       queueBefore: queueBefore ?? null,
       scope, mode, cycle,
-      message: `Synced ${results.success}/${candidates.length} (scope=${scope}, mode=${mode}). ${results.totalDonorsImported} donors imported. Remaining in queue: ${remaining}.`,
+      message: `Synced ${results.success}/${candidates.length} fully (${results.partial} partial, ${results.failed} failed). ${results.totalDonorsImported} donors imported. Remaining in queue: ${remaining}.`,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {
