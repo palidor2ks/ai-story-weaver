@@ -177,6 +177,8 @@ async function fetchFEC(state: string, district: string | null): Promise<Electio
   if (!FEC_API_KEY) return [];
   const cycles = nextCycles();
   const results: ElectionPayload[] = [];
+  const normalizedDistrict = normalizeDistrict(district);
+  const houseJurisdiction = districtJurisdiction(state, normalizedDistrict);
 
   for (const cycle of cycles) {
     // House (only if we know district), Senate, President in parallel.
@@ -200,8 +202,8 @@ async function fetchFEC(state: string, district: string | null): Promise<Electio
       }
     };
 
-    if (district) {
-      const dist = district.replace(/^\D+/, '').padStart(2, '0');
+    if (normalizedDistrict) {
+      const dist = normalizedDistrict.padStart(2, '0');
       calls.push(fecFetch('H', `${base}?${common}&office=H&state=${state}&district=${dist}`));
     }
     calls.push(fecFetch('S', `${base}?${common}&office=S&state=${state}`));
@@ -214,14 +216,16 @@ async function fetchFEC(state: string, district: string | null): Promise<Electio
     const generalDate = firstTuesdayAfterFirstMonday(parseInt(cycle), 11); // November
 
     for (const { office, data } of settled) {
-      const officeLabel = office === 'H' ? `U.S. House ${state}-${district ?? ''}` : office === 'S' ? `U.S. Senate (${state})` : 'President of the United States';
+      const officeLabel = office === 'H'
+        ? `U.S. House ${houseJurisdiction ?? `${state}-`}`
+        : office === 'S' ? `U.S. Senate (${state})` : 'President of the United States';
       const candidates: CandidatePayload[] = (data?.results ?? []).map((c: any) => ({
         id: c.candidate_id,
         name: c.name || 'Unknown',
         party: mapParty(c.party_full || c.party),
         office: officeLabel,
         state: office === 'P' ? 'US' : state,
-        district: office === 'H' ? district : null,
+        district: office === 'H' ? normalizedDistrict : null,
         is_incumbent: c.incumbent_challenge === 'I',
         image_url: null,
         fec_candidate_id: c.candidate_id,
@@ -235,10 +239,10 @@ async function fetchFEC(state: string, district: string | null): Promise<Electio
         election_type: 'general',
         level: 'federal',
         state: office === 'P' ? null : state,
-        jurisdiction: office === 'H' ? `${state}-${district ?? ''}` : (office === 'S' ? state : 'US'),
+        jurisdiction: office === 'H' ? (houseJurisdiction ?? `${state}-`) : (office === 'S' ? state : 'US'),
         name: `${cycle} ${office === 'P' ? 'U.S. Presidential' : 'Federal'} Election`,
         source: 'fec',
-        source_ref: `${cycle}-${office}-${state}-${district ?? ''}`,
+        source_ref: `${cycle}-${office}-${state}-${normalizedDistrict ?? ''}`,
         candidates,
       });
     }
