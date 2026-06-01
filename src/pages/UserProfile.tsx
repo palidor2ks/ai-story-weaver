@@ -71,10 +71,24 @@ export const UserProfile = () => {
   const [isRefreshingAnalysis, setIsRefreshingAnalysis] = useState(false);
   const [isRefreshingParties, setIsRefreshingParties] = useState(false);
 
-  // Fire identity_verified badge event when returning from ID.me
+  // Validate the OAuth state returned from ID.me before trusting the callback.
+  // Prevents CSRF / auth-code injection where an attacker tricks a user into
+  // completing a verification flow they did not initiate.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('idme_callback') === 'true' && profile?.identity_verified) {
+    if (params.get('idme_callback') !== 'true') return;
+
+    const returnedState = params.get('state');
+    const storedState = sessionStorage.getItem('idme_state');
+    // Single-use — always clear, regardless of outcome.
+    sessionStorage.removeItem('idme_state');
+
+    if (!storedState || !returnedState || storedState !== returnedState) {
+      console.warn('[idme] OAuth state mismatch on callback — aborting.');
+      return;
+    }
+
+    if (profile?.identity_verified) {
       logBadgeEvent('identity_verified');
     }
   }, [profile?.identity_verified]);
