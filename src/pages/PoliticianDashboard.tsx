@@ -17,6 +17,7 @@ import { Loader2, Search, User, FileText, CheckCircle2, Clock, ExternalLink, Fil
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import { logBadgeEvent } from '@/lib/badges';
 
 interface Question {
   id: string;
@@ -368,6 +369,19 @@ export default function PoliticianDashboard() {
                     candidateId: claimedProfile.id,
                     answer,
                   });
+                  logBadgeEvent('platform_first_answer', {
+                    candidate_id: claimedProfile.id,
+                    question_id: answer.question_id,
+                    has_source: !!answer.source_url,
+                  });
+                  if (answer.source_url) {
+                    logBadgeEvent('evidence_added', { candidate_id: claimedProfile.id, question_id: answer.question_id });
+                  }
+                  // Check completeness after this answer
+                  const newCount = answersMap.has(answer.question_id) ? candidateAnswers.length : candidateAnswers.length + 1;
+                  if (totalQuestions > 0 && newCount >= totalQuestions) {
+                    logBadgeEvent('platform_complete', { candidate_id: claimedProfile.id });
+                  }
                 }}
                 onDelete={() => {
                   deleteMutation.mutate({

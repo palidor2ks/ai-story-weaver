@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,8 +16,10 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { logBadgeEvent } from '@/lib/badges';
 
 export const HowScoringWorks = () => {
+  useEffect(() => { logBadgeEvent('scoring_viewed'); }, []);
   return (
     <div className="min-h-screen bg-background">
       <Seo

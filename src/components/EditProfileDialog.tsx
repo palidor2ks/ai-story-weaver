@@ -22,6 +22,7 @@ import {
 import { RELIGION_GROUPS } from '@/data/religionOptions';
 import { Pencil } from 'lucide-react';
 import { Profile } from '@/hooks/useProfile';
+import { logBadgeEvent } from '@/lib/badges';
 
 const POLITICAL_PARTIES = [
   'Democrat',
@@ -138,6 +139,7 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
       education_level: formData.education_level || null,
       race: formData.race || null,
     });
+    logBadgeEvent('demographics_updated');
     setOpen(false);
   };
 

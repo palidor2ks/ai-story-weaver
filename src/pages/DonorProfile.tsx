@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/Header';
@@ -33,6 +33,7 @@ import {
   X,
   Sparkles
 } from 'lucide-react';
+import { logBadgeEvent } from '@/lib/badges';
 
 interface DonorRecord {
   id: string;
@@ -149,6 +150,8 @@ const DonorProfile = () => {
   const [showAllRecipients, setShowAllRecipients] = useState(false);
   const [showAllContributors, setShowAllContributors] = useState(false);
   const [profileCycleFilter, setProfileCycleFilter] = useState<string>('all');
+
+  useEffect(() => { if (id) logBadgeEvent('donor_viewed', { donor_id: id }); }, [id]);
 
   // Fetch the specific donor record
   const { data: donor, isLoading: donorLoading } = useQuery({

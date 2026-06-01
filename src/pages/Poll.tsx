@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { twitterIntent, facebookIntent, linkedinIntent, openIntent } from '@/lib/shareIntents';
 import { cn } from '@/lib/utils';
 import { PollResults } from '@/components/poll/PollResults';
+import { logBadgeEvent } from '@/lib/badges';
 
 const ANON_KEY = 'polipulse_anon_session_id';
 
@@ -85,6 +86,7 @@ export default function Poll() {
 
       setSubmitted(true);
       toast.success('Thanks for voting!');
+      logBadgeEvent('poll_completed', { poll_id: poll.id, slug: poll.slug });
     } catch (e: any) {
       toast.error(e.message || 'Submit failed');
     } finally {

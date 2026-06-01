@@ -4,6 +4,7 @@ import { User, Camera, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { logBadgeEvent } from '@/lib/badges';
 
 interface AvatarUploadProps {
   userId: string;
@@ -66,6 +67,7 @@ export const AvatarUpload = ({ userId, currentAvatarUrl, userName, onAvatarChang
       setPreviewUrl(urlWithCacheBust);
       onAvatarChange(urlWithCacheBust);
       toast.success('Avatar updated successfully!');
+      logBadgeEvent('avatar_uploaded');
     } catch (error: any) {
       console.error('Error uploading avatar:', error);
       toast.error(error.message || 'Failed to upload avatar');

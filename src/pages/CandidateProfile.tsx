@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { logBadgeEvent } from '@/lib/badges';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { Button } from '@/components/ui/button';
@@ -87,6 +88,7 @@ const getOfficeLocationLabel = (
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
   const { data: profile } = useProfile();
+  useEffect(() => { if (id) logBadgeEvent('match_viewed', { candidate_id: id }); }, [id]);
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
   const { data: scoreMap } = useCandidateScoreMap(id ? [id] : undefined);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useMyClaimForCandidate, useSubmitClaim } from '@/hooks/useProfileClaims';
+import { logBadgeEvent } from '@/lib/badges';
 import { Button } from '@/components/ui/button';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { Input } from '@/components/ui/input';
@@ -91,6 +92,8 @@ export function ClaimProfileDialog({
       verificationInfo,
       officialEmail,
     });
+
+    logBadgeEvent('profile_claimed', { candidate_id: candidateId });
 
     setIsOpen(false);
     setOfficialEmail('');
