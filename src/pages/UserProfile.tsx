@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { normalizeOfficeName } from '@/lib/officeLabel';
-import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info, Share2 } from 'lucide-react';
+import { User, RefreshCw, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info, Share2 } from 'lucide-react';
 import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { AvatarUpload } from '@/components/AvatarUpload';
@@ -367,14 +367,14 @@ export const UserProfile = () => {
         {/* Profile Header */}
         <div className="bg-card rounded-2xl border border-border p-6 md:p-8 mb-8 shadow-elevated">
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-6">
+            <div className="flex min-w-0 flex-1 items-center gap-6">
               <AvatarUpload
                 userId={profile.id}
                 currentAvatarUrl={profile.avatar_url}
                 userName={profile.name}
                 onAvatarChange={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
               />
-              <div>
+              <div className="min-w-0">
                 <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">
                   {profile.name}
                 </h1>
@@ -474,10 +474,25 @@ export const UserProfile = () => {
                 <VerificationBadges profile={profile} />
               </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleSignOut} className="gap-2">
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </Button>
+            <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+              <div className="flex-1 rounded-xl bg-secondary/50 px-4 py-3 text-center sm:min-w-[180px] sm:flex-none">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Overall Score
+                </span>
+                <div className="mt-1 flex items-center justify-center">
+                  <ScoreText score={profile.overall_score} size="lg" className="text-3xl" />
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {profile.overall_score <= -30 ? 'Progressive lean' :
+                   profile.overall_score >= 30 ? 'Conservative lean' :
+                   'Moderate or mixed'}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleSignOut} className="gap-2">
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -512,30 +527,6 @@ export const UserProfile = () => {
           </Button>
         </div>
 
-        {/* Overall Score */}
-        <Card className="mb-8 shadow-elevated">
-          <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-accent" />
-              Your Political Profile
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center p-6 rounded-xl bg-secondary/50">
-              <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                Overall Score
-              </span>
-              <div className="flex items-center justify-center mt-2">
-                <ScoreText score={profile.overall_score} size="lg" className="text-5xl" />
-              </div>
-              <p className="text-sm text-muted-foreground mt-2">
-                {profile.overall_score <= -30 ? 'You tend to lean Progressive on most issues' : 
-                 profile.overall_score >= 30 ? 'You tend to lean Conservative on most issues' : 
-                 'You hold moderate or mixed views across issues'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* AI Analysis Summary */}
         <Card className="mb-8 shadow-elevated">
