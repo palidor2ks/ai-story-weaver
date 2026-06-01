@@ -68,9 +68,25 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, code, redirect_uri } = body;
 
-    // Validate redirect_uri against the module-level allowlist (env-extensible).
-    if (typeof redirect_uri !== 'string' || !ALLOWED_REDIRECT_URIS.has(redirect_uri)) {
-      return new Response(JSON.stringify({ error: 'Invalid redirect_uri' }), {
+    // Validate redirect_uri: explicit allowlist OR any Lovable preview/sandbox host
+    // for this project (e.g. id-preview--*, *.sandbox.lovable.dev, *.lovable.app).
+    // Path must always be /auth/idme-callback.
+    const isAllowedRedirect = (uri: unknown): boolean => {
+      if (typeof uri !== 'string') return false;
+      if (ALLOWED_REDIRECT_URIS.has(uri)) return true;
+      let u: URL;
+      try { u = new URL(uri); } catch { return false; }
+      if (u.pathname !== '/auth/idme-callback') return false;
+      const host = u.hostname.toLowerCase();
+      // Lovable-hosted preview/sandbox subdomains
+      if (u.protocol === 'https:' && (host.endsWith('.lovable.app') || host.endsWith('.lovable.dev'))) {
+        return true;
+      }
+      return false;
+    };
+    if (!isAllowedRedirect(redirect_uri)) {
+      console.error('Invalid redirect_uri rejected:', redirect_uri);
+      return new Response(JSON.stringify({ error: 'Invalid redirect_uri', message: `Redirect URI not allowed: ${redirect_uri}` }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
