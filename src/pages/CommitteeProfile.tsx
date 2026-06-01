@@ -35,6 +35,13 @@ const formatNumber = (value: number) =>
       ? `${(value / 1_000).toFixed(0)}K`
       : value.toLocaleString();
 
+const raisedSourceCopy = (source: string | undefined) => {
+  if (source === 'external_fec') return 'From FEC receipt totals for this external committee';
+  if (source === 'local_contributions') return 'Calculated from synced contribution entries';
+  if (source === 'independent_expenditures') return 'No receipt totals synced yet; spending is shown below';
+  return 'Includes latest synced totals';
+};
+
 export const CommitteeProfile = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -263,7 +270,7 @@ export const CommitteeProfile = () => {
                     Total Raised
                   </div>
                   <p className="text-2xl font-bold text-foreground mt-2">{formatCurrency(committee.totalRaised)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Includes latest synced totals</p>
+                  <p className="text-xs text-muted-foreground mt-1">{raisedSourceCopy(committee.financeSource)}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -273,7 +280,9 @@ export const CommitteeProfile = () => {
                     Unique Donors
                   </div>
                   <p className="text-2xl font-bold text-foreground mt-2">{committee.donorCount == null ? '—' : formatNumber(committee.donorCount)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">From committee finance rollups</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {committee.financeSource === 'external_fec' ? 'Donor-level sync not available for this total' : 'From committee finance rollups'}
+                  </p>
                 </CardContent>
               </Card>
               <Card>

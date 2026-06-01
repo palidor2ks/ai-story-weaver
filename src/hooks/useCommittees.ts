@@ -6,6 +6,7 @@ export interface CommitteeSummary {
   name: string | null;
   aliasName?: string | null;
   fecCommitteeId: string;
+  financeSource?: 'candidate_rollup' | 'external_fec' | 'local_contributions' | 'independent_expenditures';
   designation: string | null;
   designationFull: string | null;
   role: string | null;
@@ -74,6 +75,16 @@ interface CommitteeRow {
     state: string;
   } | null;
 }
+
+interface ExternalCommitteeFinanceRow {
+  committee_id: string;
+  committee_name: string | null;
+  cycle: string;
+  total_raised: number | null;
+  last_fec_check: string | null;
+}
+
+const isPresentString = (value: string | null | undefined): value is string => !!value;
 
 const buildCommitteeSummaries = (
   committees: CommitteeRow[] = [],
@@ -145,6 +156,7 @@ const buildCommitteeSummaries = (
       name: resolvedName,
       aliasName: null,
       fecCommitteeId: committee.fec_committee_id,
+      financeSource: hasRollupData ? 'candidate_rollup' : undefined,
       designation: committee.designation,
       designationFull: committee.designation_full,
       role: committee.role,
@@ -449,9 +461,54 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
       }
 
       if (committees[0]) {
+        const summary = committees[0];
+        const { data: externalFinanceRows } = await supabase
+          .from('external_committee_finance')
+          .select('committee_id, committee_name, cycle, total_raised, last_fec_check')
+          .eq('committee_id', committeeId)
+          .returns<ExternalCommitteeFinanceRow[]>();
+        const { data: ieRows } = await supabase
+          .from('independent_expenditures')
+          .select('spending_committee_name, cycle, expenditure_date')
+          .eq('spending_committee_fec_id', committeeId)
+          .order('expenditure_date', { ascending: false })
+          .limit(1000);
+        const ieExpenditures = (ieRows || []) as Array<{ spending_committee_name: string | null; cycle: string | null; expenditure_date: string | null }>;
+        const externalFinances = externalFinanceRows || [];
+        const matchingExternalFinances = cycle && cycle !== 'all'
+          ? externalFinances.filter((r) => r.cycle === cycle)
+          : externalFinances;
+        const externalRaised = matchingExternalFinances.reduce(
+          (sum, r) => sum + Number(r.total_raised ?? 0),
+          0,
+        );
+        const externalLastSync = matchingExternalFinances
+          .map((r) => r.last_fec_check)
+          .filter(isPresentString)
+          .sort()
+          .at(-1) ?? null;
+        const mergedCycles = Array.from(new Set([
+          ...(summary.cycles ?? []),
+          ...externalFinances.map((r) => r.cycle).filter(isPresentString),
+          ...ieExpenditures.map((r) => r.cycle).filter(isPresentString),
+        ])).sort((a, b) => Number(b) - Number(a));
+        const externalOverride = summary.totalRaised === 0 && externalRaised > 0
+          ? {
+            totalRaised: externalRaised,
+            financeSource: 'external_fec' as const,
+            lastSyncDate: externalLastSync ?? summary.lastSyncDate,
+          }
+          : {};
+        const ieOnlyHint = summary.totalRaised === 0 && externalRaised === 0 && ieExpenditures.length > 0
+          ? { financeSource: 'independent_expenditures' as const }
+          : {};
+
         return {
-          ...committees[0],
-          name: pickBetter(committees[0].name),
+          ...summary,
+          name: pickBetter(summary.name),
+          cycles: mergedCycles.length > 0 ? mergedCycles : summary.cycles,
+          ...externalOverride,
+          ...ieOnlyHint,
           ...(cycleScopedLastDate !== undefined
             ? { lastContributionDate: cycleScopedLastDate }
             : {}),
@@ -472,50 +529,27 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
         .select('committee_id, candidate_id, donor_count, contribution_count, local_itemized, fec_itemized, fec_total_receipts, cycle')
         .eq('committee_id', committeeId);
 
-      if (!contribRow && (!rollupRows || rollupRows.length === 0)) {
-        // Final fallback: IE-only committees (appear only in independent_expenditures)
-        const { data: ieRows } = await supabase
-          .from('independent_expenditures')
-          .select('spending_committee_name, cycle, expenditure_date')
-          .eq('spending_committee_fec_id', committeeId)
-          .order('expenditure_date', { ascending: false })
-          .limit(1000);
+      const { data: externalFinanceRows } = await supabase
+        .from('external_committee_finance')
+        .select('committee_id, committee_name, cycle, total_raised, last_fec_check')
+        .eq('committee_id', committeeId)
+        .returns<ExternalCommitteeFinanceRow[]>();
 
-        if (!ieRows || ieRows.length === 0) {
-          return null;
-        }
-
-        const rows = ieRows as Array<{ spending_committee_name: string | null; cycle: string | null; expenditure_date: string | null }>;
-        const ieName = pickBetter(rows.find((r) => r.spending_committee_name)?.spending_committee_name ?? null);
-        const ieCycles = Array.from(
-          new Set(rows.map((r) => r.cycle).filter(Boolean) as string[]),
-        ).sort((a, b) => Number(b) - Number(a));
-        const lastDate = rows.find((r) => r.expenditure_date)?.expenditure_date ?? null;
-
-        const ieSummary: CommitteeSummary = {
-          id: committeeId,
-          name: ieName,
-          aliasName: null,
-          fecCommitteeId: committeeId,
-          designation: null,
-          designationFull: null,
-          role: null,
-          cycles: ieCycles,
-          lastSyncDate: null,
-          lastContributionDate: lastDate,
-          localItemizedTotal: null,
-          fecItemizedTotal: null,
-          candidateId: null,
-          candidate: null,
-          donorCount: 0,
-          contributionCount: 0,
-          totalRaised: 0,
-          hasRollupData: false,
-        };
-        return ieSummary;
-      }
+      const { data: ieRows } = await supabase
+        .from('independent_expenditures')
+        .select('spending_committee_name, cycle, expenditure_date')
+        .eq('spending_committee_fec_id', committeeId)
+        .order('expenditure_date', { ascending: false })
+        .limit(1000);
 
       const rollups = (rollupRows || []) as CommitteeRollupRow[];
+      const externalFinances = externalFinanceRows || [];
+      const ieExpenditures = (ieRows || []) as Array<{ spending_committee_name: string | null; cycle: string | null; expenditure_date: string | null }>;
+
+      if (!contribRow && rollups.length === 0 && externalFinances.length === 0 && ieExpenditures.length === 0) {
+        return null;
+      }
+
       const filtered = cycle && cycle !== 'all' ? rollups.filter(r => r.cycle === cycle) : rollups;
       const totals = filtered.reduce(
         (acc, r) => ({
@@ -525,7 +559,32 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
         }),
         { donor_count: 0, contribution_count: 0, total_raised: 0 },
       );
-      let cycles = Array.from(new Set(rollups.map(r => r.cycle).filter(Boolean))) as string[];
+      const matchingExternalFinances = cycle && cycle !== 'all'
+        ? externalFinances.filter((r) => r.cycle === cycle)
+        : externalFinances;
+      const externalRaised = matchingExternalFinances.reduce(
+        (sum, r) => sum + Number(r.total_raised ?? 0),
+        0,
+      );
+      const externalLastSync = matchingExternalFinances
+        .map((r) => r.last_fec_check)
+        .filter(Boolean)
+        .sort()
+        .at(-1) ?? null;
+      let financeSource: CommitteeSummary['financeSource'] = totals.total_raised > 0 || rollups.length > 0
+        ? 'candidate_rollup'
+        : undefined;
+
+      let cycles = Array.from(new Set([
+        ...rollups.map(r => r.cycle).filter(isPresentString),
+        ...externalFinances.map(r => r.cycle).filter(isPresentString),
+        ...ieExpenditures.map(r => r.cycle).filter(isPresentString),
+      ])).sort((a, b) => Number(b) - Number(a)) as string[];
+
+      if (totals.total_raised === 0 && externalRaised > 0) {
+        totals.total_raised = externalRaised;
+        financeSource = 'external_fec';
+      }
 
       // If rollups are missing/empty but contributions exist, derive totals from contributions table
       if (contribRow && totals.total_raised === 0 && totals.contribution_count === 0) {
@@ -552,21 +611,34 @@ export const useCommittee = (committeeId: string | undefined, cycle = 'all') => 
           totals.total_raised = raised;
           totals.contribution_count = rows.length;
           totals.donor_count = donorKeys.size;
+          financeSource = 'local_contributions';
           cycles = Array.from(cycleSet).sort((a, b) => Number(b) - Number(a));
         }
       }
 
+      const ieLastDate = ieExpenditures.find((r) => r.expenditure_date)?.expenditure_date ?? null;
+      if (!financeSource && ieExpenditures.length > 0) {
+        financeSource = 'independent_expenditures';
+      }
+
       const summary: CommitteeSummary = {
         id: committeeId,
-        name: pickBetter(contribRow?.recipient_committee_name ?? null),
+        name: pickBetter(
+          contribRow?.recipient_committee_name
+          ?? matchingExternalFinances.find((r) => r.committee_name)?.committee_name
+          ?? externalFinances.find((r) => r.committee_name)?.committee_name
+          ?? ieExpenditures.find((r) => r.spending_committee_name)?.spending_committee_name
+          ?? null,
+        ),
         aliasName: null,
         fecCommitteeId: committeeId,
+        financeSource,
         designation: null,
         designationFull: null,
         role: null,
         cycles,
-        lastSyncDate: null,
-        lastContributionDate: contribRow?.receipt_date ?? null,
+        lastSyncDate: externalLastSync,
+        lastContributionDate: contribRow?.receipt_date ?? ieLastDate,
         localItemizedTotal: null,
         fecItemizedTotal: null,
         candidateId: null,
