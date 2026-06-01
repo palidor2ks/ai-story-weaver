@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-
+import { Share2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { IconActionButton } from '@/components/ui/icon-action-button';
+import { ShareCardModal } from '@/components/share/ShareCardModal';
+import { normalizeInvokeError } from '@/components/RecipientAIAnalysisDialog';
+import { useAuth } from '@/context/AuthContext';
+import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
+import { supabase } from '@/integrations/supabase/client';
+import { BRAND_HOST } from '@/lib/brand';
+import { choosePrimaryCauseLabel } from '@/lib/committeeCauseDisplay';
 import { proxiedImageUrl } from '@/lib/imageProxy';
 
 const imageUrlToBase64 = async (url: string): Promise<string> => {
@@ -14,16 +23,6 @@ const imageUrlToBase64 = async (url: string): Promise<string> => {
     reader.readAsDataURL(blob);
   });
 };
-import { Share2 } from 'lucide-react';
-import { IconActionButton } from '@/components/ui/icon-action-button';
-import { ShareCardModal } from '@/components/share/ShareCardModal';
-import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { choosePrimaryCauseLabel } from '@/lib/committeeCauseDisplay';
-import { useAuth } from '@/context/AuthContext';
-import { normalizeInvokeError } from '@/components/RecipientAIAnalysisDialog';
-
 interface TopicComparison {
   topicName: string;
   score: number;
@@ -118,8 +117,7 @@ export const ShareProfileButton = ({
     };
   }, [candidateImages]);
 
-  const brandHost =
-    typeof window !== 'undefined' ? window.location.host.replace(/^www\./, '') : 'polipulseapp.com';
+  const brandHost = BRAND_HOST;
 
   // Prefer IE rows for the same cycle as the finance card, but fall back to
   // the latest available IE cycle when the current finance cycle has no IE data.
