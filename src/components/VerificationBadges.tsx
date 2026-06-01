@@ -88,7 +88,23 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Parse structured error body from FunctionsHttpError (non-2xx).
+        const ctx: any = (error as any).context;
+        let serverMessage: string | undefined;
+        if (ctx) {
+          try {
+            const body = typeof ctx.json === 'function' ? await ctx.json() : null;
+            serverMessage = body?.message || body?.error;
+          } catch {
+            try {
+              const text = typeof ctx.text === 'function' ? await ctx.text() : null;
+              if (text) serverMessage = text;
+            } catch { /* ignore */ }
+          }
+        }
+        throw new Error(serverMessage || error.message || 'Failed to start identity verification');
+      }
 
       if (data.error) {
         toast.error(data.message || 'ID.me verification is not configured');
@@ -102,7 +118,7 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
       window.location.href = data.auth_url;
     } catch (error: any) {
       console.error('ID.me verification error:', error);
-      toast.error('Failed to start identity verification');
+      toast.error(error?.message || 'Failed to start identity verification');
     } finally {
       setIsIdMeLoading(false);
     }
