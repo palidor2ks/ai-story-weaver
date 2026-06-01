@@ -197,8 +197,10 @@ serve(async (req) => {
     const remaining = Math.max(0, (queueBefore ?? candidates.length) - results.success);
 
     return new Response(JSON.stringify({
+      success: true,
       processed: candidates.length,
       successCount: results.success,
+      partialCount: results.partial,
       failedCount: results.failed,
       totalDonorsImported: results.totalDonorsImported,
       totalRaised: results.totalRaised,
@@ -207,7 +209,7 @@ serve(async (req) => {
       remaining,
       queueBefore: queueBefore ?? null,
       scope, mode, cycle,
-      message: `Synced ${results.success}/${candidates.length} (scope=${scope}, mode=${mode}). ${results.totalDonorsImported} donors imported. Remaining in queue: ${remaining}.`,
+      message: `Synced ${results.success}/${candidates.length} fully (${results.partial} partial, ${results.failed} failed). ${results.totalDonorsImported} donors imported. Remaining in queue: ${remaining}.`,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {
