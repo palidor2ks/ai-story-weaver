@@ -38,7 +38,6 @@ function CandidateRow({ c, ieMap }: { c: UpcomingCandidate; ieMap?: IETotalsMap 
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {c.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={c.image_url} alt={c.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
         ) : (
           <div className="w-8 h-8 rounded-full bg-muted flex-shrink-0" />
