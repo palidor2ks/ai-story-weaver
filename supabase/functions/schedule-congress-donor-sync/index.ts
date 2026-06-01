@@ -63,12 +63,7 @@ serve(async (req) => {
 
   const startedAt = new Date().toISOString();
 
-  // Advisory lock so overlapping ticks no-op. Key chosen per (scope,mode) pair.
-  const lockKey = scope === 'congress_visible' ? (mode === 'refresh' ? 730001 : 730002) : 730000;
-  const { data: lockRow } = await supabase.rpc('pg_try_advisory_lock' as never, { key: lockKey } as never).catch(() => ({ data: null }));
-  // The RPC above won't exist; use raw SQL instead via a transient connection: we just skip if can't acquire.
-  // Simpler: rely on cron not stacking + 150s edge timeout. (No-op here.)
-  void lockRow;
+  // Overlap protection: rely on cron not stacking + 150s edge timeout.
 
   // Step 1 — discover candidates missing FEC IDs (full list for diagnostics, attempt fill for top N)
   let fecIdsFilled = 0;
