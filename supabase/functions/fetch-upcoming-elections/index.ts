@@ -831,16 +831,21 @@ Deno.serve(async (req) => {
       }),
     }));
 
-    const context = { state, district, city };
-    const scopedOut = out.filter((e) => electionMatchesUserContext(e, context));
+    const context = { state, district, city, ward };
+    const scopedOut = out
+      .filter((e) => electionMatchesUserContext(e, context))
+      .map((e) => ({ ...e, candidates: filterCandidatesByWard(e.candidates, ward) }))
+      .filter((e) => e.candidates.length > 0);
+    const dedupedOut = mergeDuplicateElections(scopedOut);
     console.log('[fetch-upcoming-elections] readback scope', {
-      state, district, city, readRows: out.length, returnedRows: scopedOut.length,
+      state, district, city, ward,
+      readRows: out.length, scopedRows: scopedOut.length, returnedRows: dedupedOut.length,
     });
 
     const grouped = {
-      federal: scopedOut.filter(e => e.level === 'federal'),
-      state: scopedOut.filter(e => e.level === 'state'),
-      local: scopedOut.filter(e => e.level === 'local'),
+      federal: dedupedOut.filter(e => e.level === 'federal'),
+      state: dedupedOut.filter(e => e.level === 'state'),
+      local: dedupedOut.filter(e => e.level === 'local'),
     };
 
     return new Response(JSON.stringify(grouped), {
