@@ -159,6 +159,8 @@ export function AutomatedJobsCard() {
       }
       const r = data as {
         ok: boolean;
+        queued?: boolean;
+        runId?: string;
         error: string | null;
         fecIdsFilled: number;
         missingFec: MissingFec[];
@@ -175,6 +177,15 @@ export function AutomatedJobsCard() {
           errors?: string[];
         };
       };
+
+      // Background pattern: the function returns immediately with queued=true.
+      // Real results land in donor_sync_runs and the 15s poll picks them up.
+      if (r.queued) {
+        toast.success('Run queued — watch the history below for progress (refreshes every 15s).', { id: toastId });
+        qc.invalidateQueries({ queryKey: ['donor-sync-runs'] });
+        return;
+      }
+
       const s = r.syncResult ?? {};
       setDiagnostics({
         mode,
