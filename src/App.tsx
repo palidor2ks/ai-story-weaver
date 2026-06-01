@@ -29,7 +29,6 @@ const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const DataDeletion = lazy(() => import("./pages/DataDeletion"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
-const IdMeCallback = lazy(() => import("./pages/IdMeCallback"));
 const Committees = lazy(() => import("./pages/Committees").then((m) => ({ default: m.Committees })));
 const CommitteeProfile = lazy(() => import("./pages/CommitteeProfile").then((m) => ({ default: m.CommitteeProfile })));
 const Blog = lazy(() => import("./pages/Blog"));
@@ -98,7 +97,6 @@ const AppRoutes = () => (
       <Route path="/p/:slug" element={<Poll />} />
       <Route path="/p/:slug/results" element={<PollResultsPage />} />
       <Route path="/verify-email" element={<RouteGuard requireAuth requireVerifiedEmail={false}><VerifyEmail /></RouteGuard>} />
-      <Route path="/auth/idme-callback" element={<RouteGuard requireAuth requireOnboarding={false}><IdMeCallback /></RouteGuard>} />
       <Route path="/" element={<RootRedirect />} />
       <Route path="/onboarding" element={<RouteGuard requireAuth requireOnboarding={false}><Onboarding /></RouteGuard>} />
       <Route path="/results" element={<RouteGuard requireAuth requireOnboarding><QuizResults /></RouteGuard>} />

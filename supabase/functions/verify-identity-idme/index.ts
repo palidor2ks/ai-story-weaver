@@ -7,26 +7,7 @@ const corsHeaders = {
 
 const IDME_CLIENT_ID = Deno.env.get('IDME_CLIENT_ID');
 const IDME_CLIENT_SECRET = Deno.env.get('IDME_CLIENT_SECRET');
-const IDME_BASE_URL = Deno.env.get('IDME_BASE_URL') || 'https://api.id.me';
-const IDME_SCOPE = Deno.env.get('IDME_SCOPE') || 'openid';
-
-// Hardcoded fallback allowlist; extend via IDME_ALLOWED_REDIRECT_URIS (comma-separated).
-const DEFAULT_ALLOWED_REDIRECT_URIS = [
-  'https://polipulse.lovable.app/auth/idme-callback',
-  'https://polipulseapp.com/auth/idme-callback',
-  'https://www.polipulseapp.com/auth/idme-callback',
-  'https://id-preview--b4a499eb-c11a-4320-8adc-dfe50259459a.lovable.app/auth/idme-callback',
-  'https://b4a499eb-c11a-4320-8adc-dfe50259459a.lovableproject.com/auth/idme-callback',
-  'http://localhost:5173/auth/idme-callback',
-  'http://localhost:8080/auth/idme-callback',
-];
-const ALLOWED_REDIRECT_URIS = new Set<string>([
-  ...DEFAULT_ALLOWED_REDIRECT_URIS,
-  ...(Deno.env.get('IDME_ALLOWED_REDIRECT_URIS') || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean),
-]);
+const IDME_BASE_URL = 'https://api.id.me';
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -69,25 +50,17 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, code, redirect_uri } = body;
 
-    // Validate redirect_uri: explicit allowlist OR any Lovable preview/sandbox host
-    // for this project (e.g. id-preview--*, *.sandbox.lovable.dev, *.lovable.app).
-    // Path must always be /auth/idme-callback.
-    const isAllowedRedirect = (uri: unknown): boolean => {
-      if (typeof uri !== 'string') return false;
-      if (ALLOWED_REDIRECT_URIS.has(uri)) return true;
-      let u: URL;
-      try { u = new URL(uri); } catch { return false; }
-      if (u.pathname !== '/auth/idme-callback') return false;
-      const host = u.hostname.toLowerCase();
-      // Lovable-hosted preview/sandbox subdomains
-      if (u.protocol === 'https:' && (host.endsWith('.lovable.app') || host.endsWith('.lovable.dev') || host.endsWith('.lovableproject.com'))) {
-        return true;
-      }
-      return false;
-    };
-    if (!isAllowedRedirect(redirect_uri)) {
-      console.error('Invalid redirect_uri rejected:', redirect_uri);
-      return new Response(JSON.stringify({ error: 'Invalid redirect_uri', message: `Redirect URI not allowed: ${redirect_uri}` }), {
+    // Allowlist redirect_uris to prevent OAuth authorization code theft.
+    const ALLOWED_REDIRECT_URIS = new Set<string>([
+      'https://polipulse.lovable.app/auth/idme-callback',
+      'https://polipulseapp.com/auth/idme-callback',
+      'https://www.polipulseapp.com/auth/idme-callback',
+      'https://id-preview--b4a499eb-c11a-4320-8adc-dfe50259459a.lovable.app/auth/idme-callback',
+      'http://localhost:5173/auth/idme-callback',
+      'http://localhost:8080/auth/idme-callback',
+    ]);
+    if (typeof redirect_uri !== 'string' || !ALLOWED_REDIRECT_URIS.has(redirect_uri)) {
+      return new Response(JSON.stringify({ error: 'Invalid redirect_uri' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -110,7 +83,7 @@ Deno.serve(async (req) => {
         client_id: IDME_CLIENT_ID,
         redirect_uri: redirect_uri,
         response_type: 'code',
-        scope: IDME_SCOPE,
+        scope: 'openid',
         state: state,
       }).toString();
 
@@ -196,18 +169,6 @@ Deno.serve(async (req) => {
       const userInfo = await userInfoResponse.json();
       console.log('ID.me verification successful for user:', user.id);
 
-      const verificationId: string | undefined = userInfo.uuid || userInfo.sub;
-      if (!verificationId || typeof verificationId !== 'string') {
-        console.error('ID.me userinfo missing uuid/sub:', userInfo);
-        return new Response(JSON.stringify({
-          error: 'Verification failed',
-          message: 'ID.me did not return a verification identifier.'
-        }), {
-          status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
       // Update the user's profile with verification status
       const { error: updateError } = await supabase
         .from('profiles')
@@ -215,7 +176,7 @@ Deno.serve(async (req) => {
           identity_verified: true,
           identity_verified_at: new Date().toISOString(),
           identity_provider: 'id.me',
-          identity_verification_id: verificationId,
+          identity_verification_id: userInfo.uuid || userInfo.sub,
         })
         .eq('id', user.id);
 

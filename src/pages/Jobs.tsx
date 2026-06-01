@@ -164,7 +164,7 @@ export default function Jobs() {
               </p>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90">
-                  <a href="mailto:admin@polipulseapp.com?subject=Pulse%20Jobs%20Application">
+                  <a href="mailto:support@polipulseapp.com?subject=Pulse%20Jobs%20Application">
                     Apply by email
                     <Mail className="ml-2 h-4 w-4" />
                   </a>
@@ -247,7 +247,7 @@ export default function Jobs() {
               </p>
             </div>
             <Button asChild size="lg">
-              <a href="mailto:admin@polipulseapp.com?subject=Pulse%20Jobs%20Application">
+              <a href="mailto:support@polipulseapp.com?subject=Pulse%20Jobs%20Application">
                 Apply by email
                 <Mail className="ml-2 h-4 w-4" />
               </a>
