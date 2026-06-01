@@ -43,6 +43,96 @@ const EMPTY: UpcomingElectionsResult = { federal: [], state: [], local: [] };
 
 const MAX_LOOKAHEAD_DAYS = 550;
 
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeJurisdictionKey(jurisdiction: string | null | undefined, state: string | null | undefined): string {
+  let normalized = normalizeText(jurisdiction);
+  if (!normalized) return normalizeText(state);
+
+  normalized = normalized
+    .replace(/\btownship of\b/g, '')
+    .replace(/\bcity of\b/g, '')
+    .replace(/\bborough of\b/g, '')
+    .replace(/\btown of\b/g, '')
+    .replace(/\bvillage of\b/g, '')
+    .replace(/\btownship\b/g, '')
+    .replace(/,?\s*[a-z\s]+county\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return normalized || normalizeText(state);
+}
+
+function candidateKey(candidate: UpcomingCandidate): string {
+  const name = normalizeText(candidate.name);
+  const office = normalizeText(candidate.office);
+  const party = normalizeText(candidate.party);
+  const state = normalizeText(candidate.state);
+  const district = normalizeText(candidate.district);
+
+  return [name, party, office, state, district].join('|');
+}
+
+function mergeCandidate(existing: UpcomingCandidate, incoming: UpcomingCandidate): UpcomingCandidate {
+  return {
+    ...existing,
+    ...incoming,
+    candidate_id: existing.candidate_id || incoming.candidate_id,
+    image_url: existing.image_url ?? incoming.image_url,
+    overall_score: existing.overall_score ?? incoming.overall_score,
+    confidence: existing.confidence ?? incoming.confidence,
+    answers_source: existing.answers_source ?? incoming.answers_source,
+    source_url: existing.source_url ?? incoming.source_url,
+    is_incumbent: existing.is_incumbent || incoming.is_incumbent,
+    is_pending_research: existing.is_pending_research && incoming.is_pending_research,
+    office: incoming.office.length > existing.office.length ? incoming.office : existing.office,
+    district: existing.district ?? incoming.district,
+  };
+}
+
+function mergeCandidates(candidates: UpcomingCandidate[]): UpcomingCandidate[] {
+  const byId = new Map<string, UpcomingCandidate>();
+  const bySignature = new Map<string, string>();
+
+  for (const candidate of candidates) {
+    const signature = candidateKey(candidate);
+    const existingId = byId.has(candidate.candidate_id)
+      ? candidate.candidate_id
+      : bySignature.get(signature);
+
+    if (!existingId) {
+      byId.set(candidate.candidate_id, candidate);
+      bySignature.set(signature, candidate.candidate_id);
+      continue;
+    }
+
+    const merged = mergeCandidate(byId.get(existingId)!, candidate);
+    byId.set(existingId, merged);
+    bySignature.set(signature, existingId);
+  }
+
+  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function mergeElection(existing: UpcomingElection, incoming: UpcomingElection): UpcomingElection {
+  const candidates = mergeCandidates([...existing.candidates, ...incoming.candidates]);
+
+  return {
+    ...existing,
+    name: incoming.name.length > existing.name.length ? incoming.name : existing.name,
+    jurisdiction: existing.jurisdiction ?? incoming.jurisdiction,
+    state: existing.state ?? incoming.state,
+    source: existing.source.includes(incoming.source) ? existing.source : `${existing.source}, ${incoming.source}`,
+    candidates,
+  };
+}
+
 function normalizeUpcomingElections(data: UpcomingElectionsResult): UpcomingElectionsResult {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -55,29 +145,25 @@ function normalizeUpcomingElections(data: UpcomingElectionsResult): UpcomingElec
   };
 
   const filterAndDedupe = (rows: UpcomingElection[]) => {
-    const filtered = rows
-      .filter((row) => {
-        const d = new Date(`${row.election_date}T00:00:00`);
-        return d >= today && d <= maxDate;
-      })
-      .sort((a, b) => toTime(a.election_date) - toTime(b.election_date));
+    const byElection = new Map<string, UpcomingElection>();
 
-    const byRace = new Map<string, UpcomingElection>();
-    for (const row of filtered) {
-      for (const c of row.candidates) {
-        const raceKey = [
-          c.office.toLowerCase(),
-          (c.state || row.state || '').toLowerCase(),
-          (c.district || row.jurisdiction || '').toLowerCase(),
-          row.election_type.toLowerCase(),
-        ].join('|');
+    for (const row of rows) {
+      const d = new Date(`${row.election_date}T00:00:00`);
+      if (d < today || d > maxDate) continue;
 
-        if (!byRace.has(raceKey)) byRace.set(raceKey, row);
-      }
+      const key = [
+        row.election_date,
+        normalizeText(row.election_type),
+        row.level,
+        normalizeJurisdictionKey(row.jurisdiction, row.state),
+      ].join('|');
+
+      const normalizedRow = { ...row, candidates: mergeCandidates(row.candidates) };
+      const existing = byElection.get(key);
+      byElection.set(key, existing ? mergeElection(existing, normalizedRow) : normalizedRow);
     }
 
-    const allowedIds = new Set(Array.from(byRace.values()).map((r) => r.id));
-    return filtered.filter((r) => allowedIds.has(r.id));
+    return Array.from(byElection.values()).sort((a, b) => toTime(a.election_date) - toTime(b.election_date));
   };
 
   return {
