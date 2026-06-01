@@ -352,6 +352,17 @@ export const Onboarding = () => {
         answers: allAnswers,
       });
 
+      // Fire badge events (fire-and-forget)
+      const { logBadgeEvent } = await import('@/lib/badges');
+      logBadgeEvent('onboarding_completed');
+      logBadgeEvent('priority_picker', { topic_count: allTopicIds.length });
+      if (selectedTopicIds.length > 0) logBadgeEvent('federal_quiz_completed');
+      if (selectedLocalTopicIds.length > 0) logBadgeEvent('local_quiz_completed');
+      const allQuestionsById = new Map([...activeQuestions, ...activeLocalQuestions].map(q => [q.id, q.topicId]));
+      for (const ans of allAnswers) {
+        logBadgeEvent('question_answered', { question_id: ans.questionId, topic_id: allQuestionsById.get(ans.questionId) });
+      }
+
       toast.success('Profile created successfully!');
       navigate('/results');
     } catch (error) {
