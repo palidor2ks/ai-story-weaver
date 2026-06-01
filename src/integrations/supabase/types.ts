@@ -4511,6 +4511,14 @@ export type Database = {
         Args: { p_event_type: string; p_payload?: Json }
         Returns: string
       }
+      rebuild_donors_for_committee: {
+        Args: {
+          p_candidate_id?: string
+          p_committee_id: string
+          p_cycle: string
+        }
+        Returns: number
+      }
       recalculate_all_coverage_tiers: {
         Args: never
         Returns: {
