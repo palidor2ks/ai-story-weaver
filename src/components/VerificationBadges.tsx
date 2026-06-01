@@ -152,6 +152,7 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
         toast.info('Please verify your registration manually using the link below');
       } else if (data.verified) {
         toast.success('Voter registration verified!');
+        logBadgeEvent('voter_verified');
         queryClient.invalidateQueries({ queryKey: ['profile'] });
         setIsVoterDialogOpen(false);
       } else {
