@@ -90,6 +90,7 @@ export const RelevantNewsFeed = ({
               href={item.url}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => logBadgeEvent('news_opened', { url: item.url, source: item.source })}
               className="block rounded-md border p-3 transition-colors group hover:bg-accent/40 cursor-pointer"
             >
                 <div className="flex items-start justify-between gap-3">
