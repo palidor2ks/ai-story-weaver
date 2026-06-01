@@ -151,6 +151,8 @@ const DonorProfile = () => {
   const [showAllContributors, setShowAllContributors] = useState(false);
   const [profileCycleFilter, setProfileCycleFilter] = useState<string>('all');
 
+  useEffect(() => { if (id) logBadgeEvent('donor_viewed', { donor_id: id }); }, [id]);
+
   // Fetch the specific donor record
   const { data: donor, isLoading: donorLoading } = useQuery({
     queryKey: ['donor', id],
