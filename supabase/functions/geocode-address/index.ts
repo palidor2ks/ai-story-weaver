@@ -88,7 +88,7 @@ serve(async (req) => {
     // 1. Try cache first
     const { data: cached } = await serviceClient
       .from('civic_lookup_cache')
-      .select('lat, lng, state, district, city, matched_address, cached_at')
+      .select('lat, lng, state, district, city, matched_address, payload, cached_at')
       .eq('normalized_address', normalized)
       .maybeSingle();
 
@@ -96,6 +96,7 @@ serve(async (req) => {
       const ageDays = (Date.now() - new Date(cached.cached_at).getTime()) / (1000 * 60 * 60 * 24);
       if (ageDays < CACHE_TTL_DAYS && (cached.lat !== null || cached.state !== null)) {
         console.log(`[Geocode] Cache HIT for "${normalized}" (age ${ageDays.toFixed(1)}d)`);
+        const payload = (cached.payload as any) ?? {};
         return new Response(JSON.stringify({
           district: cached.district,
           state: cached.state,
@@ -103,6 +104,8 @@ serve(async (req) => {
           lat: cached.lat,
           lng: cached.lng,
           matchedAddress: cached.matched_address,
+          divisions: payload.divisions ?? [],
+          ward: payload.ward ?? null,
           cached: true,
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
