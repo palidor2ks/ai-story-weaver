@@ -34,6 +34,7 @@ import { PartyAnswersPanel } from "@/components/admin/PartyAnswersPanel";
 import TopicReviewPanel from "@/components/admin/TopicReviewPanel";
 import { DonorImportPanel } from "@/components/admin/DonorImportPanel";
 import { BulkDonorSyncCard } from "@/components/admin/BulkDonorSyncCard";
+import { AutomatedJobsCard } from "@/components/admin/AutomatedJobsCard";
 import { BulkCommitteeTotalsCard } from "@/components/admin/BulkCommitteeTotalsCard";
 import { BulkAnswerValidation } from "@/components/admin/BulkAnswerValidation";
 import { IndependentExpenditureImportCard } from "@/components/admin/IndependentExpenditureImportCard";
@@ -795,6 +796,7 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="donor-import" className="space-y-6">
+            <AutomatedJobsCard />
             <BulkDonorSyncCard />
             <BulkCommitteeTotalsCard />
             <IndependentExpenditureImportCard onImportComplete={() => setIeHistoryRefresh(k => k + 1)} />
