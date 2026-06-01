@@ -294,6 +294,7 @@ export const ShareCardModal = ({
     try {
       await navigator.clipboard.writeText(finalText);
       toast.success('Caption copied to clipboard.');
+      fireShareCompleted('copy_caption');
     } catch {
       toast.error('Could not copy caption.');
     }
