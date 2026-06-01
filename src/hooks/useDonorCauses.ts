@@ -111,19 +111,11 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
 
       // 1. Apply direct donor-level cause overrides first. These let admins tag
       //    a donor search result without creating a donor alias.
-      const directOverrides = (
-        await Promise.all(
-          chunk(names, 100).map(async (nameBatch) => {
-            const { data, error } = await (supabase as any)
-              .from('donor_cause_overrides')
-              .select('donor_name, donor_type, primary_cause_id, assigned_by, committee_causes!donor_cause_overrides_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
-              .in('donor_name', nameBatch)
-              .in('donor_type', types);
-            if (error) throw error;
-            return data ?? [];
-          })
-        )
-      ).flat();
+      const { data: directOverrides, error: directErr } = await (supabase as any)
+        .from('donor_cause_overrides')
+        .select('donor_name, donor_type, primary_cause_id, assigned_by, committee_causes!donor_cause_overrides_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
+        .in('donor_type', types);
+      if (directErr) throw directErr;
 
       for (const row of (directOverrides ?? []) as any[]) {
         const c = row.committee_causes;
