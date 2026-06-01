@@ -912,7 +912,7 @@ export const UserProfile = () => {
               </div>
             ) : (
               <p className="text-muted-foreground text-center py-4">
-                No representatives found for your address.
+                No current representatives found for your address.
               </p>
             )}
           </CardContent>
