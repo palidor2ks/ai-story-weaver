@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowLeft, DollarSign, Users, Landmark, MapPin, Calendar, RefreshCw, TrendingUp, Sparkles } from 'lucide-react';
 import { useCommittee, useCommitteeDonors } from '@/hooks/useCommittees';
-import { useFetchCommitteeDonors } from '@/hooks/useImportExternalCommittee';
+import { useFetchCommitteeDonors, useImportExternalCommittee } from '@/hooks/useImportExternalCommittee';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { useIEExclusions, useRestoreCommittee } from '@/hooks/useIEExclusions';
 import { toast } from 'sonner';
