@@ -839,8 +839,10 @@ async function persistAll(supabase: any, rows: ElectionPayload[]) {
     await persistCandidates(supabase, electionId, row.candidates, newCandidateIds, newCandidateMeta);
   }
 
-  // Kick off background research for up to MAX_RESEARCH_PER_RUN new candidates.
-  const toResearch = newCandidateIds.slice(0, MAX_RESEARCH_PER_RUN);
+  // Split research budget so AI-onboarded candidates don't crowd out FEC/Civic ones (or vice versa).
+  const aiIds = newCandidateIds.filter((id) => newCandidateMeta.get(id)?.source === 'ai_research');
+  const otherIds = newCandidateIds.filter((id) => newCandidateMeta.get(id)?.source !== 'ai_research');
+  const toResearch = [...otherIds.slice(0, MAX_RESEARCH_FEC_CIVIC), ...aiIds.slice(0, MAX_RESEARCH_AI)];
   if (toResearch.length > 0) {
     EdgeRuntime.waitUntil((async () => {
       for (const id of toResearch) {
