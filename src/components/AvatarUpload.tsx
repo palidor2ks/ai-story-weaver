@@ -67,6 +67,7 @@ export const AvatarUpload = ({ userId, currentAvatarUrl, userName, onAvatarChang
       setPreviewUrl(urlWithCacheBust);
       onAvatarChange(urlWithCacheBust);
       toast.success('Avatar updated successfully!');
+      logBadgeEvent('avatar_uploaded');
     } catch (error: any) {
       console.error('Error uploading avatar:', error);
       toast.error(error.message || 'Failed to upload avatar');
