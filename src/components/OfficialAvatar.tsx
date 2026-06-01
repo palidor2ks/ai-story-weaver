@@ -85,7 +85,7 @@ export const OfficialAvatar = ({
       {hasValidImage ? (
         <img
           src={imageUrl}
-          alt={name}
+          alt={`Portrait of ${name}`}
           loading="lazy"
           decoding="async"
           width="160"
