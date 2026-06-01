@@ -679,12 +679,13 @@ Deno.serve(async (req) => {
       // Client polls and re-fetches; cached rows are returned immediately below.
       EdgeRuntime.waitUntil((async () => {
         try {
-          const [fecRows, civicRows] = await Promise.all([
+          const [fecRows, civicRows, aiRows] = await Promise.all([
             fetchFEC(state, district),
             fetchGoogleCivic(address ?? ''),
+            fetchAIUpcomingElections({ state, district, city, address }),
           ]);
-          console.log('[fetch-upcoming-elections] fetched rows', { fec: fecRows.length, civic: civicRows.length });
-          await persistAll(supabase, [...fecRows, ...civicRows]);
+          console.log('[fetch-upcoming-elections] fetched rows', { fec: fecRows.length, civic: civicRows.length, ai: aiRows.length });
+          await persistAll(supabase, [...fecRows, ...civicRows, ...aiRows]);
           console.log('[fetch-upcoming-elections] background persist complete');
         } catch (e) {
           console.error('[fetch-upcoming-elections] background error', e);
