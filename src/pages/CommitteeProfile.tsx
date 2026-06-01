@@ -45,6 +45,7 @@ export const CommitteeProfile = () => {
   const { data: ieExclusions = [] } = useIEExclusions();
   const restoreCommittee = useRestoreCommittee();
   const fetchDonorsMutation = useFetchCommitteeDonors();
+  const importCommitteeMutation = useImportExternalCommittee();
 
   const isAdmin = adminData?.isAdmin ?? false;
   const exclusion = useMemo(
