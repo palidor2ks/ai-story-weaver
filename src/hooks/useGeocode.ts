@@ -8,6 +8,8 @@ export interface GeocodeResult {
   lat: number | null;
   lng: number | null;
   matchedAddress?: string | null;
+  ward?: string | null;
+  divisions?: string[];
 }
 
 /**
