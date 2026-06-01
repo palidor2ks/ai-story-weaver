@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ShareCardModal } from '@/components/share/ShareCardModal';
+import { BRAND_HOST } from '@/lib/brand';
 
 interface ShareDonorButtonProps {
   donorName: string;
@@ -25,8 +26,7 @@ export const ShareDonorButton = ({
   profileUrl,
 }: ShareDonorButtonProps) => {
   const [open, setOpen] = useState(false);
-  const brandHost =
-    typeof window !== 'undefined' ? window.location.host.replace(/^www\./, '') : 'polipulseapp.com';
+  const brandHost = BRAND_HOST;
 
   return (
     <>
