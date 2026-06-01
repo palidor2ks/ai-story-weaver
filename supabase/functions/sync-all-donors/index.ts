@@ -20,7 +20,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('VITE_SUPABASE_PUBLISHABLE_KEY') ?? '';
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -28,7 +28,8 @@ serve(async (req) => {
     }
 
     const bearer = authHeader.slice('Bearer '.length).trim();
-    const isServiceRole = bearer === supabaseServiceKey;
+    const internalToken = req.headers.get('x-internal-service-token')?.trim();
+    const isServiceRole = bearer === supabaseServiceKey || internalToken === supabaseServiceKey;
 
     // Caller auth: allow service-role (cron / wrapper) OR an admin user JWT
     if (!isServiceRole) {
@@ -167,19 +168,27 @@ serve(async (req) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Authorization': `Bearer ${anonKey}`,
             'apikey': anonKey,
+            'x-internal-service-token': supabaseServiceKey,
           },
-          body: JSON.stringify({ candidateId: candidate.id, fecCandidateId: candidate.fec_candidate_id, cycle }),
+          body: JSON.stringify({ candidateId: candidate.id, fecCandidateId: candidate.fec_candidate_id, cycle, highVolumeMode: true, maxPages: 2 }),
           signal: AbortSignal.timeout(candidateTimeoutMs),
         });
         const data = await resp.json().catch(() => ({}));
         const durationMs = Date.now() - t0;
         if (!resp.ok) {
-          results.failed++;
           const msg = `HTTP ${resp.status} ${data?.error || ''}`.trim();
-          results.errors.push(`${candidate.name}: ${msg}`);
-          perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs, error: msg });
+          const shouldResume = resp.status === 429 || resp.status === 504 || resp.status >= 500 || data?.hasMore;
+          if (shouldResume) {
+            results.partial++;
+            results.errors.push(`${candidate.name}: partial — ${msg}; will resume next tick`);
+            perCandidate.push({ ...base, status: 'success', imported: 0, totalRaised: 0, durationMs, hasMore: true, stoppedDueToTimeout: true, error: msg });
+          } else {
+            results.failed++;
+            results.errors.push(`${candidate.name}: ${msg}`);
+            perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs, error: msg });
+          }
         } else if (data?.success) {
           const imported = data.imported || 0;
           const totalRaised = data.totalRaised || 0;
@@ -204,7 +213,7 @@ serve(async (req) => {
         await new Promise((r) => setTimeout(r, 1000));
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
-        const timedOut = err instanceof DOMException && err.name === 'TimeoutError';
+        const timedOut = (err instanceof DOMException && err.name === 'TimeoutError') || /timeout|timed out|aborted|worker_limit|546/i.test(msg);
         if (timedOut) {
           // Cursor is persisted incrementally inside fetch-fec-donors, so the next cron
           // tick will resume this candidate where it left off. Classify as partial, not

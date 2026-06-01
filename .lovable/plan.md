@@ -1,26 +1,41 @@
-## Problem
-The live logs still show `fetch-fec-donors` running for 128s after `Runtime limit reached mid-pagination`, then doing expensive donor/rollup work. That means the active backfill path is still timing out instead of returning a clean partial result for the next cron run.
+## Plan: make donor backfill resilient by design
 
-## Plan
-1. **Confirm deployed/runtime mismatch**
-   - Check whether the deployed `fetch-fec-donors` code is behind the local code changes, because the live log message does not match the current source message.
-   - Redeploy only the affected edge functions if needed: `fetch-fec-donors`, `sync-all-donors`, and `fetch-fec-candidate-id`.
+The current path is still too monolithic: even after timeout guards, `fetch-fec-donors` can spend 100+ seconds flushing donors/rollups/reconciliation after paging, and the scheduler can still receive auth/timeout failures. I’ll make the backfill more drastic and intentionally small per invocation.
 
-2. **Make timeout exits truly fast**
-   - In `fetch-fec-donors`, when the 25s page budget is reached:
-     - save only the current contribution chunk and cursor,
-     - skip full donor re-flush,
-     - skip rollup/reconciliation work,
-     - immediately return a `success: true`, `hasMore: true`, `stoppedDueToTimeout: true` response.
-   - This prevents the Josh Riley-style path from spending another 100s after deciding to stop.
+### 1. Fix the immediate 401 regression
+- Update `schedule-congress-donor-sync` and `sync-all-donors` calls so nested function calls use a deploy-safe internal token pattern.
+- Ensure `sync-all-donors`, `fetch-fec-donors`, and `fetch-fec-candidate-id` all accept service-role calls consistently while preserving admin JWT checks for UI users.
 
-3. **Prevent wrapper timeouts from becoming errors**
-   - In `sync-all-donors`, keep classifying nested timeouts as `partial`, not `failed`.
-   - Add a shorter nested-call timeout if needed so the wrapper responds before Supabase’s gateway limit.
+### 2. Hard-limit each donor import to tiny chunks
+- Change `sync-all-donors` to call `fetch-fec-donors` with conservative settings:
+  - `limit = 1` candidate at a time
+  - `highVolumeMode = true`
+  - `maxPages` reduced to a tiny page count per invocation
+- This makes every backfill tick intentionally partial instead of trying to finish a large candidate in one edge runtime.
 
-4. **Verify with the real backfill path**
-   - Run the deployed `sync-all-donors` function with `scope: congress_visible`, `mode: backfill`, `limit: 1`, `cycle: 2024`.
-   - Check logs confirm the result is either fully complete or cleanly partial, with no 504/546 and no long post-timeout donor flush/rollup.
+### 3. Remove expensive work from partial runs
+- In `fetch-fec-donors`, when a run is partial (`hasMore=true` or timeout/rate-limit):
+  - save contributions and cursor only
+  - skip donor aggregate flushing
+  - skip committee rollups
+  - skip finance reconciliation
+  - return immediately with `success: true`, `hasMore: true`, `stoppedDueToTimeout: true`
+- Only run donor aggregate flush, rollups, FEC totals, reconciliation, and `last_donor_sync` once the committee/candidate is complete.
 
-## Expected result
-Large candidates will no longer repeatedly error. They will import a small chunk, save the cursor, return as partial, and continue on the next scheduled run until complete.
+### 4. Stop loading thousands of old donors on resume
+- Remove the resume-time load of all existing donors into memory.
+- For partial chunks, treat contributions as the durable source of truth.
+- Rebuild/upsert donor aggregates only at completion, or with a small bounded batch if completion happens inside the current invocation.
+
+### 5. Make failures non-blocking
+- Treat nested fetch timeouts, 429s, 504s, and worker-limit style errors as partial progress, not failed candidates.
+- Keep cursor state so the next scheduled run continues rather than retrying the same expensive page forever.
+
+### 6. Deploy and verify
+- Deploy the three affected edge functions.
+- Run a one-candidate backfill test.
+- Confirm the latest `donor_sync_runs` row shows `partial` or `completed`, not `HTTP 401`, `HTTP 504`, or failed timeout.
+- Check edge logs for short execution times and no post-timeout donor flush/rollup.
+
+### Expected behavior
+Backfill will take more cron ticks for very large candidates, but it should stop throwing runtime errors. Each invocation should do a small durable slice, save its cursor, return cleanly, and resume on the next run.

@@ -21,14 +21,15 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('VITE_SUPABASE_PUBLISHABLE_KEY') ?? '';
   const supabase = createClient(supabaseUrl, serviceKey);
 
   // Auth: admin user OR service-role (pg_cron passes anon — accept that too since this fn
   // does only safe, scoped work and we need pg_cron to invoke it).
   const auth = req.headers.get('Authorization') ?? '';
   const bearer = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-  const isServiceOrAnon = bearer === serviceKey || bearer === anonKey;
+  const apiKeyHeader = req.headers.get('apikey')?.trim() ?? '';
+  const isServiceOrAnon = bearer === serviceKey || apiKeyHeader === serviceKey || (anonKey && (bearer === anonKey || apiKeyHeader === anonKey));
   let triggeredBy = 'cron';
 
   if (!isServiceOrAnon) {
@@ -118,7 +119,7 @@ serve(async (req) => {
           try {
             const r = await fetch(`${supabaseUrl}/functions/v1/fetch-fec-candidate-id`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}`, 'apikey': anonKey },
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey, 'x-internal-service-token': serviceKey },
               body: JSON.stringify({ candidateId: c.id, name: c.name, state: c.state, office: c.office }),
             });
             if (r.ok) { fecIdsFilled++; entry.filled = true; }
@@ -140,7 +141,7 @@ serve(async (req) => {
     try {
       const r = await fetch(`${supabaseUrl}/functions/v1/sync-all-donors`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}`, 'apikey': anonKey },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey, 'x-internal-service-token': serviceKey },
         body: JSON.stringify({ scope, mode, limit, cycle }),
       });
       syncResult = await r.json().catch(() => ({}));

@@ -419,8 +419,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     const token = authHeader.replace('Bearer ', '').trim();
+    const internalToken = req.headers.get('x-internal-service-token')?.trim();
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const isServiceRole = token === serviceRoleKey;
+    const isServiceRole = token === serviceRoleKey || internalToken === serviceRoleKey;
     if (!isServiceRole) {
       const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
         global: { headers: { Authorization: authHeader } },
@@ -836,6 +837,7 @@ serve(async (req) => {
 
     let totalRaised = 0;
     let totalDonors = 0;
+    let donorRebuildCount = 0;
     let totalContributions = 0;
     let skippedNonContributions = 0;
     let earmarkedCount = 0;
@@ -872,59 +874,13 @@ serve(async (req) => {
       console.log(`[FEC-DONORS] Ignoring saved cursor for ${committeeId}; cursor cycle ${targetCommittee.lastCycle || 'unknown'} does not match requested receipt cycle ${cycle}`);
     }
 
-    // Per-committee aggregation - accumulates across all pages
-    // CRITICAL: We keep donors in memory for the entire sync to properly aggregate
-    // Instead of clearing after flush, we track which donors have been flushed
+    // Per-invocation aggregation only. Contributions are the durable source of truth;
+    // full donor summaries are rebuilt from saved contributions only when a committee completes.
     const aggregatedDonors = new Map<string, AggregatedDonor & { id: string; flushedAmount?: number }>();
     const donorIdsSeen = new Set<string>(); // Track unique donor IDs for accurate count
     
-    // For resumable syncs, load existing donors from DB to continue accumulating
-    // NOTE: For J/U/B/D committees, we load donors with candidate_id = null
     if (resumeFromCursor && cursorMatchesRequestedCycle && targetCommittee.lastIndex && !forceFullSync) {
-      console.log(`[FEC-DONORS] Loading existing ${cycle} receipt-period donors from DB to continue accumulation...`);
-      
-      let existingDonorsQuery = supabase
-        .from('donors')
-        .select('*')
-        .eq('recipient_committee_id', committeeId)
-        .eq('cycle', cycle);
-      
-      if (effectiveCandidateId) {
-        existingDonorsQuery = existingDonorsQuery.eq('candidate_id', effectiveCandidateId);
-      } else {
-        existingDonorsQuery = existingDonorsQuery.is('candidate_id', null);
-      }
-      
-      const { data: existingDonors } = await existingDonorsQuery;
-      
-      if (existingDonors && existingDonors.length > 0) {
-        for (const d of existingDonors) {
-          aggregatedDonors.set(d.id, {
-            id: d.id,
-            name: d.name,
-            type: d.type as 'Individual' | 'PAC' | 'Organization' | 'Unknown',
-            amount: d.amount || 0,
-            transactionCount: d.transaction_count || 1,
-            firstReceiptDate: d.first_receipt_date,
-            lastReceiptDate: d.last_receipt_date,
-            city: d.contributor_city || '',
-            state: d.contributor_state || '',
-            zip: d.contributor_zip || '',
-            employer: d.employer || '',
-            occupation: d.occupation || '',
-            lineNumber: d.line_number || '',
-            isContribution: d.is_contribution ?? true,
-            isTransfer: d.is_transfer ?? false,
-            receiptType: d.is_transfer ? 'transfer' : 'contribution',
-            isConduitOrg: d.is_conduit_org ?? false,
-            conduitName: d.conduit_name,
-            conduitCommitteeId: d.conduit_committee_id,
-            flushedAmount: d.amount || 0 // Track what's already saved to DB
-          });
-          donorIdsSeen.add(d.id);
-        }
-        console.log(`[FEC-DONORS] Loaded ${existingDonors.length} existing donors from DB`);
-      }
+      console.log(`[FEC-DONORS] Resumed ${committeeId} without loading existing donors; donor summaries rebuild from contributions at completion`);
     }
     
     let contributionBatch: Array<{
@@ -1100,18 +1056,44 @@ serve(async (req) => {
         .eq('fec_committee_id', committeeId);
     };
 
+    const returnPartialNow = async (reason: string) => {
+      committeeHasMore = true;
+      stoppedDueToTimeout = true;
+      console.log(`[FEC-DONORS] Partial exit (${reason}) — saving contributions + cursor only; skipping donor rebuild, rollups, and reconciliation`);
+      try { await saveContributionBatch(); } catch (e) { console.error('[FEC-DONORS] partial contribution save error:', e); }
+      try { await saveCursor(true); } catch (e) { console.error('[FEC-DONORS] partial cursor save error:', e); }
+      const elapsedMs = Date.now() - startTime;
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          imported: 0,
+          contributionsImported: committeeContributionsSaved,
+          totalRaised: 0,
+          earmarkedCount,
+          transferCount,
+          cycle,
+          hasMore: true,
+          stoppedDueToTimeout: true,
+          partialReason: reason,
+          committeesProcessed: 1,
+          committeesSynced: committeeId,
+          committeesRemaining: remainingCommittees,
+          committees: committees.map(c => ({ id: c.id, name: c.name })),
+          skippedNonContributions,
+          elapsedMs,
+          hitRateLimit: hitRateLimitDuringRequest,
+          rateLimitWaitMs: lastRateLimitBackoffMs,
+          message: `Partial sync saved ${committeeContributionsSaved} contribution rows for ${committeeName}. Rerun to continue.`
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    };
+
     while (pageCount < maxPages) {
       // Check runtime guard during pagination
       if (Date.now() - startTime > MAX_RUNTIME_MS) {
-        console.log('[FEC-DONORS] Runtime limit reached mid-pagination — fast cursor save and exit (skip donor flush + rollup)');
-        committeeHasMore = true;
-        stoppedDueToTimeout = true;
-        // Persist ONLY contributions + cursor. Skip donor flush (was 100s for Josh Riley:
-        // 6491 donors). On next resume we reload donors from DB and re-aggregate, so no
-        // data is lost — only deferred. Rollups also skipped via stoppedDueToTimeout guard.
-        try { await saveContributionBatch(); } catch (e) { console.error('[FEC-DONORS] timeout flush contribs error:', e); }
-        try { await saveCursor(true); } catch (e) { console.error('[FEC-DONORS] timeout saveCursor error:', e); }
-        break;
+        return await returnPartialNow('runtime-budget');
       }
 
       // Get proper date range for the cycle to ensure we only import contributions
@@ -1144,8 +1126,7 @@ serve(async (req) => {
         response = await fetchWithRetry(contributionsUrl);
       } catch (err) {
         console.error('[FEC-DONORS] Fetch failed after retries:', err);
-        committeeHasMore = true;
-        break;
+        return await returnPartialNow('fetch-retry-exhausted');
       }
       
       // Defensive: check response
@@ -1158,16 +1139,7 @@ serve(async (req) => {
         }
         console.error('[FEC-DONORS] API error on page', pageCount + 1, ':', response?.status, errorText);
         
-        if (response?.status === 429) {
-          // Rate limited - save cursor and return partial results
-          console.log('[FEC-DONORS] Rate limited, saving progress and returning hasMore=true');
-          committeeHasMore = true;
-          await saveContributionBatch();
-          await saveDonorBatch();
-          await saveCursor(true);
-          break;
-        }
-        break;
+        return await returnPartialNow(`fec-api-${response?.status || 'unknown'}`);
       }
 
       // Defensive: safe JSON parse
@@ -1176,8 +1148,7 @@ serve(async (req) => {
         data = await response.json();
       } catch {
         console.error('[FEC-DONORS] Failed to parse page response');
-        committeeHasMore = true;
-        break;
+        return await returnPartialNow('fec-invalid-json');
       }
       
       const results = data?.results || [];
@@ -1387,25 +1358,40 @@ serve(async (req) => {
       lastIndex = pagination.last_indexes.last_index;
       lastContributionDate = pagination.last_indexes.last_contribution_receipt_date;
 
-      // Periodic save every DONOR_FLUSH_PAGES pages to avoid memory buildup
+      if (pageCount >= maxPages) {
+        return await returnPartialNow('page-budget');
+      }
+
+      // Periodic save every DONOR_FLUSH_PAGES pages. Contributions are durable;
+      // donor summaries are rebuilt once the committee completes.
       if (pageCount % DONOR_FLUSH_PAGES === 0) {
-        console.log(`[FEC-DONORS] Progress: page ${pageCount}, ${committeeContributions} contributions - flushing to DB`);
+        console.log(`[FEC-DONORS] Progress: page ${pageCount}, ${committeeContributions} contributions - flushing contributions only`);
         await saveContributionBatch();
-        await saveDonorBatch();
         await saveCursor(true); // Save cursor for resumability
       }
 
       await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY_MS));
     }
 
-    // Save remaining contributions and donors (final flush) — but skip if we already
-    // saved a cursor in the timeout branch above; running saveDonorBatch(true) on a
-    // resumed sync re-flushes thousands of pre-loaded donors and can burn 100+ seconds.
+    // Save remaining contributions. Donor aggregates are rebuilt in one DB-side set operation
+    // only when this committee has completed, never during partial/resume slices.
     if (!stoppedDueToTimeout) {
       await saveContributionBatch();
-      await saveDonorBatch(true); // Final flush - save all donors
 
-      totalDonors = aggregatedDonors.size; // Actual unique donor count
+      if (!committeeHasMore) {
+        const { data: rebuilt, error: rebuildError } = await supabase.rpc('rebuild_donors_for_committee', {
+          p_committee_id: committeeId,
+          p_cycle: cycle,
+          p_candidate_id: effectiveCandidateId,
+        });
+        if (rebuildError) {
+          console.error('[FEC-DONORS] Donor rebuild error:', rebuildError.message);
+        } else {
+          donorRebuildCount = Number(rebuilt || 0);
+        }
+      }
+
+      totalDonors = donorRebuildCount || aggregatedDonors.size;
       totalContributions = committeeContributionsSaved;
       totalRaised = committeeItemized;
 
