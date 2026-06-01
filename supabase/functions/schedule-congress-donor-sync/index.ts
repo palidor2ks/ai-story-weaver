@@ -63,96 +63,131 @@ serve(async (req) => {
 
   const startedAt = new Date().toISOString();
 
-  // Overlap protection: rely on cron not stacking + 150s edge timeout.
+  // Insert an in-flight run row up front so the UI shows progress immediately.
+  const { data: runRow } = await supabase
+    .from('donor_sync_runs')
+    .insert({
+      scope,
+      mode,
+      started_at: startedAt,
+      finished_at: null,
+      processed: 0,
+      success_count: 0,
+      failed_count: 0,
+      remaining: null,
+      fec_ids_filled: 0,
+      triggered_by: triggeredBy,
+      errors: [],
+      notes: 'running…',
+    })
+    .select('id')
+    .single();
+  const runId = runRow?.id as string | undefined;
 
-  // Step 1 — discover candidates missing FEC IDs (full list for diagnostics, attempt fill for top N)
-  let fecIdsFilled = 0;
-  const fecIdErrors: string[] = [];
-  type MissingFec = { id: string; name: string; state: string | null; office: string | null; attempted: boolean; filled?: boolean; error?: string };
-  const missingFec: MissingFec[] = [];
-  try {
-    let q = supabase
-      .from('candidates')
-      .select('id, name, state, office')
-      .is('fec_candidate_id', null);
-    if (scope === 'congress_visible') {
-      q = q.or('office.ilike.%senate%,office.ilike.%house%,office.eq.Senator,office.eq.Representative');
-      const { data: hidden } = await supabase.from('hidden_states').select('state_code');
-      const hiddenCodes = (hidden ?? []).map((h: { state_code: string }) => h.state_code).filter(Boolean);
-      if (hiddenCodes.length > 0) {
-        q = q.not('state', 'in', `(${hiddenCodes.map((c) => `"${c}"`).join(',')})`);
-      }
-    }
-    const { data: missing } = await q.limit(100);
-    const list = missing ?? [];
-    const attemptCount = Math.min(5, list.length);
-    for (let i = 0; i < list.length; i++) {
-      const c = list[i];
-      const entry: MissingFec = { id: c.id, name: c.name, state: c.state, office: c.office, attempted: i < attemptCount };
-      if (i < attemptCount) {
-        try {
-          const r = await fetch(`${supabaseUrl}/functions/v1/fetch-fec-candidate-id`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}`, 'apikey': anonKey },
-            body: JSON.stringify({ candidateId: c.id, name: c.name, state: c.state, office: c.office }),
-          });
-          if (r.ok) { fecIdsFilled++; entry.filled = true; }
-          else { entry.filled = false; entry.error = `HTTP ${r.status}`; fecIdErrors.push(`${c.name}: HTTP ${r.status}`); }
-        } catch (e) {
-          entry.filled = false;
-          entry.error = e instanceof Error ? e.message : 'err';
-          fecIdErrors.push(`${c.name}: ${entry.error}`);
+  // Run the heavy work in the background — sync-all-donors itself can take
+  // 30-40s per candidate and would blow the 150s edge idle timeout.
+  const work = async () => {
+    let fecIdsFilled = 0;
+    const fecIdErrors: string[] = [];
+    type MissingFec = { id: string; name: string; state: string | null; office: string | null; attempted: boolean; filled?: boolean; error?: string };
+    const missingFec: MissingFec[] = [];
+    try {
+      let q = supabase
+        .from('candidates')
+        .select('id, name, state, office')
+        .is('fec_candidate_id', null);
+      if (scope === 'congress_visible') {
+        q = q.or('office.ilike.%senate%,office.ilike.%house%,office.eq.Senator,office.eq.Representative');
+        const { data: hidden } = await supabase.from('hidden_states').select('state_code');
+        const hiddenCodes = (hidden ?? []).map((h: { state_code: string }) => h.state_code).filter(Boolean);
+        if (hiddenCodes.length > 0) {
+          q = q.not('state', 'in', `(${hiddenCodes.map((c) => `"${c}"`).join(',')})`);
         }
       }
-      missingFec.push(entry);
+      const { data: missing } = await q.limit(100);
+      const list = missing ?? [];
+      const attemptCount = Math.min(5, list.length);
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        const entry: MissingFec = { id: c.id, name: c.name, state: c.state, office: c.office, attempted: i < attemptCount };
+        if (i < attemptCount) {
+          try {
+            const r = await fetch(`${supabaseUrl}/functions/v1/fetch-fec-candidate-id`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}`, 'apikey': anonKey },
+              body: JSON.stringify({ candidateId: c.id, name: c.name, state: c.state, office: c.office }),
+            });
+            if (r.ok) { fecIdsFilled++; entry.filled = true; }
+            else { entry.filled = false; entry.error = `HTTP ${r.status}`; fecIdErrors.push(`${c.name}: HTTP ${r.status}`); }
+          } catch (e) {
+            entry.filled = false;
+            entry.error = e instanceof Error ? e.message : 'err';
+            fecIdErrors.push(`${c.name}: ${entry.error}`);
+          }
+        }
+        missingFec.push(entry);
+      }
+    } catch (e) {
+      console.error('[schedule] fec-id step error:', e);
     }
-  } catch (e) {
-    console.error('[schedule] fec-id step error:', e);
+
+    let syncResult: Record<string, unknown> = {};
+    let syncError: string | null = null;
+    try {
+      const r = await fetch(`${supabaseUrl}/functions/v1/sync-all-donors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}`, 'apikey': anonKey },
+        body: JSON.stringify({ scope, mode, limit, cycle }),
+      });
+      syncResult = await r.json().catch(() => ({}));
+      if (!r.ok) syncError = `HTTP ${r.status}: ${(syncResult as { error?: string })?.error ?? ''}`;
+    } catch (e) {
+      syncError = e instanceof Error ? e.message : 'sync-all-donors call failed';
+    }
+
+    const errors = [
+      ...fecIdErrors.map((e) => ({ step: 'fec_id', message: e })),
+      ...((syncResult as { errors?: string[] }).errors ?? []).map((e) => ({ step: 'donor_sync', message: e })),
+      ...(syncError ? [{ step: 'donor_sync', message: syncError }] : []),
+    ];
+
+    const update = {
+      finished_at: new Date().toISOString(),
+      processed: (syncResult as { processed?: number }).processed ?? 0,
+      success_count: (syncResult as { successCount?: number }).successCount ?? 0,
+      failed_count: (syncResult as { failedCount?: number }).failedCount ?? 0,
+      remaining: (syncResult as { remaining?: number }).remaining ?? null,
+      fec_ids_filled: fecIdsFilled,
+      errors,
+      notes: syncError ?? null,
+    };
+    if (runId) {
+      await supabase.from('donor_sync_runs').update(update).eq('id', runId);
+    } else {
+      await supabase.from('donor_sync_runs').insert({ scope, mode, started_at: startedAt, triggered_by: triggeredBy, ...update });
+    }
+  };
+
+  // Fire-and-forget so the HTTP response returns in <1s.
+  // deno-lint-ignore no-explicit-any
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime?.waitUntil) {
+    runtime.waitUntil(work());
+  } else {
+    work().catch((e) => console.error('[schedule] background work error:', e));
   }
-
-  // Step 2 — run donor sync
-  let syncResult: Record<string, unknown> = {};
-  let syncError: string | null = null;
-  try {
-    const r = await fetch(`${supabaseUrl}/functions/v1/sync-all-donors`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}`, 'apikey': anonKey },
-      body: JSON.stringify({ scope, mode, limit, cycle }),
-    });
-    syncResult = await r.json().catch(() => ({}));
-    if (!r.ok) syncError = `HTTP ${r.status}: ${(syncResult as { error?: string })?.error ?? ''}`;
-  } catch (e) {
-    syncError = e instanceof Error ? e.message : 'sync-all-donors call failed';
-  }
-
-  // Step 3 — log the run
-  const errors = [
-    ...fecIdErrors.map((e) => ({ step: 'fec_id', message: e })),
-    ...((syncResult as { errors?: string[] }).errors ?? []).map((e) => ({ step: 'donor_sync', message: e })),
-    ...(syncError ? [{ step: 'donor_sync', message: syncError }] : []),
-  ];
-
-  await supabase.from('donor_sync_runs').insert({
-    scope,
-    mode,
-    started_at: startedAt,
-    finished_at: new Date().toISOString(),
-    processed: (syncResult as { processed?: number }).processed ?? 0,
-    success_count: (syncResult as { successCount?: number }).successCount ?? 0,
-    failed_count: (syncResult as { failedCount?: number }).failedCount ?? 0,
-    remaining: (syncResult as { remaining?: number }).remaining ?? null,
-    fec_ids_filled: fecIdsFilled,
-    triggered_by: triggeredBy,
-    errors,
-    notes: syncError ?? null,
-  });
 
   return new Response(JSON.stringify({
-    ok: !syncError,
-    fecIdsFilled,
-    missingFec,
-    missingFecCount: missingFec.length,
-    syncResult,
-    error: syncError,
-  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    ok: true,
+    queued: true,
+    runId,
+    startedAt,
+    message: 'Run started in the background. Watch the run history for updates.',
+    // Stub fields so the UI's existing parser does not break.
+    fecIdsFilled: 0,
+    missingFec: [],
+    missingFecCount: 0,
+    syncResult: { message: 'Background run started', processed: 0, successCount: 0, failedCount: 0, candidates: [], errors: [] },
+    error: null,
+  }), { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 });
