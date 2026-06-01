@@ -118,7 +118,7 @@ serve(async (req) => {
           try {
             const r = await fetch(`${supabaseUrl}/functions/v1/fetch-fec-candidate-id`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}`, 'apikey': anonKey },
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey, 'x-internal-service-token': serviceKey },
               body: JSON.stringify({ candidateId: c.id, name: c.name, state: c.state, office: c.office }),
             });
             if (r.ok) { fecIdsFilled++; entry.filled = true; }
@@ -140,7 +140,7 @@ serve(async (req) => {
     try {
       const r = await fetch(`${supabaseUrl}/functions/v1/sync-all-donors`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}`, 'apikey': anonKey },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey, 'x-internal-service-token': serviceKey },
         body: JSON.stringify({ scope, mode, limit, cycle }),
       });
       syncResult = await r.json().catch(() => ({}));

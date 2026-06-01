@@ -188,8 +188,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     const bearer = authHeader.slice('Bearer '.length).trim();
+    const internalToken = req.headers.get('x-internal-service-token')?.trim();
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const isServiceRole = bearer === serviceRoleKey;
+    const isServiceRole = bearer === serviceRoleKey || internalToken === serviceRoleKey;
     if (!isServiceRole) {
       const userClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
         global: { headers: { Authorization: authHeader } },

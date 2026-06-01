@@ -28,7 +28,8 @@ serve(async (req) => {
     }
 
     const bearer = authHeader.slice('Bearer '.length).trim();
-    const isServiceRole = bearer === supabaseServiceKey;
+    const internalToken = req.headers.get('x-internal-service-token')?.trim();
+    const isServiceRole = bearer === supabaseServiceKey || internalToken === supabaseServiceKey;
 
     // Caller auth: allow service-role (cron / wrapper) OR an admin user JWT
     if (!isServiceRole) {
@@ -167,10 +168,11 @@ serve(async (req) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Authorization': `Bearer ${anonKey}`,
             'apikey': anonKey,
+            'x-internal-service-token': supabaseServiceKey,
           },
-          body: JSON.stringify({ candidateId: candidate.id, fecCandidateId: candidate.fec_candidate_id, cycle }),
+          body: JSON.stringify({ candidateId: candidate.id, fecCandidateId: candidate.fec_candidate_id, cycle, highVolumeMode: true, maxPages: 2 }),
           signal: AbortSignal.timeout(candidateTimeoutMs),
         });
         const data = await resp.json().catch(() => ({}));
