@@ -195,6 +195,14 @@ export const Quiz = () => {
         answers: quizAnswers,
       });
 
+      // Fire badge events (fire-and-forget). One question_answered per answer
+      // in this session, with topic_id so topic-depth checker runs per topic.
+      const questionTopicMap = new Map(questions.map(q => [q.id, q.topicId]));
+      for (const ans of quizAnswers) {
+        const topicId = questionTopicMap.get(ans.questionId);
+        logBadgeEvent('question_answered', { question_id: ans.questionId, topic_id: topicId });
+      }
+
       toast.success('Quiz results saved!');
       navigate('/profile');
     } catch (error) {
