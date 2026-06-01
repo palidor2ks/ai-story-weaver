@@ -139,7 +139,7 @@ function jurisdictionMatchesCity(jurisdiction: string | null | undefined, city: 
 
 function electionMatchesUserContext(
   election: ElectionResponseRow,
-  context: { state: string; district: string | null; city: string | null },
+  context: { state: string; district: string | null; city: string | null; ward: string | null },
 ): boolean {
   const electionState = election.state?.toUpperCase() ?? null;
   const electionJurisdiction = election.jurisdiction ?? null;
@@ -175,6 +175,80 @@ function electionMatchesUserContext(
   }
 
   return false;
+}
+
+// Drop ward-scoped candidates that don't match the user's ward. Mayor / at-large
+// rows pass through untouched.
+function isWardOffice(office: string | null | undefined): boolean {
+  if (!office) return false;
+  return /\bward\b/i.test(office);
+}
+
+function filterCandidatesByWard<T extends { office: string; district: string | null }>(
+  candidates: T[],
+  ward: string | null,
+): T[] {
+  if (!ward) return candidates;
+  const targetWard = normalizeDistrict(ward);
+  if (!targetWard) return candidates;
+  return candidates.filter((c) => {
+    if (!isWardOffice(c.office)) return true;
+    const candWard = normalizeDistrict(c.district);
+    // If a candidate row in a ward race has no district set, keep it (we can't prove mismatch).
+    if (!candWard) return true;
+    return candWard === targetWard;
+  });
+}
+
+// Collapse two database rows that describe the same real-world race
+// (same date + election type + same place). Examples this catches:
+//   - "Piscataway Township Ward Council Election"
+//   - "Township of Piscataway, Middlesex County" → "Piscataway Ward Council Primary"
+function normalizeJurisdictionKey(jurisdiction: string | null | undefined, state: string | null | undefined): string {
+  let s = normalizeText(jurisdiction);
+  if (!s) return normalizeText(state);
+  s = s.replace(/\btownship of\b/g, '')
+       .replace(/\bcity of\b/g, '')
+       .replace(/\bborough of\b/g, '')
+       .replace(/\btown of\b/g, '')
+       .replace(/\bvillage of\b/g, '')
+       .replace(/\btownship\b/g, '')
+       .replace(/,?\s*[a-z\s]+county\b/g, '')
+       .replace(/\s+/g, ' ')
+       .trim();
+  return s || normalizeText(state);
+}
+
+function mergeDuplicateElections(rows: ElectionResponseRow[]): ElectionResponseRow[] {
+  const byKey = new Map<string, ElectionResponseRow>();
+  for (const row of rows) {
+    const key = [
+      row.election_date,
+      (row.election_type ?? '').toLowerCase(),
+      row.level,
+      normalizeJurisdictionKey(row.jurisdiction, row.state),
+    ].join('|');
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { ...row, candidates: [...row.candidates] });
+      continue;
+    }
+    // Merge candidates, deduped by candidate_id; keep the longest/most-specific office string.
+    const byId = new Map(existing.candidates.map(c => [c.candidate_id, c] as const));
+    for (const c of row.candidates) {
+      const prev = byId.get(c.candidate_id);
+      if (!prev) {
+        byId.set(c.candidate_id, c);
+      } else if ((c.office ?? '').length > (prev.office ?? '').length) {
+        byId.set(c.candidate_id, { ...prev, office: c.office });
+      }
+    }
+    existing.candidates = Array.from(byId.values());
+    // Prefer the more descriptive name / jurisdiction.
+    if ((row.name ?? '').length > (existing.name ?? '').length) existing.name = row.name;
+    if (!existing.jurisdiction && row.jurisdiction) existing.jurisdiction = row.jurisdiction;
+  }
+  return Array.from(byKey.values());
 }
 
 function nextCycles(): string[] {
