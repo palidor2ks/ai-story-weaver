@@ -160,6 +160,7 @@ export const UserProfile = () => {
       await updateProfile.mutateAsync({ address: addressInput.trim() });
       setIsEditingAddress(false);
       toast.success('Address updated successfully!');
+      logBadgeEvent('address_added');
     } catch (error) {
       console.error('Error updating address:', error);
       toast.error('Failed to update address. Please try again.');
