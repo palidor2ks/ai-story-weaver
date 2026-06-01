@@ -91,6 +91,80 @@ async function sha1(input: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function normalizeDistrict(district?: string | number | null): string | null {
+  if (district === null || district === undefined) return null;
+  const raw = String(district).trim();
+  if (!raw) return null;
+  const match = raw.match(/(\d+)$/);
+  const normalized = (match ? match[1] : raw).replace(/^0+/, '');
+  return normalized || '0';
+}
+
+function normalizeText(value?: string | null): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeCity(value?: string | null): string | null {
+  const normalized = normalizeText(value);
+  return normalized || null;
+}
+
+function districtJurisdiction(state: string, district?: string | number | null): string | null {
+  const normalized = normalizeDistrict(district);
+  return normalized ? `${state.toUpperCase()}-${normalized}` : null;
+}
+
+function jurisdictionMatchesCity(jurisdiction: string | null | undefined, city: string | null): boolean {
+  if (!city) return false;
+  const normalizedJurisdiction = normalizeText(jurisdiction);
+  if (!normalizedJurisdiction) return false;
+  return normalizedJurisdiction.includes(city) || city.includes(normalizedJurisdiction);
+}
+
+function electionMatchesUserContext(
+  election: ElectionResponseRow,
+  context: { state: string; district: string | null; city: string | null },
+): boolean {
+  const electionState = election.state?.toUpperCase() ?? null;
+  const electionJurisdiction = election.jurisdiction ?? null;
+  const normalizedJurisdiction = normalizeText(electionJurisdiction);
+  const district = normalizeDistrict(context.district);
+  const houseJurisdiction = districtJurisdiction(context.state, district);
+
+  // National rows (President) apply to everyone.
+  if (electionState === null || normalizedJurisdiction === 'us') return true;
+  if (electionState !== context.state.toUpperCase()) return false;
+
+  if (election.level === 'federal') {
+    // Statewide federal races (Senate) apply to everyone in the state.
+    if (!electionJurisdiction || normalizeText(electionJurisdiction) === normalizeText(context.state)) return true;
+
+    // House races must match the user's congressional district. Prefer the
+    // election jurisdiction, then candidate district as a fallback.
+    if (houseJurisdiction && normalizeText(electionJurisdiction) === normalizeText(houseJurisdiction)) return true;
+    return election.candidates.some((candidate) => normalizeDistrict(candidate.district) === district);
+  }
+
+  if (election.level === 'state') {
+    // Keep statewide state races; require a district match for district-scoped races when a district is present.
+    if (!electionJurisdiction || normalizeText(electionJurisdiction) === normalizeText(context.state)) return true;
+    if (district && election.candidates.some((candidate) => normalizeDistrict(candidate.district) === district)) return true;
+    return false;
+  }
+
+  if (election.level === 'local') {
+    // Local rows must be scoped to the geocoded city whenever we know it.
+    if (!context.city) return false;
+    return jurisdictionMatchesCity(electionJurisdiction, context.city);
+  }
+
+  return false;
+}
+
 function nextCycles(): string[] {
   const y = new Date().getFullYear();
   const even = y % 2 === 0 ? y : y + 1;
@@ -103,6 +177,8 @@ async function fetchFEC(state: string, district: string | null): Promise<Electio
   if (!FEC_API_KEY) return [];
   const cycles = nextCycles();
   const results: ElectionPayload[] = [];
+  const normalizedDistrict = normalizeDistrict(district);
+  const houseJurisdiction = districtJurisdiction(state, normalizedDistrict);
 
   for (const cycle of cycles) {
     // House (only if we know district), Senate, President in parallel.
@@ -126,8 +202,8 @@ async function fetchFEC(state: string, district: string | null): Promise<Electio
       }
     };
 
-    if (district) {
-      const dist = district.replace(/^\D+/, '').padStart(2, '0');
+    if (normalizedDistrict) {
+      const dist = normalizedDistrict.padStart(2, '0');
       calls.push(fecFetch('H', `${base}?${common}&office=H&state=${state}&district=${dist}`));
     }
     calls.push(fecFetch('S', `${base}?${common}&office=S&state=${state}`));
@@ -140,14 +216,16 @@ async function fetchFEC(state: string, district: string | null): Promise<Electio
     const generalDate = firstTuesdayAfterFirstMonday(parseInt(cycle), 11); // November
 
     for (const { office, data } of settled) {
-      const officeLabel = office === 'H' ? `U.S. House ${state}-${district ?? ''}` : office === 'S' ? `U.S. Senate (${state})` : 'President of the United States';
+      const officeLabel = office === 'H'
+        ? `U.S. House ${houseJurisdiction ?? `${state}-`}`
+        : office === 'S' ? `U.S. Senate (${state})` : 'President of the United States';
       const candidates: CandidatePayload[] = (data?.results ?? []).map((c: any) => ({
         id: c.candidate_id,
         name: c.name || 'Unknown',
         party: mapParty(c.party_full || c.party),
         office: officeLabel,
         state: office === 'P' ? 'US' : state,
-        district: office === 'H' ? district : null,
+        district: office === 'H' ? normalizedDistrict : null,
         is_incumbent: c.incumbent_challenge === 'I',
         image_url: null,
         fec_candidate_id: c.candidate_id,
@@ -161,10 +239,10 @@ async function fetchFEC(state: string, district: string | null): Promise<Electio
         election_type: 'general',
         level: 'federal',
         state: office === 'P' ? null : state,
-        jurisdiction: office === 'H' ? `${state}-${district ?? ''}` : (office === 'S' ? state : 'US'),
+        jurisdiction: office === 'H' ? (houseJurisdiction ?? `${state}-`) : (office === 'S' ? state : 'US'),
         name: `${cycle} ${office === 'P' ? 'U.S. Presidential' : 'Federal'} Election`,
         source: 'fec',
-        source_ref: `${cycle}-${office}-${state}-${district ?? ''}`,
+        source_ref: `${cycle}-${office}-${state}-${normalizedDistrict ?? ''}`,
         candidates,
       });
     }
@@ -271,7 +349,10 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const address: string | undefined = body.address;
     const state: string | undefined = body.state;
-    const district: string | null = body.district ?? null;
+    const district: string | null = normalizeDistrict(body.district ?? null);
+    const city: string | null = normalizeCity(body.city ?? null);
+    const lat: number | null = typeof body.lat === 'number' ? body.lat : null;
+    const lng: number | null = typeof body.lng === 'number' ? body.lng : null;
     const force: boolean = body.force === true;
 
     if (!state) {
@@ -284,16 +365,41 @@ Deno.serve(async (req) => {
 
     let shouldFetch = force;
     if (!force) {
-      // Cache check: any election rows newer than CACHE_TTL_HOURS for this state+district?
+      // Cache check: require fresh rows for this address context, not merely any
+      // row in the state. A fresh NJ Senate row must not suppress an NJ-06 House
+      // or Piscataway municipal ballot lookup.
       const cacheCutoff = new Date(Date.now() - CACHE_TTL_HOURS * 3600 * 1000).toISOString();
-      const { data: cached } = await supabase
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const expectedJurisdictions = new Set(['US', state.toUpperCase()]);
+      const houseJurisdiction = districtJurisdiction(state, district);
+      if (houseJurisdiction) expectedJurisdictions.add(houseJurisdiction);
+      if (city) expectedJurisdictions.add(city);
+
+      const { data: cachedRows } = await supabase
         .from('elections')
-        .select('id, updated_at')
-        .eq('state', state)
-        .gte('election_date', new Date().toISOString().slice(0, 10))
-        .gte('updated_at', cacheCutoff)
-        .limit(1);
-      shouldFetch = !cached || cached.length === 0;
+        .select('id, level, state, jurisdiction, source, updated_at')
+        .or(`state.eq.${state},state.is.null`)
+        .gte('election_date', todayIso)
+        .gte('updated_at', cacheCutoff);
+
+      const freshRows = cachedRows ?? [];
+      const hasFederalStatewideOrNational = freshRows.some((row: any) => {
+        if (row.level !== 'federal') return false;
+        const normalized = normalizeText(row.jurisdiction);
+        return normalized === 'us' || normalized === normalizeText(state);
+      });
+      const hasFederalHouse = !houseJurisdiction || freshRows.some((row: any) => (
+        row.level === 'federal' && normalizeText(row.jurisdiction) === normalizeText(houseJurisdiction)
+      ));
+      const hasFederalScope = hasFederalStatewideOrNational && hasFederalHouse;
+      const hasLocalScope = !city || freshRows.some((row: any) => row.level === 'local' && jurisdictionMatchesCity(row.jurisdiction, city));
+
+      shouldFetch = !(hasFederalScope && hasLocalScope);
+      console.log('[fetch-upcoming-elections] cache scope', {
+        state, district, city, lat, lng, cachedRows: freshRows.length,
+        hasFederalStatewideOrNational, hasFederalHouse, hasFederalScope, hasLocalScope, shouldFetch,
+        expectedJurisdictions: Array.from(expectedJurisdictions),
+      });
     }
 
     if (shouldFetch) {
@@ -375,10 +481,16 @@ Deno.serve(async (req) => {
       }),
     }));
 
+    const context = { state, district, city };
+    const scopedOut = out.filter((e) => electionMatchesUserContext(e, context));
+    console.log('[fetch-upcoming-elections] readback scope', {
+      state, district, city, readRows: out.length, returnedRows: scopedOut.length,
+    });
+
     const grouped = {
-      federal: out.filter(e => e.level === 'federal'),
-      state: out.filter(e => e.level === 'state'),
-      local: out.filter(e => e.level === 'local'),
+      federal: scopedOut.filter(e => e.level === 'federal'),
+      state: scopedOut.filter(e => e.level === 'state'),
+      local: scopedOut.filter(e => e.level === 'local'),
     };
 
     return new Response(JSON.stringify(grouped), {
