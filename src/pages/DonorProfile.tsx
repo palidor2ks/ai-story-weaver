@@ -33,6 +33,7 @@ import {
   X,
   Sparkles
 } from 'lucide-react';
+import { logBadgeEvent } from '@/lib/badges';
 
 interface DonorRecord {
   id: string;
