@@ -733,6 +733,7 @@ Deno.serve(async (req) => {
             office: r.office, state: '', district: null, image_url: null,
             is_incumbent: r.is_incumbent, overall_score: null,
             coverage_tier: 'tier_3', confidence: null, answers_source: null, is_pending_research: true,
+            source: r.source ?? 'unknown', source_url: r.source_ref ?? null,
           };
         }
         return {
@@ -749,6 +750,8 @@ Deno.serve(async (req) => {
           confidence: c.confidence ?? null,
           answers_source: c.answers_source,
           is_pending_research: c.answers_source === 'pending_research' || (c.overall_score === 0 && c.answers_source !== 'calculated_from_answers'),
+          source: r.source ?? 'unknown',
+          source_url: r.source_ref ?? null,
         };
       }),
     }));
