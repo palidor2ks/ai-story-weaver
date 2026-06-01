@@ -1,0 +1,23 @@
+REVOKE ALL ON FUNCTION public._award_badge(uuid, text, jsonb, uuid) FROM public, anon, authenticated;
+REVOKE ALL ON FUNCTION public._user_question_scope(uuid) FROM public, anon;
+REVOKE ALL ON FUNCTION public.evaluate_badges(uuid, text, jsonb, uuid) FROM public, anon, authenticated;
+REVOKE ALL ON FUNCTION public._check_onboarding(uuid, text, jsonb, uuid) FROM public, anon, authenticated;
+REVOKE ALL ON FUNCTION public._check_identity(uuid, text, jsonb, uuid) FROM public, anon, authenticated;
+REVOKE ALL ON FUNCTION public._check_question_progress(uuid, text, jsonb, uuid) FROM public, anon, authenticated;
+REVOKE ALL ON FUNCTION public._check_topic_depth(uuid, text, jsonb, uuid) FROM public, anon, authenticated;
+REVOKE ALL ON FUNCTION public._check_engagement_misc(uuid, text, jsonb, uuid) FROM public, anon, authenticated;
+REVOKE ALL ON FUNCTION public._check_social(uuid, text, jsonb, uuid) FROM public, anon, authenticated;
+REVOKE ALL ON FUNCTION public._check_streaks(uuid, text, jsonb, uuid) FROM public, anon, authenticated;
+REVOKE ALL ON FUNCTION public._check_candidate(uuid, text, jsonb, uuid) FROM public, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION public._award_badge(uuid, text, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.evaluate_badges(uuid, text, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._check_onboarding(uuid, text, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._check_identity(uuid, text, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._check_question_progress(uuid, text, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._check_topic_depth(uuid, text, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._check_engagement_misc(uuid, text, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._check_social(uuid, text, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._check_streaks(uuid, text, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._check_candidate(uuid, text, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public._user_question_scope(uuid) TO service_role;
