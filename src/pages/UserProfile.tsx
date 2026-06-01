@@ -28,6 +28,7 @@ import { RepresentativeComparisonCard } from '@/components/RepresentativeCompari
 import { PartyComparisonCard } from '@/components/PartyComparisonCard';
 import { VerificationBadges } from '@/components/VerificationBadges';
 import { UpcomingElectionsCard } from '@/components/profile/UpcomingElectionsCard';
+import { logBadgeEvent } from '@/lib/badges';
 import { BadgeShelf } from '@/components/BadgeShelf';
 
 interface ProfileAnalysis {
