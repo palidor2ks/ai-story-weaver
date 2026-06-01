@@ -287,7 +287,7 @@ export function AutomatedJobsCard() {
             </CardTitle>
             <CardDescription>
               Auto-fills FEC donor data for visible-state House &amp; Senate candidates.
-              Backfill runs every 10 minutes until the queue is empty; a full refresh runs daily at 07:00 UTC.
+              Backfill runs every 10 minutes until the queue is empty; a refresh runner starts daily at 07:00 UTC. Each run processes one candidate to avoid edge timeouts.
             </CardDescription>
           </div>
           {activeRunId && (
