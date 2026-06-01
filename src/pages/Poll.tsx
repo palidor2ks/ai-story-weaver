@@ -68,7 +68,7 @@ export default function Poll() {
       const anonId = getAnonSessionId();
       type PollOption = { id: string; value: number; display_order?: number };
       type PollQuestion = { question_id: string; questions?: { question_options?: PollOption[] } };
-      const payload = (questions as PollQuestion[]).map((pq) => {
+      const payload = (questions as unknown as PollQuestion[]).map((pq) => {
         const opt = (pq.questions?.question_options || []).find((o) => o.id === answers[pq.question_id]);
         return {
           question_id: pq.question_id,
@@ -123,7 +123,7 @@ export default function Poll() {
             {poll.description && <CardDescription>{poll.description}</CardDescription>}
           </CardHeader>
           <CardContent className="space-y-6">
-            {!submitted && (questions as Array<{ id: string; question_id: string; questions: { text: string; question_options?: Array<{ id: string; text: string; value: number; display_order?: number }> } }>).map((pq, idx) => {
+            {!submitted && (questions as unknown as Array<{ id: string; question_id: string; questions: { id: string; text: string; question_options?: Array<{ id: string; text: string; value: number; display_order?: number }> } }>).map((pq, idx) => {
               const q = pq.questions;
               const opts = (q.question_options || []).slice().sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
               return (
