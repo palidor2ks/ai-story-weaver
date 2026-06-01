@@ -193,7 +193,7 @@ export function UpcomingElectionsCard({ address }: Props) {
                 </section>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
-                  Local race coverage is limited — typically only available in the weeks leading up to an election.
+                  Local ballot coverage is limited and depends on address-specific data from election sources; some municipal or ward races may only appear after local sample-ballot data is available.
                 </p>
               )}
             </div>
