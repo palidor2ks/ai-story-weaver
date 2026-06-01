@@ -280,6 +280,7 @@ export const ShareCardModal = ({
         await downloadNode(node, filename);
         toast.message('Clipboard not supported — image was downloaded instead.');
       }
+      fireShareCompleted('copy_image');
     } catch (e) {
       toast.error('Could not copy image.');
       console.error(e);
