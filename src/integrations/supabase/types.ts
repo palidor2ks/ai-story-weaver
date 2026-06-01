@@ -1363,6 +1363,54 @@ export type Database = {
         }
         Relationships: []
       }
+      donor_sync_runs: {
+        Row: {
+          errors: Json
+          failed_count: number
+          fec_ids_filled: number
+          finished_at: string | null
+          id: string
+          mode: string
+          notes: string | null
+          processed: number
+          remaining: number | null
+          scope: string
+          started_at: string
+          success_count: number
+          triggered_by: string
+        }
+        Insert: {
+          errors?: Json
+          failed_count?: number
+          fec_ids_filled?: number
+          finished_at?: string | null
+          id?: string
+          mode: string
+          notes?: string | null
+          processed?: number
+          remaining?: number | null
+          scope: string
+          started_at?: string
+          success_count?: number
+          triggered_by?: string
+        }
+        Update: {
+          errors?: Json
+          failed_count?: number
+          fec_ids_filled?: number
+          finished_at?: string | null
+          id?: string
+          mode?: string
+          notes?: string | null
+          processed?: number
+          remaining?: number | null
+          scope?: string
+          started_at?: string
+          success_count?: number
+          triggered_by?: string
+        }
+        Relationships: []
+      }
       donors: {
         Row: {
           amount: number
