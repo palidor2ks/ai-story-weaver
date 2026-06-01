@@ -213,7 +213,7 @@ export function UpcomingElectionsCard({ address }: Props) {
                 </section>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
-                  Local ballot coverage is limited and depends on address-specific data from election sources; some municipal or ward races may only appear after local sample-ballot data is available.
+                  Local ballot coverage depends on address-specific election sources and AI-assisted research; some municipal or ward races may only appear after official sample-ballot data is available.
                 </p>
               )}
             </div>
