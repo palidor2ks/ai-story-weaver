@@ -398,6 +398,7 @@ export const ShareCardModal = ({
         toast.message('Sharing without preview image — couldn\'t upload card.');
       }
       openIntent(build(shareUrl));
+      fireShareCompleted(`intent_${destination}`);
     } finally {
       setBusy(null);
     }
