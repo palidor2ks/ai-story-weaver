@@ -132,8 +132,8 @@ serve(async (req) => {
       previousSync: string | null;
     };
 
-    const results = { success: 0, failed: 0, totalDonorsImported: 0, totalRaised: 0, errors: [] as string[] };
-    const perCandidate: CandidateResult[] = [];
+    const results = { success: 0, failed: 0, partial: 0, totalDonorsImported: 0, totalRaised: 0, errors: [] as string[] };
+    const perCandidate: (CandidateResult & { hasMore?: boolean; stoppedDueToTimeout?: boolean })[] = [];
     const fetchFecDonorsUrl = `${supabaseUrl}/functions/v1/fetch-fec-donors`;
 
     for (const candidate of candidates) {
