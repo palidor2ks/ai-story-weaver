@@ -799,6 +799,19 @@ async function persistAll(supabase: any, rows: ElectionPayload[]) {
 
     if (lookup.data?.id) {
       electionId = lookup.data.id;
+      const { error: updErr } = await supabase
+        .from('elections')
+        .update({
+          election_type: row.election_type,
+          level: row.level,
+          state: row.state,
+          jurisdiction: row.jurisdiction,
+          name: row.name,
+          source_url: row.source_url ?? null,
+          confidence: row.confidence ?? null,
+        })
+        .eq('id', electionId);
+      if (updErr) console.warn('[persist] failed to refresh election', row.source, row.source_ref, updErr.message);
     } else {
       const { data: inserted, error: insErr } = await supabase
         .from('elections')
@@ -811,6 +824,8 @@ async function persistAll(supabase: any, rows: ElectionPayload[]) {
           name: row.name,
           source: row.source,
           source_ref: row.source_ref ?? null,
+          source_url: row.source_url ?? null,
+          confidence: row.confidence ?? null,
         })
         .select('id')
         .maybeSingle();
