@@ -262,6 +262,7 @@ export function AutomatedJobsCard() {
           </div>
         )}
 
+        {runError && <ErrorPanel e={runError} onDismiss={() => setRunError(null)} />}
         {diagnostics && <DiagnosticsPanel d={diagnostics} onDismiss={() => setDiagnostics(null)} />}
 
         {runs && runs.length > 0 && (
