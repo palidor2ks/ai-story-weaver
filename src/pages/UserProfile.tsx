@@ -665,16 +665,16 @@ export const UserProfile = () => {
           </CardContent>
         </Card>
 
-        {/* Your Representatives */}
+        {/* Your Current Representatives */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
             <CardTitle className="font-display flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-accent" />
-                Your Representatives
+                Your Current Representatives
                 {allRepsLoading ? (
                   <Badge variant="outline" className="ml-2 text-xs font-normal animate-pulse">
-                    Looking up representatives...
+                    Looking up current representatives...
                   </Badge>
                 ) : congressionalState && congressionalDistrict ? (
                   <Badge variant="outline" className="ml-2 text-xs font-normal">
