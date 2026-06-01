@@ -314,7 +314,8 @@ function JobBlock({
   isRunning: boolean;
   onRunNow: () => void;
 }) {
-  const hasFailed = !!run && (run.failed_count > 0 || (run.notes && run.notes.length > 0));
+  const isInFlight = !!run && !run.finished_at;
+  const hasFailed = !!run && (run.failed_count > 0 || (run.notes && run.notes.startsWith('error') && !isInFlight));
   return (
     <div className="rounded-lg border p-3 space-y-2">
       <div className="flex items-center justify-between">
@@ -330,19 +331,30 @@ function JobBlock({
       {run ? (
         <div className="text-xs space-y-1">
           <div className="flex items-center gap-1.5">
-            {hasFailed ? (
-              <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+            {isInFlight ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                <span>Running — started {formatDistanceToNow(new Date(run.started_at), { addSuffix: true })}</span>
+              </>
+            ) : hasFailed ? (
+              <>
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                <span>Last run {formatDistanceToNow(new Date(run.started_at), { addSuffix: true })}</span>
+              </>
             ) : (
-              <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+              <>
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                <span>Last run {formatDistanceToNow(new Date(run.started_at), { addSuffix: true })}</span>
+              </>
             )}
-            <span>
-              Last run {formatDistanceToNow(new Date(run.started_at), { addSuffix: true })}
-            </span>
           </div>
           <div className="text-muted-foreground">
             Processed {run.processed} · Success {run.success_count}
             {run.failed_count > 0 && ` · Failed ${run.failed_count}`}
           </div>
+          {run.notes && !isInFlight && (
+            <div className="text-muted-foreground italic">{run.notes}</div>
+          )}
           {run.remaining !== null && (
             <div className="flex items-center gap-1.5">
               <RefreshCw className="h-3 w-3 text-muted-foreground" />
