@@ -101,7 +101,7 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
       
       // Redirect to ID.me
       window.location.href = data.auth_url;
-    } catch (error: any) {
+    } catch (error) {
       console.error('ID.me verification error:', error);
       toast.error('Failed to start identity verification');
     } finally {
@@ -158,7 +158,7 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
       } else {
         toast.error(data.message || 'Voter registration not found');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Voter verification error:', error);
       toast.error('Failed to verify voter registration');
     } finally {

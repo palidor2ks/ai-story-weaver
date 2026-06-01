@@ -68,9 +68,9 @@ export const AvatarUpload = ({ userId, currentAvatarUrl, userName, onAvatarChang
       onAvatarChange(urlWithCacheBust);
       toast.success('Avatar updated successfully!');
       logBadgeEvent('avatar_uploaded');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error uploading avatar:', error);
-      toast.error(error.message || 'Failed to upload avatar');
+      toast.error(error instanceof Error ? error.message : 'Failed to upload avatar');
     } finally {
       setIsUploading(false);
       // Reset the input so the same file can be selected again

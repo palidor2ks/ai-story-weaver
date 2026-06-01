@@ -50,24 +50,27 @@ export const Onboarding = () => {
   // Fetch canonical questions for selected local topics
   const { data: localCanonicalQuestions = [], isLoading: localQuestionsLoading } = useCanonicalQuestions(selectedLocalTopicIds);
 
+  type DbTopicExt = typeof dbTopics[number] & { scope?: string; display_name?: string };
+  type QuestionOption = { id: string; text: string; value: number; is_skip_option?: boolean };
+
   // Transform database topics to app format — federal topics only
   const topics: Topic[] = dbTopics
-    .filter(t => (t as any).scope !== 'local')
+    .filter(t => (t as DbTopicExt).scope !== 'local')
     .map(t => ({
       id: t.id,
       name: t.name,
-      displayName: (t as any).display_name || undefined,
+      displayName: (t as DbTopicExt).display_name || undefined,
       icon: t.icon,
       weight: t.weight || 1,
     }));
 
   // Local topics
   const localTopics: Topic[] = dbTopics
-    .filter(t => (t as any).scope === 'local')
+    .filter(t => (t as DbTopicExt).scope === 'local')
     .map(t => ({
       id: t.id,
       name: t.name,
-      displayName: (t as any).display_name || undefined,
+      displayName: (t as DbTopicExt).display_name || undefined,
       icon: t.icon,
       weight: t.weight || 1,
     }));
@@ -77,7 +80,7 @@ export const Onboarding = () => {
     id: q.id,
     topicId: q.topic_id,
     text: q.text,
-    options: (q.options || []).map((o: any) => ({
+    options: (q.options || []).map((o: QuestionOption) => ({
       id: o.id,
       text: o.text,
       value: o.value,
@@ -90,7 +93,7 @@ export const Onboarding = () => {
     id: q.id,
     topicId: q.topic_id,
     text: q.text,
-    options: (q.options || []).map((o: any) => ({
+    options: (q.options || []).map((o: QuestionOption) => ({
       id: o.id,
       text: o.text,
       value: o.value,
@@ -583,6 +586,7 @@ export const Onboarding = () => {
           );
         }
 
+        { /* eslint-disable-next-line no-case-declarations */ }
         const currentQuestion = activeQuestions[currentQuestionIndex];
         if (!currentQuestion) {
           return (
@@ -734,6 +738,7 @@ export const Onboarding = () => {
           );
         }
 
+        { /* eslint-disable-next-line no-case-declarations */ }
         const currentLocalQuestion = activeLocalQuestions[currentLocalQuestionIndex];
         if (!currentLocalQuestion) {
           return (
@@ -809,7 +814,7 @@ export const Onboarding = () => {
           </div>
         );
 
-      case 'results':
+      case 'results': {
         const scores = calculatedScores || { overall: 0, byTopic: [] };
         return (
           <div className="max-w-2xl mx-auto text-center animate-fade-in">
@@ -887,6 +892,7 @@ export const Onboarding = () => {
             )}
           </div>
         );
+      }
     }
   };
 

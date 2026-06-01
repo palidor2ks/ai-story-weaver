@@ -54,7 +54,7 @@ export const UserProfile = () => {
   const { data: repsData, isLoading: repsLoading, error: repsError, refetch: refetchReps } = useRepresentatives(profile?.address);
   const { data: civicData, isLoading: civicLoading, refetch: refetchCivic } = useCivicOfficials(profile?.address);
   const { data: partyScores, isLoading: partyScoresLoading } = usePartyMatchScores();
-  const federalReps = repsData?.representatives ?? [];
+  const federalReps = useMemo(() => repsData?.representatives ?? [], [repsData?.representatives]);
   const congressionalDistrict = repsData?.district;
   const congressionalState = repsData?.state;
   const geocodeFailed = !repsLoading && profile?.address && !congressionalDistrict && !repsError;

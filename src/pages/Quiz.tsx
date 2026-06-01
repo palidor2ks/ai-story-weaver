@@ -58,7 +58,7 @@ export const Quiz = () => {
       id: q.id,
       topicId: q.topic_id,
       text: q.text,
-      options: (q.options || []).map((o: any) => ({
+      options: (q.options || []).map((o: { id: string; text: string; value: number; is_skip_option?: boolean }) => ({
         id: o.id,
         text: o.text,
         value: o.value,
