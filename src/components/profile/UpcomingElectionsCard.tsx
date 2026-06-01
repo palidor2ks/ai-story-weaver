@@ -53,6 +53,54 @@ interface SeatGroup {
   elections: UpcomingElection[]; // every election feeding this seat (for date display + dialog)
 }
 
+
+function normalizeCandidateText(value: string | null | undefined): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function candidateSignature(candidate: UpcomingCandidate): string {
+  return [
+    normalizeCandidateText(candidate.name),
+    normalizeCandidateText(candidate.party),
+    normalizeCandidateText(candidate.office),
+    normalizeCandidateText(candidate.state),
+    normalizeCandidateText(candidate.district),
+  ].join('|');
+}
+
+function mergeSeatCandidate(existing: UpcomingCandidate, incoming: UpcomingCandidate): UpcomingCandidate {
+  return {
+    ...existing,
+    ...incoming,
+    candidate_id: existing.candidate_id || incoming.candidate_id,
+    image_url: existing.image_url ?? incoming.image_url,
+    overall_score: existing.overall_score ?? incoming.overall_score,
+    confidence: existing.confidence ?? incoming.confidence,
+    answers_source: existing.answers_source ?? incoming.answers_source,
+    source_url: existing.source_url ?? incoming.source_url,
+    is_incumbent: existing.is_incumbent || incoming.is_incumbent,
+    is_pending_research: existing.is_pending_research && incoming.is_pending_research,
+    office: incoming.office.length > existing.office.length ? incoming.office : existing.office,
+    district: existing.district ?? incoming.district,
+  };
+}
+
+function addSeatCandidate(seat: SeatGroup, candidate: UpcomingCandidate) {
+  const byIdIndex = seat.candidates.findIndex(x => x.candidate_id === candidate.candidate_id);
+  const bySignatureIndex = seat.candidates.findIndex(x => candidateSignature(x) === candidateSignature(candidate));
+  const index = byIdIndex >= 0 ? byIdIndex : bySignatureIndex;
+
+  if (index === -1) {
+    seat.candidates.push(candidate);
+  } else {
+    seat.candidates[index] = mergeSeatCandidate(seat.candidates[index], candidate);
+  }
+}
+
 function seatLabel(seat: SeatGroup): string {
   const parts: string[] = [seat.office];
   if (seat.district) parts.push(`District ${seat.district}`);
@@ -66,10 +114,10 @@ function buildSeatGroups(elections: UpcomingElection[]): SeatGroup[] {
   for (const e of elections) {
     for (const c of e.candidates) {
       const key = [
-        c.office.toLowerCase().trim(),
-        (c.state || e.state || '').toLowerCase(),
-        (c.district || '').toLowerCase(),
-        (e.jurisdiction || '').toLowerCase(),
+        normalizeCandidateText(c.office),
+        normalizeCandidateText(c.state || e.state),
+        normalizeCandidateText(c.district),
+        normalizeCandidateText(e.jurisdiction),
       ].join('|');
       let seat = seats.get(key);
       if (!seat) {
@@ -84,9 +132,7 @@ function buildSeatGroups(elections: UpcomingElection[]): SeatGroup[] {
         };
         seats.set(key, seat);
       }
-      if (!seat.candidates.some(x => x.candidate_id === c.candidate_id)) {
-        seat.candidates.push(c);
-      }
+      addSeatCandidate(seat, c);
       if (!seat.elections.some(x => x.id === e.id)) seat.elections.push(e);
     }
   }
@@ -176,11 +222,19 @@ function SeatBlock({
     .filter((v, i, arr) => arr.indexOf(v) === i)
     .join(' · ');
 
+  const dialogElection: UpcomingElection = {
+    ...primaryElection,
+    name: seatLabel(seat),
+    state: seat.state ?? primaryElection.state,
+    jurisdiction: seat.jurisdiction ?? primaryElection.jurisdiction,
+    candidates: seat.candidates,
+  };
+
   return (
     <div className="space-y-2">
       <button
         type="button"
-        onClick={() => onOpen(primaryElection)}
+        onClick={() => onOpen(dialogElection)}
         className="w-full flex items-center gap-2 text-left rounded-md px-2 py-1 -mx-2 hover:bg-accent/40 transition-colors group"
       >
         <div className="min-w-0 flex-1">

@@ -219,6 +219,60 @@ function normalizeJurisdictionKey(jurisdiction: string | null | undefined, state
   return s || normalizeText(state);
 }
 
+function candidateMergeKey(candidate: ElectionResponseRow['candidates'][number]): string {
+  return [
+    normalizeText(candidate.name),
+    normalizeText(candidate.party),
+    normalizeText(candidate.office),
+    normalizeText(candidate.state),
+    normalizeText(candidate.district),
+  ].join('|');
+}
+
+function mergeCandidateRows(
+  existing: ElectionResponseRow['candidates'][number],
+  incoming: ElectionResponseRow['candidates'][number],
+): ElectionResponseRow['candidates'][number] {
+  return {
+    ...existing,
+    ...incoming,
+    candidate_id: existing.candidate_id || incoming.candidate_id,
+    image_url: existing.image_url ?? incoming.image_url,
+    overall_score: existing.overall_score ?? incoming.overall_score,
+    confidence: existing.confidence ?? incoming.confidence,
+    answers_source: existing.answers_source ?? incoming.answers_source,
+    source_url: existing.source_url ?? incoming.source_url,
+    is_incumbent: existing.is_incumbent || incoming.is_incumbent,
+    is_pending_research: existing.is_pending_research && incoming.is_pending_research,
+    office: (incoming.office ?? '').length > (existing.office ?? '').length ? incoming.office : existing.office,
+    district: existing.district ?? incoming.district,
+  };
+}
+
+function mergeCandidateLists(candidates: ElectionResponseRow['candidates']): ElectionResponseRow['candidates'] {
+  const byId = new Map<string, ElectionResponseRow['candidates'][number]>();
+  const bySignature = new Map<string, string>();
+
+  for (const candidate of candidates) {
+    const signature = candidateMergeKey(candidate);
+    const existingId = byId.has(candidate.candidate_id)
+      ? candidate.candidate_id
+      : bySignature.get(signature);
+
+    if (!existingId) {
+      byId.set(candidate.candidate_id, candidate);
+      bySignature.set(signature, candidate.candidate_id);
+      continue;
+    }
+
+    const merged = mergeCandidateRows(byId.get(existingId)!, candidate);
+    byId.set(existingId, merged);
+    bySignature.set(signature, existingId);
+  }
+
+  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function mergeDuplicateElections(rows: ElectionResponseRow[]): ElectionResponseRow[] {
   const byKey = new Map<string, ElectionResponseRow>();
   for (const row of rows) {
@@ -230,23 +284,17 @@ function mergeDuplicateElections(rows: ElectionResponseRow[]): ElectionResponseR
     ].join('|');
     const existing = byKey.get(key);
     if (!existing) {
-      byKey.set(key, { ...row, candidates: [...row.candidates] });
+      byKey.set(key, { ...row, candidates: mergeCandidateLists(row.candidates) });
       continue;
     }
-    // Merge candidates, deduped by candidate_id; keep the longest/most-specific office string.
-    const byId = new Map(existing.candidates.map(c => [c.candidate_id, c] as const));
-    for (const c of row.candidates) {
-      const prev = byId.get(c.candidate_id);
-      if (!prev) {
-        byId.set(c.candidate_id, c);
-      } else if ((c.office ?? '').length > (prev.office ?? '').length) {
-        byId.set(c.candidate_id, { ...prev, office: c.office });
-      }
-    }
-    existing.candidates = Array.from(byId.values());
+
+    existing.candidates = mergeCandidateLists([...existing.candidates, ...row.candidates]);
     // Prefer the more descriptive name / jurisdiction.
     if ((row.name ?? '').length > (existing.name ?? '').length) existing.name = row.name;
     if (!existing.jurisdiction && row.jurisdiction) existing.jurisdiction = row.jurisdiction;
+    if (!existing.source.includes(row.source)) existing.source = `${existing.source}, ${row.source}`;
+    if (!existing.source_url && row.source_url) existing.source_url = row.source_url;
+    if (!existing.confidence && row.confidence) existing.confidence = row.confidence;
   }
   return Array.from(byKey.values());
 }
