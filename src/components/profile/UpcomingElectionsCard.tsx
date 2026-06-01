@@ -81,7 +81,10 @@ function ElectionGroup({ election, onOpen, ieMap }: { election: UpcomingElection
     <div className="space-y-3">
       <button
         type="button"
-        onClick={() => onOpen(election)}
+        onClick={() => {
+          onOpen(election);
+          logBadgeEvent('election_viewed', { election_id: election.id, name: election.name });
+        }}
         className="w-full flex items-center gap-2 text-sm font-semibold text-foreground text-left rounded-md px-2 py-1 -mx-2 hover:bg-accent/40 transition-colors group"
       >
         <Calendar className="w-4 h-4 text-muted-foreground" />
