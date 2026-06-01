@@ -201,6 +201,30 @@ export const ShareCardModal = ({
     charCount,
   });
 
+  const shareTargetType = (() => {
+    switch (data.kind) {
+      case 'candidate-alignment': return 'candidate';
+      case 'donor-stats': return 'donor';
+      case 'user-profile': return 'profile';
+      case 'invite': return 'invite';
+      default: return 'unknown';
+    }
+  })();
+  const shareTargetId = (() => {
+    try { return new URL(url, window.location.origin).pathname || url; } catch { return url; }
+  })();
+  const fireShareCompleted = (action: string) => {
+    logBadgeEvent('share_completed', {
+      target_type: shareTargetType,
+      target_id: shareTargetId,
+      action,
+      kind: caption.kind,
+    });
+    if (data.kind === 'invite') {
+      logBadgeEvent('referral_sent', { target: shareTargetId, action });
+    }
+  };
+
   // Run a non-blocking pre-flight QA pass and warn the user if cropping
   // or font-loading issues are detected. Returns false if no node is available.
   const preflightCheck = async (action: string): Promise<boolean> => {
