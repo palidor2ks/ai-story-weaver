@@ -270,17 +270,33 @@ export function AutomatedJobsCard() {
     }
   };
 
+  const activeRun = useMemo(
+    () => (activeRunId ? runs?.find((r) => r.id === activeRunId) ?? null : null),
+    [activeRunId, runs],
+  );
+
   return (
+    <>
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Clock className="h-5 w-5" />
-          Automated Jobs — Congress Donor Sync
-        </CardTitle>
-        <CardDescription>
-          Auto-fills FEC donor data for visible-state House &amp; Senate candidates.
-          Backfill runs every 10 minutes until the queue is empty; a full refresh runs daily at 07:00 UTC.
-        </CardDescription>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Automated Jobs — Congress Donor Sync
+            </CardTitle>
+            <CardDescription>
+              Auto-fills FEC donor data for visible-state House &amp; Senate candidates.
+              Backfill runs every 10 minutes until the queue is empty; a full refresh runs daily at 07:00 UTC.
+            </CardDescription>
+          </div>
+          {activeRunId && (
+            <Button size="sm" variant="outline" onClick={() => setStatusDrawerOpen(true)}>
+              <Activity className="h-3.5 w-3.5 mr-1" />
+              Run status
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading ? (
@@ -313,30 +329,146 @@ export function AutomatedJobsCard() {
           <details className="rounded-lg border bg-muted/30 p-3 text-sm">
             <summary className="cursor-pointer font-medium">Recent run history ({runs.length})</summary>
             <div className="mt-2 space-y-1.5 text-xs">
-              {runs.map((r) => (
-                <div key={r.id} className="flex flex-wrap items-center gap-2 border-b border-border/50 pb-1.5 last:border-0">
-                  <Badge variant={r.mode === 'backfill' ? 'secondary' : 'outline'}>{r.mode}</Badge>
-                  <span className="text-muted-foreground">
-                    {formatDistanceToNow(new Date(r.started_at), { addSuffix: true })}
-                  </span>
-                  <span>✓ {r.success_count}</span>
-                  {r.failed_count > 0 && <span className="text-destructive">✗ {r.failed_count}</span>}
-                  {r.remaining !== null && (
-                    <span className="text-muted-foreground">· {r.remaining} left</span>
-                  )}
-                  {r.fec_ids_filled > 0 && (
-                    <span className="text-muted-foreground">· {r.fec_ids_filled} FEC IDs filled</span>
-                  )}
-                  <span className="text-muted-foreground ml-auto">{r.triggered_by}</span>
-                </div>
-              ))}
+              {runs.map((r) => {
+                const state = deriveRunState(r);
+                const meta = RUN_STATE_META[state];
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => { setActiveRunId(r.id); setStatusDrawerOpen(true); }}
+                    className="flex w-full flex-wrap items-center gap-2 border-b border-border/50 pb-1.5 last:border-0 text-left hover:bg-muted/50 rounded px-1 -mx-1"
+                  >
+                    <Badge variant={r.mode === 'backfill' ? 'secondary' : 'outline'}>{r.mode}</Badge>
+                    <Badge variant={meta.variant} className={meta.className}>{meta.label}</Badge>
+                    <span className="text-muted-foreground">
+                      {formatDistanceToNow(new Date(r.started_at), { addSuffix: true })}
+                    </span>
+                    <span>✓ {r.success_count}</span>
+                    {r.failed_count > 0 && <span className="text-destructive">✗ {r.failed_count}</span>}
+                    {r.remaining !== null && (
+                      <span className="text-muted-foreground">· {r.remaining} left</span>
+                    )}
+                    {r.fec_ids_filled > 0 && (
+                      <span className="text-muted-foreground">· {r.fec_ids_filled} FEC IDs filled</span>
+                    )}
+                    <span className="text-muted-foreground ml-auto">{r.triggered_by}</span>
+                  </button>
+                );
+              })}
             </div>
           </details>
         )}
       </CardContent>
     </Card>
+    <RunStatusDrawer
+      open={statusDrawerOpen}
+      onOpenChange={setStatusDrawerOpen}
+      runId={activeRunId}
+      run={activeRun}
+    />
+    </>
   );
 }
+
+function RunStatusDrawer({
+  open, onOpenChange, runId, run,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  runId: string | null;
+  run: DonorSyncRun | null;
+}) {
+  const state = deriveRunState(run);
+  const meta = RUN_STATE_META[state];
+  const copyRunId = () => {
+    if (!runId) return;
+    navigator.clipboard?.writeText(runId).then(() => toast.success('Run ID copied'));
+  };
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Run status
+            <Badge variant={meta.variant} className={meta.className}>{meta.label}</Badge>
+            {run && !run.finished_at && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          </DrawerTitle>
+          <DrawerDescription>
+            Live status for the most recent Run now execution. Auto-refreshes every 15 seconds.
+          </DrawerDescription>
+        </DrawerHeader>
+        <div className="px-4 pb-2 space-y-3 text-sm max-h-[60vh] overflow-y-auto">
+          <div className="rounded-md border bg-muted/30 p-2 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Run ID</div>
+              <div className="font-mono text-xs truncate">{runId ?? '—'}</div>
+            </div>
+            <Button size="sm" variant="outline" onClick={copyRunId} disabled={!runId}>Copy</Button>
+          </div>
+
+          {run ? (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <Stat label="Mode" value={run.mode} />
+                <Stat label="Processed" value={run.processed} />
+                <Stat label="Success" value={run.success_count} accent="text-green-600" />
+                <Stat label="Failed" value={run.failed_count} accent={run.failed_count > 0 ? 'text-destructive' : ''} />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <Stat label="Remaining" value={run.remaining ?? '—'} />
+                <Stat label="FEC IDs filled" value={run.fec_ids_filled} />
+                <Stat label="Triggered by" value={run.triggered_by} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Stat
+                  label="Started"
+                  value={formatDistanceToNow(new Date(run.started_at), { addSuffix: true })}
+                />
+                <Stat
+                  label="Finished"
+                  value={run.finished_at ? formatDistanceToNow(new Date(run.finished_at), { addSuffix: true }) : '—'}
+                />
+              </div>
+              <div className="rounded-md border bg-background p-2">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Notes</div>
+                <div className="text-xs whitespace-pre-wrap break-words">
+                  {run.notes ?? <span className="italic text-muted-foreground">No notes yet.</span>}
+                </div>
+              </div>
+              {run.errors && run.errors.length > 0 && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2">
+                  <div className="text-[10px] uppercase tracking-wide text-destructive mb-1">
+                    Errors ({run.errors.length})
+                  </div>
+                  <ul className="text-xs space-y-1 max-h-48 overflow-y-auto">
+                    {run.errors.map((e, i) => (
+                      <li key={i} className="border-b border-border/40 pb-1 last:border-0">
+                        <span className="font-medium">{e.step}:</span> {e.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Waiting for the run row to appear…
+            </div>
+          )}
+        </div>
+        <DrawerFooter>
+          <DrawerClose asChild>
+            <Button variant="outline">Close</Button>
+          </DrawerClose>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
 
 function JobBlock({
   title, schedule, run, isRunning, onRunNow,
