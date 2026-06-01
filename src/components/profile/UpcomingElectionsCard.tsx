@@ -135,17 +135,22 @@ export function UpcomingElectionsCard({ address }: Props) {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <CardTitle className="flex items-center gap-2">
-              <Vote className="w-5 h-5" />
-              Upcoming Elections on Your Ballot
-            </CardTitle>
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2">
+                <Vote className="w-5 h-5" />
+                Candidates on Your Upcoming Ballot
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Ballot candidates are separate from your current representatives and are matched by address, district, and local jurisdiction when available.
+              </p>
+            </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={handleRefresh}
               disabled={!address || isRefreshing || isLoading}
               className="h-8 gap-1.5"
-              title="Re-fetch from FEC and Google Civic"
+              title="Re-fetch ballot candidates from FEC and Google Civic"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="text-xs">Refresh</span>
@@ -163,7 +168,7 @@ export function UpcomingElectionsCard({ address }: Props) {
             </div>
           ) : total === 0 ? (
             <p className="text-muted-foreground text-sm">
-              No upcoming elections found for your address yet. Check back closer to election day.
+              No upcoming ballot candidates found for your address yet. Check back closer to election day or tap Refresh to re-check available sources.
             </p>
           ) : (
             <div className="space-y-6">
@@ -188,7 +193,7 @@ export function UpcomingElectionsCard({ address }: Props) {
                 </section>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
-                  Local race coverage is limited — typically only available in the weeks leading up to an election.
+                  Local ballot coverage is limited and depends on address-specific data from election sources; some municipal or ward races may only appear after local sample-ballot data is available.
                 </p>
               )}
             </div>

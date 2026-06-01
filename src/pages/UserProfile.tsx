@@ -665,16 +665,16 @@ export const UserProfile = () => {
           </CardContent>
         </Card>
 
-        {/* Your Representatives */}
+        {/* Your Current Representatives */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
             <CardTitle className="font-display flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-accent" />
-                Your Representatives
+                Your Current Representatives
                 {allRepsLoading ? (
                   <Badge variant="outline" className="ml-2 text-xs font-normal animate-pulse">
-                    Looking up representatives...
+                    Looking up current representatives...
                   </Badge>
                 ) : congressionalState && congressionalDistrict ? (
                   <Badge variant="outline" className="ml-2 text-xs font-normal">
@@ -700,7 +700,7 @@ export const UserProfile = () => {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Regenerate AI comparison summaries for all representatives</p>
+                        <p>Regenerate AI comparison summaries for current representatives</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -709,7 +709,7 @@ export const UserProfile = () => {
                     size="icon"
                     onClick={handleRefreshRepresentatives}
                     disabled={allRepsLoading}
-                    aria-label="Refresh representatives"
+                    aria-label="Refresh current representatives"
                   >
                     <RefreshCw className={cn("h-4 w-4", allRepsLoading && "animate-spin")} />
                   </Button>
@@ -720,7 +720,7 @@ export const UserProfile = () => {
           <CardContent>
             {!profile.address ? (
               <div className="text-center py-6">
-                <p className="text-muted-foreground mb-4">Add your address to see your representatives.</p>
+                <p className="text-muted-foreground mb-4">Add your address to see your current representatives.</p>
                 <Button variant="outline" onClick={handleEditAddress}>
                   Add Address
                 </Button>
@@ -729,7 +729,7 @@ export const UserProfile = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-center gap-3 py-4 text-muted-foreground">
                   <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent" />
-                  <span>Finding your representatives...</span>
+                  <span>Finding your current representatives...</span>
                 </div>
                 {[1, 2, 3].map(i => (
                   <div key={i} className="flex items-center gap-4 p-4 rounded-lg border border-border animate-pulse">
@@ -861,9 +861,9 @@ export const UserProfile = () => {
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="font-medium text-destructive">Failed to load representatives</p>
+                    <p className="font-medium text-destructive">Failed to load current representatives</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      There was an error fetching your representatives. Please try again.
+                      There was an error fetching your current representatives. Please try again.
                     </p>
                     <Button 
                       variant="outline" 
@@ -912,7 +912,7 @@ export const UserProfile = () => {
               </div>
             ) : (
               <p className="text-muted-foreground text-center py-4">
-                No representatives found for your address.
+                No current representatives found for your address.
               </p>
             )}
           </CardContent>
