@@ -184,7 +184,12 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[Geocode] State: ${state}, City: ${city}, District: ${district}, lat/lng: ${lat}/${lng}`);
+    // Pull OCD divisions from Google Civic to enrich with municipal subdivisions
+    // (ward, school district, etc.) that Census doesn't provide.
+    const divisions = await fetchCivicDivisions(trimmed);
+    const ward = extractDivisionSegment(divisions, 'ward');
+
+    console.log(`[Geocode] State: ${state}, City: ${city}, District: ${district}, Ward: ${ward}, lat/lng: ${lat}/${lng}`);
 
     // Write back to cache (best-effort, don't block the response on errors)
     try {
@@ -194,6 +199,7 @@ serve(async (req) => {
           normalized_address: normalized,
           lat, lng, state, district, city,
           matched_address: matchedAddress,
+          payload: { divisions, ward },
           cached_at: new Date().toISOString(),
         }, { onConflict: 'normalized_address' });
     } catch (e) {
@@ -201,7 +207,7 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify({
-      district, state, city, lat, lng, matchedAddress, cached: false,
+      district, state, city, lat, lng, matchedAddress, divisions, ward, cached: false,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {
