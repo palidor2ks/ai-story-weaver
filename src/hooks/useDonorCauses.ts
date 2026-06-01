@@ -142,7 +142,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       // appear for rows like "AIPAC".
       const { data: canonicalAliases, error: canonicalErr } = await (supabase as any)
         .from('donor_aliases')
-        .select('canonical_name, donor_type, donor_types, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
+        .select('canonical_name, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
         .in('canonical_name', names)
         .eq('is_active', true);
       if (canonicalErr) throw canonicalErr;
