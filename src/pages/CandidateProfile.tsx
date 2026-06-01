@@ -135,7 +135,7 @@ export const CandidateProfile = () => {
       if (error) throw error;
 
       const map = new Map<string, string>();
-      for (const row of (data ?? []) as any[]) {
+      for (const row of (data ?? []) as Array<{ donor_name: string; donor_type: string; donor_aliases?: { canonical_name?: string; is_active?: boolean } }>) {
         if (!row.donor_aliases?.is_active || !row.donor_aliases?.canonical_name) continue;
         map.set(`${row.donor_name.trim().toUpperCase()}|${row.donor_type}`, row.donor_aliases.canonical_name);
       }
@@ -665,7 +665,7 @@ export const CandidateProfile = () => {
                 state: candidate.state,
                 district: candidate.district,
               }]}
-              topics={userTopicScores.map(uts => (uts as any).topic_id).filter(Boolean)}
+              topics={userTopicScores.map(uts => (uts as { topic_id?: string }).topic_id).filter(Boolean)}
               state={candidate.state}
               district={candidate.district}
               title={`Latest News about ${candidate.name}`}

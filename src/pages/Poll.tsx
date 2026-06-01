@@ -59,15 +59,17 @@ export default function Poll() {
     );
   }
 
-  const allAnswered = questions.every((q: any) => answers[q.question_id]);
+  const allAnswered = questions.every((q: { question_id: string }) => answers[q.question_id]);
 
   const handleSubmit = async () => {
     if (!allAnswered) return toast.error('Please answer all questions');
     setSubmitting(true);
     try {
       const anonId = getAnonSessionId();
-      const payload = questions.map((pq: any) => {
-        const opt = (pq.questions?.question_options || []).find((o: any) => o.id === answers[pq.question_id]);
+      type PollOption = { id: string; value: number; display_order?: number };
+      type PollQuestion = { question_id: string; questions?: { question_options?: PollOption[] } };
+      const payload = (questions as PollQuestion[]).map((pq) => {
+        const opt = (pq.questions?.question_options || []).find((o) => o.id === answers[pq.question_id]);
         return {
           question_id: pq.question_id,
           selected_option_id: answers[pq.question_id],
@@ -87,8 +89,8 @@ export default function Poll() {
       setSubmitted(true);
       toast.success('Thanks for voting!');
       logBadgeEvent('poll_completed', { poll_id: poll.id, slug: poll.slug });
-    } catch (e: any) {
-      toast.error(e.message || 'Submit failed');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Submit failed');
     } finally {
       setSubmitting(false);
     }
@@ -121,9 +123,9 @@ export default function Poll() {
             {poll.description && <CardDescription>{poll.description}</CardDescription>}
           </CardHeader>
           <CardContent className="space-y-6">
-            {!submitted && questions.map((pq: any, idx: number) => {
+            {!submitted && (questions as Array<{ id: string; question_id: string; questions: { text: string; question_options?: Array<{ id: string; text: string; value: number; display_order?: number }> } }>).map((pq, idx) => {
               const q = pq.questions;
-              const opts = (q.question_options || []).slice().sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
+              const opts = (q.question_options || []).slice().sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
               return (
                 <div key={pq.id}>
                   <p className="font-medium mb-3">
@@ -131,7 +133,7 @@ export default function Poll() {
                     {q.text}
                   </p>
                   <div className="space-y-2">
-                    {opts.map((o: any) => {
+                    {opts.map((o) => {
                       const selected = answers[q.id] === o.id;
                       return (
                         <button

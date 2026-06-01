@@ -184,7 +184,7 @@ const DonorProfile = () => {
         .maybeSingle();
 
       if (error) throw error;
-      return ((data as any)?.donor_aliases) || null;
+      return ((data as { donor_aliases?: unknown } | null)?.donor_aliases as typeof aliasInfo) || null;
     },
     enabled: !!donor?.name && !!donor?.type,
   });
@@ -201,7 +201,7 @@ const DonorProfile = () => {
         .eq('alias_id', aliasInfo.id);
 
       if (error) throw error;
-      const uniqueNames = [...new Set((data || []).map((d: any) => d.donor_name))];
+      const uniqueNames = [...new Set((data || []).map((d: { donor_name: string }) => d.donor_name))];
       return uniqueNames.sort();
     },
     enabled: !!aliasInfo?.id,
@@ -242,7 +242,7 @@ const DonorProfile = () => {
       if (error) throw error;
       return (data || []).map((row) => ({
         ...row,
-        candidates: (row as any).candidates,
+        candidates: (row as { candidates?: unknown }).candidates,
       })) as DonorRecord[];
     },
     enabled: !!donor?.name,
@@ -268,7 +268,7 @@ const DonorProfile = () => {
       if (error) throw error;
       return (data || []).map((row) => ({
         ...row,
-        candidates: (row as any).candidates,
+        candidates: (row as { candidates?: unknown }).candidates,
       })) as ContributionRecord[];
     },
     enabled: !!donor?.name && donorRecords.length > 0,
@@ -305,7 +305,7 @@ const DonorProfile = () => {
           .ilike('recipient_committee_name', `${trimmed}%`)
           .not('recipient_committee_id', 'is', null)
           .limit(500);
-        (matches || []).forEach((m: any) => {
+        (matches || []).forEach((m: { recipient_committee_id: string | null }) => {
           if (m.recipient_committee_id) resolvedCommitteeIds.add(m.recipient_committee_id);
         });
       }
@@ -325,7 +325,7 @@ const DonorProfile = () => {
       if (error) throw error;
 
       const grouped = new Map<string, PACContributor>();
-      (data || []).forEach((row: any) => {
+      (data || []).forEach((row: { name?: string; display_name?: string; type?: string; amount?: number | string; transaction_count?: number | string; cycle?: string | number }) => {
         const contributorName = (row.display_name || row.name || '').trim();
         if (!contributorName) return;
         const amount = Number(row.amount || 0);
