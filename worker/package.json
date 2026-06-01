@@ -1,0 +1,31 @@
+{
+  "name": "ai-story-weaver-sync-worker",
+  "version": "1.0.0",
+  "description": "Background data sync worker for ai-story-weaver",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.89.0",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.4.5",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.5",
+    "@types/node-cron": "^3.0.11",
+    "typescript": "^5.8.3",
+    "tsx": "^4.7.0",
+    "eslint": "^9.32.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+
