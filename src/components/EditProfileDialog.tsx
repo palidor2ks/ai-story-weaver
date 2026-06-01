@@ -139,6 +139,7 @@ export const EditProfileDialog = ({ profile, onSave, isLoading }: EditProfileDia
       education_level: formData.education_level || null,
       race: formData.race || null,
     });
+    logBadgeEvent('demographics_updated');
     setOpen(false);
   };
 
