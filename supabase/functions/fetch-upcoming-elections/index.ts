@@ -696,6 +696,7 @@ Deno.serve(async (req) => {
     const state: string | undefined = body.state;
     const district: string | null = normalizeDistrict(body.district ?? null);
     const city: string | null = normalizeCity(body.city ?? null);
+    const ward: string | null = normalizeDistrict(body.ward ?? null);
     const lat: number | null = typeof body.lat === 'number' ? body.lat : null;
     const lng: number | null = typeof body.lng === 'number' ? body.lng : null;
     const force: boolean = body.force === true;
