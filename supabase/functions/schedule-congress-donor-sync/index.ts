@@ -21,7 +21,7 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('VITE_SUPABASE_PUBLISHABLE_KEY') ?? '';
   const supabase = createClient(supabaseUrl, serviceKey);
 
   // Auth: admin user OR service-role (pg_cron passes anon — accept that too since this fn
@@ -29,7 +29,7 @@ serve(async (req) => {
   const auth = req.headers.get('Authorization') ?? '';
   const bearer = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   const apiKeyHeader = req.headers.get('apikey')?.trim() ?? '';
-  const isServiceOrAnon = bearer === serviceKey || bearer === anonKey || apiKeyHeader === serviceKey || apiKeyHeader === anonKey;
+  const isServiceOrAnon = bearer === serviceKey || apiKeyHeader === serviceKey || (anonKey && (bearer === anonKey || apiKeyHeader === anonKey));
   let triggeredBy = 'cron';
 
   if (!isServiceOrAnon) {
