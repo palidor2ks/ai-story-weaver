@@ -257,6 +257,7 @@ export const ShareCardModal = ({
       await preflightCheck('download');
       await downloadNode(node, filename);
       toast.success('Image downloaded — attach it to your post.');
+      fireShareCompleted('download');
     } catch (e) {
       toast.error('Could not generate image.');
       console.error(e);
