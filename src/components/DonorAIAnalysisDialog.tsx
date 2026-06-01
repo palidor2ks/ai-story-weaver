@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { PoliticalJargonHelper } from '@/components/PoliticalJargonHelper';
 
 export interface DonorAnalysis {
   summary: string;
@@ -250,6 +251,16 @@ export const DonorAIAnalysisDialog = ({ id, name, type, cycle, profileHref, trig
             )}
 
             <p className="text-foreground leading-relaxed">{analysis.summary}</p>
+
+            <PoliticalJargonHelper
+              contextText={[
+                analysis.summary,
+                analysis.analysis,
+                ...(analysis.positions?.map((position) => `${position.topic} ${position.stance}`) ?? []),
+                ...(analysis.finance_claims ?? []),
+                ...(analysis.public_context_claims ?? []),
+              ].join(' ')}
+            />
 
             {analysis.party_support?.length > 0 && (
               <div className="space-y-2">

@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, Sparkles, ExternalLink, Loader2, ThumbsUp, Thum
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { PoliticalJargonHelper } from '@/components/PoliticalJargonHelper';
 
 interface AIExplanationProps {
   candidateId: string;
@@ -149,6 +150,19 @@ export const AIExplanation = ({
           )}
         </div>
 
+        {analysis && (
+          <div className="mb-4">
+            <PoliticalJargonHelper
+              contextText={[
+                analysis.summary,
+                analysis.deepAnalysis,
+                ...(analysis.personalizedComparison?.agreements ?? []),
+                ...(analysis.personalizedComparison?.disagreements ?? []),
+                analysis.personalizedComparison?.overallAssessment ?? '',
+              ].join(' ')}
+            />
+          </div>
+        )}
 
         {/* Personalized Comparison Section */}
         {analysis?.personalizedComparison && (
