@@ -1055,18 +1055,44 @@ serve(async (req) => {
         .eq('fec_committee_id', committeeId);
     };
 
+    const returnPartialNow = async (reason: string) => {
+      committeeHasMore = true;
+      stoppedDueToTimeout = true;
+      console.log(`[FEC-DONORS] Partial exit (${reason}) — saving contributions + cursor only; skipping donor rebuild, rollups, and reconciliation`);
+      try { await saveContributionBatch(); } catch (e) { console.error('[FEC-DONORS] partial contribution save error:', e); }
+      try { await saveCursor(true); } catch (e) { console.error('[FEC-DONORS] partial cursor save error:', e); }
+      const elapsedMs = Date.now() - startTime;
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          imported: 0,
+          contributionsImported: committeeContributionsSaved,
+          totalRaised: 0,
+          earmarkedCount,
+          transferCount,
+          cycle,
+          hasMore: true,
+          stoppedDueToTimeout: true,
+          partialReason: reason,
+          committeesProcessed: 1,
+          committeesSynced: committeeId,
+          committeesRemaining: remainingCommittees,
+          committees: committees.map(c => ({ id: c.id, name: c.name })),
+          skippedNonContributions,
+          elapsedMs,
+          hitRateLimit: hitRateLimitDuringRequest,
+          rateLimitWaitMs: lastRateLimitBackoffMs,
+          message: `Partial sync saved ${committeeContributionsSaved} contribution rows for ${committeeName}. Rerun to continue.`
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    };
+
     while (pageCount < maxPages) {
       // Check runtime guard during pagination
       if (Date.now() - startTime > MAX_RUNTIME_MS) {
-        console.log('[FEC-DONORS] Runtime limit reached mid-pagination — fast cursor save and exit (skip donor flush + rollup)');
-        committeeHasMore = true;
-        stoppedDueToTimeout = true;
-        // Persist ONLY contributions + cursor. Skip donor flush (was 100s for Josh Riley:
-        // 6491 donors). On next resume we reload donors from DB and re-aggregate, so no
-        // data is lost — only deferred. Rollups also skipped via stoppedDueToTimeout guard.
-        try { await saveContributionBatch(); } catch (e) { console.error('[FEC-DONORS] timeout flush contribs error:', e); }
-        try { await saveCursor(true); } catch (e) { console.error('[FEC-DONORS] timeout saveCursor error:', e); }
-        break;
+        return await returnPartialNow('runtime-budget');
       }
 
       // Get proper date range for the cycle to ensure we only import contributions
