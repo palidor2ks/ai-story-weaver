@@ -16,6 +16,7 @@ const DEFAULT_ALLOWED_REDIRECT_URIS = [
   'https://polipulseapp.com/auth/idme-callback',
   'https://www.polipulseapp.com/auth/idme-callback',
   'https://id-preview--b4a499eb-c11a-4320-8adc-dfe50259459a.lovable.app/auth/idme-callback',
+  'https://b4a499eb-c11a-4320-8adc-dfe50259459a.lovableproject.com/auth/idme-callback',
   'http://localhost:5173/auth/idme-callback',
   'http://localhost:8080/auth/idme-callback',
 ];
@@ -79,7 +80,7 @@ Deno.serve(async (req) => {
       if (u.pathname !== '/auth/idme-callback') return false;
       const host = u.hostname.toLowerCase();
       // Lovable-hosted preview/sandbox subdomains
-      if (u.protocol === 'https:' && (host.endsWith('.lovable.app') || host.endsWith('.lovable.dev'))) {
+      if (u.protocol === 'https:' && (host.endsWith('.lovable.app') || host.endsWith('.lovable.dev') || host.endsWith('.lovableproject.com'))) {
         return true;
       }
       return false;
