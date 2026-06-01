@@ -376,6 +376,7 @@ export const ShareCardModal = ({
         files,
       });
       if (!ok) toast.error('Share failed.');
+      else fireShareCompleted('native');
     } finally {
       setBusy(null);
     }
