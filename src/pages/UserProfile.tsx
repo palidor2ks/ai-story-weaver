@@ -8,6 +8,7 @@ import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
 import { usePersonalizedScoreMap } from '@/hooks/usePersonalizedScoreMap';
 import { usePartyMatchScores } from '@/hooks/usePartyMatchScores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -537,8 +538,19 @@ export const UserProfile = () => {
           </CardContent>
         </Card>
 
-        {/* AI Analysis Summary */}
-        <Card className="mb-8 shadow-elevated">
+        <Tabs defaultValue="ai-analysis" className="mb-8">
+          <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-xl bg-secondary/60 p-1">
+            <TabsTrigger value="ai-analysis" className="whitespace-nowrap">AI Analysis</TabsTrigger>
+            <TabsTrigger value="party-alignment" className="whitespace-nowrap">Party Alignment</TabsTrigger>
+            <TabsTrigger value="representatives" className="whitespace-nowrap">Representatives</TabsTrigger>
+            <TabsTrigger value="elections" className="whitespace-nowrap">Upcoming Elections</TabsTrigger>
+            <TabsTrigger value="badges" className="whitespace-nowrap">Badges</TabsTrigger>
+            <TabsTrigger value="topics" className="whitespace-nowrap">Priority Topics</TabsTrigger>
+          </TabsList>
+
+          {/* AI Analysis Summary */}
+          <TabsContent value="ai-analysis" className="mt-4">
+            <Card className="shadow-elevated">
           <CardHeader>
             <CardTitle className="font-display flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -602,10 +614,12 @@ export const UserProfile = () => {
               <p className="text-muted-foreground">Complete the quiz to see your AI-generated political analysis.</p>
             )}
           </CardContent>
-        </Card>
+            </Card>
+          </TabsContent>
 
-        {/* Party Alignment */}
-        <Card className="mb-8 shadow-elevated">
+          {/* Party Alignment */}
+          <TabsContent value="party-alignment" className="mt-4">
+            <Card className="shadow-elevated">
           <CardHeader>
             <CardTitle className="font-display flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -663,10 +677,12 @@ export const UserProfile = () => {
               </div>
             </TooltipProvider>
           </CardContent>
-        </Card>
+            </Card>
+          </TabsContent>
 
-        {/* Your Current Representatives */}
-        <Card className="mb-8 shadow-elevated">
+          {/* Your Current Representatives */}
+          <TabsContent value="representatives" className="mt-4">
+            <Card className="shadow-elevated">
           <CardHeader>
             <CardTitle className="font-display flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -916,16 +932,22 @@ export const UserProfile = () => {
               </p>
             )}
           </CardContent>
-        </Card>
+            </Card>
+          </TabsContent>
 
-        {/* Upcoming Elections */}
-        <UpcomingElectionsCard address={profile?.address} />
+          {/* Upcoming Elections */}
+          <TabsContent value="elections" className="mt-4">
+            <UpcomingElectionsCard address={profile?.address} />
+          </TabsContent>
 
-        {/* Badges */}
-        <BadgeShelf userId={session?.user?.id} family="voter" />
+          {/* Badges */}
+          <TabsContent value="badges" className="mt-4">
+            <BadgeShelf userId={session?.user?.id} family="voter" />
+          </TabsContent>
 
-        {/* Priority Topics */}
-        <Card className="shadow-elevated">
+          {/* Priority Topics */}
+          <TabsContent value="topics" className="mt-4">
+            <Card className="shadow-elevated">
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
               <Target className="w-5 h-5 text-accent" />
@@ -952,7 +974,9 @@ export const UserProfile = () => {
               </p>
             )}
           </CardContent>
-        </Card>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
