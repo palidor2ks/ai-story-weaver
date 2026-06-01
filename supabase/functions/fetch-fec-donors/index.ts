@@ -1362,25 +1362,36 @@ serve(async (req) => {
         return await returnPartialNow('page-budget');
       }
 
-      // Periodic save every DONOR_FLUSH_PAGES pages to avoid memory buildup
+      // Periodic save every DONOR_FLUSH_PAGES pages. Contributions are durable;
+      // donor summaries are rebuilt once the committee completes.
       if (pageCount % DONOR_FLUSH_PAGES === 0) {
-        console.log(`[FEC-DONORS] Progress: page ${pageCount}, ${committeeContributions} contributions - flushing to DB`);
+        console.log(`[FEC-DONORS] Progress: page ${pageCount}, ${committeeContributions} contributions - flushing contributions only`);
         await saveContributionBatch();
-        await saveDonorBatch();
         await saveCursor(true); // Save cursor for resumability
       }
 
       await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY_MS));
     }
 
-    // Save remaining contributions and donors (final flush) — but skip if we already
-    // saved a cursor in the timeout branch above; running saveDonorBatch(true) on a
-    // resumed sync re-flushes thousands of pre-loaded donors and can burn 100+ seconds.
+    // Save remaining contributions. Donor aggregates are rebuilt in one DB-side set operation
+    // only when this committee has completed, never during partial/resume slices.
     if (!stoppedDueToTimeout) {
       await saveContributionBatch();
-      await saveDonorBatch(true); // Final flush - save all donors
 
-      totalDonors = aggregatedDonors.size; // Actual unique donor count
+      if (!committeeHasMore) {
+        const { data: rebuilt, error: rebuildError } = await supabase.rpc('rebuild_donors_for_committee', {
+          p_committee_id: committeeId,
+          p_cycle: cycle,
+          p_candidate_id: effectiveCandidateId,
+        });
+        if (rebuildError) {
+          console.error('[FEC-DONORS] Donor rebuild error:', rebuildError.message);
+        } else {
+          donorRebuildCount = Number(rebuilt || 0);
+        }
+      }
+
+      totalDonors = donorRebuildCount || aggregatedDonors.size;
       totalContributions = committeeContributionsSaved;
       totalRaised = committeeItemized;
 
