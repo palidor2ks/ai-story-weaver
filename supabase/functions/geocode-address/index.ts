@@ -7,6 +7,40 @@ const corsHeaders = {
 };
 
 const CACHE_TTL_DAYS = 30;
+const GOOGLE_CIVIC_API_KEY = Deno.env.get('GOOGLE_CIVIC_API_KEY') ?? '';
+
+// Pull every OCD division id returned by Google Civic for an address.
+// Used to derive municipal subdivisions (ward, council district, school board)
+// that the Census geocoder doesn't expose.
+async function fetchCivicDivisions(address: string): Promise<string[]> {
+  if (!GOOGLE_CIVIC_API_KEY || !address) return [];
+  try {
+    const url = `https://www.googleapis.com/civicinfo/v2/representatives?key=${GOOGLE_CIVIC_API_KEY}&address=${encodeURIComponent(address)}&includeOffices=false`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const divisions = data?.divisions ?? {};
+    return Object.keys(divisions);
+  } catch (e) {
+    console.warn('[Geocode] Civic divisions fetch failed:', e);
+    return [];
+  }
+}
+
+// Parse a single segment like `ward:1` or `sldl:nj-006` from any matching division.
+function extractDivisionSegment(divisions: string[], segment: string): string | null {
+  const needle = `/${segment}:`;
+  for (const id of divisions) {
+    const idx = id.indexOf(needle);
+    if (idx === -1) continue;
+    const rest = id.slice(idx + needle.length);
+    const end = rest.indexOf('/');
+    const value = end === -1 ? rest : rest.slice(0, end);
+    const numeric = value.match(/(\d+)/);
+    return numeric ? numeric[1] : value;
+  }
+  return null;
+}
 
 // Normalize an address for cache keying. Uppercase, collapse whitespace,
 // strip ZIP+4 suffix, and remove most punctuation except commas.
