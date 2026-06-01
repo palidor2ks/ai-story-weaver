@@ -349,7 +349,10 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const address: string | undefined = body.address;
     const state: string | undefined = body.state;
-    const district: string | null = body.district ?? null;
+    const district: string | null = normalizeDistrict(body.district ?? null);
+    const city: string | null = normalizeCity(body.city ?? null);
+    const lat: number | null = typeof body.lat === 'number' ? body.lat : null;
+    const lng: number | null = typeof body.lng === 'number' ? body.lng : null;
     const force: boolean = body.force === true;
 
     if (!state) {
@@ -362,16 +365,41 @@ Deno.serve(async (req) => {
 
     let shouldFetch = force;
     if (!force) {
-      // Cache check: any election rows newer than CACHE_TTL_HOURS for this state+district?
+      // Cache check: require fresh rows for this address context, not merely any
+      // row in the state. A fresh NJ Senate row must not suppress an NJ-06 House
+      // or Piscataway municipal ballot lookup.
       const cacheCutoff = new Date(Date.now() - CACHE_TTL_HOURS * 3600 * 1000).toISOString();
-      const { data: cached } = await supabase
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const expectedJurisdictions = new Set(['US', state.toUpperCase()]);
+      const houseJurisdiction = districtJurisdiction(state, district);
+      if (houseJurisdiction) expectedJurisdictions.add(houseJurisdiction);
+      if (city) expectedJurisdictions.add(city);
+
+      const { data: cachedRows } = await supabase
         .from('elections')
-        .select('id, updated_at')
-        .eq('state', state)
-        .gte('election_date', new Date().toISOString().slice(0, 10))
-        .gte('updated_at', cacheCutoff)
-        .limit(1);
-      shouldFetch = !cached || cached.length === 0;
+        .select('id, level, state, jurisdiction, source, updated_at')
+        .or(`state.eq.${state},state.is.null`)
+        .gte('election_date', todayIso)
+        .gte('updated_at', cacheCutoff);
+
+      const freshRows = cachedRows ?? [];
+      const hasFederalStatewideOrNational = freshRows.some((row: any) => {
+        if (row.level !== 'federal') return false;
+        const normalized = normalizeText(row.jurisdiction);
+        return normalized === 'us' || normalized === normalizeText(state);
+      });
+      const hasFederalHouse = !houseJurisdiction || freshRows.some((row: any) => (
+        row.level === 'federal' && normalizeText(row.jurisdiction) === normalizeText(houseJurisdiction)
+      ));
+      const hasFederalScope = hasFederalStatewideOrNational && hasFederalHouse;
+      const hasLocalScope = !city || freshRows.some((row: any) => row.level === 'local' && jurisdictionMatchesCity(row.jurisdiction, city));
+
+      shouldFetch = !(hasFederalScope && hasLocalScope);
+      console.log('[fetch-upcoming-elections] cache scope', {
+        state, district, city, lat, lng, cachedRows: freshRows.length,
+        hasFederalStatewideOrNational, hasFederalHouse, hasFederalScope, hasLocalScope, shouldFetch,
+        expectedJurisdictions: Array.from(expectedJurisdictions),
+      });
     }
 
     if (shouldFetch) {
