@@ -66,10 +66,52 @@ interface RunDiagnostics {
   errors: string[];
 }
 
+interface RunError {
+  mode: string;
+  ranAt: string;
+  message: string;
+  name?: string;
+  status?: number | string;
+  context?: unknown;
+  raw?: unknown;
+  advice: string[];
+}
+
+function buildAdvice(message: string, status?: number | string): string[] {
+  const tips: string[] = [];
+  const m = message.toLowerCase();
+  if (typeof status === 'number' && status >= 500) {
+    tips.push('The edge function crashed (5xx). Check the schedule-congress-donor-sync logs in Supabase for the stack trace.');
+  }
+  if (m.includes('fetch') && m.includes('failed')) {
+    tips.push('Network call from the browser to the edge function failed. Confirm you are signed in and the function is deployed.');
+  }
+  if (m.includes('timeout') || m.includes('timed out')) {
+    tips.push('Run took longer than the 150s edge timeout. Lower the batch limit or rerun — progress is checkpointed.');
+  }
+  if (m.includes('worker_limit') || m.includes('546')) {
+    tips.push('Edge worker limit hit. Wait a minute and rerun with a smaller limit.');
+  }
+  if (m.includes('jwt') || m.includes('unauthorized') || status === 401) {
+    tips.push('Auth token rejected. Refresh the page to renew your session, then retry.');
+  }
+  if (m.includes('fec_api_key') || m.includes('fec api')) {
+    tips.push('FEC_API_KEY secret missing or invalid. Set it in Lovable Cloud secrets.');
+  }
+  if (m.includes('rpc') || m.includes('relation') || m.includes('column')) {
+    tips.push('Database error — a migration may be missing. Check recent migrations for donor_sync_runs/queue tables.');
+  }
+  if (tips.length === 0) {
+    tips.push('Open the schedule-congress-donor-sync function logs for the matching timestamp to see the full server-side error.');
+  }
+  return tips;
+}
+
 export function AutomatedJobsCard() {
   const qc = useQueryClient();
   const [runningMode, setRunningMode] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<RunDiagnostics | null>(null);
+  const [runError, setRunError] = useState<RunError | null>(null);
 
   const { data: runs, isLoading } = useQuery({
     queryKey: ['donor-sync-runs'],
