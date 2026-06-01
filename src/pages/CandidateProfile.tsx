@@ -99,11 +99,12 @@ export const CandidateProfile = () => {
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
   const donorCauseInputs = useMemo(
     () => donors.flatMap(d => {
-      const inputs = [{ name: d.name, type: d.type }];
-      if (d.display_name && d.display_name !== d.name) {
-        inputs.push({ name: d.display_name, type: d.type });
-      }
-      return inputs;
+      const names = [d.name, d.display_name, ...(d.name_variations ?? [])]
+        .filter((name): name is string => Boolean(name?.trim()));
+      return Array.from(new Set(names.map((name) => name.trim()))).map((name) => ({
+        name,
+        type: d.type,
+      }));
     }),
     [donors],
   );

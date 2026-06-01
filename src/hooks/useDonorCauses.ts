@@ -23,6 +23,20 @@ const getCauseLookupTypes = (type: string) => {
   return CAUSE_ELIGIBLE_DONOR_TYPES.has(type) ? [type] : [];
 };
 
+const aliasMatchesType = (alias: any, type: string) => {
+  const lookupTypes = getCauseLookupTypes(type);
+  if (lookupTypes.length === 0) return false;
+
+  const aliasTypes = new Set<string>();
+  if (alias.donor_type) aliasTypes.add(alias.donor_type);
+  if (Array.isArray(alias.donor_types)) {
+    alias.donor_types.filter(Boolean).forEach((t: string) => aliasTypes.add(t));
+  }
+
+  if (aliasTypes.size === 0) return true;
+  return lookupTypes.some((lookupType) => aliasTypes.has(lookupType));
+};
+
 export interface DonorNameInput {
   name: string;
   type: string; // 'Individual' | 'PAC' | 'Organization' | ...
@@ -96,10 +110,8 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       // name|type -> alias-level cause id (preferred when set)
       const aliasLevelCause = new Map<string, { causeId: string; assignedBy: string; confidence: string | null; fecCommitteeId: string }>();
       const aliasCauseIds = new Set<string>();
-      for (const m of (members ?? []) as any[]) {
-        const alias = m.donor_aliases;
-        if (!alias?.is_active) continue;
-        const key = `${norm(m.donor_name)}|${m.donor_type}`;
+
+      const applyAliasToKey = (key: string, alias: any) => {
         const ids: string[] = [];
         if (alias.fec_committee_id) ids.push(alias.fec_committee_id);
         if (Array.isArray(alias.fec_committee_ids)) ids.push(...alias.fec_committee_ids);
@@ -115,6 +127,30 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
             fecCommitteeId: ids[0] || '',
           });
           aliasCauseIds.add(alias.primary_cause_id);
+        }
+      };
+
+      for (const m of (members ?? []) as any[]) {
+        const alias = m.donor_aliases;
+        if (!alias?.is_active) continue;
+        applyAliasToKey(`${norm(m.donor_name)}|${m.donor_type}`, alias);
+      }
+
+      // Consolidated donor rows often use donor_aliases.canonical_name as the
+      // displayed name, while donor_alias_members stores only the raw imported
+      // FEC names. Resolve canonical names directly so alias-level causes still
+      // appear for rows like "AIPAC".
+      const { data: canonicalAliases, error: canonicalErr } = await (supabase as any)
+        .from('donor_aliases')
+        .select('canonical_name, donor_type, donor_types, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
+        .in('canonical_name', names)
+        .eq('is_active', true);
+      if (canonicalErr) throw canonicalErr;
+
+      for (const alias of (canonicalAliases ?? []) as any[]) {
+        for (const input of uniqueInputs) {
+          if (norm(input.name) !== norm(alias.canonical_name) || !aliasMatchesType(alias, input.type)) continue;
+          applyAliasToKey(`${norm(input.name)}|${input.type}`, alias);
         }
       }
 
