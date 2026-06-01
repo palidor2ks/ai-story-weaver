@@ -145,6 +145,7 @@ export function useUpcomingElections(address: string | null | undefined) {
           lat: geocode.lat ?? undefined,
           lng: geocode.lng ?? undefined,
           city: geocode.city ?? undefined,
+          ward: geocode.ward ?? undefined,
           force: true,
         },
       });
