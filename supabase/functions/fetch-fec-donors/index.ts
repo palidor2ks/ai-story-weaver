@@ -1421,7 +1421,7 @@ serve(async (req) => {
     // This ensures the dashboard shows accurate dollar amounts during partial syncs
     // CRITICAL: Only store rollups for P/A (campaign) committees with the candidate_id
     // External committees (J/U/B/D) should NOT contribute to candidate totals
-    if (!isExternalCommittee) {
+    if (!isExternalCommittee && !stoppedDueToTimeout) {
       // Query actual totals from contributions table for accuracy
       const { data: dbTotals } = await supabase.rpc(
         'get_contribution_totals_by_committee',
