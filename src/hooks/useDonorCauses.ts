@@ -96,12 +96,32 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
         });
       }
 
+      // Build a PostgREST `or` filter that matches names case-insensitively.
+      // Wrapping each value in double quotes lets us include names that
+      // contain commas, periods, or other special characters safely.
+      const orFilter = (column: string, values: string[]) =>
+        values
+          .map((v) => `${column}.ilike."${v.replace(/"/g, '\\"')}"`)
+          .join(',');
+
+      // Build a quick lookup from normalized name -> original inputs so we
+      // can map any case-insensitive DB row back to the exact input casing
+      // used by `getDonorCause` callers.
+      const inputsByNormName = new Map<string, DonorNameInput[]>();
+      for (const i of uniqueInputs) {
+        const list = inputsByNormName.get(norm(i.name)) ?? [];
+        list.push(i);
+        inputsByNormName.set(norm(i.name), list);
+      }
+
       // 2. Resolve names -> aliases (and fec_committee_ids + alias-level cause)
-      const { data: members, error: mErr } = await supabase
+      const membersBase = (supabase as any)
         .from('donor_alias_members')
         .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
-        .in('donor_name', names)
         .in('donor_type', types);
+      const { data: members, error: mErr } = await (names.length > 0
+        ? membersBase.or(orFilter('donor_name', names))
+        : membersBase);
       if (mErr) throw mErr;
 
       // name|type -> set of committee ids
@@ -130,26 +150,37 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
         }
       };
 
+      // Apply each matched member row back to the ORIGINAL input casing so
+      // `getDonorCause(map, name, type)` can find it regardless of how the
+      // donor name is cased in the DB vs in the UI.
       for (const m of (members ?? []) as any[]) {
         const alias = m.donor_aliases;
         if (!alias?.is_active) continue;
-        applyAliasToKey(`${norm(m.donor_name)}|${m.donor_type}`, alias);
+        const matches = inputsByNormName.get(norm(m.donor_name)) ?? [];
+        for (const input of matches) {
+          const lookupTypes = getCauseLookupTypes(input.type);
+          if (lookupTypes.length > 0 && !lookupTypes.includes(m.donor_type)) continue;
+          applyAliasToKey(`${norm(input.name)}|${input.type}`, alias);
+        }
       }
 
       // Consolidated donor rows often use donor_aliases.canonical_name as the
       // displayed name, while donor_alias_members stores only the raw imported
-      // FEC names. Resolve canonical names directly so alias-level causes still
-      // appear for rows like "AIPAC".
-      const { data: canonicalAliases, error: canonicalErr } = await (supabase as any)
+      // FEC names. Resolve canonical names directly (case-insensitively) so
+      // alias-level causes still appear for rows like "NorPac" / "AIPAC".
+      const canonicalBase = (supabase as any)
         .from('donor_aliases')
-        .select('canonical_name, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
-        .in('canonical_name', names)
+        .select('id, canonical_name, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
         .eq('is_active', true);
+      const { data: canonicalAliases, error: canonicalErr } = await (names.length > 0
+        ? canonicalBase.or(orFilter('canonical_name', names))
+        : canonicalBase);
       if (canonicalErr) throw canonicalErr;
 
       for (const alias of (canonicalAliases ?? []) as any[]) {
-        for (const input of uniqueInputs) {
-          if (norm(input.name) !== norm(alias.canonical_name) || !aliasMatchesType(alias, input.type)) continue;
+        const matches = inputsByNormName.get(norm(alias.canonical_name)) ?? [];
+        for (const input of matches) {
+          if (!aliasMatchesType(alias, input.type)) continue;
           applyAliasToKey(`${norm(input.name)}|${input.type}`, alias);
         }
       }
