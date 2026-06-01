@@ -1,12 +1,39 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, Play, Loader2, RefreshCw, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
+import {
+  Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose,
+} from '@/components/ui/drawer';
+import { Clock, Play, Loader2, RefreshCw, CheckCircle2, AlertTriangle, XCircle, Activity } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
+
+type RunState = 'queued' | 'running' | 'partial' | 'completed' | 'error' | 'unknown';
+
+function deriveRunState(run: DonorSyncRun | null | undefined): RunState {
+  if (!run) return 'unknown';
+  const notes = (run.notes ?? '').toLowerCase();
+  if (!run.finished_at) {
+    if (run.processed === 0 && run.success_count === 0 && run.failed_count === 0) return 'queued';
+    return 'running';
+  }
+  if (notes.startsWith('error')) return 'error';
+  if (notes.startsWith('partial')) return 'partial';
+  if (run.failed_count > 0 && run.success_count === 0) return 'error';
+  return 'completed';
+}
+
+const RUN_STATE_META: Record<RunState, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }> = {
+  queued:    { label: 'Queued',    variant: 'outline' },
+  running:   { label: 'Running',   variant: 'secondary' },
+  partial:   { label: 'Partial',   variant: 'outline', className: 'border-amber-500 text-amber-700' },
+  completed: { label: 'Completed', variant: 'secondary', className: 'border-green-500 text-green-700' },
+  error:     { label: 'Error',     variant: 'destructive' },
+  unknown:   { label: 'Unknown',   variant: 'outline' },
+};
 
 interface DonorSyncRun {
   id: string;
