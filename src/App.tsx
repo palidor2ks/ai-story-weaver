@@ -138,6 +138,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <BadgeAwardToast />
             <AppRoutes />
           </BrowserRouter>
         </TooltipProvider>
