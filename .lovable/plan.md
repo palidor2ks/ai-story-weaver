@@ -1,35 +1,25 @@
-## Goal
+## Why is Jane Q. Challenger still showing?
 
-Port the changes from PR #156 (ai-story-weaver) into this project to make upcoming-ballot results match the user's full address context (state + congressional district + city) and clarify UI copy distinguishing ballot candidates from current representatives.
+She's a placeholder row that was inserted directly into the database (not via a repo migration). The DB currently has 4 `seed_*` candidate rows linked to two municipal elections:
 
-All four target files already exist here with compatible structure (`geocode.city` is exposed by `useGeocode`), so the diff applies cleanly.
+| election | candidate_id | name | party |
+|---|---|---|---|
+| Piscataway Mayor 2026 | seed_piscataway_mayor_1 | Brian C. Wahler | Democrat (real incumbent) |
+| Piscataway Mayor 2026 | seed_piscataway_mayor_2 | **Jane Q. Challenger** | Republican (fake placeholder) |
+| Newark Mayor 2026 | seed_newark_mayor_1 | Ras J. Baraka | Democrat (real, though now governor-elect) |
+| Newark Mayor 2026 | seed_newark_mayor_2 | **Maria L. Cortez** | Independent (fake placeholder) |
 
-## Changes
+The `UpcomingElectionsCard` is rendering exactly what's in the DB — the "Researching…" state just means the placeholder has no AI answers yet. Nothing in the code is generating her; she's a real DB row from earlier seeding.
 
-### 1. `supabase/functions/fetch-upcoming-elections/index.ts`
-- Add helpers: `normalizeDistrict`, `normalizeText`, `normalizeCity`, `districtJurisdiction`, `jurisdictionMatchesCity`, `electionMatchesUserContext`.
-- Accept and normalize `district` and `city` from the request body; capture `lat`/`lng` as nullable numbers.
-- Use `normalizedDistrict` in the FEC candidate fetch path and for `jurisdiction` / `source_ref` consistency.
-- Replace the loose cache check with a scope-aware check that requires fresh rows covering: national/state-wide federal, the user's House district, and the user's city (when known). Log the cache decision.
-- After read-back, filter rows through `electionMatchesUserContext` before grouping into `federal` / `state` / `local`. Log read-back scope.
+## Plan
 
-### 2. `src/hooks/useUpcomingElections.ts`
-- Include `geocode.city` in the React Query key and bump version to `v2`.
-- Pass `city: geocode.city ?? undefined` in both the initial query body and the force-refresh body.
+Write a migration that removes the fake "challenger" seed rows (and their `election_candidates` links) while keeping the real incumbents:
 
-### 3. `src/components/profile/UpcomingElectionsCard.tsx`
-- Rename card title to "Candidates on Your Upcoming Ballot".
-- Add helper subtitle clarifying that ballot candidates differ from current representatives and are matched by address/district/local jurisdiction.
-- Update empty-state copy and the local-coverage hint to be more specific about address-scoped data and refresh guidance.
+1. `DELETE FROM election_candidates WHERE candidate_id IN ('seed_piscataway_mayor_2','seed_newark_mayor_2');`
+2. `DELETE FROM candidates WHERE id IN ('seed_piscataway_mayor_2','seed_newark_mayor_2');`
 
-### 4. `src/pages/UserProfile.tsx`
-- Rename "Your Representatives" → "Your Current Representatives" (heading, loading states, error states, empty state, refresh tooltip/aria-label, regenerate-summaries hint, add-address prompt).
+After this, the Piscataway race will show only Brian C. Wahler until a real opponent is added (manually or via the future scrape/import flow). No frontend changes required.
 
-## Out of scope
+### Open question
 
-- The Supabase branch-preview migration error in the PR (`candidate_committees_candidate_id_fkey` already exists) is unrelated and not reproduced here; no migration changes will be applied.
-
-## Validation
-
-- After edits, confirm the edge function still type-checks (Deno syntax preserved).
-- Manually verify on `/profile` that the card shows the new heading/copy and that the network call to `fetch-upcoming-elections` includes `city` in the body.
+Do you also want me to drop the real incumbents (`seed_piscataway_mayor_1` Wahler, `seed_newark_mayor_1` Baraka)? They're real people but were inserted as throwaway `seed_*` rows — long term they should probably be replaced with proper candidate records from your normal ingestion path. I'd recommend leaving them for now so the card isn't empty.
