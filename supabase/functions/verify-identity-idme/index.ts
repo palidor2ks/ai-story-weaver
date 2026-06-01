@@ -179,6 +179,18 @@ Deno.serve(async (req) => {
       const userInfo = await userInfoResponse.json();
       console.log('ID.me verification successful for user:', user.id);
 
+      const verificationId: string | undefined = userInfo.uuid || userInfo.sub;
+      if (!verificationId || typeof verificationId !== 'string') {
+        console.error('ID.me userinfo missing uuid/sub:', userInfo);
+        return new Response(JSON.stringify({
+          error: 'Verification failed',
+          message: 'ID.me did not return a verification identifier.'
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       // Update the user's profile with verification status
       const { error: updateError } = await supabase
         .from('profiles')
@@ -186,7 +198,7 @@ Deno.serve(async (req) => {
           identity_verified: true,
           identity_verified_at: new Date().toISOString(),
           identity_provider: 'id.me',
-          identity_verification_id: userInfo.uuid || userInfo.sub,
+          identity_verification_id: verificationId,
         })
         .eq('id', user.id);
 
