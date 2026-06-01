@@ -1138,7 +1138,12 @@ export const CandidateProfile = () => {
                                         <div className="flex flex-wrap items-center gap-2 mt-1">
                                           <Badge variant="secondary">{donor.type}</Badge>
                                           {(() => {
-                                            const cause = getDonorCause(donorCauseMap, displayName, donor.type);
+                                            const cause =
+                                              getDonorCause(donorCauseMap, displayName, donor.type) ??
+                                              getDonorCause(donorCauseMap, donor.name, donor.type) ??
+                                              (donor.name_variations ?? [])
+                                                .map((nv) => getDonorCause(donorCauseMap, nv, donor.type))
+                                                .find(Boolean);
                                             return cause ? <CauseBadge cause={cause} /> : null;
                                           })()}
                                           {isConduit && (
