@@ -15,6 +15,26 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const DEFAULT_CANDIDATE_TIMEOUT_MS = 8 * 60 * 1000;
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`Candidate answer generation timed out after ${Math.round(timeoutMs / 1000)} seconds`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 interface ProcessResult {
   candidateId: string;
@@ -55,12 +75,13 @@ async function processBatchInBackground(params: {
   startFromId: string | null;
   visibleStatesOnly?: boolean;
   states?: string[] | null;
+  candidateTimeoutMs: number;
 }) {
-  const { batchSize, delayBetweenCandidates, delayBetweenBatches, maxCandidates, startFromId, visibleStatesOnly, states } = params;
+  const { batchSize, delayBetweenCandidates, delayBetweenBatches, maxCandidates, startFromId, visibleStatesOnly, states, candidateTimeoutMs } = params;
   
   globalProgress = { processed: 0, successful: 0, failed: 0, total: 0, currentCandidate: '', startTime: Date.now() };
   console.log(`=== BACKGROUND BATCH REGENERATION STARTED ===`);
-  console.log(`Parameters: batchSize=${batchSize}, maxCandidates=${maxCandidates || 'unlimited'}`);
+  console.log(`Parameters: batchSize=${batchSize}, maxCandidates=${maxCandidates || 'unlimited'}, candidateTimeoutMs=${candidateTimeoutMs}`);
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -210,10 +231,11 @@ async function processBatchInBackground(params: {
         
         globalProgress.currentCandidate = `${candidate.name} (${candidate.id})`;
         console.log(`[${globalProgress.processed + 1}/${globalProgress.total}] Processing ${candidate.name} - currently has ${previousCount} answers`);
+        await writeProgress('running');
 
         try {
           // Call get-candidate-answers function
-          const response = await fetch(`${SUPABASE_URL}/functions/v1/get-candidate-answers`, {
+          const response = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/get-candidate-answers`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -228,7 +250,7 @@ async function processBatchInBackground(params: {
               candidateState: candidate.state,
               forceRegenerate: false, // Only generate missing answers
             }),
-          });
+          }, candidateTimeoutMs);
 
           if (!response.ok) {
             const errorText = await response.text();
@@ -375,6 +397,9 @@ serve(async (req) => {
       startFromId: params.startFromId || null,
       visibleStatesOnly: params.visibleStatesOnly !== false, // default true
       states: Array.isArray(params.states) ? params.states : null,
+      candidateTimeoutMs: Number.isFinite(Number(params.candidateTimeoutMs))
+        ? Math.max(30000, Number(params.candidateTimeoutMs))
+        : DEFAULT_CANDIDATE_TIMEOUT_MS,
     };
 
     console.log('Received batch regeneration request with config:', config);

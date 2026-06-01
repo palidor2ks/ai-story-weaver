@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,10 @@ import {
 import { Brain, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+type BackfillStatus = "running" | "complete" | "error" | "cancelled";
+
 type BackfillProgress = {
-  status: "running" | "complete" | "error" | "cancelled";
+  status: BackfillStatus;
   processed: number;
   total: number;
   successful: number;
@@ -30,6 +32,16 @@ type BackfillProgress = {
   elapsedMinutes?: number;
   error?: string;
   failures?: { id: string; name: string; error: string }[];
+  updatedAt?: string;
+};
+
+const STALE_PROGRESS_MINUTES = 30;
+
+const getMinutesSince = (iso?: string) => {
+  if (!iso) return null;
+  const timestamp = new Date(iso).getTime();
+  if (Number.isNaN(timestamp)) return null;
+  return Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
 };
 
 export function BackfillAnswersControl() {
@@ -40,10 +52,15 @@ export function BackfillAnswersControl() {
     queryFn: async (): Promise<BackfillProgress | null> => {
       const { data } = await supabase
         .from("admin_stats_cache")
-        .select("stat_value")
+        .select("stat_value, updated_at")
         .eq("stat_key", "backfill_answers_progress")
         .maybeSingle();
-      return (data?.stat_value as BackfillProgress) ?? null;
+      if (!data?.stat_value) return null;
+
+      return {
+        ...(data.stat_value as BackfillProgress),
+        updatedAt: data.updated_at,
+      };
     },
     refetchInterval: (q) => {
       const v = q.state.data as BackfillProgress | null;
@@ -51,7 +68,11 @@ export function BackfillAnswersControl() {
     },
   });
 
+  const minutesSinceUpdate = getMinutesSince(progress?.updatedAt);
   const isRunning = progress?.status === "running";
+  const isStaleRunning = isRunning && minutesSinceUpdate != null && minutesSinceUpdate >= STALE_PROGRESS_MINUTES;
+  const isActivelyRunning = isRunning && !isStaleRunning;
+  const displayStatus = isStaleRunning ? "stalled" : progress?.status;
   const pct = progress && progress.total > 0
     ? Math.round((progress.processed / progress.total) * 100)
     : 0;
@@ -84,9 +105,11 @@ export function BackfillAnswersControl() {
       <div className="flex items-center gap-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button size="sm" variant="outline" disabled={isRunning}>
-              {isRunning ? (
+            <Button size="sm" variant="outline" disabled={isActivelyRunning}>
+              {isActivelyRunning ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Backfill running...</>
+              ) : isStaleRunning ? (
+                <><Brain className="h-4 w-4 mr-2" />Restart stalled backfill</>
               ) : (
                 <><Brain className="h-4 w-4 mr-2" />Backfill Answers (Visible States)</>
               )}
@@ -106,7 +129,7 @@ export function BackfillAnswersControl() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {isRunning && (
+        {isActivelyRunning && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button size="sm" variant="destructive">
@@ -136,8 +159,10 @@ export function BackfillAnswersControl() {
               <span className="font-medium">Backfill</span>
               <Badge
                 variant={
-                  progress.status === "running"
+                  displayStatus === "running"
                     ? "secondary"
+                    : displayStatus === "stalled"
+                    ? "destructive"
                     : progress.status === "complete"
                     ? "default"
                     : progress.status === "cancelled"
@@ -145,7 +170,7 @@ export function BackfillAnswersControl() {
                     : "destructive"
                 }
               >
-                {progress.status}
+                {displayStatus}
               </Badge>
             </div>
             <span className="text-muted-foreground text-xs">
@@ -165,11 +190,22 @@ export function BackfillAnswersControl() {
             {progress.elapsedMinutes != null && (
               <span className="text-muted-foreground">{progress.elapsedMinutes} min</span>
             )}
+            {minutesSinceUpdate != null && (
+              <span className={isStaleRunning ? "text-destructive" : "text-muted-foreground"}>
+                updated {minutesSinceUpdate} min ago
+              </span>
+            )}
           </div>
 
           {isRunning && progress.currentCandidate && (
             <div className="text-xs text-muted-foreground truncate">
               Now: {progress.currentCandidate}
+            </div>
+          )}
+
+          {isStaleRunning && (
+            <div className="text-xs text-destructive">
+              No progress update has been recorded for at least {STALE_PROGRESS_MINUTES} minutes. The previous Edge Function likely stopped before it could write a final status; starting again will resume from candidates that still have missing answers.
             </div>
           )}
 
