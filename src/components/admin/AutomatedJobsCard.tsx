@@ -135,12 +135,28 @@ export function AutomatedJobsCard() {
   const runNow = async (mode: 'backfill' | 'refresh') => {
     setRunningMode(mode);
     setDiagnostics(null);
+    setRunError(null);
     const toastId = toast.loading(`Running ${mode}…`);
     try {
       const { data, error } = await supabase.functions.invoke('schedule-congress-donor-sync', {
         body: { scope: 'congress_visible', mode, limit: mode === 'backfill' ? 10 : 25, cycle: '2024' },
       });
-      if (error) throw error;
+      if (error) {
+        // Try to extract the server response body for a better message
+        let bodyText: string | undefined;
+        let status: number | undefined;
+        const ctx = (error as unknown as { context?: { response?: Response } }).context;
+        if (ctx?.response) {
+          status = ctx.response.status;
+          try { bodyText = await ctx.response.clone().text(); } catch { /* ignore */ }
+        }
+        let parsed: unknown = bodyText;
+        if (bodyText) { try { parsed = JSON.parse(bodyText); } catch { /* keep text */ } }
+        const serverMsg = (parsed && typeof parsed === 'object' && 'error' in (parsed as Record<string, unknown>))
+          ? String((parsed as Record<string, unknown>).error)
+          : (typeof parsed === 'string' && parsed.length > 0 ? parsed : error.message);
+        throw Object.assign(new Error(serverMsg), { name: error.name, status, context: parsed ?? null });
+      }
       const r = data as {
         ok: boolean;
         error: string | null;
@@ -177,10 +193,34 @@ export function AutomatedJobsCard() {
         candidates: s.candidates ?? [],
         errors: s.errors ?? [],
       });
-      toast.success(s.message ?? `${mode} run complete`, { id: toastId });
+      if (!r.ok || r.error) {
+        const msg = r.error ?? 'Run returned ok=false with no error message.';
+        setRunError({
+          mode,
+          ranAt: new Date().toISOString(),
+          message: msg,
+          context: r,
+          advice: buildAdvice(msg),
+        });
+        toast.error(`${mode} reported a failure`, { id: toastId });
+      } else {
+        toast.success(s.message ?? `${mode} run complete`, { id: toastId });
+      }
       qc.invalidateQueries({ queryKey: ['donor-sync-runs'] });
     } catch (err) {
-      toast.error(`${mode} failed: ${err instanceof Error ? err.message : 'Unknown error'}`, { id: toastId });
+      const e = err as { message?: string; name?: string; status?: number | string; context?: unknown };
+      const message = e.message ?? 'Unknown error';
+      setRunError({
+        mode,
+        ranAt: new Date().toISOString(),
+        message,
+        name: e.name,
+        status: e.status,
+        context: e.context,
+        raw: err,
+        advice: buildAdvice(message, e.status),
+      });
+      toast.error(`${mode} failed: ${message}`, { id: toastId });
     } finally {
       setRunningMode(null);
     }
