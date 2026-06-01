@@ -49,12 +49,12 @@ export function BulkDonorSyncCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <RefreshCw className="h-5 w-5" />
-          Bulk FEC Donor Sync
+          Bulk FEC Donor Sync (manual)
         </CardTitle>
         <CardDescription>
-          Pulls Schedule A itemized donors from the FEC for candidates that have an FEC ID,
-          prioritizing those least-recently synced. Use this when committees show "Total Raised"
-          but 0 donors.
+          Manual one-off sync. Visible-state House &amp; Senate candidates are now auto-backfilled —
+          see the <strong>Automated Jobs</strong> card above. Use this card for ad-hoc runs across
+          all candidates or non-congress scopes.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
