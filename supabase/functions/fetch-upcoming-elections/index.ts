@@ -16,9 +16,14 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const FEC_API_KEY = Deno.env.get('FEC_API_KEY') ?? '';
 const OPEN_STATES_API_KEY = Deno.env.get('OPEN_STATES_API_KEY') ?? '';
 const GOOGLE_CIVIC_API_KEY = Deno.env.get('GOOGLE_CIVIC_API_KEY') ?? '';
+const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY') ?? '';
+const YOU_API_KEY = Deno.env.get('YOU_API_KEY') ?? '';
 
 const INTERNAL_CHAIN_HEADER = 'x-internal-chain-secret';
-const MAX_RESEARCH_PER_RUN = 5;
+const MAX_RESEARCH_FEC_CIVIC = 5;
+const MAX_RESEARCH_AI = 3;
+const MAX_AI_ELECTIONS = 8;
+const MAX_AI_CANDIDATES_PER_ELECTION = 6;
 const CACHE_TTL_HOURS = 24;
 
 type Level = 'federal' | 'state' | 'local';
@@ -37,6 +42,7 @@ interface CandidatePayload {
   source: string;
   source_ref?: string | null;
   status?: string;
+  confidence?: 'high' | 'medium' | 'low';
 }
 
 interface ElectionPayload {
@@ -48,6 +54,8 @@ interface ElectionPayload {
   name: string;
   source: string;
   source_ref?: string | null;
+  source_url?: string | null;
+  confidence?: 'high' | 'medium' | 'low';
   candidates: CandidatePayload[];
 }
 
@@ -60,6 +68,8 @@ interface ElectionResponseRow {
   jurisdiction: string | null;
   name: string;
   source: string;
+  source_url?: string | null;
+  confidence?: string | null;
   candidates: Array<{
     candidate_id: string;
     name: string;
@@ -74,6 +84,8 @@ interface ElectionResponseRow {
     confidence: string | null;
     answers_source: string | null;
     is_pending_research: boolean;
+    source: string;
+    source_url: string | null;
   }>;
 }
 
@@ -340,6 +352,265 @@ function detectType(name: string): string {
   return 'general';
 }
 
+// ----- AI election research -------------------------------------------------
+
+interface AIElectionCandidate {
+  name?: string;
+  party?: string;
+  office?: string;
+  district?: string | null;
+  is_incumbent?: boolean;
+  source_url?: string | null;
+  status?: string;
+  confidence?: 'high' | 'medium' | 'low';
+}
+
+interface AIElectionRow {
+  election_date?: string;
+  election_type?: string;
+  level?: Level;
+  state?: string | null;
+  jurisdiction?: string | null;
+  name?: string;
+  source_url?: string | null;
+  confidence?: 'high' | 'medium' | 'low';
+  candidates?: AIElectionCandidate[];
+}
+
+function isIsoDate(value?: string | null): value is string {
+  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime());
+}
+
+function clampElectionType(value?: string | null): string {
+  const raw = normalizeText(value);
+  if (raw.includes('primary')) return 'primary';
+  if (raw.includes('runoff')) return 'runoff';
+  if (raw.includes('special')) return 'special';
+  if (raw.includes('municipal') || raw.includes('local')) return 'municipal';
+  if (raw.includes('general')) return 'general';
+  return 'general';
+}
+
+function clampLevel(value?: string | null, office?: string | null): Level {
+  const raw = normalizeText(`${value ?? ''} ${office ?? ''}`);
+  if (raw.includes('federal') || raw.includes('president') || raw.includes('senate') || raw.includes('congress') || raw.includes('house')) return 'federal';
+  if (raw.includes('state') || raw.includes('governor') || raw.includes('assembly') || raw.includes('delegate')) return 'state';
+  return 'local';
+}
+
+function isValidHttpUrl(value?: string | null): value is string {
+  if (!value) return false;
+  try {
+    const u = new URL(value);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+async function fetchYouElectionResearch(opts: {
+  state: string;
+  district: string | null;
+  city: string | null;
+  address?: string;
+}): Promise<string> {
+  if (!YOU_API_KEY) return '';
+  const districtText = opts.district ? ` congressional district ${opts.district}` : '';
+  const cityText = opts.city ? `, city/municipality ${opts.city}` : '';
+  const addressText = opts.address ? ` Address context: ${opts.address}.` : '';
+  const query = `Find authoritative current sources for upcoming elections and candidate lists for voters in ${opts.state}${districtText}${cityText}.${addressText}
+Return only elections with known candidate names. Prioritize official state/county/municipal election pages, official sample ballots, and filing/candidate lists. Include election dates, offices, parties when available, districts/jurisdictions, incumbency if stated, and source URLs.`;
+
+  try {
+    const response = await fetch('https://api.you.com/v1/research', {
+      method: 'POST',
+      headers: { 'X-API-Key': YOU_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: query.slice(0, 39000), research_effort: 'standard' }),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      console.warn('[AI elections] You.com research failed', response.status, text.slice(0, 300));
+      return '';
+    }
+    const data = await response.json().catch(() => ({} as any));
+    const output = data?.output ?? {};
+    const rawContent = output?.content ?? data?.answer ?? data?.message ?? '';
+    const content = typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
+    const rawSources: any[] = Array.isArray(output?.sources) ? output.sources : (Array.isArray(data?.sources) ? data.sources : []);
+    const sources = rawSources
+      .map((source: any) => `${source?.title ?? source?.name ?? 'Source'}: ${source?.url ?? source?.link ?? source?.href ?? ''}`)
+      .filter((line: string) => line.trim() && !line.endsWith(': '))
+      .slice(0, 12)
+      .join('\n');
+    return [content, sources ? `Sources:\n${sources}` : ''].filter(Boolean).join('\n\n').slice(0, 30000);
+  } catch (error) {
+    console.warn('[AI elections] You.com research error', String(error));
+    return '';
+  }
+}
+
+async function fetchAIUpcomingElections(opts: {
+  state: string;
+  district: string | null;
+  city: string | null;
+  address?: string;
+}): Promise<ElectionPayload[]> {
+  if (!LOVABLE_API_KEY) return [];
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const maxDate = new Date();
+  maxDate.setDate(maxDate.getDate() + 550);
+  const maxDateIso = maxDate.toISOString().slice(0, 10);
+  const researchContext = await fetchYouElectionResearch(opts);
+  const location = [opts.city, opts.state, opts.district ? `district ${opts.district}` : null].filter(Boolean).join(', ');
+
+  const prompt = `Refresh upcoming elections for this voter location: ${location || opts.state}.
+${opts.address ? `Address context: ${opts.address}.` : ''}
+Today is ${todayIso}. Include elections from ${todayIso} through ${maxDateIso} only.
+
+Find ballot races and who is running. Focus on federal, state, county, municipal, school board, mayor/council, and special elections relevant to the location. Do not include past elections, speculative candidates, or races without named candidates.
+
+Use this live research context when available:
+${researchContext || '(No live research context was available; rely on conservative, well-known public election information only.)'}
+
+Return structured data only via the tool. Requirements:
+- Every election_date must be YYYY-MM-DD and not before ${todayIso}.
+- Every election AND every candidate MUST include a source_url pointing to an authoritative supporting page; entries without a verifiable source will be discarded.
+- Mark confidence low when the source is incomplete; low- and medium-confidence rows for unknown candidates will be ignored.
+- Jurisdiction should be the state code for statewide races, a district such as ${opts.state}-${opts.district ?? '##'} for district races, or the city/county name for local races.`;
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: 'You are a meticulous, non-partisan U.S. election data researcher. Extract only current, sourced, location-relevant ballot candidate data. Every candidate must have a verifiable source URL. Do not invent candidates.' },
+          { role: 'user', content: prompt },
+        ],
+        tools: [{
+          type: 'function',
+          function: {
+            name: 'report_upcoming_elections',
+            description: 'Report sourced upcoming elections and candidates for a voter location',
+            parameters: {
+              type: 'object',
+              properties: {
+                elections: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      election_date: { type: 'string', description: 'YYYY-MM-DD' },
+                      election_type: { type: 'string', enum: ['general', 'primary', 'runoff', 'special', 'municipal'] },
+                      level: { type: 'string', enum: ['federal', 'state', 'local'] },
+                      state: { type: 'string', description: 'Two-letter state code' },
+                      jurisdiction: { type: 'string' },
+                      name: { type: 'string' },
+                      source_url: { type: 'string' },
+                      confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+                      candidates: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            name: { type: 'string' },
+                            party: { type: 'string' },
+                            office: { type: 'string' },
+                            district: { type: 'string' },
+                            is_incumbent: { type: 'boolean' },
+                            source_url: { type: 'string' },
+                            status: { type: 'string', enum: ['declared', 'filed', 'qualified', 'primary_winner', 'withdrawn'] },
+                            confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+                          },
+                          required: ['name', 'office', 'source_url', 'confidence'],
+                        },
+                      },
+                    },
+                    required: ['election_date', 'election_type', 'level', 'name', 'source_url', 'confidence', 'candidates'],
+                  },
+                },
+              },
+              required: ['elections'],
+            },
+          },
+        }],
+        tool_choice: { type: 'function', function: { name: 'report_upcoming_elections' } },
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      console.warn('[AI elections] AI gateway failed', response.status, text.slice(0, 500));
+      return [];
+    }
+
+    const data = await response.json();
+    const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
+    if (!toolCall?.function?.arguments) return [];
+    const parsed = JSON.parse(toolCall.function.arguments);
+    const rows: AIElectionRow[] = Array.isArray(parsed?.elections) ? parsed.elections : [];
+    const payloads: ElectionPayload[] = [];
+
+    for (const row of rows.slice(0, MAX_AI_ELECTIONS)) {
+      if (!isIsoDate(row.election_date) || row.election_date < todayIso) continue;
+      if (row.confidence === 'low') continue;
+      if (!isValidHttpUrl(row.source_url)) {
+        console.warn('[AI elections] dropping row without source_url', row.name);
+        continue;
+      }
+
+      const filteredCandidates = (row.candidates ?? [])
+        .filter((c) => c.name && c.office && c.status !== 'withdrawn' && c.confidence !== 'low' && isValidHttpUrl(c.source_url))
+        .slice(0, MAX_AI_CANDIDATES_PER_ELECTION);
+
+      const resolvedCandidates = await Promise.all(filteredCandidates.map(async (candidate): Promise<CandidatePayload> => {
+        const office = candidate.office!.trim();
+        const candidateState = (row.state || opts.state || '').toUpperCase();
+        const district = candidate.district ? normalizeDistrict(candidate.district) ?? candidate.district : null;
+        const id = `ai_${await sha1(`${candidate.name}|${office}|${candidateState}|${district ?? ''}`)}`;
+        return {
+          id,
+          name: candidate.name!.trim(),
+          party: mapParty(candidate.party),
+          office,
+          state: candidateState || 'US',
+          district,
+          is_incumbent: candidate.is_incumbent === true,
+          image_url: null,
+          source: 'ai_research',
+          source_ref: candidate.source_url ?? null,
+          status: candidate.status ?? 'declared',
+          confidence: candidate.confidence ?? row.confidence ?? 'medium',
+        };
+      }));
+      if (resolvedCandidates.length === 0) continue;
+
+      const sourceRef = row.source_url || `${row.election_date}-${row.name}-${row.jurisdiction ?? opts.city ?? opts.state}`;
+      payloads.push({
+        election_date: row.election_date,
+        election_type: clampElectionType(row.election_type),
+        level: clampLevel(row.level, resolvedCandidates[0]?.office),
+        state: (row.state || opts.state).toUpperCase(),
+        jurisdiction: row.jurisdiction || opts.city || opts.state,
+        name: row.name || `${row.election_date} ${opts.state} Election`,
+        source: 'ai_research',
+        source_ref: `ai-${await sha1(sourceRef)}`,
+        source_url: row.source_url ?? null,
+        confidence: row.confidence ?? 'medium',
+        candidates: resolvedCandidates,
+      });
+    }
+
+    console.log('[AI elections] parsed rows', { raw: rows.length, accepted: payloads.length });
+    return payloads;
+  } catch (error) {
+    console.warn('[AI elections] parse/fetch error', String(error));
+    return [];
+  }
+}
+
 // ----- Main handler --------------------------------------------------------
 
 Deno.serve(async (req) => {
@@ -408,12 +679,13 @@ Deno.serve(async (req) => {
       // Client polls and re-fetches; cached rows are returned immediately below.
       EdgeRuntime.waitUntil((async () => {
         try {
-          const [fecRows, civicRows] = await Promise.all([
+          const [fecRows, civicRows, aiRows] = await Promise.all([
             fetchFEC(state, district),
             fetchGoogleCivic(address ?? ''),
+            fetchAIUpcomingElections({ state, district, city, address }),
           ]);
-          console.log('[fetch-upcoming-elections] fetched rows', { fec: fecRows.length, civic: civicRows.length });
-          await persistAll(supabase, [...fecRows, ...civicRows]);
+          console.log('[fetch-upcoming-elections] fetched rows', { fec: fecRows.length, civic: civicRows.length, ai: aiRows.length });
+          await persistAll(supabase, [...fecRows, ...civicRows, ...aiRows]);
           console.log('[fetch-upcoming-elections] background persist complete');
         } catch (e) {
           console.error('[fetch-upcoming-elections] background error', e);
@@ -425,7 +697,7 @@ Deno.serve(async (req) => {
     const todayIso = new Date().toISOString().slice(0, 10);
     const { data: elections } = await supabase
       .from('elections')
-      .select('id, election_date, election_type, level, state, jurisdiction, name, source')
+      .select('id, election_date, election_type, level, state, jurisdiction, name, source, source_url, confidence')
       .gte('election_date', todayIso)
       .or(`state.eq.${state},state.is.null`)
       .order('election_date', { ascending: true });
@@ -433,7 +705,7 @@ Deno.serve(async (req) => {
     const electionIds = (elections ?? []).map(e => e.id);
     const { data: ec } = await supabase
       .from('election_candidates')
-      .select('election_id, candidate_id, office, is_incumbent, status')
+      .select('election_id, candidate_id, office, is_incumbent, status, source, source_ref')
       .in('election_id', electionIds.length ? electionIds : ['00000000-0000-0000-0000-000000000000']);
 
     const candidateIds = Array.from(new Set((ec ?? []).map(r => r.candidate_id)));
@@ -461,6 +733,7 @@ Deno.serve(async (req) => {
             office: r.office, state: '', district: null, image_url: null,
             is_incumbent: r.is_incumbent, overall_score: null,
             coverage_tier: 'tier_3', confidence: null, answers_source: null, is_pending_research: true,
+            source: r.source ?? 'unknown', source_url: r.source_ref ?? null,
           };
         }
         return {
@@ -477,6 +750,8 @@ Deno.serve(async (req) => {
           confidence: c.confidence ?? null,
           answers_source: c.answers_source,
           is_pending_research: c.answers_source === 'pending_research' || (c.overall_score === 0 && c.answers_source !== 'calculated_from_answers'),
+          source: r.source ?? 'unknown',
+          source_url: r.source_ref ?? null,
         };
       }),
     }));
@@ -524,6 +799,19 @@ async function persistAll(supabase: any, rows: ElectionPayload[]) {
 
     if (lookup.data?.id) {
       electionId = lookup.data.id;
+      const { error: updErr } = await supabase
+        .from('elections')
+        .update({
+          election_type: row.election_type,
+          level: row.level,
+          state: row.state,
+          jurisdiction: row.jurisdiction,
+          name: row.name,
+          source_url: row.source_url ?? null,
+          confidence: row.confidence ?? null,
+        })
+        .eq('id', electionId);
+      if (updErr) console.warn('[persist] failed to refresh election', row.source, row.source_ref, updErr.message);
     } else {
       const { data: inserted, error: insErr } = await supabase
         .from('elections')
@@ -536,6 +824,8 @@ async function persistAll(supabase: any, rows: ElectionPayload[]) {
           name: row.name,
           source: row.source,
           source_ref: row.source_ref ?? null,
+          source_url: row.source_url ?? null,
+          confidence: row.confidence ?? null,
         })
         .select('id')
         .maybeSingle();
@@ -549,8 +839,10 @@ async function persistAll(supabase: any, rows: ElectionPayload[]) {
     await persistCandidates(supabase, electionId, row.candidates, newCandidateIds, newCandidateMeta);
   }
 
-  // Kick off background research for up to MAX_RESEARCH_PER_RUN new candidates.
-  const toResearch = newCandidateIds.slice(0, MAX_RESEARCH_PER_RUN);
+  // Split research budget so AI-onboarded candidates don't crowd out FEC/Civic ones (or vice versa).
+  const aiIds = newCandidateIds.filter((id) => newCandidateMeta.get(id)?.source === 'ai_research');
+  const otherIds = newCandidateIds.filter((id) => newCandidateMeta.get(id)?.source !== 'ai_research');
+  const toResearch = [...otherIds.slice(0, MAX_RESEARCH_FEC_CIVIC), ...aiIds.slice(0, MAX_RESEARCH_AI)];
   if (toResearch.length > 0) {
     EdgeRuntime.waitUntil((async () => {
       for (const id of toResearch) {

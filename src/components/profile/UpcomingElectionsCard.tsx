@@ -51,6 +51,26 @@ function CandidateRow({ c, ieMap }: { c: UpcomingCandidate; ieMap?: IETotalsMap 
             {c.is_incumbent && (
               <Badge variant="secondary" className="text-xs">Incumbent</Badge>
             )}
+            {c.source === 'ai_research' && (
+              c.source_url ? (
+                <a
+                  href={c.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title={`AI-discovered candidate — source: ${c.source_url}`}
+                  className="inline-flex"
+                >
+                  <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30">
+                    AI-sourced
+                  </Badge>
+                </a>
+              ) : (
+                <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30" title="AI-discovered candidate">
+                  AI-sourced
+                </Badge>
+              )
+            )}
           </div>
           <IESummaryInline totals={ie} className="mt-0.5" />
         </div>
@@ -150,7 +170,7 @@ export function UpcomingElectionsCard({ address }: Props) {
               onClick={handleRefresh}
               disabled={!address || isRefreshing || isLoading}
               className="h-8 gap-1.5"
-              title="Re-fetch from FEC and Google Civic"
+              title="Re-fetch from FEC, Google Civic, and AI election research"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="text-xs">Refresh</span>
@@ -168,7 +188,7 @@ export function UpcomingElectionsCard({ address }: Props) {
             </div>
           ) : total === 0 ? (
             <p className="text-muted-foreground text-sm">
-              No upcoming ballot candidates found for your address yet. Check back closer to election day or tap Refresh to re-check available sources.
+              No upcoming ballot candidates found for your address yet. Check back closer to election day or tap Refresh to re-check FEC, Google Civic, and AI election research sources.
             </p>
           ) : (
             <div className="space-y-6">
@@ -193,7 +213,7 @@ export function UpcomingElectionsCard({ address }: Props) {
                 </section>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
-                  Local ballot coverage is limited and depends on address-specific data from election sources; some municipal or ward races may only appear after local sample-ballot data is available.
+                  Local ballot coverage depends on address-specific election sources and AI-assisted research; some municipal or ward races may only appear after official sample-ballot data is available.
                 </p>
               )}
             </div>

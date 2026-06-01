@@ -17,6 +17,8 @@ export interface UpcomingCandidate {
   confidence: string | null;
   answers_source: string | null;
   is_pending_research: boolean;
+  source: string;
+  source_url: string | null;
 }
 
 export interface UpcomingElection {
@@ -91,7 +93,7 @@ export function useUpcomingElections(address: string | null | undefined) {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const queryKey = ['upcoming-elections', geocode?.state, geocode?.district, geocode?.city, 'v2'];
+  const queryKey = ['upcoming-elections', geocode?.state, geocode?.district, geocode?.city, 'v3'];
 
   const query = useQuery({
     queryKey,
