@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useCandidatesIE, type IETotalsMap } from '@/hooks/useIndependentExpenditures';
 import { IESummaryInline } from '@/components/IESummaryInline';
+import { canonicalElectionSeat, electionSeatKey, electionSeatLabel } from '@/lib/electionSeatUtils';
 
 interface Props {
   address: string | null | undefined;
@@ -101,32 +102,20 @@ function addSeatCandidate(seat: SeatGroup, candidate: UpcomingCandidate) {
   }
 }
 
-function seatLabel(seat: SeatGroup): string {
-  const parts: string[] = [seat.office];
-  if (seat.district) parts.push(`District ${seat.district}`);
-  const place = seat.jurisdiction ?? seat.state;
-  if (place && !seat.office.toLowerCase().includes(place.toLowerCase())) parts.push(place);
-  return parts.join(' · ');
-}
-
 function buildSeatGroups(elections: UpcomingElection[]): SeatGroup[] {
   const seats = new Map<string, SeatGroup>();
   for (const e of elections) {
     for (const c of e.candidates) {
-      const key = [
-        normalizeCandidateText(c.office),
-        normalizeCandidateText(c.state || e.state),
-        normalizeCandidateText(c.district),
-        normalizeCandidateText(e.jurisdiction),
-      ].join('|');
+      const key = electionSeatKey(c, e);
       let seat = seats.get(key);
       if (!seat) {
+        const canonicalSeat = canonicalElectionSeat(c, e);
         seat = {
           key,
-          office: c.office,
-          state: c.state || e.state,
-          district: c.district,
-          jurisdiction: e.jurisdiction,
+          office: canonicalSeat.office,
+          state: canonicalSeat.state,
+          district: canonicalSeat.district,
+          jurisdiction: canonicalSeat.jurisdiction,
           candidates: [],
           elections: [],
         };
@@ -224,7 +213,7 @@ function SeatBlock({
 
   const dialogElection: UpcomingElection = {
     ...primaryElection,
-    name: seatLabel(seat),
+    name: electionSeatLabel(seat.candidates[0], primaryElection),
     state: seat.state ?? primaryElection.state,
     jurisdiction: seat.jurisdiction ?? primaryElection.jurisdiction,
     candidates: seat.candidates,
@@ -238,7 +227,7 @@ function SeatBlock({
         className="w-full flex items-center gap-2 text-left rounded-md px-2 py-1 -mx-2 hover:bg-accent/40 transition-colors group"
       >
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-foreground truncate">{seatLabel(seat)}</div>
+          <div className="text-sm font-semibold text-foreground truncate">{electionSeatLabel(seat.candidates[0], primaryElection)}</div>
           <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
             <Calendar className="w-3 h-3" />
             <span>{dates}</span>
