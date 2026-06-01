@@ -1,29 +1,33 @@
-## Why NorPac has no "Primary cause" badge
+## Plan
 
-The donor card calls `useDonorCauses` with the displayed name `NorPac` / type `PAC`. The hook tries three lookups:
+Fix the NorPAC primary cause badge by making donor cause lookup tolerant of the exact alias shapes currently in the database.
 
-1. `donor_cause_overrides` — no row for NorPac.
-2. `donor_alias_members` — there are 8 member rows, but they are stored as `NORPAC`, `NOR PAC`, `NORPAC LLC`, etc. The query uses `.in('donor_name', ['NorPac'])`, which is case-sensitive in Postgres, so nothing matches.
-3. `donor_aliases` canonical-name lookup — `canonical_name = 'NorPac'` does exist with `primary_cause_id = 'pro-israel'`. This is the path that should produce the badge.
+### What I found
+- NorPAC is correctly listed in `donor_aliases` as `canonical_name = 'NorPac'`, `primary_cause_id = 'pro-israel'`, active.
+- The candidate donor row for `/candidate/B001288` is `name = 'NORPAC'`, `display_name = 'NorPac'`, `type = 'PAC'`.
+- The current lookup can still miss cause display paths because it relies on case-sensitive `.in('donor_name', names)` / `.in('canonical_name', names)` filters before doing normalized comparisons in JavaScript.
+- That means variants like `NORPAC`, `NOrpac`, `NorPac`, and `NOR PAC` are not consistently resolved even though they belong to the same active alias.
 
-But the canonical-name query in `src/hooks/useDonorCauses.ts` currently selects:
+### Implementation
+1. Update `src/hooks/useDonorCauses.ts` to normalize alias resolution before querying:
+   - Build uppercase normalized input-name keys.
+   - Query likely alias/member candidates using `ilike` OR filters for the input names instead of case-sensitive `.in(...)` where exact casing can fail.
+   - Keep exact donor type filtering for direct overrides and member aliases.
 
-```ts
-.select('canonical_name, donor_type, donor_types, fec_committee_id, ...')
-```
+2. Add a fallback alias-id resolution path:
+   - First resolve matching `donor_alias_members` rows by normalized donor names.
+   - Collect their `alias_id`s.
+   - Fetch active `donor_aliases` for those alias IDs and apply any `primary_cause_id` to the original input key.
+   - This specifically covers `NOR PAC` member rows whose canonical alias is `NorPac`.
 
-`donor_aliases` has no `donor_type` or `donor_types` columns (confirmed via `information_schema`). PostgREST returns a 400, and the hook does `if (canonicalErr) throw canonicalErr;` — so the entire causes query errors out for any donor that relies on canonical-name matching, including NorPac. Donors whose causes resolve via `donor_alias_members` + `committee_topics` survive because that path runs before the broken query, which is why most rows still render their badge.
+3. Preserve existing precedence:
+   - Direct donor overrides still win.
+   - Alias-level primary cause wins before committee-topic fallback.
+   - Committee-topic cause remains the final fallback.
 
-## Fix
+4. Update the affected UI lookup call if needed:
+   - On candidate donor rows, attempt cause lookup against `display_name`, raw `name`, and `name_variations`, not just one display value.
 
-In `src/hooks/useDonorCauses.ts`, the canonical-alias query:
-
-- Drop `donor_type` and `donor_types` from the `.select(...)` — they don't exist on `donor_aliases`.
-- Since the alias row no longer carries type info, the existing `aliasMatchesType(alias, input.type)` call will see an empty type set and return `true` (its documented fallback), so NorPac (PAC) will match its canonical alias and inherit `primary_cause_id = 'pro-israel'` → the "Pro-Israel" cause badge renders.
-- No schema change, no other call sites affected.
-
-### Technical notes
-
-- File: `src/hooks/useDonorCauses.ts`, the `canonicalAliases` block (~lines 120-135).
-- Keep `is_active`, `fec_committee_id`, `fec_committee_ids`, `primary_cause_id`, `cause_assigned_by`, `cause_ai_confidence` in the select.
-- Optional follow-up (not required for this fix): also lowercase/uppercase-normalize names before `.in('donor_name', names)` on `donor_alias_members` so case-variant displays still hit member rows. Out of scope unless you want it bundled.
+### Validation
+- Verify NorPAC on `/candidate/B001288` resolves to `Pro-Israel` from `primary_cause_id = 'pro-israel'`.
+- Verify existing donor cause badges still render for canonical names and merged donor cards.
