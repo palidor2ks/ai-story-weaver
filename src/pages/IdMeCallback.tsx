@@ -47,12 +47,8 @@ export const IdMeCallback = () => {
         },
       });
 
-      if (error) {
-        throw error;
-      }
-
-      if (data?.error || data?.success !== true) {
-        throw new Error(data?.message || 'ID.me verification could not be completed.');
+      if (error || data?.error || data?.success !== true) {
+        throw new Error(data?.message || error?.message || 'ID.me verification could not be completed.');
       }
 
       sessionStorage.removeItem('idme_state');

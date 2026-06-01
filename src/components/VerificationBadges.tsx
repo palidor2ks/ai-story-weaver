@@ -80,29 +80,28 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
     setIsIdMeLoading(true);
     try {
       const redirectUri = `${window.location.origin}/auth/idme-callback`;
-      
+
       const { data, error } = await supabase.functions.invoke('verify-identity-idme', {
-        body: { 
+        body: {
           action: 'get_auth_url',
           redirect_uri: redirectUri
         }
       });
 
-      if (error) throw error;
-
-      if (data.error) {
-        toast.error(data.message || 'ID.me verification is not configured');
+      if (error || data?.error) {
+        toast.error(data?.message || error?.message || 'ID.me verification is not configured');
         return;
       }
 
       // Store state for validation
       sessionStorage.setItem('idme_state', data.state);
-      
+
       // Redirect to ID.me
       window.location.href = data.auth_url;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start identity verification';
       console.error('ID.me verification error:', error);
-      toast.error('Failed to start identity verification');
+      toast.error(errorMessage);
     } finally {
       setIsIdMeLoading(false);
     }
@@ -116,7 +115,7 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
 
     setIsVoterLoading(true);
     setManualVerifyUrl(null);
-    
+
     try {
       // Parse address if available
       let city = '';
@@ -143,7 +142,9 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
         }
       });
 
-      if (error) throw error;
+      if (error || data?.error) {
+        throw new Error(data?.message || error?.message || 'Failed to verify voter registration');
+      }
 
       if (data.configured === false) {
         // API not configured - show manual verification option
@@ -156,9 +157,10 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
       } else {
         toast.error(data.message || 'Voter registration not found');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to verify voter registration';
       console.error('Voter verification error:', error);
-      toast.error('Failed to verify voter registration');
+      toast.error(errorMessage);
     } finally {
       setIsVoterLoading(false);
     }
