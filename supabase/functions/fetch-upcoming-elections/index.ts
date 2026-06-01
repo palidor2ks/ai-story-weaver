@@ -16,9 +16,14 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const FEC_API_KEY = Deno.env.get('FEC_API_KEY') ?? '';
 const OPEN_STATES_API_KEY = Deno.env.get('OPEN_STATES_API_KEY') ?? '';
 const GOOGLE_CIVIC_API_KEY = Deno.env.get('GOOGLE_CIVIC_API_KEY') ?? '';
+const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY') ?? '';
+const YOU_API_KEY = Deno.env.get('YOU_API_KEY') ?? '';
 
 const INTERNAL_CHAIN_HEADER = 'x-internal-chain-secret';
-const MAX_RESEARCH_PER_RUN = 5;
+const MAX_RESEARCH_FEC_CIVIC = 5;
+const MAX_RESEARCH_AI = 3;
+const MAX_AI_ELECTIONS = 8;
+const MAX_AI_CANDIDATES_PER_ELECTION = 6;
 const CACHE_TTL_HOURS = 24;
 
 type Level = 'federal' | 'state' | 'local';
