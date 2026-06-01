@@ -93,7 +93,7 @@ export function useUpcomingElections(address: string | null | undefined) {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const queryKey = ['upcoming-elections', geocode?.state, geocode?.district, geocode?.city, 'v3'];
+  const queryKey = ['upcoming-elections', geocode?.state, geocode?.district, geocode?.city, geocode?.ward, 'v4'];
 
   const query = useQuery({
     queryKey,
@@ -109,6 +109,7 @@ export function useUpcomingElections(address: string | null | undefined) {
             lat: geocode.lat ?? undefined,
             lng: geocode.lng ?? undefined,
             city: geocode.city ?? undefined,
+            ward: geocode.ward ?? undefined,
           },
         },
       );
@@ -144,6 +145,7 @@ export function useUpcomingElections(address: string | null | undefined) {
           lat: geocode.lat ?? undefined,
           lng: geocode.lng ?? undefined,
           city: geocode.city ?? undefined,
+          ward: geocode.ward ?? undefined,
           force: true,
         },
       });

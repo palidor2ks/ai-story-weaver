@@ -8,6 +8,8 @@ export interface GeocodeResult {
   lat: number | null;
   lng: number | null;
   matchedAddress?: string | null;
+  ward?: string | null;
+  divisions?: string[];
 }
 
 /**
@@ -38,6 +40,8 @@ export function useGeocode(address: string | null | undefined) {
         lat: data?.lat ?? null,
         lng: data?.lng ?? null,
         matchedAddress: data?.matchedAddress ?? null,
+        ward: (data as any)?.ward ?? null,
+        divisions: (data as any)?.divisions ?? [],
       };
     },
     enabled: !!address,
