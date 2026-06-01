@@ -66,9 +66,37 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
   // FEC/display name as imported, not normalized uppercase.
   const pairs = uniqueInputs.map(d => `${norm(d.name)}|${d.type}`).sort();
 
+  const { data: allAliasMembers } = useQuery({
+    queryKey: ['donor-alias-members-all'],
+    enabled: pairs.length > 0,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('donor_alias_members')
+        .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
+        .eq('donor_aliases.is_active', true);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: allCanonicalAliases } = useQuery({
+    queryKey: ['donor-aliases-active'],
+    enabled: pairs.length > 0,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('donor_aliases')
+        .select('id, canonical_name, donor_type, donor_types, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   return useQuery({
     queryKey: ['donor-causes', pairs],
-    enabled: pairs.length > 0,
+    enabled: pairs.length > 0 && Boolean(allAliasMembers && allCanonicalAliases),
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<Map<string, DonorCauseInfo>> => {
       const result = new Map<string, DonorCauseInfo>();
