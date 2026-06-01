@@ -28,7 +28,8 @@ serve(async (req) => {
   // does only safe, scoped work and we need pg_cron to invoke it).
   const auth = req.headers.get('Authorization') ?? '';
   const bearer = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-  const isServiceOrAnon = bearer === serviceKey || bearer === anonKey;
+  const apiKeyHeader = req.headers.get('apikey')?.trim() ?? '';
+  const isServiceOrAnon = bearer === serviceKey || bearer === anonKey || apiKeyHeader === serviceKey || apiKeyHeader === anonKey;
   let triggeredBy = 'cron';
 
   if (!isServiceOrAnon) {
