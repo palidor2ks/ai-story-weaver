@@ -86,6 +86,7 @@ export default function Poll() {
 
       setSubmitted(true);
       toast.success('Thanks for voting!');
+      logBadgeEvent('poll_completed', { poll_id: poll.id, slug: poll.slug });
     } catch (e: any) {
       toast.error(e.message || 'Submit failed');
     } finally {
