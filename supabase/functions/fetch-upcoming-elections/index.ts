@@ -84,6 +84,8 @@ interface ElectionResponseRow {
     confidence: string | null;
     answers_source: string | null;
     is_pending_research: boolean;
+    source: string;
+    source_url: string | null;
   }>;
 }
 
