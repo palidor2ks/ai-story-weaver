@@ -1,37 +1,29 @@
-## Why you are not seeing results
+## Why NorPac has no "Primary cause" badge
 
-The current **Run now** button now returns immediately with a queued/background response to avoid the 150s timeout. That part is working: the database has new `donor_sync_runs` rows marked `running…`.
+The donor card calls `useDonorCauses` with the displayed name `NorPac` / type `PAC`. The hook tries three lookups:
 
-The results are not appearing because the background run calls `sync-all-donors`, which then processes candidates one-by-one through `fetch-fec-donors`. The logs show `fetch-fec-donors` repeatedly hitting its internal runtime guard (`Runtime limit reached mid-pagination`). When that happens it can return partial candidate progress, but `sync-all-donors` only treats `data.success` as useful and does not explicitly track `hasMore` / `stoppedDueToTimeout`. Also, `schedule-congress-donor-sync` only updates the run row after the entire `sync-all-donors` call returns, so the UI sits at `processed: 0` and `running…` while the nested work is still going.
+1. `donor_cause_overrides` — no row for NorPac.
+2. `donor_alias_members` — there are 8 member rows, but they are stored as `NORPAC`, `NOR PAC`, `NORPAC LLC`, etc. The query uses `.in('donor_name', ['NorPac'])`, which is case-sensitive in Postgres, so nothing matches.
+3. `donor_aliases` canonical-name lookup — `canonical_name = 'NorPac'` does exist with `primary_cause_id = 'pro-israel'`. This is the path that should produce the badge.
 
-There are also two currently in-flight run rows that have not finished yet, which makes the UI look like it produced no result even though nested donor work is happening in logs.
+But the canonical-name query in `src/hooks/useDonorCauses.ts` currently selects:
 
-## Plan
+```ts
+.select('canonical_name, donor_type, donor_types, fec_committee_id, ...')
+```
 
-1. Update `sync-all-donors` result handling
-   - Treat `fetch-fec-donors` responses with `success: true` as successful even when `hasMore: true`.
-   - Include partial/resumable status per candidate: `hasMore`, `stoppedDueToTimeout`, `committeesRemaining`.
-   - Count these as processed successes, but add a note/error-style message that the candidate needs another pass.
-   - Calculate `remaining` based on candidates that still need more work, not only hard failures.
+`donor_aliases` has no `donor_type` or `donor_types` columns (confirmed via `information_schema`). PostgREST returns a 400, and the hook does `if (canonicalErr) throw canonicalErr;` — so the entire causes query errors out for any donor that relies on canonical-name matching, including NorPac. Donors whose causes resolve via `donor_alias_members` + `committee_topics` survive because that path runs before the broken query, which is why most rows still render their badge.
 
-2. Reduce each manual batch size to avoid nested edge timeout pressure
-   - Change manual backfill from 10 candidates to a smaller batch, likely 1-2 candidates per run.
-   - Keep the cron/backfill pattern resumable so repeated runs complete the queue safely.
+## Fix
 
-3. Improve the `donor_sync_runs` row updates
-   - Make `schedule-congress-donor-sync` mark the run as queued/running immediately, then finish with a clear `notes` value like `completed`, `partial — rerun needed`, or the exact error.
-   - Preserve backend error details in `errors` so the on-screen panel/history can show what happened.
+In `src/hooks/useDonorCauses.ts`, the canonical-alias query:
 
-4. Improve the admin UI messaging for queued jobs
-   - When `Run now` returns `202 queued`, show a clear “Background run started” panel instead of a zero-result diagnostics panel.
-   - Show in-progress rows as `Running` rather than appearing like an empty/no-result run.
-   - Continue relying on the 15s polling of `donor_sync_runs` for final results.
+- Drop `donor_type` and `donor_types` from the `.select(...)` — they don't exist on `donor_aliases`.
+- Since the alias row no longer carries type info, the existing `aliasMatchesType(alias, input.type)` call will see an empty type set and return `true` (its documented fallback), so NorPac (PAC) will match its canonical alias and inherit `primary_cause_id = 'pro-israel'` → the "Pro-Israel" cause badge renders.
+- No schema change, no other call sites affected.
 
-## Technical notes
+### Technical notes
 
-- No schema change is required for the first pass; existing `donor_sync_runs.notes` and `errors` can hold the relevant status.
-- The key files to edit are:
-  - `supabase/functions/sync-all-donors/index.ts`
-  - `supabase/functions/schedule-congress-donor-sync/index.ts`
-  - `src/components/admin/AutomatedJobsCard.tsx`
-- After implementation, test by calling `schedule-congress-donor-sync` and confirming a new run row transitions from `running…` to a completed/partial/error state with nonzero processed counts.
+- File: `src/hooks/useDonorCauses.ts`, the `canonicalAliases` block (~lines 120-135).
+- Keep `is_active`, `fec_committee_id`, `fec_committee_ids`, `primary_cause_id`, `cause_assigned_by`, `cause_ai_confidence` in the select.
+- Optional follow-up (not required for this fix): also lowercase/uppercase-normalize names before `.in('donor_name', names)` on `donor_alias_members` so case-variant displays still hit member rows. Out of scope unless you want it bundled.
