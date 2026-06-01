@@ -5,12 +5,6 @@ import { useAdminRole } from "@/hooks/useAdminRole";
 import { useStaticOfficials, useCreateStaticOfficial, useUpdateStaticOfficial, useDeleteStaticOfficial, StaticOfficial } from "@/hooks/useStaticOfficials";
 import { useCandidateOverrides, useDeleteCandidateOverride, CandidateOverride } from "@/hooks/useCandidateOverrides";
 import { Header } from "@/components/Header";
-import { AnswerCoveragePanel } from "@/components/admin/AnswerCoveragePanel";
-import { ClaimReviewPanel } from "@/components/admin/ClaimReviewPanel";
-import { DonorAliasesPanel } from "@/components/admin/DonorAliasesPanel";
-import { VendorRefundsPanel } from "@/components/admin/VendorRefundsPanel";
-import { ScoreFixesTab } from "@/pages/admin/tabs/ScoreFixesTab";
-import { HiddenStatesPanel } from "@/components/admin/HiddenStatesPanel";
 import { BackgroundProcessingProvider } from "@/context/BackgroundProcessingContext";
 
 
@@ -18,31 +12,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags, CheckCircle2, Upload, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { QuestionManagementPanel } from "@/components/admin/QuestionManagementPanel";
-import { PartyAnswersPanel } from "@/components/admin/PartyAnswersPanel";
-import TopicReviewPanel from "@/components/admin/TopicReviewPanel";
-import { DonorImportPanel } from "@/components/admin/DonorImportPanel";
-import { BulkDonorSyncCard } from "@/components/admin/BulkDonorSyncCard";
-import { AutomatedJobsCard } from "@/components/admin/AutomatedJobsCard";
-import { BulkCommitteeTotalsCard } from "@/components/admin/BulkCommitteeTotalsCard";
-import { BulkAnswerValidation } from "@/components/admin/BulkAnswerValidation";
-import { IndependentExpenditureImportCard } from "@/components/admin/IndependentExpenditureImportCard";
-import { IndependentExpenditureImportHistory } from "@/components/admin/IndependentExpenditureImportHistory";
-import { AdminUsersPanel } from "@/components/admin/AdminUsersPanel";
-import { IEExclusionsPanel } from "@/components/admin/IEExclusionsPanel";
-import { CommitteeTopicsPanel } from "@/components/admin/CommitteeTopicsPanel";
-import { CommitteeAliasesPanel } from "@/components/admin/CommitteeAliasesPanel";
 
 
 // Only levels that require manual entry (no API available)
@@ -54,9 +34,29 @@ const LEVELS = [
 const PARTIES = ['Democrat', 'Republican', 'Independent', 'Other'] as const;
 const TIERS = ['tier_1', 'tier_2', 'tier_3'];
 
+const AnswerCoveragePanel = lazy(() => import("@/components/admin/AnswerCoveragePanel").then((m) => ({ default: m.AnswerCoveragePanel })));
+const ClaimReviewPanel = lazy(() => import("@/components/admin/ClaimReviewPanel").then((m) => ({ default: m.ClaimReviewPanel })));
+const DonorAliasesPanel = lazy(() => import("@/components/admin/DonorAliasesPanel").then((m) => ({ default: m.DonorAliasesPanel })));
+const VendorRefundsPanel = lazy(() => import("@/components/admin/VendorRefundsPanel").then((m) => ({ default: m.VendorRefundsPanel })));
+const ScoreFixesTab = lazy(() => import("@/pages/admin/tabs/ScoreFixesTab").then((m) => ({ default: m.ScoreFixesTab })));
+const HiddenStatesPanel = lazy(() => import("@/components/admin/HiddenStatesPanel").then((m) => ({ default: m.HiddenStatesPanel })));
 const EvidenceReviewPanel = lazy(() => import("@/components/admin/EvidenceReviewPanel").then((m) => ({ default: m.EvidenceReviewPanel })));
 const BillSummaryDashboard = lazy(() => import("@/components/admin/BillSummaryDashboard").then((m) => ({ default: m.BillSummaryDashboard })));
 const PollsPanel = lazy(() => import("@/components/admin/PollsPanel").then((m) => ({ default: m.PollsPanel })));
+const QuestionManagementPanel = lazy(() => import("@/components/admin/QuestionManagementPanel").then((m) => ({ default: m.QuestionManagementPanel })));
+const PartyAnswersPanel = lazy(() => import("@/components/admin/PartyAnswersPanel").then((m) => ({ default: m.PartyAnswersPanel })));
+const TopicReviewPanel = lazy(() => import("@/components/admin/TopicReviewPanel"));
+const DonorImportPanel = lazy(() => import("@/components/admin/DonorImportPanel").then((m) => ({ default: m.DonorImportPanel })));
+const BulkDonorSyncCard = lazy(() => import("@/components/admin/BulkDonorSyncCard").then((m) => ({ default: m.BulkDonorSyncCard })));
+const AutomatedJobsCard = lazy(() => import("@/components/admin/AutomatedJobsCard").then((m) => ({ default: m.AutomatedJobsCard })));
+const BulkCommitteeTotalsCard = lazy(() => import("@/components/admin/BulkCommitteeTotalsCard").then((m) => ({ default: m.BulkCommitteeTotalsCard })));
+const BulkAnswerValidation = lazy(() => import("@/components/admin/BulkAnswerValidation").then((m) => ({ default: m.BulkAnswerValidation })));
+const IndependentExpenditureImportCard = lazy(() => import("@/components/admin/IndependentExpenditureImportCard").then((m) => ({ default: m.IndependentExpenditureImportCard })));
+const IndependentExpenditureImportHistory = lazy(() => import("@/components/admin/IndependentExpenditureImportHistory").then((m) => ({ default: m.IndependentExpenditureImportHistory })));
+const AdminUsersPanel = lazy(() => import("@/components/admin/AdminUsersPanel").then((m) => ({ default: m.AdminUsersPanel })));
+const IEExclusionsPanel = lazy(() => import("@/components/admin/IEExclusionsPanel").then((m) => ({ default: m.IEExclusionsPanel })));
+const CommitteeTopicsPanel = lazy(() => import("@/components/admin/CommitteeTopicsPanel").then((m) => ({ default: m.CommitteeTopicsPanel })));
+const CommitteeAliasesPanel = lazy(() => import("@/components/admin/CommitteeAliasesPanel").then((m) => ({ default: m.CommitteeAliasesPanel })));
 
 
 interface OfficialFormData {
@@ -91,11 +91,20 @@ const defaultFormData: OfficialFormData = {
   confidence: 'high',
 };
 
+function SectionLoader() {
+  return (
+    <div className="flex justify-center py-8">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
+
 export default function Admin() {
   const { user, loading: authLoading } = useAuth();
   const { data: adminData, isLoading: adminLoading } = useAdminRole();
-  const { data: officials, isLoading: officialsLoading } = useStaticOfficials();
-  const { data: overrides, isLoading: overridesLoading } = useCandidateOverrides();
+  const [activeTab, setActiveTab] = useState("overview");
+  const { data: officials, isLoading: officialsLoading } = useStaticOfficials(activeTab === "officials");
+  const { data: overrides, isLoading: overridesLoading } = useCandidateOverrides(activeTab === "overrides");
   const createMutation = useCreateStaticOfficial();
   const updateMutation = useUpdateStaticOfficial();
   const deleteMutation = useDeleteStaticOfficial();
@@ -104,7 +113,6 @@ export default function Admin() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingOfficial, setEditingOfficial] = useState<StaticOfficial | null>(null);
   const [formData, setFormData] = useState<OfficialFormData>(defaultFormData);
-  const [activeTab, setActiveTab] = useState("officials");
   const [ieHistoryRefresh, setIeHistoryRefresh] = useState(0);
   const [scrapingPiscataway, setScrapingPiscataway] = useState(false);
   const queryClient = useQueryClient();
@@ -255,23 +263,22 @@ export default function Admin() {
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
               <Users className="h-8 w-8 text-primary" />
-              Manage Politicians
+              Admin Console
             </h1>
             <p className="text-muted-foreground mt-1">
-              Manage officials without API coverage (President/VP, local officials)
-            </p>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Note: State legislators and governors are fetched automatically from Open States API
+              Select one section at a time so charts, review queues, and imports only load when needed.
             </p>
           </div>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={handleOpenCreate}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Official
-              </Button>
-            </DialogTrigger>
+            {activeTab === "officials" && (
+              <DialogTrigger asChild>
+                <Button onClick={handleOpenCreate}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Official
+                </Button>
+              </DialogTrigger>
+            )}
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
@@ -488,24 +495,23 @@ export default function Admin() {
           </Button>
         </div>
 
-        <AnswerCoveragePanel />
-
-        {(() => null)()}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           {(() => {
             const ADMIN_TABS = [
+              { value: "overview", label: "Overview", Icon: Shield },
+              { value: "coverage", label: "Answer Coverage", Icon: BarChart3 },
               { value: "officials", label: "Static Officials", Icon: Users },
-              { value: "overrides", label: `Overrides (${overrides?.length || 0})`, Icon: FileEdit },
+              { value: "overrides", label: "Overrides", Icon: FileEdit },
               { value: "claims", label: "Claims", Icon: UserCheck },
               { value: "parties", label: "Party Answers", Icon: Building2 },
               { value: "scores", label: "Score Fixes", Icon: BarChart3 },
-              { value: "donor-aliases", label: "Donor Aliases", Icon: DollarSign },
+              { value: "donor-aliases", label: "Donor Entity Resolution", Icon: DollarSign },
               { value: "questions", label: "Questions", Icon: HelpCircle },
               { value: "evidence", label: "Evidence Review", Icon: AlertTriangle },
               { value: "voting-records", label: "Voting Records", Icon: FileText },
               { value: "topic-review", label: "Topic Review", Icon: Tags },
               { value: "bulk-validation", label: "Bulk Validation", Icon: CheckCircle2 },
-              { value: "donor-import", label: "Donor Import", Icon: Upload },
+              { value: "donor-import", label: "Imports & Jobs", Icon: Upload },
               { value: "polls", label: "Polls", Icon: Sparkles },
               { value: "ie-exclusions", label: "IE Exclusions", Icon: AlertTriangle },
               { value: "committee-topics", label: "Committee Topics", Icon: Tags },
@@ -534,12 +540,41 @@ export default function Admin() {
             );
           })()}
 
+          <TabsContent value="overview">
+            <Card>
+              <CardHeader>
+                <CardTitle>Admin sections</CardTitle>
+                <CardDescription>
+                  Choose a section from the dropdown above. Expensive charts, imports, and review queues stay unloaded until you open their section.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm text-muted-foreground">
+                <div>
+                  <p className="font-medium text-foreground">Consolidated areas</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    <li><span className="font-medium text-foreground">Donor Entity Resolution</span> groups donor aliases and vendor refunds because both clean donor-facing finance lists.</li>
+                    <li><span className="font-medium text-foreground">Donor Import</span> groups scheduled jobs, bulk syncs, committee totals, independent expenditures, history, and manual imports.</li>
+                    <li><span className="font-medium text-foreground">Committee Topics</span> and <span className="font-medium text-foreground">Spender Aliases</span> stay separate but next to related committee data sections in the dropdown.</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">Reduced redundancy</p>
+                  <p className="mt-2">The old always-visible answer coverage panel has moved into its own dropdown section, so the admin landing page no longer loads charts or large data by default.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="coverage">
+            <Suspense fallback={<SectionLoader />}><AnswerCoveragePanel /></Suspense>
+          </TabsContent>
+
           <TabsContent value="visible-states">
-            <HiddenStatesPanel />
+            <Suspense fallback={<SectionLoader />}><HiddenStatesPanel /></Suspense>
           </TabsContent>
 
           <TabsContent value="users">
-            <AdminUsersPanel />
+            <Suspense fallback={<SectionLoader />}><AdminUsersPanel /></Suspense>
           </TabsContent>
 
           <TabsContent value="officials">
@@ -734,17 +769,17 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="claims">
-            <ClaimReviewPanel />
+            <Suspense fallback={<SectionLoader />}><ClaimReviewPanel /></Suspense>
           </TabsContent>
 
           <TabsContent value="parties">
-            <PartyAnswersPanel />
+            <Suspense fallback={<SectionLoader />}><PartyAnswersPanel /></Suspense>
           </TabsContent>
 
 
           {/* Score Fixes - lazy loaded only when tab is active */}
           <TabsContent value="scores">
-            {activeTab === 'scores' && <ScoreFixesTab />}
+            {activeTab === 'scores' && <Suspense fallback={<SectionLoader />}><ScoreFixesTab /></Suspense>}
           </TabsContent>
 
           {/* Donor Aliases Tab */}
@@ -758,7 +793,7 @@ export default function Admin() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <DonorAliasesPanel />
+                <Suspense fallback={<SectionLoader />}><DonorAliasesPanel /></Suspense>
               </CardContent>
             </Card>
             <Card className="mt-4">
@@ -770,54 +805,56 @@ export default function Admin() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <VendorRefundsPanel />
+                <Suspense fallback={<SectionLoader />}><VendorRefundsPanel /></Suspense>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="questions">
-            <QuestionManagementPanel />
+            <Suspense fallback={<SectionLoader />}><QuestionManagementPanel /></Suspense>
           </TabsContent>
 
           <TabsContent value="evidence">
-            <Suspense fallback={<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}><EvidenceReviewPanel /></Suspense>
+            <Suspense fallback={<SectionLoader />}><EvidenceReviewPanel /></Suspense>
           </TabsContent>
 
           <TabsContent value="voting-records">
-            <Suspense fallback={<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}><BillSummaryDashboard /></Suspense>
+            <Suspense fallback={<SectionLoader />}><BillSummaryDashboard /></Suspense>
           </TabsContent>
 
           <TabsContent value="topic-review">
-            <TopicReviewPanel />
+            <Suspense fallback={<SectionLoader />}><TopicReviewPanel /></Suspense>
           </TabsContent>
 
           <TabsContent value="bulk-validation">
-            <BulkAnswerValidation />
+            <Suspense fallback={<SectionLoader />}><BulkAnswerValidation /></Suspense>
           </TabsContent>
 
           <TabsContent value="donor-import" className="space-y-6">
-            <AutomatedJobsCard />
-            <BulkDonorSyncCard />
-            <BulkCommitteeTotalsCard />
-            <IndependentExpenditureImportCard onImportComplete={() => setIeHistoryRefresh(k => k + 1)} />
-            <IndependentExpenditureImportHistory refreshKey={ieHistoryRefresh} />
-            <DonorImportPanel />
+            <Suspense fallback={<SectionLoader />}>
+              <AutomatedJobsCard />
+              <BulkDonorSyncCard />
+              <BulkCommitteeTotalsCard />
+              <IndependentExpenditureImportCard onImportComplete={() => setIeHistoryRefresh(k => k + 1)} />
+              <IndependentExpenditureImportHistory refreshKey={ieHistoryRefresh} />
+              <DonorImportPanel />
+            </Suspense>
           </TabsContent>
 
           <TabsContent value="polls">
-            <Suspense fallback={<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}><PollsPanel /></Suspense>
+            <Suspense fallback={<SectionLoader />}><PollsPanel /></Suspense>
           </TabsContent>
 
           <TabsContent value="ie-exclusions">
-            <IEExclusionsPanel />
+            <Suspense fallback={<SectionLoader />}><IEExclusionsPanel /></Suspense>
           </TabsContent>
 
           <TabsContent value="committee-topics">
-            <CommitteeTopicsPanel />
+            <Suspense fallback={<SectionLoader />}><CommitteeTopicsPanel /></Suspense>
           </TabsContent>
 
           <TabsContent value="committee-aliases">
-            <CommitteeAliasesPanel />
+            <Suspense fallback={<SectionLoader />}><CommitteeAliasesPanel /></Suspense>
           </TabsContent>
 
 
