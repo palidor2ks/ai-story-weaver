@@ -1103,13 +1103,13 @@ serve(async (req) => {
     while (pageCount < maxPages) {
       // Check runtime guard during pagination
       if (Date.now() - startTime > MAX_RUNTIME_MS) {
-        console.log('[FEC-DONORS] Runtime limit reached mid-pagination — flushing cursor and exiting fast');
+        console.log('[FEC-DONORS] Runtime limit reached mid-pagination — fast cursor save and exit (skip donor flush + rollup)');
         committeeHasMore = true;
         stoppedDueToTimeout = true;
-        // Persist what we have NOW, then bail out before the heavy final flush / rollup
-        // queries (those took ~100s for Josh Riley and blew the 110s parent timeout).
+        // Persist ONLY contributions + cursor. Skip donor flush (was 100s for Josh Riley:
+        // 6491 donors). On next resume we reload donors from DB and re-aggregate, so no
+        // data is lost — only deferred. Rollups also skipped via stoppedDueToTimeout guard.
         try { await saveContributionBatch(); } catch (e) { console.error('[FEC-DONORS] timeout flush contribs error:', e); }
-        try { await saveDonorBatch(); } catch (e) { console.error('[FEC-DONORS] timeout flush donors error:', e); }
         try { await saveCursor(true); } catch (e) { console.error('[FEC-DONORS] timeout saveCursor error:', e); }
         break;
       }
