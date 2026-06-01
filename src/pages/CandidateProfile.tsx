@@ -126,7 +126,6 @@ export const CandidateProfile = () => {
     enabled: donorAliasLookupInputs.length > 0,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const names = Array.from(new Set(donorAliasLookupInputs.map(d => d.name)));
       const types = Array.from(new Set(donorAliasLookupInputs.map(d => d.type)));
       const inputsByName = new Map<string, Array<{ name: string; type: string }>>();
       for (const input of donorAliasLookupInputs) {
