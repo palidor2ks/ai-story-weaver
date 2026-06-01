@@ -153,26 +153,6 @@ function CandidateRow({ c, ieMap }: { c: UpcomingCandidate; ieMap?: IETotalsMap 
             {c.is_incumbent && (
               <Badge variant="secondary" className="text-xs">Incumbent</Badge>
             )}
-            {c.source === 'ai_research' && (
-              c.source_url ? (
-                <a
-                  href={c.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  title={`AI-discovered candidate — source: ${c.source_url}`}
-                  className="inline-flex"
-                >
-                  <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30">
-                    AI-sourced
-                  </Badge>
-                </a>
-              ) : (
-                <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30" title="AI-discovered candidate">
-                  AI-sourced
-                </Badge>
-              )
-            )}
           </div>
           <IESummaryInline totals={ie} className="mt-0.5" />
         </div>
