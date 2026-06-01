@@ -1103,9 +1103,14 @@ serve(async (req) => {
     while (pageCount < maxPages) {
       // Check runtime guard during pagination
       if (Date.now() - startTime > MAX_RUNTIME_MS) {
-        console.log('[FEC-DONORS] Runtime limit reached mid-pagination');
+        console.log('[FEC-DONORS] Runtime limit reached mid-pagination — flushing cursor and exiting fast');
         committeeHasMore = true;
         stoppedDueToTimeout = true;
+        // Persist what we have NOW, then bail out before the heavy final flush / rollup
+        // queries (those took ~100s for Josh Riley and blew the 110s parent timeout).
+        try { await saveContributionBatch(); } catch (e) { console.error('[FEC-DONORS] timeout flush contribs error:', e); }
+        try { await saveDonorBatch(); } catch (e) { console.error('[FEC-DONORS] timeout flush donors error:', e); }
+        try { await saveCursor(true); } catch (e) { console.error('[FEC-DONORS] timeout saveCursor error:', e); }
         break;
       }
 
