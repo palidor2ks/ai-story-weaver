@@ -91,6 +91,80 @@ async function sha1(input: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function normalizeDistrict(district?: string | number | null): string | null {
+  if (district === null || district === undefined) return null;
+  const raw = String(district).trim();
+  if (!raw) return null;
+  const match = raw.match(/(\d+)$/);
+  const normalized = (match ? match[1] : raw).replace(/^0+/, '');
+  return normalized || '0';
+}
+
+function normalizeText(value?: string | null): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeCity(value?: string | null): string | null {
+  const normalized = normalizeText(value);
+  return normalized || null;
+}
+
+function districtJurisdiction(state: string, district?: string | number | null): string | null {
+  const normalized = normalizeDistrict(district);
+  return normalized ? `${state.toUpperCase()}-${normalized}` : null;
+}
+
+function jurisdictionMatchesCity(jurisdiction: string | null | undefined, city: string | null): boolean {
+  if (!city) return false;
+  const normalizedJurisdiction = normalizeText(jurisdiction);
+  if (!normalizedJurisdiction) return false;
+  return normalizedJurisdiction.includes(city) || city.includes(normalizedJurisdiction);
+}
+
+function electionMatchesUserContext(
+  election: ElectionResponseRow,
+  context: { state: string; district: string | null; city: string | null },
+): boolean {
+  const electionState = election.state?.toUpperCase() ?? null;
+  const electionJurisdiction = election.jurisdiction ?? null;
+  const normalizedJurisdiction = normalizeText(electionJurisdiction);
+  const district = normalizeDistrict(context.district);
+  const houseJurisdiction = districtJurisdiction(context.state, district);
+
+  // National rows (President) apply to everyone.
+  if (electionState === null || normalizedJurisdiction === 'us') return true;
+  if (electionState !== context.state.toUpperCase()) return false;
+
+  if (election.level === 'federal') {
+    // Statewide federal races (Senate) apply to everyone in the state.
+    if (!electionJurisdiction || normalizeText(electionJurisdiction) === normalizeText(context.state)) return true;
+
+    // House races must match the user's congressional district. Prefer the
+    // election jurisdiction, then candidate district as a fallback.
+    if (houseJurisdiction && normalizeText(electionJurisdiction) === normalizeText(houseJurisdiction)) return true;
+    return election.candidates.some((candidate) => normalizeDistrict(candidate.district) === district);
+  }
+
+  if (election.level === 'state') {
+    // Keep statewide state races; require a district match for district-scoped races when a district is present.
+    if (!electionJurisdiction || normalizeText(electionJurisdiction) === normalizeText(context.state)) return true;
+    if (district && election.candidates.some((candidate) => normalizeDistrict(candidate.district) === district)) return true;
+    return false;
+  }
+
+  if (election.level === 'local') {
+    // Local rows must be scoped to the geocoded city whenever we know it.
+    if (!context.city) return false;
+    return jurisdictionMatchesCity(electionJurisdiction, context.city);
+  }
+
+  return false;
+}
+
 function nextCycles(): string[] {
   const y = new Date().getFullYear();
   const even = y % 2 === 0 ? y : y + 1;
