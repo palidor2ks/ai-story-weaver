@@ -6,6 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Keep the wrapper comfortably below the Supabase Edge Function timeout.
+// The nested fetch-fec-donors call has its own cursoring and may return hasMore=true,
+// so it is safer to return a partial batch than to let this aggregate function 504.
+const SYNC_RUNTIME_BUDGET_MS = 120_000;
+const CANDIDATE_CALL_TIMEOUT_MS = 110_000;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
