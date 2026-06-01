@@ -481,10 +481,16 @@ Deno.serve(async (req) => {
       }),
     }));
 
+    const context = { state, district, city };
+    const scopedOut = out.filter((e) => electionMatchesUserContext(e, context));
+    console.log('[fetch-upcoming-elections] readback scope', {
+      state, district, city, readRows: out.length, returnedRows: scopedOut.length,
+    });
+
     const grouped = {
-      federal: out.filter(e => e.level === 'federal'),
-      state: out.filter(e => e.level === 'state'),
-      local: out.filter(e => e.level === 'local'),
+      federal: scopedOut.filter(e => e.level === 'federal'),
+      state: scopedOut.filter(e => e.level === 'state'),
+      local: scopedOut.filter(e => e.level === 'local'),
     };
 
     return new Response(JSON.stringify(grouped), {
