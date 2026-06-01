@@ -720,7 +720,7 @@ export const UserProfile = () => {
           <CardContent>
             {!profile.address ? (
               <div className="text-center py-6">
-                <p className="text-muted-foreground mb-4">Add your address to see your representatives.</p>
+                <p className="text-muted-foreground mb-4">Add your address to see your current representatives.</p>
                 <Button variant="outline" onClick={handleEditAddress}>
                   Add Address
                 </Button>
