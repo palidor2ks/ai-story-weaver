@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
         client_id: IDME_CLIENT_ID,
         redirect_uri: redirect_uri,
         response_type: 'code',
-        scope: 'openid',
+        scope: IDME_SCOPE,
         state: state,
       }).toString();
 
