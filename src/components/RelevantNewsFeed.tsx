@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Newspaper, Sparkles, ExternalLink } from 'lucide-react';
+import { logBadgeEvent } from '@/lib/badges';
 
 interface Props {
   people: NewsPerson[];
