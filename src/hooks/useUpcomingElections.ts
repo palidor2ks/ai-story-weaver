@@ -106,6 +106,7 @@ export function useUpcomingElections(address: string | null | undefined) {
             district: geocode.district ?? null,
             lat: geocode.lat ?? undefined,
             lng: geocode.lng ?? undefined,
+            city: geocode.city ?? undefined,
           },
         },
       );
