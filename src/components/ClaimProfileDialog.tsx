@@ -93,6 +93,8 @@ export function ClaimProfileDialog({
       officialEmail,
     });
 
+    logBadgeEvent('profile_claimed', { candidate_id: candidateId });
+
     setIsOpen(false);
     setOfficialEmail('');
     setVerificationInfo('');
