@@ -1,35 +1,55 @@
 ## Goal
 
-Replace PR #145 entirely. Land the equivalent hardening directly on `main` with no merge risk to fresh/branch environments.
+Turn on ID.me verification now that you have an approved OAuth client.
 
 ## Steps
 
-### 1. Idempotent FK migration (✅ already applied)
+### 1. Confirm your ID.me app config matches the edge function
 
-A migration was applied that wraps the `candidate_committees_candidate_id_fkey` foreign key in a `DO $$ IF NOT EXISTS ... $$` block, so it skips creation when the constraint already exists. Verified: prod already has the FK; the migration was a no-op there and is safe for fresh DBs / preview branches.
+Before adding secrets, double-check in the ID.me developer dashboard:
 
-### 2. Harden `supabase/functions/verify-identity-idme/index.ts`
+- **Redirect URIs registered** must include every host the button can launch from:
+  - `https://polipulseapp.com/auth/idme-callback`
+  - `https://www.polipulseapp.com/auth/idme-callback`
+  - `https://polipulse.lovable.app/auth/idme-callback`
+  - `https://id-preview--b4a499eb-c11a-4320-8adc-dfe50259459a.lovable.app/auth/idme-callback`
+  - (optional, for local dev) `http://localhost:5173/auth/idme-callback`, `http://localhost:8080/auth/idme-callback`
+- **Scope** the app is approved for. Default in code is `openid`. If you were approved for `identity` (or any other policy), tell me and I'll set `IDME_SCOPE`.
+- **Environment**. Default in code points to production (`https://api.id.me`). If you only have sandbox credentials, tell me and I'll set `IDME_BASE_URL` to the sandbox host.
 
-Three changes:
+If any redirect URI above is missing in ID.me's dashboard, add it there — the function rejects unregistered URIs and ID.me will reject mismatches.
 
-- **Env-driven base URL + scope.** `IDME_BASE_URL` and `IDME_SCOPE` become env-overridable (sandbox vs. prod, scope tuning) with sensible defaults (`https://api.id.me`, `openid`).
-- **Env-extensible redirect allowlist.** Keep the hardcoded `DEFAULT_ALLOWED_REDIRECT_URIS` (current 6 entries: polipulse.lovable.app, polipulseapp.com, www variant, id-preview, two localhost ports). Merge in any additional URIs from `IDME_ALLOWED_REDIRECT_URIS` (comma-separated). Validation logic unchanged — strict `Set.has()` match.
-- **Validate `uuid`/`sub` from ID.me userinfo.** Before writing to `profiles.identity_verification_id`, require at least one of `userInfo.uuid` or `userInfo.sub`. If neither is present, return 502 with a clear message instead of writing `null` and silently "succeeding".
+### 2. Add secrets in Lovable
 
-No client-side changes needed — the `FunctionsHttpError` `error.context` parsing already on `main` (in `IdMeCallback.tsx` and `VerificationBadges.tsx`) will surface the new error messages cleanly.
+I'll request these via the secrets tool (you paste values into a secure form, never into chat):
 
-### 3. After you close PR #145 on GitHub
+- `IDME_CLIENT_ID` — required
+- `IDME_CLIENT_SECRET` — required
+- `IDME_SCOPE` — only if not `openid` (e.g. `identity`)
+- `IDME_BASE_URL` — only if sandbox
 
-Nothing further required on my side. The hardening is on `main`.
+### 3. Verify end-to-end
+
+Once secrets land:
+
+1. Hit `verify-identity-idme` with `action=get_auth_url` via the curl tool to confirm it returns an `auth_url` (no more 503 "not configured").
+2. From `/profile` in the preview, click the ID.me verify button → complete ID.me's flow → land on `/auth/idme-callback`.
+3. Watch the edge function logs for token exchange + userinfo success.
+4. Confirm `profiles.identity_verified=true` and the badge appears in `VerificationBadges`.
+
+If anything fails (scope rejected, redirect mismatch, missing `uuid`/`sub` in userinfo), I'll read the logs and fix the function — usually a one-line scope or claim change.
 
 ## Technical notes
 
-- Files touched in build mode: `supabase/functions/verify-identity-idme/index.ts` only.
-- New optional secrets (purely additive; defaults work without them): `IDME_BASE_URL`, `IDME_SCOPE`, `IDME_ALLOWED_REDIRECT_URIS`. The function still requires `IDME_CLIENT_ID` and `IDME_CLIENT_SECRET` to actually issue tokens — neither is currently set, so ID.me verification will return a 503 "not configured" until you add them.
-- No DB type regen needed (no schema-shape change).
+- No code changes expected in step 2. The edge function already supports the env knobs (`IDME_BASE_URL`, `IDME_SCOPE`, `IDME_ALLOWED_REDIRECT_URIS`) and validates `uuid`/`sub` before writing to `profiles`.
+- No DB migration. `profiles.identity_verified*` columns already exist.
+- Frontend `IdMeCallback.tsx` and `VerificationBadges.tsx` already surface `FunctionsHttpError` context cleanly.
+- Out of scope: Auth0, Stripe Identity, re-verification cadence, admin override.
 
-## Verification
+## What I need from you to start
 
-- Confirm the function deploys without errors.
-- Hit `get_auth_url` from the app and confirm a 503 with the "not configured" message (expected until `IDME_CLIENT_ID`/`SECRET` are set).
-- If/when you add the ID.me secrets, run the full flow end-to-end from `/profile` → callback.
+1. Confirm the redirect URI list above is complete (or list adds/removes).
+2. Tell me the **scope** ID.me approved you for (default `openid`, common upgrade `identity`).
+3. Confirm **production** vs **sandbox** credentials.
+
+Once you answer, I'll request the secrets and run the verification.
