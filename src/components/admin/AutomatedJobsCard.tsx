@@ -168,7 +168,7 @@ export function AutomatedJobsCard() {
     const toastId = toast.loading(`Running ${mode}…`);
     try {
       const { data, error } = await supabase.functions.invoke('schedule-congress-donor-sync', {
-        body: { scope: 'congress_visible', mode, limit: mode === 'backfill' ? 2 : 3, cycle: '2024' },
+        body: { scope: 'congress_visible', mode, limit: 1, cycle: '2024' },
       });
       if (error) {
         // Try to extract the server response body for a better message
