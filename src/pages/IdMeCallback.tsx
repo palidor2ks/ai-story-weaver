@@ -48,7 +48,22 @@ export const IdMeCallback = () => {
       });
 
       if (error) {
-        throw error;
+        // supabase.functions.invoke throws FunctionsHttpError for non-2xx;
+        // the structured JSON body lives on error.context, not `data`.
+        const ctx: any = (error as any).context;
+        let serverMessage: string | undefined;
+        if (ctx) {
+          try {
+            const body = typeof ctx.json === 'function' ? await ctx.json() : null;
+            serverMessage = body?.message || body?.error;
+          } catch {
+            try {
+              const text = typeof ctx.text === 'function' ? await ctx.text() : null;
+              if (text) serverMessage = text;
+            } catch { /* ignore */ }
+          }
+        }
+        throw new Error(serverMessage || error.message || 'ID.me verification could not be completed.');
       }
 
       if (data?.error || data?.success !== true) {
