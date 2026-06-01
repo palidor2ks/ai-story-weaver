@@ -46,6 +46,11 @@ async function startHealthCheckServer(): Promise<void> {
     if (req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
+    } else if (req.url === '/sync' && req.method === 'POST') {
+      // Manual sync trigger endpoint
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: 'Sync triggered', status: 'running' }));
+      runSync().catch((error) => logger.error({ error }, 'Manual sync failed'));
     } else {
       res.writeHead(404);
       res.end();
@@ -78,7 +83,7 @@ async function start(): Promise<void> {
   logger.info('✅ Worker started successfully');
   logger.info(`📅 Next sync: ${job.nextDate().toString()}`);
 
-  // Run sync immediately on startup (optional - comment out to wait for schedule)
+  // Run sync immediately on startup if enabled
   if (config.runOnStartup) {
     logger.info('⚡ Running sync on startup');
     await runSync();
