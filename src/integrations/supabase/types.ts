@@ -71,6 +71,54 @@ export type Database = {
         }
         Relationships: []
       }
+      badge_definitions: {
+        Row: {
+          active: boolean
+          category: Database["public"]["Enums"]["badge_category"]
+          created_at: string
+          criteria: Json
+          description: string
+          icon: string | null
+          is_repeatable: boolean
+          name: string
+          points: number
+          priority: number
+          slug: string
+          tier: number | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category: Database["public"]["Enums"]["badge_category"]
+          created_at?: string
+          criteria?: Json
+          description: string
+          icon?: string | null
+          is_repeatable?: boolean
+          name: string
+          points?: number
+          priority?: number
+          slug: string
+          tier?: number | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category?: Database["public"]["Enums"]["badge_category"]
+          created_at?: string
+          criteria?: Json
+          description?: string
+          icon?: string | null
+          is_repeatable?: boolean
+          name?: string
+          points?: number
+          priority?: number
+          slug?: string
+          tier?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bill_ingestion_status: {
         Row: {
           completed_at: string | null
@@ -2507,6 +2555,35 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_badge_notifications: {
+        Row: {
+          badge_slug: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          badge_slug: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          badge_slug?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_badge_notifications_badge_slug_fkey"
+            columns: ["badge_slug"]
+            isOneToOne: false
+            referencedRelation: "badge_definitions"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       poll_questions: {
         Row: {
           created_at: string
@@ -3456,6 +3533,78 @@ export type Database = {
         }
         Relationships: []
       }
+      user_activity_events: {
+        Row: {
+          created_at: string
+          day_key: string | null
+          event_type: string
+          id: string
+          payload: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_key?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day_key?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_badges: {
+        Row: {
+          awarded_at: string
+          badge_slug: string
+          event_id: string | null
+          id: string
+          metadata: Json
+          scope_key: string | null
+          user_id: string
+        }
+        Insert: {
+          awarded_at?: string
+          badge_slug: string
+          event_id?: string | null
+          id?: string
+          metadata?: Json
+          scope_key?: string | null
+          user_id: string
+        }
+        Update: {
+          awarded_at?: string
+          badge_slug?: string
+          event_id?: string | null
+          id?: string
+          metadata?: Json
+          scope_key?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_badges_badge_slug_fkey"
+            columns: ["badge_slug"]
+            isOneToOne: false
+            referencedRelation: "badge_definitions"
+            referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "user_badges_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "user_activity_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_party_comparisons: {
         Row: {
           created_at: string | null
@@ -4024,13 +4173,95 @@ export type Database = {
       }
     }
     Functions: {
+      _award_badge: {
+        Args: {
+          p_event_id?: string
+          p_metadata?: Json
+          p_slug: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       _candidate_district_key: { Args: { p_district: string }; Returns: string }
       _candidate_name_key: { Args: { p_name: string }; Returns: string }
       _candidate_office_class: { Args: { p_office: string }; Returns: string }
+      _check_candidate: {
+        Args: {
+          p_event: string
+          p_event_id: string
+          p_payload: Json
+          p_user: string
+        }
+        Returns: undefined
+      }
+      _check_engagement_misc: {
+        Args: {
+          p_event: string
+          p_event_id: string
+          p_payload: Json
+          p_user: string
+        }
+        Returns: undefined
+      }
+      _check_identity: {
+        Args: {
+          p_event: string
+          p_event_id: string
+          p_payload: Json
+          p_user: string
+        }
+        Returns: undefined
+      }
+      _check_onboarding: {
+        Args: {
+          p_event: string
+          p_event_id: string
+          p_payload: Json
+          p_user: string
+        }
+        Returns: undefined
+      }
+      _check_question_progress: {
+        Args: {
+          p_event: string
+          p_event_id: string
+          p_payload: Json
+          p_user: string
+        }
+        Returns: undefined
+      }
+      _check_social: {
+        Args: {
+          p_event: string
+          p_event_id: string
+          p_payload: Json
+          p_user: string
+        }
+        Returns: undefined
+      }
+      _check_streaks: {
+        Args: {
+          p_event: string
+          p_event_id: string
+          p_payload: Json
+          p_user: string
+        }
+        Returns: undefined
+      }
+      _check_topic_depth: {
+        Args: {
+          p_event: string
+          p_event_id: string
+          p_payload: Json
+          p_user: string
+        }
+        Returns: undefined
+      }
       _merge_candidate: {
         Args: { p_loser: string; p_winner: string }
         Returns: undefined
       }
+      _user_question_scope: { Args: { p_user_id: string }; Returns: string }
       backfill_candidate_scores: {
         Args: never
         Returns: {
@@ -4085,6 +4316,15 @@ export type Database = {
       }
       cleanup_x_oauth_pending: { Args: never; Returns: undefined }
       complete_job: { Args: { p_id: string }; Returns: undefined }
+      evaluate_badges: {
+        Args: {
+          p_event: string
+          p_event_id: string
+          p_payload: Json
+          p_user: string
+        }
+        Returns: undefined
+      }
       fail_job: {
         Args: { p_error: string; p_id: string; p_retry_delay_seconds?: number }
         Returns: undefined
@@ -4213,6 +4453,10 @@ export type Database = {
           total: number
         }[]
       }
+      log_user_event: {
+        Args: { p_event_type: string; p_payload?: Json }
+        Returns: string
+      }
       recalculate_all_coverage_tiers: {
         Args: never
         Returns: {
@@ -4285,6 +4529,13 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "politician"
+      badge_category:
+        | "onboarding"
+        | "progress"
+        | "topic"
+        | "engagement"
+        | "social"
+        | "candidate"
       confidence_level: "high" | "medium" | "low"
       coverage_tier: "tier_1" | "tier_2" | "tier_3"
       donor_type: "Individual" | "PAC" | "Organization" | "Unknown"
@@ -4425,6 +4676,14 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user", "politician"],
+      badge_category: [
+        "onboarding",
+        "progress",
+        "topic",
+        "engagement",
+        "social",
+        "candidate",
+      ],
       confidence_level: ["high", "medium", "low"],
       coverage_tier: ["tier_1", "tier_2", "tier_3"],
       donor_type: ["Individual", "PAC", "Organization", "Unknown"],
