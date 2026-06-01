@@ -342,12 +342,12 @@ export const Candidates = () => {
             >
               {compareMode ? (
                 <>
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4" aria-hidden="true" />
                   Exit Compare
                 </>
               ) : (
                 <>
-                  <GitCompare className="w-4 h-4" />
+                  <GitCompare className="w-4 h-4" aria-hidden="true" />
                   Compare
                 </>
               )}

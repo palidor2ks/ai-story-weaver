@@ -1363,6 +1363,54 @@ export type Database = {
         }
         Relationships: []
       }
+      donor_sync_runs: {
+        Row: {
+          errors: Json
+          failed_count: number
+          fec_ids_filled: number
+          finished_at: string | null
+          id: string
+          mode: string
+          notes: string | null
+          processed: number
+          remaining: number | null
+          scope: string
+          started_at: string
+          success_count: number
+          triggered_by: string
+        }
+        Insert: {
+          errors?: Json
+          failed_count?: number
+          fec_ids_filled?: number
+          finished_at?: string | null
+          id?: string
+          mode: string
+          notes?: string | null
+          processed?: number
+          remaining?: number | null
+          scope: string
+          started_at?: string
+          success_count?: number
+          triggered_by?: string
+        }
+        Update: {
+          errors?: Json
+          failed_count?: number
+          fec_ids_filled?: number
+          finished_at?: string | null
+          id?: string
+          mode?: string
+          notes?: string | null
+          processed?: number
+          remaining?: number | null
+          scope?: string
+          started_at?: string
+          success_count?: number
+          triggered_by?: string
+        }
+        Relationships: []
+      }
       donors: {
         Row: {
           amount: number
@@ -1511,6 +1559,7 @@ export type Database = {
       }
       elections: {
         Row: {
+          confidence: string | null
           created_at: string
           election_date: string
           election_type: string
@@ -1520,10 +1569,12 @@ export type Database = {
           name: string
           source: string
           source_ref: string | null
+          source_url: string | null
           state: string | null
           updated_at: string
         }
         Insert: {
+          confidence?: string | null
           created_at?: string
           election_date: string
           election_type?: string
@@ -1533,10 +1584,12 @@ export type Database = {
           name: string
           source: string
           source_ref?: string | null
+          source_url?: string | null
           state?: string | null
           updated_at?: string
         }
         Update: {
+          confidence?: string | null
           created_at?: string
           election_date?: string
           election_type?: string
@@ -1546,6 +1599,7 @@ export type Database = {
           name?: string
           source?: string
           source_ref?: string | null
+          source_url?: string | null
           state?: string | null
           updated_at?: string
         }
@@ -4456,6 +4510,14 @@ export type Database = {
       log_user_event: {
         Args: { p_event_type: string; p_payload?: Json }
         Returns: string
+      }
+      rebuild_donors_for_committee: {
+        Args: {
+          p_candidate_id?: string
+          p_committee_id: string
+          p_cycle: string
+        }
+        Returns: number
       }
       recalculate_all_coverage_tiers: {
         Args: never
