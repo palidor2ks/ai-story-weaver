@@ -168,7 +168,7 @@ export function AutomatedJobsCard() {
     const toastId = toast.loading(`Running ${mode}…`);
     try {
       const { data, error } = await supabase.functions.invoke('schedule-congress-donor-sync', {
-        body: { scope: 'congress_visible', mode, limit: mode === 'backfill' ? 2 : 3, cycle: '2024' },
+        body: { scope: 'congress_visible', mode, limit: 1, cycle: '2024' },
       });
       if (error) {
         // Try to extract the server response body for a better message
@@ -287,7 +287,7 @@ export function AutomatedJobsCard() {
             </CardTitle>
             <CardDescription>
               Auto-fills FEC donor data for visible-state House &amp; Senate candidates.
-              Backfill runs every 10 minutes until the queue is empty; a full refresh runs daily at 07:00 UTC.
+              Backfill runs every 10 minutes until the queue is empty; a refresh runner starts daily at 07:00 UTC. Each run processes one candidate to avoid edge timeouts.
             </CardDescription>
           </div>
           {activeRunId && (

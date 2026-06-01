@@ -58,7 +58,11 @@ serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const scope: string = body.scope ?? 'congress_visible';
   const mode: string = body.mode ?? 'backfill';
-  const limit: number = Math.max(1, Math.min(50, Number(body.limit) || 10));
+  // A single candidate's donor import can take 30s+ and occasionally much longer while
+  // fetch-fec-donors paginates/retries. Hardcoding limit=1 keeps the background task well
+  // under the Edge Function timeout so donor_sync_runs always persists instead of 504-ing.
+  const limit = 1;
+  void body.limit; // limit is no longer caller-configurable; ignored intentionally.
   const cycle: string = body.cycle ?? '2024';
 
   const startedAt = new Date().toISOString();
