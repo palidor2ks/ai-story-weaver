@@ -861,9 +861,9 @@ export const UserProfile = () => {
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="font-medium text-destructive">Failed to load representatives</p>
+                    <p className="font-medium text-destructive">Failed to load current representatives</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      There was an error fetching your representatives. Please try again.
+                      There was an error fetching your current representatives. Please try again.
                     </p>
                     <Button 
                       variant="outline" 
