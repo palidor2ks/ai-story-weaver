@@ -88,6 +88,7 @@ const getOfficeLocationLabel = (
 export const CandidateProfile = () => {
   const { id } = useParams<{ id: string }>();
   const { data: profile } = useProfile();
+  useEffect(() => { if (id) logBadgeEvent('match_viewed', { candidate_id: id }); }, [id]);
   const { data: userTopicScores = [] } = useUserTopicScores();
   const { data: candidate, isLoading: candidateLoading } = useCandidate(id);
   const { data: scoreMap } = useCandidateScoreMap(id ? [id] : undefined);
