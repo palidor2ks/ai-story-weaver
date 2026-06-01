@@ -170,7 +170,7 @@ export function UpcomingElectionsCard({ address }: Props) {
               onClick={handleRefresh}
               disabled={!address || isRefreshing || isLoading}
               className="h-8 gap-1.5"
-              title="Re-fetch from FEC and Google Civic"
+              title="Re-fetch from FEC, Google Civic, and AI election research"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="text-xs">Refresh</span>
