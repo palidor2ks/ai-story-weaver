@@ -1559,6 +1559,7 @@ export type Database = {
       }
       elections: {
         Row: {
+          confidence: string | null
           created_at: string
           election_date: string
           election_type: string
@@ -1568,10 +1569,12 @@ export type Database = {
           name: string
           source: string
           source_ref: string | null
+          source_url: string | null
           state: string | null
           updated_at: string
         }
         Insert: {
+          confidence?: string | null
           created_at?: string
           election_date: string
           election_type?: string
@@ -1581,10 +1584,12 @@ export type Database = {
           name: string
           source: string
           source_ref?: string | null
+          source_url?: string | null
           state?: string | null
           updated_at?: string
         }
         Update: {
+          confidence?: string | null
           created_at?: string
           election_date?: string
           election_type?: string
@@ -1594,6 +1599,7 @@ export type Database = {
           name?: string
           source?: string
           source_ref?: string | null
+          source_url?: string | null
           state?: string | null
           updated_at?: string
         }
