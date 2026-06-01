@@ -892,6 +892,7 @@ export const Onboarding = () => {
             )}
           </div>
         );
+      }
     }
   };
 
