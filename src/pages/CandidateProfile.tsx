@@ -126,19 +126,27 @@ export const CandidateProfile = () => {
     enabled: donorAliasLookupInputs.length > 0,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const names = Array.from(new Set(donorAliasLookupInputs.map(d => d.name)));
       const types = Array.from(new Set(donorAliasLookupInputs.map(d => d.type)));
+      const inputsByName = new Map<string, Array<{ name: string; type: string }>>();
+      for (const input of donorAliasLookupInputs) {
+        const key = input.name.trim().toUpperCase();
+        inputsByName.set(key, [...(inputsByName.get(key) ?? []), input]);
+      }
       const { data, error } = await supabase
         .from('donor_alias_members')
         .select('donor_name, donor_type, donor_aliases!inner(canonical_name, is_active)')
-        .in('donor_name', names)
-        .in('donor_type', types);
+        .in('donor_type', types)
+        .eq('donor_aliases.is_active', true);
       if (error) throw error;
 
       const map = new Map<string, string>();
       for (const row of (data ?? []) as Array<{ donor_name: string; donor_type: string; donor_aliases?: { canonical_name?: string; is_active?: boolean } }>) {
         if (!row.donor_aliases?.is_active || !row.donor_aliases?.canonical_name) continue;
-        map.set(`${row.donor_name.trim().toUpperCase()}|${row.donor_type}`, row.donor_aliases.canonical_name);
+        const matches = inputsByName.get(row.donor_name.trim().toUpperCase()) ?? [];
+        for (const input of matches) {
+          if (input.type !== row.donor_type) continue;
+          map.set(`${input.name.trim().toUpperCase()}|${input.type}`, row.donor_aliases.canonical_name);
+        }
       }
       return map;
     },

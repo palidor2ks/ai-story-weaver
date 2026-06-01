@@ -60,9 +60,37 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
   // FEC/display name as imported, not normalized uppercase.
   const pairs = uniqueInputs.map(d => `${norm(d.name)}|${d.type}`).sort();
 
+  const { data: allAliasMembers } = useQuery({
+    queryKey: ['donor-alias-members-all'],
+    enabled: pairs.length > 0,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('donor_alias_members')
+        .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
+        .eq('donor_aliases.is_active', true);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: allCanonicalAliases } = useQuery({
+    queryKey: ['donor-aliases-active'],
+    enabled: pairs.length > 0,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('donor_aliases')
+        .select('id, canonical_name, donor_type, donor_types, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   return useQuery({
     queryKey: ['donor-causes', pairs],
-    enabled: pairs.length > 0,
+    enabled: pairs.length > 0 && Boolean(allAliasMembers && allCanonicalAliases),
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<Map<string, DonorCauseInfo>> => {
       const result = new Map<string, DonorCauseInfo>();
@@ -71,42 +99,9 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       const names = Array.from(new Set(uniqueInputs.map(d => d.name)));
       const types = Array.from(new Set(uniqueInputs.map(d => d.type)));
 
-      // 1. Apply direct donor-level cause overrides first. These let admins tag
-      //    a donor search result without creating a donor alias.
-      const { data: directOverrides, error: directErr } = await (supabase as any)
-        .from('donor_cause_overrides')
-        .select('donor_name, donor_type, primary_cause_id, assigned_by, committee_causes!donor_cause_overrides_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
-        .in('donor_name', names)
-        .in('donor_type', types);
-      if (directErr) throw directErr;
-
-      for (const row of (directOverrides ?? []) as any[]) {
-        const c = row.committee_causes;
-        if (!c) continue;
-        result.set(`${norm(row.donor_name)}|${row.donor_type}`, {
-          causeId: c.id,
-          label: c.label,
-          description: c.description,
-          stance: c.stance,
-          quizTopicId: c.quiz_topic_id,
-          confidence: null,
-          assignedBy: row.assigned_by || 'admin',
-          adminOverridden: row.assigned_by === 'admin',
-          fecCommitteeId: '',
-        });
-      }
-
-      // Build a PostgREST `or` filter that matches names case-insensitively.
-      // Wrapping each value in double quotes lets us include names that
-      // contain commas, periods, or other special characters safely.
-      const orFilter = (column: string, values: string[]) =>
-        values
-          .map((v) => `${column}.ilike."${v.replace(/"/g, '\\"')}"`)
-          .join(',');
-
       // Build a quick lookup from normalized name -> original inputs so we
-      // can map any case-insensitive DB row back to the exact input casing
-      // used by `getDonorCause` callers.
+      // can map case-insensitive DB rows back to the exact input casing used
+      // by `getDonorCause` callers.
       const inputsByNormName = new Map<string, DonorNameInput[]>();
       for (const i of uniqueInputs) {
         const list = inputsByNormName.get(norm(i.name)) ?? [];
@@ -114,15 +109,36 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
         inputsByNormName.set(norm(i.name), list);
       }
 
-      // 2. Resolve names -> aliases (and fec_committee_ids + alias-level cause)
-      const membersBase = (supabase as any)
-        .from('donor_alias_members')
-        .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
+      // 1. Apply direct donor-level cause overrides first. These let admins tag
+      //    a donor search result without creating a donor alias.
+      const { data: directOverrides, error: directErr } = await (supabase as any)
+        .from('donor_cause_overrides')
+        .select('donor_name, donor_type, primary_cause_id, assigned_by, committee_causes!donor_cause_overrides_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
         .in('donor_type', types);
-      const { data: members, error: mErr } = await (names.length > 0
-        ? membersBase.or(orFilter('donor_name', names))
-        : membersBase);
-      if (mErr) throw mErr;
+      if (directErr) throw directErr;
+
+      for (const row of (directOverrides ?? []) as any[]) {
+        const c = row.committee_causes;
+        if (!c) continue;
+        const matches = inputsByNormName.get(norm(row.donor_name)) ?? [];
+        for (const input of matches) {
+          if (!getCauseLookupTypes(input.type).includes(row.donor_type)) continue;
+          result.set(`${norm(input.name)}|${input.type}`, {
+            causeId: c.id,
+            label: c.label,
+            description: c.description,
+            stance: c.stance,
+            quizTopicId: c.quiz_topic_id,
+            confidence: null,
+            assignedBy: row.assigned_by || 'admin',
+            adminOverridden: row.assigned_by === 'admin',
+            fecCommitteeId: '',
+          });
+        }
+      }
+
+      // 2. Resolve names -> aliases (and fec_committee_ids + alias-level cause)
+      const members = allAliasMembers ?? [];
 
       // name|type -> set of committee ids
       const nameToCommittees = new Map<string, string[]>();
@@ -168,14 +184,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       // displayed name, while donor_alias_members stores only the raw imported
       // FEC names. Resolve canonical names directly (case-insensitively) so
       // alias-level causes still appear for rows like "NorPac" / "AIPAC".
-      const canonicalBase = (supabase as any)
-        .from('donor_aliases')
-        .select('id, canonical_name, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
-        .eq('is_active', true);
-      const { data: canonicalAliases, error: canonicalErr } = await (names.length > 0
-        ? canonicalBase.or(orFilter('canonical_name', names))
-        : canonicalBase);
-      if (canonicalErr) throw canonicalErr;
+      const canonicalAliases = allCanonicalAliases ?? [];
 
       for (const alias of (canonicalAliases ?? []) as any[]) {
         const matches = inputsByNormName.get(norm(alias.canonical_name)) ?? [];
