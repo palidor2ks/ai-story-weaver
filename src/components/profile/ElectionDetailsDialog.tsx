@@ -7,7 +7,6 @@ import { ScoreText } from '@/components/ScoreText';
 import type { UpcomingElection, UpcomingCandidate } from '@/hooks/useUpcomingElections';
 import type { IETotalsMap, IETotals } from '@/hooks/useIndependentExpenditures';
 import { IESummaryInline, formatIECompact } from '@/components/IESummaryInline';
-import { electionSeatKey, electionSeatLabel } from '@/lib/electionSeatUtils';
 
 const PARTY_BADGE: Record<string, string> = {
   Democrat: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
@@ -86,15 +85,10 @@ interface Props {
 export function ElectionDetailsDialog({ election, open, onOpenChange, ieMap }: Props) {
   if (!election) return null;
 
-  const byOffice = new Map<string, { label: string; candidates: UpcomingCandidate[] }>();
+  const byOffice = new Map<string, UpcomingCandidate[]>();
   for (const c of election.candidates) {
-    const key = electionSeatKey(c, election);
-    const existing = byOffice.get(key);
-    if (existing) {
-      existing.candidates.push(c);
-    } else {
-      byOffice.set(key, { label: electionSeatLabel(c, election), candidates: [c] });
-    }
+    if (!byOffice.has(c.office)) byOffice.set(c.office, []);
+    byOffice.get(c.office)!.push(c);
   }
 
   // Total outside spending across all candidates in this race
@@ -143,13 +137,13 @@ export function ElectionDetailsDialog({ election, open, onOpenChange, ieMap }: P
           {byOffice.size === 0 ? (
             <p className="text-sm text-muted-foreground">No candidates listed yet for this race.</p>
           ) : (
-            Array.from(byOffice.entries()).map(([key, group]) => (
-              <section key={key} className="space-y-2">
+            Array.from(byOffice.entries()).map(([office, cands]) => (
+              <section key={office} className="space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {group.label} · {group.candidates.length} candidate{group.candidates.length === 1 ? '' : 's'}
+                  {office} · {cands.length} candidate{cands.length === 1 ? '' : 's'}
                 </h3>
                 <div className="space-y-2">
-                  {group.candidates.map(c => <CandidateCard key={c.candidate_id} c={c} ie={ieMap?.get(c.candidate_id)} />)}
+                  {cands.map(c => <CandidateCard key={c.candidate_id} c={c} ie={ieMap?.get(c.candidate_id)} />)}
                 </div>
               </section>
             ))

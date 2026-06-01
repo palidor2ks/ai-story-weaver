@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/dialog';
 import { Sparkles, Loader2, ExternalLink, AlertTriangle, BookOpen, RefreshCw, X, Globe } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { PoliticalJargonHelper } from '@/components/PoliticalJargonHelper';
 
 export interface BillAnalysis {
   summary: string;
@@ -214,16 +213,6 @@ export const BillAIAnalysisDialog = ({
             )}
 
             <p className="text-foreground leading-relaxed">{analysis.summary}</p>
-
-            <PoliticalJargonHelper
-              contextText={[
-                analysis.summary,
-                analysis.analysis,
-                ...(analysis.key_provisions ?? []),
-                analysis.candidate_role_explanation ?? '',
-                ...(analysis.public_context_claims ?? []),
-              ].join(' ')}
-            />
 
             {analysis.key_provisions && analysis.key_provisions.length > 0 && (
               <div className="space-y-2">

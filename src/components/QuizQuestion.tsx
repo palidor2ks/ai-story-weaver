@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { MinusCircle } from 'lucide-react';
-import { PoliticalJargonHelper } from '@/components/PoliticalJargonHelper';
 
 interface QuizQuestionProps {
   question: Question;
@@ -49,21 +48,11 @@ export const QuizQuestion = ({
       <Card className="bg-card border-border shadow-elevated">
         <CardContent className="p-6 md:p-8">
           {!hideQuestionText && (
-            <>
-              <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4 leading-relaxed">
-                {question.text}
-              </h2>
-              <PoliticalJargonHelper
-                className="mb-8"
-                contextText={[
-                  question.text,
-                  ...question.options.map((option) => option.text),
-                ].join(' ')}
-                title="Need a term explained?"
-                description="Search plain-English definitions for political words that show up in questions and answers."
-              />
-            </>
+            <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-8 leading-relaxed">
+              {question.text}
+            </h2>
           )}
+
 
           <div className="space-y-3">
             {regularOptions.map((option, index) => {

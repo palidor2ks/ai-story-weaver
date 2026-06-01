@@ -12,7 +12,6 @@ import { proxiedImageUrl } from '@/lib/imageProxy';
 import { supabase } from '@/integrations/supabase/client';
 import { choosePrimaryCauseLabel } from '@/lib/committeeCauseDisplay';
 import { useQuery } from '@tanstack/react-query';
-import { BRAND_HOST } from '@/lib/brand';
 
 const CONDUIT_NAMES = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
 
@@ -321,7 +320,10 @@ export function useCandidateShareCardData(
         primaryCause: spenderCauseMap?.get(fecId) ?? null,
       }));
 
-    const brandHost = BRAND_HOST;
+    const brandHost =
+      typeof window !== 'undefined'
+        ? window.location.host.replace(/^www\./, '')
+        : 'polipulseapp.com';
 
     return {
       brandHost,

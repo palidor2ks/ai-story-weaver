@@ -59,7 +59,7 @@ export const useCandidateOverride = (candidateId: string | undefined) => {
 };
 
 // Fetch all overrides (for Admin page) - includes inactive for management
-export const useCandidateOverrides = (enabled = true) => {
+export const useCandidateOverrides = () => {
   return useQuery({
     queryKey: ['candidate_overrides'],
     queryFn: async () => {
@@ -71,7 +71,6 @@ export const useCandidateOverrides = (enabled = true) => {
       if (error) throw error;
       return data as CandidateOverride[];
     },
-    enabled,
   });
 };
 

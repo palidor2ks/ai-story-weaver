@@ -1,5 +1,4 @@
-/* Fonts loaded via <link> in index.html for faster LCP (avoids CSS @import render-block) */
-
+@import url('https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Merriweather:wght@400;700&display=swap');
 
 @tailwind base;
 @tailwind components;

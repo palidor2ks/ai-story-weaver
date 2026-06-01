@@ -20,7 +20,7 @@ export interface StaticOfficial {
   updated_at?: string;
 }
 
-export function useStaticOfficials(enabled = true) {
+export function useStaticOfficials() {
   return useQuery({
     queryKey: ['static-officials'],
     queryFn: async () => {
@@ -34,7 +34,6 @@ export function useStaticOfficials(enabled = true) {
       if (error) throw error;
       return data as StaticOfficial[];
     },
-    enabled,
   });
 }
 

@@ -1,2 +1,0 @@
-DELETE FROM public.election_candidates WHERE candidate_id IN ('seed_piscataway_mayor_2','seed_newark_mayor_2');
-DELETE FROM public.candidates WHERE id IN ('seed_piscataway_mayor_2','seed_newark_mayor_2');

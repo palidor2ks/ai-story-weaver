@@ -6,13 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Keep the wrapper comfortably below the Supabase Edge Function timeout.
-// The nested fetch-fec-donors call has its own cursoring and may return hasMore=true,
-// so it is safer to return a partial batch than to let this aggregate function 504.
-const SYNC_RUNTIME_BUDGET_MS = 120_000;
-const CANDIDATE_CALL_TIMEOUT_MS = 110_000;
-
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -20,243 +15,139 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('VITE_SUPABASE_PUBLISHABLE_KEY') ?? '';
 
+    // Admin auth check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-
-    const bearer = authHeader.slice('Bearer '.length).trim();
-    const internalToken = req.headers.get('x-internal-service-token')?.trim();
-    const isServiceRole = bearer === supabaseServiceKey || internalToken === supabaseServiceKey;
-
-    // Caller auth: allow service-role (cron / wrapper) OR an admin user JWT
-    if (!isServiceRole) {
-      const userClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user }, error: authError } = await userClient.auth.getUser();
-      if (authError || !user) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
-      const adminCheckClient = createClient(supabaseUrl, supabaseServiceKey);
-      const { data: roleData } = await adminCheckClient.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
-      if (!roleData) {
-        return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
+    const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const adminCheckClient = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: roleData } = await adminCheckClient.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
+    if (!roleData) {
+      return new Response(JSON.stringify({ error: 'Forbidden: admin role required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const syncStartedAt = Date.now();
 
-    const body = await req.json().catch(() => ({}));
-    const cycle: string = body.cycle ?? '2024';
-    const limit: number = Math.max(1, Math.min(500, Number(body.limit) || 50));
-    const scope: string = body.scope ?? 'all'; // 'all' | 'congress_visible'
-    const mode: string = body.mode ?? 'all';   // 'all' | 'backfill' | 'refresh'
+    const { cycle = '2024', limit = 50 } = await req.json().catch(() => ({}));
+    
+    console.log('[SYNC-ALL-DONORS] Starting batch donor sync for cycle:', cycle);
 
-    console.log('[SYNC-ALL-DONORS]', { cycle, limit, scope, mode });
-
-    // Build candidate selection
-    let query = supabase
+    // Get all candidates with FEC IDs
+    const { data: candidates, error: fetchError } = await supabase
       .from('candidates')
-      .select('id, name, fec_candidate_id, last_donor_sync, office, state')
-      .not('fec_candidate_id', 'is', null);
-
-    if (scope === 'congress_visible') {
-      // Filter to House/Senate
-      query = query.or('office.ilike.%senate%,office.ilike.%house%,office.eq.Senator,office.eq.Representative');
-
-      // Exclude hidden states
-      const { data: hidden } = await supabase.from('hidden_states').select('state_code');
-      const hiddenCodes = (hidden ?? []).map((h: { state_code: string }) => h.state_code).filter(Boolean);
-      if (hiddenCodes.length > 0) {
-        query = query.not('state', 'in', `(${hiddenCodes.map((c) => `"${c}"`).join(',')})`);
-      }
-    }
-
-    if (mode === 'backfill') {
-      query = query.is('last_donor_sync', null);
-    } else if (mode === 'refresh') {
-      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      query = query.or(`last_donor_sync.is.null,last_donor_sync.lt.${cutoff}`);
-    }
-
-    // Compute remaining queue depth (matches selection criteria) before slicing
-    let remainingQuery = supabase
-      .from('candidates')
-      .select('id', { count: 'exact', head: true })
-      .not('fec_candidate_id', 'is', null);
-
-    if (scope === 'congress_visible') {
-      remainingQuery = remainingQuery.or('office.ilike.%senate%,office.ilike.%house%,office.eq.Senator,office.eq.Representative');
-      const { data: hidden } = await supabase.from('hidden_states').select('state_code');
-      const hiddenCodes = (hidden ?? []).map((h: { state_code: string }) => h.state_code).filter(Boolean);
-      if (hiddenCodes.length > 0) {
-        remainingQuery = remainingQuery.not('state', 'in', `(${hiddenCodes.map((c) => `"${c}"`).join(',')})`);
-      }
-    }
-    if (mode === 'backfill') {
-      remainingQuery = remainingQuery.is('last_donor_sync', null);
-    } else if (mode === 'refresh') {
-      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      remainingQuery = remainingQuery.or(`last_donor_sync.is.null,last_donor_sync.lt.${cutoff}`);
-    }
-
-    const { count: queueBefore } = await remainingQuery;
-
-    const { data: candidates, error: fetchError } = await query
+      .select('id, name, fec_candidate_id, last_donor_sync')
+      .not('fec_candidate_id', 'is', null)
       .order('last_donor_sync', { ascending: true, nullsFirst: true })
       .limit(limit);
 
     if (fetchError) {
-      console.error('[SYNC-ALL-DONORS] fetch error:', fetchError);
-      return new Response(JSON.stringify({ error: fetchError.message }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.error('[SYNC-ALL-DONORS] Error fetching candidates:', fetchError);
+      return new Response(
+        JSON.stringify({ error: fetchError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+
+    console.log('[SYNC-ALL-DONORS] Found', candidates?.length || 0, 'candidates with FEC IDs');
 
     if (!candidates || candidates.length === 0) {
-      return new Response(JSON.stringify({
-        success: true, processed: 0, successCount: 0, failedCount: 0,
-        totalDonorsImported: 0, totalRaised: 0, errors: [],
-        remaining: 0,
-        message: `No candidates to sync (scope=${scope}, mode=${mode})`,
-      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          processed: 0, 
+          message: 'No candidates with FEC IDs found' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    type CandidateResult = {
-      candidateId: string;
-      name: string;
-      state: string | null;
-      office: string | null;
-      fecCandidateId: string | null;
-      status: 'success' | 'failed';
-      imported: number;
-      totalRaised: number;
-      durationMs: number;
-      error?: string;
-      previousSync: string | null;
+    const results = {
+      success: 0,
+      failed: 0,
+      totalDonorsImported: 0,
+      totalRaised: 0,
+      errors: [] as string[],
     };
 
-    const results = { success: 0, failed: 0, partial: 0, skipped: 0, totalDonorsImported: 0, totalRaised: 0, errors: [] as string[] };
-    const perCandidate: (CandidateResult & { hasMore?: boolean; stoppedDueToTimeout?: boolean })[] = [];
     const fetchFecDonorsUrl = `${supabaseUrl}/functions/v1/fetch-fec-donors`;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
+    // Process each candidate
     for (const candidate of candidates) {
-      const remainingBudgetMs = SYNC_RUNTIME_BUDGET_MS - (Date.now() - syncStartedAt);
-      if (remainingBudgetMs <= 5000) {
-        const skipped = candidates.length - perCandidate.length;
-        results.skipped += skipped;
-        results.errors.push(`Stopped early with ${skipped} selected candidate(s) left because the sync wrapper reached its runtime budget; rerun to continue.`);
-        break;
-      }
-      const candidateTimeoutMs = Math.min(CANDIDATE_CALL_TIMEOUT_MS, remainingBudgetMs - 5000);
-
-      const t0 = Date.now();
-      const base = {
-        candidateId: candidate.id,
-        name: candidate.name,
-        state: candidate.state ?? null,
-        office: candidate.office ?? null,
-        fecCandidateId: candidate.fec_candidate_id ?? null,
-        previousSync: candidate.last_donor_sync ?? null,
-      };
       try {
+        console.log('[SYNC-ALL-DONORS] Processing:', candidate.name);
+
+        // Call fetch-fec-donors via direct fetch with the service-role bearer token.
+        // fetch-fec-donors recognizes the service-role key and skips its admin/user check.
         const resp = await fetch(fetchFecDonorsUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${anonKey}`,
+            'Authorization': `Bearer ${supabaseServiceKey}`,
             'apikey': anonKey,
-            'x-internal-service-token': supabaseServiceKey,
           },
-          body: JSON.stringify({ candidateId: candidate.id, fecCandidateId: candidate.fec_candidate_id, cycle, highVolumeMode: true, maxPages: 2 }),
-          signal: AbortSignal.timeout(candidateTimeoutMs),
+          body: JSON.stringify({
+            candidateId: candidate.id,
+            fecCandidateId: candidate.fec_candidate_id,
+            cycle,
+          }),
         });
+
         const data = await resp.json().catch(() => ({}));
-        const durationMs = Date.now() - t0;
+
         if (!resp.ok) {
-          const msg = `HTTP ${resp.status} ${data?.error || ''}`.trim();
-          const shouldResume = resp.status === 429 || resp.status === 504 || resp.status >= 500 || data?.hasMore;
-          if (shouldResume) {
-            results.partial++;
-            results.errors.push(`${candidate.name}: partial — ${msg}; will resume next tick`);
-            perCandidate.push({ ...base, status: 'success', imported: 0, totalRaised: 0, durationMs, hasMore: true, stoppedDueToTimeout: true, error: msg });
-          } else {
-            results.failed++;
-            results.errors.push(`${candidate.name}: ${msg}`);
-            perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs, error: msg });
-          }
+          console.error('[SYNC-ALL-DONORS] HTTP', resp.status, 'for', candidate.name, ':', data);
+          results.failed++;
+          results.errors.push(`${candidate.name}: HTTP ${resp.status} ${data?.error || ''}`.trim());
         } else if (data?.success) {
-          const imported = data.imported || 0;
-          const totalRaised = data.totalRaised || 0;
-          const hasMore = !!data.hasMore;
-          const stoppedDueToTimeout = !!data.stoppedDueToTimeout;
-          results.totalDonorsImported += imported;
-          results.totalRaised += totalRaised;
-          if (hasMore) {
-            results.partial++;
-            results.errors.push(`${candidate.name}: partial — ${imported} donors imported, more pages remain (rerun to continue)`);
-            perCandidate.push({ ...base, status: 'success', imported, totalRaised, durationMs, hasMore, stoppedDueToTimeout, error: 'partial (rerun)' });
-          } else {
-            results.success++;
-            perCandidate.push({ ...base, status: 'success', imported, totalRaised, durationMs, hasMore, stoppedDueToTimeout });
-          }
+          results.success++;
+          results.totalDonorsImported += data.imported || 0;
+          results.totalRaised += data.totalRaised || 0;
+          console.log('[SYNC-ALL-DONORS] Success for', candidate.name, ':', data.imported, 'donors');
         } else {
           results.failed++;
-          const msg = data?.error || 'Unknown error';
-          results.errors.push(`${candidate.name}: ${msg}`);
-          perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs, error: msg });
+          results.errors.push(`${candidate.name}: ${data?.error || 'Unknown error'}`);
         }
-        await new Promise((r) => setTimeout(r, 1000));
+
+        // Rate limit: wait 1 second between requests
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        const timedOut = (err instanceof DOMException && err.name === 'TimeoutError') || /timeout|timed out|aborted|worker_limit|546/i.test(msg);
-        if (timedOut) {
-          // Cursor is persisted incrementally inside fetch-fec-donors, so the next cron
-          // tick will resume this candidate where it left off. Classify as partial, not
-          // failed, so we don't permanently mark big candidates (e.g. Josh Riley) as failed.
-          results.partial++;
-          const partialMsg = `partial — nested donor import still running after ${Math.round(candidateTimeoutMs / 1000)}s; cursor saved, will resume next tick`;
-          results.errors.push(`${candidate.name}: ${partialMsg}`);
-          perCandidate.push({ ...base, status: 'success', imported: 0, totalRaised: 0, durationMs: Date.now() - t0, hasMore: true, stoppedDueToTimeout: true, error: partialMsg });
-        } else {
-          results.failed++;
-          results.errors.push(`${candidate.name}: ${msg}`);
-          perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs: Date.now() - t0, error: msg });
-        }
-        // Do NOT break on timeout — the loop-top runtime-budget check stops the run if there's no headroom left.
+        console.error('[SYNC-ALL-DONORS] Exception for', candidate.name, ':', err);
+        results.failed++;
+        results.errors.push(`${candidate.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     }
 
+    console.log('[SYNC-ALL-DONORS] Complete:', results);
 
-    // remaining = queue depth before this batch, minus fully completed ones
-    const processedCount = perCandidate.length;
-    const remaining = Math.max(0, (queueBefore ?? candidates.length) - results.success);
-
-    return new Response(JSON.stringify({
-      success: true,
-      processed: processedCount,
-      successCount: results.success,
-      partialCount: results.partial,
-      failedCount: results.failed,
-      totalDonorsImported: results.totalDonorsImported,
-      totalRaised: results.totalRaised,
-      errors: results.errors,
-      candidates: perCandidate,
-      remaining,
-      queueBefore: queueBefore ?? null,
-      scope, mode, cycle,
-      message: `Synced ${results.success}/${processedCount} fully (${results.partial} partial, ${results.failed} failed, ${results.skipped} skipped). ${results.totalDonorsImported} donors imported. Remaining in queue: ${remaining}.`,
-    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({
+        processed: candidates.length,
+        successCount: results.success,
+        failedCount: results.failed,
+        totalDonorsImported: results.totalDonorsImported,
+        totalRaised: results.totalRaised,
+        errors: results.errors,
+        message: `Synced ${results.success}/${candidates.length} candidates. Imported ${results.totalDonorsImported} donors totaling $${results.totalRaised.toLocaleString()}`,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
 
   } catch (error: unknown) {
     console.error('[SYNC-ALL-DONORS] Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });

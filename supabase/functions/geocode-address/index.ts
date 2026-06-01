@@ -7,40 +7,6 @@ const corsHeaders = {
 };
 
 const CACHE_TTL_DAYS = 30;
-const GOOGLE_CIVIC_API_KEY = Deno.env.get('GOOGLE_CIVIC_API_KEY') ?? '';
-
-// Pull every OCD division id returned by Google Civic for an address.
-// Used to derive municipal subdivisions (ward, council district, school board)
-// that the Census geocoder doesn't expose.
-async function fetchCivicDivisions(address: string): Promise<string[]> {
-  if (!GOOGLE_CIVIC_API_KEY || !address) return [];
-  try {
-    const url = `https://www.googleapis.com/civicinfo/v2/representatives?key=${GOOGLE_CIVIC_API_KEY}&address=${encodeURIComponent(address)}&includeOffices=false`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const divisions = data?.divisions ?? {};
-    return Object.keys(divisions);
-  } catch (e) {
-    console.warn('[Geocode] Civic divisions fetch failed:', e);
-    return [];
-  }
-}
-
-// Parse a single segment like `ward:1` or `sldl:nj-006` from any matching division.
-function extractDivisionSegment(divisions: string[], segment: string): string | null {
-  const needle = `/${segment}:`;
-  for (const id of divisions) {
-    const idx = id.indexOf(needle);
-    if (idx === -1) continue;
-    const rest = id.slice(idx + needle.length);
-    const end = rest.indexOf('/');
-    const value = end === -1 ? rest : rest.slice(0, end);
-    const numeric = value.match(/(\d+)/);
-    return numeric ? numeric[1] : value;
-  }
-  return null;
-}
 
 // Normalize an address for cache keying. Uppercase, collapse whitespace,
 // strip ZIP+4 suffix, and remove most punctuation except commas.
@@ -88,7 +54,7 @@ serve(async (req) => {
     // 1. Try cache first
     const { data: cached } = await serviceClient
       .from('civic_lookup_cache')
-      .select('lat, lng, state, district, city, matched_address, payload, cached_at')
+      .select('lat, lng, state, district, city, matched_address, cached_at')
       .eq('normalized_address', normalized)
       .maybeSingle();
 
@@ -96,7 +62,6 @@ serve(async (req) => {
       const ageDays = (Date.now() - new Date(cached.cached_at).getTime()) / (1000 * 60 * 60 * 24);
       if (ageDays < CACHE_TTL_DAYS && (cached.lat !== null || cached.state !== null)) {
         console.log(`[Geocode] Cache HIT for "${normalized}" (age ${ageDays.toFixed(1)}d)`);
-        const payload = (cached.payload as any) ?? {};
         return new Response(JSON.stringify({
           district: cached.district,
           state: cached.state,
@@ -104,8 +69,6 @@ serve(async (req) => {
           lat: cached.lat,
           lng: cached.lng,
           matchedAddress: cached.matched_address,
-          divisions: payload.divisions ?? [],
-          ward: payload.ward ?? null,
           cached: true,
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
@@ -184,12 +147,7 @@ serve(async (req) => {
       }
     }
 
-    // Pull OCD divisions from Google Civic to enrich with municipal subdivisions
-    // (ward, school district, etc.) that Census doesn't provide.
-    const divisions = await fetchCivicDivisions(trimmed);
-    const ward = extractDivisionSegment(divisions, 'ward');
-
-    console.log(`[Geocode] State: ${state}, City: ${city}, District: ${district}, Ward: ${ward}, lat/lng: ${lat}/${lng}`);
+    console.log(`[Geocode] State: ${state}, City: ${city}, District: ${district}, lat/lng: ${lat}/${lng}`);
 
     // Write back to cache (best-effort, don't block the response on errors)
     try {
@@ -199,7 +157,6 @@ serve(async (req) => {
           normalized_address: normalized,
           lat, lng, state, district, city,
           matched_address: matchedAddress,
-          payload: { divisions, ward },
           cached_at: new Date().toISOString(),
         }, { onConflict: 'normalized_address' });
     } catch (e) {
@@ -207,7 +164,7 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify({
-      district, state, city, lat, lng, matchedAddress, divisions, ward, cached: false,
+      district, state, city, lat, lng, matchedAddress, cached: false,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {

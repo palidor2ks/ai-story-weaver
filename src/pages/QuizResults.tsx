@@ -21,7 +21,6 @@ import { useToast } from '@/hooks/use-toast';
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 import { Loader2, Sparkles, ArrowRight, BarChart3, Users, Share2, Building2, MapPin, Calendar, Vote } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { BRAND_HOST } from '@/lib/brand';
 
 interface ProfileAnalysis {
   summary: string;
@@ -169,7 +168,10 @@ export const QuizResults = () => {
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
   const inviteUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const brandHost = BRAND_HOST;
+  const brandHost =
+    typeof window !== 'undefined'
+      ? window.location.host.replace(/^www\./, '')
+      : 'polipulseapp.com';
 
 
 

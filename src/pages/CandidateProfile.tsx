@@ -126,27 +126,19 @@ export const CandidateProfile = () => {
     enabled: donorAliasLookupInputs.length > 0,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
+      const names = Array.from(new Set(donorAliasLookupInputs.map(d => d.name)));
       const types = Array.from(new Set(donorAliasLookupInputs.map(d => d.type)));
-      const inputsByName = new Map<string, Array<{ name: string; type: string }>>();
-      for (const input of donorAliasLookupInputs) {
-        const key = input.name.trim().toUpperCase();
-        inputsByName.set(key, [...(inputsByName.get(key) ?? []), input]);
-      }
       const { data, error } = await supabase
         .from('donor_alias_members')
         .select('donor_name, donor_type, donor_aliases!inner(canonical_name, is_active)')
-        .in('donor_type', types)
-        .eq('donor_aliases.is_active', true);
+        .in('donor_name', names)
+        .in('donor_type', types);
       if (error) throw error;
 
       const map = new Map<string, string>();
       for (const row of (data ?? []) as Array<{ donor_name: string; donor_type: string; donor_aliases?: { canonical_name?: string; is_active?: boolean } }>) {
         if (!row.donor_aliases?.is_active || !row.donor_aliases?.canonical_name) continue;
-        const matches = inputsByName.get(row.donor_name.trim().toUpperCase()) ?? [];
-        for (const input of matches) {
-          if (input.type !== row.donor_type) continue;
-          map.set(`${input.name.trim().toUpperCase()}|${input.type}`, row.donor_aliases.canonical_name);
-        }
+        map.set(`${row.donor_name.trim().toUpperCase()}|${row.donor_type}`, row.donor_aliases.canonical_name);
       }
       return map;
     },
@@ -1146,12 +1138,7 @@ export const CandidateProfile = () => {
                                         <div className="flex flex-wrap items-center gap-2 mt-1">
                                           <Badge variant="secondary">{donor.type}</Badge>
                                           {(() => {
-                                            const cause =
-                                              getDonorCause(donorCauseMap, displayName, donor.type) ??
-                                              getDonorCause(donorCauseMap, donor.name, donor.type) ??
-                                              (donor.name_variations ?? [])
-                                                .map((nv) => getDonorCause(donorCauseMap, nv, donor.type))
-                                                .find(Boolean);
+                                            const cause = getDonorCause(donorCauseMap, displayName, donor.type);
                                             return cause ? <CauseBadge cause={cause} /> : null;
                                           })()}
                                           {isConduit && (

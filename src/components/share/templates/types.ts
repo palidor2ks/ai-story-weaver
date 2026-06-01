@@ -11,7 +11,7 @@ export interface CardData {
   recipientCount?: string;
   cycleCount?: number;
   // Header / branding
-  brandHost: string; // e.g. www.polipulseapp.com
+  brandHost: string; // e.g. polipulseapp.com
   // Candidate alignment
   candidateName?: string;
   candidateOffice?: string;

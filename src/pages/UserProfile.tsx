@@ -8,13 +8,12 @@ import { useCivicOfficials, CivicOfficial } from '@/hooks/useCivicOfficials';
 import { usePersonalizedScoreMap } from '@/hooks/usePersonalizedScoreMap';
 import { usePartyMatchScores } from '@/hooks/usePartyMatchScores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { normalizeOfficeName } from '@/lib/officeLabel';
-import { User, RefreshCw, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info, Share2 } from 'lucide-react';
+import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info, Share2 } from 'lucide-react';
 import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { AvatarUpload } from '@/components/AvatarUpload';
@@ -71,24 +70,10 @@ export const UserProfile = () => {
   const [isRefreshingAnalysis, setIsRefreshingAnalysis] = useState(false);
   const [isRefreshingParties, setIsRefreshingParties] = useState(false);
 
-  // Validate the OAuth state returned from ID.me before trusting the callback.
-  // Prevents CSRF / auth-code injection where an attacker tricks a user into
-  // completing a verification flow they did not initiate.
+  // Fire identity_verified badge event when returning from ID.me
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('idme_callback') !== 'true') return;
-
-    const returnedState = params.get('state');
-    const storedState = sessionStorage.getItem('idme_state');
-    // Single-use — always clear, regardless of outcome.
-    sessionStorage.removeItem('idme_state');
-
-    if (!storedState || !returnedState || storedState !== returnedState) {
-      console.warn('[idme] OAuth state mismatch on callback — aborting.');
-      return;
-    }
-
-    if (profile?.identity_verified) {
+    if (params.get('idme_callback') === 'true' && profile?.identity_verified) {
       logBadgeEvent('identity_verified');
     }
   }, [profile?.identity_verified]);
@@ -382,14 +367,14 @@ export const UserProfile = () => {
         {/* Profile Header */}
         <div className="bg-card rounded-2xl border border-border p-6 md:p-8 mb-8 shadow-elevated">
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex min-w-0 flex-1 items-center gap-6">
+            <div className="flex items-center gap-6">
               <AvatarUpload
                 userId={profile.id}
                 currentAvatarUrl={profile.avatar_url}
                 userName={profile.name}
                 onAvatarChange={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
               />
-              <div className="min-w-0">
+              <div>
                 <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">
                   {profile.name}
                 </h1>
@@ -489,25 +474,10 @@ export const UserProfile = () => {
                 <VerificationBadges profile={profile} />
               </div>
             </div>
-            <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
-              <div className="flex-1 rounded-xl bg-secondary/50 px-4 py-3 text-center sm:min-w-[180px] sm:flex-none">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Overall Score
-                </span>
-                <div className="mt-1 flex items-center justify-center">
-                  <ScoreText score={profile.overall_score} size="lg" className="text-3xl" />
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {profile.overall_score <= -30 ? 'Progressive lean' :
-                   profile.overall_score >= 30 ? 'Conservative lean' :
-                   'Moderate or mixed'}
-                </p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={handleSignOut} className="gap-2">
-                <LogOut className="w-4 h-4" />
-                Sign Out
-              </Button>
-            </div>
+            <Button variant="ghost" size="sm" onClick={handleSignOut} className="gap-2">
+              <LogOut className="w-4 h-4" />
+              Sign Out
+            </Button>
           </div>
         </div>
 
@@ -542,20 +512,33 @@ export const UserProfile = () => {
           </Button>
         </div>
 
+        {/* Overall Score */}
+        <Card className="mb-8 shadow-elevated">
+          <CardHeader>
+            <CardTitle className="font-display flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-accent" />
+              Your Political Profile
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center p-6 rounded-xl bg-secondary/50">
+              <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                Overall Score
+              </span>
+              <div className="flex items-center justify-center mt-2">
+                <ScoreText score={profile.overall_score} size="lg" className="text-5xl" />
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                {profile.overall_score <= -30 ? 'You tend to lean Progressive on most issues' : 
+                 profile.overall_score >= 30 ? 'You tend to lean Conservative on most issues' : 
+                 'You hold moderate or mixed views across issues'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
-        <Tabs defaultValue="ai-analysis" className="mb-8">
-          <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-xl bg-secondary/60 p-1">
-            <TabsTrigger value="ai-analysis" className="whitespace-nowrap">AI Analysis</TabsTrigger>
-            <TabsTrigger value="party-alignment" className="whitespace-nowrap">Party Alignment</TabsTrigger>
-            <TabsTrigger value="representatives" className="whitespace-nowrap">Representatives</TabsTrigger>
-            <TabsTrigger value="elections" className="whitespace-nowrap">Upcoming Elections</TabsTrigger>
-            <TabsTrigger value="badges" className="whitespace-nowrap">Badges</TabsTrigger>
-            <TabsTrigger value="topics" className="whitespace-nowrap">Priority Topics</TabsTrigger>
-          </TabsList>
-
-          {/* AI Analysis Summary */}
-          <TabsContent value="ai-analysis" className="mt-4">
-            <Card className="shadow-elevated">
+        {/* AI Analysis Summary */}
+        <Card className="mb-8 shadow-elevated">
           <CardHeader>
             <CardTitle className="font-display flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -619,12 +602,10 @@ export const UserProfile = () => {
               <p className="text-muted-foreground">Complete the quiz to see your AI-generated political analysis.</p>
             )}
           </CardContent>
-            </Card>
-          </TabsContent>
+        </Card>
 
-          {/* Party Alignment */}
-          <TabsContent value="party-alignment" className="mt-4">
-            <Card className="shadow-elevated">
+        {/* Party Alignment */}
+        <Card className="mb-8 shadow-elevated">
           <CardHeader>
             <CardTitle className="font-display flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -682,20 +663,18 @@ export const UserProfile = () => {
               </div>
             </TooltipProvider>
           </CardContent>
-            </Card>
-          </TabsContent>
+        </Card>
 
-          {/* Your Current Representatives */}
-          <TabsContent value="representatives" className="mt-4">
-            <Card className="shadow-elevated">
+        {/* Your Representatives */}
+        <Card className="mb-8 shadow-elevated">
           <CardHeader>
             <CardTitle className="font-display flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-accent" />
-                Your Current Representatives
+                Your Representatives
                 {allRepsLoading ? (
                   <Badge variant="outline" className="ml-2 text-xs font-normal animate-pulse">
-                    Looking up current representatives...
+                    Looking up representatives...
                   </Badge>
                 ) : congressionalState && congressionalDistrict ? (
                   <Badge variant="outline" className="ml-2 text-xs font-normal">
@@ -721,7 +700,7 @@ export const UserProfile = () => {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Regenerate AI comparison summaries for current representatives</p>
+                        <p>Regenerate AI comparison summaries for all representatives</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -730,7 +709,7 @@ export const UserProfile = () => {
                     size="icon"
                     onClick={handleRefreshRepresentatives}
                     disabled={allRepsLoading}
-                    aria-label="Refresh current representatives"
+                    aria-label="Refresh representatives"
                   >
                     <RefreshCw className={cn("h-4 w-4", allRepsLoading && "animate-spin")} />
                   </Button>
@@ -741,7 +720,7 @@ export const UserProfile = () => {
           <CardContent>
             {!profile.address ? (
               <div className="text-center py-6">
-                <p className="text-muted-foreground mb-4">Add your address to see your current representatives.</p>
+                <p className="text-muted-foreground mb-4">Add your address to see your representatives.</p>
                 <Button variant="outline" onClick={handleEditAddress}>
                   Add Address
                 </Button>
@@ -750,7 +729,7 @@ export const UserProfile = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-center gap-3 py-4 text-muted-foreground">
                   <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent" />
-                  <span>Finding your current representatives...</span>
+                  <span>Finding your representatives...</span>
                 </div>
                 {[1, 2, 3].map(i => (
                   <div key={i} className="flex items-center gap-4 p-4 rounded-lg border border-border animate-pulse">
@@ -882,9 +861,9 @@ export const UserProfile = () => {
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="font-medium text-destructive">Failed to load current representatives</p>
+                    <p className="font-medium text-destructive">Failed to load representatives</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      There was an error fetching your current representatives. Please try again.
+                      There was an error fetching your representatives. Please try again.
                     </p>
                     <Button 
                       variant="outline" 
@@ -933,26 +912,20 @@ export const UserProfile = () => {
               </div>
             ) : (
               <p className="text-muted-foreground text-center py-4">
-                No current representatives found for your address.
+                No representatives found for your address.
               </p>
             )}
           </CardContent>
-            </Card>
-          </TabsContent>
+        </Card>
 
-          {/* Upcoming Elections */}
-          <TabsContent value="elections" className="mt-4">
-            <UpcomingElectionsCard address={profile?.address} />
-          </TabsContent>
+        {/* Upcoming Elections */}
+        <UpcomingElectionsCard address={profile?.address} />
 
-          {/* Badges */}
-          <TabsContent value="badges" className="mt-4">
-            <BadgeShelf userId={session?.user?.id} family="voter" />
-          </TabsContent>
+        {/* Badges */}
+        <BadgeShelf userId={session?.user?.id} family="voter" />
 
-          {/* Priority Topics */}
-          <TabsContent value="topics" className="mt-4">
-            <Card className="shadow-elevated">
+        {/* Priority Topics */}
+        <Card className="shadow-elevated">
           <CardHeader>
             <CardTitle className="font-display flex items-center gap-2">
               <Target className="w-5 h-5 text-accent" />
@@ -979,9 +952,7 @@ export const UserProfile = () => {
               </p>
             )}
           </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        </Card>
       </main>
     </div>
   );
