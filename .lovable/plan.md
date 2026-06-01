@@ -1,107 +1,93 @@
-# Full Gamification & Badges System
+## Goal
 
-Implements every badge family from `docs/gamification-badge-ideas.md` plus the activity/streak infrastructure needed to support them. All awarding is server-side and idempotent; the client only emits events and reads results.
+Continuously run `fetch-fec-donors` for every congressional candidate in a **visible** state (US House + US Senate, excluding states in `hidden_states`) until donor data is complete, then keep it fresh with a daily check. Same pipeline closes the "never-synced" gap whenever new candidates appear.
 
-## 1. Database schema (one migration)
+## Re-analysis (live DB, just verified)
 
-### Tables
+Scope = candidates whose `office` matches Senate/House and whose `state` is NOT in `hidden_states`:
 
-**`badge_definitions`** — catalog (seeded, admin-editable)
-- `slug` (PK, text), `name`, `description`, `category` (enum: `onboarding | progress | topic | engagement | social | candidate`), `tier` (int, nullable — for ladders), `icon` (emoji/url), `points` (int, default 0), `is_repeatable` (bool — for per-topic and streak badges), `active` (bool), `criteria` (jsonb — machine-readable trigger config)
+| Metric | Count |
+|---|---|
+| Total visible-congress candidates | 121 |
+| Missing `fec_candidate_id` | **0** ✅ |
+| Have FEC ID, never donor-synced | **34** |
+| Have FEC ID, donor-synced >24h ago | 80 |
+| Have FEC ID, fresh (<24h) | 7 |
 
-**`user_badges`** — awards
-- `user_id`, `badge_slug`, `awarded_at`, `metadata` (jsonb: e.g. `{topic_id, percent, period_key}`), `event_id` (uuid → user_activity_events, nullable for backfilled)
-- Unique: `(user_id, badge_slug)` when `is_repeatable=false`; `(user_id, badge_slug, metadata->>'scope_key')` when repeatable (enforced via partial unique indexes)
+Every visible-congress candidate already has an FEC ID, so the "never-synced FEC ID" gap today reduces to the 34 candidates whose FEC ID is known but `last_donor_sync IS NULL`. The plan still includes a defensive FEC-ID lookup step because new candidates get added over time and the daily check should catch them automatically.
 
-**`user_activity_events`** — append-only log driving streaks/retention
-- `id`, `user_id`, `event_type` (text: `onboarding_completed`, `question_answered`, `poll_completed`, `share_completed`, `news_opened`, `identity_verified`, `voter_verified`, `address_added`, `avatar_uploaded`, `demographics_updated`, `match_viewed`, `election_viewed`, `donor_viewed`, `scoring_viewed`, `quiz_retaken`, `referral_signup`), `payload` (jsonb), `created_at`, `day_key` (date, generated — for streak windowing)
-- Indexes: `(user_id, created_at desc)`, `(user_id, event_type, day_key)`
+## Approach
 
-**`badge_progress`** (optional but useful for "next badge" cards)
-- `user_id`, `badge_slug`, `current_value`, `target_value`, `updated_at` — recomputed by awarder
+Two scheduled pg_cron jobs that drive a slightly extended `sync-all-donors` → `fetch-fec-donors` pipeline, fronted by a thin scheduler edge function that also fills missing FEC IDs before each run.
 
-### Grants & RLS
-- `badge_definitions`: GRANT SELECT to anon+authenticated (catalog is public); admin-only writes via service role.
-- `user_badges`: GRANT SELECT to authenticated (own + public profiles via existing profile visibility), INSERT only via service role. Policy: `SELECT USING (user_id = auth.uid() OR EXISTS public profile)`.
-- `user_activity_events`: GRANT SELECT to authenticated for own rows only; INSERT via RPC `log_user_event` (security definer, validates `auth.uid() = user_id`).
-- `badge_progress`: same as `user_badges`.
+### 1. Extend `sync-all-donors` with `scope` + `mode`
 
-### Seed data
-All ~40 badges from the doc inserted with category, tier, criteria JSON, and icon. MVP six marked `priority=1`.
+Add `scope: 'congress_visible'` → restricts candidate selection to:
 
-## 2. Server-side awarding engine
+- `office ILIKE '%senate%' OR office ILIKE '%house%' OR office IN ('Senator','Representative')`
+- `state NOT IN (SELECT state_code FROM hidden_states)`
+- `fec_candidate_id IS NOT NULL`
 
-**`log_user_event(p_event_type text, p_payload jsonb)` RPC** (SECURITY DEFINER)
-- Validates `auth.uid()`, inserts into `user_activity_events`, then calls `evaluate_badges(auth.uid(), event_type, payload)`.
+Add `mode`:
+- `'backfill'` → only `last_donor_sync IS NULL` (drains naturally)
+- `'refresh'` → `last_donor_sync IS NULL OR last_donor_sync < now() - interval '24 hours'`
 
-**`evaluate_badges(user_id, event_type, payload)` function**
-- Switch on event_type → call dedicated checker per badge family:
-  - `check_onboarding_badges` — First Step, Onboarding Graduate, Priority Picker, Federal Foundations, Local Lens, Address Added, Profile Photo, Demographics Complete
-  - `check_identity_badges` — Identity Verified, Registered Voter
-  - `check_question_progress` — recomputes % answered against scope-appropriate denominator (federal vs local from `_candidate_office_class` analog for user; uses `user_topics.scope`); awards Curious Citizen → Full Ballot ladder
-  - `check_topic_badges` — Topic Starter / Halfway / Specialist per topic_id in payload; awards Balanced Ballot when ≥5 starters, All-Issues Explorer when every in-scope topic has ≥1
-  - `check_engagement_badges` — queries `user_activity_events` windows: Comeback Voter (gap ≥7d + new answer), Weekly Pulse (3 distinct day_keys in 7d), Civic Streak (7 consecutive day_keys), Monthly Check-In (event in new calendar month), Fresh Perspective (quiz_retaken with answer change), News Reader (≥3 news_opened in 24h)
-  - `check_social_badges` — Conversation Starter, Match Messenger, Donor Detective, First Share, Civic Inviter, Community Builder
-  - `check_engagement_misc` — First Match, Poll Participant, Election Ready, Money Trail, Score Explorer
-  - `check_candidate_badges` — runs on candidate-profile events (Profile Claimed, Platform Builder, Platform Complete, Evidence Added, Finance Synced); uses claimed_user_id from `profile_claims`
+Return shape adds `remaining: number` so the scheduler / UI can show progress and the cron run becomes a no-op once the queue is empty. Existing ordering (`last_donor_sync ASC NULLS FIRST`) is preserved — never-synced run first.
 
-- Each checker inserts into `user_badges` `ON CONFLICT DO NOTHING` (idempotent). Updates `badge_progress` rows.
-- Emits a row to `pending_badge_notifications(user_id, badge_slug, created_at)` for the client to consume.
+### 2. New scheduler edge function `schedule-congress-donor-sync`
 
-### Anti-gaming rules
-- One-time badges enforced by unique `(user_id, badge_slug)`.
-- Share badges keyed by `share_target_id` in metadata so each unique target counts once.
-- Streaks count distinct `day_key`, not raw events.
-- Question-progress recomputed only when `question_answered` event for a *new* `(user_id, question_id)` pair (uses existing `quiz_answers` unique constraint).
+Each invocation:
+1. Selects up to N visible-congress candidates with `fec_candidate_id IS NULL` → calls `fetch-fec-candidate-id` per row (today: 0 rows; future-proofing)
+2. Calls `sync-all-donors` with `{ scope: 'congress_visible', mode, limit }`
+3. Writes one row to `donor_sync_runs` with `mode`, `processed`, `success`, `failed`, `remaining`, `errors[]`, `started_at`, `finished_at`
+4. Uses a pg advisory lock so overlapping cron ticks no-op instead of stacking
 
-### Backfill
-One-time SQL to award existing users badges they already qualify for: onboarding, federal/local quiz, ID.me, address, avatar, demographics, % ladder, topic specialists, profile_claims-derived candidate badges.
+### 3. Backfill cron — every 10 min until done
 
-## 3. Client integration
+```text
+schedule: */10 * * * *
+calls:    schedule-congress-donor-sync { mode: 'backfill', limit: 10 }
+```
 
-### Event emission hooks (`src/lib/badges.ts`)
-Small wrapper `logEvent(eventType, payload)` calling the RPC. Wire into:
-- `Onboarding.tsx` — onboarding_completed, priority_picker (topic selection), address_added
-- `Quiz.tsx` — question_answered (on every save_quiz_results call, pass topic_ids + total_answered); quiz_retaken when changing prior answer
-- `Auth.tsx` / sign-up flow — first_step (via handle_new_user already; trigger awards on profile insert directly)
-- `AvatarUpload.tsx` — avatar_uploaded
-- `EditProfileDialog.tsx` / `DemographicsForm.tsx` — demographics_updated (checker computes completeness)
-- ID.me + voter-verify callbacks — identity_verified, voter_verified
-- `Share*Button.tsx` family — share_completed with `{target_type, target_id}`
-- `Poll.tsx` submit — poll_completed
-- `UpcomingElectionsCard.tsx` open — election_viewed
-- `DonorProfile.tsx`, `CommitteeProfile.tsx`, `TopSpenders.tsx` mount — donor_viewed
-- `HowScoringWorks.tsx` / AIExplanation open — scoring_viewed
-- `CandidateCard` first personalized view → match_viewed
-- `RelevantNewsFeed` article click → news_opened
-- `PoliticianDashboard` (claimed candidate flows) → candidate-side events
+10 candidates × ~1.5s each → well under the 150s edge timeout. 34 in queue today → drained in ~4 ticks (~40 min), then auto-quiesces.
 
-### UI
-- **`useBadges(userId)` hook** — fetches earned + progress.
-- **`<BadgeShelf />`** on `UserProfile.tsx` and `PoliticianDashboard.tsx` (separate candidate family) — grid grouped by category, locked badges shown desaturated with progress bar.
-- **`<NextBadgeCard />`** on profile + post-quiz screen — shows nearest unearned badge with progress.
-- **`<BadgeAwardToast />`** — `BackgroundProcessingContext`-style global listener polls `pending_badge_notifications` (or realtime subscribe), shows celebratory toast/modal, then deletes the notification row.
-- **`/badges/:slug`** public deep link — shareable badge page.
-- New share template for badge awards (extends `src/components/share/templates/`).
+### 4. Daily refresh cron — 07:00 UTC
 
-## 4. Phased rollout
+```text
+schedule: 0 7 * * *
+calls:    schedule-congress-donor-sync { mode: 'refresh', limit: 25 }
+```
 
-1. **Phase 1 (MVP, ~1 day):** Migration + seed + RPC + hooks for the 6 MVP badges + shelf + toast.
-2. **Phase 2:** Topic-depth + question-progress ladder + engagement-misc (Poll Participant, First Match, Election Ready, Money Trail, Score Explorer).
-3. **Phase 3:** Activity log + streak checkers (Comeback, Weekly Pulse, Civic Streak, Monthly, Fresh Perspective, News Reader).
-4. **Phase 4:** Social/advocacy (share-target keyed) + referral plumbing (Community Builder requires referral_code on signup).
-5. **Phase 5:** Candidate badges on `PoliticianDashboard`.
-6. **Phase 6:** Backfill + analytics dashboard tab in `Admin.tsx` (award counts, funnel impact).
+Re-syncs anything ≥24h old plus any newly added candidate. Whatever it can't finish in one tick gets mopped up by the 10-min backfill cron the same day.
 
-## Technical notes
+### 5. Observability + UI (new "Automated Jobs" card on `/admin`)
 
-- All checkers run inline in `log_user_event` for instant feedback; heavy ones (streaks, % recompute) protected with `pg_try_advisory_xact_lock(hashtext(user_id::text))` to avoid race double-awards.
-- Question-progress denominator: counts `questions` rows joined to `topics` with `scope` matching user's scope (federal officials → 6 federal topics' questions; local-only users → 5 local topics). Cached in a small MV `question_totals_by_scope` refreshed when questions change.
-- Candidate badges write to `user_badges` keyed to the *claimed* user_id (via `profile_claims`), not to candidate rows — avoids the politician-tampering trigger.
-- All event logging is fire-and-forget from the client; failures never block the user action.
-- Realtime: subscribe to `pending_badge_notifications` inserts filtered by `user_id = auth.uid()` so toasts feel instant.
+- New table `donor_sync_runs` (admin-read RLS) feeds a panel showing:
+  - Queue depth (`remaining`) for backfill + refresh
+  - Last run timestamp + mode + processed/success/failed
+  - Next scheduled run (static text from cron schedule)
+  - "Run now" button → invokes `schedule-congress-donor-sync` with `mode: 'backfill'`
+- `BulkDonorSyncCard` gets a small "Auto-backfill: ON" badge next to the `neverSynced` counter so the existing manual flow stays discoverable
 
-## Out of scope (flagged for later)
-- Leaderboards / points redemption (schema includes `points` but no UI).
-- Seasonal/limited-time badges.
-- Email notifications on award.
+## Files to touch
+
+- `supabase/functions/sync-all-donors/index.ts` — add `scope`, `mode`, return `remaining`
+- `supabase/functions/schedule-congress-donor-sync/index.ts` — new wrapper + advisory lock + run logging
+- Migration — create `donor_sync_runs` (with GRANTs + RLS); enable `pg_cron` + `pg_net`; schedule the two cron jobs
+- `src/components/admin/AutomatedJobsCard.tsx` — new monitoring card on `/admin`
+- `src/components/admin/BulkDonorSyncCard.tsx` — add auto-backfill badge
+
+## Worth flagging
+
+1. **pg_cron + pg_net** must be enabled on the Supabase project (one-time, done by the migration).
+2. **FEC rate limit** is 1000/hr per key — current pacing is comfortably under.
+3. **"Complete" is a moving target.** New candidates can appear via `fetch-fec-candidate-id`; states can flip in `hidden_states`. Daily refresh + missing-FEC-ID pre-step covers both.
+4. **Cycle is currently hard-coded to `'2024'`.** Pass it as a parameter from the cron call so we can flip to `'2026'` without a redeploy.
+5. **Generalization.** Same `scope`+`mode`+`schedule-…` pattern will fit voting records, bill sponsors, civic officials, external committees. Worth a tiny `data_sync_jobs` config table later — out of scope for this first iteration.
+
+## Out of scope
+
+- Non-congressional candidates (president, governor, state-level)
+- External committee donor backfill (`fetch-committee-donors`)
+- UI to edit cron schedules from the admin panel
+- Consolidating the other admin monitoring surfaces into a single Operations tab
