@@ -86,7 +86,7 @@ export function BadgeShelf({ userId, showLocked = true, family = 'voter' }: Prop
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                   {CATEGORY_LABEL[category]}
                 </h3>
-                <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2.5">
                   {badges.map(b => {
                     const got = earnedBySlug.get(b.slug);
                     const isEarned = !!got;
@@ -97,15 +97,18 @@ export function BadgeShelf({ userId, showLocked = true, family = 'voter' }: Prop
                         <TooltipTrigger asChild>
                           <div
                             className={cn(
-                              'aspect-square rounded-lg border flex flex-col items-center justify-center text-2xl relative transition-all',
+                              'min-h-[88px] rounded-md border flex flex-col items-center justify-center p-2 text-lg relative transition-all',
                               isEarned
                                 ? 'bg-gradient-to-br from-primary/10 to-primary/5 border-primary/30 shadow-sm hover:scale-105'
                                 : 'bg-muted/40 border-border opacity-40 grayscale'
                             )}
                           >
-                            <span>{b.icon ?? '🏅'}</span>
+                            <span aria-hidden="true">{b.icon ?? '🏅'}</span>
+                            <span className="mt-1.5 line-clamp-2 max-w-full text-center text-[11px] font-medium leading-tight text-foreground">
+                              {b.name}
+                            </span>
                             {b.is_repeatable && count > 1 && (
-                              <span className="absolute -top-1 -right-1 text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 font-bold">
+                              <span className="absolute -top-1 -right-1 text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 font-bold shadow-sm">
                                 ×{count}
                               </span>
                             )}
