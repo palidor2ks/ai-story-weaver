@@ -17,6 +17,7 @@ import { Loader2, Search, User, FileText, CheckCircle2, Clock, ExternalLink, Fil
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import { logBadgeEvent } from '@/lib/badges';
 
 interface Question {
   id: string;
