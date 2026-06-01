@@ -66,10 +66,52 @@ interface RunDiagnostics {
   errors: string[];
 }
 
+interface RunError {
+  mode: string;
+  ranAt: string;
+  message: string;
+  name?: string;
+  status?: number | string;
+  context?: unknown;
+  raw?: unknown;
+  advice: string[];
+}
+
+function buildAdvice(message: string, status?: number | string): string[] {
+  const tips: string[] = [];
+  const m = message.toLowerCase();
+  if (typeof status === 'number' && status >= 500) {
+    tips.push('The edge function crashed (5xx). Check the schedule-congress-donor-sync logs in Supabase for the stack trace.');
+  }
+  if (m.includes('fetch') && m.includes('failed')) {
+    tips.push('Network call from the browser to the edge function failed. Confirm you are signed in and the function is deployed.');
+  }
+  if (m.includes('timeout') || m.includes('timed out')) {
+    tips.push('Run took longer than the 150s edge timeout. Lower the batch limit or rerun — progress is checkpointed.');
+  }
+  if (m.includes('worker_limit') || m.includes('546')) {
+    tips.push('Edge worker limit hit. Wait a minute and rerun with a smaller limit.');
+  }
+  if (m.includes('jwt') || m.includes('unauthorized') || status === 401) {
+    tips.push('Auth token rejected. Refresh the page to renew your session, then retry.');
+  }
+  if (m.includes('fec_api_key') || m.includes('fec api')) {
+    tips.push('FEC_API_KEY secret missing or invalid. Set it in Lovable Cloud secrets.');
+  }
+  if (m.includes('rpc') || m.includes('relation') || m.includes('column')) {
+    tips.push('Database error — a migration may be missing. Check recent migrations for donor_sync_runs/queue tables.');
+  }
+  if (tips.length === 0) {
+    tips.push('Open the schedule-congress-donor-sync function logs for the matching timestamp to see the full server-side error.');
+  }
+  return tips;
+}
+
 export function AutomatedJobsCard() {
   const qc = useQueryClient();
   const [runningMode, setRunningMode] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<RunDiagnostics | null>(null);
+  const [runError, setRunError] = useState<RunError | null>(null);
 
   const { data: runs, isLoading } = useQuery({
     queryKey: ['donor-sync-runs'],
@@ -93,12 +135,28 @@ export function AutomatedJobsCard() {
   const runNow = async (mode: 'backfill' | 'refresh') => {
     setRunningMode(mode);
     setDiagnostics(null);
+    setRunError(null);
     const toastId = toast.loading(`Running ${mode}…`);
     try {
       const { data, error } = await supabase.functions.invoke('schedule-congress-donor-sync', {
         body: { scope: 'congress_visible', mode, limit: mode === 'backfill' ? 10 : 25, cycle: '2024' },
       });
-      if (error) throw error;
+      if (error) {
+        // Try to extract the server response body for a better message
+        let bodyText: string | undefined;
+        let status: number | undefined;
+        const ctx = (error as unknown as { context?: { response?: Response } }).context;
+        if (ctx?.response) {
+          status = ctx.response.status;
+          try { bodyText = await ctx.response.clone().text(); } catch { /* ignore */ }
+        }
+        let parsed: unknown = bodyText;
+        if (bodyText) { try { parsed = JSON.parse(bodyText); } catch { /* keep text */ } }
+        const serverMsg = (parsed && typeof parsed === 'object' && 'error' in (parsed as Record<string, unknown>))
+          ? String((parsed as Record<string, unknown>).error)
+          : (typeof parsed === 'string' && parsed.length > 0 ? parsed : error.message);
+        throw Object.assign(new Error(serverMsg), { name: error.name, status, context: parsed ?? null });
+      }
       const r = data as {
         ok: boolean;
         error: string | null;
@@ -135,10 +193,34 @@ export function AutomatedJobsCard() {
         candidates: s.candidates ?? [],
         errors: s.errors ?? [],
       });
-      toast.success(s.message ?? `${mode} run complete`, { id: toastId });
+      if (!r.ok || r.error) {
+        const msg = r.error ?? 'Run returned ok=false with no error message.';
+        setRunError({
+          mode,
+          ranAt: new Date().toISOString(),
+          message: msg,
+          context: r,
+          advice: buildAdvice(msg),
+        });
+        toast.error(`${mode} reported a failure`, { id: toastId });
+      } else {
+        toast.success(s.message ?? `${mode} run complete`, { id: toastId });
+      }
       qc.invalidateQueries({ queryKey: ['donor-sync-runs'] });
     } catch (err) {
-      toast.error(`${mode} failed: ${err instanceof Error ? err.message : 'Unknown error'}`, { id: toastId });
+      const e = err as { message?: string; name?: string; status?: number | string; context?: unknown };
+      const message = e.message ?? 'Unknown error';
+      setRunError({
+        mode,
+        ranAt: new Date().toISOString(),
+        message,
+        name: e.name,
+        status: e.status,
+        context: e.context,
+        raw: err,
+        advice: buildAdvice(message, e.status),
+      });
+      toast.error(`${mode} failed: ${message}`, { id: toastId });
     } finally {
       setRunningMode(null);
     }
@@ -180,6 +262,7 @@ export function AutomatedJobsCard() {
           </div>
         )}
 
+        {runError && <ErrorPanel e={runError} onDismiss={() => setRunError(null)} />}
         {diagnostics && <DiagnosticsPanel d={diagnostics} onDismiss={() => setDiagnostics(null)} />}
 
         {runs && runs.length > 0 && (
@@ -393,6 +476,64 @@ function Stat({ label, value, accent }: { label: string; value: string | number;
     <div className="rounded border bg-background px-2 py-1.5">
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={`text-sm font-semibold ${accent ?? ''}`}>{value}</div>
+    </div>
+  );
+}
+
+function ErrorPanel({ e, onDismiss }: { e: RunError; onDismiss: () => void }) {
+  const ctxString = (() => {
+    if (e.context == null) return null;
+    try { return JSON.stringify(e.context, null, 2); } catch { return String(e.context); }
+  })();
+  const copy = () => {
+    const payload = [
+      `Mode: ${e.mode}`,
+      `When: ${e.ranAt}`,
+      `Status: ${e.status ?? '—'}`,
+      `Name: ${e.name ?? '—'}`,
+      `Message: ${e.message}`,
+      ctxString ? `Context:\n${ctxString}` : '',
+    ].filter(Boolean).join('\n');
+    navigator.clipboard?.writeText(payload).then(() => toast.success('Error details copied'));
+  };
+  return (
+    <div className="rounded-lg border-2 border-destructive/50 bg-destructive/5 p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1">
+          <p className="font-semibold text-sm flex items-center gap-2">
+            <XCircle className="h-4 w-4 text-destructive" />
+            Run failed — {e.mode}
+            <span className="text-xs font-normal text-muted-foreground">
+              {formatDistanceToNow(new Date(e.ranAt), { addSuffix: true })}
+            </span>
+            {e.status !== undefined && (
+              <Badge variant="outline" className="text-[10px]">HTTP {String(e.status)}</Badge>
+            )}
+            {e.name && <Badge variant="outline" className="text-[10px]">{e.name}</Badge>}
+          </p>
+          <p className="text-xs font-mono break-all text-destructive">{e.message}</p>
+        </div>
+        <div className="flex gap-1">
+          <Button size="sm" variant="outline" onClick={copy}>Copy</Button>
+          <Button size="sm" variant="ghost" onClick={onDismiss}>Dismiss</Button>
+        </div>
+      </div>
+
+      <div className="rounded-md border bg-background p-2">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">What to try</p>
+        <ul className="text-xs space-y-1 list-disc pl-4">
+          {e.advice.map((a, i) => <li key={i}>{a}</li>)}
+        </ul>
+      </div>
+
+      {ctxString && (
+        <details className="rounded-md border bg-background p-2">
+          <summary className="cursor-pointer text-xs font-medium">Raw server response</summary>
+          <pre className="mt-2 max-h-60 overflow-auto text-[11px] leading-snug whitespace-pre-wrap break-all">
+{ctxString}
+          </pre>
+        </details>
+      )}
     </div>
   );
 }
