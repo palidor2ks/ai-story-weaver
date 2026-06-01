@@ -7,7 +7,25 @@ const corsHeaders = {
 
 const IDME_CLIENT_ID = Deno.env.get('IDME_CLIENT_ID');
 const IDME_CLIENT_SECRET = Deno.env.get('IDME_CLIENT_SECRET');
-const IDME_BASE_URL = 'https://api.id.me';
+const IDME_BASE_URL = Deno.env.get('IDME_BASE_URL') || 'https://api.id.me';
+const IDME_SCOPE = Deno.env.get('IDME_SCOPE') || 'openid';
+
+// Hardcoded fallback allowlist; extend via IDME_ALLOWED_REDIRECT_URIS (comma-separated).
+const DEFAULT_ALLOWED_REDIRECT_URIS = [
+  'https://polipulse.lovable.app/auth/idme-callback',
+  'https://polipulseapp.com/auth/idme-callback',
+  'https://www.polipulseapp.com/auth/idme-callback',
+  'https://id-preview--b4a499eb-c11a-4320-8adc-dfe50259459a.lovable.app/auth/idme-callback',
+  'http://localhost:5173/auth/idme-callback',
+  'http://localhost:8080/auth/idme-callback',
+];
+const ALLOWED_REDIRECT_URIS = new Set<string>([
+  ...DEFAULT_ALLOWED_REDIRECT_URIS,
+  ...(Deno.env.get('IDME_ALLOWED_REDIRECT_URIS') || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+]);
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -50,15 +68,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, code, redirect_uri } = body;
 
-    // Allowlist redirect_uris to prevent OAuth authorization code theft.
-    const ALLOWED_REDIRECT_URIS = new Set<string>([
-      'https://polipulse.lovable.app/auth/idme-callback',
-      'https://polipulseapp.com/auth/idme-callback',
-      'https://www.polipulseapp.com/auth/idme-callback',
-      'https://id-preview--b4a499eb-c11a-4320-8adc-dfe50259459a.lovable.app/auth/idme-callback',
-      'http://localhost:5173/auth/idme-callback',
-      'http://localhost:8080/auth/idme-callback',
-    ]);
+    // Validate redirect_uri against the module-level allowlist (env-extensible).
     if (typeof redirect_uri !== 'string' || !ALLOWED_REDIRECT_URIS.has(redirect_uri)) {
       return new Response(JSON.stringify({ error: 'Invalid redirect_uri' }), {
         status: 400,
@@ -83,7 +93,7 @@ Deno.serve(async (req) => {
         client_id: IDME_CLIENT_ID,
         redirect_uri: redirect_uri,
         response_type: 'code',
-        scope: 'openid',
+        scope: IDME_SCOPE,
         state: state,
       }).toString();
 
@@ -169,6 +179,18 @@ Deno.serve(async (req) => {
       const userInfo = await userInfoResponse.json();
       console.log('ID.me verification successful for user:', user.id);
 
+      const verificationId: string | undefined = userInfo.uuid || userInfo.sub;
+      if (!verificationId || typeof verificationId !== 'string') {
+        console.error('ID.me userinfo missing uuid/sub:', userInfo);
+        return new Response(JSON.stringify({
+          error: 'Verification failed',
+          message: 'ID.me did not return a verification identifier.'
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       // Update the user's profile with verification status
       const { error: updateError } = await supabase
         .from('profiles')
@@ -176,7 +198,7 @@ Deno.serve(async (req) => {
           identity_verified: true,
           identity_verified_at: new Date().toISOString(),
           identity_provider: 'id.me',
-          identity_verification_id: userInfo.uuid || userInfo.sub,
+          identity_verification_id: verificationId,
         })
         .eq('id', user.id);
 
