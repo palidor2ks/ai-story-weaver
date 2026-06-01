@@ -873,59 +873,13 @@ serve(async (req) => {
       console.log(`[FEC-DONORS] Ignoring saved cursor for ${committeeId}; cursor cycle ${targetCommittee.lastCycle || 'unknown'} does not match requested receipt cycle ${cycle}`);
     }
 
-    // Per-committee aggregation - accumulates across all pages
-    // CRITICAL: We keep donors in memory for the entire sync to properly aggregate
-    // Instead of clearing after flush, we track which donors have been flushed
+    // Per-invocation aggregation only. Contributions are the durable source of truth;
+    // full donor summaries are rebuilt from saved contributions only when a committee completes.
     const aggregatedDonors = new Map<string, AggregatedDonor & { id: string; flushedAmount?: number }>();
     const donorIdsSeen = new Set<string>(); // Track unique donor IDs for accurate count
     
-    // For resumable syncs, load existing donors from DB to continue accumulating
-    // NOTE: For J/U/B/D committees, we load donors with candidate_id = null
     if (resumeFromCursor && cursorMatchesRequestedCycle && targetCommittee.lastIndex && !forceFullSync) {
-      console.log(`[FEC-DONORS] Loading existing ${cycle} receipt-period donors from DB to continue accumulation...`);
-      
-      let existingDonorsQuery = supabase
-        .from('donors')
-        .select('*')
-        .eq('recipient_committee_id', committeeId)
-        .eq('cycle', cycle);
-      
-      if (effectiveCandidateId) {
-        existingDonorsQuery = existingDonorsQuery.eq('candidate_id', effectiveCandidateId);
-      } else {
-        existingDonorsQuery = existingDonorsQuery.is('candidate_id', null);
-      }
-      
-      const { data: existingDonors } = await existingDonorsQuery;
-      
-      if (existingDonors && existingDonors.length > 0) {
-        for (const d of existingDonors) {
-          aggregatedDonors.set(d.id, {
-            id: d.id,
-            name: d.name,
-            type: d.type as 'Individual' | 'PAC' | 'Organization' | 'Unknown',
-            amount: d.amount || 0,
-            transactionCount: d.transaction_count || 1,
-            firstReceiptDate: d.first_receipt_date,
-            lastReceiptDate: d.last_receipt_date,
-            city: d.contributor_city || '',
-            state: d.contributor_state || '',
-            zip: d.contributor_zip || '',
-            employer: d.employer || '',
-            occupation: d.occupation || '',
-            lineNumber: d.line_number || '',
-            isContribution: d.is_contribution ?? true,
-            isTransfer: d.is_transfer ?? false,
-            receiptType: d.is_transfer ? 'transfer' : 'contribution',
-            isConduitOrg: d.is_conduit_org ?? false,
-            conduitName: d.conduit_name,
-            conduitCommitteeId: d.conduit_committee_id,
-            flushedAmount: d.amount || 0 // Track what's already saved to DB
-          });
-          donorIdsSeen.add(d.id);
-        }
-        console.log(`[FEC-DONORS] Loaded ${existingDonors.length} existing donors from DB`);
-      }
+      console.log(`[FEC-DONORS] Resumed ${committeeId} without loading existing donors; donor summaries rebuild from contributions at completion`);
     }
     
     let contributionBatch: Array<{
