@@ -210,7 +210,11 @@ export function AutomatedJobsCard() {
       // Background pattern: the function returns immediately with queued=true.
       // Real results land in donor_sync_runs and the 15s poll picks them up.
       if (r.queued) {
-        toast.success('Run queued — watch the history below for progress (refreshes every 15s).', { id: toastId });
+        if (r.runId) {
+          setActiveRunId(r.runId);
+          setStatusDrawerOpen(true);
+        }
+        toast.success('Run queued — watch the status drawer for live progress.', { id: toastId });
         qc.invalidateQueries({ queryKey: ['donor-sync-runs'] });
         return;
       }
