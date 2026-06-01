@@ -251,10 +251,11 @@ Output ONLY a JSON object, no prose:
     let content = "";
     let citations: string[] = [];
     let youCitations: YouCitation[] = [];
+    let parsed: any = null;
     let lastError: { status: number; code: string; message: string } | null = null;
     const providerErrors: { provider: string; status: number; code: string }[] = [];
 
-    if (perplexityKey) {
+    const tryPerplexity = async () => {
       const ppxResp = await fetch("https://api.perplexity.ai/chat/completions", {
         method: "POST",
         headers: {
@@ -275,38 +276,52 @@ Output ONLY a JSON object, no prose:
           ],
         }),
       });
-
       if (ppxResp.ok) {
         const ppxJson = await ppxResp.json();
-        content = ppxJson?.choices?.[0]?.message?.content ?? "";
-        citations = Array.isArray(ppxJson?.citations) ? ppxJson.citations : [];
-        provider = "perplexity";
-      } else {
-        const t = await ppxResp.text();
-        console.error("Perplexity error", ppxResp.status, t);
-        const isAuth = ppxResp.status === 401 || ppxResp.status === 402 || ppxResp.status === 403;
-        const isRate = ppxResp.status === 429;
-        lastError = {
-          status: ppxResp.status,
-          code: isAuth ? "PERPLEXITY_AUTH" : isRate ? "PERPLEXITY_RATE_LIMIT" : "PERPLEXITY_ERROR",
-          message: isAuth
-            ? "AI analysis is temporarily unavailable: the Perplexity API key is invalid or out of quota. Please update billing or rotate the key."
-            : isRate
-            ? "Perplexity rate limit reached. Try again shortly."
-            : `Perplexity service error (${ppxResp.status}). Try again later.`,
-        };
-        providerErrors.push({ provider: "perplexity", status: ppxResp.status, code: lastError.code });
+        const c = ppxJson?.choices?.[0]?.message?.content ?? "";
+        const p = extractJson(c);
+        if (p) {
+          content = c;
+          citations = Array.isArray(ppxJson?.citations) ? ppxJson.citations : [];
+          provider = "perplexity";
+          parsed = p;
+          return;
+        }
+        console.error("Perplexity returned unparseable content", c.slice(0, 300));
+        providerErrors.push({ provider: "perplexity", status: 200, code: "PERPLEXITY_PARSE_FAIL" });
+        return;
       }
-    }
+      const t = await ppxResp.text();
+      console.error("Perplexity error", ppxResp.status, t);
+      const isAuth = ppxResp.status === 401 || ppxResp.status === 402 || ppxResp.status === 403;
+      const isRate = ppxResp.status === 429;
+      lastError = {
+        status: ppxResp.status,
+        code: isAuth ? "PERPLEXITY_AUTH" : isRate ? "PERPLEXITY_RATE_LIMIT" : "PERPLEXITY_ERROR",
+        message: isAuth
+          ? "AI analysis is temporarily unavailable: the Perplexity API key is invalid or out of quota. Please update billing or rotate the key."
+          : isRate
+          ? "Perplexity rate limit reached. Try again shortly."
+          : `Perplexity service error (${ppxResp.status}). Try again later.`,
+      };
+      providerErrors.push({ provider: "perplexity", status: ppxResp.status, code: lastError.code });
+    };
 
-    if (!provider && youKey) {
+    const tryYou = async () => {
       console.log("Trying You.com Smart as grounded-search fallback");
       try {
-        const yres = await callYouSmart({ query: searchPrompt, apiKey: youKey, systemPrompt });
-        content = yres.content;
-        youCitations = yres.citations;
-        citations = yres.citations.map((c) => c.url);
-        provider = "you";
+        const yres = await callYouSmart({ query: searchPrompt, apiKey: youKey!, systemPrompt });
+        const p = extractJson(yres.content);
+        if (p) {
+          content = yres.content;
+          youCitations = yres.citations;
+          citations = yres.citations.map((c) => c.url);
+          provider = "you";
+          parsed = p;
+          return;
+        }
+        console.error("You.com returned unparseable content", yres.content.slice(0, 300));
+        providerErrors.push({ provider: "you", status: 200, code: "YOU_PARSE_FAIL" });
       } catch (e) {
         const ye = e as YouError;
         console.error("You.com fallback error", ye?.status, ye?.message);
@@ -317,9 +332,9 @@ Output ONLY a JSON object, no prose:
         };
         providerErrors.push({ provider: "you", status: ye?.status ?? 500, code: ye?.code ?? "YOU_ERROR" });
       }
-    }
+    };
 
-    if (!provider && lovableKey) {
+    const tryGemini = async () => {
       console.log("Falling back to Lovable AI Gateway (Gemini)");
       const gemResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -335,35 +350,42 @@ Output ONLY a JSON object, no prose:
           ],
         }),
       });
-
       if (gemResp.ok) {
         const gJson = await gemResp.json();
-        content = gJson?.choices?.[0]?.message?.content ?? "";
-        citations = [];
-        provider = "gemini";
-      } else {
-        const gt = await gemResp.text();
-        console.error("Lovable AI fallback error", gemResp.status, gt);
-        if (gemResp.status === 402) {
-          lastError = { status: 402, code: "LOVABLE_AI_PAYMENT", message: "AI fallback unavailable: Lovable AI credits exhausted. Add credits in Settings → Workspace → Usage." };
-        } else if (gemResp.status === 429) {
-          lastError = { status: 429, code: "LOVABLE_AI_RATE_LIMIT", message: "AI fallback rate-limited. Try again shortly." };
-        } else if (!lastError) {
-          lastError = { status: gemResp.status, code: "LOVABLE_AI_ERROR", message: `AI fallback error (${gemResp.status}).` };
+        const c = gJson?.choices?.[0]?.message?.content ?? "";
+        const p = extractJson(c);
+        if (p) {
+          content = c;
+          citations = [];
+          provider = "gemini";
+          parsed = p;
+          return;
         }
+        console.error("Gemini returned unparseable content", c.slice(0, 300));
+        providerErrors.push({ provider: "gemini", status: 200, code: "GEMINI_PARSE_FAIL" });
+        lastError = { status: 502, code: "GEMINI_PARSE_FAIL", message: "AI response could not be parsed. Please regenerate." };
+        return;
       }
+      const gt = await gemResp.text();
+      console.error("Lovable AI fallback error", gemResp.status, gt);
+      if (gemResp.status === 402) {
+        lastError = { status: 402, code: "LOVABLE_AI_PAYMENT", message: "AI fallback unavailable: Lovable AI credits exhausted. Add credits in Settings → Workspace → Usage." };
+      } else if (gemResp.status === 429) {
+        lastError = { status: 429, code: "LOVABLE_AI_RATE_LIMIT", message: "AI fallback rate-limited. Try again shortly." };
+      } else if (!lastError) {
+        lastError = { status: gemResp.status, code: "LOVABLE_AI_ERROR", message: `AI fallback error (${gemResp.status}).` };
+      }
+    };
+
+    if (perplexityKey) await tryPerplexity();
+    if (!provider && youKey) await tryYou();
+    if (!provider && lovableKey) await tryGemini();
+
+    if (!provider || !parsed) {
+      const err = lastError ?? { code: "NO_PROVIDER", message: "No AI provider produced a usable response." };
+      return json({ error: err.message, code: err.code, fallback: true, providerErrors }, 200);
     }
 
-    if (!provider) {
-      const err = lastError ?? { code: "NO_PROVIDER", message: "No AI provider available." };
-      return json({ error: err.message, code: err.code, fallback: true }, 200);
-    }
-
-    const parsed = extractJson(content);
-    if (!parsed) {
-      console.error(`Could not parse ${provider} output`, content.slice(0, 500));
-      return json({ error: "Could not parse AI response. Please regenerate." }, 500);
-    }
 
     const grounded: { title: string; url: string }[] =
       provider === "you"
