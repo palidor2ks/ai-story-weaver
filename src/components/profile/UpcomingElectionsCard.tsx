@@ -150,7 +150,7 @@ export function UpcomingElectionsCard({ address }: Props) {
               onClick={handleRefresh}
               disabled={!address || isRefreshing || isLoading}
               className="h-8 gap-1.5"
-              title="Re-fetch from FEC and Google Civic"
+              title="Re-fetch from FEC, Google Civic, and AI election research"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="text-xs">Refresh</span>
@@ -168,7 +168,7 @@ export function UpcomingElectionsCard({ address }: Props) {
             </div>
           ) : total === 0 ? (
             <p className="text-muted-foreground text-sm">
-              No upcoming ballot candidates found for your address yet. Check back closer to election day or tap Refresh to re-check available sources.
+              No upcoming ballot candidates found for your address yet. Check back closer to election day or tap Refresh to re-check FEC, Google Civic, and AI election research sources.
             </p>
           ) : (
             <div className="space-y-6">
@@ -193,7 +193,7 @@ export function UpcomingElectionsCard({ address }: Props) {
                 </section>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
-                  Local ballot coverage is limited and depends on address-specific data from election sources; some municipal or ward races may only appear after local sample-ballot data is available.
+                  Local ballot coverage depends on address-specific election sources and AI-assisted research; some municipal or ward races may only appear after official sample-ballot data is available.
                 </p>
               )}
             </div>
