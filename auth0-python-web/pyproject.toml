@@ -1,0 +1,14 @@
+[project]
+name = "polipulse-auth0-python-web"
+version = "0.1.0"
+description = "Minimal server-side Auth0 Python SDK integration for PoliPulse."
+requires-python = ">=3.10"
+dependencies = [
+  "auth0-server-python>=1.0.0b1,<2",
+  "flask[async]",
+  "python-dotenv",
+  "markupsafe",
+]
+
+[tool.uv]
+package = false

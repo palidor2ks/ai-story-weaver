@@ -79,7 +79,7 @@ export const VerificationBadges = ({ profile }: VerificationBadgesProps) => {
   const handleIdMeVerify = async () => {
     setIsIdMeLoading(true);
     try {
-      const redirectUri = `${window.location.origin}/profile?idme_callback=true`;
+      const redirectUri = `${window.location.origin}/auth/idme-callback`;
       
       const { data, error } = await supabase.functions.invoke('verify-identity-idme', {
         body: { 
