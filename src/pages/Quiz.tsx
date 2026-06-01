@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { shuffleArray, calculateQuizScore } from '@/lib/score';
+import { logBadgeEvent } from '@/lib/badges';
 
 export const Quiz = () => {
   const navigate = useNavigate();
