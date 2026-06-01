@@ -70,6 +70,15 @@ export const UserProfile = () => {
   const [isRefreshingAnalysis, setIsRefreshingAnalysis] = useState(false);
   const [isRefreshingParties, setIsRefreshingParties] = useState(false);
 
+  // Fire identity_verified badge event when returning from ID.me
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('idme_callback') === 'true' && profile?.identity_verified) {
+      logBadgeEvent('identity_verified');
+    }
+  }, [profile?.identity_verified]);
+
+
   // Collect all candidate IDs from civic officials and reps to fetch their scores
   const allOfficialIds = useMemo(() => {
     const ids: string[] = [];
