@@ -61,9 +61,9 @@ export const CandidateCard = ({
 
   const getTierIcon = (tier: CoverageTier) => {
     switch (tier) {
-      case 'tier_1': return { icon: Star, label: 'Tier 1 - Full Coverage', color: 'text-amber-500' };
-      case 'tier_2': return { icon: Star, label: 'Tier 2 - Partial Coverage', color: 'text-slate-400' };
-      case 'tier_3': return { icon: Star, label: 'Tier 3 - Basic Coverage', color: 'text-slate-300' };
+      case 'tier_1': return { icon: Star, label: 'Tier 1 - Full Coverage', color: 'text-amber-600 dark:text-amber-400' };
+      case 'tier_2': return { icon: Star, label: 'Tier 2 - Partial Coverage', color: 'text-muted-foreground' };
+      case 'tier_3': return { icon: Star, label: 'Tier 3 - Basic Coverage', color: 'text-muted-foreground' };
     }
   };
 
