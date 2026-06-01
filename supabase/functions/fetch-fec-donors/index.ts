@@ -1125,8 +1125,7 @@ serve(async (req) => {
         response = await fetchWithRetry(contributionsUrl);
       } catch (err) {
         console.error('[FEC-DONORS] Fetch failed after retries:', err);
-        committeeHasMore = true;
-        break;
+        return await returnPartialNow('fetch-retry-exhausted');
       }
       
       // Defensive: check response
@@ -1141,12 +1140,7 @@ serve(async (req) => {
         
         if (response?.status === 429) {
           // Rate limited - save cursor and return partial results
-          console.log('[FEC-DONORS] Rate limited, saving progress and returning hasMore=true');
-          committeeHasMore = true;
-          await saveContributionBatch();
-          await saveDonorBatch();
-          await saveCursor(true);
-          break;
+          return await returnPartialNow('fec-rate-limit');
         }
         break;
       }
@@ -1367,6 +1361,10 @@ serve(async (req) => {
 
       lastIndex = pagination.last_indexes.last_index;
       lastContributionDate = pagination.last_indexes.last_contribution_receipt_date;
+
+      if (pageCount >= maxPages) {
+        return await returnPartialNow('page-budget');
+      }
 
       // Periodic save every DONOR_FLUSH_PAGES pages to avoid memory buildup
       if (pageCount % DONOR_FLUSH_PAGES === 0) {
