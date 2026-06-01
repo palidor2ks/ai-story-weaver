@@ -479,3 +479,61 @@ function Stat({ label, value, accent }: { label: string; value: string | number;
     </div>
   );
 }
+
+function ErrorPanel({ e, onDismiss }: { e: RunError; onDismiss: () => void }) {
+  const ctxString = (() => {
+    if (e.context == null) return null;
+    try { return JSON.stringify(e.context, null, 2); } catch { return String(e.context); }
+  })();
+  const copy = () => {
+    const payload = [
+      `Mode: ${e.mode}`,
+      `When: ${e.ranAt}`,
+      `Status: ${e.status ?? '—'}`,
+      `Name: ${e.name ?? '—'}`,
+      `Message: ${e.message}`,
+      ctxString ? `Context:\n${ctxString}` : '',
+    ].filter(Boolean).join('\n');
+    navigator.clipboard?.writeText(payload).then(() => toast.success('Error details copied'));
+  };
+  return (
+    <div className="rounded-lg border-2 border-destructive/50 bg-destructive/5 p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1">
+          <p className="font-semibold text-sm flex items-center gap-2">
+            <XCircle className="h-4 w-4 text-destructive" />
+            Run failed — {e.mode}
+            <span className="text-xs font-normal text-muted-foreground">
+              {formatDistanceToNow(new Date(e.ranAt), { addSuffix: true })}
+            </span>
+            {e.status !== undefined && (
+              <Badge variant="outline" className="text-[10px]">HTTP {String(e.status)}</Badge>
+            )}
+            {e.name && <Badge variant="outline" className="text-[10px]">{e.name}</Badge>}
+          </p>
+          <p className="text-xs font-mono break-all text-destructive">{e.message}</p>
+        </div>
+        <div className="flex gap-1">
+          <Button size="sm" variant="outline" onClick={copy}>Copy</Button>
+          <Button size="sm" variant="ghost" onClick={onDismiss}>Dismiss</Button>
+        </div>
+      </div>
+
+      <div className="rounded-md border bg-background p-2">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">What to try</p>
+        <ul className="text-xs space-y-1 list-disc pl-4">
+          {e.advice.map((a, i) => <li key={i}>{a}</li>)}
+        </ul>
+      </div>
+
+      {ctxString && (
+        <details className="rounded-md border bg-background p-2">
+          <summary className="cursor-pointer text-xs font-medium">Raw server response</summary>
+          <pre className="mt-2 max-h-60 overflow-auto text-[11px] leading-snug whitespace-pre-wrap break-all">
+{ctxString}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+}
