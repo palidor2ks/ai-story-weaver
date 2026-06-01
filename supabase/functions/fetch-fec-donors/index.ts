@@ -837,6 +837,7 @@ serve(async (req) => {
 
     let totalRaised = 0;
     let totalDonors = 0;
+    let donorRebuildCount = 0;
     let totalContributions = 0;
     let skippedNonContributions = 0;
     let earmarkedCount = 0;
@@ -1138,11 +1139,7 @@ serve(async (req) => {
         }
         console.error('[FEC-DONORS] API error on page', pageCount + 1, ':', response?.status, errorText);
         
-        if (response?.status === 429) {
-          // Rate limited - save cursor and return partial results
-          return await returnPartialNow('fec-rate-limit');
-        }
-        break;
+        return await returnPartialNow(`fec-api-${response?.status || 'unknown'}`);
       }
 
       // Defensive: safe JSON parse
@@ -1151,8 +1148,7 @@ serve(async (req) => {
         data = await response.json();
       } catch {
         console.error('[FEC-DONORS] Failed to parse page response');
-        committeeHasMore = true;
-        break;
+        return await returnPartialNow('fec-invalid-json');
       }
       
       const results = data?.results || [];
