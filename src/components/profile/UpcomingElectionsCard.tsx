@@ -134,11 +134,16 @@ export function UpcomingElectionsCard({ address }: Props) {
     <>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="flex items-center gap-2">
-              <Vote className="w-5 h-5" />
-              Upcoming Elections on Your Ballot
-            </CardTitle>
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2">
+                <Vote className="w-5 h-5" />
+                Candidates on Your Upcoming Ballot
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Ballot candidates are separate from your current representatives and are matched by address, district, and local jurisdiction when available.
+              </p>
+            </div>
             <Button
               variant="ghost"
               size="sm"
