@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { logBadgeEvent } from '@/lib/badges';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { Button } from '@/components/ui/button';
