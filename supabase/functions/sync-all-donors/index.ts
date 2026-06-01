@@ -47,6 +47,7 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const syncStartedAt = Date.now();
 
     const body = await req.json().catch(() => ({}));
     const cycle: string = body.cycle ?? '2024';
