@@ -152,12 +152,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       }
 
       // 2. Resolve names -> aliases (and fec_committee_ids + alias-level cause)
-      const { data: members, error: mErr } = await (supabase as any)
-        .from('donor_alias_members')
-        .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
-        .in('donor_type', types)
-        .eq('donor_aliases.is_active', true);
-      if (mErr) throw mErr;
+      const members = allAliasMembers ?? [];
 
       // name|type -> set of committee ids
       const nameToCommittees = new Map<string, string[]>();
@@ -203,11 +198,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       // displayed name, while donor_alias_members stores only the raw imported
       // FEC names. Resolve canonical names directly (case-insensitively) so
       // alias-level causes still appear for rows like "NorPac" / "AIPAC".
-      const { data: canonicalAliases, error: canonicalErr } = await (supabase as any)
-        .from('donor_aliases')
-        .select('id, canonical_name, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
-        .eq('is_active', true);
-      if (canonicalErr) throw canonicalErr;
+      const canonicalAliases = allCanonicalAliases ?? [];
 
       for (const alias of (canonicalAliases ?? []) as any[]) {
         const matches = inputsByNormName.get(norm(alias.canonical_name)) ?? [];
