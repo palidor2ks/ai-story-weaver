@@ -58,7 +58,12 @@ serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const scope: string = body.scope ?? 'congress_visible';
   const mode: string = body.mode ?? 'backfill';
-  const limit: number = Math.max(1, Math.min(50, Number(body.limit) || 10));
+  // Each candidate can take 30s+ and occasionally much longer while the FEC donor
+  // importer paginates/retries. Keep scheduled wrapper batches to one candidate so
+  // the background task has enough headroom to finish and persist donor_sync_runs
+  // instead of surfacing platform HTTP 504s.
+  const requestedLimit = Number(body.limit) || 1;
+  const limit: number = Math.max(1, Math.min(1, requestedLimit));
   const cycle: string = body.cycle ?? '2024';
 
   const startedAt = new Date().toISOString();

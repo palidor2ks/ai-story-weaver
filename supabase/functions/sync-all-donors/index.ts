@@ -6,6 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Keep the wrapper comfortably below the Supabase Edge Function timeout.
+// The nested fetch-fec-donors call has its own cursoring and may return hasMore=true,
+// so it is safer to return a partial batch than to let this aggregate function 504.
+const SYNC_RUNTIME_BUDGET_MS = 120000;
+const CANDIDATE_CALL_TIMEOUT_MS = 110000;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -41,6 +47,7 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const syncStartedAt = Date.now();
 
     const body = await req.json().catch(() => ({}));
     const cycle: string = body.cycle ?? '2024';
@@ -132,11 +139,20 @@ serve(async (req) => {
       previousSync: string | null;
     };
 
-    const results = { success: 0, failed: 0, partial: 0, totalDonorsImported: 0, totalRaised: 0, errors: [] as string[] };
+    const results = { success: 0, failed: 0, partial: 0, skipped: 0, totalDonorsImported: 0, totalRaised: 0, errors: [] as string[] };
     const perCandidate: (CandidateResult & { hasMore?: boolean; stoppedDueToTimeout?: boolean })[] = [];
     const fetchFecDonorsUrl = `${supabaseUrl}/functions/v1/fetch-fec-donors`;
 
     for (const candidate of candidates) {
+      const remainingBudgetMs = SYNC_RUNTIME_BUDGET_MS - (Date.now() - syncStartedAt);
+      if (remainingBudgetMs <= 5000) {
+        const skipped = candidates.length - perCandidate.length;
+        results.skipped += skipped;
+        results.errors.push(`Stopped early with ${skipped} selected candidate(s) left because the sync wrapper reached its runtime budget; rerun to continue.`);
+        break;
+      }
+      const candidateTimeoutMs = Math.min(CANDIDATE_CALL_TIMEOUT_MS, remainingBudgetMs - 5000);
+
       const t0 = Date.now();
       const base = {
         candidateId: candidate.id,
@@ -155,6 +171,7 @@ serve(async (req) => {
             'apikey': anonKey,
           },
           body: JSON.stringify({ candidateId: candidate.id, fecCandidateId: candidate.fec_candidate_id, cycle }),
+          signal: AbortSignal.timeout(candidateTimeoutMs),
         });
         const data = await resp.json().catch(() => ({}));
         const durationMs = Date.now() - t0;
@@ -188,17 +205,21 @@ serve(async (req) => {
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         results.failed++;
-        results.errors.push(`${candidate.name}: ${msg}`);
-        perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs: Date.now() - t0, error: msg });
+        const timedOut = err instanceof DOMException && err.name === 'TimeoutError';
+        const wrappedMsg = timedOut ? `${msg}; nested donor import exceeded ${Math.round(candidateTimeoutMs / 1000)}s budget` : msg;
+        results.errors.push(`${candidate.name}: ${wrappedMsg}`);
+        perCandidate.push({ ...base, status: 'failed', imported: 0, totalRaised: 0, durationMs: Date.now() - t0, error: wrappedMsg });
+        if (timedOut) break;
       }
     }
 
     // remaining = queue depth before this batch, minus fully completed ones
+    const processedCount = perCandidate.length;
     const remaining = Math.max(0, (queueBefore ?? candidates.length) - results.success);
 
     return new Response(JSON.stringify({
       success: true,
-      processed: candidates.length,
+      processed: processedCount,
       successCount: results.success,
       partialCount: results.partial,
       failedCount: results.failed,
@@ -209,7 +230,7 @@ serve(async (req) => {
       remaining,
       queueBefore: queueBefore ?? null,
       scope, mode, cycle,
-      message: `Synced ${results.success}/${candidates.length} fully (${results.partial} partial, ${results.failed} failed). ${results.totalDonorsImported} donors imported. Remaining in queue: ${remaining}.`,
+      message: `Synced ${results.success}/${processedCount} fully (${results.partial} partial, ${results.failed} failed, ${results.skipped} skipped). ${results.totalDonorsImported} donors imported. Remaining in queue: ${remaining}.`,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {
