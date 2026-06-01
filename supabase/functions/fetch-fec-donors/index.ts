@@ -1398,16 +1398,24 @@ serve(async (req) => {
       await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY_MS));
     }
 
-    // Save remaining contributions and donors (final flush)
-    await saveContributionBatch();
-    await saveDonorBatch(true); // Final flush - save all donors
+    // Save remaining contributions and donors (final flush) — but skip if we already
+    // saved a cursor in the timeout branch above; running saveDonorBatch(true) on a
+    // resumed sync re-flushes thousands of pre-loaded donors and can burn 100+ seconds.
+    if (!stoppedDueToTimeout) {
+      await saveContributionBatch();
+      await saveDonorBatch(true); // Final flush - save all donors
 
-    totalDonors = aggregatedDonors.size; // Actual unique donor count
-    totalContributions = committeeContributionsSaved;
-    totalRaised = committeeItemized;
+      totalDonors = aggregatedDonors.size; // Actual unique donor count
+      totalContributions = committeeContributionsSaved;
+      totalRaised = committeeItemized;
 
-    // Update committee sync cursors
-    await saveCursor(committeeHasMore);
+      // Update committee sync cursors
+      await saveCursor(committeeHasMore);
+    } else {
+      totalDonors = aggregatedDonors.size;
+      totalContributions = committeeContributionsSaved;
+      totalRaised = committeeItemized;
+    }
 
     // Update rollups for EVERY sync batch (not just when complete)
     // This ensures the dashboard shows accurate dollar amounts during partial syncs
