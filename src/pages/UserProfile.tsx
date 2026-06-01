@@ -700,7 +700,7 @@ export const UserProfile = () => {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Regenerate AI comparison summaries for all representatives</p>
+                        <p>Regenerate AI comparison summaries for current representatives</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
