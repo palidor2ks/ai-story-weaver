@@ -709,7 +709,7 @@ export const UserProfile = () => {
                     size="icon"
                     onClick={handleRefreshRepresentatives}
                     disabled={allRepsLoading}
-                    aria-label="Refresh representatives"
+                    aria-label="Refresh current representatives"
                   >
                     <RefreshCw className={cn("h-4 w-4", allRepsLoading && "animate-spin")} />
                   </Button>
