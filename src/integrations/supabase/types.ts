@@ -760,6 +760,7 @@ export type Database = {
           office: string
           overall_score: number | null
           party: Database["public"]["Enums"]["party_type"]
+          person_id: string | null
           score_version: string | null
           state: string
           x_handle: string | null
@@ -785,6 +786,7 @@ export type Database = {
           office: string
           overall_score?: number | null
           party: Database["public"]["Enums"]["party_type"]
+          person_id?: string | null
           score_version?: string | null
           state: string
           x_handle?: string | null
@@ -810,11 +812,20 @@ export type Database = {
           office?: string
           overall_score?: number | null
           party?: Database["public"]["Enums"]["party_type"]
+          person_id?: string | null
           score_version?: string | null
           state?: string
           x_handle?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "candidates_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       civic_lookup_cache: {
         Row: {
@@ -1518,6 +1529,7 @@ export type Database = {
           id: string
           is_incumbent: boolean
           office: string
+          person_id: string | null
           source: string
           source_ref: string | null
           status: string
@@ -1530,6 +1542,7 @@ export type Database = {
           id?: string
           is_incumbent?: boolean
           office: string
+          person_id?: string | null
           source: string
           source_ref?: string | null
           status?: string
@@ -1542,6 +1555,7 @@ export type Database = {
           id?: string
           is_incumbent?: boolean
           office?: string
+          person_id?: string | null
           source?: string
           source_ref?: string | null
           status?: string
@@ -1553,6 +1567,13 @@ export type Database = {
             columns: ["election_id"]
             isOneToOne: false
             referencedRelation: "elections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "election_candidates_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
             referencedColumns: ["id"]
           },
         ]
@@ -2638,6 +2659,45 @@ export type Database = {
           },
         ]
       }
+      persons: {
+        Row: {
+          bioguide_id: string | null
+          created_at: string
+          display_name: string
+          fec_candidate_id: string | null
+          id: string
+          normalized_name: string | null
+          office_key: string | null
+          openstates_id: string | null
+          state: string | null
+          updated_at: string
+        }
+        Insert: {
+          bioguide_id?: string | null
+          created_at?: string
+          display_name: string
+          fec_candidate_id?: string | null
+          id?: string
+          normalized_name?: string | null
+          office_key?: string | null
+          openstates_id?: string | null
+          state?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bioguide_id?: string | null
+          created_at?: string
+          display_name?: string
+          fec_candidate_id?: string | null
+          id?: string
+          normalized_name?: string | null
+          office_key?: string | null
+          openstates_id?: string | null
+          state?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       poll_questions: {
         Row: {
           created_at: string
@@ -3509,6 +3569,7 @@ export type Database = {
           name: string
           office: string
           party: string
+          person_id: string | null
           source_last_fetched_at: string | null
           source_url: string | null
           state: string
@@ -3531,6 +3592,7 @@ export type Database = {
           name: string
           office: string
           party: string
+          person_id?: string | null
           source_last_fetched_at?: string | null
           source_url?: string | null
           state: string
@@ -3553,6 +3615,7 @@ export type Database = {
           name?: string
           office?: string
           party?: string
+          person_id?: string | null
           source_last_fetched_at?: string | null
           source_url?: string | null
           state?: string
@@ -3561,7 +3624,15 @@ export type Database = {
           updated_at?: string | null
           website_url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "static_officials_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       topics: {
         Row: {
@@ -4511,6 +4582,12 @@ export type Database = {
         Args: { p_event_type: string; p_payload?: Json }
         Returns: string
       }
+      merge_persons: {
+        Args: { from_id: string; into_id: string }
+        Returns: undefined
+      }
+      normalize_office_key: { Args: { _office: string }; Returns: string }
+      normalize_person_name: { Args: { _name: string }; Returns: string }
       rebuild_donors_for_committee: {
         Args: {
           p_candidate_id?: string
@@ -4540,6 +4617,17 @@ export type Database = {
       resolve_committee_alias: { Args: { p_fec_id: string }; Returns: string[] }
       resolve_donor_display_name: {
         Args: { p_donor_name: string; p_donor_type: string }
+        Returns: string
+      }
+      resolve_person: {
+        Args: {
+          _bioguide_id?: string
+          _fec_candidate_id?: string
+          _name: string
+          _office: string
+          _openstates_id?: string
+          _state: string
+        }
         Returns: string
       }
       retag_vendor_refunds: { Args: never; Returns: number }
