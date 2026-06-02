@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Merge } from 'lucide-react';
+import { Loader2, Merge, Trash2, Wand2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface SourceRow {
@@ -105,6 +105,42 @@ export default function DuplicatePersonsPanel() {
     onError: (e: Error) => toast.error(`Merge failed: ${e.message}`),
   });
 
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['duplicate-persons'] });
+    queryClient.invalidateQueries({ queryKey: ['merge-candidate-pairs'] });
+    queryClient.invalidateQueries({ queryKey: ['candidates'] });
+    queryClient.invalidateQueries({ queryKey: ['static-officials'] });
+  };
+
+  const autoMerge = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('auto_merge_obvious_persons');
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: (n) => { toast.success(`Auto-merged ${n} person record${n === 1 ? '' : 's'}`); invalidateAll(); },
+    onError: (e: Error) => toast.error(`Auto-merge failed: ${e.message}`),
+  });
+
+  const cleanupAi = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('cleanup_redundant_ai_candidates');
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: (n) => { toast.success(`Removed ${n} redundant AI candidate row${n === 1 ? '' : 's'}`); invalidateAll(); },
+    onError: (e: Error) => toast.error(`Cleanup failed: ${e.message}`),
+  });
+
+  const deleteRow = useMutation({
+    mutationFn: async ({ source, id }: { source: string; id: string }) => {
+      const { error } = await supabase.rpc('admin_delete_roster_row', { _source: source, _id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success('Deleted'); invalidateAll(); },
+    onError: (e: Error) => toast.error(`Delete failed: ${e.message}`),
+  });
+
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const doMerge = async (into: string, from: string, key: string) => {
     setBusyKey(key);
@@ -113,6 +149,16 @@ export default function DuplicatePersonsPanel() {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" onClick={() => autoMerge.mutate()} disabled={autoMerge.isPending}>
+          {autoMerge.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Wand2 className="mr-1 h-3 w-3" />}
+          Run auto-merge
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => cleanupAi.mutate()} disabled={cleanupAi.isPending}>
+          {cleanupAi.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
+          Cleanup AI seed candidates
+        </Button>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Persons with multiple source rows</CardTitle>
@@ -129,15 +175,31 @@ export default function DuplicatePersonsPanel() {
                 <div key={g.person_id} className="rounded-md border p-3">
                   <div className="font-medium">{g.display_name}</div>
                   <div className="mt-2 space-y-1 text-sm">
-                    {g.rows.map((r) => (
-                      <div key={`${r.source}:${r.source_id}`} className="flex items-center gap-2">
-                        <Badge variant="outline">{r.source}</Badge>
-                        <code className="text-xs text-muted-foreground">{r.source_id}</code>
-                        <span>— {r.name}</span>
-                        {r.office && <span className="text-muted-foreground">· {r.office}</span>}
-                        {r.state && <span className="text-muted-foreground">· {r.state}</span>}
-                      </div>
-                    ))}
+                    {g.rows.map((r) => {
+                      const rowKey = `${r.source}:${r.source_id}`;
+                      return (
+                        <div key={rowKey} className="flex items-center gap-2">
+                          <Badge variant="outline">{r.source}</Badge>
+                          <code className="text-xs text-muted-foreground">{r.source_id}</code>
+                          <span>— {r.name}</span>
+                          {r.office && <span className="text-muted-foreground">· {r.office}</span>}
+                          {r.state && <span className="text-muted-foreground">· {r.state}</span>}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="ml-auto h-7 px-2 text-destructive hover:text-destructive"
+                            disabled={deleteRow.isPending}
+                            onClick={() => {
+                              if (confirm(`Delete ${r.source} row ${r.source_id}? This cannot be undone.`)) {
+                                deleteRow.mutate({ source: r.source, id: r.source_id });
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}

@@ -4387,6 +4387,11 @@ export type Database = {
         Returns: undefined
       }
       _user_question_scope: { Args: { p_user_id: string }; Returns: string }
+      admin_delete_roster_row: {
+        Args: { _id: string; _source: string }
+        Returns: undefined
+      }
+      auto_merge_obvious_persons: { Args: never; Returns: number }
       backfill_candidate_scores: {
         Args: never
         Returns: {
@@ -4439,6 +4444,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      cleanup_redundant_ai_candidates: { Args: never; Returns: number }
       cleanup_x_oauth_pending: { Args: never; Returns: undefined }
       complete_job: { Args: { p_id: string }; Returns: undefined }
       evaluate_badges: {

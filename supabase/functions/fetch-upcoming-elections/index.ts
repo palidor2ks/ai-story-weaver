@@ -547,6 +547,33 @@ async function persistCandidates(
       .maybeSingle();
 
     if (!existing) {
+      // 3a) Person-level guard: if a static_officials row already represents this human,
+      // do NOT insert a duplicate candidate row. Link the election to that human via a
+      // synthetic record skip.
+      try {
+        const { data: pid } = await supabase.rpc('resolve_person', {
+          _name: c.name,
+          _state: c.state || 'US',
+          _office: c.office,
+          _bioguide_id: null,
+          _fec_candidate_id: c.fec_candidate_id ?? null,
+          _openstates_id: null,
+        });
+        if (pid) {
+          const { data: backed } = await supabase
+            .from('static_officials')
+            .select('id')
+            .eq('person_id', pid as string)
+            .limit(1);
+          if (backed && backed.length > 0) {
+            console.log(`[persist] skipping candidate insert ${c.id} — static_officials already covers person ${pid}`);
+            continue;
+          }
+        }
+      } catch (e) {
+        console.warn('[persist] resolve_person guard failed (continuing):', (e as Error).message);
+      }
+
       const insertRow = {
         id: c.id,
         name: c.name,
@@ -565,8 +592,6 @@ async function persistCandidates(
       };
       const { error: insErr } = await supabase.from('candidates').insert(insertRow);
       if (insErr) {
-        // The DB-level prevent_duplicate_candidate trigger will block name/state/office
-        // collisions even if the lookup above missed them — log and skip.
         console.warn('[persist] candidate insert blocked/failed', c.id, insErr.message);
       } else {
         newCandidateIds.push(c.id);
