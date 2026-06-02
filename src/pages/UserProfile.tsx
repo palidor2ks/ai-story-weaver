@@ -678,7 +678,9 @@ export const UserProfile = () => {
             </TooltipProvider>
           </CardContent>
         </Card>
+          </TabsContent>
 
+          <TabsContent value="representatives">
         {/* Your Representatives */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
