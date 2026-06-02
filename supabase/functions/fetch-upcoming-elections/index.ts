@@ -86,6 +86,29 @@ function mapParty(raw: string | undefined | null): Party {
   return 'Other';
 }
 
+const US_STATE_ABBREVS: Record<string, string> = {
+  'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
+  'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
+  'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI', 'idaho': 'ID',
+  'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS',
+  'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+  'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
+  'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV',
+  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+  'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK',
+  'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT',
+  'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV',
+  'wisconsin': 'WI', 'wyoming': 'WY', 'district of columbia': 'DC',
+};
+
+function normalizeState(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 2) return trimmed.toUpperCase();
+  return US_STATE_ABBREVS[trimmed.toLowerCase()] ?? null;
+}
+
 function nameKey(s: string): string {
   return (s || '')
     .toLowerCase()
@@ -153,7 +176,6 @@ function onlyNextElection(rows: ElectionResponseRow[]): ElectionResponseRow[] {
     const target = merged.find(
       (r) =>
         r.level === e.level &&
-        r.election_type.toLowerCase() === e.election_type.toLowerCase() &&
         e.candidates.some((c) => r.candidates.some((d) => nameKey(d.name) === nameKey(c.name))),
     );
     if (target) {
@@ -299,7 +321,7 @@ async function fetchGoogleCivic(address: string): Promise<ElectionPayload[]> {
       const contests: any[] = vi.contests ?? [];
 
       // Prefer the 2-letter state code from the OCD division ID; fall back to
-      // normalizedInput.state (which may be a full name like "New Jersey").
+      // normalizedInput.state (full name like "New Jersey" → "NJ" via lookup map).
       const stateAbbr = election.ocdDivisionId?.match(/state:(\w\w)/)?.[1]?.toUpperCase() ?? null;
       const stateRaw = stateAbbr || vi.normalizedInput?.state || null;
 
@@ -310,13 +332,13 @@ async function fetchGoogleCivic(address: string): Promise<ElectionPayload[]> {
         const officeName: string = contest.office || contest.referendumTitle || 'Race';
         const district = contest.district?.name ?? null;
         const level = inferLevel(contest.level, contest.roles, officeName);
-        // Canonical state: always 2-letter uppercase when available
-        const state = stateAbbr || (stateRaw ? stateRaw.slice(0, 2).toUpperCase() : null);
+        // Canonical state: always 2-letter uppercase, using USPS lookup for full names.
+        const state = normalizeState(stateRaw);
 
-        // Normalise candidate IDs using officeClass so the same person in two
-        // contest variants (different officeName/district) gets the same ID.
+        // Normalise candidate IDs using officeClass only (omitting district) so the
+        // same person across contest variants with different district labels gets the same ID.
         const candidates: CandidatePayload[] = await Promise.all(contestCandidates.map(async (c: any) => {
-          const id = `civic_${await sha1(`${c.name}|${officeClass(officeName)}|${state ?? ''}|${district ?? ''}`)}`;
+          const id = `civic_${await sha1(`${c.name}|${officeClass(officeName)}|${state ?? ''}`)}`;
           return {
             id,
             name: c.name,
@@ -332,7 +354,9 @@ async function fetchGoogleCivic(address: string): Promise<ElectionPayload[]> {
         }));
 
         // Merge into existing payload for this race, or create a new one.
-        const raceKey = `${election.electionDay}|${detectType(election.name)}|${level}|${officeClass(officeName)}|${(district ?? '').toLowerCase()}`;
+        // Key on race attributes only — omitting the parent election's type so that
+        // a primary contest and a municipal contest for the same ward race are merged.
+        const raceKey = `${election.electionDay}|${level}|${officeClass(officeName)}|${(district ?? '').toLowerCase()}`;
         const existing = raceMap.get(raceKey);
         if (existing) {
           const seenNames = new Set(existing.candidates.map((c) => nameKey(c.name)));
