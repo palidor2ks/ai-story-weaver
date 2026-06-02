@@ -539,6 +539,11 @@ export default function Admin() {
             <HiddenStatesPanel />
           </TabsContent>
 
+          <TabsContent value="duplicates">
+            <DuplicatePersonsPanel />
+          </TabsContent>
+
+
           <TabsContent value="users">
             <AdminUsersPanel />
           </TabsContent>
