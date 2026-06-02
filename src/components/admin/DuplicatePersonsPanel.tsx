@@ -175,15 +175,31 @@ export default function DuplicatePersonsPanel() {
                 <div key={g.person_id} className="rounded-md border p-3">
                   <div className="font-medium">{g.display_name}</div>
                   <div className="mt-2 space-y-1 text-sm">
-                    {g.rows.map((r) => (
-                      <div key={`${r.source}:${r.source_id}`} className="flex items-center gap-2">
-                        <Badge variant="outline">{r.source}</Badge>
-                        <code className="text-xs text-muted-foreground">{r.source_id}</code>
-                        <span>— {r.name}</span>
-                        {r.office && <span className="text-muted-foreground">· {r.office}</span>}
-                        {r.state && <span className="text-muted-foreground">· {r.state}</span>}
-                      </div>
-                    ))}
+                    {g.rows.map((r) => {
+                      const rowKey = `${r.source}:${r.source_id}`;
+                      return (
+                        <div key={rowKey} className="flex items-center gap-2">
+                          <Badge variant="outline">{r.source}</Badge>
+                          <code className="text-xs text-muted-foreground">{r.source_id}</code>
+                          <span>— {r.name}</span>
+                          {r.office && <span className="text-muted-foreground">· {r.office}</span>}
+                          {r.state && <span className="text-muted-foreground">· {r.state}</span>}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="ml-auto h-7 px-2 text-destructive hover:text-destructive"
+                            disabled={deleteRow.isPending}
+                            onClick={() => {
+                              if (confirm(`Delete ${r.source} row ${r.source_id}? This cannot be undone.`)) {
+                                deleteRow.mutate({ source: r.source, id: r.source_id });
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
