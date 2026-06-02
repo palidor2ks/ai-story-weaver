@@ -135,7 +135,7 @@ export const CandidatePositions = ({ candidateId, candidateName, isUserRep = fal
         </CardHeader>
         <CardContent>
           <div className="text-center py-8">
-            <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+            <FileText aria-hidden="true" className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
             <p className="text-muted-foreground">
               No documented positions available for {candidateName} yet.
             </p>

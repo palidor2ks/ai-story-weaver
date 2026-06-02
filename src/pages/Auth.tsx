@@ -137,6 +137,10 @@ export const Auth = () => {
           <img
             src="/icon-192.png"
             alt="Pulse app icon"
+            width={64}
+            height={64}
+            fetchPriority="high"
+            decoding="async"
             className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-glow"
           />
           <h1 className="font-display text-3xl font-bold text-foreground flex items-center justify-center gap-2">
