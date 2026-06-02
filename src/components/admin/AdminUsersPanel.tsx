@@ -89,6 +89,22 @@ export function AdminUsersPanel() {
     },
   });
 
+  const { data: lastSignins } = useQuery({
+    queryKey: ["admin", "user_last_signins"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_admin_user_last_signins");
+      if (error) throw error;
+      return (data || []) as { user_id: string; last_sign_in_at: string | null }[];
+    },
+    staleTime: 1000 * 60,
+  });
+
+  const lastSigninMap = useMemo(() => {
+    const m = new Map<string, string | null>();
+    (lastSignins || []).forEach((r) => m.set(r.user_id, r.last_sign_in_at));
+    return m;
+  }, [lastSignins]);
+
   const roleMap = useMemo(() => {
     const m = new Map<string, string[]>();
     (roles || []).forEach((r) => {
