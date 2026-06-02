@@ -307,16 +307,24 @@ export const useUnifiedCandidates = ({
       dbOnly.push(make(c.id, { db: c }));
     }
 
-    // Combined `all`
+    // Combined `all` — dedupe by id, name+office, AND db person_id when present
     const all: Candidate[] = [];
     const seenIds = new Set<string>();
     const seenNames = new Set<string>();
+    const seenPersonIds = new Set<string>();
+    const personIdOf = (c: Candidate): string | undefined => {
+      const db = dbById.get(c.id) ?? dbByName.get(nameKey(c.name, c.office));
+      return (db as any)?.person_id ?? undefined;
+    };
     const push = (c: Candidate) => {
       if (seenIds.has(c.id)) return;
       const k = nameKey(c.name, c.office);
       if (seenNames.has(k)) return;
+      const pid = personIdOf(c);
+      if (pid && seenPersonIds.has(pid)) return;
       seenIds.add(c.id);
       seenNames.add(k);
+      if (pid) seenPersonIds.add(pid);
       all.push(c);
     };
     for (const c of dbOnly) push(c);
