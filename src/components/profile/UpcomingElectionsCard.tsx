@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { officeBucket, candidateKey, chooseCandidate } from '@/lib/electionUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,49 +38,9 @@ const OFFICE_LABELS: Record<string, string> = {
 
 const OFFICE_ORDER = ['president', 'senate', 'house', 'governor', 'state-senate', 'state-house', 'mayor', 'local-council'];
 
-function officeBucket(office: string): string {
-  const value = (office || '').toLowerCase();
-  if (/president|white house/.test(value)) return 'president';
-  if (/governor/.test(value)) return 'governor';
-  if (/state\s+senate|state senator/.test(value)) return 'state-senate';
-  if (/state\s+(assembly|house|representative|delegate|legislature)/.test(value)) return 'state-house';
-  if (/u\.?s\.?\s+senate|us senate|senator/.test(value)) return 'senate';
-  if (/u\.?s\.?\s+house|us house|congress|representative/.test(value)) return 'house';
-  if (/mayor/.test(value)) return 'mayor';
-  if (/council|alder|select(wo)?man|commissioner|freeholder/.test(value)) return 'local-council';
-  return value.replace(/\s+/g, ' ').trim() || 'other';
-}
-
 function officeLabel(office: string): string {
   const bucket = officeBucket(office);
   return OFFICE_LABELS[bucket] ?? office;
-}
-
-function normalizeNameKey(name: string): string {
-  return (name || '')
-    .toLowerCase()
-    .replace(/[,.]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .filter((token) => token && !['jr', 'sr', 'ii', 'iii', 'iv', 'mr', 'mrs', 'ms', 'dr'].includes(token))
-    .sort()
-    .join(' ');
-}
-
-function candidateKey(candidate: UpcomingCandidate): string {
-  return [
-    normalizeNameKey(candidate.name),
-    (candidate.state || '').toLowerCase(),
-    officeBucket(candidate.office),
-    String(candidate.district || '').replace(/^0+/, '').toLowerCase(),
-  ].join('|');
-}
-
-function chooseCandidate(current: UpcomingCandidate, next: UpcomingCandidate): UpcomingCandidate {
-  const currentRank = Number(current.image_url ? 1 : 0) + Number(!current.is_pending_research ? 2 : 0) + Number(current.overall_score !== null ? 4 : 0);
-  const nextRank = Number(next.image_url ? 1 : 0) + Number(!next.is_pending_research ? 2 : 0) + Number(next.overall_score !== null ? 4 : 0);
-  return nextRank > currentRank ? next : current;
 }
 
 function formatDate(iso: string): string {
@@ -230,9 +191,12 @@ function buildOfficeGroups(elections: UpcomingElection[]): OfficeGroup[] {
 }
 
 function NextElectionBallot({ elections, onOpen, ieMap }: { elections: UpcomingElection[]; onOpen: (e: UpcomingElection) => void; ieMap?: IETotalsMap }) {
-  const sortedElections = [...elections].sort((a, b) => a.election_date.localeCompare(b.election_date));
+  const sortedElections = useMemo(
+    () => [...elections].sort((a, b) => a.election_date.localeCompare(b.election_date)),
+    [elections],
+  );
   const electionDate = sortedElections[0]?.election_date;
-  const officeGroups = buildOfficeGroups(sortedElections);
+  const officeGroups = useMemo(() => buildOfficeGroups(sortedElections), [sortedElections]);
   const names = Array.from(new Set(sortedElections.map((e) => e.name))).join(' • ');
 
   return (

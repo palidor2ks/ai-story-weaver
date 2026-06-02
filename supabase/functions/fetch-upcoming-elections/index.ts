@@ -280,7 +280,7 @@ async function fetchGoogleCivic(address: string): Promise<ElectionPayload[]> {
         const state = vi.normalizedInput?.state || election.ocdDivisionId?.match(/state:(\w\w)/)?.[1]?.toUpperCase() || null;
 
         const candidates: CandidatePayload[] = await Promise.all(contestCandidates.map(async (c: any) => {
-          const id = `civic_${await sha1(`${c.name}|${officeName}|${state ?? ''}|${district ?? ''}`)}`;
+          const id = `civic_${await sha1(`${c.name}|${officeName}|${state ?? ''}|${district ?? ''}`)}` ;
           return {
             id,
             name: c.name,
@@ -645,6 +645,20 @@ async function persistCandidates(
           resolvedPersonId = (pid as string) ?? null;
         } catch (e) {
           console.warn('[persist] resolve_person insert metadata failed (continuing):', (e as Error).message);
+        }
+      }
+
+      // Guard: skip inserting a duplicate candidate row when a static_officials
+      // record already covers this person (avoids ghost profiles for incumbents).
+      if (resolvedPersonId) {
+        const { data: backed } = await supabase
+          .from('static_officials')
+          .select('id')
+          .eq('person_id', resolvedPersonId)
+          .limit(1);
+        if (backed && backed.length > 0) {
+          console.log(`[persist] skipping candidate insert ${c.id} — static_officials already covers person ${resolvedPersonId}`);
+          continue;
         }
       }
 
