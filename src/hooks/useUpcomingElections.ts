@@ -57,6 +57,47 @@ function dedupeCandidates(candidates: UpcomingCandidate[]): UpcomingCandidate[] 
   return Array.from(byPerson.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// Merge local elections that share candidates — handles cases where the same race
+// is stored as multiple DB rows (e.g. one from a partisan-primary contest and one
+// from the broader ward election), which differ in jurisdiction and party composition
+// but represent the same ballot race.
+function mergeOverlappingLocalElections(rows: UpcomingElection[]): UpcomingElection[] {
+  const result: UpcomingElection[] = [];
+
+  for (const row of rows) {
+    if (row.level !== 'local') {
+      result.push(row);
+      continue;
+    }
+
+    const rowOffices = Array.from(new Set(row.candidates.map((c) => officeBucket(c.office)))).sort().join(',');
+    const mergeTarget = result.find(
+      (existing) =>
+        existing.level === 'local' &&
+        existing.election_date === row.election_date &&
+        existing.election_type.toLowerCase() === row.election_type.toLowerCase() &&
+        Array.from(new Set(existing.candidates.map((c) => officeBucket(c.office)))).sort().join(',') === rowOffices &&
+        row.candidates.some((c) => existing.candidates.some((e) => candidateKey(e) === candidateKey(c))),
+    );
+
+    if (mergeTarget) {
+      for (const c of row.candidates) {
+        const idx = mergeTarget.candidates.findIndex((e) => candidateKey(e) === candidateKey(c));
+        if (idx === -1) {
+          mergeTarget.candidates.push(c);
+        } else {
+          mergeTarget.candidates[idx] = chooseCandidate(mergeTarget.candidates[idx], c);
+        }
+      }
+      mergeTarget.candidates.sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      result.push({ ...row, candidates: [...row.candidates] });
+    }
+  }
+
+  return result;
+}
+
 function normalizeUpcomingElections(data: UpcomingElectionsResult): UpcomingElectionsResult {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -74,19 +115,22 @@ function normalizeUpcomingElections(data: UpcomingElectionsResult): UpcomingElec
   if (!nextDate) return EMPTY;
   const nextTime = toElectionTime(nextDate);
 
-  const seenRaces = new Set<string>();
-  const nextRows = allRows
+  const baseRows = allRows
     .filter((row) => toElectionTime(row.election_date) === nextTime)
     .map((row) => ({ ...row, candidates: dedupeCandidates(row.candidates) }))
-    .filter((row) => row.candidates.length > 0)
-    .filter((row) => {
-      const offices = Array.from(new Set(row.candidates.map((c) => officeBucket(c.office)))).sort().join(',');
-      const parties = Array.from(new Set(row.candidates.map((c) => c.party))).sort().join(',');
-      const raceKey = [row.election_date, row.election_type.toLowerCase(), row.level, row.jurisdiction ?? '', offices, parties].join('|').toLowerCase();
-      if (seenRaces.has(raceKey)) return false;
-      seenRaces.add(raceKey);
-      return true;
-    });
+    .filter((row) => row.candidates.length > 0);
+
+  const mergedRows = mergeOverlappingLocalElections(baseRows);
+
+  const seenRaces = new Set<string>();
+  const nextRows = mergedRows.filter((row) => {
+    const offices = Array.from(new Set(row.candidates.map((c) => officeBucket(c.office)))).sort().join(',');
+    const parties = Array.from(new Set(row.candidates.map((c) => c.party))).sort().join(',');
+    const raceKey = [row.election_date, row.election_type.toLowerCase(), row.level, row.jurisdiction ?? '', offices, parties].join('|').toLowerCase();
+    if (seenRaces.has(raceKey)) return false;
+    seenRaces.add(raceKey);
+    return true;
+  });
 
   return {
     federal: nextRows.filter((e) => e.level === 'federal'),

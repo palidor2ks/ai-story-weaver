@@ -121,9 +121,8 @@ function raceLabel(election: UpcomingElection, candidates: UpcomingCandidate[]):
   return election.name || type;
 }
 
-function raceKey(election: UpcomingElection, officeKey: string, candidates: UpcomingCandidate[]): string {
-  const parties = Array.from(new Set(candidates.map((candidate) => candidate.party))).sort().join(',');
-  return [election.election_date, election.election_type, election.level, election.jurisdiction ?? '', officeKey, parties].join('|').toLowerCase();
+function raceKey(election: UpcomingElection, officeKey: string): string {
+  return [election.election_date, election.election_type, election.level, election.jurisdiction ?? '', officeKey].join('|').toLowerCase();
 }
 
 function buildOfficeGroups(elections: UpcomingElection[]): OfficeGroup[] {
@@ -151,7 +150,7 @@ function buildOfficeGroups(elections: UpcomingElection[]): OfficeGroup[] {
         label: officeLabel(sortedCandidates[0]?.office ?? officeKey),
         races: [],
       };
-      const key = raceKey(election, officeKey, sortedCandidates);
+      const key = raceKey(election, officeKey);
       const existingRace = officeGroup.races.find((race) => race.key === key);
 
       if (existingRace) {
