@@ -42,6 +42,7 @@ import { AdminUsersPanel } from "@/components/admin/AdminUsersPanel";
 import { IEExclusionsPanel } from "@/components/admin/IEExclusionsPanel";
 import { CommitteeTopicsPanel } from "@/components/admin/CommitteeTopicsPanel";
 import { CommitteeAliasesPanel } from "@/components/admin/CommitteeAliasesPanel";
+import DuplicatePersonsPanel from "@/components/admin/DuplicatePersonsPanel";
 
 
 // Only levels that require manual entry (no API available)
