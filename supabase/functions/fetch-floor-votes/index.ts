@@ -560,7 +560,7 @@ async function persistVotesBatch(
         chamber: v.chamber,
         summary: v.bill_summary || null,
         summary_fetched_at: v.summary_fetched_at || null,
-        last_action_date: v.date,
+        latest_action_date: v.date,
         // ADD: Required columns for bills table
         bill_type: isPlaceholder ? 'PROC' : (parsed?.type || 'HR'),
         bill_number: isPlaceholder ? 0 : (parsed?.number || 0),

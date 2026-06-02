@@ -363,7 +363,7 @@ async function processVoteSync(bioguideId: string, persistVotes: boolean, syncSt
             summary: v.bill_summary || null,
             summary_fetched_at: v.summary_fetched_at || null,
             introduced_date: v.date,
-            last_action_date: v.date,
+            latest_action_date: v.date,
           });
         }
         
