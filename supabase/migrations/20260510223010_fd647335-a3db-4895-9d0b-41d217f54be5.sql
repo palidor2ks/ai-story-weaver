@@ -62,15 +62,25 @@ BEGIN
     AND EXISTS (SELECT 1 FROM finance_reconciliation w WHERE w.candidate_id = p_winner AND w.cycle = r.cycle);
   UPDATE finance_reconciliation SET candidate_id = p_winner WHERE candidate_id = p_loser;
 
-  DELETE FROM pac_candidate_totals p WHERE p.candidate_id = p_loser
-    AND EXISTS (SELECT 1 FROM pac_candidate_totals w WHERE w.candidate_id = p_winner
-                  AND w.committee_id = p.committee_id AND w.cycle = p.cycle);
-  UPDATE pac_candidate_totals SET candidate_id = p_winner WHERE candidate_id = p_loser;
+  IF to_regclass('public.pac_candidate_totals') IS NOT NULL THEN
+    EXECUTE '
+      DELETE FROM public.pac_candidate_totals p WHERE p.candidate_id = $1
+        AND EXISTS (SELECT 1 FROM public.pac_candidate_totals w WHERE w.candidate_id = $2
+                      AND w.committee_id = p.committee_id AND w.cycle = p.cycle)'
+      USING p_loser, p_winner;
+    EXECUTE 'UPDATE public.pac_candidate_totals SET candidate_id = $1 WHERE candidate_id = $2'
+      USING p_winner, p_loser;
+  END IF;
 
-  DELETE FROM pac_expenditures e WHERE e.candidate_id = p_loser
-    AND EXISTS (SELECT 1 FROM pac_expenditures w WHERE w.candidate_id = p_winner
-                  AND w.committee_id = e.committee_id AND w.support_oppose = e.support_oppose AND w.cycle = e.cycle);
-  UPDATE pac_expenditures SET candidate_id = p_winner WHERE candidate_id = p_loser;
+  IF to_regclass('public.pac_expenditures') IS NOT NULL THEN
+    EXECUTE '
+      DELETE FROM public.pac_expenditures e WHERE e.candidate_id = $1
+        AND EXISTS (SELECT 1 FROM public.pac_expenditures w WHERE w.candidate_id = $2
+                      AND w.committee_id = e.committee_id AND w.support_oppose = e.support_oppose AND w.cycle = e.cycle)'
+      USING p_loser, p_winner;
+    EXECUTE 'UPDATE public.pac_expenditures SET candidate_id = $1 WHERE candidate_id = $2'
+      USING p_winner, p_loser;
+  END IF;
 
   DELETE FROM election_candidates ec WHERE ec.candidate_id = p_loser
     AND EXISTS (SELECT 1 FROM election_candidates w WHERE w.candidate_id = p_winner AND w.election_id = ec.election_id);
