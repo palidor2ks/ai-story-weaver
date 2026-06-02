@@ -1,26 +1,25 @@
-# Fix AI Analysis Voice
+# Add Profile Section Tabs
 
-The "AI Political Analysis" on the profile reads in third-person ("This voter..."), making it feel like a report *about* the user. It should read like an analyst speaking *to* the user ("You generally align with...").
+Port PR #158 from the `ai-story-weaver` repo into this project's `src/pages/UserProfile.tsx`.
 
-## Scope
+## Change
 
-Two edge functions generate this content:
-1. `supabase/functions/user-profile-analysis/index.ts` — the active one (called from `UserProfile.tsx` and `QuizResults.tsx`).
-2. `supabase/functions/ai-profile-summary/index.ts` — legacy/duplicate, also generates same shape. Update for consistency.
+Wrap the six profile subsections that currently render stacked below the **Overall Score** card in a `Tabs` component, so users can switch between them via a compact tab bar.
 
-## Changes
+### Tabs (in order)
+1. `ai-analysis` — AI Political Analysis card (lines ~540–605)
+2. `party-alignment` — Party Alignment card (~607–666)
+3. `representatives` — Your Representatives card (~668–919)
+4. `elections` — `<UpcomingElectionsCard />` (~922)
+5. `badges` — `<BadgeShelf />` (~925)
+6. `topics` — Your Priority Topics card (~927–955)
 
-Rewrite the system + user prompts in both functions to:
-- Address the user directly in second person ("you", "your")
-- Forbid third-person references ("this voter", "the voter", "they", "their")
-- Apply to `summary`, `keyInsights`, `partyComparison`, and `strongestPositions`
+### Implementation
+- Import `Tabs`, `TabsContent`, `TabsList`, `TabsTrigger` from `@/components/ui/tabs`.
+- Place a single `<Tabs defaultValue="ai-analysis">` immediately after the Overall Score card.
+- Scrollable `TabsList` (horizontal overflow on mobile) with the six triggers.
+- Move each existing block, unchanged, into its matching `<TabsContent value="…">`. Internal refresh buttons, AI cards, and state remain identical.
+- Leave the profile header card, action buttons (View & Share, Answer More Questions, Retake Full Quiz, Reset Onboarding), and avatar/edit controls outside the tabs.
 
-Example shift:
-- Before: *"This voter generally aligns with Left-leaning policies... their views on environmental matters are more Centrist."*
-- After: *"You generally align with Left-leaning policies... your views on environmental matters are more Centrist."*
-
-Keep the analyst tone (non-partisan, factual, L/R score format). No UI changes; copy in `UserProfile.tsx` ("AI Political Analysis", "Key Insights") stays as-is since those are labels, not voice.
-
-## Cache note
-
-Results are regenerated on demand via the "Refresh" button and aren't persisted as cached strings in a DB column (only invoked live). Existing rendered text on screen will update next time the user loads or refreshes.
+### Out of scope
+No design system or copy changes; no logic changes inside any of the moved sections.
