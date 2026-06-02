@@ -5646,12 +5646,12 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00940783</loc>
+    <loc>https://www.polipulseapp.com/committee/C00929208</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.polipulseapp.com/committee/C00929208</loc>
+    <loc>https://www.polipulseapp.com/committee/C00940783</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -8237,6 +8237,26 @@
   </url>
   <url>
     <loc>https://www.polipulseapp.com/candidate/M001244</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/manual_betsy_aumack_piscataway_w2</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/manual_rashaad_couloote_piscataway_w4</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/manual_shantell_cherry_piscataway_w1</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.polipulseapp.com/candidate/manual_viola_stone_piscataway_w3</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
