@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useGeocode } from './useGeocode';
-import { officeBucket, candidateKey, chooseCandidate, normalizeNameKey } from '@/lib/electionUtils';
+import { officeBucket, candidateKey, chooseCandidate, normalizeNameKey, normalizeDistrictKey } from '@/lib/electionUtils';
 
 export interface UpcomingCandidate {
   candidate_id: string;
@@ -65,7 +65,13 @@ function localCandidatesMatch(a: UpcomingCandidate, b: UpcomingCandidate): boole
   if (normalizeNameKey(a.name) !== normalizeNameKey(b.name)) return false;
   const sa = (a.state || '').toLowerCase();
   const sb = (b.state || '').toLowerCase();
-  return !sa || !sb || sa === sb;
+  if (sa && sb && sa !== sb) return false;
+  // Different non-empty districts (e.g. Ward 1 vs Ward 2) are different races for
+  // the same-named person and must not be merged; empty district is a wildcard.
+  const da = normalizeDistrictKey(a.district);
+  const db = normalizeDistrictKey(b.district);
+  if (da && db && da !== db) return false;
+  return true;
 }
 
 // Merge local elections that share candidates — handles cases where the same race
