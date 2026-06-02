@@ -26,6 +26,8 @@ interface ProfileRow {
   created_at: string;
 }
 
+type LastLoginMap = Record<string, string | null>;
+
 const PAGE_SIZE = 50;
 
 export function AdminUsersPanel() {
@@ -80,6 +82,15 @@ export function AdminUsersPanel() {
     },
   });
 
+  const { data: lastLogins, error: lastLoginsError } = useQuery({
+    queryKey: ["admin", "user_last_logins"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke<{ lastLogins: LastLoginMap }>("admin-user-last-logins");
+      if (error) throw error;
+      return data?.lastLogins || {};
+    },
+  });
+
   const { data: roles } = useQuery({
     queryKey: ["admin", "user_roles_all"],
     queryFn: async () => {
@@ -128,6 +139,11 @@ export function AdminUsersPanel() {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageRows = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return "—";
+    return new Date(value).toLocaleDateString();
+  };
 
   return (
     <Card>
@@ -190,6 +206,12 @@ export function AdminUsersPanel() {
           </Select>
         </div>
 
+        {lastLoginsError && (
+          <p className="text-sm text-muted-foreground">
+            Last login dates could not be loaded: {(lastLoginsError as Error).message}
+          </p>
+        )}
+
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -212,13 +234,14 @@ export function AdminUsersPanel() {
                     <TableHead>Verified</TableHead>
                     <TableHead>Score</TableHead>
                     <TableHead>Joined</TableHead>
+                    <TableHead>Last Login</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pageRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                         No users match these filters.
                       </TableCell>
                     </TableRow>
@@ -266,7 +289,10 @@ export function AdminUsersPanel() {
                           </TableCell>
                           <TableCell>{p.overall_score?.toFixed?.(2) ?? "—"}</TableCell>
                           <TableCell className="text-muted-foreground text-xs">
-                            {new Date(p.created_at).toLocaleDateString()}
+                            {formatDate(p.created_at)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs">
+                            {formatDate(lastLogins?.[p.id])}
                           </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             {p.id === user?.id ? (
