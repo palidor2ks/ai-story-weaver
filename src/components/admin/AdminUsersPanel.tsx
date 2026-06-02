@@ -228,6 +228,7 @@ export function AdminUsersPanel() {
                     <TableHead>Verified</TableHead>
                     <TableHead>Score</TableHead>
                     <TableHead>Joined</TableHead>
+                    <TableHead>Last login</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
