@@ -1,8 +1,12 @@
 // Admin-only OR cron-invoked. Posts a social_posts row to all enabled platforms.
 // X is fully wired; FB/IG/TikTok return "not_configured" until tokens added.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { z } from 'npm:zod@3.23.8';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 const supaUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

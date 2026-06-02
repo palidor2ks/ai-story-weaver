@@ -1,8 +1,12 @@
 // Classify a donor alias (PAC, organization, individual) by *cause* using Lovable AI.
 // Writes primary_cause_id directly onto donor_aliases — works even when the alias has no committee ID.
 // Body: { alias_id: string }
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;

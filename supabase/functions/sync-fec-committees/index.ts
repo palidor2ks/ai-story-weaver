@@ -1,8 +1,12 @@
 // Bulk-sync FEC committees (PACs, SuperPACs, party, leadership) into external_pacs.
 // Body: { cycles?: number[], committee_types?: string[] }
 // Defaults: cycles=[2024,2026], committee_types=['N','Q','O','V','W','X','Y','Z','U']
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
