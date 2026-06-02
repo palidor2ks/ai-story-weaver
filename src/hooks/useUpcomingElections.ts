@@ -57,17 +57,20 @@ function dedupeCandidates(candidates: UpcomingCandidate[]): UpcomingCandidate[] 
   return Array.from(byPerson.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Loose match key: name + state only, ignoring district/office.
-// The same person is often stored as two candidate records with different district
-// values (one from a partisan-primary contest, one from the broader ward election),
-// so candidateKey() (which includes district) fails to detect them as duplicates.
-function localNameKey(c: UpcomingCandidate): string {
-  return `${normalizeNameKey(c.name)}|${(c.state || '').toLowerCase()}`;
+// Match by name; treat empty state as a wildcard to tolerate inconsistent state
+// storage (one record may have state="NJ", another state="" for the same person).
+// When both records have a non-empty state, require them to match to avoid
+// accidentally merging candidates from different states.
+function localCandidatesMatch(a: UpcomingCandidate, b: UpcomingCandidate): boolean {
+  if (normalizeNameKey(a.name) !== normalizeNameKey(b.name)) return false;
+  const sa = (a.state || '').toLowerCase();
+  const sb = (b.state || '').toLowerCase();
+  return !sa || !sb || sa === sb;
 }
 
 // Merge local elections that share candidates — handles cases where the same race
-// is stored as multiple DB rows which differ in jurisdiction, party composition, or
-// candidate district values but represent the same ballot race.
+// is stored as multiple DB rows which differ in jurisdiction, party composition,
+// district values, or inconsistent state strings for the same person.
 function mergeOverlappingLocalElections(rows: UpcomingElection[]): UpcomingElection[] {
   const result: UpcomingElection[] = [];
 
@@ -84,12 +87,12 @@ function mergeOverlappingLocalElections(rows: UpcomingElection[]): UpcomingElect
         existing.election_date === row.election_date &&
         existing.election_type.toLowerCase() === row.election_type.toLowerCase() &&
         Array.from(new Set(existing.candidates.map((c) => officeBucket(c.office)))).sort().join(',') === rowOffices &&
-        row.candidates.some((c) => existing.candidates.some((e) => localNameKey(e) === localNameKey(c))),
+        row.candidates.some((c) => existing.candidates.some((e) => localCandidatesMatch(e, c))),
     );
 
     if (mergeTarget) {
       for (const c of row.candidates) {
-        const idx = mergeTarget.candidates.findIndex((e) => localNameKey(e) === localNameKey(c));
+        const idx = mergeTarget.candidates.findIndex((e) => localCandidatesMatch(e, c));
         if (idx === -1) {
           mergeTarget.candidates.push(c);
         } else {
