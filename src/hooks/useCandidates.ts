@@ -87,7 +87,7 @@ interface Question {
 }
 
 const CANDIDATE_LIST_COLUMNS =
-  'id, name, party, office, state, district, image_url, overall_score, coverage_tier, confidence, is_incumbent, score_version, last_updated, claimed_by_user_id, claimed_at, fec_candidate_id, last_donor_sync';
+  'id, name, party, office, state, district, image_url, overall_score, coverage_tier, confidence, is_incumbent, score_version, last_updated, claimed_by_user_id, claimed_at, fec_candidate_id, last_donor_sync, person_id';
 
 export const useCandidates = () => {
   return useQuery({
