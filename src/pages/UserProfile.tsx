@@ -615,7 +615,9 @@ export const UserProfile = () => {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
 
+          <TabsContent value="party-alignment">
         {/* Party Alignment */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
