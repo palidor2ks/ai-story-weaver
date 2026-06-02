@@ -18,6 +18,7 @@ import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { AvatarUpload } from '@/components/AvatarUpload';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -537,6 +538,17 @@ export const UserProfile = () => {
           </CardContent>
         </Card>
 
+        <Tabs defaultValue="ai-analysis" className="w-full">
+          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap mb-6">
+            <TabsTrigger value="ai-analysis">AI Analysis</TabsTrigger>
+            <TabsTrigger value="party-alignment">Party Alignment</TabsTrigger>
+            <TabsTrigger value="representatives">Representatives</TabsTrigger>
+            <TabsTrigger value="elections">Upcoming Elections</TabsTrigger>
+            <TabsTrigger value="badges">Badges</TabsTrigger>
+            <TabsTrigger value="topics">Priority Topics</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="ai-analysis">
         {/* AI Analysis Summary */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
@@ -603,7 +615,9 @@ export const UserProfile = () => {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
 
+          <TabsContent value="party-alignment">
         {/* Party Alignment */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
@@ -664,7 +678,9 @@ export const UserProfile = () => {
             </TooltipProvider>
           </CardContent>
         </Card>
+          </TabsContent>
 
+          <TabsContent value="representatives">
         {/* Your Representatives */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
@@ -917,42 +933,50 @@ export const UserProfile = () => {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
 
-        {/* Upcoming Elections */}
-        <UpcomingElectionsCard address={profile?.address} />
+          <TabsContent value="elections">
+            {/* Upcoming Elections */}
+            <UpcomingElectionsCard address={profile?.address} />
+          </TabsContent>
 
-        {/* Badges */}
-        <BadgeShelf userId={session?.user?.id} family="voter" />
+          <TabsContent value="badges">
+            {/* Badges */}
+            <BadgeShelf userId={session?.user?.id} family="voter" />
+          </TabsContent>
 
-        {/* Priority Topics */}
-        <Card className="shadow-elevated">
-          <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <Target className="w-5 h-5 text-accent" />
-              Your Priority Topics
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {topicsList.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {topicsList.map(topic => (
-                  <Badge 
-                    key={topic.id} 
-                    variant="secondary"
-                    className="px-4 py-2 text-base gap-2"
-                  >
-                    <span>{topic.icon}</span>
-                    {topic.name}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-center py-4">
-                No priority topics selected yet.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+          <TabsContent value="topics">
+            {/* Priority Topics */}
+            <Card className="shadow-elevated">
+              <CardHeader>
+                <CardTitle className="font-display flex items-center gap-2">
+                  <Target className="w-5 h-5 text-accent" />
+                  Your Priority Topics
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {topicsList.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {topicsList.map(topic => (
+                      <Badge 
+                        key={topic.id} 
+                        variant="secondary"
+                        className="px-4 py-2 text-base gap-2"
+                      >
+                        <span>{topic.icon}</span>
+                        {topic.name}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-4">
+                    No priority topics selected yet.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
