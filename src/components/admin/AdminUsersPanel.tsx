@@ -285,6 +285,12 @@ export function AdminUsersPanel() {
                           <TableCell className="text-muted-foreground text-xs">
                             {new Date(p.created_at).toLocaleDateString()}
                           </TableCell>
+                          <TableCell className="text-muted-foreground text-xs">
+                            {(() => {
+                              const ts = lastSigninMap.get(p.id);
+                              return ts ? new Date(ts).toLocaleDateString() : "—";
+                            })()}
+                          </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             {p.id === user?.id ? (
                               <span className="text-xs text-muted-foreground">You</span>
