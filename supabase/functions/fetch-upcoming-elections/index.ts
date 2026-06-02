@@ -86,6 +86,75 @@ function mapParty(raw: string | undefined | null): Party {
   return 'Other';
 }
 
+function nameKey(s: string): string {
+  return (s || '')
+    .toLowerCase()
+    .replace(/[,.]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter((t) => t && !['jr', 'sr', 'ii', 'iii', 'iv', 'mr', 'mrs', 'ms', 'dr'].includes(t))
+    .sort()
+    .join(' ');
+}
+
+function districtKey(d?: string | null): string | null {
+  if (!d) return null;
+  const t = String(d).replace(/^0+/, '').toLowerCase();
+  return t || '0';
+}
+
+function officeClass(o: string): string {
+  const x = (o || '').toLowerCase();
+  if (/president|white house/.test(x)) return 'president';
+  if (/governor/.test(x)) return 'governor';
+  if (/state\s+senate|state senator/.test(x)) return 'state-senate';
+  if (/state\s+(assembly|house|representative|delegate|legislature)/.test(x)) return 'state-house';
+  if (/u\.?s\.?\s+senate|us senate|senator/.test(x)) return 'senate';
+  if (/u\.?s\.?\s+house|us house|congress|representative/.test(x)) return 'house';
+  if (/mayor/.test(x)) return 'mayor';
+  if (/council|alder|select(wo)?man|commissioner|freeholder/.test(x)) return 'local-council';
+  return x.replace(/\s+/g, ' ').trim() || 'other';
+}
+
+function candidatePersonKey(c: ElectionResponseRow['candidates'][number]): string {
+  return [nameKey(c.name), (c.state || '').toLowerCase(), officeClass(c.office), districtKey(c.district) ?? ''].join('|');
+}
+
+function candidateQuality(c: ElectionResponseRow['candidates'][number]): number {
+  return Number(Boolean(c.image_url)) + Number(!c.is_pending_research) * 2 + Number(c.overall_score !== null) * 4;
+}
+
+function dedupeResponseCandidates(candidates: ElectionResponseRow['candidates']): ElectionResponseRow['candidates'] {
+  const byPerson = new Map<string, ElectionResponseRow['candidates'][number]>();
+  for (const candidate of candidates) {
+    const key = candidatePersonKey(candidate);
+    const existing = byPerson.get(key);
+    if (!existing || candidateQuality(candidate) > candidateQuality(existing)) {
+      byPerson.set(key, candidate);
+    }
+  }
+  return Array.from(byPerson.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function onlyNextElection(rows: ElectionResponseRow[]): ElectionResponseRow[] {
+  const sorted = rows
+    .filter((e) => e.candidates.length > 0)
+    .sort((a, b) => a.election_date.localeCompare(b.election_date));
+  const nextDate = sorted[0]?.election_date;
+  if (!nextDate) return [];
+
+  const seen = new Set<string>();
+  return sorted.filter((e) => e.election_date === nextDate).filter((e) => {
+    const offices = Array.from(new Set(e.candidates.map((c) => officeClass(c.office)))).sort().join(',');
+    const parties = Array.from(new Set(e.candidates.map((c) => c.party))).sort().join(',');
+    const key = [e.election_date, e.election_type, e.level, e.jurisdiction ?? '', offices, parties].join('|').toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function sha1(input: string): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(input));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -211,7 +280,7 @@ async function fetchGoogleCivic(address: string): Promise<ElectionPayload[]> {
         const state = vi.normalizedInput?.state || election.ocdDivisionId?.match(/state:(\w\w)/)?.[1]?.toUpperCase() || null;
 
         const candidates: CandidatePayload[] = await Promise.all(contestCandidates.map(async (c: any) => {
-          const id = `civic_${await sha1(`${c.name}|${officeName}|${state ?? ''}|${district ?? ''}`)}`;
+          const id = `civic_${await sha1(`${c.name}|${officeName}|${state ?? ''}|${district ?? ''}`)}` ;
           return {
             id,
             name: c.name,
@@ -345,9 +414,9 @@ Deno.serve(async (req) => {
       ecByEl.get(r.election_id)!.push(r);
     }
 
-    const out: ElectionResponseRow[] = (elections ?? []).map(e => ({
+    const out: ElectionResponseRow[] = onlyNextElection((elections ?? []).map(e => ({
       ...e,
-      candidates: (ecByEl.get(e.id) ?? []).map(r => {
+      candidates: dedupeResponseCandidates((ecByEl.get(e.id) ?? []).map(r => {
         const c = candById.get(r.candidate_id);
         if (!c) {
           return {
@@ -361,7 +430,7 @@ Deno.serve(async (req) => {
           candidate_id: c.id,
           name: c.name,
           party: c.party,
-          office: c.office,
+          office: r.office || c.office,
           state: c.state,
           district: c.district,
           image_url: c.image_url,
@@ -372,8 +441,8 @@ Deno.serve(async (req) => {
           answers_source: c.answers_source,
           is_pending_research: c.answers_source === 'pending_research' || (c.overall_score === 0 && c.answers_source !== 'calculated_from_answers'),
         };
-      }),
-    }));
+      })),
+    })));
 
     const grouped = {
       federal: out.filter(e => e.level === 'federal'),
@@ -475,32 +544,9 @@ async function persistCandidates(
   newCandidateIds: string[],
   newCandidateMeta: Map<string, CandidatePayload>,
 ) {
-  // Normalization helpers — mirror the Postgres `_candidate_*` functions.
-  const nameKey = (s: string) =>
-    (s || '')
-      .toLowerCase()
-      .replace(/[,.]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .split(' ')
-      .filter((t) => t && !['jr', 'sr', 'ii', 'iii', 'iv', 'mr', 'mrs', 'ms', 'dr'].includes(t))
-      .sort()
-      .join(' ');
-  const officeClass = (o: string) => {
-    const x = (o || '').toLowerCase();
-    if (/senator|u\.s\. senate|us senate/.test(x)) return 'senate';
-    if (/representative|u\.s\. house|us house|congress/.test(x)) return 'house';
-    if (/president/.test(x)) return 'president';
-    if (/governor/.test(x)) return 'governor';
-    return x || 'other';
-  };
-  const districtKey = (d?: string | null) => {
-    if (!d) return null;
-    const t = String(d).replace(/^0+/, '');
-    return t || '0';
-  };
-
   for (const c of candidates) {
+    let resolvedPersonId: string | null = null;
+
     // 1) Try collapsing by FEC candidate id.
     const looksLikeFecId = /^[HSP]\d[A-Z]{2}\d+$/.test(c.id);
     const fecLookup = c.fec_candidate_id || (looksLikeFecId ? c.id : null);
@@ -513,10 +559,49 @@ async function persistCandidates(
       if (byFec && byFec.id !== c.id) {
         console.log(`[persist] collapsing FEC id ${c.id} → canonical ${byFec.id}`);
         c.id = byFec.id;
+      } else {
+        const { data: byAlias } = await supabase
+          .from('candidate_fec_ids')
+          .select('candidate_id')
+          .eq('fec_candidate_id', fecLookup)
+          .limit(1);
+        const aliasId = byAlias?.[0]?.candidate_id;
+        if (aliasId && aliasId !== c.id) {
+          console.log(`[persist] collapsing FEC alias ${c.id} → canonical ${aliasId}`);
+          c.id = aliasId;
+        }
       }
     }
 
-    // 2) Fallback: collapse by normalized (name, state, office class, district).
+    // 2) Person table match: this lets AI / Civic-discovered candidates reuse an
+    // existing profile when the person has already been resolved from another source.
+    try {
+      const { data: pid } = await supabase.rpc('resolve_person', {
+        _name: c.name,
+        _state: c.state || 'US',
+        _office: c.office,
+        _bioguide_id: null,
+        _fec_candidate_id: c.fec_candidate_id ?? null,
+        _openstates_id: null,
+      });
+      if (pid) {
+        resolvedPersonId = pid as string;
+        const { data: byPerson } = await supabase
+          .from('candidates')
+          .select('id')
+          .eq('person_id', pid as string)
+          .limit(1);
+        const personCandidateId = byPerson?.[0]?.id;
+        if (personCandidateId && personCandidateId !== c.id) {
+          console.log(`[persist] collapsing ${c.id} → existing ${personCandidateId} by person_id ${pid}`);
+          c.id = personCandidateId;
+        }
+      }
+    } catch (e) {
+      console.warn('[persist] resolve_person candidate match failed (continuing):', (e as Error).message);
+    }
+
+    // 3) Fallback: collapse by normalized (name, state, office class, district).
     {
       const targetKey = nameKey(c.name);
       const targetClass = officeClass(c.office);
@@ -539,7 +624,7 @@ async function persistCandidates(
       }
     }
 
-    // 3) Check if candidate exists.
+    // 4) Check if candidate exists.
     const { data: existing } = await supabase
       .from('candidates')
       .select('id, answers_source')
@@ -547,31 +632,34 @@ async function persistCandidates(
       .maybeSingle();
 
     if (!existing) {
-      // 3a) Person-level guard: if a static_officials row already represents this human,
-      // do NOT insert a duplicate candidate row. Link the election to that human via a
-      // synthetic record skip.
-      try {
-        const { data: pid } = await supabase.rpc('resolve_person', {
-          _name: c.name,
-          _state: c.state || 'US',
-          _office: c.office,
-          _bioguide_id: null,
-          _fec_candidate_id: c.fec_candidate_id ?? null,
-          _openstates_id: null,
-        });
-        if (pid) {
-          const { data: backed } = await supabase
-            .from('static_officials')
-            .select('id')
-            .eq('person_id', pid as string)
-            .limit(1);
-          if (backed && backed.length > 0) {
-            console.log(`[persist] skipping candidate insert ${c.id} — static_officials already covers person ${pid}`);
-            continue;
-          }
+      if (!resolvedPersonId) {
+        try {
+          const { data: pid } = await supabase.rpc('resolve_person', {
+            _name: c.name,
+            _state: c.state || 'US',
+            _office: c.office,
+            _bioguide_id: null,
+            _fec_candidate_id: c.fec_candidate_id ?? null,
+            _openstates_id: null,
+          });
+          resolvedPersonId = (pid as string) ?? null;
+        } catch (e) {
+          console.warn('[persist] resolve_person insert metadata failed (continuing):', (e as Error).message);
         }
-      } catch (e) {
-        console.warn('[persist] resolve_person guard failed (continuing):', (e as Error).message);
+      }
+
+      // Guard: skip inserting a duplicate candidate row when a static_officials
+      // record already covers this person (avoids ghost profiles for incumbents).
+      if (resolvedPersonId) {
+        const { data: backed } = await supabase
+          .from('static_officials')
+          .select('id')
+          .eq('person_id', resolvedPersonId)
+          .limit(1);
+        if (backed && backed.length > 0) {
+          console.log(`[persist] skipping candidate insert ${c.id} — static_officials already covers person ${resolvedPersonId}`);
+          continue;
+        }
       }
 
       const insertRow = {
@@ -583,6 +671,7 @@ async function persistCandidates(
         district: c.district,
         image_url: c.image_url,
         fec_candidate_id: c.fec_candidate_id ?? null,
+        person_id: resolvedPersonId,
         is_incumbent: c.is_incumbent,
         overall_score: 0,
         coverage_tier: 'tier_3',
