@@ -176,7 +176,11 @@ function onlyNextElection(rows: ElectionResponseRow[]): ElectionResponseRow[] {
     const target = merged.find(
       (r) =>
         r.level === e.level &&
-        e.candidates.some((c) => r.candidates.some((d) => nameKey(d.name) === nameKey(c.name))),
+        e.candidates.some((c) =>
+          r.candidates.some(
+            (d) => nameKey(d.name) === nameKey(c.name) && officeClass(d.office) === officeClass(c.office),
+          )
+        ),
     );
     if (target) {
       const seenNames = new Map(target.candidates.map((c) => [nameKey(c.name), c]));
@@ -354,9 +358,10 @@ async function fetchGoogleCivic(address: string): Promise<ElectionPayload[]> {
         }));
 
         // Merge into existing payload for this race, or create a new one.
-        // Key on race attributes only — omitting the parent election's type so that
-        // a primary contest and a municipal contest for the same ward race are merged.
-        const raceKey = `${election.electionDay}|${level}|${officeClass(officeName)}|${(district ?? '').toLowerCase()}`;
+        // Use the raw officeName (not officeClass) so that "City Council" and
+        // "County Commissioner" don't collapse into the same payload, while two
+        // contest variants with the exact same contest.office still merge.
+        const raceKey = `${election.electionDay}|${level}|${officeName.toLowerCase().trim()}|${(district ?? '').toLowerCase()}`;
         const existing = raceMap.get(raceKey);
         if (existing) {
           const seenNames = new Set(existing.candidates.map((c) => nameKey(c.name)));
@@ -371,7 +376,7 @@ async function fetchGoogleCivic(address: string): Promise<ElectionPayload[]> {
             election_date: election.electionDay,
             election_type: detectType(election.name),
             level,
-            state: stateRaw,
+            state: state,
             jurisdiction: district || vi.normalizedInput?.city || null,
             name: election.name,
             source: 'google_civic',
