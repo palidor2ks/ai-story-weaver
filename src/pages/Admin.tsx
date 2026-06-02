@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from "react";
+import { Fragment, Suspense, lazy, useState } from "react";
 import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useAdminRole } from "@/hooks/useAdminRole";
@@ -17,7 +17,16 @@ import { BackgroundProcessingProvider } from "@/context/BackgroundProcessingCont
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -58,7 +67,6 @@ const TIERS = ['tier_1', 'tier_2', 'tier_3'];
 const ADMIN_AREAS = [
   {
     label: "Dashboards",
-    placeholder: "Open dashboard",
     items: [
       { value: "coverage", label: "Coverage & Finance Dashboard", Icon: BarChart3 },
       { value: "voting-records", label: "Voting Records", Icon: FileText },
@@ -67,7 +75,6 @@ const ADMIN_AREAS = [
   },
   {
     label: "People",
-    placeholder: "Manage people",
     items: [
       { value: "officials", label: "Static Officials", Icon: Users },
       { value: "overrides", label: "Candidate Overrides", Icon: FileEdit },
@@ -78,7 +85,6 @@ const ADMIN_AREAS = [
   },
   {
     label: "Scoring & Answers",
-    placeholder: "Edit scoring",
     items: [
       { value: "parties", label: "Party Answers", Icon: Building2 },
       { value: "scores", label: "Score Fixes", Icon: BarChart3 },
@@ -90,7 +96,6 @@ const ADMIN_AREAS = [
   },
   {
     label: "Finance Data",
-    placeholder: "Manage finance",
     items: [
       { value: "donor-aliases", label: "Donor Aliases", Icon: DollarSign },
       { value: "donor-import", label: "Donor Import", Icon: Upload },
@@ -101,7 +106,6 @@ const ADMIN_AREAS = [
   },
   {
     label: "Platform",
-    placeholder: "Platform tools",
     items: [
       { value: "visible-states", label: "Visible States", Icon: Shield },
     ],
@@ -543,27 +547,26 @@ export default function Admin() {
           <CardHeader>
             <CardTitle>Admin Areas</CardTitle>
             <CardDescription>
-              Each area has its own drop-down. The Coverage & Finance Dashboard opens by default.
+              Use one menu to jump between dashboards, people tools, scoring workflows, finance data, and platform settings.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {ADMIN_AREAS.map((area) => {
-                const selectedInArea = area.items.some((item) => item.value === activeTab);
-
-                return (
-                  <div key={area.label} className="space-y-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {area.label}
-                    </Label>
-                    <Select
-                      value={selectedInArea ? activeTab : undefined}
-                      onValueChange={setActiveTab}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={area.placeholder} />
-                      </SelectTrigger>
-                      <SelectContent>
+            <div className="max-w-xl space-y-2">
+              <Label
+                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                htmlFor="admin-area-select"
+              >
+                Admin area
+              </Label>
+              <Select value={activeTab} onValueChange={setActiveTab}>
+                <SelectTrigger id="admin-area-select">
+                  <SelectValue placeholder="Choose an admin area" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ADMIN_AREAS.map((area, areaIndex) => (
+                    <Fragment key={area.label}>
+                      <SelectGroup>
+                        <SelectLabel>{area.label}</SelectLabel>
                         {area.items.map(({ value, label, Icon }) => (
                           <SelectItem key={value} value={value}>
                             <span className="flex items-center gap-2">
@@ -572,11 +575,12 @@ export default function Admin() {
                             </span>
                           </SelectItem>
                         ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                );
-              })}
+                      </SelectGroup>
+                      {areaIndex < ADMIN_AREAS.length - 1 && <SelectSeparator />}
+                    </Fragment>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
