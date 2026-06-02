@@ -30,7 +30,7 @@ interface FlaggedBill {
   ai_detected_topics: string[] | null;
   omnibus_type: string | null;
   summary: string | null;
-  last_action_date: string | null;
+  latest_action_date: string | null;
   reviewed_at: string | null;
 }
 
@@ -54,10 +54,10 @@ export default function TopicReviewPanel() {
     queryFn: async () => {
       let query = supabase
         .from('bills')
-        .select('id, name, topic, additional_topics, topic_flag, ai_detected_topics, omnibus_type, summary, last_action_date, reviewed_at')
+        .select('id, name, topic, additional_topics, topic_flag, ai_detected_topics, omnibus_type, summary, latest_action_date, reviewed_at')
         .not('topic_flag', 'is', null)
         .is('reviewed_at', null)
-        .order('last_action_date', { ascending: false })
+        .order('latest_action_date', { ascending: false })
         .limit(200);
       
       if (filterType !== 'all') {
@@ -574,7 +574,7 @@ export default function TopicReviewPanel() {
                       </TableCell>
                       <TableCell>{getFlagBadge(bill.topic_flag)}</TableCell>
                       <TableCell className="text-sm">
-                        {bill.last_action_date ? format(new Date(bill.last_action_date), 'MMM d, yyyy') : '-'}
+                        {bill.latest_action_date ? format(new Date(bill.latest_action_date), 'MMM d, yyyy') : '-'}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">

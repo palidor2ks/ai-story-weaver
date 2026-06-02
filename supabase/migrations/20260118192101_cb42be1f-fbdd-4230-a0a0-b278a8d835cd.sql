@@ -1,3 +1,6 @@
+-- Drop first to allow the signature change (new column set vs. prior version).
+DROP FUNCTION IF EXISTS public.get_contribution_totals_by_committee(text, text);
+
 CREATE OR REPLACE FUNCTION public.get_contribution_totals_by_committee(p_committee_id text, p_cycle text)
  RETURNS TABLE(itemized_total bigint, itemized_gross bigint, individual_itemized bigint, individual_gross bigint, pac_total bigint, party_total bigint, organization_total bigint, transfers_total bigint, other_total bigint, earmarked_total bigint, memo_x_total bigint, loans_total bigint, donor_count bigint, contribution_count bigint)
  LANGUAGE plpgsql

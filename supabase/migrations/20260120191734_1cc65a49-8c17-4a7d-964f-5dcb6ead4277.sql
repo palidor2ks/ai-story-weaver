@@ -1,3 +1,6 @@
+-- Drop first to allow changing from bigint columns to numeric with a different column set.
+DROP FUNCTION IF EXISTS public.get_contribution_totals(text, text);
+
 -- Fix NULL handling in pass-through detection for get_contribution_totals
 CREATE OR REPLACE FUNCTION public.get_contribution_totals(p_candidate_id text, p_cycle text)
  RETURNS TABLE(individual_total numeric, organization_total numeric, pac_total numeric, party_total numeric, transfer_total numeric, loan_total numeric, other_total numeric, earmarked_total numeric, memo_x_total numeric, conduit_excluded numeric, pass_through_excluded numeric)
