@@ -41,57 +41,108 @@ const EMPTY: UpcomingElectionsResult = { federal: [], state: [], local: [] };
 
 const MAX_LOOKAHEAD_DAYS = 550;
 
+function toElectionTime(date: string): number {
+  const t = new Date(`${date}T00:00:00`).getTime();
+  return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
+}
+
+function normalizeNameKey(name: string): string {
+  return (name || '')
+    .toLowerCase()
+    .replace(/[,.]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter((token) => token && !['jr', 'sr', 'ii', 'iii', 'iv', 'mr', 'mrs', 'ms', 'dr'].includes(token))
+    .sort()
+    .join(' ');
+}
+
+function normalizeDistrictKey(district: string | null | undefined): string {
+  return String(district || '').replace(/^0+/, '').toLowerCase();
+}
+
+function officeBucket(office: string): string {
+  const value = (office || '').toLowerCase();
+  if (/president|white house/.test(value)) return 'president';
+  if (/governor/.test(value)) return 'governor';
+  if (/state\s+senate|state senator/.test(value)) return 'state-senate';
+  if (/state\s+(assembly|house|representative|delegate|legislature)/.test(value)) return 'state-house';
+  if (/u\.?s\.?\s+senate|us senate|senator/.test(value)) return 'senate';
+  if (/u\.?s\.?\s+house|us house|congress|representative/.test(value)) return 'house';
+  if (/mayor/.test(value)) return 'mayor';
+  if (/council|alder|select(wo)?man|commissioner|freeholder/.test(value)) return 'local-council';
+  return value.replace(/\s+/g, ' ').trim() || 'other';
+}
+
+function candidatePersonKey(candidate: UpcomingCandidate): string {
+  return [
+    normalizeNameKey(candidate.name),
+    (candidate.state || '').toLowerCase(),
+    officeBucket(candidate.office),
+    normalizeDistrictKey(candidate.district),
+  ].join('|');
+}
+
+function chooseCandidate(current: UpcomingCandidate, next: UpcomingCandidate): UpcomingCandidate {
+  const currentRank = Number(current.image_url ? 1 : 0) + Number(!current.is_pending_research ? 2 : 0) + Number(current.overall_score !== null ? 4 : 0);
+  const nextRank = Number(next.image_url ? 1 : 0) + Number(!next.is_pending_research ? 2 : 0) + Number(next.overall_score !== null ? 4 : 0);
+  return nextRank > currentRank ? next : current;
+}
+
+function dedupeCandidates(candidates: UpcomingCandidate[]): UpcomingCandidate[] {
+  const byPerson = new Map<string, UpcomingCandidate>();
+  for (const candidate of candidates) {
+    const key = candidatePersonKey(candidate);
+    const existing = byPerson.get(key);
+    byPerson.set(key, existing ? chooseCandidate(existing, candidate) : candidate);
+  }
+  return Array.from(byPerson.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function normalizeUpcomingElections(data: UpcomingElectionsResult): UpcomingElectionsResult {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const maxDate = new Date(today);
   maxDate.setDate(maxDate.getDate() + MAX_LOOKAHEAD_DAYS);
 
-  const toTime = (date: string) => {
-    const t = new Date(`${date}T00:00:00`).getTime();
-    return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
-  };
+  const allRows = [...data.federal, ...data.state, ...data.local]
+    .filter((row) => {
+      const d = new Date(`${row.election_date}T00:00:00`);
+      return d >= today && d <= maxDate;
+    })
+    .sort((a, b) => toElectionTime(a.election_date) - toElectionTime(b.election_date));
 
-  const filterAndDedupe = (rows: UpcomingElection[]) => {
-    const filtered = rows
-      .filter((row) => {
-        const d = new Date(`${row.election_date}T00:00:00`);
-        return d >= today && d <= maxDate;
-      })
-      .sort((a, b) => toTime(a.election_date) - toTime(b.election_date));
+  const nextDate = allRows[0]?.election_date;
+  if (!nextDate) return EMPTY;
 
-    const byRace = new Map<string, UpcomingElection>();
-    for (const row of filtered) {
-      for (const c of row.candidates) {
-        const raceKey = [
-          c.office.toLowerCase(),
-          (c.state || row.state || '').toLowerCase(),
-          (c.district || row.jurisdiction || '').toLowerCase(),
-          row.election_type.toLowerCase(),
-        ].join('|');
-
-        if (!byRace.has(raceKey)) byRace.set(raceKey, row);
-      }
-    }
-
-    const allowedIds = new Set(Array.from(byRace.values()).map((r) => r.id));
-    return filtered.filter((r) => allowedIds.has(r.id));
-  };
+  const seenRaces = new Set<string>();
+  const nextRows = allRows
+    .filter((row) => row.election_date === nextDate)
+    .map((row) => ({ ...row, candidates: dedupeCandidates(row.candidates) }))
+    .filter((row) => row.candidates.length > 0)
+    .filter((row) => {
+      const offices = Array.from(new Set(row.candidates.map((c) => officeBucket(c.office)))).sort().join(',');
+      const parties = Array.from(new Set(row.candidates.map((c) => c.party))).sort().join(',');
+      const raceKey = [row.election_date, row.election_type.toLowerCase(), row.level, row.jurisdiction ?? '', offices, parties].join('|').toLowerCase();
+      if (seenRaces.has(raceKey)) return false;
+      seenRaces.add(raceKey);
+      return true;
+    });
 
   return {
-    federal: filterAndDedupe(data.federal),
-    state: filterAndDedupe(data.state),
-    local: filterAndDedupe(data.local),
+    federal: nextRows.filter((e) => e.level === 'federal'),
+    state: nextRows.filter((e) => e.level === 'state'),
+    local: nextRows.filter((e) => e.level === 'local'),
   };
 }
-
 export function useUpcomingElections(address: string | null | undefined) {
   const geocodeQuery = useGeocode(address);
   const geocode = geocodeQuery.data;
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const queryKey = ['upcoming-elections', geocode?.state, geocode?.district, 'v1'];
+  const queryKey = ['upcoming-elections', geocode?.state, geocode?.district, 'next-election-v2'];
 
   const query = useQuery({
     queryKey,

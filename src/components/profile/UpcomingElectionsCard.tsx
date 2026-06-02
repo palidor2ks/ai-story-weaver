@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Vote, Calendar, MapPin, ChevronRight, RefreshCw } from 'lucide-react';
+import { Vote, Calendar, ChevronRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useUpcomingElections, type UpcomingCandidate, type UpcomingElection } from '@/hooks/useUpcomingElections';
 import { ScoreText } from '@/components/ScoreText';
@@ -23,6 +23,64 @@ const PARTY_BADGE: Record<string, string> = {
   Independent: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30',
   Other: 'bg-muted text-muted-foreground border-border',
 };
+
+const OFFICE_LABELS: Record<string, string> = {
+  president: 'President',
+  governor: 'Governor',
+  senate: 'Senator',
+  house: 'House Representative',
+  'state-senate': 'State Senator',
+  'state-house': 'State Representative',
+  mayor: 'Mayor',
+  'local-council': 'Local Council',
+};
+
+const OFFICE_ORDER = ['president', 'senate', 'house', 'governor', 'state-senate', 'state-house', 'mayor', 'local-council'];
+
+function officeBucket(office: string): string {
+  const value = (office || '').toLowerCase();
+  if (/president|white house/.test(value)) return 'president';
+  if (/governor/.test(value)) return 'governor';
+  if (/state\s+senate|state senator/.test(value)) return 'state-senate';
+  if (/state\s+(assembly|house|representative|delegate|legislature)/.test(value)) return 'state-house';
+  if (/u\.?s\.?\s+senate|us senate|senator/.test(value)) return 'senate';
+  if (/u\.?s\.?\s+house|us house|congress|representative/.test(value)) return 'house';
+  if (/mayor/.test(value)) return 'mayor';
+  if (/council|alder|select(wo)?man|commissioner|freeholder/.test(value)) return 'local-council';
+  return value.replace(/\s+/g, ' ').trim() || 'other';
+}
+
+function officeLabel(office: string): string {
+  const bucket = officeBucket(office);
+  return OFFICE_LABELS[bucket] ?? office;
+}
+
+function normalizeNameKey(name: string): string {
+  return (name || '')
+    .toLowerCase()
+    .replace(/[,.]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter((token) => token && !['jr', 'sr', 'ii', 'iii', 'iv', 'mr', 'mrs', 'ms', 'dr'].includes(token))
+    .sort()
+    .join(' ');
+}
+
+function candidateKey(candidate: UpcomingCandidate): string {
+  return [
+    normalizeNameKey(candidate.name),
+    (candidate.state || '').toLowerCase(),
+    officeBucket(candidate.office),
+    String(candidate.district || '').replace(/^0+/, '').toLowerCase(),
+  ].join('|');
+}
+
+function chooseCandidate(current: UpcomingCandidate, next: UpcomingCandidate): UpcomingCandidate {
+  const currentRank = Number(current.image_url ? 1 : 0) + Number(!current.is_pending_research ? 2 : 0) + Number(current.overall_score !== null ? 4 : 0);
+  const nextRank = Number(next.image_url ? 1 : 0) + Number(!next.is_pending_research ? 2 : 0) + Number(next.overall_score !== null ? 4 : 0);
+  return nextRank > currentRank ? next : current;
+}
 
 function formatDate(iso: string): string {
   const d = new Date(iso + 'T00:00:00');
@@ -68,36 +126,153 @@ function CandidateRow({ c, ieMap }: { c: UpcomingCandidate; ieMap?: IETotalsMap 
   );
 }
 
-function ElectionGroup({ election, onOpen, ieMap }: { election: UpcomingElection; onOpen: (e: UpcomingElection) => void; ieMap?: IETotalsMap }) {
-  // Group candidates by office within this election.
-  const byOffice = new Map<string, UpcomingCandidate[]>();
-  for (const c of election.candidates) {
-    if (!byOffice.has(c.office)) byOffice.set(c.office, []);
-    byOffice.get(c.office)!.push(c);
+interface RaceGroup {
+  key: string;
+  label: string;
+  election: UpcomingElection;
+  candidates: UpcomingCandidate[];
+}
+
+interface OfficeGroup {
+  key: string;
+  label: string;
+  races: RaceGroup[];
+}
+
+function electionTypeLabel(type: string): string {
+  const value = (type || '').replace(/[_-]+/g, ' ').trim();
+  if (!value) return 'Election';
+  return value.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function racePartyLabel(candidates: UpcomingCandidate[]): string | null {
+  const parties = Array.from(new Set(candidates.map((candidate) => candidate.party).filter(Boolean)));
+  if (parties.length !== 1) return null;
+  const [party] = parties;
+  return ['Democrat', 'Republican', 'Independent'].includes(party) ? party : null;
+}
+
+function raceLabel(election: UpcomingElection, candidates: UpcomingCandidate[]): string {
+  const party = racePartyLabel(candidates);
+  const type = electionTypeLabel(election.election_type);
+  if (party && /primary/i.test(type)) return `${party} Primary`;
+  if (party && /runoff/i.test(type)) return `${party} Runoff`;
+  return election.name || type;
+}
+
+function raceKey(election: UpcomingElection, officeKey: string, candidates: UpcomingCandidate[]): string {
+  const parties = Array.from(new Set(candidates.map((candidate) => candidate.party))).sort().join(',');
+  return [election.election_date, election.election_type, election.level, election.jurisdiction ?? '', officeKey, parties].join('|').toLowerCase();
+}
+
+function buildOfficeGroups(elections: UpcomingElection[]): OfficeGroup[] {
+  const officeGroups = new Map<string, OfficeGroup>();
+
+  for (const election of elections) {
+    const candidatesByOffice = new Map<string, UpcomingCandidate[]>();
+
+    for (const candidate of election.candidates) {
+      const officeKey = officeBucket(candidate.office);
+      const officeCandidates = candidatesByOffice.get(officeKey) ?? [];
+      const existingIndex = officeCandidates.findIndex((existing) => candidateKey(existing) === candidateKey(candidate));
+      if (existingIndex === -1) {
+        officeCandidates.push(candidate);
+      } else {
+        officeCandidates[existingIndex] = chooseCandidate(officeCandidates[existingIndex], candidate);
+      }
+      candidatesByOffice.set(officeKey, officeCandidates);
+    }
+
+    for (const [officeKey, candidates] of candidatesByOffice.entries()) {
+      const sortedCandidates = candidates.sort((a, b) => a.name.localeCompare(b.name));
+      const officeGroup = officeGroups.get(officeKey) ?? {
+        key: officeKey,
+        label: officeLabel(sortedCandidates[0]?.office ?? officeKey),
+        races: [],
+      };
+      const key = raceKey(election, officeKey, sortedCandidates);
+      const existingRace = officeGroup.races.find((race) => race.key === key);
+
+      if (existingRace) {
+        for (const candidate of sortedCandidates) {
+          const existingIndex = existingRace.candidates.findIndex((existing) => candidateKey(existing) === candidateKey(candidate));
+          if (existingIndex === -1) {
+            existingRace.candidates.push(candidate);
+          } else {
+            existingRace.candidates[existingIndex] = chooseCandidate(existingRace.candidates[existingIndex], candidate);
+          }
+        }
+        existingRace.candidates.sort((a, b) => a.name.localeCompare(b.name));
+      } else {
+        officeGroup.races.push({
+          key,
+          label: raceLabel(election, sortedCandidates),
+          election,
+          candidates: sortedCandidates,
+        });
+      }
+
+      officeGroups.set(officeKey, officeGroup);
+    }
   }
 
+  return Array.from(officeGroups.values())
+    .map((group) => ({
+      ...group,
+      races: group.races.sort((a, b) => a.label.localeCompare(b.label)),
+    }))
+    .sort((a, b) => {
+      const aIndex = OFFICE_ORDER.indexOf(a.key);
+      const bIndex = OFFICE_ORDER.indexOf(b.key);
+      if (aIndex !== -1 || bIndex !== -1) return (aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex) - (bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex);
+      return a.label.localeCompare(b.label);
+    });
+}
+
+function NextElectionBallot({ elections, onOpen, ieMap }: { elections: UpcomingElection[]; onOpen: (e: UpcomingElection) => void; ieMap?: IETotalsMap }) {
+  const sortedElections = [...elections].sort((a, b) => a.election_date.localeCompare(b.election_date));
+  const electionDate = sortedElections[0]?.election_date;
+  const officeGroups = buildOfficeGroups(sortedElections);
+  const names = Array.from(new Set(sortedElections.map((e) => e.name))).join(' • ');
+
   return (
-    <div className="space-y-3">
-      <button
-        type="button"
-        onClick={() => {
-          onOpen(election);
-          logBadgeEvent('election_viewed', { election_id: election.id, name: election.name });
-        }}
-        className="w-full flex items-center gap-2 text-sm font-semibold text-foreground text-left rounded-md px-2 py-1 -mx-2 hover:bg-accent/40 transition-colors group"
-      >
-        <Calendar className="w-4 h-4 text-muted-foreground" />
-        <span>{formatDate(election.election_date)}</span>
-        <span className="text-muted-foreground font-normal">— {election.name}</span>
-        <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto group-hover:translate-x-0.5 transition-transform" />
-      </button>
-      {Array.from(byOffice.entries()).map(([office, cands]) => (
-        <div key={office} className="space-y-1.5 pl-6">
-          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{office}</div>
-          <div className="space-y-1.5">
-            {cands.map(c => <CandidateRow key={c.candidate_id} c={c} ieMap={ieMap} />)}
+    <div className="space-y-4">
+      {electionDate ? (
+        <div className="flex items-start gap-2 text-sm text-foreground">
+          <Calendar className="w-4 h-4 text-muted-foreground mt-0.5" />
+          <div className="min-w-0">
+            <div className="font-semibold">{formatDate(electionDate)}</div>
+            {names ? <div className="text-muted-foreground">{names}</div> : null}
           </div>
         </div>
+      ) : null}
+
+      {officeGroups.map((group) => (
+        <section key={group.key} className="space-y-2">
+          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{group.label}</h4>
+          <div className="space-y-3">
+            {group.races.map((race) => (
+              <div key={race.key} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2 pl-1">
+                  <div className="text-xs font-medium text-muted-foreground">{race.label}</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpen(race.election);
+                      logBadgeEvent('election_viewed', { election_id: race.election.id, name: race.election.name });
+                    }}
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Details <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {race.candidates.map((candidate) => <CandidateRow key={candidateKey(candidate)} c={candidate} ieMap={ieMap} />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       ))}
     </div>
   );
@@ -166,32 +341,11 @@ export function UpcomingElectionsCard({ address }: Props) {
               No upcoming elections found for your address yet. Check back closer to election day.
             </p>
           ) : (
-            <div className="space-y-6">
-              {data?.federal.length ? (
-                <section className="space-y-4">
-                  <h4 className="text-sm font-semibold text-muted-foreground">Federal</h4>
-                  {data.federal.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} ieMap={ieMap} />)}
-                </section>
-              ) : null}
-              {data?.state.length ? (
-                <section className="space-y-4">
-                  <h4 className="text-sm font-semibold text-muted-foreground">State</h4>
-                  {data.state.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} ieMap={ieMap} />)}
-                </section>
-              ) : null}
-              {data?.local.length ? (
-                <section className="space-y-4">
-                  <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5" /> Local
-                  </h4>
-                  {data.local.map(e => <ElectionGroup key={e.id} election={e} onOpen={setOpenElection} ieMap={ieMap} />)}
-                </section>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">
-                  Local race coverage is limited — typically only available in the weeks leading up to an election.
-                </p>
-              )}
-            </div>
+            <NextElectionBallot
+              elections={[...(data?.federal ?? []), ...(data?.state ?? []), ...(data?.local ?? [])]}
+              onOpen={setOpenElection}
+              ieMap={ieMap}
+            />
           )}
         </CardContent>
       </Card>
