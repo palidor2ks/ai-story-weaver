@@ -27,10 +27,6 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.backfill-conduit-committees]
     verify_jwt = false
-  [functions.backfill-vote-chambers]
-    verify_jwt = false
-  [functions.backfill-vote-congress-numbers]
-    verify_jwt = false
   [functions.batch-populate-answers]
     verify_jwt = false
   [functions.batch-regenerate-answers]
