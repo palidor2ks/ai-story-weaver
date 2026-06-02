@@ -4460,6 +4460,13 @@ export type Database = {
         Args: { p_error: string; p_id: string; p_retry_delay_seconds?: number }
         Returns: undefined
       }
+      get_admin_user_last_signins: {
+        Args: never
+        Returns: {
+          last_sign_in_at: string
+          user_id: string
+        }[]
+      }
       get_committee_cycles: { Args: never; Returns: string[] }
       get_contribution_totals: {
         Args: { p_candidate_id: string; p_cycle: string }

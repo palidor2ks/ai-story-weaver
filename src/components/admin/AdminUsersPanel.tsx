@@ -89,6 +89,22 @@ export function AdminUsersPanel() {
     },
   });
 
+  const { data: lastSignins } = useQuery({
+    queryKey: ["admin", "user_last_signins"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_admin_user_last_signins");
+      if (error) throw error;
+      return (data || []) as { user_id: string; last_sign_in_at: string | null }[];
+    },
+    staleTime: 1000 * 60,
+  });
+
+  const lastSigninMap = useMemo(() => {
+    const m = new Map<string, string | null>();
+    (lastSignins || []).forEach((r) => m.set(r.user_id, r.last_sign_in_at));
+    return m;
+  }, [lastSignins]);
+
   const roleMap = useMemo(() => {
     const m = new Map<string, string[]>();
     (roles || []).forEach((r) => {
@@ -212,13 +228,14 @@ export function AdminUsersPanel() {
                     <TableHead>Verified</TableHead>
                     <TableHead>Score</TableHead>
                     <TableHead>Joined</TableHead>
+                    <TableHead>Last login</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pageRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                         No users match these filters.
                       </TableCell>
                     </TableRow>
@@ -267,6 +284,12 @@ export function AdminUsersPanel() {
                           <TableCell>{p.overall_score?.toFixed?.(2) ?? "—"}</TableCell>
                           <TableCell className="text-muted-foreground text-xs">
                             {new Date(p.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs">
+                            {(() => {
+                              const ts = lastSigninMap.get(p.id);
+                              return ts ? new Date(ts).toLocaleDateString() : "—";
+                            })()}
                           </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             {p.id === user?.id ? (
