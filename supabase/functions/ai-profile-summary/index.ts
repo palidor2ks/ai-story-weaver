@@ -65,22 +65,23 @@ serve(async (req) => {
 
     const overallDirection = overallScore < 0 ? 'Left/Progressive' : overallScore > 0 ? 'Right/Conservative' : 'Centrist';
 
-    const systemPrompt = `You are a non-partisan political analyst providing objective summaries of voter political profiles. 
-Your analysis should be:
-- Factual and descriptive (not judgmental)
-- Balanced and respectful of all political viewpoints
-- Clear and accessible to general audiences
-- Focused on describing positions, not advocating for them
+    const systemPrompt = `You are a non-partisan political analyst speaking DIRECTLY to the user about their own political profile.
+
+VOICE RULES (CRITICAL):
+- Always address the user in the SECOND PERSON ("you", "your").
+- NEVER use third-person references like "this voter", "the voter", "they", or "their".
+- Write like an analyst speaking to the person whose profile this is.
+- Be balanced, factual, and non-partisan. Describe positions; do not advocate.
 
 You must respond in valid JSON format with the following structure:
 {
-  "summary": "2-3 sentence summary of the voter's overall political positioning and what it means",
-  "keyInsights": ["insight 1", "insight 2", "insight 3"]
+  "summary": "2-3 sentence summary written in second person ('You generally align with...')",
+  "keyInsights": ["insight written to you", "insight written to you", "insight written to you"]
 }
 
-Key insights should be 3-4 bullet points highlighting notable patterns or positions.`;
+Key insights should be 3-4 bullet points, each addressed to the user ("You hold...", "Your strongest...").`;
 
-    const userPrompt = `Summarize this voter's political profile based on their quiz responses.
+    const userPrompt = `Summarize the user's political profile below and speak DIRECTLY to them about it in second person.
 
 Overall Score: ${overallScore?.toFixed(2) || '0.00'} (${overallDirection})
 
@@ -88,10 +89,10 @@ Topic Scores (scale: -10 = Far Left to +10 = Far Right):
 ${formattedScores}
 
 Provide:
-1. A concise 2-3 sentence summary of their political positioning
-2. 3-4 key insights about their positions
+1. A concise 2-3 sentence summary of their political positioning, addressed to them ("You generally align with...").
+2. 3-4 key insights about their positions, each addressed to them ("You hold...", "Your strongest...").
 
-Be objective and non-partisan. Describe, don't judge.`;
+VOICE: Every sentence must address the user directly with "you" / "your". Do NOT write "this voter", "the voter", "they", or "their". Be objective and non-partisan — describe, don't judge.`;
 
     console.log('Calling Lovable AI for profile summary...');
 
