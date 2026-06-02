@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags, CheckCircle2, Upload, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -53,6 +53,60 @@ const LEVELS = [
 
 const PARTIES = ['Democrat', 'Republican', 'Independent', 'Other'] as const;
 const TIERS = ['tier_1', 'tier_2', 'tier_3'];
+
+
+const ADMIN_AREAS = [
+  {
+    label: "Dashboards",
+    placeholder: "Open dashboard",
+    items: [
+      { value: "coverage", label: "Coverage & Finance Dashboard", Icon: BarChart3 },
+      { value: "voting-records", label: "Voting Records", Icon: FileText },
+      { value: "polls", label: "Polls", Icon: Sparkles },
+    ],
+  },
+  {
+    label: "People",
+    placeholder: "Manage people",
+    items: [
+      { value: "officials", label: "Static Officials", Icon: Users },
+      { value: "overrides", label: "Candidate Overrides", Icon: FileEdit },
+      { value: "claims", label: "Profile Claims", Icon: UserCheck },
+      { value: "duplicates", label: "Duplicate Persons", Icon: Users },
+      { value: "users", label: "Users", Icon: Users },
+    ],
+  },
+  {
+    label: "Scoring & Answers",
+    placeholder: "Edit scoring",
+    items: [
+      { value: "parties", label: "Party Answers", Icon: Building2 },
+      { value: "scores", label: "Score Fixes", Icon: BarChart3 },
+      { value: "questions", label: "Questions", Icon: HelpCircle },
+      { value: "evidence", label: "Evidence Review", Icon: AlertTriangle },
+      { value: "topic-review", label: "Topic Review", Icon: Tags },
+      { value: "bulk-validation", label: "Bulk Validation", Icon: CheckCircle2 },
+    ],
+  },
+  {
+    label: "Finance Data",
+    placeholder: "Manage finance",
+    items: [
+      { value: "donor-aliases", label: "Donor Aliases", Icon: DollarSign },
+      { value: "donor-import", label: "Donor Import", Icon: Upload },
+      { value: "ie-exclusions", label: "IE Exclusions", Icon: AlertTriangle },
+      { value: "committee-topics", label: "Committee Topics", Icon: Tags },
+      { value: "committee-aliases", label: "Spender Aliases", Icon: Tags },
+    ],
+  },
+  {
+    label: "Platform",
+    placeholder: "Platform tools",
+    items: [
+      { value: "visible-states", label: "Visible States", Icon: Shield },
+    ],
+  },
+];
 
 const EvidenceReviewPanel = lazy(() => import("@/components/admin/EvidenceReviewPanel").then((m) => ({ default: m.EvidenceReviewPanel })));
 const BillSummaryDashboard = lazy(() => import("@/components/admin/BillSummaryDashboard").then((m) => ({ default: m.BillSummaryDashboard })));
@@ -104,7 +158,7 @@ export default function Admin() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingOfficial, setEditingOfficial] = useState<StaticOfficial | null>(null);
   const [formData, setFormData] = useState<OfficialFormData>(defaultFormData);
-  const [activeTab, setActiveTab] = useState("officials");
+  const [activeTab, setActiveTab] = useState("coverage");
   const [ieHistoryRefresh, setIeHistoryRefresh] = useState(0);
   const [scrapingPiscataway, setScrapingPiscataway] = useState(false);
   const queryClient = useQueryClient();
@@ -251,17 +305,14 @@ export default function Admin() {
       <Header />
       
       <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between gap-6 mb-8">
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Users className="h-8 w-8 text-primary" />
-              Manage Politicians
+              <Shield className="h-8 w-8 text-primary" />
+              Admin Console
             </h1>
             <p className="text-muted-foreground mt-1">
-              Manage officials without API coverage (President/VP, local officials)
-            </p>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Note: State legislators and governors are fetched automatically from Open States API
+              Use the area drop-downs to jump between dashboards, people tools, scoring workflows, finance data, and platform settings.
             </p>
           </div>
           
@@ -473,7 +524,7 @@ export default function Admin() {
           </Dialog>
         </div>
 
-        <div className="mb-4">
+        <div className="mb-6 flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">
             <Link to="/admin/x-composer">Post to X</Link>
           </Button>
@@ -488,52 +539,52 @@ export default function Admin() {
           </Button>
         </div>
 
-        <AnswerCoveragePanel />
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Admin Areas</CardTitle>
+            <CardDescription>
+              Each area has its own drop-down. The Coverage & Finance Dashboard opens by default.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              {ADMIN_AREAS.map((area) => {
+                const selectedInArea = area.items.some((item) => item.value === activeTab);
 
-        {(() => null)()}
+                return (
+                  <div key={area.label} className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {area.label}
+                    </Label>
+                    <Select
+                      value={selectedInArea ? activeTab : undefined}
+                      onValueChange={setActiveTab}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={area.placeholder} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {area.items.map(({ value, label, Icon }) => (
+                          <SelectItem key={value} value={value}>
+                            <span className="flex items-center gap-2">
+                              <Icon className="h-4 w-4" />
+                              {value === "overrides" ? `${label} (${overrides?.length || 0})` : label}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          {(() => {
-            const ADMIN_TABS = [
-              { value: "officials", label: "Static Officials", Icon: Users },
-              { value: "overrides", label: `Overrides (${overrides?.length || 0})`, Icon: FileEdit },
-              { value: "claims", label: "Claims", Icon: UserCheck },
-              { value: "parties", label: "Party Answers", Icon: Building2 },
-              { value: "scores", label: "Score Fixes", Icon: BarChart3 },
-              { value: "donor-aliases", label: "Donor Aliases", Icon: DollarSign },
-              { value: "questions", label: "Questions", Icon: HelpCircle },
-              { value: "evidence", label: "Evidence Review", Icon: AlertTriangle },
-              { value: "voting-records", label: "Voting Records", Icon: FileText },
-              { value: "topic-review", label: "Topic Review", Icon: Tags },
-              { value: "bulk-validation", label: "Bulk Validation", Icon: CheckCircle2 },
-              { value: "donor-import", label: "Donor Import", Icon: Upload },
-              { value: "polls", label: "Polls", Icon: Sparkles },
-              { value: "ie-exclusions", label: "IE Exclusions", Icon: AlertTriangle },
-              { value: "committee-topics", label: "Committee Topics", Icon: Tags },
-              { value: "committee-aliases", label: "Spender Aliases", Icon: Tags },
-              { value: "visible-states", label: "Visible States", Icon: Shield },
-              { value: "duplicates", label: "Duplicate Persons", Icon: Users },
-              { value: "users", label: "Users", Icon: Users },
-            ];
-            return (
-              <div className="mb-6 max-w-xs">
-                <Select value={activeTab} onValueChange={setActiveTab}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a section" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ADMIN_TABS.map(({ value, label, Icon }) => (
-                      <SelectItem key={value} value={value}>
-                        <span className="flex items-center gap-2">
-                          <Icon className="h-4 w-4" />
-                          {label}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            );
-          })()}
+          <TabsContent value="coverage">
+            <AnswerCoveragePanel />
+          </TabsContent>
 
           <TabsContent value="visible-states">
             <HiddenStatesPanel />
