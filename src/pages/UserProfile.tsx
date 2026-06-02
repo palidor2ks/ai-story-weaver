@@ -538,6 +538,17 @@ export const UserProfile = () => {
           </CardContent>
         </Card>
 
+        <Tabs defaultValue="ai-analysis" className="w-full">
+          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap mb-6">
+            <TabsTrigger value="ai-analysis">AI Analysis</TabsTrigger>
+            <TabsTrigger value="party-alignment">Party Alignment</TabsTrigger>
+            <TabsTrigger value="representatives">Representatives</TabsTrigger>
+            <TabsTrigger value="elections">Upcoming Elections</TabsTrigger>
+            <TabsTrigger value="badges">Badges</TabsTrigger>
+            <TabsTrigger value="topics">Priority Topics</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="ai-analysis">
         {/* AI Analysis Summary */}
         <Card className="mb-8 shadow-elevated">
           <CardHeader>
