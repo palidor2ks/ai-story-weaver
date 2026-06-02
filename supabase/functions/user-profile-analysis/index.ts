@@ -191,23 +191,26 @@ serve(async (req) => {
         `${ts.topicName}: ${formatScoreForPrompt(ts.score)}`)
       .join('\n');
 
-    const systemPrompt = `You are a non-partisan political analyst providing objective summaries of political positions. 
-Be balanced, factual, and avoid any partisan advocacy. Focus on explaining positions clearly without judgment.
+    const systemPrompt = `You are a non-partisan political analyst speaking DIRECTLY to the user about their own political profile.
 
-CRITICAL: When referencing scores in your analysis, ALWAYS use the L/R format:
+VOICE RULES (CRITICAL):
+- Always address the user in the SECOND PERSON ("you", "your", "you're").
+- NEVER refer to the user in the third person. Do not use "this voter", "the voter", "they", "their", "this user", "the user", or the user's name as a third-person subject.
+- Write like an analyst talking to the person whose profile this is, not a report about them.
+- Stay balanced, factual, and non-partisan. Describe positions; do not advocate.
+
+SCORE FORMAT (CRITICAL): When referencing scores, ALWAYS use L/R format:
 - L = Left/Progressive (e.g., L5, L10)
 - R = Right/Conservative (e.g., R5, R10)
 - CL = Center-Left (e.g., CL2)
 - CR = Center-Right (e.g., CR2)
 - C = Center
-
 NEVER use raw numbers like +5 or -5. Always use L5 or R5 format.
 
-IMPORTANT: Base your analysis ONLY on the user's actual stated positions. Do not make assumptions about their views based on party alignment percentages - those are calculated comparisons, not identities.`;
+Base your analysis ONLY on the user's actual stated positions. Do not assume views from party alignment percentages — those are calculated comparisons, not identities.`;
 
-    const userPrompt = `Analyze this voter's political profile and provide a comprehensive summary.
+    const userPrompt = `Analyze the user's political profile below and speak DIRECTLY to them about it in second person.
 
-User: ${userName || 'Voter'}
 Overall Score: ${formatScoreForPrompt(overallScore)}
 Democratic Party Alignment: ${democratAlignment}%
 Republican Party Alignment: ${republicanAlignment}%
@@ -217,22 +220,21 @@ Libertarian Party Alignment: ${libertarianAlignment}%
 Topic Scores:
 ${topicScoresText}
 
-Please provide:
-1. A 2-3 sentence summary of their overall political philosophy based on their ACTUAL POSITIONS (not party alignment)
-2. 3-4 key insights about their positions (what makes them unique, any interesting patterns)
-3. A brief comparison to the four major party platforms based on documented party positions
+Provide:
+1. A 2-3 sentence summary of their overall political philosophy based on their ACTUAL POSITIONS — addressed to them ("You generally align with...").
+2. 3-4 key insights about their positions — each addressed to them ("You hold...", "Your strongest...").
+3. A brief comparison of their views to the four major party platforms — addressed to them ("Your views most closely match...").
+4. Their strongest positions — phrased to them ("Your strongest position is...").
 
-IMPORTANT: 
-- Base your analysis on the user's stated positions, not assumptions
-- When mentioning any scores, use L/R format (e.g., "L5", "R3", "CL2")
-- Never use raw numbers like +5 or -5
+VOICE: Every sentence must address the user directly. Do NOT write "this voter", "the voter", "they", or "their". Write "you" and "your".
+SCORES: Use L/R format only (e.g., "L5", "R3", "CL2"). Never raw numbers like +5 or -5.
 
 Return your response as JSON with this exact structure:
 {
-  "summary": "2-3 sentence summary of political philosophy",
-  "keyInsights": ["insight 1", "insight 2", "insight 3"],
-  "partyComparison": "2-3 sentences comparing to all four party platforms",
-  "strongestPositions": ["topic where they have strongest views", "another strong position"]
+  "summary": "2-3 sentence summary written in second person ('You...')",
+  "keyInsights": ["insight written to you", "insight written to you", "insight written to you"],
+  "partyComparison": "2-3 sentences written to you comparing your views to all four party platforms",
+  "strongestPositions": ["your strongest position phrased to you", "another strong position phrased to you"]
 }`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

@@ -1,57 +1,26 @@
-## Goal
-Collapse the existing duplicate-rep rows (e.g. three Michele Lombardis) into a single canonical person each, and stop the AI ingestion path from creating new ones.
+# Fix AI Analysis Voice
 
-## Steps
+The "AI Political Analysis" on the profile reads in third-person ("This voter..."), making it feel like a report *about* the user. It should read like an analyst speaking *to* the user ("You generally align with...").
 
-### 1. Smarter office normalization
-Update `normalize_office_key()`:
-- Strip parenthetical suffixes: `town council member, piscataway (ward 4)` → `town council member, piscataway`
-- Collapse `ward\s*\d+` → `ward`
-- Collapse `at[- ]large`, `district\s*\d+` → generic tokens
-- Treat `town council member` / `ward council member` / `council member` as equivalent (map all to `council member`)
-- Strip city prefix that already lives in `state`
+## Scope
 
-Then re-run `resolve_person()` over `candidates`, `static_officials`, `election_candidates` so each row recomputes its `person_id` against the new keys. Many same-name+state variants collapse onto one `person_id` immediately.
+Two edge functions generate this content:
+1. `supabase/functions/user-profile-analysis/index.ts` — the active one (called from `UserProfile.tsx` and `QuizResults.tsx`).
+2. `supabase/functions/ai-profile-summary/index.ts` — legacy/duplicate, also generates same shape. Update for consistency.
 
-### 2. Auto-merge confident pairs
-Add `public.auto_merge_obvious_persons()` (admin-only). For each `(normalized_name, state)` group with >1 person row, pick the winner by provenance:
-1. has `bioguide_id`
-2. has `fec_candidate_id`
-3. has `openstates_id`
-4. has a backing `static_officials` row
-5. oldest `created_at`
+## Changes
 
-Then call `merge_persons(winner, loser)` for every loser. Returns merged count.
+Rewrite the system + user prompts in both functions to:
+- Address the user directly in second person ("you", "your")
+- Forbid third-person references ("this voter", "the voter", "they", "their")
+- Apply to `summary`, `keyInsights`, `partyComparison`, and `strongestPositions`
 
-### 3. AI candidate cleanup RPC
-Add `public.cleanup_redundant_ai_candidates()` (admin-only). Deletes rows from `candidates` where ALL of:
-- `id LIKE 'ai_%'`
-- `fec_candidate_id IS NULL`
-- another roster row (`static_officials` or non-ai `candidates`) shares the same `person_id`
-- the AI row has no `claimed_by_user_id`, no `candidate_answers`, no `candidate_votes`, no `candidate_overrides`
+Example shift:
+- Before: *"This voter generally aligns with Left-leaning policies... their views on environmental matters are more Centrist."*
+- After: *"You generally align with Left-leaning policies... your views on environmental matters are more Centrist."*
 
-Returns deleted count. Safe because dependent data is checked.
+Keep the analyst tone (non-partisan, factual, L/R score format). No UI changes; copy in `UserProfile.tsx` ("AI Political Analysis", "Key Insights") stays as-is since those are labels, not voice.
 
-### 4. Upgrade the Duplicate Persons panel
-Add two buttons at the top:
-- **Run auto-merge** → calls step 2 RPC, refreshes lists, toasts count.
-- **Cleanup AI seed candidates** → calls step 3 RPC, refreshes.
+## Cache note
 
-Plus per-row **"Delete source row"** button on the existing "multiple source rows" list so admins can prune losers manually for the cases auto-merge couldn't decide.
-
-### 5. Ingestion guard
-In the AI candidate-seeding edge function (and any other code path that inserts into `candidates`), before insert:
-- Call `resolve_person(name, state, office, fec_candidate_id)`.
-- If the returned `person_id` already has a `static_officials` row OR a non-ai `candidates` row → skip insert and log.
-- Otherwise proceed.
-
-Prevents the bleed at the source.
-
-## Technical notes
-- Step 1 is a migration: `CREATE OR REPLACE FUNCTION normalize_office_key`, then a one-shot `UPDATE` block that nulls and re-resolves `person_id` on all three roster tables. Orphaned `persons` rows (no more references) are deleted in the same migration.
-- Step 2 and 3 are `SECURITY DEFINER` functions with explicit `has_role(auth.uid(), 'admin')` checks; `GRANT EXECUTE ... TO authenticated`.
-- Step 5 needs to find the seeding edge function — likely `seed-local-candidates` or similar. Will grep `supabase/functions` for inserts into `candidates` with `ai_` IDs and wrap each call site.
-
-## Out of scope
-- Real same-name distinct humans (different `office_key` after normalization). Stay manual via the panel.
-- Reverting an auto-merge — no automated unmerge; admins re-create via the existing Static Officials editor.
+Results are regenerated on demand via the "Refresh" button and aren't persisted as cached strings in a DB column (only invoked live). Existing rendered text on screen will update next time the user loads or refreshes.
