@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Component, Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -74,6 +74,49 @@ interface RouteGuardProps {
   requireVerifiedEmail?: boolean;
 }
 
+const isLazyImportError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Importing a module script failed|Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError/i.test(message);
+};
+
+class ChunkErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    if (!isLazyImportError(error)) return;
+
+    const retryKey = `polipulse:chunk-reload:${window.location.pathname}`;
+    if (!sessionStorage.getItem(retryKey)) {
+      sessionStorage.setItem(retryKey, "1");
+      window.location.reload();
+    }
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+
+    return (
+      <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+        <section className="max-w-md text-center space-y-4">
+          <h1 className="text-2xl font-semibold">Refresh needed</h1>
+          <p className="text-muted-foreground">A new version is available. Refresh to continue.</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Refresh
+          </button>
+        </section>
+      </main>
+    );
+  }
+}
+
 const RouteGuard = ({ children, requireAuth = true, requireOnboarding = false, requireVerifiedEmail = true }: RouteGuardProps) => {
   const { user, loading: authLoading } = useAuth();
   const { data: hasCompleted, isLoading: onboardingLoading } = useHasCompletedOnboarding();
@@ -88,8 +131,9 @@ const RouteGuard = ({ children, requireAuth = true, requireOnboarding = false, r
 };
 
 const AppRoutes = () => (
-  <Suspense fallback={<LoadingScreen />}>
-    <Routes>
+  <ChunkErrorBoundary>
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
       <Route path="/auth" element={<Auth />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
@@ -126,8 +170,9 @@ const AppRoutes = () => (
       <Route path="/blog" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Blog /></RouteGuard>} />
       <Route path="/jobs" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Jobs /></RouteGuard>} />
       <Route path="*" element={<NotFound />} />
-    </Routes>
-  </Suspense>
+      </Routes>
+    </Suspense>
+  </ChunkErrorBoundary>
 );
 
 const App = () => (
