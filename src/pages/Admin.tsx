@@ -511,6 +511,7 @@ export default function Admin() {
               { value: "committee-topics", label: "Committee Topics", Icon: Tags },
               { value: "committee-aliases", label: "Spender Aliases", Icon: Tags },
               { value: "visible-states", label: "Visible States", Icon: Shield },
+              { value: "duplicates", label: "Duplicate Persons", Icon: Users },
               { value: "users", label: "Users", Icon: Users },
             ];
             return (
