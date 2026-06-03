@@ -1,0 +1,37 @@
+name: Lighthouse
+
+# Manual, on-demand Lighthouse run against the public pages (which render without
+# auth). Builds the app, serves the production preview, and runs Lighthouse 3x per
+# URL, uploading reports to temporary public storage (links printed in the run log).
+# Use this to track real LCP/INP/CLS on the pages the page-load work targeted.
+#
+# Config (URLs, runs, settings) lives in .lighthouserc.json. The committed .env
+# supplies the public Supabase URL + anon key, so the pages load real data.
+on:
+  workflow_dispatch:
+  # Also run when the Lighthouse setup itself changes, so the config stays valid.
+  pull_request:
+    paths:
+      - ".lighthouserc.json"
+      - ".github/workflows/lighthouse.yml"
+
+jobs:
+  lighthouse:
+    name: Lighthouse (public pages)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build
+        run: bun run build
+      - name: Run Lighthouse
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: ./.lighthouserc.json
+          # Publish results: shareable report links in the log + a downloadable artifact.
+          temporaryPublicStorage: true
+          uploadArtifacts: true
