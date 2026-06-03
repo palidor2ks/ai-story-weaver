@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { proxiedImageUrl } from '@/lib/imageProxy';
+import { BRAND_HOST } from '@/lib/brand';
 
 const imageUrlToBase64 = async (url: string): Promise<string> => {
   const response = await fetch(proxiedImageUrl(url));
@@ -118,8 +119,7 @@ export const ShareProfileButton = ({
     };
   }, [candidateImages]);
 
-  const brandHost =
-    typeof window !== 'undefined' ? window.location.host.replace(/^www\./, '') : 'polipulseapp.com';
+  const brandHost = BRAND_HOST;
 
   // Prefer IE rows for the same cycle as the finance card, but fall back to
   // the latest available IE cycle when the current finance cycle has no IE data.

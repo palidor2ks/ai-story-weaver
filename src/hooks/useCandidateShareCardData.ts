@@ -9,6 +9,7 @@ import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
 import { getDonorCause, useDonorCauses } from '@/hooks/useDonorCauses';
 import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { proxiedImageUrl } from '@/lib/imageProxy';
+import { BRAND_HOST } from '@/lib/brand';
 import { supabase } from '@/integrations/supabase/client';
 import { choosePrimaryCauseLabel } from '@/lib/committeeCauseDisplay';
 import { useQuery } from '@tanstack/react-query';
@@ -320,13 +321,8 @@ export function useCandidateShareCardData(
         primaryCause: spenderCauseMap?.get(fecId) ?? null,
       }));
 
-    const brandHost =
-      typeof window !== 'undefined'
-        ? window.location.host.replace(/^www\./, '')
-        : 'polipulseapp.com';
-
     return {
-      brandHost,
+      brandHost: BRAND_HOST,
       candidateId: id,
       candidateName: candidate.name,
       candidateOffice: candidate.office,
