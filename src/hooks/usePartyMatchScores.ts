@@ -29,14 +29,29 @@ export function usePartyMatchScores(overrideUserId?: string) {
     queryFn: async () => {
       if (!targetId) return { democrat: null, republican: null, green: null, libertarian: null };
 
+      // These three reads are independent (party answers are filtered to the
+      // user's questions in JS below, not in SQL), so fetch them in parallel —
+      // one round-trip instead of three sequential ones.
+      const [userAnswersRes, userTopicsRes, partyAnswersRes] = await Promise.all([
+        supabase
+          .from('quiz_answers')
+          .select(`
+            question_id,
+            questions!inner(topic_id)
+          `)
+          .eq('user_id', targetId),
+        supabase
+          .from('user_topics')
+          .select('topic_id, weight')
+          .eq('user_id', targetId)
+          .order('weight', { ascending: false }),
+        supabase
+          .from('party_answers')
+          .select('party_id, question_id, answer_value'),
+      ]);
+
       // Fetch user's answered questions with their topics
-      const { data: userAnswers, error: userError } = await supabase
-        .from('quiz_answers')
-        .select(`
-          question_id,
-          questions!inner(topic_id)
-        `)
-        .eq('user_id', targetId);
+      const { data: userAnswers, error: userError } = userAnswersRes;
 
       if (userError) throw userError;
       
@@ -56,12 +71,8 @@ export function usePartyMatchScores(overrideUserId?: string) {
         }
       });
 
-      // Fetch user's topic weights
-      const { data: userTopics, error: topicsError } = await supabase
-        .from('user_topics')
-        .select('topic_id, weight')
-        .eq('user_id', targetId)
-        .order('weight', { ascending: false });
+      // User's topic weights (fetched in parallel above)
+      const { data: userTopics, error: topicsError } = userTopicsRes;
 
       if (topicsError) throw topicsError;
 
@@ -71,10 +82,8 @@ export function usePartyMatchScores(overrideUserId?: string) {
         weight: ut.weight || 1,
       }));
 
-      // Fetch all party answers
-      const { data: partyAnswers, error: partyError } = await supabase
-        .from('party_answers')
-        .select('party_id, question_id, answer_value');
+      // All party answers (fetched in parallel above)
+      const { data: partyAnswers, error: partyError } = partyAnswersRes;
 
       if (partyError) throw partyError;
 

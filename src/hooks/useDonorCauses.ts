@@ -71,13 +71,31 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       const names = Array.from(new Set(uniqueInputs.map(d => d.name)));
       const types = Array.from(new Set(uniqueInputs.map(d => d.type)));
 
+      // The first three lookups (direct overrides, alias members, canonical
+      // aliases) don't depend on each other's results, so fetch them in parallel
+      // (one network round-trip instead of three). The processing below still runs
+      // in the original order so cause-precedence (direct override > alias) holds.
+      const [directRes, membersRes, canonicalRes] = await Promise.all([
+        (supabase as any)
+          .from('donor_cause_overrides')
+          .select('donor_name, donor_type, primary_cause_id, assigned_by, committee_causes!donor_cause_overrides_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
+          .in('donor_name', names)
+          .in('donor_type', types),
+        supabase
+          .from('donor_alias_members')
+          .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
+          .in('donor_name', names)
+          .in('donor_type', types),
+        (supabase as any)
+          .from('donor_aliases')
+          .select('canonical_name, donor_type, donor_types, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
+          .in('canonical_name', names)
+          .eq('is_active', true),
+      ]);
+
       // 1. Apply direct donor-level cause overrides first. These let admins tag
       //    a donor search result without creating a donor alias.
-      const { data: directOverrides, error: directErr } = await (supabase as any)
-        .from('donor_cause_overrides')
-        .select('donor_name, donor_type, primary_cause_id, assigned_by, committee_causes!donor_cause_overrides_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
-        .in('donor_name', names)
-        .in('donor_type', types);
+      const { data: directOverrides, error: directErr } = directRes;
       if (directErr) throw directErr;
 
       for (const row of (directOverrides ?? []) as any[]) {
@@ -97,11 +115,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       }
 
       // 2. Resolve names -> aliases (and fec_committee_ids + alias-level cause)
-      const { data: members, error: mErr } = await supabase
-        .from('donor_alias_members')
-        .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
-        .in('donor_name', names)
-        .in('donor_type', types);
+      const { data: members, error: mErr } = membersRes;
       if (mErr) throw mErr;
 
       // name|type -> set of committee ids
@@ -140,11 +154,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       // displayed name, while donor_alias_members stores only the raw imported
       // FEC names. Resolve canonical names directly so alias-level causes still
       // appear for rows like "AIPAC".
-      const { data: canonicalAliases, error: canonicalErr } = await (supabase as any)
-        .from('donor_aliases')
-        .select('canonical_name, donor_type, donor_types, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
-        .in('canonical_name', names)
-        .eq('is_active', true);
+      const { data: canonicalAliases, error: canonicalErr } = canonicalRes;
       if (canonicalErr) throw canonicalErr;
 
       for (const alias of (canonicalAliases ?? []) as any[]) {
