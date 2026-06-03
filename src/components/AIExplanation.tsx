@@ -163,7 +163,7 @@ export const AIExplanation = ({
               {/* Agreements */}
               {analysis.personalizedComparison.agreements.length > 0 && (
                 <div className="p-3 rounded-lg bg-agree/5 border border-agree/20">
-                  <h5 className="text-sm font-semibold text-agree mb-2 flex items-center gap-1">
+                  <h4 className="text-sm font-semibold text-agree mb-2 flex items-center gap-1">
                     <ThumbsUp className="w-4 h-4" />
                     Where You Align
                   </h5>
