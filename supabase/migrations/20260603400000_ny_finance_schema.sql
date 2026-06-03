@@ -1,0 +1,102 @@
+-- New York state campaign-finance ingestion. Source: data.ny.gov (Socrata),
+-- the NY State Board of Elections disclosure datasets, queried via the SODA
+-- JSON API ($where/$limit/$offset). State-level data the FEC does NOT cover
+-- (NY State Senate + State Assembly).
+--
+-- Datasets:
+--   7x2g-h32p  Campaign Finance Filer Data (the committee/candidate registry;
+--              office_desc + district let us scope to the state legislature)
+--   e9ss-239a  Campaign Finance Disclosure Reports (itemized transactions;
+--              monetary contributions are filing schedules A/B/C)
+--
+-- Deliberately ISOLATED from the federal FEC, NJ ELEC, and FL pipelines:
+-- dedicated ny_* tables. Ingestion unit = filer (committee); the drain pulls a
+-- filer's contributions via the SODA API (paginated). NY gives a stable
+-- per-row trans_number, so dedup is exact (no hashing like FL).
+
+-- ---------------------------------------------------------------------------
+-- Filers = NY state-legislative candidate/committee registry + drain queue
+-- ---------------------------------------------------------------------------
+create table if not exists public.ny_filers (
+  filer_id             text primary key,
+  filer_name           text,
+  office_desc          text,                 -- 'State Senator' | 'Member of Assembly'
+  office_code          text,                 -- 'SEN' | 'ASM'
+  district             int,
+  committee_type_desc  text,
+  filer_type_desc      text,
+  filer_status         text,                 -- 'ACTIVE' | ...
+  contrib_synced_at    timestamptz,          -- cursor; null = needs sync
+  last_contrib_count   int,
+  first_seen_at        timestamptz not null default now(),
+  last_synced_at       timestamptz
+);
+
+-- ---------------------------------------------------------------------------
+-- Itemized monetary contributions (schedules A/B/C).
+-- NY quirk: contributions are filed by COMMITTEES ("Friends Of <name>") that
+-- carry no office/district, while office/district live on separate CANDIDATE
+-- records — linked only by name. So each contribution is attributed at ingest
+-- to the candidate record (legislator_filer_id) via committee-name matching,
+-- and the candidate record supplies office_code/district. PK is composite so a
+-- shared committee can (rarely) be attributed to >1 same-named candidate.
+-- ---------------------------------------------------------------------------
+create table if not exists public.ny_contributions (
+  legislator_filer_id text not null references public.ny_filers(filer_id) on delete cascade,
+  trans_number        text not null,         -- NY transaction id
+  committee_filer_id  text,                  -- the filing committee (data.ny.gov filer_id)
+  cand_comm_name      text,                  -- committee name as filed
+  office_code         text,                  -- denormalized from the candidate record
+  district            int,
+  contributor         text,                  -- display name (org, or "First Last")
+  contributor_type    text,                  -- cntrbr_type_desc ("Individual",...)
+  is_individual       boolean,
+  city                text,
+  state               text,
+  zip                 text,
+  amount              numeric,               -- org_amt
+  sched_date          date,
+  election_year       int,
+  election_type       text,
+  filing_sched_abbrev text,                  -- 'A' | 'B' | 'C'
+  payment_type        text,
+  raw                 jsonb,
+  synced_at           timestamptz not null default now(),
+  primary key (legislator_filer_id, trans_number)
+);
+
+create index if not exists idx_ny_contrib_legislator on public.ny_contributions(legislator_filer_id);
+create index if not exists idx_ny_contrib_year  on public.ny_contributions(election_year);
+create index if not exists idx_ny_filers_office_district on public.ny_filers(office_code, district);
+create index if not exists idx_ny_filers_cursor on public.ny_filers(contrib_synced_at);
+
+-- ---------------------------------------------------------------------------
+-- Sync run log
+-- ---------------------------------------------------------------------------
+create table if not exists public.ny_sync_runs (
+  id                     bigint generated always as identity primary key,
+  started_at             timestamptz not null default now(),
+  finished_at            timestamptz,
+  status                 text not null default 'running',
+  mode                   text,
+  filers_upserted        int default 0,
+  filers_processed       int default 0,
+  contributions_upserted int default 0,
+  remaining              int,
+  error                  text,
+  notes                  jsonb
+);
+
+-- ---------------------------------------------------------------------------
+-- RLS: public read; only the service_role (edge function) writes.
+-- ---------------------------------------------------------------------------
+alter table public.ny_filers        enable row level security;
+alter table public.ny_contributions enable row level security;
+alter table public.ny_sync_runs     enable row level security;
+
+drop policy if exists ny_filers_read on public.ny_filers;
+create policy ny_filers_read on public.ny_filers for select using (true);
+
+drop policy if exists ny_contributions_read on public.ny_contributions;
+create policy ny_contributions_read on public.ny_contributions for select using (true);
+-- ny_sync_runs: no public policy → internal/service_role only.
