@@ -9,6 +9,11 @@ name: Lighthouse
 # supplies the public Supabase URL + anon key, so the pages load real data.
 on:
   workflow_dispatch:
+  # Also run when the Lighthouse setup itself changes, so the config stays valid.
+  pull_request:
+    paths:
+      - ".lighthouserc.json"
+      - ".github/workflows/lighthouse.yml"
 
 jobs:
   lighthouse:
