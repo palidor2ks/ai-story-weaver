@@ -251,10 +251,14 @@ Deno.serve(async (req) => {
   const qp = url.searchParams;
   const num = (v) => (v == null || v === "" ? null : Number(v));
 
-  const secret = Deno.env.get("NJ_SYNC_SECRET");
-  if (secret) {
-    const provided = req.headers.get("x-sync-secret") || qp.get("secret");
-    if (provided !== secret) return new Response("Unauthorized", { status: 401, headers: cors });
+  const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+
+  // Lock-down: require the shared secret, validated against Vault via a
+  // service-role-only RPC. Cron jobs send it as the x-sync-secret header.
+  {
+    const provided = req.headers.get("x-sync-secret") || qp.get("secret") || "";
+    const { data: secretOk } = await supabase.rpc("check_nj_sync_secret", { p_token: provided });
+    if (!secretOk) return new Response("Unauthorized", { status: 401, headers: cors });
   }
 
   const mode = p.mode ?? qp.get("mode") ?? "full";
@@ -265,7 +269,6 @@ Deno.serve(async (req) => {
   const batch = p.batch ?? num(qp.get("batch")) ?? 12;
   const staleDays = p.stale_days ?? num(qp.get("stale_days")) ?? 7;
 
-  const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
   const startedMs = Date.now();
 
   const { data: runRow } = await supabase
