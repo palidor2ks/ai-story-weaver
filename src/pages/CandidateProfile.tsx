@@ -25,6 +25,7 @@ import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCar
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { FundingSourcesBreakdown } from '@/components/FundingSourcesBreakdown';
 import { NjStateFinanceSection } from '@/components/NjStateFinanceSection';
+import { FlStateFinanceSection } from '@/components/FlStateFinanceSection';
 import { normalizeOfficeName } from '@/lib/officeLabel';
 import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
@@ -680,6 +681,16 @@ export const CandidateProfile = () => {
         {/* NJ state-legislator campaign finance (ELEC). Renders only for NJ
             state legislators that have synced ELEC contribution data. */}
         <NjStateFinanceSection
+          name={candidate.name}
+          district={candidate.district}
+          office={candidate.office}
+          state={candidate.state}
+          level={(candidate as { level?: string }).level}
+        />
+
+        {/* FL state-legislator campaign finance (Division of Elections). Renders
+            only for FL state legislators that have synced contribution data. */}
+        <FlStateFinanceSection
           name={candidate.name}
           district={candidate.district}
           office={candidate.office}
