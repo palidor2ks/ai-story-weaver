@@ -1,0 +1,60 @@
+name: CI
+
+# Validates pull requests (and pushes to main) by installing deps, linting, and
+# running a production build. The repo is Bun-managed — the predev/prebuild npm
+# hooks call `bunx` — so CI uses Bun too.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref so only the latest commit is checked.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build
+        # `bun run build` also runs the prebuild sitemap hook, which has public
+        # fallbacks and degrades gracefully if it can't reach Supabase.
+        run: bun run build
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Lint
+        run: bun run lint
+
+  typecheck:
+    name: Typecheck (non-blocking)
+    runs-on: ubuntu-latest
+    # Vite's build does not type-check. This surfaces type errors without failing
+    # the PR on any pre-existing type debt. Once the app type-checks cleanly, drop
+    # `continue-on-error` to make it a required gate.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Type-check (app sources)
+        run: bunx tsc --noEmit -p tsconfig.app.json
