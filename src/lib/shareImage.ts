@@ -1,4 +1,12 @@
-import { toPng, toBlob } from 'html-to-image';
+// `html-to-image` is only needed when a user actually exports/shares a card.
+// Load it lazily so its (canvas-heavy) code stays out of the page's initial bundle.
+let htmlToImagePromise: Promise<typeof import('html-to-image')> | null = null;
+function loadHtmlToImage() {
+  if (!htmlToImagePromise) {
+    htmlToImagePromise = import('html-to-image');
+  }
+  return htmlToImagePromise;
+}
 
 const PIXEL_RATIO = 2;
 
@@ -11,6 +19,7 @@ const RENDER_OPTIONS = {
 };
 
 export async function nodeToBlob(node: HTMLElement): Promise<Blob> {
+  const { toPng, toBlob } = await loadHtmlToImage();
   // Two-pass render to ensure web fonts are applied
   await toPng(node, RENDER_OPTIONS);
   const blob = await toBlob(node, RENDER_OPTIONS);
@@ -100,6 +109,8 @@ export async function renderNodeWithQA(node: HTMLElement): Promise<RenderQAResul
     fontsReady = false;
     warnings.push('Could not confirm web fonts finished loading.');
   }
+
+  const { toPng, toBlob } = await loadHtmlToImage();
 
   const rect = node.getBoundingClientRect();
   const expectedWidth = Math.round(rect.width * PIXEL_RATIO);

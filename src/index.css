@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=Merriweather:wght@400;700&display=swap');
+/* Fonts are loaded via a non-render-blocking <link> in index.html (see <head>). */
 
 @tailwind base;
 @tailwind components;
