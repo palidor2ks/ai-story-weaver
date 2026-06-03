@@ -42,7 +42,16 @@ export const useCandidateAnswers = (candidateId: string | undefined) => {
       const { data, error } = await supabase
         .from('candidate_answers')
         .select(`
-          *,
+          id,
+          candidate_id,
+          question_id,
+          answer_value,
+          source_url,
+          source_description,
+          source_type,
+          confidence,
+          created_at,
+          updated_at,
           question:questions (
             id,
             text,
@@ -96,7 +105,16 @@ export const useSmartCandidateAnswers = (
       const { data: dbAnswers, error: dbError } = await supabase
         .from('candidate_answers')
         .select(`
-          *,
+          id,
+          candidate_id,
+          question_id,
+          answer_value,
+          source_url,
+          source_description,
+          source_type,
+          confidence,
+          created_at,
+          updated_at,
           question:questions (
             id,
             text,
@@ -275,7 +293,16 @@ export const useCandidateAnswersForUser = (
       const { data, error } = await supabase
         .from('candidate_answers')
         .select(`
-          *,
+          id,
+          candidate_id,
+          question_id,
+          answer_value,
+          source_url,
+          source_description,
+          source_type,
+          confidence,
+          created_at,
+          updated_at,
           question:questions (
             id,
             text,
