@@ -113,5 +113,6 @@ export default {
       },
     },
   },
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- tailwind config is loaded via CJS-capable runner
   plugins: [require("tailwindcss-animate")],
 } satisfies Config;

@@ -109,13 +109,13 @@ export function useGenerateRepComparison() {
       if (!user?.id) throw new Error('Not authenticated');
 
       // Verify a valid, server-accepted session before invoking (avoids 401 after logout/refresh races)
-      let { data: sessionData } = await supabase.auth.getSession();
+      const { data: sessionData } = await supabase.auth.getSession();
       let accessToken = sessionData?.session?.access_token;
       if (!accessToken) {
         throw new Error('No active session');
       }
 
-      let { data: validatedUser, error: validationError } = await supabase.auth.getUser(accessToken);
+      const { data: validatedUser, error: validationError } = await supabase.auth.getUser(accessToken);
       if (validationError || validatedUser.user?.id !== user.id) {
         const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession();
         accessToken = refreshedSession.session?.access_token;
