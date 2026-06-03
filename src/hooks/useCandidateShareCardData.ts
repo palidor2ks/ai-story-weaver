@@ -11,7 +11,7 @@ import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { proxiedImageUrl } from '@/lib/imageProxy';
 import { BRAND_HOST } from '@/lib/brand';
 import { supabase } from '@/integrations/supabase/client';
-import { choosePrimaryCauseLabel } from '@/lib/committeeCauseDisplay';
+import { choosePrimaryCauseLabel, type CauseDisplayInfo } from '@/lib/committeeCauseDisplay';
 import { useQuery } from '@tanstack/react-query';
 
 const CONDUIT_NAMES = ['WINRED', 'ACTBLUE', 'DEMOCRACY ENGINE'];
@@ -163,33 +163,37 @@ export function useCandidateShareCardData(
     enabled: topSpenderIds.length > 0,
     staleTime: 1000 * 60 * 10,
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('committee_topics')
         .select(
           'fec_committee_id, secondary_cause_ids, primary_cause:primary_cause_id(id, label)',
         )
         .in('fec_committee_id', topSpenderIds);
+      const rows = (data ?? []) as unknown as Array<{
+        fec_committee_id: string | null;
+        secondary_cause_ids: string[] | null;
+        primary_cause: CauseDisplayInfo | null;
+      }>;
       const secondaryIds = Array.from(
-        new Set((data ?? []).flatMap((r: any) => r.secondary_cause_ids ?? [])),
+        new Set(rows.flatMap((r) => r.secondary_cause_ids ?? [])),
       );
       const { data: secondaryCauses } =
         secondaryIds.length > 0
-          ? await (supabase as any)
+          ? await supabase
               .from('committee_causes')
               .select('id, label')
               .in('id', secondaryIds)
           : { data: [] };
-      const causeById = new Map(
-        (secondaryCauses ?? []).map((cause: any) => [cause.id, cause]),
-      );
+      const causeRows = (secondaryCauses ?? []) as unknown as CauseDisplayInfo[];
+      const causeById = new Map(causeRows.map((cause) => [cause.id, cause]));
       const map = new Map<string, string>();
-      (data ?? []).forEach((r: any) => {
+      rows.forEach((r) => {
         if (!r.fec_committee_id) return;
         const label = choosePrimaryCauseLabel(
           r.primary_cause,
           (r.secondary_cause_ids ?? [])
-            .map((secondaryId: string) => causeById.get(secondaryId))
-            .filter(Boolean) as any,
+            .map((secondaryId) => causeById.get(secondaryId))
+            .filter(Boolean) as CauseDisplayInfo[],
         );
         if (label) map.set(r.fec_committee_id, label);
       });

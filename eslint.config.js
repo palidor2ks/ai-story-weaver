@@ -49,9 +49,7 @@ export default tseslint.config(
       // PollResults consumes a Supabase join (question_options) that the generated
       // types resolve to a SelectQueryError, so its rows can't be cleanly typed yet.
       "src/components/poll/PollResults.tsx",
-      "src/components/ShareProfileButton.tsx",
       "src/pages/TopSpenders.tsx",
-      "src/hooks/useCandidateShareCardData.ts",
       "src/hooks/useCandidates.ts",
       "src/hooks/useCommitteePool.ts",
       "src/hooks/useCommitteeTopics.ts",
