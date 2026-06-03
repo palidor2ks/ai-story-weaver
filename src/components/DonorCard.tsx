@@ -7,6 +7,7 @@ import {
   User as UserIcon,
   TrendingUp,
   Layers,
+  Landmark,
   Sparkles,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -26,6 +27,9 @@ interface DonorCardProps {
   nameVariations?: string[];
   recipientCount?: number;
   cycle?: string;
+  federalAmount?: number;
+  stateAmount?: number;
+  sources?: string[];
   primaryCause?: import('@/hooks/useDonorCauses').DonorCauseInfo;
 }
 
@@ -65,12 +69,21 @@ export const DonorCard = ({
   nameVariations,
   recipientCount,
   cycle,
+  federalAmount,
+  stateAmount,
+  sources,
   primaryCause,
 }: DonorCardProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const hasMultipleVariations = nameVariations && nameVariations.length > 1;
   const entityType = getPrimaryDonorEntityType(type, types);
+
+  // Federal (FEC) vs NJ state (ELEC) source breakdown.
+  const fed = federalAmount ?? 0;
+  const st = stateAmount ?? 0;
+  const hasState = st > 0 || (sources?.includes('state') ?? false);
+  const spansBoth = fed > 0 && st > 0;
 
   const requireAuth = (e: React.MouseEvent) => {
     if (user) return false;
@@ -112,6 +125,19 @@ export const DonorCard = ({
                   </Tooltip>
                 </TooltipProvider>
               )}
+              {hasState && (
+                <Badge
+                  variant="outline"
+                  className={
+                    spansBoth
+                      ? 'shrink-0 gap-1 text-[11px] sm:text-xs bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-400'
+                      : 'shrink-0 gap-1 text-[11px] sm:text-xs bg-violet-500/10 text-violet-700 border-violet-500/30 dark:text-violet-400'
+                  }
+                >
+                  <Landmark className="h-3 w-3" />
+                  {spansBoth ? 'Federal + State' : 'NJ State'}
+                </Badge>
+              )}
               <Badge variant="outline" className={`shrink-0 text-[11px] sm:text-xs ${getTypeBadgeStyle(entityType)}`}>
                 {entityType}
               </Badge>
@@ -142,6 +168,11 @@ export const DonorCard = ({
             <div className="space-y-1 text-right">
               <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total</p>
               <p className="text-2xl font-bold leading-none text-agree sm:text-3xl">{formatAmount(amount)}</p>
+              {spansBoth && (
+                <p className="text-[11px] text-muted-foreground">
+                  Fed {formatAmount(fed)} · NJ {formatAmount(st)}
+                </p>
+              )}
             </div>
           </div>
         </Link>

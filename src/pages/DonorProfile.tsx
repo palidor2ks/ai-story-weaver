@@ -27,13 +27,16 @@ import {
   Layers,
   Loader2, 
   MapPin, 
-  TrendingUp, 
-  User as UserIcon, 
+  TrendingUp,
+  User as UserIcon,
   Users,
   X,
+  Landmark,
   Sparkles
 } from 'lucide-react';
 import { logBadgeEvent } from '@/lib/badges';
+import { useNjDonorGiving } from '@/hooks/useNjDonorGiving';
+import { DonorStateGiving } from '@/components/DonorStateGiving';
 
 interface DonorRecord {
   id: string;
@@ -158,6 +161,35 @@ const DonorProfile = () => {
     queryKey: ['donor', id],
     queryFn: async () => {
       if (!id) return null;
+      // NJ state donors have a synthetic id ("njc:<contrib_s>") that isn't in the
+      // federal `donors` table; resolve their identity from nj_elec_contributions.
+      if (id.startsWith('njc:')) {
+        const { data, error } = await supabase
+          .from('nj_elec_contributions')
+          .select('contrib_s, contributor, is_individual, contributor_type, city, state')
+          .eq('contrib_s', Number(id.slice(4)))
+          .maybeSingle();
+        if (error) throw error;
+        if (!data) return null;
+        const ct = data.contributor_type || '';
+        const njType: DonorRecord['type'] = data.is_individual
+          ? 'Individual'
+          : /PAC|CMTE|COMMITTEE|PARTY|POLITICAL/i.test(ct)
+            ? 'PAC'
+            : (!ct || ['NOT PROVIDED', 'MISC/ OTHER', 'INTEREST'].includes(ct))
+              ? 'Unknown'
+              : 'Organization';
+        return {
+          id,
+          name: data.contributor || '',
+          type: njType,
+          amount: 0,
+          cycle: '',
+          candidate_id: '',
+          contributor_city: data.city,
+          contributor_state: data.state,
+        } as DonorRecord;
+      }
       const { data, error } = await supabase
         .from('donors')
         .select('*')
@@ -521,6 +553,22 @@ const DonorProfile = () => {
     return { totalAmount, totalTransactions, uniqueRecipients, uniqueCycles, uniqueTypes, byType };
   }, [contributions, donorRecords]);
 
+  // NJ state (ELEC) giving for this donor, matched by the same name variations.
+  const njNames = useMemo(() => {
+    const all = [displayName, donor?.name, ...nameVariations].filter(Boolean) as string[];
+    return [...new Set(all.map((n) => n.trim()).filter(Boolean))];
+  }, [displayName, donor?.name, nameVariations]);
+
+  const { data: njGiving } = useNjDonorGiving(njNames);
+
+  const federalAmount = stats.totalAmount;
+  const stateAmount = njGiving?.total ?? 0;
+  const spansBoth = federalAmount > 0 && stateAmount > 0;
+  const combinedTotal = federalAmount + stateAmount;
+  const combinedTransactions = stats.totalTransactions + (njGiving?.transactionCount ?? 0);
+  const combinedRecipients = stats.uniqueRecipients + (njGiving?.recipients.length ?? 0);
+  const combinedCycles = stats.uniqueCycles + (njGiving?.cycles.length ?? 0);
+
   const isLoading = donorLoading || recordsLoading || contributionsLoading;
 
   if (isLoading) {
@@ -665,10 +713,10 @@ const DonorProfile = () => {
                       ? `${donor.contributor_city}, ${donor.contributor_state}`
                       : null
                   }
-                  totalGiven={formatCompactAmount(stats.totalAmount)}
-                  donationCount={formatCompactNumber(stats.totalTransactions)}
-                  recipientCount={formatCompactNumber(stats.uniqueRecipients)}
-                  cycleCount={stats.uniqueCycles}
+                  totalGiven={formatCompactAmount(combinedTotal)}
+                  donationCount={formatCompactNumber(combinedTransactions)}
+                  recipientCount={formatCompactNumber(combinedRecipients)}
+                  cycleCount={combinedCycles}
                   profileUrl={typeof window !== 'undefined' ? window.location.href : ''}
                 />
               </div>
@@ -678,7 +726,7 @@ const DonorProfile = () => {
                   <CardContent className="p-3 text-center">
                     <DollarSign className="w-4 h-4 mx-auto mb-1 text-agree" />
                     <p className="text-base lg:text-lg font-bold text-foreground truncate">
-                      {formatCompactAmount(stats.totalAmount)}
+                      {formatCompactAmount(combinedTotal)}
                     </p>
                     <p className="text-xs text-muted-foreground">Total Given</p>
                   </CardContent>
@@ -687,7 +735,7 @@ const DonorProfile = () => {
                   <CardContent className="p-3 text-center">
                     <Hash className="w-4 h-4 mx-auto mb-1 text-primary" />
                     <p className="text-base lg:text-lg font-bold text-foreground truncate">
-                      {formatCompactNumber(stats.totalTransactions)}
+                      {formatCompactNumber(combinedTransactions)}
                     </p>
                     <p className="text-xs text-muted-foreground">Donations</p>
                   </CardContent>
@@ -696,7 +744,7 @@ const DonorProfile = () => {
                   <CardContent className="p-3 text-center">
                     <Users className="w-4 h-4 mx-auto mb-1 text-primary" />
                     <p className="text-base lg:text-lg font-bold text-foreground truncate">
-                      {formatCompactNumber(stats.uniqueRecipients)}
+                      {formatCompactNumber(combinedRecipients)}
                     </p>
                     <p className="text-xs text-muted-foreground">Recipients</p>
                   </CardContent>
@@ -705,12 +753,21 @@ const DonorProfile = () => {
                   <CardContent className="p-3 text-center">
                     <Calendar className="w-4 h-4 mx-auto mb-1 text-primary" />
                     <p className="text-base lg:text-lg font-bold text-foreground truncate">
-                      {stats.uniqueCycles}
+                      {combinedCycles}
                     </p>
                     <p className="text-xs text-muted-foreground">Cycles</p>
                   </CardContent>
                 </Card>
               </div>
+              {(spansBoth || stateAmount > 0) && (
+                <div className="flex items-center justify-center lg:justify-end gap-2 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Federal {formatCompactAmount(federalAmount)}</span>
+                  <span>·</span>
+                  <span className="inline-flex items-center gap-1 text-violet-700 dark:text-violet-400">
+                    <Landmark className="h-3 w-3" /> NJ {formatCompactAmount(stateAmount)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -812,7 +869,8 @@ const DonorProfile = () => {
           </section>
         )}
 
-        {/* Top Recipients */}
+        {/* Top Recipients (federal FEC) */}
+        {(donorRecords.length > 0 || stateAmount === 0) && (
         <section>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-4 min-w-0">
             <TrendingUp className="w-5 h-5 text-primary shrink-0" />
@@ -894,7 +952,7 @@ const DonorProfile = () => {
             </div>
           )}
 
-          {donorRecords.length === 0 && (
+          {donorRecords.length === 0 && stateAmount === 0 && (
             <Card>
               <CardContent className="py-10 text-center text-muted-foreground">
                 No recipients found for this donor.
@@ -902,12 +960,16 @@ const DonorProfile = () => {
             </Card>
           )}
         </section>
+        )}
+
+        {/* New Jersey state (ELEC) giving */}
+        <DonorStateGiving giving={njGiving} />
 
         {/* Top Contributors moved above Top Recipients */}
 
 
-        {/* Detailed Contribution History — hidden for Individual donors */}
-        {donor.type !== 'Individual' && (
+        {/* Detailed Contribution History (federal) — hidden for Individual donors */}
+        {donor.type !== 'Individual' && donorRecords.length > 0 && (
         <section>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">

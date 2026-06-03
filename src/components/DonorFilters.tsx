@@ -46,6 +46,7 @@ export const DonorFilters = ({
       sortOrder: 'desc',
       cycle: 'all',
       type: 'all',
+      jurisdiction: 'all',
       search: '',
       state: 'all',
       minAmount: null,
@@ -57,9 +58,10 @@ export const DonorFilters = ({
     });
   };
 
-  const hasActiveFilters = 
-    filters.search || 
-    (filters.type && filters.type !== 'all') || 
+  const hasActiveFilters =
+    filters.search ||
+    (filters.type && filters.type !== 'all') ||
+    (filters.jurisdiction && filters.jurisdiction !== 'all') ||
     (filters.state && filters.state !== 'all') ||
     (filters.party && filters.party !== 'all') ||
     filters.minAmount !== null ||
@@ -103,6 +105,22 @@ export const DonorFilters = ({
               {availableCycles.map(cycle => (
                 <SelectItem key={cycle} value={cycle}>{cycle}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+
+          {/* Jurisdiction (federal FEC vs NJ state ELEC) */}
+          <Select
+            value={filters.jurisdiction || 'all'}
+            onValueChange={(v) => updateFilter('jurisdiction', v)}
+            disabled={isLoading}
+          >
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="Jurisdiction" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sources</SelectItem>
+              <SelectItem value="federal">Federal</SelectItem>
+              <SelectItem value="state">NJ State</SelectItem>
             </SelectContent>
           </Select>
 
@@ -151,6 +169,7 @@ export const DonorFilters = ({
                   {[
                     filters.search,
                     filters.type !== 'all' && filters.type,
+                    filters.jurisdiction !== 'all' && filters.jurisdiction,
                     filters.state !== 'all' && filters.state,
                     filters.party !== 'all' && filters.party,
                     filters.minAmount !== null,

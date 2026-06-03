@@ -9,6 +9,8 @@ export interface DonorFilters {
   sortOrder: 'asc' | 'desc';
   cycle: string;
   type: string;
+  /** Jurisdiction: 'all' | 'federal' | 'state' (NJ). Maps to the RPC's p_source. */
+  jurisdiction: string;
   search: string;
   state: string;
   minAmount: number | null;
@@ -42,6 +44,10 @@ export interface DonorWithCandidate {
   is_consolidated?: boolean;
   name_variations?: string[];
   recipient_count?: number;
+  // Source breakdown (federal FEC vs NJ state ELEC)
+  federal_amount?: number;
+  state_amount?: number;
+  sources?: string[];
 }
 
 export interface UseDonorsPaginatedResult {
@@ -60,6 +66,7 @@ const DEFAULT_FILTERS: DonorFilters = {
   sortOrder: 'desc',
   cycle: 'all',
   type: 'all',
+  jurisdiction: 'all',
   search: '',
   state: 'all',
   minAmount: null,
@@ -119,6 +126,7 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
     sortOrder,
     cycle,
     type,
+    jurisdiction,
     search,
     minAmount,
   } = mergedFilters;
@@ -135,6 +143,7 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
         p_type: toDonorTypeFilterValue(type),
         p_search: search || null,
         p_min_amount: minAmount,
+        p_source: jurisdiction && jurisdiction !== 'all' ? jurisdiction : null,
       });
 
       if (error) throw error;
@@ -157,6 +166,9 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
         is_consolidated: d.is_consolidated,
         name_variations: d.name_variations,
         recipient_count: d.recipient_count,
+        federal_amount: d.federal_amount != null ? Number(d.federal_amount) : undefined,
+        state_amount: d.state_amount != null ? Number(d.state_amount) : undefined,
+        sources: d.sources ?? undefined,
       }));
 
       return {
