@@ -220,7 +220,7 @@ export const AIExplanation = ({
                 
                 {analysis.sources && analysis.sources.length > 0 && (
                   <div className="pt-4 border-t border-border">
-                    <h5 className="text-sm font-semibold text-foreground mb-2">Sources</h5>
+                    <h4 className="text-sm font-semibold text-foreground mb-2">Sources</h4>
                     <ul className="space-y-1">
                       {analysis.sources.map((source, index) => (
                         <li key={index}>
