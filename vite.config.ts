@@ -20,4 +20,27 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    minify: "esbuild",
+    rollupOptions: {
+      output: {
+        // Split large, infrequently-changing dependencies into their own long-cached
+        // vendor chunks so users don't re-download them on every app deploy, and so the
+        // heaviest libs aren't bundled into route chunks that need them only rarely.
+        manualChunks: {
+          "react-vendor": ["react", "react-dom", "react-router-dom"],
+          "supabase": ["@supabase/supabase-js"],
+          "charts": ["recharts"],
+          "xlsx": ["xlsx"],
+          "data-utils": ["@tanstack/react-query", "papaparse", "date-fns", "zod"],
+        },
+      },
+    },
+  },
+  esbuild: {
+    // In production, strip debugger statements and noisy logs but keep console.error/warn
+    // so real-user auth/network diagnostics still surface.
+    drop: mode === "production" ? ["debugger"] : [],
+    pure: mode === "production" ? ["console.log", "console.debug", "console.info"] : [],
+  },
 }));

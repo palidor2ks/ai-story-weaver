@@ -120,7 +120,10 @@ class ChunkErrorBoundary extends Component<{ children: React.ReactNode }, { hasE
 const RouteGuard = ({ children, requireAuth = true, requireOnboarding = false, requireVerifiedEmail = true }: RouteGuardProps) => {
   const { user, loading: authLoading } = useAuth();
   const { data: hasCompleted, isLoading: onboardingLoading } = useHasCompletedOnboarding();
-  const isLoading = authLoading || (requireOnboarding && onboardingLoading);
+  // Public routes (requireAuth=false) have no auth-dependent redirect, so render them
+  // immediately instead of waiting on the auth session round-trip. Auth-gated routes still
+  // wait so we don't flash protected content or redirect prematurely.
+  const isLoading = requireAuth && (authLoading || (requireOnboarding && onboardingLoading));
 
   if (isLoading) return <LoadingScreen />;
   if (requireAuth && !user) return <Navigate to="/auth" replace />;
