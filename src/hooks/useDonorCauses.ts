@@ -68,8 +68,14 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       // aliases) don't depend on each other's results, so fetch them in parallel
       // (one network round-trip instead of three). The processing below still runs
       // in the original order so cause-precedence (direct override > alias) holds.
+      //
+      // NOTE: keep these queries (and the loops that consume their results) free of
+      // `as any` casts. The typed query builder brands the result row as a
+      // SelectQueryError when a selected column no longer exists, so accessing the
+      // row fields below fails the build instead of silently breaking at runtime —
+      // which is exactly the regression that previously hid the primary-cause badge.
       const [directRes, membersRes, canonicalRes] = await Promise.all([
-        (supabase as any)
+        supabase
           .from('donor_cause_overrides')
           .select('donor_name, donor_type, primary_cause_id, assigned_by, committee_causes!donor_cause_overrides_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
           .in('donor_name', names)
@@ -79,7 +85,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
           .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
           .in('donor_name', memberNames)
           .in('donor_type', types),
-        (supabase as any)
+        supabase
           .from('donor_aliases')
           .select('canonical_name, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
           .in('canonical_name', names)
@@ -91,7 +97,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       const { data: directOverrides, error: directErr } = directRes;
       if (directErr) throw directErr;
 
-      for (const row of (directOverrides ?? []) as any[]) {
+      for (const row of (directOverrides ?? [])) {
         const c = row.committee_causes;
         if (!c) continue;
         result.set(`${norm(row.donor_name)}|${row.donor_type}`, {
@@ -137,7 +143,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
         }
       };
 
-      for (const m of (members ?? []) as any[]) {
+      for (const m of (members ?? [])) {
         const alias = m.donor_aliases;
         if (!alias?.is_active) continue;
         applyAliasToKey(`${norm(m.donor_name)}|${m.donor_type}`, alias);
@@ -152,7 +158,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       const { data: canonicalAliases, error: canonicalErr } = canonicalRes;
       if (canonicalErr) throw canonicalErr;
 
-      for (const alias of (canonicalAliases ?? []) as any[]) {
+      for (const alias of (canonicalAliases ?? [])) {
         for (const input of uniqueInputs) {
           if (norm(input.name) !== norm(alias.canonical_name)) continue;
           applyAliasToKey(`${norm(input.name)}|${input.type}`, alias);
@@ -221,6 +227,10 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
           });
         }
       } else {
+        // Intentional `as any[]` here (unlike the queries above): the
+        // committee_topics -> committee_causes embed relation is not present in
+        // the generated types, so the typed builder can't resolve it. The
+        // `if (tErr || !topics)` branch above is the runtime fallback for that.
         for (const t of topics as any[]) {
           const c = t.committee_causes;
           if (!c) continue;
