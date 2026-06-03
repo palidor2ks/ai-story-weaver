@@ -33,16 +33,22 @@ create table if not exists public.ny_filers (
 );
 
 -- ---------------------------------------------------------------------------
--- Itemized monetary contributions received by a filer (schedules A/B/C)
+-- Itemized monetary contributions (schedules A/B/C).
+-- NY quirk: contributions are filed by COMMITTEES ("Friends Of <name>") that
+-- carry no office/district, while office/district live on separate CANDIDATE
+-- records — linked only by name. So each contribution is attributed at ingest
+-- to the candidate record (legislator_filer_id) via committee-name matching,
+-- and the candidate record supplies office_code/district. PK is composite so a
+-- shared committee can (rarely) be attributed to >1 same-named candidate.
 -- ---------------------------------------------------------------------------
 create table if not exists public.ny_contributions (
-  trans_number        text primary key,      -- NY transaction id (exact dedup key)
-  filer_id            text not null references public.ny_filers(filer_id) on delete cascade,
-  cand_comm_name      text,                  -- recipient committee name
+  legislator_filer_id text not null references public.ny_filers(filer_id) on delete cascade,
+  trans_number        text not null,         -- NY transaction id
+  committee_filer_id  text,                  -- the filing committee (data.ny.gov filer_id)
+  cand_comm_name      text,                  -- committee name as filed
+  office_code         text,                  -- denormalized from the candidate record
+  district            int,
   contributor         text,                  -- display name (org, or "First Last")
-  contributor_first   text,
-  contributor_last    text,
-  contributor_org     text,
   contributor_type    text,                  -- cntrbr_type_desc ("Individual",...)
   is_individual       boolean,
   city                text,
@@ -55,10 +61,11 @@ create table if not exists public.ny_contributions (
   filing_sched_abbrev text,                  -- 'A' | 'B' | 'C'
   payment_type        text,
   raw                 jsonb,
-  synced_at           timestamptz not null default now()
+  synced_at           timestamptz not null default now(),
+  primary key (legislator_filer_id, trans_number)
 );
 
-create index if not exists idx_ny_contrib_filer on public.ny_contributions(filer_id);
+create index if not exists idx_ny_contrib_legislator on public.ny_contributions(legislator_filer_id);
 create index if not exists idx_ny_contrib_year  on public.ny_contributions(election_year);
 create index if not exists idx_ny_filers_office_district on public.ny_filers(office_code, district);
 create index if not exists idx_ny_filers_cursor on public.ny_filers(contrib_synced_at);

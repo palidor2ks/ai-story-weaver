@@ -1,15 +1,17 @@
 // fetch-ny-finance
 // Automated ingestion of New York state campaign-finance data into the isolated
 // ny_* tables. Source: data.ny.gov (Socrata) NYSBOE disclosure datasets via the
-// SODA JSON API. State-level data the FEC doesn't cover (NY State Senate +
-// State Assembly). Kept separate from the federal FEC, NJ ELEC, and FL pipelines.
+// SODA JSON API. NY State Senate + State Assembly (FEC doesn't cover state).
+// Kept separate from the federal FEC, NJ ELEC, and FL pipelines.
 //
-//   Filers:     7x2g-h32p  (registry; office_desc + district scope the legislature)
-//   Disclosure: e9ss-239a  (itemized txns; monetary contributions = schedules A/B/C)
+//   Filers:     7x2g-h32p  (registry; CANDIDATE records carry office_desc+district)
+//   Disclosure: e9ss-239a  (itemized txns on COMMITTEE filers; monetary = sched A/B/C)
 //
-// Ingestion unit = filer (committee). The drain pulls a filer's contributions via
-// the SODA API (paginated, $limit/$offset). NY provides a stable trans_number, so
-// dedup is exact. This is a real query API — no scraping, no smallint traps.
+// NY quirk: contributions are filed by committees ("Friends Of <name>") that
+// carry NO office/district, while office/district live on separate CANDIDATE
+// records — linked only by name. So the ingestion unit is the candidate record;
+// the drain matches that candidate's committees by `cand_comm_name` and
+// attributes the contributions (with the candidate's office/district) to it.
 //
 // Modes (param `mode`): discover | drain | full (default). Other params:
 //   batch(=15), stale_days(=30), max_filers, only_filer.
@@ -22,25 +24,36 @@ const FILERS_DS = "7x2g-h32p";
 const DISCLOSURE_DS = "e9ss-239a";
 const UA = "Mozilla/5.0 (Polipulse civic-data ingest)";
 const BUDGET_MS = 110_000;
-const PAGE = 50_000;               // Socrata $limit ceiling
-const MIN_DATE = "2017-01-01";     // recent cycles (2018→); bounds volume, stays relevant
-const SCHEDULES = "'A','B','C'";   // monetary contributions: Ind./Part., Corporation, All Other
+const PAGE = 50_000;
+const MIN_DATE = "2017-01-01";
+const SCHEDULES = "'A','B','C'";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sync-secret",
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const escSoql = (s: string) => s.replace(/'/g, "''");
+const trimPunct = (s: string) => s.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, "");
 
 // deno-lint-ignore no-explicit-any
 async function sodaGet(url: string): Promise<any[]> {
   const res = await fetch(url, { headers: { "Accept": "application/json", "User-Agent": UA } });
-  if (!res.ok) throw new Error(`SODA ${res.status} ${url.slice(60, 160)}`);
+  if (!res.ok) throw new Error(`SODA ${res.status} ${url.slice(60, 170)}`);
   return res.json();
 }
 
+interface Cand { filer_id: string; filer_name: string; office_code: string | null; district: number | null }
+
+// "Andrea  Stewart-Cousins" -> { first: "Andrea", surname: "Stewart-Cousins" }
+function parseName(filerName: string): { first: string | null; surname: string | null } {
+  const toks = (filerName ?? "").split(/\s+/).map(trimPunct).filter((t) => t.length >= 1);
+  if (!toks.length) return { first: null, surname: null };
+  return { first: toks[0] || null, surname: toks[toks.length - 1] || null };
+}
+
 // deno-lint-ignore no-explicit-any
-function mapContribution(r: any, filerId: string): Record<string, unknown> {
+function mapContribution(r: any, cand: Cand): Record<string, unknown> {
   const org = (r.flng_ent_name ?? "").trim();
   const first = (r.flng_ent_first_name ?? "").trim();
   const last = (r.flng_ent_last_name ?? "").trim();
@@ -48,13 +61,13 @@ function mapContribution(r: any, filerId: string): Record<string, unknown> {
   const ctype = (r.cntrbr_type_desc ?? "").trim();
   const amt = r.org_amt != null && r.org_amt !== "" ? Number(r.org_amt) : null;
   return {
+    legislator_filer_id: cand.filer_id,
     trans_number: String(r.trans_number),
-    filer_id: filerId,
+    committee_filer_id: r.filer_id ?? null,
     cand_comm_name: r.cand_comm_name ?? null,
+    office_code: cand.office_code,
+    district: cand.district,
     contributor,
-    contributor_first: first || null,
-    contributor_last: last || null,
-    contributor_org: org || null,
     contributor_type: ctype || null,
     is_individual: /individual/i.test(ctype) || (!org && !!last),
     city: r.flng_ent_city ?? null,
@@ -99,7 +112,7 @@ async function discover(supabase: any): Promise<number> {
       });
     }
     for (let i = 0; i < mapped.length; i += 500) {
-      // contrib_synced_at intentionally omitted so re-discovery preserves the cursor.
+      // contrib_synced_at omitted so re-discovery preserves the cursor.
       const { error } = await supabase.from("ny_filers").upsert(mapped.slice(i, i + 500), { onConflict: "filer_id" });
       if (!error) upserted += Math.min(500, mapped.length - i);
     }
@@ -110,15 +123,25 @@ async function discover(supabase: any): Promise<number> {
   return upserted;
 }
 
+// Drain one candidate record: find its committees' monetary contributions by
+// matching cand_comm_name to the candidate's name, attribute them to the record.
 // deno-lint-ignore no-explicit-any
-async function syncFiler(supabase: any, filerId: string, errors: string[]): Promise<number> {
+async function syncCandidate(supabase: any, cand: Cand, errors: string[]): Promise<number> {
+  const { first, surname } = parseName(cand.filer_name);
+  const now = new Date().toISOString();
+  if (!surname || surname.length < 3) {
+    await supabase.from("ny_filers").update({ contrib_synced_at: now, last_synced_at: now, last_contrib_count: 0 }).eq("filer_id", cand.filer_id);
+    return 0;
+  }
+  const clauses = [`cand_comm_name like '%${escSoql(surname)}%'`];
+  if (first && first.length >= 2) clauses.push(`cand_comm_name like '%${escSoql(first)}%'`);
+  clauses.push(`filing_sched_abbrev in(${SCHEDULES})`);
+  clauses.push(`sched_date>='${MIN_DATE}'`);
+  const where = encodeURIComponent(clauses.join(" AND "));
   const select = encodeURIComponent(
     "trans_number,filer_id,cand_comm_name,flng_ent_name,flng_ent_first_name,flng_ent_last_name," +
     "cntrbr_type_desc,flng_ent_city,flng_ent_state,flng_ent_zip,org_amt,sched_date,election_year," +
     "election_type,filing_sched_abbrev,payment_type_desc",
-  );
-  const where = encodeURIComponent(
-    `filer_id='${filerId}' AND filing_sched_abbrev in(${SCHEDULES}) AND sched_date>='${MIN_DATE}'`,
   );
   let offset = 0, total = 0;
   const seen = new Set<string>();
@@ -131,21 +154,21 @@ async function syncFiler(supabase: any, filerId: string, errors: string[]): Prom
       const tn = r.trans_number ? String(r.trans_number) : null;
       if (!tn || seen.has(tn)) continue;
       seen.add(tn);
-      mapped.push(mapContribution(r, filerId));
+      mapped.push(mapContribution(r, cand));
     }
     for (let i = 0; i < mapped.length; i += 1000) {
-      const { error } = await supabase.from("ny_contributions").upsert(mapped.slice(i, i + 1000), { onConflict: "trans_number" });
-      if (error) errors.push(`contrib ${filerId}: ${error.message}`);
+      const { error } = await supabase.from("ny_contributions")
+        .upsert(mapped.slice(i, i + 1000), { onConflict: "legislator_filer_id,trans_number" });
+      if (error) errors.push(`contrib ${cand.filer_id}: ${error.message}`);
     }
     total += mapped.length;
     offset += PAGE;
     if (rows.length < PAGE) break;
     await sleep(150);
   }
-  const now = new Date().toISOString();
   await supabase.from("ny_filers")
     .update({ contrib_synced_at: now, last_synced_at: now, last_contrib_count: total })
-    .eq("filer_id", filerId);
+    .eq("filer_id", cand.filer_id);
   return total;
 }
 
@@ -185,7 +208,7 @@ Deno.serve(async (req) => {
     } else {
       if (mode === "full") filersUpserted = await discover(supabase);
       const cutoff = new Date(Date.now() - staleDays * 86_400_000).toISOString();
-      let q = supabase.from("ny_filers").select("filer_id");
+      let q = supabase.from("ny_filers").select("filer_id, filer_name, office_code, district");
       if (onlyFiler) {
         q = q.eq("filer_id", onlyFiler);
       } else {
@@ -194,15 +217,15 @@ Deno.serve(async (req) => {
           .limit(maxFilers ?? batch);
       }
       const { data: due } = await q;
-      for (const row of due ?? []) {
+      for (const row of (due ?? []) as Cand[]) {
         if (Date.now() - startedMs > BUDGET_MS) break;
         try {
-          contribUpserted += await syncFiler(supabase, row.filer_id, errors);
+          contribUpserted += await syncCandidate(supabase, row, errors);
           filersProcessed++;
         } catch (e) {
           errors.push(`filer ${row.filer_id}: ${String(e).slice(0, 150)}`);
         }
-        await sleep(150);
+        await sleep(120);
       }
       const { count } = await supabase.from("ny_filers")
         .select("filer_id", { count: "exact", head: true })
