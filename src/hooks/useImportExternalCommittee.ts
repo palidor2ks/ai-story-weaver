@@ -29,9 +29,18 @@ interface FetchDonorsResult {
   error?: string;
 }
 
-async function readFunctionError(error: any): Promise<string> {
+async function readFunctionError(error: unknown): Promise<string> {
   try {
-    const ctx = error?.context;
+    const ctx = (error as {
+      context?: {
+        json?: unknown;
+        text?: unknown;
+        clone: () => {
+          json: () => Promise<{ error?: string; message?: string } | null>;
+          text: () => Promise<string>;
+        };
+      };
+    })?.context;
     if (ctx && typeof ctx.json === 'function') {
       const body = await ctx.clone().json().catch(() => null);
       if (body?.error) return String(body.error);
@@ -44,7 +53,7 @@ async function readFunctionError(error: any): Promise<string> {
   } catch {
     /* ignore */
   }
-  return error?.message ?? 'Unknown error';
+  return (error as { message?: string })?.message ?? 'Unknown error';
 }
 
 export function useImportExternalCommittee() {
