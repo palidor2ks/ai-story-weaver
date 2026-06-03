@@ -39,9 +39,17 @@ interface Params {
   level?: string | null;
 }
 
-/** True when this official is a NJ state legislator (State Senate / Assembly). */
+/**
+ * True when this official is a NJ state legislator (State Senate / General Assembly).
+ * Excludes federal offices that also contain "senat" (e.g. "U.S. Senator") so the
+ * federal/FEC pipeline owns those — the ELEC dataset is state-legislative only.
+ */
 export function isNjStateLegislator({ state, office, level }: Params): boolean {
-  return state === 'NJ' && !!office && /assembl|senat/i.test(office) && level !== 'federal';
+  if (state !== 'NJ' || !office || level === 'federal') return false;
+  const o = office.toLowerCase();
+  // Federal offices (U.S. Senate is the ambiguous one — "senator" contains "senat").
+  if (/\bu\.?\s*s\.?\b|united states|congress/.test(o)) return false;
+  return /assembl/.test(o) || /senat/.test(o);
 }
 
 /**
