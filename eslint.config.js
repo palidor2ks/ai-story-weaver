@@ -43,6 +43,12 @@ export default tseslint.config(
     files: [
       "src/components/admin/**/*.{ts,tsx}",
       "src/pages/admin/**/*.{ts,tsx}",
+      // Non-app code: build tooling and the separate Remotion video sub-project.
+      "scripts/**/*.{ts,tsx}",
+      "remotion/**/*.{ts,tsx}",
+      // PollResults consumes a Supabase join (question_options) that the generated
+      // types resolve to a SelectQueryError, so its rows can't be cleanly typed yet.
+      "src/components/poll/PollResults.tsx",
       "src/components/ShareProfileButton.tsx",
       "src/pages/TopSpenders.tsx",
       "src/hooks/useCandidateShareCardData.ts",
