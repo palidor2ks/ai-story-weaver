@@ -166,7 +166,7 @@ export const AIExplanation = ({
                   <h4 className="text-sm font-semibold text-agree mb-2 flex items-center gap-1">
                     <ThumbsUp className="w-4 h-4" />
                     Where You Align
-                  </h5>
+                  </h4>
                   <ul className="space-y-1">
                     {analysis.personalizedComparison.agreements.map((agreement, idx) => (
                       <li key={idx} className="text-sm text-foreground">• {agreement}</li>
