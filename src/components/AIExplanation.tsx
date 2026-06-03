@@ -121,6 +121,7 @@ export const AIExplanation = ({
             onClick={handleRefresh}
             disabled={isLoading}
             title="Regenerate analysis"
+            aria-label="Regenerate analysis"
           >
             <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
           </Button>
