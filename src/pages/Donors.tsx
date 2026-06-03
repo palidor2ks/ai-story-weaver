@@ -102,7 +102,7 @@ export const Donors = () => {
     <div className="min-h-screen bg-background">
       <Seo
         title="Campaign Donors — Pulse"
-        description="Explore federal (FEC) and NJ state (ELEC) contributions to candidates. Filter by cycle, jurisdiction, state, and donor type to follow the money."
+        description="Explore federal (FEC) and state (NJ ELEC, FL DOE) contributions to candidates. Filter by cycle, jurisdiction, state, and donor type to follow the money."
         path="/donors"
         jsonLd={{
           "@context": "https://schema.org",
@@ -121,8 +121,8 @@ export const Donors = () => {
             Campaign Donors
           </h1>
           <p className="text-muted-foreground">
-            Explore federal and New Jersey state campaign contributions to political candidates.
-            Similar donors are automatically grouped across both.
+            Explore federal, New Jersey, and Florida state campaign contributions to political
+            candidates. Similar donors are automatically grouped across sources.
           </p>
         </div>
 
@@ -210,6 +210,8 @@ export const Donors = () => {
                 federalAmount={donor.federal_amount}
                 stateAmount={donor.state_amount}
                 sources={donor.sources}
+                stateCodes={donor.state_codes}
+                stateAmounts={donor.state_amounts}
                 primaryCause={getCardPrimaryCause(donor)}
               />
             ))}

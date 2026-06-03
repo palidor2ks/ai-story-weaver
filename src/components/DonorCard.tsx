@@ -30,6 +30,8 @@ interface DonorCardProps {
   federalAmount?: number;
   stateAmount?: number;
   sources?: string[];
+  stateCodes?: string[];
+  stateAmounts?: Record<string, number>;
   primaryCause?: import('@/hooks/useDonorCauses').DonorCauseInfo;
 }
 
@@ -72,6 +74,8 @@ export const DonorCard = ({
   federalAmount,
   stateAmount,
   sources,
+  stateCodes,
+  stateAmounts,
   primaryCause,
 }: DonorCardProps) => {
   const { user } = useAuth();
@@ -79,11 +83,22 @@ export const DonorCard = ({
   const hasMultipleVariations = nameVariations && nameVariations.length > 1;
   const entityType = getPrimaryDonorEntityType(type, types);
 
-  // Federal (FEC) vs NJ state (ELEC) source breakdown.
+  // Federal (FEC) vs per-state (NJ ELEC / FL DOE / ...) source breakdown.
   const fed = federalAmount ?? 0;
   const st = stateAmount ?? 0;
-  const hasState = st > 0 || (sources?.includes('state') ?? false);
-  const spansBoth = fed > 0 && st > 0;
+  const codes = stateCodes ?? [];
+  const amounts = stateAmounts ?? {};
+  const hasFederal = fed > 0;
+  const hasState = st > 0 || codes.length > 0 || (sources?.includes('state') ?? false);
+  const stateLabel = codes.length > 0 ? codes.join(' · ') : 'State';
+  // Per-source breakdown (Fed / NJ / FL …), nonzero parts only.
+  const breakdownParts: string[] = [];
+  if (hasFederal) breakdownParts.push(`Fed ${formatAmount(fed)}`);
+  for (const code of codes) {
+    const a = amounts[code] ?? 0;
+    if (a > 0) breakdownParts.push(`${code} ${formatAmount(a)}`);
+  }
+  if (breakdownParts.length === 0 && st > 0) breakdownParts.push(`State ${formatAmount(st)}`);
 
   const requireAuth = (e: React.MouseEvent) => {
     if (user) return false;
@@ -129,13 +144,13 @@ export const DonorCard = ({
                 <Badge
                   variant="outline"
                   className={
-                    spansBoth
+                    hasFederal
                       ? 'shrink-0 gap-1 text-[11px] sm:text-xs bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-400'
                       : 'shrink-0 gap-1 text-[11px] sm:text-xs bg-violet-500/10 text-violet-700 border-violet-500/30 dark:text-violet-400'
                   }
                 >
                   <Landmark className="h-3 w-3" />
-                  {spansBoth ? 'Federal + State' : 'NJ State'}
+                  {hasFederal ? `Federal + ${stateLabel}` : stateLabel}
                 </Badge>
               )}
               <Badge variant="outline" className={`shrink-0 text-[11px] sm:text-xs ${getTypeBadgeStyle(entityType)}`}>
@@ -168,9 +183,9 @@ export const DonorCard = ({
             <div className="space-y-1 text-right">
               <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium">Total</p>
               <p className="text-2xl font-bold leading-none text-agree sm:text-3xl">{formatAmount(amount)}</p>
-              {spansBoth && (
+              {breakdownParts.length > 1 && (
                 <p className="text-[11px] text-muted-foreground">
-                  Fed {formatAmount(fed)} · NJ {formatAmount(st)}
+                  {breakdownParts.join(' · ')}
                 </p>
               )}
             </div>
