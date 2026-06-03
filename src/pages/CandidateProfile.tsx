@@ -24,6 +24,7 @@ import { useCandidatePersonalizedScore } from '@/hooks/useCandidatePersonalizedS
 import { FinanceReconciliationCard } from '@/components/FinanceReconciliationCard';
 import { FinanceSummaryCard, type FinanceSummaryData } from '@/components/FinanceSummaryCard';
 import { FundingSourcesBreakdown } from '@/components/FundingSourcesBreakdown';
+import { NjStateFinanceSection } from '@/components/NjStateFinanceSection';
 import { normalizeOfficeName } from '@/lib/officeLabel';
 import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
@@ -675,6 +676,16 @@ export const CandidateProfile = () => {
           </div>
         )}
 
+
+        {/* NJ state-legislator campaign finance (ELEC). Renders only for NJ
+            state legislators that have synced ELEC contribution data. */}
+        <NjStateFinanceSection
+          name={candidate.name}
+          district={candidate.district}
+          office={candidate.office}
+          state={candidate.state}
+          level={(candidate as { level?: string }).level}
+        />
 
         {/* Tabs for Donors and Votes */}
         <Tabs defaultValue="donors" className="w-full">
