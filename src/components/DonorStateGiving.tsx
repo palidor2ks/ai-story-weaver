@@ -10,7 +10,12 @@ const fmt = (n: number) => formatCompactCurrency(n);
 
 const fmtDate = (d: string | null) => {
   if (!d) return '—';
-  const date = new Date(d);
+  // ELEC cont_date is a date-only string (YYYY-MM-DD). Parse the parts as a *local*
+  // date so it doesn't shift a day earlier in US time zones, where new Date('YYYY-MM-DD')
+  // is interpreted as UTC midnight.
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  const date = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(d);
+  if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
@@ -42,7 +47,12 @@ export const DonorStateGiving = ({ giving }: { giving: NjDonorGiving | undefined
         {recipients.map((r, i) => (
           <Card key={`${r.name}-${i}`} className="h-full min-w-0">
             <CardContent className="p-4">
-              <p className="font-semibold text-foreground truncate mb-2">{r.name}</p>
+              <p className="font-semibold text-foreground truncate mb-1">{r.name}</p>
+              {(r.office || r.district || r.party) && (
+                <p className="text-xs text-muted-foreground truncate mb-2">
+                  {[r.office, r.district, r.party].filter(Boolean).join(' • ')}
+                </p>
+              )}
               <div className="flex items-center justify-between pt-2 border-t border-border">
                 <span className="text-sm text-muted-foreground">
                   {r.count.toLocaleString()} contribution{r.count === 1 ? '' : 's'}
