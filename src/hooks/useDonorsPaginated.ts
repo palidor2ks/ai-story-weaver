@@ -75,21 +75,33 @@ export const useAvailableDonorFilters = () => {
   return useQuery({
     queryKey: ['donor-filter-options'],
     queryFn: async () => {
-      // Get all distinct cycles via RPC (avoids 1000-row scan limit hiding older cycles)
-      const { data: cyclesData } = await supabase.rpc('get_donor_cycles');
+      // Get all distinct cycles via RPC (avoids 1000-row scan limit hiding older cycles).
+      // The cycle dropdown is populated entirely from this call, so a failure must be
+      // surfaced (thrown) rather than swallowed. If we silently fell back to an empty
+      // list, React Query would cache that empty result as a "success" for the whole
+      // staleTime window and never retry -- leaving the cycle filter with nothing to
+      // select (the "can't filter by cycle" symptom). Throwing lets React Query retry
+      // transient failures (e.g. PostgREST schema-cache reloads after migrations).
+      const { data: cyclesData, error: cyclesError } = await supabase.rpc('get_donor_cycles');
+      if (cyclesError) throw cyclesError;
 
       const cycles = [...new Set((cyclesData || []).map((d: { cycle: string }) => d.cycle).filter(Boolean))] as string[];
-      
-      // Get distinct states - limit scan for faster load
-      const { data: statesData } = await supabase
+
+      // Get distinct states - limit scan for faster load. States are a secondary filter,
+      // so a states failure should not wipe out the (already loaded) cycle options.
+      const { data: statesData, error: statesError } = await supabase
         .from('donors')
         .select('contributor_state')
         .not('contributor_state', 'is', null)
         .order('contributor_state')
         .limit(5000);
-      
-      const states = [...new Set(statesData?.map(d => d.contributor_state).filter(Boolean) || [])] as string[];
-      
+
+      if (statesError) {
+        console.error('Failed to load donor state filter options', statesError);
+      }
+
+      const states = [...new Set((statesData || []).map(d => d.contributor_state).filter(Boolean))] as string[];
+
       return { cycles, states };
     },
     staleTime: 10 * 60 * 1000, // 10 minutes - cache longer
