@@ -102,7 +102,7 @@ export const Donors = () => {
     <div className="min-h-screen bg-background">
       <Seo
         title="Campaign Donors — Pulse"
-        description="Explore federal (FEC) and New Jersey state (ELEC) contributions to political candidates. Filter by cycle, jurisdiction, state, and donor type to follow the money."
+        description="Explore federal (FEC) and NJ state (ELEC) contributions to candidates. Filter by cycle, jurisdiction, state, and donor type to follow the money."
         path="/donors"
         jsonLd={{
           "@context": "https://schema.org",

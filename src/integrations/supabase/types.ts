@@ -1971,6 +1971,167 @@ export type Database = {
         }
         Relationships: []
       }
+      fl_contributions: {
+        Row: {
+          address: string | null
+          amount: number | null
+          candidate_name: string | null
+          candidate_party: string | null
+          candidate_raw: string | null
+          city_state_zip: string | null
+          cont_date: string | null
+          contributor: string | null
+          district: number | null
+          election: string | null
+          election_year: number | null
+          id: string
+          inkind_desc: string | null
+          is_individual: boolean | null
+          occupation: string | null
+          office_code: string | null
+          raw: string | null
+          synced_at: string
+          typ: string | null
+          unit_id: string
+        }
+        Insert: {
+          address?: string | null
+          amount?: number | null
+          candidate_name?: string | null
+          candidate_party?: string | null
+          candidate_raw?: string | null
+          city_state_zip?: string | null
+          cont_date?: string | null
+          contributor?: string | null
+          district?: number | null
+          election?: string | null
+          election_year?: number | null
+          id: string
+          inkind_desc?: string | null
+          is_individual?: boolean | null
+          occupation?: string | null
+          office_code?: string | null
+          raw?: string | null
+          synced_at?: string
+          typ?: string | null
+          unit_id: string
+        }
+        Update: {
+          address?: string | null
+          amount?: number | null
+          candidate_name?: string | null
+          candidate_party?: string | null
+          candidate_raw?: string | null
+          city_state_zip?: string | null
+          cont_date?: string | null
+          contributor?: string | null
+          district?: number | null
+          election?: string | null
+          election_year?: number | null
+          id?: string
+          inkind_desc?: string | null
+          is_individual?: boolean | null
+          occupation?: string | null
+          office_code?: string | null
+          raw?: string | null
+          synced_at?: string
+          typ?: string | null
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fl_contributions_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "fl_finance_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fl_finance_units: {
+        Row: {
+          contrib_synced_at: string | null
+          district: number
+          election: string
+          election_label: string | null
+          election_year: number | null
+          first_seen_at: string
+          id: string
+          last_row_count: number | null
+          last_synced_at: string | null
+          office: string | null
+          office_code: string
+        }
+        Insert: {
+          contrib_synced_at?: string | null
+          district: number
+          election: string
+          election_label?: string | null
+          election_year?: number | null
+          first_seen_at?: string
+          id: string
+          last_row_count?: number | null
+          last_synced_at?: string | null
+          office?: string | null
+          office_code: string
+        }
+        Update: {
+          contrib_synced_at?: string | null
+          district?: number
+          election?: string
+          election_label?: string | null
+          election_year?: number | null
+          first_seen_at?: string
+          id?: string
+          last_row_count?: number | null
+          last_synced_at?: string | null
+          office?: string | null
+          office_code?: string
+        }
+        Relationships: []
+      }
+      fl_sync_runs: {
+        Row: {
+          contributions_upserted: number | null
+          error: string | null
+          finished_at: string | null
+          id: number
+          mode: string | null
+          notes: Json | null
+          remaining: number | null
+          started_at: string
+          status: string
+          units_processed: number | null
+          units_upserted: number | null
+        }
+        Insert: {
+          contributions_upserted?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          mode?: string | null
+          notes?: Json | null
+          remaining?: number | null
+          started_at?: string
+          status?: string
+          units_processed?: number | null
+          units_upserted?: number | null
+        }
+        Update: {
+          contributions_upserted?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          mode?: string | null
+          notes?: Json | null
+          remaining?: number | null
+          started_at?: string
+          status?: string
+          units_processed?: number | null
+          units_upserted?: number | null
+        }
+        Relationships: []
+      }
       hidden_states: {
         Row: {
           hidden_at: string
@@ -4670,6 +4831,7 @@ export type Database = {
         }[]
       }
       cancel_job: { Args: { p_id: string }; Returns: undefined }
+      check_fl_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_nj_sync_secret: { Args: { p_token: string }; Returns: boolean }
       claim_anon_poll_responses: {
         Args: { p_anon_session_id: string }
@@ -4723,6 +4885,10 @@ export type Database = {
       fail_job: {
         Args: { p_error: string; p_id: string; p_retry_delay_seconds?: number }
         Returns: undefined
+      }
+      fl_legislator_finance: {
+        Args: { p_district?: string; p_name: string; p_office?: string }
+        Returns: Json
       }
       get_admin_user_last_signins: {
         Args: never
@@ -4787,15 +4953,19 @@ export type Database = {
           p_search?: string
           p_sort_by?: string
           p_sort_order?: string
+          p_source?: string
           p_type?: string
         }
         Returns: {
           cycle: string
           display_name: string
+          federal_amount: number
           is_consolidated: boolean
           name_variations: string[]
           primary_id: string
           recipient_count: number
+          sources: string[]
+          state_amount: number
           total_amount: number
           total_count: number
           total_transactions: number
