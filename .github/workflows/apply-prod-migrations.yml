@@ -1,0 +1,32 @@
+name: Apply new migrations to Supabase production
+
+# In this repo's Lovable + Supabase setup, merging to main deploys Edge Functions to prod
+# but does NOT apply migrations to prod. This workflow applies the migration files ADDED in
+# each merge to the production database (idempotently, via public.claude_migration_log).
+#
+# One-time setup: add a repository secret SUPABASE_DB_URL with the production database
+# connection string (Supabase Dashboard → Settings → Database → Connection string →
+# use the "Session"/direct URI, which supports DDL — not the transaction pooler).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+  workflow_dispatch:
+
+concurrency:
+  group: prod-migrations
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply newly added migrations to production
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash scripts/apply-prod-migrations.sh "${{ github.event.before }}" "${{ github.sha }}"
