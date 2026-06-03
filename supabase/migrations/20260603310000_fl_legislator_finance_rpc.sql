@@ -57,11 +57,12 @@ as $function$
       m.office_code as office,
       'District ' || m.district as location,
       m.election_year,
-      m.election_label as election_type,
+      max(u.election_label) as election_type,
       sum(m.amount)::numeric as total,
       count(*)::int as n
     from matched m
-    group by m.candidate_name, m.office_code, m.district, m.election_year, m.election_label
+    left join public.fl_finance_units u on u.id = m.unit_id
+    group by m.candidate_name, m.office_code, m.district, m.election_year
   ),
   top_contributors as (
     select

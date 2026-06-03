@@ -33,7 +33,9 @@ const BASE = "https://dos.elections.myflorida.com";
 const ENDPOINT = "/cgi-bin/contrib.exe";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 const BUDGET_MS = 110_000;
-const ROW_LIMIT = 50_000;
+// FL's CGI casts `rowlimit` to a smallint — anything > 32767 overflows and the
+// query returns zero rows. 32767 is the safe max (covers any single district).
+const ROW_LIMIT = 32_767;
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
