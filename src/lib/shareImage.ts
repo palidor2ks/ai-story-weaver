@@ -102,8 +102,8 @@ export async function renderNodeWithQA(node: HTMLElement): Promise<RenderQAResul
   // 1. Make sure web fonts are loaded before we rasterize
   let fontsReady = true;
   try {
-    if (typeof document !== 'undefined' && (document as any).fonts?.ready) {
-      await (document as any).fonts.ready;
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      await document.fonts.ready;
     }
   } catch {
     fontsReady = false;

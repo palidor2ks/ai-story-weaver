@@ -49,8 +49,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           loadingResolved.current = true;
           setLoading(false);
         }
-      } catch (err: any) {
-        console.error('[Auth] getSession error:', err.message);
+      } catch (err) {
+        console.error('[Auth] getSession error:', (err as Error).message);
         
         // Check if it's a transient error (504, network, etc.)
         const isTransient = 

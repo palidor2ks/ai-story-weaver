@@ -4,9 +4,16 @@ import { cn } from '@/lib/utils';
 
 interface TallyRow { question_id: string; selected_option_id: string; count: number }
 
+interface PollOption { id: string; text: string; value: number; display_order?: number | null }
+interface PollResultQuestion {
+  id: string;
+  question_id?: string;
+  questions: { id: string; text: string; question_options?: PollOption[] | null };
+}
+
 interface Props {
   poll: { id: string; type: string; title: string };
-  questions: any[];
+  questions: PollResultQuestion[];
   tally: TallyRow[];
   userAnswers?: Record<string, string>;
 }
@@ -30,16 +37,16 @@ export function PollResults({ poll, questions, tally, userAnswers = {} }: Props)
         </CardContent>
       </Card>
 
-      {questions.map((pq: any, idx: number) => {
+      {questions.map((pq, idx) => {
         const q = pq.questions;
         const opts = (q.question_options || [])
           .slice()
-          .sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
+          .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
         const qTally = tally.filter(t => t.question_id === q.id);
         const total = qTally.reduce((s, t) => s + Number(t.count), 0);
         const userPick = userAnswers[q.id];
 
-        const data = opts.map((o: any) => {
+        const data = opts.map((o) => {
           const count = Number(qTally.find(t => t.selected_option_id === o.id)?.count || 0);
           const pct = total > 0 ? Math.round((count / total) * 100) : 0;
           return {

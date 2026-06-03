@@ -23,13 +23,45 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
-      // Advisory rather than blocking: the app has ~60 pre-existing `any`s. Keeping this
-      // a warning surfaces them (and new ones) without failing CI. Tighten to "error"
-      // once they're typed.
-      "@typescript-eslint/no-explicit-any": "warn",
+      // Error in app code (typed). Admin-only internal panels stay a warning via the
+      // override below, where a stale generated types.ts still forces some `any`.
+      "@typescript-eslint/no-explicit-any": "error",
       // shadcn/ui generates empty interfaces that extend a supertype (e.g. TextareaProps).
       // Keep this advisory so regenerated UI components don't break the lint gate.
       "@typescript-eslint/no-empty-object-type": "warn",
+    },
+  },
+  {
+    // no-explicit-any stays advisory (warn) here for now:
+    //  - admin/**: internal tooling that leans on Supabase tables/RPCs missing from
+    //    the generated types.
+    //  - the listed hooks/components: their remaining `any`s are Supabase RPC/query
+    //    result rows and untyped-table client casts. Typing them correctly needs the
+    //    real schema (regenerate src/integrations/supabase/types.ts) or a local build to
+    //    verify, so they're deferred to a follow-up rather than typed blind.
+    // Everything else in src/ is gated at "error".
+    files: [
+      "src/components/admin/**/*.{ts,tsx}",
+      "src/pages/admin/**/*.{ts,tsx}",
+      "src/components/ShareProfileButton.tsx",
+      "src/pages/TopSpenders.tsx",
+      "src/hooks/useCandidateShareCardData.ts",
+      "src/hooks/useCandidates.ts",
+      "src/hooks/useCommitteePool.ts",
+      "src/hooks/useCommitteeTopics.ts",
+      "src/hooks/useDonorAliases.ts",
+      "src/hooks/useDonorCauses.ts",
+      "src/hooks/useDonorsPaginated.ts",
+      "src/hooks/useFinanceReconciliation.ts",
+      "src/hooks/useIEExclusions.ts",
+      "src/hooks/useImportExternalCommittee.ts",
+      "src/hooks/useIndependentExpenditures.ts",
+      "src/hooks/usePolls.ts",
+      "src/hooks/useRepComparison.ts",
+      "src/hooks/useUnifiedCandidates.ts",
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
     },
   },
 );

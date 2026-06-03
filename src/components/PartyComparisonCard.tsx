@@ -79,7 +79,12 @@ export function PartyComparisonCard({ partyId, partyName, score, isLoading = fal
         return [];
       }
 
-      return data.map((a: any) => ({
+      return (data as unknown as Array<{
+        question_id: string;
+        value: number;
+        questions: { text: string; topics: { name: string } };
+        question_options?: { is_skip_option?: boolean } | null;
+      }>).map((a) => ({
         question_id: a.question_id,
         value: a.value,
         question_text: a.questions.text,
@@ -114,7 +119,13 @@ export function PartyComparisonCard({ partyId, partyName, score, isLoading = fal
         return [];
       }
 
-      return data.map((a: any) => ({
+      return (data as unknown as Array<{
+        question_id: string;
+        answer_value: number;
+        source_url: string | null;
+        source_description: string | null;
+        questions: { text: string; topics: { name: string } };
+      }>).map((a) => ({
         question_id: a.question_id,
         value: a.answer_value,
         source_url: a.source_url,

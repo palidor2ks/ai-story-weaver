@@ -76,7 +76,11 @@ export function RepresentativeComparisonCard({ official, resolvedScore }: Repres
   });
 
   // Transform answers to the format needed by the edge function
-  const userAnswers = (userAnswersRaw || []).map((a: any) => ({
+  const userAnswers = ((userAnswersRaw || []) as unknown as Array<{
+    question_id: string;
+    value: number;
+    questions?: { text?: string; topics?: { name?: string } };
+  }>).map((a) => ({
     question_id: a.question_id,
     value: a.value,
     question_text: a.questions?.text || '',

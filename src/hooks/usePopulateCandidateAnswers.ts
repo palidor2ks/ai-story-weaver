@@ -117,8 +117,8 @@ export function usePopulateCandidateAnswers() {
   };
 
   // Check if error is a worker limit error
-  const isWorkerLimitError = (error: any): boolean => {
-    const message = error?.message || error?.toString() || '';
+  const isWorkerLimitError = (error: unknown): boolean => {
+    const message = (error as { message?: string })?.message || String(error ?? '') || '';
     return message.includes('WORKER_LIMIT') || 
            message.includes('546') ||
            message.includes('compute resources');

@@ -567,15 +567,15 @@ export const QuizResults = () => {
                                 id: c.candidate_id,
                                 name: c.name,
                                 office: c.office,
-                                party: (c.party as any) || 'Other',
+                                party: (c.party as CivicOfficial['party']) || 'Other',
                                 image_url: c.image_url || '',
                                 overall_score: c.overall_score ?? 0,
                                 level: (level === 'federal' ? 'federal' : level === 'state' ? 'state' : 'local') as OfficeLevelType,
                                 state: c.state,
                                 district: c.district || undefined,
                                 is_incumbent: c.is_incumbent,
-                                coverage_tier: (c.coverage_tier as any) || 'tier_3',
-                                confidence: (c.confidence as any) || 'low',
+                                coverage_tier: (c.coverage_tier as CivicOfficial['coverage_tier']) || 'tier_3',
+                                confidence: (c.confidence as CivicOfficial['confidence']) || 'low',
                               };
                               const levelLabel = level === 'federal' ? 'Federal' : level === 'state' ? 'State' : 'Local';
                               const officeLabel = formatRunningForOffice(c.office, c.state, c.district);

@@ -61,7 +61,7 @@ export const AIExplanation = ({
       if (error) throw error;
 
       setAnalysis(data);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to fetch AI analysis:', error);
       const msg = String(error?.message ?? error ?? '');
       const isRateLimited = msg.includes('429') || /rate.?limit/i.test(msg);

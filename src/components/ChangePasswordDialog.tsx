@@ -47,9 +47,9 @@ export const ChangePasswordDialog = () => {
       toast.success('Password updated successfully!');
       setOpen(false);
       setFormData({ newPassword: '', confirmPassword: '' });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating password:', error);
-      toast.error(error.message || 'Failed to update password');
+      toast.error((error as Error).message || 'Failed to update password');
     } finally {
       setIsLoading(false);
     }
