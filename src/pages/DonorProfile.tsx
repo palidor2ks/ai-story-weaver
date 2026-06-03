@@ -34,6 +34,8 @@ import {
   Sparkles
 } from 'lucide-react';
 import { logBadgeEvent } from '@/lib/badges';
+import { NjDonorProfile } from '@/components/NjDonorProfile';
+import { isNjDonorId } from '@/hooks/useNjDonorProfile';
 
 interface DonorRecord {
   id: string;
@@ -140,8 +142,7 @@ const formatDate = (dateStr: string | null) => {
   });
 };
 
-const DonorProfile = () => {
-  const { id } = useParams<{ id: string }>();
+const FederalDonorProfile = ({ id }: { id: string }) => {
   const { user } = useAuth();
   const [cycleFilter, setCycleFilter] = useState<string>('all');
   const [showAllDonations, setShowAllDonations] = useState(false);
@@ -150,8 +151,6 @@ const DonorProfile = () => {
   const [showAllRecipients, setShowAllRecipients] = useState(false);
   const [showAllContributors, setShowAllContributors] = useState(false);
   const [profileCycleFilter, setProfileCycleFilter] = useState<string>('all');
-
-  useEffect(() => { if (id) logBadgeEvent('donor_viewed', { donor_id: id }); }, [id]);
 
   // Fetch the specific donor record
   const { data: donor, isLoading: donorLoading } = useQuery({
@@ -1109,6 +1108,23 @@ const DonorProfile = () => {
       </main>
     </div>
   );
+};
+
+// Donors live in two sources: federal (FEC) records in the `donors` table and NJ
+// state (ELEC) records surfaced with synthetic `njc:` ids. Route each id to the
+// matching profile so NJ donors no longer fall through to "Donor not found".
+const DonorProfile = () => {
+  const { id } = useParams<{ id: string }>();
+
+  useEffect(() => {
+    if (id) logBadgeEvent('donor_viewed', { donor_id: id });
+  }, [id]);
+
+  if (isNjDonorId(id)) {
+    return <NjDonorProfile id={id as string} />;
+  }
+
+  return <FederalDonorProfile id={id ?? ''} />;
 };
 
 export default DonorProfile;
