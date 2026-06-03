@@ -120,7 +120,9 @@ export const DonorFilters = ({
             <SelectContent>
               <SelectItem value="all">All Sources</SelectItem>
               <SelectItem value="federal">Federal</SelectItem>
-              <SelectItem value="state">NJ State</SelectItem>
+              <SelectItem value="state">All State</SelectItem>
+              <SelectItem value="nj">NJ State</SelectItem>
+              <SelectItem value="fl">FL State</SelectItem>
             </SelectContent>
           </Select>
 

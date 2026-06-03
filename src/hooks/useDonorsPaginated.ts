@@ -44,10 +44,12 @@ export interface DonorWithCandidate {
   is_consolidated?: boolean;
   name_variations?: string[];
   recipient_count?: number;
-  // Source breakdown (federal FEC vs NJ state ELEC)
+  // Source breakdown (federal FEC vs state ELEC/DOE, per-state)
   federal_amount?: number;
   state_amount?: number;
   sources?: string[];
+  state_codes?: string[];
+  state_amounts?: Record<string, number>;
 }
 
 export interface UseDonorsPaginatedResult {
@@ -169,6 +171,8 @@ export const useDonorsPaginated = (filters: Partial<DonorFilters> = {}) => {
         federal_amount: d.federal_amount != null ? Number(d.federal_amount) : undefined,
         state_amount: d.state_amount != null ? Number(d.state_amount) : undefined,
         sources: d.sources ?? undefined,
+        state_codes: d.state_codes ?? undefined,
+        state_amounts: d.state_amounts ?? undefined,
       }));
 
       return {
