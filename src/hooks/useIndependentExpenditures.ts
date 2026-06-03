@@ -123,7 +123,9 @@ export const useCommitteeIE = (
           .or(filters.join(','));
         const byId = new Map<string, { id: string; party: string | null }>();
         const byFec = new Map<string, { id: string; party: string | null }>();
-        (cands ?? []).forEach((c) => {
+        // `fec_id` isn't in the generated types for `candidates`, so the typed
+        // builder resolves this select to a SelectQueryError — cast to the real shape.
+        ((cands ?? []) as unknown as Array<{ id: string; fec_id: string | null; party: string | null }>).forEach((c) => {
           if (c.id) byId.set(c.id, { id: c.id, party: c.party ?? null });
           if (c.fec_id) byFec.set(c.fec_id, { id: c.id, party: c.party ?? null });
         });
