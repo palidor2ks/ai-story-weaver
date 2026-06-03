@@ -41,7 +41,7 @@ export const useCommitteePool = ({ search, source, assigned, page, pageSize = 10
     placeholderData: keepPreviousData,
     staleTime: 0,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('list_committee_pool' as any, {
+      const { data, error } = await supabase.rpc('list_committee_pool', {
         p_search: debouncedSearch || null,
         p_source: source === 'all' ? null : source,
         p_assigned: assigned === 'all' ? null : assigned,
@@ -49,7 +49,7 @@ export const useCommitteePool = ({ search, source, assigned, page, pageSize = 10
         p_offset: page * pageSize,
       });
       if (error) throw error;
-      const rows = (data ?? []) as CommitteePoolRow[];
+      const rows = (data ?? []) as unknown as CommitteePoolRow[];
       return {
         rows,
         total: rows[0]?.total_count ?? 0,
@@ -61,7 +61,7 @@ export const useCommitteePool = ({ search, source, assigned, page, pageSize = 10
 export const useRefreshCommitteePool = () => {
   const qc = useQueryClient();
   return async () => {
-    const { error } = await supabase.rpc('refresh_committee_pool' as any);
+    const { error } = await supabase.rpc('refresh_committee_pool');
     if (error) {
       toast.error(error.message ?? 'Refresh failed');
       return false;

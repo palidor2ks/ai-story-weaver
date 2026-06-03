@@ -81,7 +81,7 @@ function aggregateReconciliations(
   candidateId: string,
 ): FinanceReconciliation | null {
   if (!rows.length) return null;
-  const agg: any = {
+  const agg: Record<string, unknown> = {
     id: 'aggregate',
     candidate_id: candidateId,
     cycle: 'all',
@@ -95,7 +95,7 @@ function aggregateReconciliations(
   for (const f of SUMMABLE_RECONCILIATION_FIELDS) {
     agg[f] = rows.reduce((s, r) => s + (Number(r[f] ?? 0) || 0), 0);
   }
-  return agg as FinanceReconciliation;
+  return agg as unknown as FinanceReconciliation;
 }
 
 // Hook to get reconciliation data for a single candidate.
