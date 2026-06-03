@@ -11,6 +11,7 @@ import { DonorAliasesPanel } from "@/components/admin/DonorAliasesPanel";
 import { VendorRefundsPanel } from "@/components/admin/VendorRefundsPanel";
 import { ScoreFixesTab } from "@/pages/admin/tabs/ScoreFixesTab";
 import { HiddenStatesPanel } from "@/components/admin/HiddenStatesPanel";
+import { IngestStatusPanel } from "@/components/admin/IngestStatusPanel";
 import { BackgroundProcessingProvider } from "@/context/BackgroundProcessingContext";
 
 
@@ -34,7 +35,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags, CheckCircle2, Upload, Sparkles } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Shield, Users, FileEdit, UserCheck, Building2, BarChart3, DollarSign, HelpCircle, ExternalLink, AlertTriangle, FileText, Tags, CheckCircle2, Upload, Sparkles, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -108,6 +109,7 @@ const ADMIN_AREAS = [
     label: "Platform",
     items: [
       { value: "visible-states", label: "Visible States", Icon: Shield },
+      { value: "discovery-jobs", label: "Discovery Jobs", Icon: Activity },
     ],
   },
 ];
@@ -592,6 +594,10 @@ export default function Admin() {
 
           <TabsContent value="visible-states">
             <HiddenStatesPanel />
+          </TabsContent>
+
+          <TabsContent value="discovery-jobs">
+            <IngestStatusPanel />
           </TabsContent>
 
           <TabsContent value="duplicates">
