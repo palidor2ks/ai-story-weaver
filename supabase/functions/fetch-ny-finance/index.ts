@@ -25,6 +25,7 @@ const DISCLOSURE_DS = "e9ss-239a";
 const UA = "Mozilla/5.0 (Polipulse civic-data ingest)";
 const BUDGET_MS = 110_000;
 const PAGE = 50_000;
+const MAX_PAGES = 4;               // per-filer cap: bounds runaway common-surname matches
 const MIN_DATE = "2017-01-01";
 const SCHEDULES = "'A','B','C'";
 
@@ -126,7 +127,7 @@ async function discover(supabase: any): Promise<number> {
 // Drain one candidate record: find its committees' monetary contributions by
 // matching cand_comm_name to the candidate's name, attribute them to the record.
 // deno-lint-ignore no-explicit-any
-async function syncCandidate(supabase: any, cand: Cand, errors: string[]): Promise<number> {
+async function syncCandidate(supabase: any, cand: Cand, errors: string[], startedMs: number): Promise<number> {
   const { first, surname } = parseName(cand.filer_name);
   const now = new Date().toISOString();
   if (!surname || surname.length < 3) {
@@ -143,7 +144,7 @@ async function syncCandidate(supabase: any, cand: Cand, errors: string[]): Promi
     "cntrbr_type_desc,flng_ent_city,flng_ent_state,flng_ent_zip,org_amt,sched_date,election_year," +
     "election_type,filing_sched_abbrev,payment_type_desc",
   );
-  let offset = 0, total = 0;
+  let offset = 0, total = 0, pages = 0;
   const seen = new Set<string>();
   while (true) {
     const url = `${BASE}/${DISCLOSURE_DS}.json?$select=${select}&$where=${where}&$order=trans_number&$limit=${PAGE}&$offset=${offset}`;
@@ -163,7 +164,11 @@ async function syncCandidate(supabase: any, cand: Cand, errors: string[]): Promi
     }
     total += mapped.length;
     offset += PAGE;
-    if (rows.length < PAGE) break;
+    pages++;
+    // stop on last page, the per-filer page cap (runaway common-surname guard),
+    // or the overall time budget — checked INSIDE the loop so one big filer
+    // can't blow past the budget and get the function killed mid-run.
+    if (rows.length < PAGE || pages >= MAX_PAGES || Date.now() - startedMs > BUDGET_MS) break;
     await sleep(150);
   }
   await supabase.from("ny_filers")
@@ -220,7 +225,7 @@ Deno.serve(async (req) => {
       for (const row of (due ?? []) as Cand[]) {
         if (Date.now() - startedMs > BUDGET_MS) break;
         try {
-          contribUpserted += await syncCandidate(supabase, row, errors);
+          contribUpserted += await syncCandidate(supabase, row, errors, startedMs);
           filersProcessed++;
         } catch (e) {
           errors.push(`filer ${row.filer_id}: ${String(e).slice(0, 150)}`);
