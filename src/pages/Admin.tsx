@@ -46,6 +46,7 @@ import { DonorImportPanel } from "@/components/admin/DonorImportPanel";
 import { BulkDonorSyncCard } from "@/components/admin/BulkDonorSyncCard";
 import { BulkCommitteeTotalsCard } from "@/components/admin/BulkCommitteeTotalsCard";
 import { BulkAnswerValidation } from "@/components/admin/BulkAnswerValidation";
+import { IndependentExpenditureApiFetchCard } from "@/components/admin/IndependentExpenditureApiFetchCard";
 import { IndependentExpenditureImportCard } from "@/components/admin/IndependentExpenditureImportCard";
 import { IndependentExpenditureImportHistory } from "@/components/admin/IndependentExpenditureImportHistory";
 import { AdminUsersPanel } from "@/components/admin/AdminUsersPanel";
@@ -865,6 +866,7 @@ export default function Admin() {
           <TabsContent value="donor-import" className="space-y-6">
             <BulkDonorSyncCard />
             <BulkCommitteeTotalsCard />
+            <IndependentExpenditureApiFetchCard onImportComplete={() => setIeHistoryRefresh(k => k + 1)} />
             <IndependentExpenditureImportCard onImportComplete={() => setIeHistoryRefresh(k => k + 1)} />
             <IndependentExpenditureImportHistory refreshKey={ieHistoryRefresh} />
             <DonorImportPanel />
