@@ -42,6 +42,10 @@ Deno.serve(async (req) => {
   const cycle = String(p.cycle ?? qp.get("cycle") ?? "2026");
   const doLink = (p.link ?? qp.get("link")) !== false && qp.get("link") !== "false";
   const doSync = (p.sync ?? qp.get("sync")) !== false && qp.get("sync") !== "false";
+  // Re-sync candidates whose donors are stale (older than stale_days), in addition to
+  // never-synced ones — this supersedes the broken (anon-auth) monthly-donor-sync cron.
+  const staleDays = num(p.stale_days ?? qp.get("stale_days"), 14);
+  const staleCutoff = new Date(Date.now() - staleDays * 86400000).toISOString();
 
   const startedMs = Date.now();
   const callHeaders = {
@@ -50,14 +54,13 @@ Deno.serve(async (req) => {
     "apikey": ANON_KEY,
   };
 
-  // Candidates that have a FEC candidate ID but have never been donor-synced.
-  // This is the "Sync: Never / No Data" population (includes freshly-discovered rows).
+  // Candidates with a FEC candidate ID that are never-synced OR stale (oldest first).
   const { data: due, error: dueErr } = await supabase
     .from("candidates")
     .select("id, name, fec_candidate_id, fec_committee_id, last_donor_sync")
     .not("fec_candidate_id", "is", null)
-    .is("last_donor_sync", null)
-    .order("created_at", { ascending: true })
+    .or(`last_donor_sync.is.null,last_donor_sync.lt.${staleCutoff}`)
+    .order("last_donor_sync", { ascending: true, nullsFirst: true })
     .limit(batch);
 
   if (dueErr) {
@@ -120,7 +123,7 @@ Deno.serve(async (req) => {
     .from("candidates")
     .select("id", { count: "exact", head: true })
     .not("fec_candidate_id", "is", null)
-    .is("last_donor_sync", null);
+    .or(`last_donor_sync.is.null,last_donor_sync.lt.${staleCutoff}`);
 
   return new Response(JSON.stringify({
     ok: true, cycle, processed, linked, synced, remaining: remaining ?? null, errors: errors.slice(0, 20),
