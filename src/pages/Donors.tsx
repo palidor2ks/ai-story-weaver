@@ -19,6 +19,7 @@ export const Donors = () => {
     sortOrder: 'desc',
     cycle: 'all',
     type: 'all',
+    jurisdiction: 'all',
     search: '',
     state: 'all',
     minAmount: null,
@@ -101,7 +102,7 @@ export const Donors = () => {
     <div className="min-h-screen bg-background">
       <Seo
         title="Campaign Donors — Pulse"
-        description="Explore individual and PAC contributions to political candidates. Filter by cycle, state, and donor type to follow the money."
+        description="Explore federal (FEC) and New Jersey state (ELEC) contributions to political candidates. Filter by cycle, jurisdiction, state, and donor type to follow the money."
         path="/donors"
         jsonLd={{
           "@context": "https://schema.org",
@@ -120,7 +121,8 @@ export const Donors = () => {
             Campaign Donors
           </h1>
           <p className="text-muted-foreground">
-            Explore campaign contributions to political candidates. Similar donors are automatically grouped.
+            Explore federal and New Jersey state campaign contributions to political candidates.
+            Similar donors are automatically grouped across both.
           </p>
         </div>
 
@@ -205,6 +207,9 @@ export const Donors = () => {
                 nameVariations={donor.name_variations}
                 recipientCount={donor.recipient_count}
                 cycle={effectiveCycle}
+                federalAmount={donor.federal_amount}
+                stateAmount={donor.state_amount}
+                sources={donor.sources}
                 primaryCause={getCardPrimaryCause(donor)}
               />
             ))}
