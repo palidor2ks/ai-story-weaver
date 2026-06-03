@@ -77,6 +77,9 @@ export interface CandidateAnswerCoverage {
   // Validation flags
   fecIdMismatch: boolean;
   fecIdMismatchReason: string | null;
+  // Cross-cycle finance availability
+  hasReconciliation: boolean;     // True if a finance_reconciliation row exists for the SELECTED cycle
+  otherCyclesWithData: string[];  // Other cycles (≠ selected) that have reconciliation data, newest first
   // Source tracking
   source: CandidateSource;
   level: GovernmentLevel;
@@ -167,6 +170,7 @@ function makeCivicCoverage(
     hasPartialSync: false, lastDonorSync: null, lastSyncDate: null,
     reconciliationCheckedAt: null, syncStatus: 'never',
     fecIdMismatch: false, fecIdMismatchReason: null,
+    hasReconciliation: false, otherCyclesWithData: [],
     source: 'civic',
     level: inferLevel(c.office || '', 'civic'),
   };
@@ -252,7 +256,8 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         donorCountsResult,
         reconciliationResult,
         partialSyncResult,
-        voteSyncResult
+        voteSyncResult,
+        allCyclesResult
       ] = await Promise.all([
         // Answer counts - filter by candidate IDs
         supabase
@@ -284,6 +289,13 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
         supabase
           .from('vote_sync_status')
           .select('candidate_id, expected_total, persisted_count, expected_floor_votes, persisted_floor_votes, last_sync_completed_at, sync_error, floor_vote_sync_error')
+          .in('candidate_id', candidateIds),
+        // All cycles that have reconciliation data (lightweight — drives the
+        // cross-cycle hint so a candidate's data isn't "invisible" when the
+        // selected cycle has no row but another cycle does).
+        supabase
+          .from('finance_reconciliation')
+          .select('candidate_id, cycle')
           .in('candidate_id', candidateIds),
       ]);
 
@@ -364,6 +376,16 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
       const reconciliationMap: Record<string, ReconciliationRecord> = {};
       (reconciliationData || []).forEach(row => {
         reconciliationMap[row.candidate_id] = row;
+      });
+
+      // Map candidate_id -> every cycle that has a reconciliation row (any cycle).
+      // Used to surface a hint when the selected cycle has no data but another does.
+      const cyclesByCandidate: Record<string, string[]> = {};
+      (allCyclesResult.data || []).forEach(row => {
+        if (!row.candidate_id) return;
+        const cy = String(row.cycle);
+        if (!cyclesByCandidate[row.candidate_id]) cyclesByCandidate[row.candidate_id] = [];
+        if (!cyclesByCandidate[row.candidate_id].includes(cy)) cyclesByCandidate[row.candidate_id].push(cy);
       });
 
       // Build lookup maps for sync status
@@ -570,6 +592,11 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           // Validation flags
           fecIdMismatch: fecIdValidation.mismatch,
           fecIdMismatchReason: fecIdValidation.reason,
+          // Cross-cycle finance availability
+          hasReconciliation: !!rec,
+          otherCyclesWithData: (cyclesByCandidate[c.id] || [])
+            .filter(cy => cy !== FINANCE_CYCLE)
+            .sort((a, b) => b.localeCompare(a)),
           // Source tracking
           source: 'federal' as CandidateSource,
           level: inferLevel(c.office, 'federal'),

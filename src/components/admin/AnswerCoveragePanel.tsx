@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHiddenStates } from "@/hooks/useHiddenStates";
 import { Link } from "react-router-dom";
 import { useSyncStats } from "@/hooks/useSyncStats";
@@ -148,11 +148,23 @@ export function AnswerCoveragePanel() {
     setFinanceCycleState(cycle);
     try { localStorage.setItem('admin.financeCycle', cycle); } catch { /* storage unavailable */ }
   }, []);
-  // If persisted cycle disappears from the available list, snap to newest
+  // Default the cycle selector to the newest cycle that actually has data.
+  // A previously persisted older cycle (e.g. "2024") would otherwise silently
+  // hide all finance data for candidates whose activity lives in the current
+  // cycle. We snap to the newest available cycle once on load, then respect
+  // in-session selections so the user can still drill into older cycles.
+  const cycleInitializedRef = useRef(false);
   useEffect(() => {
     if (!availableCycles || availableCycles.length === 0) return;
+    const newest = availableCycles[0];
+    if (!cycleInitializedRef.current) {
+      cycleInitializedRef.current = true;
+      if (financeCycle !== newest) setFinanceCycle(newest);
+      return;
+    }
+    // After the initial snap, only correct if the selected cycle vanished.
     if (!availableCycles.includes(financeCycle)) {
-      setFinanceCycle(availableCycles[0]);
+      setFinanceCycle(newest);
     }
   }, [availableCycles, financeCycle, setFinanceCycle]);
   
@@ -2536,9 +2548,31 @@ export function AnswerCoveragePanel() {
                             </Popover>
                           </TableCell>
                           <TableCell className="text-right px-2 py-2 whitespace-nowrap">
-                            <span className="font-medium text-xs">{formatCurrency(financeStatus.fecTotalReceipts, true)}</span>
+                            {candidate.hasReconciliation ? (
+                              <span className="font-medium text-xs">{formatCurrency(financeStatus.fecTotalReceipts, true)}</span>
+                            ) : candidate.otherCyclesWithData.length > 0 ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 hover:text-amber-700 hover:underline"
+                                      onClick={() => setFinanceCycle(candidate.otherCyclesWithData[0])}
+                                    >
+                                      <ChevronsRight className="h-3 w-3" />
+                                      {`'${candidate.otherCyclesWithData[0].slice(-2)}`}
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left" className="max-w-[220px]">
+                                    No finance data for cycle {financeCycle}. Found data in cycle{candidate.otherCyclesWithData.length > 1 ? 's' : ''} {candidate.otherCyclesWithData.join(', ')}. Click to switch.
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              <span className="font-medium text-xs text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right px-2 py-2 whitespace-nowrap">
+                            {candidate.hasReconciliation ? (
                             <Popover>
                               <PopoverTrigger asChild>
                                 <button className="font-medium text-xs hover:underline cursor-help">
@@ -2610,6 +2644,9 @@ export function AnswerCoveragePanel() {
                                 </div>
                               </PopoverContent>
                             </Popover>
+                            ) : (
+                              <span className="font-medium text-xs text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="px-2 py-2 whitespace-nowrap">
                             <DeltaBadge
