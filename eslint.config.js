@@ -53,12 +53,10 @@ export default tseslint.config(
       "src/hooks/useCandidates.ts",
       "src/hooks/useCommitteeTopics.ts",
       "src/hooks/useDonorAliases.ts",
-      "src/hooks/useDonorCauses.ts",
       "src/hooks/useDonorsPaginated.ts",
       "src/hooks/useIndependentExpenditures.ts",
       "src/hooks/usePolls.ts",
       "src/hooks/useRepComparison.ts",
-      "src/hooks/useUnifiedCandidates.ts",
     ],
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",

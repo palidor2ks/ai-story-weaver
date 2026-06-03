@@ -81,11 +81,12 @@ const buildCandidate = (
   const imageUrl = db?.image_url ?? api?.image_url ?? undefined;
 
   const stored = scoreMap?.get(id);
+  const apiExtra = api as { overall_score?: number; coverage_tier?: string; confidence?: string } | undefined;
   const overallScore =
-    stored ?? db?.overall_score ?? (api as any)?.overall_score ?? 0;
+    stored ?? db?.overall_score ?? apiExtra?.overall_score ?? 0;
 
-  const coverageTier = (db?.coverage_tier ?? (api as any)?.coverage_tier ?? 'tier_3') as CoverageTier;
-  const confidence = (db?.confidence ?? (api as any)?.confidence ?? 'medium') as ConfidenceLevel;
+  const coverageTier = (db?.coverage_tier ?? apiExtra?.coverage_tier ?? 'tier_3') as CoverageTier;
+  const confidence = (db?.confidence ?? apiExtra?.confidence ?? 'medium') as ConfidenceLevel;
 
   const isIncumbent = db?.is_incumbent ?? api?.is_incumbent ?? true;
 
@@ -104,7 +105,7 @@ const buildCandidate = (
     imageUrl: imageUrl || undefined,
     overallScore,
     topicScores:
-      (db?.topicScores || []).map((ts: any) => ({
+      ((db?.topicScores || []) as Array<{ topic_id: string; topics?: { name?: string } | null; score: number }>).map((ts) => ({
         topicId: ts.topic_id,
         topicName: ts.topics?.name || ts.topic_id,
         score: ts.score,
@@ -203,18 +204,19 @@ export const useUnifiedCandidates = ({
     () =>
       allIds
         .map((id) => {
-          const src =
-            lookups.allById.get(id) ||
+          const src = (lookups.allById.get(id) ||
             lookups.repsById.get(id) ||
             lookups.civicById.get(id) ||
-            lookups.dbById.get(id);
+            lookups.dbById.get(id)) as
+            | { name?: string; party?: string; office?: string; state?: string }
+            | undefined;
           return src
             ? {
                 id,
-                name: (src as any).name,
-                party: (src as any).party,
-                office: (src as any).office,
-                state: (src as any).state,
+                name: src.name,
+                party: src.party,
+                office: src.office,
+                state: src.state,
               }
             : null;
         })
@@ -314,7 +316,7 @@ export const useUnifiedCandidates = ({
     const seenPersonIds = new Set<string>();
     const personIdOf = (c: Candidate): string | undefined => {
       const db = dbById.get(c.id) ?? dbByName.get(nameKey(c.name, c.office));
-      return (db as any)?.person_id ?? undefined;
+      return (db as { person_id?: string } | undefined)?.person_id ?? undefined;
     };
     const push = (c: Candidate) => {
       if (seenIds.has(c.id)) return;

@@ -124,7 +124,14 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       const aliasLevelCause = new Map<string, { causeId: string; assignedBy: string; confidence: string | null; fecCommitteeId: string }>();
       const aliasCauseIds = new Set<string>();
 
-      const applyAliasToKey = (key: string, alias: any) => {
+      type AliasCauseRow = {
+        fec_committee_id?: string | null;
+        fec_committee_ids?: string[] | null;
+        primary_cause_id?: string | null;
+        cause_assigned_by?: string | null;
+        cause_ai_confidence?: string | null;
+      };
+      const applyAliasToKey = (key: string, alias: AliasCauseRow) => {
         const ids: string[] = [];
         if (alias.fec_committee_id) ids.push(alias.fec_committee_id);
         if (Array.isArray(alias.fec_committee_ids)) ids.push(...alias.fec_committee_ids);
@@ -146,7 +153,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       for (const m of (members ?? [])) {
         const alias = m.donor_aliases;
         if (!alias?.is_active) continue;
-        applyAliasToKey(`${norm(m.donor_name)}|${m.donor_type}`, alias);
+        applyAliasToKey(`${norm(m.donor_name)}|${m.donor_type}`, alias as unknown as AliasCauseRow);
       }
 
       // Consolidated donor rows often use donor_aliases.canonical_name as the
@@ -161,7 +168,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       for (const alias of (canonicalAliases ?? [])) {
         for (const input of uniqueInputs) {
           if (norm(input.name) !== norm(alias.canonical_name)) continue;
-          applyAliasToKey(`${norm(input.name)}|${input.type}`, alias);
+          applyAliasToKey(`${norm(input.name)}|${input.type}`, alias as unknown as AliasCauseRow);
         }
       }
 
@@ -171,9 +178,11 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
           .from('committee_causes')
           .select('id, label, description, stance, quiz_topic_id')
           .in('id', Array.from(aliasCauseIds));
-        const causeMap = new Map((causeRows ?? []).map((c: any) => [c.id, c]));
+        const causeMap = new Map(
+          ((causeRows ?? []) as Array<{ id: string; label: string; description: string | null; stance: string | null; quiz_topic_id: string | null }>).map((c) => [c.id, c]),
+        );
         for (const [key, info] of aliasLevelCause.entries()) {
-          const c: any = causeMap.get(info.causeId);
+          const c = causeMap.get(info.causeId);
           if (!c) continue;
           result.set(key, {
             causeId: c.id,
@@ -231,7 +240,13 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
         // committee_topics -> committee_causes embed relation is not present in
         // the generated types, so the typed builder can't resolve it. The
         // `if (tErr || !topics)` branch above is the runtime fallback for that.
-        for (const t of topics as any[]) {
+        for (const t of topics as unknown as Array<{
+          fec_committee_id: string;
+          ai_confidence: string | null;
+          assigned_by: string | null;
+          admin_overridden: boolean | null;
+          committee_causes: { id: string; label: string; description: string | null; stance: string | null; quiz_topic_id: string | null } | null;
+        }>) {
           const c = t.committee_causes;
           if (!c) continue;
           causeByCommittee.set(t.fec_committee_id, {
