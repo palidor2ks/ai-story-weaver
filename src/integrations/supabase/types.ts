@@ -591,6 +591,45 @@ export type Database = {
         }
         Relationships: []
       }
+      candidate_ingest_status: {
+        Row: {
+          cursor: Json
+          error_message: string | null
+          last_completed_at: string | null
+          last_page: number
+          last_started_at: string | null
+          last_total_fetched: number
+          last_total_new: number
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cursor?: Json
+          error_message?: string | null
+          last_completed_at?: string | null
+          last_page?: number
+          last_started_at?: string | null
+          last_total_fetched?: number
+          last_total_new?: number
+          source: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cursor?: Json
+          error_message?: string | null
+          last_completed_at?: string | null
+          last_page?: number
+          last_started_at?: string | null
+          last_total_fetched?: number
+          last_total_new?: number
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       candidate_overrides: {
         Row: {
           candidate_id: string
@@ -754,6 +793,7 @@ export type Database = {
           is_incumbent: boolean | null
           last_answers_sync: string | null
           last_donor_sync: string | null
+          last_research_at: string | null
           last_updated: string | null
           lis_member_id: string | null
           name: string
@@ -761,6 +801,7 @@ export type Database = {
           overall_score: number | null
           party: Database["public"]["Enums"]["party_type"]
           person_id: string | null
+          research_attempts: number
           score_version: string | null
           state: string
           x_handle: string | null
@@ -780,6 +821,7 @@ export type Database = {
           is_incumbent?: boolean | null
           last_answers_sync?: string | null
           last_donor_sync?: string | null
+          last_research_at?: string | null
           last_updated?: string | null
           lis_member_id?: string | null
           name: string
@@ -787,6 +829,7 @@ export type Database = {
           overall_score?: number | null
           party: Database["public"]["Enums"]["party_type"]
           person_id?: string | null
+          research_attempts?: number
           score_version?: string | null
           state: string
           x_handle?: string | null
@@ -806,6 +849,7 @@ export type Database = {
           is_incumbent?: boolean | null
           last_answers_sync?: string | null
           last_donor_sync?: string | null
+          last_research_at?: string | null
           last_updated?: string | null
           lis_member_id?: string | null
           name?: string
@@ -813,6 +857,7 @@ export type Database = {
           overall_score?: number | null
           party?: Database["public"]["Enums"]["party_type"]
           person_id?: string | null
+          research_attempts?: number
           score_version?: string | null
           state?: string
           x_handle?: string | null
@@ -2366,6 +2411,224 @@ export type Database = {
           source?: string
           title?: string
           url?: string
+        }
+        Relationships: []
+      }
+      nj_elec_contributions: {
+        Row: {
+          cand_name: string | null
+          city: string | null
+          cont_amt: number | null
+          cont_date: string | null
+          cont_type: string | null
+          contrib_s: number
+          contribution_type: string | null
+          contributor: string | null
+          contributor_type: string | null
+          election_type_code: string | null
+          election_year: number | null
+          emp_city: string | null
+          emp_name: string | null
+          emp_state: string | null
+          entity_s: string
+          first_name: string | null
+          is_individual: boolean | null
+          last_name: string | null
+          middle_init: string | null
+          non_ind_name: string | null
+          occupation_code: string | null
+          occupation_name: string | null
+          office_code: string | null
+          party_code: string | null
+          raw: Json | null
+          state: string | null
+          street1: string | null
+          street2: string | null
+          suffix: string | null
+          synced_at: string
+          zip: string | null
+        }
+        Insert: {
+          cand_name?: string | null
+          city?: string | null
+          cont_amt?: number | null
+          cont_date?: string | null
+          cont_type?: string | null
+          contrib_s: number
+          contribution_type?: string | null
+          contributor?: string | null
+          contributor_type?: string | null
+          election_type_code?: string | null
+          election_year?: number | null
+          emp_city?: string | null
+          emp_name?: string | null
+          emp_state?: string | null
+          entity_s: string
+          first_name?: string | null
+          is_individual?: boolean | null
+          last_name?: string | null
+          middle_init?: string | null
+          non_ind_name?: string | null
+          occupation_code?: string | null
+          occupation_name?: string | null
+          office_code?: string | null
+          party_code?: string | null
+          raw?: Json | null
+          state?: string | null
+          street1?: string | null
+          street2?: string | null
+          suffix?: string | null
+          synced_at?: string
+          zip?: string | null
+        }
+        Update: {
+          cand_name?: string | null
+          city?: string | null
+          cont_amt?: number | null
+          cont_date?: string | null
+          cont_type?: string | null
+          contrib_s?: number
+          contribution_type?: string | null
+          contributor?: string | null
+          contributor_type?: string | null
+          election_type_code?: string | null
+          election_year?: number | null
+          emp_city?: string | null
+          emp_name?: string | null
+          emp_state?: string | null
+          entity_s?: string
+          first_name?: string | null
+          is_individual?: boolean | null
+          last_name?: string | null
+          middle_init?: string | null
+          non_ind_name?: string | null
+          occupation_code?: string | null
+          occupation_name?: string | null
+          office_code?: string | null
+          party_code?: string | null
+          raw?: Json | null
+          state?: string | null
+          street1?: string | null
+          street2?: string | null
+          suffix?: string | null
+          synced_at?: string
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nj_elec_contributions_entity_s_fkey"
+            columns: ["entity_s"]
+            isOneToOne: false
+            referencedRelation: "nj_elec_entities"
+            referencedColumns: ["entity_s"]
+          },
+        ]
+      }
+      nj_elec_entities: {
+        Row: {
+          contrib_synced_at: string | null
+          election_type: string | null
+          election_type_code: string | null
+          election_year: number | null
+          entity_first_name: string | null
+          entity_id: string | null
+          entity_last_name: string | null
+          entity_name: string
+          entity_s: string
+          first_seen_at: string
+          last_synced_at: string
+          location: string | null
+          location_code: string | null
+          office: string | null
+          office_code: string | null
+          party: string | null
+          party_code: string | null
+          raw: Json | null
+          total_contributions: number | null
+          total_expenditures: number | null
+        }
+        Insert: {
+          contrib_synced_at?: string | null
+          election_type?: string | null
+          election_type_code?: string | null
+          election_year?: number | null
+          entity_first_name?: string | null
+          entity_id?: string | null
+          entity_last_name?: string | null
+          entity_name: string
+          entity_s: string
+          first_seen_at?: string
+          last_synced_at?: string
+          location?: string | null
+          location_code?: string | null
+          office?: string | null
+          office_code?: string | null
+          party?: string | null
+          party_code?: string | null
+          raw?: Json | null
+          total_contributions?: number | null
+          total_expenditures?: number | null
+        }
+        Update: {
+          contrib_synced_at?: string | null
+          election_type?: string | null
+          election_type_code?: string | null
+          election_year?: number | null
+          entity_first_name?: string | null
+          entity_id?: string | null
+          entity_last_name?: string | null
+          entity_name?: string
+          entity_s?: string
+          first_seen_at?: string
+          last_synced_at?: string
+          location?: string | null
+          location_code?: string | null
+          office?: string | null
+          office_code?: string | null
+          party?: string | null
+          party_code?: string | null
+          raw?: Json | null
+          total_contributions?: number | null
+          total_expenditures?: number | null
+        }
+        Relationships: []
+      }
+      nj_elec_sync_runs: {
+        Row: {
+          contributions_upserted: number | null
+          election_years: number[] | null
+          entities_upserted: number | null
+          error: string | null
+          finished_at: string | null
+          id: number
+          notes: Json | null
+          office_codes: string[] | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          contributions_upserted?: number | null
+          election_years?: number[] | null
+          entities_upserted?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          notes?: Json | null
+          office_codes?: string[] | null
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          contributions_upserted?: number | null
+          election_years?: number[] | null
+          entities_upserted?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          notes?: Json | null
+          office_codes?: string[] | null
+          started_at?: string
+          status?: string
         }
         Relationships: []
       }
@@ -4407,6 +4670,7 @@ export type Database = {
         }[]
       }
       cancel_job: { Args: { p_id: string }; Returns: undefined }
+      check_nj_sync_secret: { Args: { p_token: string }; Returns: boolean }
       claim_anon_poll_responses: {
         Args: { p_anon_session_id: string }
         Returns: number
@@ -4598,6 +4862,10 @@ export type Database = {
       merge_persons: {
         Args: { from_id: string; into_id: string }
         Returns: undefined
+      }
+      nj_legislator_finance: {
+        Args: { p_district?: string; p_name: string; p_office?: string }
+        Returns: Json
       }
       normalize_office_key: { Args: { _office: string }; Returns: string }
       normalize_person_name: { Args: { _name: string }; Returns: string }
