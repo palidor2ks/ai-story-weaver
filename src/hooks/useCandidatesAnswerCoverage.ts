@@ -92,7 +92,17 @@ interface Filters {
 function inferLevel(office: string, source: CandidateSource): GovernmentLevel {
   const o = (office || '').toLowerCase();
   if (source === 'federal') {
-    if (o.includes('president') || o.includes('vice president')) return 'federal_executive';
+    // The candidates table is sourced from federal data (Congress.gov/FEC), so
+    // every row arrives tagged source='federal' — but it also holds municipal
+    // and county candidates (mayors, council members, commissioners). Detect
+    // those local/state offices BEFORE defaulting to Congress, otherwise they
+    // are all mislabeled as federal_legislative. None of the federal office
+    // strings (Representative, Senator, U.S. House/Senate, President) contain
+    // these municipal keywords, so checking local first is safe.
+    if (/mayor|council|alderman|selectman|sheriff|district attorney|school board|\bcounty\b|commissioner|surrogate|freeholder|\bborough\b|\bward\b|register|coroner|municipal|city clerk|town clerk/.test(o)) return 'local';
+    if (/lieutenant governor|\bgovernor\b/.test(o)) return 'state_executive';
+    if (/\bvice president\b|\bpresident\b/.test(o)) return 'federal_executive';
+    if (/state senat|state represent|state assembl|state house|state legislat|\bassembly\b/.test(o)) return 'state_legislative';
     return 'federal_legislative';
   }
   if (o.includes('governor') || o.includes('lieutenant governor')) return 'state_executive';
