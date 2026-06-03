@@ -16,6 +16,9 @@ const ALLOWED_HOST_SUFFIXES = [
   'githubusercontent.com',
   'wikimedia.org',
   'wikipedia.org',
+  'nj.us',
+  'state.nj.us',
+  'njleg.state.nj.us',
 ];
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
