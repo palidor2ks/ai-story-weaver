@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapPin, Loader2, CheckCircle2, AlertCircle, Search } from 'lucide-react';
@@ -24,16 +24,29 @@ interface AddressAutocompleteProps {
   value: string;
   onChange: (value: string) => void;
   onAddressSelect?: (address: AddressDetails) => void;
+  onValidationChange?: (isValid: boolean) => void;
   placeholder?: string;
   className?: string;
   id?: string;
   disabled?: boolean;
 }
 
+// An address only counts as "complete" when it has been verified AND resolves
+// to a full street + city + state + ZIP. Partial matches (e.g. a bare street
+// line) must not be treated as a usable address.
+const isCompleteAddress = (details: AddressDetails | null | undefined): boolean =>
+  Boolean(
+    details?.isValid &&
+    details.city?.trim() &&
+    details.state?.trim() &&
+    details.zipCode?.trim()
+  );
+
 export const AddressAutocomplete = ({
   value,
   onChange,
   onAddressSelect,
+  onValidationChange,
   placeholder = "Enter your full address...",
   className,
   id,
@@ -44,6 +57,8 @@ export const AddressAutocomplete = ({
   const [error, setError] = useState<string | null>(null);
   const [validationResult, setValidationResult] = useState<AddressDetails | null>(null);
   const debounceRef = useRef<NodeJS.Timeout>();
+  const initialValueRef = useRef(value);
+  const didAutoValidateRef = useRef(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
@@ -51,6 +66,8 @@ export const AddressAutocomplete = ({
     setIsVerified(false);
     setError(null);
     setValidationResult(null);
+    // Editing the field invalidates any previous verification.
+    onValidationChange?.(false);
   };
 
   const validateAddress = useCallback(async () => {
@@ -72,31 +89,49 @@ export const AddressAutocomplete = ({
       if (data?.error) {
         setError(data.error);
         setIsVerified(false);
+        onValidationChange?.(false);
         return;
       }
 
-      if (data?.isValid) {
+      if (isCompleteAddress(data)) {
         setValidationResult(data);
         setIsVerified(true);
+        setError(null);
         onChange(data.formattedAddress);
         onAddressSelect?.(data);
+        onValidationChange?.(true);
       } else {
-        setError('Could not verify this address. Please check and try again.');
+        // Either unverifiable or only a partial match (missing city/state/ZIP).
+        // Do NOT surface it as a selected address — that's the gap that let
+        // incomplete addresses through.
         setIsVerified(false);
-        
-        // Still provide the data if we have a formatted address
-        if (data?.formattedAddress) {
-          setValidationResult(data);
-          onAddressSelect?.(data);
-        }
+        setValidationResult(null);
+        onValidationChange?.(false);
+        setError(
+          data?.isValid
+            ? 'We could only partially verify this address. Please include street, city, state, and ZIP.'
+            : 'Could not verify this address. Please check and try again.'
+        );
       }
     } catch (err) {
       console.error('Error validating address:', err);
       setError('Unable to validate address. Please try again.');
+      onValidationChange?.(false);
     } finally {
       setIsLoading(false);
     }
-  }, [value, onChange, onAddressSelect]);
+  }, [value, onChange, onAddressSelect, onValidationChange]);
+
+  // Re-verify a pre-filled address (e.g. a returning user, or existing saved
+  // data) once on mount so the parent's validity gate reflects whether the
+  // stored address is actually complete.
+  useEffect(() => {
+    if (didAutoValidateRef.current) return;
+    if (initialValueRef.current && initialValueRef.current.trim().length >= 5) {
+      didAutoValidateRef.current = true;
+      validateAddress();
+    }
+  }, [validateAddress]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {

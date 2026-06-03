@@ -121,6 +121,7 @@ export const DemographicsForm = ({
   });
 
   const [addressState, setAddressState] = useState<{ code: string; name: string } | null>(null);
+  const [addressVerified, setAddressVerified] = useState(false);
   const { isHidden } = useHiddenStates();
   const stateNotSupported = addressState ? isHidden(addressState.code) : false;
 
@@ -129,7 +130,7 @@ export const DemographicsForm = ({
     onSubmit(formData);
   };
 
-  const isFormValid = formData.address && formData.political_party && formData.age && formData.income && formData.employment_status && formData.sex && formData.religion && formData.education_level && formData.race;
+  const isFormValid = addressVerified && formData.address && formData.political_party && formData.age && formData.income && formData.employment_status && formData.sex && formData.religion && formData.education_level && formData.race;
 
   return (
     <div className="max-w-xl mx-auto animate-fade-in">
@@ -159,6 +160,7 @@ export const DemographicsForm = ({
                 setFormData(prev => ({ ...prev, address: details.formattedAddress }));
                 setAddressState({ code: details.state, name: details.stateFull || details.state });
               }}
+              onValidationChange={setAddressVerified}
               placeholder="Start typing your address..."
               className="bg-background"
             />
