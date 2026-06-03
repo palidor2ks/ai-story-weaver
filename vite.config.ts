@@ -27,12 +27,17 @@ export default defineConfig(({ mode }) => ({
         // Split large, infrequently-changing dependencies into their own long-cached
         // vendor chunks so users don't re-download them on every app deploy, and so the
         // heaviest libs aren't bundled into route chunks that need them only rarely.
+        // Only EAGER deps (loaded on every page) belong here. recharts/xlsx are named so
+        // they're deduped and cached, but they stay out of the initial load because nothing
+        // in the eager graph imports them. papaparse/date-fns are intentionally NOT listed:
+        // they're used only by lazy admin components, so Rollup keeps them in those lazy
+        // chunks instead of being dragged into the eager bundle via a shared group.
         manualChunks: {
           "react-vendor": ["react", "react-dom", "react-router-dom"],
           "supabase": ["@supabase/supabase-js"],
+          "react-query": ["@tanstack/react-query"],
           "charts": ["recharts"],
           "xlsx": ["xlsx"],
-          "data-utils": ["@tanstack/react-query", "papaparse", "date-fns", "zod"],
         },
       },
     },
