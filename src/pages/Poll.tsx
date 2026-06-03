@@ -119,7 +119,7 @@ export default function Poll() {
       <main className="container py-8 max-w-2xl">
         <Card>
           <CardHeader>
-            <CardTitle className="font-display text-2xl">{poll.title}</CardTitle>
+            <CardTitle as="h1" className="font-display text-2xl">{poll.title}</CardTitle>
             {poll.description && <CardDescription>{poll.description}</CardDescription>}
           </CardHeader>
           <CardContent className="space-y-6">
