@@ -3,6 +3,12 @@
 // background research via `get-candidate-answers` so they become directly comparable.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  upsertElection,
+  resolveAndUpsertCandidate,
+  linkElectionCandidate,
+  kickResearch,
+} from '../_shared/onboard-candidate.ts';
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
 
@@ -542,240 +548,31 @@ Deno.serve(async (req) => {
 // ---- persist + auto-onboard ----------------------------------------------
 
 async function persistAll(supabase: any, rows: ElectionPayload[]) {
-  const newCandidateIds: string[] = [];
-  const newCandidateMeta = new Map<string, CandidatePayload>();
+  // Candidate resolution/dedup/insert now lives in the shared funnel
+  // (_shared/onboard-candidate.ts) so this on-demand path and the scheduled discover-*
+  // jobs onboard candidates identically. Behavior here is unchanged: the on-demand lookup
+  // does NOT restrict to visible states (no restrictToVisible flag passed).
+  const newItems: Array<{ id: string; meta: CandidatePayload }> = [];
 
   for (const row of rows) {
-    // Manual upsert (the unique index uses COALESCE expressions, which PostgREST
-    // onConflict cannot target). Look up by canonical keys; insert if missing.
-    let electionId: string | null = null;
-    const lookup = await supabase
-      .from('elections')
-      .select('id')
-      .eq('source', row.source)
-      .eq('election_date', row.election_date)
-      .eq('source_ref', row.source_ref ?? '')
-      .maybeSingle();
+    const electionId = await upsertElection(supabase, row);
+    if (!electionId) continue;
 
-    if (lookup.data?.id) {
-      electionId = lookup.data.id;
-    } else {
-      const { data: inserted, error: insErr } = await supabase
-        .from('elections')
-        .insert({
-          election_date: row.election_date,
-          election_type: row.election_type,
-          level: row.level,
-          state: row.state,
-          jurisdiction: row.jurisdiction,
-          name: row.name,
-          source: row.source,
-          source_ref: row.source_ref ?? null,
-        })
-        .select('id')
-        .maybeSingle();
-      if (insErr || !inserted) {
-        console.warn('[persist] failed to insert election', row.source, row.source_ref, insErr?.message);
-        continue;
-      }
-      electionId = inserted.id;
+    for (const c of row.candidates) {
+      const { candidateId, isNew } = await resolveAndUpsertCandidate(supabase, c);
+      if (!candidateId) continue; // skipped (covered by static_officials)
+      if (isNew) newItems.push({ id: candidateId, meta: c });
+      await linkElectionCandidate(supabase, electionId, candidateId, c);
     }
-
-    await persistCandidates(supabase, electionId, row.candidates, newCandidateIds, newCandidateMeta);
   }
 
   // Kick off background research for up to MAX_RESEARCH_PER_RUN new candidates.
-  const toResearch = newCandidateIds.slice(0, MAX_RESEARCH_PER_RUN);
+  const toResearch = newItems.slice(0, MAX_RESEARCH_PER_RUN);
   if (toResearch.length > 0) {
-    EdgeRuntime.waitUntil((async () => {
-      for (const id of toResearch) {
-        const meta = newCandidateMeta.get(id)!;
-        try {
-          await fetch(`${SUPABASE_URL}/functions/v1/get-candidate-answers`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              [INTERNAL_CHAIN_HEADER]: SUPABASE_SERVICE_ROLE_KEY,
-              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-            },
-            body: JSON.stringify({
-              candidateId: id,
-              candidateName: meta.name,
-              candidateParty: meta.party,
-              candidateOffice: meta.office,
-              candidateState: meta.state,
-              useBackground: true,
-            }),
-          });
-        } catch (e) {
-          console.error('[research-kick] failed for', id, e);
-        }
-      }
-    })());
+    EdgeRuntime.waitUntil(kickResearch(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, toResearch));
   }
 }
 
-async function persistCandidates(
-  supabase: any,
-  electionId: string,
-  candidates: CandidatePayload[],
-  newCandidateIds: string[],
-  newCandidateMeta: Map<string, CandidatePayload>,
-) {
-  for (const c of candidates) {
-    let resolvedPersonId: string | null = null;
-
-    // 1) Try collapsing by FEC candidate id.
-    const looksLikeFecId = /^[HSP]\d[A-Z]{2}\d+$/.test(c.id);
-    const fecLookup = c.fec_candidate_id || (looksLikeFecId ? c.id : null);
-    if (fecLookup) {
-      const { data: byFec } = await supabase
-        .from('candidates')
-        .select('id')
-        .eq('fec_candidate_id', fecLookup)
-        .maybeSingle();
-      if (byFec && byFec.id !== c.id) {
-        console.log(`[persist] collapsing FEC id ${c.id} → canonical ${byFec.id}`);
-        c.id = byFec.id;
-      } else {
-        const { data: byAlias } = await supabase
-          .from('candidate_fec_ids')
-          .select('candidate_id')
-          .eq('fec_candidate_id', fecLookup)
-          .limit(1);
-        const aliasId = byAlias?.[0]?.candidate_id;
-        if (aliasId && aliasId !== c.id) {
-          console.log(`[persist] collapsing FEC alias ${c.id} → canonical ${aliasId}`);
-          c.id = aliasId;
-        }
-      }
-    }
-
-    // 2) Person table match: this lets AI / Civic-discovered candidates reuse an
-    // existing profile when the person has already been resolved from another source.
-    try {
-      const { data: pid } = await supabase.rpc('resolve_person', {
-        _name: c.name,
-        _state: c.state || 'US',
-        _office: c.office,
-        _bioguide_id: null,
-        _fec_candidate_id: c.fec_candidate_id ?? null,
-        _openstates_id: null,
-      });
-      if (pid) {
-        resolvedPersonId = pid as string;
-        const { data: byPerson } = await supabase
-          .from('candidates')
-          .select('id')
-          .eq('person_id', pid as string)
-          .limit(1);
-        const personCandidateId = byPerson?.[0]?.id;
-        if (personCandidateId && personCandidateId !== c.id) {
-          console.log(`[persist] collapsing ${c.id} → existing ${personCandidateId} by person_id ${pid}`);
-          c.id = personCandidateId;
-        }
-      }
-    } catch (e) {
-      console.warn('[persist] resolve_person candidate match failed (continuing):', (e as Error).message);
-    }
-
-    // 3) Fallback: collapse by normalized (name, state, office class, district).
-    {
-      const targetKey = nameKey(c.name);
-      const targetClass = officeClass(c.office);
-      const targetDist = districtKey(c.district);
-      const { data: candidatesInState } = await supabase
-        .from('candidates')
-        .select('id, name, office, district')
-        .eq('state', c.state || 'US');
-      const match = (candidatesInState || []).find((row: any) => {
-        if (row.id === c.id) return false;
-        if (nameKey(row.name) !== targetKey) return false;
-        if (officeClass(row.office) !== targetClass) return false;
-        const rd = districtKey(row.district);
-        if (rd && targetDist && rd !== targetDist) return false;
-        return true;
-      });
-      if (match) {
-        console.log(`[persist] collapsing ${c.id} → existing ${match.id} by name+state+office`);
-        c.id = match.id;
-      }
-    }
-
-    // 4) Check if candidate exists.
-    const { data: existing } = await supabase
-      .from('candidates')
-      .select('id, answers_source')
-      .eq('id', c.id)
-      .maybeSingle();
-
-    if (!existing) {
-      if (!resolvedPersonId) {
-        try {
-          const { data: pid } = await supabase.rpc('resolve_person', {
-            _name: c.name,
-            _state: c.state || 'US',
-            _office: c.office,
-            _bioguide_id: null,
-            _fec_candidate_id: c.fec_candidate_id ?? null,
-            _openstates_id: null,
-          });
-          resolvedPersonId = (pid as string) ?? null;
-        } catch (e) {
-          console.warn('[persist] resolve_person insert metadata failed (continuing):', (e as Error).message);
-        }
-      }
-
-      // Guard: skip inserting a duplicate candidate row when a static_officials
-      // record already covers this person (avoids ghost profiles for incumbents).
-      if (resolvedPersonId) {
-        const { data: backed } = await supabase
-          .from('static_officials')
-          .select('id')
-          .eq('person_id', resolvedPersonId)
-          .limit(1);
-        if (backed && backed.length > 0) {
-          console.log(`[persist] skipping candidate insert ${c.id} — static_officials already covers person ${resolvedPersonId}`);
-          continue;
-        }
-      }
-
-      const insertRow = {
-        id: c.id,
-        name: c.name,
-        party: c.party,
-        office: c.office,
-        state: c.state || 'US',
-        district: c.district,
-        image_url: c.image_url,
-        fec_candidate_id: c.fec_candidate_id ?? null,
-        person_id: resolvedPersonId,
-        is_incumbent: c.is_incumbent,
-        overall_score: 0,
-        coverage_tier: 'tier_3',
-        confidence: 'low',
-        answers_source: 'pending_research',
-        score_version: 'v1.0',
-      };
-      const { error: insErr } = await supabase.from('candidates').insert(insertRow);
-      if (insErr) {
-        console.warn('[persist] candidate insert blocked/failed', c.id, insErr.message);
-      } else {
-        newCandidateIds.push(c.id);
-        newCandidateMeta.set(c.id, c);
-      }
-    }
-
-    // Upsert election_candidate link.
-    const { error: ecErr } = await supabase.from('election_candidates').upsert({
-      election_id: electionId,
-      candidate_id: c.id,
-      office: c.office,
-      status: c.status ?? 'declared',
-      is_incumbent: c.is_incumbent,
-      source: c.source,
-      source_ref: c.source_ref ?? null,
-    }, { onConflict: 'election_id,candidate_id' });
-    if (ecErr) console.warn('[persist] ec upsert failed', ecErr.message);
-  }
-}
+// persistCandidates() was extracted into _shared/onboard-candidate.ts as
+// resolveAndUpsertCandidate() + linkElectionCandidate() (the canonical dedup funnel,
+// also used by the scheduled discover-* jobs). See persistAll() above.

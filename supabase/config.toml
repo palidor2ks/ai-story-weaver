@@ -67,6 +67,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.fetch-upcoming-elections]
     verify_jwt = false
+  [functions.discover-fec-candidates]
+    verify_jwt = false
   [functions.generate-ai-bill-summaries]
     verify_jwt = false
   [functions.generate-party-comparison]
