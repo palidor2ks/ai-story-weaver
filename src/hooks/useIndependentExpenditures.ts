@@ -53,7 +53,7 @@ export const useCommitteeIE = (
         .eq('spending_committee_fec_id', committeeFecId!)
         .not('cycle', 'is', null);
       const availableCycles = Array.from(
-        new Set((cyclesRes.data ?? []).map((r: any) => String(r.cycle))),
+        new Set((cyclesRes.data ?? []).map((r) => String(r.cycle))),
       ).sort((a, b) => b.localeCompare(a));
 
       // Filtered rows
@@ -123,7 +123,7 @@ export const useCommitteeIE = (
           .or(filters.join(','));
         const byId = new Map<string, { id: string; party: string | null }>();
         const byFec = new Map<string, { id: string; party: string | null }>();
-        (cands ?? []).forEach((c: any) => {
+        (cands ?? []).forEach((c) => {
           if (c.id) byId.set(c.id, { id: c.id, party: c.party ?? null });
           if (c.fec_id) byFec.set(c.fec_id, { id: c.id, party: c.party ?? null });
         });
@@ -189,7 +189,7 @@ export const useCandidateIE = (
           else totals.oppose_amount += amt;
         });
       } else {
-        const t = (totalsRes as any).data;
+        const t = (totalsRes as { data?: { expenditure_count?: number; total_amount?: number; support_amount?: number; oppose_amount?: number } | null }).data;
         totals = {
           expenditure_count: num(t?.expenditure_count),
           total_amount: num(t?.total_amount),
@@ -199,7 +199,7 @@ export const useCandidateIE = (
       }
 
       const availableCycles = Array.from(
-        new Set((cyclesRes.data ?? []).map((r: any) => String(r.cycle))),
+        new Set((cyclesRes.data ?? []).map((r) => String(r.cycle))),
       ).sort((a, b) => b.localeCompare(a));
 
       // Aggregate top spenders from rows
@@ -246,7 +246,7 @@ export const useCandidatesIE = (candidateIds: string[]) => {
 
       // Group by candidate_id -> cycle -> totals
       const byCand = new Map<string, Map<string, IETotals>>();
-      (data ?? []).forEach((r: any) => {
+      (data ?? []).forEach((r) => {
         if (!r.candidate_id) return;
         const cycle = r.cycle ? String(r.cycle) : '';
         const cyclesMap = byCand.get(r.candidate_id) ?? new Map<string, IETotals>();
