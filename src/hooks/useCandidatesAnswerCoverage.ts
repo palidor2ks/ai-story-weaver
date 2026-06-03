@@ -658,8 +658,8 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           const newStatic = staticOfficials.filter(s => !existingIds.has(s.id));
           const newIds = newStatic.map(s => s.id);
 
-          let staticAnswerMap: Record<string, { count: number; sourced: number }> = {};
-          let staticOverrideMap: Record<string, { overall_score: number | null; coverage_tier: string | null; confidence: string | null }> = {};
+          const staticAnswerMap: Record<string, { count: number; sourced: number }> = {};
+          const staticOverrideMap: Record<string, { overall_score: number | null; coverage_tier: string | null; confidence: string | null }> = {};
           if (newIds.length > 0) {
             const [staticAnswerRes, staticOverrideRes] = await Promise.all([
               supabase

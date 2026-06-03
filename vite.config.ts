@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === "development" && componentTagger(),
-    process.env.ANALYZE === "true" && visualizer({ filename: "dist/stats.html", gzipSize: true, brotliSize: true, open: true }),
+    process.env.ANALYZE === "true" && visualizer({ filename: "dist/stats.html", gzipSize: true, brotliSize: true, open: !process.env.CI }),
   ].filter(Boolean),
   resolve: {
     alias: {

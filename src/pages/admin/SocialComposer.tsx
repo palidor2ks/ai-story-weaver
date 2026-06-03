@@ -33,18 +33,19 @@ export default function SocialComposer() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
 
-  if (isLoading) return <LoadingScreen />;
-  if (!data?.isAdmin) return <Navigate to="/" replace />;
-
-  const canGenerate = topic.trim().length > 0 && !isGenerating;
-  const canPost = generated.trim().length > 0 && selectedPlatforms.length > 0 && !isPosting;
-
+  // Hooks must run before any early return (react-hooks/rules-of-hooks).
   const charCounts = useMemo(() => ({
     x: generated.length,
     facebook: generated.length,
     instagram: generated.length,
     tiktok: generated.length,
   }), [generated]);
+
+  if (isLoading) return <LoadingScreen />;
+  if (!data?.isAdmin) return <Navigate to="/" replace />;
+
+  const canGenerate = topic.trim().length > 0 && !isGenerating;
+  const canPost = generated.trim().length > 0 && selectedPlatforms.length > 0 && !isPosting;
 
   const generatePost = async () => {
     if (!canGenerate) return;

@@ -1,0 +1,38 @@
+name: Bundle analysis
+
+# Manual, on-demand bundle analysis. Builds with the rollup-plugin-visualizer
+# enabled (ANALYZE=true) and uploads the treemap (with gzip/brotli sizes) as an
+# artifact, plus a quick text summary of the largest JS chunks in the run log.
+# Use this to quantify bundle/chunk sizes before vs after a change.
+on:
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    name: Analyze bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build with analyzer
+        env:
+          ANALYZE: "true"
+        run: bun run build
+      - name: Largest JS chunks (gzipped on the wire differs, raw shown here)
+        run: |
+          echo "### Largest built JS assets" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          find dist/assets -name '*.js' -printf '%s\t%p\n' 2>/dev/null \
+            | sort -rn | head -20 \
+            | awk '{ printf "%8.1f KB  %s\n", $1/1024, $2 }' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload bundle treemap
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-stats
+          path: dist/stats.html
+          if-no-files-found: error
