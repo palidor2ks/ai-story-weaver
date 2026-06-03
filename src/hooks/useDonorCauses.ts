@@ -71,6 +71,13 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       const names = Array.from(new Set(uniqueInputs.map(d => d.name)));
       const types = Array.from(new Set(uniqueInputs.map(d => d.type)));
 
+      // donor_alias_members stores FEC-imported names, which are typically
+      // uppercase, while donor cards display Title Case canonical names. The
+      // Supabase `.in()` filter is case-sensitive, so match against both the
+      // original-cased names and their uppercase variants. Downstream keys are
+      // built with norm() (uppercase), so the extra variants are harmless.
+      const memberNames = Array.from(new Set(names.flatMap(n => [n, n.toUpperCase()])));
+
       // The first three lookups (direct overrides, alias members, canonical
       // aliases) don't depend on each other's results, so fetch them in parallel
       // (one network round-trip instead of three). The processing below still runs
@@ -84,11 +91,11 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
         supabase
           .from('donor_alias_members')
           .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
-          .in('donor_name', names)
+          .in('donor_name', memberNames)
           .in('donor_type', types),
         (supabase as any)
           .from('donor_aliases')
-          .select('canonical_name, donor_type, donor_types, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
+          .select('canonical_name, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
           .in('canonical_name', names)
           .eq('is_active', true),
       ]);
