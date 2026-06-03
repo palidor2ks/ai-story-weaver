@@ -91,23 +91,37 @@ interface Filters {
 
 function inferLevel(office: string, source: CandidateSource): GovernmentLevel {
   const o = (office || '').toLowerCase();
-  if (source === 'federal') {
-    // The candidates table is sourced from federal data (Congress.gov/FEC), so
-    // every row arrives tagged source='federal' — but it also holds municipal
-    // and county candidates (mayors, council members, commissioners). Detect
-    // those local/state offices BEFORE defaulting to Congress, otherwise they
-    // are all mislabeled as federal_legislative. None of the federal office
-    // strings (Representative, Senator, U.S. House/Senate, President) contain
-    // these municipal keywords, so checking local first is safe.
-    if (/mayor|council|alderman|selectman|sheriff|district attorney|school board|\bcounty\b|commissioner|surrogate|freeholder|\bborough\b|\bward\b|register|coroner|municipal|city clerk|town clerk/.test(o)) return 'local';
-    if (/lieutenant governor|\bgovernor\b/.test(o)) return 'state_executive';
-    if (/\bvice president\b|\bpresident\b/.test(o)) return 'federal_executive';
-    if (/state senat|state represent|state assembl|state house|state legislat|\bassembly\b/.test(o)) return 'state_legislative';
+
+  // One source-aware classifier shared by every candidate source: the
+  // federal-sourced `candidates` table, civic `candidate_overrides`, and
+  // `static_officials`. Order matters — state and local offices are detected
+  // BEFORE the federal fallbacks. The candidates table is tagged source
+  // 'federal' yet also holds municipal/county/state candidates, so a federal
+  // short-circuit used to mislabel all of them as Congress. Statewide officers
+  // ("Secretary of State", "State Treasurer") are matched before the municipal
+  // clerk/treasurer keywords so they don't fall through to local.
+
+  // State executive — governor + statewide constitutional/row officers.
+  if (/\bgovernor\b|lieutenant governor|lt\.? governor|attorney general|secretary of state|state treasurer|state comptroller|state controller|state auditor|superintendent of public instruction/.test(o)) {
+    return 'state_executive';
+  }
+  // State legislature (assembly / house of delegates / general assembly variants).
+  if (/state senat|state represent|state legislat|state assembl|state house|state delegate|house of delegates|general assembly|assemblymember|assemblywoman|assemblyman|\bassembly\b/.test(o)) {
+    return 'state_legislative';
+  }
+  // Local / municipal / county (also guards titles like "Council President").
+  if (/mayor|council|alderman|selectman|sheriff|district attorney|school board|\bcounty\b|\bcity\b|town|\bborough\b|\bward\b|freeholder|surrogate|commissioner|register|coroner|municipal|\bclerk\b|\btreasurer\b/.test(o)) {
+    return 'local';
+  }
+  // Federal executive.
+  if (/\bvice president\b|\bpresident\b/.test(o)) return 'federal_executive';
+  // Federal legislature: explicit U.S. House/Senate markers, then the federal
+  // data source's default (Congress.gov members carry bare "Representative" /
+  // "Senator" offices with no other qualifier).
+  if (/united states|congress|representative|\bsenator\b|\bsenate\b|\bhouse\b/.test(o)) {
     return 'federal_legislative';
   }
-  if (o.includes('governor') || o.includes('lieutenant governor')) return 'state_executive';
-  if (o.includes('state senator') || o.includes('state representative') || o.includes('state assembl') || o.includes('state legislat')) return 'state_legislative';
-  if (o.includes('mayor') || o.includes('council') || o.includes('commissioner') || o.includes('sheriff') || o.includes('clerk') || o.includes('treasurer')) return 'local';
+  if (source === 'federal') return 'federal_legislative';
   if (o.includes('state')) return 'state_legislative';
   return 'unknown';
 }
