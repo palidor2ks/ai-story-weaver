@@ -253,14 +253,7 @@ export const useDeleteDonorAlias = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      // Capture alias details BEFORE deleting so we can unapply pattern-stamped donors.
-      const { data: alias } = await supabase
-        .from('donor_aliases')
-        .select('canonical_name, alias_pattern, alias_patterns, donor_types')
-        .eq('id', id)
-        .maybeSingle();
-
-      // Get explicit members (for member-based aliases)
+      // Capture explicit members BEFORE deleting so we can reset their display_name.
       const { data: members } = await supabase
         .from('donor_alias_members')
         .select('donor_name, donor_type')
@@ -276,19 +269,6 @@ export const useDeleteDonorAlias = () => {
           .update({ display_name: m.donor_name })
           .eq('name', m.donor_name)
           .eq('type', m.donor_type as 'Individual' | 'PAC' | 'Organization' | 'Unknown');
-      }
-
-      // Also unapply any pattern-stamped donors (apply-donor-alias matches by ILIKE
-      // pattern and does NOT insert membership rows, so they'd otherwise be orphaned
-      // with display_name still set to the deleted alias's canonical_name).
-      const a = alias as any;
-      const patterns: string[] = (a?.alias_patterns?.length ? a.alias_patterns : [a?.alias_pattern]).filter(Boolean);
-      const donorTypes: string[] = a?.donor_types || [];
-      if (a?.canonical_name && patterns.length && donorTypes.length) {
-        const { error: unErr } = await supabase.functions.invoke('unapply-donor-alias', {
-          body: { patterns, donor_types: donorTypes, canonical_name: a.canonical_name },
-        });
-        if (unErr) console.warn('[delete-alias] unapply failed:', unErr.message);
       }
 
       // Refresh the donor consolidated MV so the public Donors list immediately

@@ -23,20 +23,6 @@ const getCauseLookupTypes = (type: string) => {
   return CAUSE_ELIGIBLE_DONOR_TYPES.has(type) ? [type] : [];
 };
 
-const aliasMatchesType = (alias: any, type: string) => {
-  const lookupTypes = getCauseLookupTypes(type);
-  if (lookupTypes.length === 0) return false;
-
-  const aliasTypes = new Set<string>();
-  if (alias.donor_type) aliasTypes.add(alias.donor_type);
-  if (Array.isArray(alias.donor_types)) {
-    alias.donor_types.filter(Boolean).forEach((t: string) => aliasTypes.add(t));
-  }
-
-  if (aliasTypes.size === 0) return true;
-  return lookupTypes.some((lookupType) => aliasTypes.has(lookupType));
-};
-
 export interface DonorNameInput {
   name: string;
   type: string; // 'Individual' | 'PAC' | 'Organization' | ...
@@ -160,13 +146,15 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       // Consolidated donor rows often use donor_aliases.canonical_name as the
       // displayed name, while donor_alias_members stores only the raw imported
       // FEC names. Resolve canonical names directly so alias-level causes still
-      // appear for rows like "AIPAC".
+      // appear for rows like "AIPAC". donor_aliases is type-agnostic (the donor
+      // type lives on donor_alias_members), so match on name alone — uniqueInputs
+      // is already filtered to cause-eligible types upstream.
       const { data: canonicalAliases, error: canonicalErr } = canonicalRes;
       if (canonicalErr) throw canonicalErr;
 
       for (const alias of (canonicalAliases ?? []) as any[]) {
         for (const input of uniqueInputs) {
-          if (norm(input.name) !== norm(alias.canonical_name) || !aliasMatchesType(alias, input.type)) continue;
+          if (norm(input.name) !== norm(alias.canonical_name)) continue;
           applyAliasToKey(`${norm(input.name)}|${input.type}`, alias);
         }
       }

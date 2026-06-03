@@ -15,10 +15,6 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = true
   [functions.allocate-committee]
     verify_jwt = false
-  [functions.apply-donor-alias]
-    verify_jwt = true
-  [functions.unapply-donor-alias]
-    verify_jwt = true
   [functions.auth-email-hook]
     verify_jwt = false
   [functions.backfill-bill-summaries]
@@ -110,8 +106,6 @@ project_id = "ornnzinjrcyigazecctf"
   [functions.refresh-admin-stats]
     verify_jwt = false
   [functions.refresh-bill-summary-stats]
-    verify_jwt = false
-  [functions.refresh-donor-display-names]
     verify_jwt = false
   [functions.refresh-fec-totals]
     verify_jwt = false
