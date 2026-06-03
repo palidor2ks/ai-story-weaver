@@ -123,7 +123,7 @@ export function DonorAliasesPanel() {
     queryFn: async () => {
       const names = Array.from(new Set(searchResults.map((r) => r.name)));
       const types = Array.from(new Set(searchResults.map((r) => r.type)));
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('donor_cause_overrides')
         .select('donor_name, donor_type, primary_cause_id, assigned_by')
         .in('donor_name', names)
@@ -149,7 +149,7 @@ export function DonorAliasesPanel() {
   }, [directDonorCauseRows]);
   const updateDirectDonorCause = useMutation({
     mutationFn: async ({ name, type, primary_cause_id }: { name: string; type: string; primary_cause_id: string }) => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('donor_cause_overrides')
         .upsert({
           donor_name: name,
@@ -209,21 +209,44 @@ export function DonorAliasesPanel() {
 
       const names = Array.from(new Set(searchResults.map((r) => r.name)));
       const types = Array.from(new Set(searchResults.map((r) => r.type)));
-      const { data } = await (supabase as any)
-        .from('donors')
-        .select('name, type, recipient_committee_id, committees:recipient_committee_id(treasurer_name)')
-        .in('name', names)
-        .in('type', types);
 
+      // Treasurer names live in external_pacs, keyed by fec_committee_id, which
+      // matches donors.recipient_committee_id. There is no FK between the two
+      // tables (and no `committees` table at all), so resolve it with a manual
+      // two-step join rather than a PostgREST embed.
+      const { data: donorRows } = await supabase
+        .from('donors')
+        .select('name, type, recipient_committee_id')
+        .in('name', names)
+        .in('type', types as Array<'Individual' | 'PAC' | 'Organization' | 'Unknown'>)
+        .not('recipient_committee_id', 'is', null);
       if (cancelled) return;
+
+      const committeeIds = Array.from(new Set(
+        (donorRows ?? []).map((d) => d.recipient_committee_id).filter((id): id is string => !!id),
+      ));
+      const treasurerByCommittee = new Map<string, string>();
+      if (committeeIds.length > 0) {
+        const { data: pacs } = await supabase
+          .from('external_pacs')
+          .select('fec_committee_id, treasurer_name')
+          .in('fec_committee_id', committeeIds);
+        if (cancelled) return;
+        for (const p of pacs ?? []) {
+          if (p.treasurer_name) treasurerByCommittee.set(p.fec_committee_id, p.treasurer_name);
+        }
+      }
+
       const next: Record<string, Set<string>> = {};
-      (data || []).forEach((row: any) => {
-        const treasurer = row?.committees?.treasurer_name;
-        if (!treasurer) return;
-        const key = `${row.name}|${row.type}`;
+      for (const d of donorRows ?? []) {
+        const treasurer = d.recipient_committee_id
+          ? treasurerByCommittee.get(d.recipient_committee_id)
+          : undefined;
+        if (!treasurer) continue;
+        const key = `${d.name}|${d.type}`;
         if (!next[key]) next[key] = new Set<string>();
         next[key].add(treasurer);
-      });
+      }
 
       const flattened: Record<string, string> = {};
       Object.entries(next).forEach(([key, namesSet]) => {
@@ -254,15 +277,42 @@ export function DonorAliasesPanel() {
     queryFn: async () => {
       const aliasIds = aliases.map((a) => a.id);
       if (aliasIds.length === 0) return [] as Array<{ alias_id: string; recipient_committee_id: string | null }>;
-      const { data, error } = await (supabase as any)
+
+      // donor_alias_members links to donors by (donor_name, donor_type) — there is
+      // no FK to donors, so resolve recipient_committee_id with a manual two-step
+      // join instead of a PostgREST embed (which has no relationship to follow).
+      const { data: members, error: mErr } = await supabase
         .from('donor_alias_members')
-        .select('alias_id, donors!inner(recipient_committee_id)')
+        .select('alias_id, donor_name, donor_type')
         .in('alias_id', aliasIds);
-      if (error) throw error;
-      return (data || []).map((row: any) => ({
-        alias_id: row.alias_id as string,
-        recipient_committee_id: row?.donors?.recipient_committee_id ?? null,
-      }));
+      if (mErr) throw mErr;
+      if (!members?.length) return [];
+
+      const names = Array.from(new Set(members.map((m) => m.donor_name)));
+      const types = Array.from(new Set(members.map((m) => m.donor_type)));
+      const { data: donorRows, error: dErr } = await supabase
+        .from('donors')
+        .select('name, type, recipient_committee_id')
+        .in('name', names)
+        .in('type', types as Array<'Individual' | 'PAC' | 'Organization' | 'Unknown'>)
+        .not('recipient_committee_id', 'is', null);
+      if (dErr) throw dErr;
+
+      // (donor_name|donor_type) -> set of recipient_committee_ids
+      const committeeIdsByDonor = new Map<string, Set<string>>();
+      for (const d of donorRows ?? []) {
+        if (!d.recipient_committee_id) continue;
+        const key = `${d.name}|${d.type}`;
+        if (!committeeIdsByDonor.has(key)) committeeIdsByDonor.set(key, new Set());
+        committeeIdsByDonor.get(key)!.add(d.recipient_committee_id);
+      }
+
+      const rows: Array<{ alias_id: string; recipient_committee_id: string | null }> = [];
+      for (const m of members) {
+        const cids = committeeIdsByDonor.get(`${m.donor_name}|${m.donor_type}`);
+        if (cids) for (const cid of cids) rows.push({ alias_id: m.alias_id, recipient_committee_id: cid });
+      }
+      return rows;
     },
   });
 
