@@ -771,7 +771,7 @@ export const useQuestions = () => {
         ...q,
         is_onboarding_canonical: q.is_onboarding_canonical ?? false,
         onboarding_slot: q.onboarding_slot ?? null,
-        options: ((q.question_options || []) as Array<{ display_order: number | null }>).sort((a, b) =>
+        options: (q.question_options || []).sort((a, b) =>
           (a.display_order || 0) - (b.display_order || 0)
         ),
         question_options: undefined,
@@ -802,7 +802,7 @@ export const useCanonicalQuestions = (selectedTopicIds: string[]) => {
       
       return (questions || []).map(q => ({
         ...q,
-        options: ((q.question_options || []) as Array<{ display_order: number | null }>).sort((a, b) =>
+        options: (q.question_options || []).sort((a, b) =>
           (a.display_order || 0) - (b.display_order || 0)
         ),
       }));
@@ -827,7 +827,7 @@ export const useAllCanonicalQuestions = () => {
       
       return (questions || []).map(q => ({
         ...q,
-        options: ((q.question_options || []) as Array<{ display_order: number | null }>).sort((a, b) =>
+        options: (q.question_options || []).sort((a, b) =>
           (a.display_order || 0) - (b.display_order || 0)
         ),
       }));
