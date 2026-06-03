@@ -205,7 +205,7 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
         .in('fec_committee_id', Array.from(allCommitteeIds));
 
       // Fallback if FK name differs: do a manual join
-      let causeByCommittee = new Map<string, DonorCauseInfo>();
+      const causeByCommittee = new Map<string, DonorCauseInfo>();
       if (tErr || !topics) {
         const { data: topicsPlain } = await supabase
           .from('committee_topics')

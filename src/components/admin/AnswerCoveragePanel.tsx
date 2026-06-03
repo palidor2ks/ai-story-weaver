@@ -146,7 +146,7 @@ export function AnswerCoveragePanel() {
   });
   const setFinanceCycle = useCallback((cycle: string) => {
     setFinanceCycleState(cycle);
-    try { localStorage.setItem('admin.financeCycle', cycle); } catch {}
+    try { localStorage.setItem('admin.financeCycle', cycle); } catch { /* storage unavailable */ }
   }, []);
   // If persisted cycle disappears from the available list, snap to newest
   useEffect(() => {

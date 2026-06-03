@@ -27,6 +27,9 @@ export default tseslint.config(
       // a warning surfaces them (and new ones) without failing CI. Tighten to "error"
       // once they're typed.
       "@typescript-eslint/no-explicit-any": "warn",
+      // shadcn/ui generates empty interfaces that extend a supertype (e.g. TextareaProps).
+      // Keep this advisory so regenerated UI components don't break the lint gate.
+      "@typescript-eslint/no-empty-object-type": "warn",
     },
   },
 );

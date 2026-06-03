@@ -79,7 +79,7 @@ export function useUnallocatedCommittees(cycle: string = '2024') {
 
       // Get candidate names for linked candidates
       const candidateIds = [...new Set(committees.filter(c => c.candidate_id).map(c => c.candidate_id!))];
-      let candidateNames = new Map<string, string>();
+      const candidateNames = new Map<string, string>();
       
       if (candidateIds.length > 0) {
         const { data: candidates } = await supabase
