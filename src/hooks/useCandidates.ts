@@ -118,7 +118,7 @@ export const useCandidates = () => {
       });
 
       // Map and merge data in single pass
-      const candidatesWithScores = candidates.map((candidate: any) => {
+      const candidatesWithScores = candidates.map((candidate) => {
         const override = overrideMap.get(candidate.id);
         const candidateTopicScores = topicScoresMap.get(candidate.id) || [];
 
@@ -512,10 +512,10 @@ export const useCandidateDonors = (candidateId: string | undefined, cycle?: stri
         conduitOrgNames.some(c => (d.display_name || d.name).toUpperCase().includes(c));
 
       // Fetch IE-excluded committees so we drop their donor rows too.
-      const { data: ieExcludedRows } = await (supabase as any)
+      const { data: ieExcludedRows } = await supabase
         .from('ie_excluded_committees_public')
         .select('fec_committee_id');
-      const ieExcluded = new Set((ieExcludedRows || []).map((r: any) => r.fec_committee_id));
+      const ieExcluded = new Set(((ieExcludedRows || []) as Array<{ fec_committee_id: string }>).map((r) => r.fec_committee_id));
 
       const allowedRawDonors = rawDonors.filter(d => {
         const rid = d.recipient_committee_id;
@@ -688,11 +688,11 @@ export const useCandidateVotes = (candidateId: string | undefined) => {
         return data.map(v => ({
           id: v.id,
           bill_id: v.bill_id,
-          bill_name: (v.bills as any)?.name || v.bill_id,
+          bill_name: (v.bills as { name?: string; topic?: string; description?: string } | null)?.name || v.bill_id,
           date: v.action_date,
           position: v.position as Vote['position'],
-          topic: (v.bills as any)?.topic || 'Government',
-          description: (v.bills as any)?.description || null,
+          topic: (v.bills as { name?: string; topic?: string; description?: string } | null)?.topic || 'Government',
+          description: (v.bills as { name?: string; topic?: string; description?: string } | null)?.description || null,
         })) as Vote[];
       }
 
@@ -714,7 +714,16 @@ export const useCandidateVotes = (candidateId: string | undefined) => {
       }
 
       // Transform Congress API votes to match our Vote interface
-      return congressData.votes.map((v: any) => ({
+      return (congressData.votes as Array<{
+        id: string;
+        bill_id: string;
+        bill_name: string;
+        candidate_id: string;
+        position: string;
+        topic: string;
+        description: string;
+        date: string;
+      }>).map((v) => ({
         id: v.id,
         bill_id: v.bill_id,
         bill_name: v.bill_name,
@@ -762,7 +771,7 @@ export const useQuestions = () => {
         ...q,
         is_onboarding_canonical: q.is_onboarding_canonical ?? false,
         onboarding_slot: q.onboarding_slot ?? null,
-        options: (q.question_options || []).sort((a: any, b: any) => 
+        options: (q.question_options || []).sort((a, b) =>
           (a.display_order || 0) - (b.display_order || 0)
         ),
         question_options: undefined,
@@ -793,7 +802,7 @@ export const useCanonicalQuestions = (selectedTopicIds: string[]) => {
       
       return (questions || []).map(q => ({
         ...q,
-        options: (q.question_options || []).sort((a: any, b: any) => 
+        options: (q.question_options || []).sort((a, b) =>
           (a.display_order || 0) - (b.display_order || 0)
         ),
       }));
@@ -818,7 +827,7 @@ export const useAllCanonicalQuestions = () => {
       
       return (questions || []).map(q => ({
         ...q,
-        options: (q.question_options || []).sort((a: any, b: any) => 
+        options: (q.question_options || []).sort((a, b) =>
           (a.display_order || 0) - (b.display_order || 0)
         ),
       }));
