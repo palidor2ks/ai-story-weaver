@@ -15,6 +15,7 @@ import { useUpcomingElections } from '@/hooks/useUpcomingElections';
 import { RepresentativeComparisonCard } from '@/components/RepresentativeComparisonCard';
 import { unifiedCandidateNameKey } from '@/hooks/useUnifiedCandidates';
 import { formatRunningForOffice } from '@/lib/officeLabel';
+import { BRAND_HOST } from '@/lib/brand';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -168,10 +169,7 @@ export const QuizResults = () => {
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
   const inviteUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const brandHost =
-    typeof window !== 'undefined'
-      ? window.location.host.replace(/^www\./, '')
-      : 'polipulseapp.com';
+  const brandHost = BRAND_HOST;
 
 
 
