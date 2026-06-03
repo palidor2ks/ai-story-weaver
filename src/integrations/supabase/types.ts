@@ -2793,6 +2793,170 @@ export type Database = {
         }
         Relationships: []
       }
+      ny_contributions: {
+        Row: {
+          amount: number | null
+          cand_comm_name: string | null
+          city: string | null
+          committee_filer_id: string | null
+          contributor: string | null
+          contributor_type: string | null
+          district: number | null
+          election_type: string | null
+          election_year: number | null
+          filing_sched_abbrev: string | null
+          is_individual: boolean | null
+          legislator_filer_id: string
+          office_code: string | null
+          payment_type: string | null
+          raw: Json | null
+          sched_date: string | null
+          state: string | null
+          synced_at: string
+          trans_number: string
+          zip: string | null
+        }
+        Insert: {
+          amount?: number | null
+          cand_comm_name?: string | null
+          city?: string | null
+          committee_filer_id?: string | null
+          contributor?: string | null
+          contributor_type?: string | null
+          district?: number | null
+          election_type?: string | null
+          election_year?: number | null
+          filing_sched_abbrev?: string | null
+          is_individual?: boolean | null
+          legislator_filer_id: string
+          office_code?: string | null
+          payment_type?: string | null
+          raw?: Json | null
+          sched_date?: string | null
+          state?: string | null
+          synced_at?: string
+          trans_number: string
+          zip?: string | null
+        }
+        Update: {
+          amount?: number | null
+          cand_comm_name?: string | null
+          city?: string | null
+          committee_filer_id?: string | null
+          contributor?: string | null
+          contributor_type?: string | null
+          district?: number | null
+          election_type?: string | null
+          election_year?: number | null
+          filing_sched_abbrev?: string | null
+          is_individual?: boolean | null
+          legislator_filer_id?: string
+          office_code?: string | null
+          payment_type?: string | null
+          raw?: Json | null
+          sched_date?: string | null
+          state?: string | null
+          synced_at?: string
+          trans_number?: string
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ny_contributions_legislator_filer_id_fkey"
+            columns: ["legislator_filer_id"]
+            isOneToOne: false
+            referencedRelation: "ny_filers"
+            referencedColumns: ["filer_id"]
+          },
+        ]
+      }
+      ny_filers: {
+        Row: {
+          committee_type_desc: string | null
+          contrib_synced_at: string | null
+          district: number | null
+          filer_id: string
+          filer_name: string | null
+          filer_status: string | null
+          filer_type_desc: string | null
+          first_seen_at: string
+          last_contrib_count: number | null
+          last_synced_at: string | null
+          office_code: string | null
+          office_desc: string | null
+        }
+        Insert: {
+          committee_type_desc?: string | null
+          contrib_synced_at?: string | null
+          district?: number | null
+          filer_id: string
+          filer_name?: string | null
+          filer_status?: string | null
+          filer_type_desc?: string | null
+          first_seen_at?: string
+          last_contrib_count?: number | null
+          last_synced_at?: string | null
+          office_code?: string | null
+          office_desc?: string | null
+        }
+        Update: {
+          committee_type_desc?: string | null
+          contrib_synced_at?: string | null
+          district?: number | null
+          filer_id?: string
+          filer_name?: string | null
+          filer_status?: string | null
+          filer_type_desc?: string | null
+          first_seen_at?: string
+          last_contrib_count?: number | null
+          last_synced_at?: string | null
+          office_code?: string | null
+          office_desc?: string | null
+        }
+        Relationships: []
+      }
+      ny_sync_runs: {
+        Row: {
+          contributions_upserted: number | null
+          error: string | null
+          filers_processed: number | null
+          filers_upserted: number | null
+          finished_at: string | null
+          id: number
+          mode: string | null
+          notes: Json | null
+          remaining: number | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          contributions_upserted?: number | null
+          error?: string | null
+          filers_processed?: number | null
+          filers_upserted?: number | null
+          finished_at?: string | null
+          id?: never
+          mode?: string | null
+          notes?: Json | null
+          remaining?: number | null
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          contributions_upserted?: number | null
+          error?: string | null
+          filers_processed?: number | null
+          filers_upserted?: number | null
+          finished_at?: string | null
+          id?: never
+          mode?: string | null
+          notes?: Json | null
+          remaining?: number | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       official_transitions: {
         Row: {
           ai_confidence: string | null
@@ -4833,6 +4997,7 @@ export type Database = {
       cancel_job: { Args: { p_id: string }; Returns: undefined }
       check_fl_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_nj_sync_secret: { Args: { p_token: string }; Returns: boolean }
+      check_ny_sync_secret: { Args: { p_token: string }; Returns: boolean }
       claim_anon_poll_responses: {
         Args: { p_anon_session_id: string }
         Returns: number
@@ -4966,6 +5131,8 @@ export type Database = {
           recipient_count: number
           sources: string[]
           state_amount: number
+          state_amounts: Json
+          state_codes: string[]
           total_amount: number
           total_count: number
           total_transactions: number
@@ -5039,6 +5206,10 @@ export type Database = {
       }
       normalize_office_key: { Args: { _office: string }; Returns: string }
       normalize_person_name: { Args: { _name: string }; Returns: string }
+      ny_legislator_finance: {
+        Args: { p_district?: string; p_name: string; p_office?: string }
+        Returns: Json
+      }
       rebuild_donors_for_committee: {
         Args: {
           p_candidate_id?: string
