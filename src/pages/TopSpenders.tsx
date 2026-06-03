@@ -45,7 +45,7 @@ async function resolveDisplayNames(ids: string[]): Promise<Map<string, string>> 
       .from('external_pacs')
       .select('fec_committee_id, name')
       .in('fec_committee_id', unique),
-    (supabase as any)
+    supabase
       .from('committee_aliases')
       .select('canonical_name, fec_committee_ids, is_active')
       .overlaps('fec_committee_ids', unique),
@@ -56,8 +56,8 @@ async function resolveDisplayNames(ids: string[]): Promise<Map<string, string>> 
   });
 
   // Admin-managed aliases take precedence over external_pacs.name.
-  (aliases ?? []).forEach(
-    (r: { canonical_name: string; fec_committee_ids: string[]; is_active: boolean }) => {
+  ((aliases ?? []) as Array<{ canonical_name: string; fec_committee_ids: string[]; is_active: boolean }>).forEach(
+    (r) => {
       if (!r.is_active || !r.canonical_name) return;
       r.fec_committee_ids.forEach((id) => {
         if (unique.includes(id)) map.set(id, r.canonical_name);
@@ -166,12 +166,12 @@ const useIECycles = () => {
     queryKey: ['ie-cycles'],
     staleTime: 1000 * 60 * 60,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('independent_expenditure_cycles')
         .select('cycle');
       if (error) throw error;
       const set = new Set<string>();
-      (data ?? []).forEach((r: { cycle: string | null }) => r.cycle && set.add(r.cycle));
+      ((data ?? []) as Array<{ cycle: string | null }>).forEach((r) => r.cycle && set.add(r.cycle));
       return Array.from(set).sort((a, b) => b.localeCompare(a));
     },
   });
@@ -229,12 +229,15 @@ export default function TopSpenders() {
     enabled: visibleIds.length > 0,
     staleTime: 1000 * 60 * 10,
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('committee_topics')
         .select('fec_committee_id, primary_cause:primary_cause_id(label, stance, issue)')
         .in('fec_committee_id', visibleIds);
       const map = new Map<string, { label: string; stance: string | null; issue: string | null }>();
-      (data ?? []).forEach((r: any) => {
+      ((data ?? []) as unknown as Array<{
+        fec_committee_id: string;
+        primary_cause: { label: string | null; stance: string | null; issue: string | null } | null;
+      }>).forEach((r) => {
         if (r.primary_cause?.label) {
           map.set(r.fec_committee_id, {
             label: r.primary_cause.label,
