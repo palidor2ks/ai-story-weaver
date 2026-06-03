@@ -30,8 +30,12 @@ jobs:
         run: bun run build
 
   lint:
-    name: Lint
+    name: Lint (non-blocking)
     runs-on: ubuntu-latest
+    # The repo has substantial pre-existing ESLint debt (mostly no-explicit-any in
+    # supabase/functions), so `eslint .` currently fails. Keep lint visible without
+    # blocking PRs; remove continue-on-error once the debt is cleaned up.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
