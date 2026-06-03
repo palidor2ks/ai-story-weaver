@@ -136,8 +136,22 @@ function officeClass(o: string): string {
   if (/u\.?s\.?\s+senate|us senate|senator/.test(x)) return 'senate';
   if (/u\.?s\.?\s+house|us house|congress|representative/.test(x)) return 'house';
   if (/mayor/.test(x)) return 'mayor';
-  if (/council|alder|select(wo)?man|commissioner|freeholder/.test(x)) return 'local-council';
+  // County row offices are distinct races from a municipal/ward council seat and
+  // must not collapse together (a County Commissioner is not a Town Council member).
+  if (/surrogate/.test(x)) return 'county-surrogate';
+  if (/commissioner|freeholder/.test(x)) return 'county-commissioner';
+  if (/council|alder|select(wo)?man/.test(x)) return 'local-council';
   return x.replace(/\s+/g, ' ').trim() || 'other';
+}
+
+// Two records belong to the same race only if their districts are compatible.
+// A null/empty district is treated as a wildcard to tolerate inconsistent data,
+// but two *different* non-empty districts (e.g. Ward 1 vs Ward 2) never match.
+function districtsCompatible(a?: string | null, b?: string | null): boolean {
+  const da = districtKey(a);
+  const db = districtKey(b);
+  if (!da || !db) return true;
+  return da === db;
 }
 
 function candidatePersonKey(c: ElectionResponseRow['candidates'][number]): string {
@@ -178,7 +192,10 @@ function onlyNextElection(rows: ElectionResponseRow[]): ElectionResponseRow[] {
         r.level === e.level &&
         e.candidates.some((c) =>
           r.candidates.some(
-            (d) => nameKey(d.name) === nameKey(c.name) && officeClass(d.office) === officeClass(c.office),
+            (d) =>
+              nameKey(d.name) === nameKey(c.name) &&
+              officeClass(d.office) === officeClass(c.office) &&
+              districtsCompatible(d.district, c.district),
           )
         ),
     );

@@ -7,7 +7,11 @@ export function officeBucket(office: string): string {
   if (/u\.?s\.?\s+senate|us senate|senator/.test(value)) return 'senate';
   if (/u\.?s\.?\s+house|us house|congress|representative/.test(value)) return 'house';
   if (/mayor/.test(value)) return 'mayor';
-  if (/council|alder|select(wo)?man|commissioner|freeholder/.test(value)) return 'local-council';
+  // County row offices are distinct races from a municipal/ward council seat and
+  // must not collapse together (a County Commissioner is not a Town Council member).
+  if (/surrogate/.test(value)) return 'county-surrogate';
+  if (/commissioner|freeholder/.test(value)) return 'county-commissioner';
+  if (/council|alder|select(wo)?man/.test(value)) return 'local-council';
   return value.replace(/\s+/g, ' ').trim() || 'other';
 }
 

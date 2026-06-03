@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { officeBucket, candidateKey, chooseCandidate } from '@/lib/electionUtils';
+import { officeBucket, candidateKey, chooseCandidate, normalizeDistrictKey } from '@/lib/electionUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,9 +34,11 @@ const OFFICE_LABELS: Record<string, string> = {
   'state-house': 'State Representative',
   mayor: 'Mayor',
   'local-council': 'Local Council',
+  'county-commissioner': 'County Commissioner',
+  'county-surrogate': 'County Surrogate',
 };
 
-const OFFICE_ORDER = ['president', 'senate', 'house', 'governor', 'state-senate', 'state-house', 'mayor', 'local-council'];
+const OFFICE_ORDER = ['president', 'senate', 'house', 'governor', 'state-senate', 'state-house', 'mayor', 'local-council', 'county-commissioner', 'county-surrogate'];
 
 function officeLabel(office: string): string {
   const bucket = officeBucket(office);
@@ -113,80 +115,83 @@ function racePartyLabel(candidates: UpcomingCandidate[]): string | null {
   return ['Democrat', 'Republican', 'Independent'].includes(party) ? party : null;
 }
 
+function raceDistrictLabel(office: string, district: string | null): string | null {
+  const ward = (office || '').match(/ward\s*([0-9a-z]+)/i);
+  if (ward) return `Ward ${ward[1].toUpperCase()}`;
+  const d = (district ?? '').trim();
+  return d ? `District ${d}` : null;
+}
+
 function raceLabel(election: UpcomingElection, candidates: UpcomingCandidate[]): string {
   const party = racePartyLabel(candidates);
   const type = electionTypeLabel(election.election_type);
-  if (party && /primary/i.test(type)) return `${party} Primary`;
-  if (party && /runoff/i.test(type)) return `${party} Runoff`;
-  return election.name || type;
+  const districtLabel = candidates
+    .map((c) => raceDistrictLabel(c.office, c.district))
+    .find((label): label is string => Boolean(label)) ?? null;
+
+  let base: string;
+  if (party && /primary/i.test(type)) base = `${party} Primary`;
+  else if (party && /runoff/i.test(type)) base = `${party} Runoff`;
+  else if (districtLabel && /primary/i.test(type)) base = 'Primary';
+  else base = election.name || type;
+
+  return districtLabel ? `${districtLabel} · ${base}` : base;
 }
 
-function raceKey(election: UpcomingElection, officeKey: string): string {
-  return [election.election_date, election.election_type, election.level, election.jurisdiction ?? '', officeKey].join('|').toLowerCase();
+function raceKey(election: UpcomingElection, officeKey: string, districtToken: string): string {
+  return [election.election_date, election.election_type, election.level, election.jurisdiction ?? '', officeKey, districtToken]
+    .join('|')
+    .toLowerCase();
 }
 
 function buildOfficeGroups(elections: UpcomingElection[]): OfficeGroup[] {
   const officeGroups = new Map<string, OfficeGroup>();
 
   for (const election of elections) {
-    const candidatesByOffice = new Map<string, UpcomingCandidate[]>();
-
     for (const candidate of election.candidates) {
       const officeKey = officeBucket(candidate.office);
-      const officeCandidates = candidatesByOffice.get(officeKey) ?? [];
-      const existingIndex = officeCandidates.findIndex((existing) => candidateKey(existing) === candidateKey(candidate));
-      if (existingIndex === -1) {
-        officeCandidates.push(candidate);
-      } else {
-        officeCandidates[existingIndex] = chooseCandidate(officeCandidates[existingIndex], candidate);
-      }
-      candidatesByOffice.set(officeKey, officeCandidates);
-    }
+      // A district/ward distinguishes separate contests within the same office
+      // bucket — Ward 1 and Ward 2 council seats are different races on the ballot.
+      const districtToken = normalizeDistrictKey(candidate.district);
+      const key = raceKey(election, officeKey, districtToken);
 
-    for (const [officeKey, candidates] of candidatesByOffice.entries()) {
-      const sortedCandidates = candidates.sort((a, b) => a.name.localeCompare(b.name));
       const officeGroup = officeGroups.get(officeKey) ?? {
         key: officeKey,
-        label: officeLabel(sortedCandidates[0]?.office ?? officeKey),
+        label: officeLabel(candidate.office),
         races: [],
       };
-      const key = raceKey(election, officeKey);
-      const existingRace = officeGroup.races.find((race) => race.key === key);
 
-      if (existingRace) {
-        for (const candidate of sortedCandidates) {
-          const existingIndex = existingRace.candidates.findIndex((existing) => candidateKey(existing) === candidateKey(candidate));
-          if (existingIndex === -1) {
-            existingRace.candidates.push(candidate);
-          } else {
-            existingRace.candidates[existingIndex] = chooseCandidate(existingRace.candidates[existingIndex], candidate);
-          }
-        }
-        existingRace.candidates.sort((a, b) => a.name.localeCompare(b.name));
+      let race = officeGroup.races.find((r) => r.key === key);
+      if (!race) {
+        race = { key, label: '', election, candidates: [] };
+        officeGroup.races.push(race);
+      }
+
+      const existingIndex = race.candidates.findIndex((existing) => candidateKey(existing) === candidateKey(candidate));
+      if (existingIndex === -1) {
+        race.candidates.push(candidate);
       } else {
-        officeGroup.races.push({
-          key,
-          label: raceLabel(election, sortedCandidates),
-          election,
-          candidates: sortedCandidates,
-        });
+        race.candidates[existingIndex] = chooseCandidate(race.candidates[existingIndex], candidate);
       }
 
       officeGroups.set(officeKey, officeGroup);
     }
   }
 
-  return Array.from(officeGroups.values())
-    .map((group) => ({
-      ...group,
-      races: group.races.sort((a, b) => a.label.localeCompare(b.label)),
-    }))
-    .sort((a, b) => {
-      const aIndex = OFFICE_ORDER.indexOf(a.key);
-      const bIndex = OFFICE_ORDER.indexOf(b.key);
-      if (aIndex !== -1 || bIndex !== -1) return (aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex) - (bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex);
-      return a.label.localeCompare(b.label);
-    });
+  for (const group of officeGroups.values()) {
+    for (const race of group.races) {
+      race.candidates.sort((a, b) => a.name.localeCompare(b.name));
+      race.label = raceLabel(race.election, race.candidates);
+    }
+    group.races.sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  return Array.from(officeGroups.values()).sort((a, b) => {
+    const aIndex = OFFICE_ORDER.indexOf(a.key);
+    const bIndex = OFFICE_ORDER.indexOf(b.key);
+    if (aIndex !== -1 || bIndex !== -1) return (aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex) - (bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex);
+    return a.label.localeCompare(b.label);
+  });
 }
 
 function NextElectionBallot({ elections, onOpen, ieMap }: { elections: UpcomingElection[]; onOpen: (e: UpcomingElection) => void; ieMap?: IETotalsMap }) {
