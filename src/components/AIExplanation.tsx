@@ -178,10 +178,10 @@ export const AIExplanation = ({
               {/* Disagreements */}
               {analysis.personalizedComparison.disagreements.length > 0 && (
                 <div className="p-3 rounded-lg bg-disagree/5 border border-disagree/20">
-                  <h5 className="text-sm font-semibold text-disagree mb-2 flex items-center gap-1">
+                  <h4 className="text-sm font-semibold text-disagree mb-2 flex items-center gap-1">
                     <ThumbsDown className="w-4 h-4" />
                     Where You Differ
-                  </h5>
+                  </h4>
                   <ul className="space-y-1">
                     {analysis.personalizedComparison.disagreements.map((disagreement, idx) => (
                       <li key={idx} className="text-sm text-foreground">• {disagreement}</li>
