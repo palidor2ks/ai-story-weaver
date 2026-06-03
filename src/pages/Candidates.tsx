@@ -11,12 +11,34 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X, Loader2 } from 'lucide-react';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
 import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
 
-const PAGE_SIZE = 60;
+const PAGE_SIZE = 25;
+
+/** Compact page list with ellipses, e.g. [1, 'ellipsis', 9, 10, 11, 'ellipsis', 40]. */
+const getPageList = (current: number, total: number): (number | 'ellipsis')[] => {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | 'ellipsis')[] = [1];
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  if (start > 2) pages.push('ellipsis');
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (end < total - 1) pages.push('ellipsis');
+  pages.push(total);
+  return pages;
+};
 
 
 export const Candidates = () => {
@@ -151,35 +173,37 @@ export const Candidates = () => {
     return result;
   }, [searchQuery, sortBy, partyFilter, officeFilter, tabCandidates, profile, isHidden]);
 
-  // Incremental rendering: only mount the first N cards, grow on scroll
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // Pagination: only ever mount one fixed-size page of cards, so the DOM stays
+  // small no matter how many candidates exist (it doesn't grow with the dataset).
+  const [currentPage, setCurrentPage] = useState(1);
+  const resultsTopRef = useRef<HTMLDivElement | null>(null);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / PAGE_SIZE));
+
+  // Reset to page 1 whenever the result set changes (tab/search/filter/sort).
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
+    setCurrentPage(1);
   }, [activeTab, searchQuery, partyFilter, officeFilter, sortBy]);
 
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // Clamp the page if the result set shrinks (e.g. async reps finish loading).
   useEffect(() => {
-    if (!sentinelRef.current) return;
-    if (visibleCount >= filteredCandidates.length) return;
-    const el = sentinelRef.current;
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) {
-        setVisibleCount((n) => Math.min(n + PAGE_SIZE, filteredCandidates.length));
-      }
-    }, { rootMargin: '600px 0px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [visibleCount, filteredCandidates.length]);
+    setCurrentPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
 
-  const visibleCandidates = useMemo(
-    () => filteredCandidates.slice(0, visibleCount),
-    [filteredCandidates, visibleCount],
+  const goToPage = useCallback((page: number) => {
+    setCurrentPage(page);
+    resultsTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  const pageCandidates = useMemo(
+    () => filteredCandidates.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredCandidates, currentPage],
   );
 
   // Defer IE lookup so typing/filter changes don't synchronously refire
   const visibleIds = useMemo(
-    () => visibleCandidates.map((c) => c.id),
-    [visibleCandidates],
+    () => pageCandidates.map((c) => c.id),
+    [pageCandidates],
   );
   const deferredVisibleIds = useDeferredValue(visibleIds);
   const { data: ieMap } = useCandidatesIE(deferredVisibleIds);
@@ -366,9 +390,11 @@ export const Candidates = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <div ref={resultsTopRef} className="flex items-center justify-between mb-4 gap-3 flex-wrap scroll-mt-24">
           <p className="text-sm text-muted-foreground">
-            Showing {Math.min(visibleCount, filteredCandidates.length)} of {filteredCandidates.length} politician{filteredCandidates.length !== 1 ? 's' : ''}
+            {filteredCandidates.length > 0 && (
+              <>Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredCandidates.length)} of {filteredCandidates.length} politician{filteredCandidates.length !== 1 ? 's' : ''}</>
+            )}
           </p>
           <div className="flex items-center gap-3">
             {reposLoading && (
@@ -389,9 +415,9 @@ export const Candidates = () => {
           "grid gap-4 md:grid-cols-2 lg:grid-cols-3",
           compareMode && compareReady && selectedCandidates.length > 0 && "pb-[80vh] sm:pb-48"
         )}>
-          {visibleCandidates.map((candidate, index) => (
-            <CandidateCard 
-              key={candidate.id} 
+          {pageCandidates.map((candidate, index) => (
+            <CandidateCard
+              key={candidate.id}
               candidate={candidate}
               index={index}
               compareMode={compareMode}
@@ -402,10 +428,42 @@ export const Candidates = () => {
           ))}
         </div>
 
-        {visibleCount < filteredCandidates.length && (
-          <div ref={sentinelRef} className="flex justify-center py-8">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-          </div>
+        {totalPages > 1 && (
+          <Pagination className="mt-8">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => currentPage > 1 && goToPage(currentPage - 1)}
+                  aria-disabled={currentPage === 1}
+                  className={cn(currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer')}
+                />
+              </PaginationItem>
+              {getPageList(currentPage, totalPages).map((page, i) =>
+                page === 'ellipsis' ? (
+                  <PaginationItem key={`ellipsis-${i}`} className="hidden sm:block">
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                ) : (
+                  <PaginationItem key={page} className={cn(page !== currentPage && 'hidden sm:block')}>
+                    <PaginationLink
+                      isActive={page === currentPage}
+                      onClick={() => goToPage(page)}
+                      className="cursor-pointer"
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                ),
+              )}
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => currentPage < totalPages && goToPage(currentPage + 1)}
+                  aria-disabled={currentPage === totalPages}
+                  className={cn(currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer')}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         )}
 
         {filteredCandidates.length === 0 && (
