@@ -9,11 +9,20 @@
 # recording them in public.claude_migration_log so re-runs are idempotent.
 #
 # Usage: apply-prod-migrations.sh <before_sha> <after_sha>
-# Requires env: SUPABASE_DB_URL (Supabase → Settings → Database → Connection string;
-# use the session/direct connection, not the transaction pooler, so DDL is supported).
+# Env: SUPABASE_DB_URL (Supabase → Settings → Database → Connection string; use the
+# session/direct connection, not the transaction pooler, so DDL is supported). If it is
+# not set, the script skips with a success exit code so the workflow stays green when no
+# separate production database is wired up.
 set -euo pipefail
 
-: "${SUPABASE_DB_URL:?SUPABASE_DB_URL is required (set it as a GitHub Actions secret)}"
+# If no production database is configured, skip gracefully instead of failing the
+# workflow on every merge. Set the SUPABASE_DB_URL repo secret to enable applying
+# migrations to production.
+if [ -z "${SUPABASE_DB_URL:-}" ]; then
+  echo "SUPABASE_DB_URL is not set — skipping production migration apply (nothing to do)."
+  echo "Set the SUPABASE_DB_URL repository secret to enable it."
+  exit 0
+fi
 
 BEFORE="${1:-}"
 AFTER="${2:-HEAD}"
