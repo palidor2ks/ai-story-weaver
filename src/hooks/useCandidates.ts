@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
+import { resolveCandidateImageUrl } from '@/lib/candidateImages';
 
 interface CandidateTopicScore {
   topic_id: string;
@@ -29,6 +30,7 @@ interface Candidate {
   claimed_at: string | null;
   fec_candidate_id: string | null;
   last_donor_sync: string | null;
+  person_id?: string | null;
   topicScores?: CandidateTopicScore[];
 }
 
@@ -129,7 +131,12 @@ export const useCandidates = () => {
           office: override?.office ?? candidate.office,
           state: override?.state ?? candidate.state,
           district: override?.district ?? candidate.district,
-          image_url: override?.image_url ?? candidate.image_url,
+          image_url: resolveCandidateImageUrl({
+            overrideUrl: override?.image_url,
+            candidateUrl: candidate.image_url,
+            candidateId: candidate.id,
+            personId: candidate.person_id,
+          }) ?? null,
           overall_score: override?.overall_score ?? candidate.overall_score,
           coverage_tier: (override?.coverage_tier as CoverageTier) ?? candidate.coverage_tier ?? 'tier_3',
           confidence: (override?.confidence as ConfidenceLevel) ?? candidate.confidence ?? 'medium',
@@ -140,6 +147,7 @@ export const useCandidates = () => {
           claimed_at: candidate.claimed_at,
           fec_candidate_id: candidate.fec_candidate_id,
           last_donor_sync: candidate.last_donor_sync,
+          person_id: candidate.person_id,
           topicScores: candidateTopicScores.map(ts => ({
             topic_id: ts.topic_id,
             score: ts.calculated_score ?? 0,
@@ -197,7 +205,12 @@ export const useCandidate = (id: string | undefined) => {
           office: override?.office ?? candidate.office,
           state: override?.state ?? candidate.state,
           district: override?.district ?? candidate.district,
-          image_url: override?.image_url ?? candidate.image_url,
+          image_url: resolveCandidateImageUrl({
+            overrideUrl: override?.image_url,
+            candidateUrl: candidate.image_url,
+            candidateId: candidate.id,
+            personId: candidate.person_id,
+          }) ?? null,
           overall_score: override?.overall_score ?? candidate.overall_score,
           coverage_tier: (override?.coverage_tier as CoverageTier) ?? candidate.coverage_tier ?? 'tier_3',
           confidence: (override?.confidence as ConfidenceLevel) ?? candidate.confidence ?? 'medium',
@@ -205,6 +218,7 @@ export const useCandidate = (id: string | undefined) => {
           score_version: candidate.score_version || 'v1.0',
           fec_candidate_id: candidate.fec_candidate_id,
           last_donor_sync: candidate.last_donor_sync,
+          person_id: candidate.person_id,
           topicScores: topicScores.map(ts => ({
             topic_id: ts.topic_id,
             score: ts.score,
@@ -232,7 +246,12 @@ export const useCandidate = (id: string | undefined) => {
           office: override?.office ?? staticOfficial.office,
           state: override?.state ?? staticOfficial.state,
           district: override?.district ?? staticOfficial.district ?? null,
-          image_url: override?.image_url ?? staticOfficial.image_url,
+          image_url: resolveCandidateImageUrl({
+            overrideUrl: override?.image_url,
+            candidateUrl: staticOfficial.image_url,
+            candidateId: staticOfficial.id,
+            personId: staticOfficial.person_id,
+          }) ?? null,
           overall_score: override?.overall_score ?? 0,
           coverage_tier: (override?.coverage_tier as CoverageTier) ?? (staticOfficial.coverage_tier as CoverageTier) ?? 'tier_3',
           confidence: (override?.confidence as ConfidenceLevel) ?? (staticOfficial.confidence as ConfidenceLevel) ?? 'medium',
@@ -277,7 +296,12 @@ export const useCandidate = (id: string | undefined) => {
             office: execOverride?.office ?? execCandidate.office,
             state: execOverride?.state ?? execCandidate.state,
             district: execOverride?.district ?? execCandidate.district,
-            image_url: execOverride?.image_url ?? execCandidate.image_url,
+            image_url: resolveCandidateImageUrl({
+              overrideUrl: execOverride?.image_url,
+              candidateUrl: execCandidate.image_url,
+              candidateId: execCandidate.id,
+              personId: execCandidate.person_id,
+            }) ?? null,
             overall_score: execOverride?.overall_score ?? execCandidate.overall_score,
             coverage_tier: (execOverride?.coverage_tier as CoverageTier) ?? execCandidate.coverage_tier ?? 'tier_3',
             confidence: (execOverride?.confidence as ConfidenceLevel) ?? execCandidate.confidence ?? 'medium',
@@ -340,7 +364,10 @@ export const useCandidate = (id: string | undefined) => {
             office: override.office ?? 'Official',
             state: override.state ?? 'US',
             district: override.district ?? null,
-            image_url: override.image_url ?? null,
+            image_url: resolveCandidateImageUrl({
+              overrideUrl: override.image_url,
+              candidateId: id,
+            }) ?? null,
             overall_score: override.overall_score ?? 0,
             coverage_tier: (override.coverage_tier as CoverageTier) ?? 'tier_3',
             confidence: (override.confidence as ConfidenceLevel) ?? 'low',
@@ -388,7 +415,12 @@ export const useCandidate = (id: string | undefined) => {
         office: override?.office ?? member.office,
         state: override?.state ?? member.state,
         district: override?.district ?? member.district,
-        image_url: override?.image_url ?? member.image_url,
+        image_url: resolveCandidateImageUrl({
+          overrideUrl: override?.image_url,
+          apiUrl: member.image_url,
+          candidateId: member.id,
+          bioguideId: member.bioguide_id,
+        }) ?? null,
         overall_score: override?.overall_score ?? member.overall_score,
         coverage_tier: (override?.coverage_tier as CoverageTier) ?? member.coverage_tier ?? 'tier_3',
         confidence: (override?.confidence as ConfidenceLevel) ?? member.confidence ?? 'low',

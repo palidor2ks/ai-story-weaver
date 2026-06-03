@@ -9,6 +9,7 @@ import { useRepresentatives, Representative } from './useRepresentatives';
 import { useCivicOfficials, CivicOfficial } from './useCivicOfficials';
 import { useCandidateScoreMap } from './useCandidateScoreMap';
 import { useUserQuizQuestionIds, useRepresentativeAnswersAndScores } from './useRepresentativeScores';
+import { resolveCandidateImageUrl } from '@/lib/candidateImages';
 
 /**
  * SINGLE SOURCE OF TRUTH for candidate cards across the app.
@@ -78,7 +79,13 @@ const buildCandidate = (
   const state = db?.state ?? api?.state ?? '';
   const district = db?.district ?? api?.district ?? undefined;
 
-  const imageUrl = db?.image_url ?? api?.image_url ?? undefined;
+  const imageUrl = resolveCandidateImageUrl({
+    candidateUrl: db?.image_url,
+    apiUrl: api?.image_url,
+    candidateId: id,
+    personId: (db as { person_id?: string | null } | undefined)?.person_id,
+    bioguideId: (api as { bioguide_id?: string | null } | undefined)?.bioguide_id,
+  });
 
   const stored = scoreMap?.get(id);
   const apiExtra = api as { overall_score?: number; coverage_tier?: string; confidence?: string } | undefined;
