@@ -32,3 +32,6 @@ jobs:
         uses: treosh/lighthouse-ci-action@v12
         with:
           configPath: ./.lighthouserc.json
+          # Publish results: shareable report links in the log + a downloadable artifact.
+          temporaryPublicStorage: true
+          uploadArtifacts: true

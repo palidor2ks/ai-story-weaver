@@ -2,7 +2,7 @@
   "ci": {
     "collect": {
       "startServerCommand": "bun run preview -- --port 4173 --strictPort",
-      "startServerReadyPattern": "localhost:4173",
+      "startServerReadyPattern": "Local",
       "startServerReadyTimeout": 40000,
       "url": [
         "http://localhost:4173/candidates",
@@ -13,9 +13,6 @@
       "settings": {
         "chromeFlags": "--no-sandbox --headless=new"
       }
-    },
-    "upload": {
-      "target": "temporary-public-storage"
     }
   }
 }
