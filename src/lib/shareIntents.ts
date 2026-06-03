@@ -19,7 +19,7 @@ export const supportsNativeShare = () =>
 export async function nativeShare(opts: { title: string; text: string; url: string; files?: File[] }) {
   if (!supportsNativeShare()) return false;
   try {
-    if (opts.files && opts.files.length > 0 && (navigator as any).canShare?.({ files: opts.files })) {
+    if (opts.files && opts.files.length > 0 && navigator.canShare?.({ files: opts.files })) {
       await navigator.share({ title: opts.title, text: opts.text, url: opts.url, files: opts.files });
     } else {
       await navigator.share({ title: opts.title, text: opts.text, url: opts.url });

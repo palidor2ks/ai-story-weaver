@@ -35,7 +35,7 @@ export const Header = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  const userName = (user?.user_metadata as any)?.name || user?.email;
+  const userName = (user?.user_metadata?.name as string | undefined) || user?.email;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

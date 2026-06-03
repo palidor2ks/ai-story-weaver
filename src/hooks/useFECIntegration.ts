@@ -301,9 +301,9 @@ export function useFECIntegration() {
       }
 
       // Handle edge function returning an error in the response body
-      if ((data as any)?.error) {
-        console.warn('[FEC-DONORS] Function returned error:', (data as any).error);
-        return { success: false, imported: 0, error: String((data as any).error), hasMore: false };
+      if ((data as { error?: string })?.error) {
+        console.warn('[FEC-DONORS] Function returned error:', (data as { error?: string }).error);
+        return { success: false, imported: 0, error: String((data as { error?: string }).error), hasMore: false };
       }
 
       // Success

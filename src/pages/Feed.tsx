@@ -178,8 +178,8 @@ export const Feed = () => {
               overallScore: c.overall_score ?? 0,
               topicScores: [],
               lastUpdated: new Date(),
-              coverageTier: (c.coverage_tier as any) || 'tier_3',
-              confidence: (c.confidence as any) || 'low',
+              coverageTier: (c.coverage_tier as 'tier_1' | 'tier_2' | 'tier_3') || 'tier_3',
+              confidence: (c.confidence as 'high' | 'medium' | 'low') || 'low',
               isIncumbent: c.is_incumbent,
               transitionStatus: 'candidate',
               level,
@@ -485,7 +485,7 @@ export const Feed = () => {
           <div className="mb-6">
             <RelevantNewsFeed
               people={newsPeople}
-              topics={userTopics.map(t => (t as any).topic_id || (t as any).name).filter(Boolean)}
+              topics={(userTopics as Array<{ topic_id?: string; name?: string }>).map(t => t.topic_id || t.name).filter(Boolean)}
               questionIds={userQuestionIds}
               state={unified.myReps[0]?.state}
               district={unified.myReps.find(r => r.district)?.district}
