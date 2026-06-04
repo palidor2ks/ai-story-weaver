@@ -6,6 +6,32 @@ import { useAdminRole } from "@/hooks/useAdminRole";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+// supabase-js wraps a non-2xx edge response as FunctionsHttpError and hides the
+// body behind a generic "non-2xx status code" message. The real reason
+// (e.g. token_exchange_failed + X's invalid_client/invalid_request detail)
+// lives on `error.context` (the raw Response) — pull it out so the admin can
+// see what X actually rejected.
+async function describeFnError(error: unknown): Promise<Error> {
+  const ctx = (error as { context?: Response }).context;
+  if (ctx && typeof ctx.text === "function") {
+    try {
+      const raw = await ctx.text();
+      try {
+        const body = JSON.parse(raw) as { error?: unknown; detail?: unknown };
+        const parts = [body.error, body.detail]
+          .filter((p) => p !== undefined && p !== null && p !== "")
+          .map((p) => (typeof p === "string" ? p : JSON.stringify(p)));
+        if (parts.length) return new Error(parts.join(" — "));
+      } catch {
+        if (raw) return new Error(raw);
+      }
+    } catch {
+      /* fall through to the original error */
+    }
+  }
+  return error instanceof Error ? error : new Error("Failed to connect");
+}
+
 export default function XConnectCallback() {
   const { data, isLoading } = useAdminRole();
   const [params] = useSearchParams();
@@ -40,7 +66,7 @@ export default function XConnectCallback() {
         const { data: res, error } = await supabase.functions.invoke("x-oauth-callback", {
           body: { code, state },
         });
-        if (error) throw error;
+        if (error) throw await describeFnError(error);
         if (res?.error) throw new Error(typeof res.error === "string" ? res.error : JSON.stringify(res.error));
         setStatus("done");
         setMessage(`Connected @${res.account_handle}`);
