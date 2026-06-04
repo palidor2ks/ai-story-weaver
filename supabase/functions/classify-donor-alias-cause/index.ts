@@ -123,6 +123,11 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Valid quiz topics — an AI-suggested new industry cause must map to one of these.
+    const { data: validTopicsData } = await supabase.from('topics').select('id');
+    const validTopicIds = new Set<string>((validTopicsData ?? []).map((t: any) => t.id));
+    const topicIdList = Array.from(validTopicIds);
+
     const allowed = causes.map((c) => c.id);
     const causeMenu = causes
       .map((c) => `- ${c.id}: ${c.label} (${c.stance} ${c.issue})${c.description ? ' — ' + c.description : ''}`)
@@ -136,6 +141,8 @@ IE expenditure purposes: ${iePurposes.slice(0, 10).join(' | ') || 'none'}
 
 Pick ONE primary cause id from the list below that best describes what this donor entity advocates for. Use "low" confidence for generic partisan donors with no clear single-issue focus.
 
+Industry rule: never assign the generic "pro-business" cause to a single-industry donor. If this is a company, trade association, or PAC tied to one industry (real estate, finance/banking, insurance, defense, agriculture, healthcare providers, telecom, manufacturing, gaming, etc.), pick that industry's specific cause. Reserve "pro-business" only for broad, cross-industry business coalitions (e.g. a Chamber of Commerce). If the donor is clearly tied to a specific industry that has NO matching cause below, propose one with suggested_new_cause (map it to one of these quiz topics: ${topicIdList.join(', ')}) instead of settling for a generic bucket — but only for a clear, specific industry not already represented.
+
 Causes:
 ${causeMenu}`;
 
@@ -145,7 +152,7 @@ ${causeMenu}`;
       body: JSON.stringify({
         model: 'google/gemini-3-flash-preview',
         messages: [
-          { role: 'system', content: 'You categorize US political donors (PACs, orgs, individuals) by cause/stance (e.g. Pro-Israel, Pro-gun). Be conservative; prefer generic "conservative" / "progressive" buckets over forcing a specific cause when unclear.' },
+          { role: 'system', content: 'You categorize US political donors (PACs, orgs, individuals, trade associations) by cause/stance (e.g. Pro-Israel, Pro-gun, Pro-Real Estate). When a donor is tied to one industry, pick that industry\'s specific cause rather than the generic "Pro-Business" bucket, which is reserved for broad cross-industry business coalitions. Otherwise prefer the generic "conservative" / "progressive" buckets over forcing a specific cause when no single issue or industry stands out.' },
           { role: 'user', content: userMsg },
         ],
         tools: [{
@@ -159,6 +166,19 @@ ${causeMenu}`;
                 primary_cause_id: { type: 'string', enum: allowed },
                 confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
                 reasoning: { type: 'string', maxLength: 280 },
+                suggested_new_cause: {
+                  type: 'object',
+                  description: 'Propose a new industry-specific cause when this donor is tied to a specific industry not represented above, instead of using the generic pro-business bucket.',
+                  properties: {
+                    label: { type: 'string' },
+                    stance: { type: 'string', enum: ['pro', 'anti', 'neutral'] },
+                    issue: { type: 'string' },
+                    quiz_topic_id: { type: 'string' },
+                    reasoning: { type: 'string', maxLength: 240 },
+                  },
+                  required: ['label', 'stance', 'issue', 'quiz_topic_id'],
+                  additionalProperties: false,
+                },
               },
               required: ['primary_cause_id', 'confidence', 'reasoning'],
               additionalProperties: false,
@@ -201,6 +221,30 @@ ${causeMenu}`;
       });
     }
 
+    // Persist an AI-suggested industry-specific cause as `pending` for admin review,
+    // so single-industry donors stop collapsing into the generic pro-business bucket.
+    let suggestedCause: { id: string; label: string } | null = null;
+    const sug = parsed.suggested_new_cause;
+    if (sug?.label && sug?.quiz_topic_id && validTopicIds.has(sug.quiz_topic_id)) {
+      const slug = String(sug.label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+      if (slug && !causes.some((c) => c.id === slug)) {
+        const stance = ['pro', 'anti', 'neutral'].includes(sug.stance) ? sug.stance : 'pro';
+        const { error: causeErr } = await supabase.from('committee_causes').upsert({
+          id: slug,
+          label: String(sug.label).slice(0, 80),
+          stance,
+          issue: String(sug.issue ?? '').slice(0, 80),
+          quiz_topic_id: sug.quiz_topic_id,
+          description: null,
+          status: 'pending',
+          created_by: 'ai',
+          ai_reasoning: String(sug.reasoning ?? '').slice(0, 240),
+        }, { onConflict: 'id', ignoreDuplicates: true });
+        if (causeErr) console.error('Failed to persist suggested cause', causeErr);
+        else suggestedCause = { id: slug, label: String(sug.label).slice(0, 80) };
+      }
+    }
+
     const { error: updErr } = await supabase
       .from('donor_aliases')
       .update({
@@ -222,6 +266,7 @@ ${causeMenu}`;
       primary_cause_label: label,
       confidence: parsed.confidence,
       reasoning: parsed.reasoning,
+      suggested_new_cause: suggestedCause,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e) {
     console.error('classify-donor-alias-cause error', e);
