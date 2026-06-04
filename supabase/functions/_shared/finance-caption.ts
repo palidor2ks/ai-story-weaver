@@ -98,10 +98,9 @@ function hasFinance(f: Facts | null): boolean {
   return (f.raised ?? 0) > 0 || (f.ie_support ?? 0) > 0 || (f.ie_oppose ?? 0) > 0;
 }
 
-function factsBlock(name: string, party: string, ideology: string | null, office: string, state: string, incumbent: boolean | null | undefined, handle: string | null, f: Facts): string {
+function factsBlock(name: string, party: string, ideology: string | null, office: string, state: string, incumbent: boolean | null | undefined, f: Facts): string {
   const lines: string[] = [];
-  lines.push(`Name: ${name}`);
-  if (handle) lines.push(`X/Twitter handle: @${handle} (mention exactly once, right after the name)`);
+  lines.push(`Name to use for the politician (use exactly this, no other name): ${name}`);
   lines.push(`Leaning & party: ${ideology ? ideology + ' ' : ''}${partyFull(party)}`.trim());
   if (office) lines.push(`Office: ${office}${state ? ` (${state})` : ''}`);
   if (incumbent !== undefined && incumbent !== null) {
@@ -162,13 +161,16 @@ function electionTimingDirective(cycle: string | null, todayIso: string | null |
 
 function buildPrompt(platform: string, block: string, hint: string | null, timing: string | null, handle: string | null, long: boolean, max: number): string {
   const handleRule = handle
-    ? `\n- @-mention the rep exactly ONCE as @${handle}, right after their name (e.g. "Rep. Jane Doe (@${handle})"). Never put @${handle} as the very first character of the post.`
+    ? `\n- The "Name to use" above IS the rep's X handle (@${handle}) — refer to them by that handle in place of a real name, and never write their actual personal name. Do NOT put @${handle} as the very first character of the post (so X does not treat it as a reply).`
     : '';
+  const focusRule = long
+    ? `Give the fuller breakdown: money raised + donors, the standout donor, the funding mix, and the for-vs-against outside spending with the biggest PACs.`
+    : `Be SELECTIVE — this is a short post. Include only THREE things: (1) the lead figure, (2) the SINGLE most striking secondary fact — pick ONE of: a lopsided for-vs-against fight, a notable funding angle (e.g. "42% PAC-funded" or small-dollar/grassroots), or the standout top donor${handle ? ', and (3) the @-mention' : ''}. Leave every other fact OUT — a tight post beats a crammed one, and it must never get cut off.`;
   const lengthRule = long
-    ? `Length: 3–5 short sentences. After the hook, give the fuller breakdown — money raised + donors, the standout donor, and the for-vs-against outside spending with the biggest PACs. Keep it under ${max} characters.`
-    : `Length: 1–2 short, punchy sentences, under ${max} characters.`;
+    ? `Length: 3–5 short sentences, under ${max} characters.`
+    : `Length: ONE or TWO tight sentences. Stay comfortably under ${max} characters — aim for about ${Math.round(max * 0.85)} and leave room; do NOT run to the limit.`;
   const leadRule = hint
-    ? `OPEN with this exact figure — it is the single biggest number and MUST be your hook, right at the front: ${hint}. Weave the other facts in afterward.`
+    ? `OPEN with this exact figure — it is the single biggest number and MUST be your hook, right at the front: ${hint}.`
     : `LEAD with the single most eye-popping dollar figure and make it the hook.`;
   return `You are a sharp political-media editor writing a punchy, headline-worthy ${platform.toUpperCase()} post about a U.S. politician's campaign money, built for media consumption and engagement.
 
@@ -179,9 +181,10 @@ ${block}
 ${timing ? `\n${timing}\n` : ''}
 Write the post:
 - ${leadRule}
+- ${focusRule}
 - Match the tense and framing to the TIMING note above — an upcoming election must NOT be described in the past tense, and a finished one must not be written as if it's still ahead.
 - Refer to them using the "Leaning & party" line EXACTLY as given. When it's only a party ("Democrat"/"Republican"), use just that — NEVER prepend "Left", "Right", "Progressive", "Conservative" or any direction yourself. Only a middle-of-the-road rep carries a "Center-Left", "Centrist", or "Center-Right" qualifier (e.g. "Center-Right Republican"). Say "re-election" only if the facts mark them as the incumbent; otherwise call it their campaign or bid.${handleRule}
-- Work the FUNDING MIX into the story when it's striking — e.g. grassroots/small-dollar-powered, large-donor-reliant, or heavily PAC-funded. Small-dollar = under $200; the "PACs/committees" share is direct money TO the campaign, distinct from the outside/Super-PAC spending above. For a deep (long) post, always include it.
+- When you cite funding: small-dollar = under $200, and the "PACs/committees" share is direct money TO the campaign — keep it distinct from the outside/Super-PAC spending above.
 - Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
 - ${lengthRule}
 - Plain text ONLY — no markdown, no asterisks, no underscores, no bullet points, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
@@ -205,8 +208,8 @@ function ensureHandle(caption: string, handle: string | null, max: number): stri
 
 // Deterministic, safe fallback: lead with the single biggest number and assemble
 // a sentence directly. Names the party, with a leaning qualifier only for middle reps.
-function templateCaption(name: string, party: string, ideology: string | null, state: string, handle: string | null, f: Facts, max: number): string {
-  const who = `${name}${handle ? ` (@${handle})` : ''}, a ${ideology ? ideology + ' ' : ''}${partyFull(party)}${state ? ` (${state})` : ''}`.trim();
+function templateCaption(name: string, party: string, ideology: string | null, state: string, f: Facts, max: number): string {
+  const who = `${name}, a ${ideology ? ideology + ' ' : ''}${partyFull(party)}${state ? ` (${state})` : ''}`.trim();
   const raised = f.raised ?? 0;
   const support = f.ie_support ?? 0;
   const oppose = f.ie_oppose ?? 0;
@@ -221,7 +224,7 @@ function templateCaption(name: string, party: string, ideology: string | null, s
     base = `${fmtMoney(support)} in outside money is backing ${who}${sup ? `, led by ${tidyName(sup.name)} (${fmtMoney(sup.amount)})` : ''}${oppose > 0 ? ` — vs ${fmtMoney(oppose)} against` : ''}. 💥`;
   } else {
     const extra = (support > 0 || oppose > 0) ? ` Outside money: ${fmtMoney(support)} for, ${fmtMoney(oppose)} against.` : '';
-    base = `${who} has built a ${fmtMoney(raised)} war chest${f.donor_count ? ` from ${f.donor_count.toLocaleString('en-US')} donors` : ''}${f.top_donor ? `, top donor ${tidyName(f.top_donor.name)} (${fmtMoney(f.top_donor.amount)})` : ''}.${extra} 🏦`;
+    base = `${fmtMoney(raised)} war chest for ${who}${f.donor_count ? `, built from ${f.donor_count.toLocaleString('en-US')} donors` : ''}${f.top_donor ? `; top donor ${tidyName(f.top_donor.name)} (${fmtMoney(f.top_donor.amount)})` : ''}.${extra} 🏦`;
   }
   return summarizeForSocial(base, max);
 }
@@ -274,14 +277,15 @@ export async function composeFinanceCaption(
   const facts = (factsRaw ?? null) as Facts | null;
   if (!facts || !hasFinance(facts)) return null;
 
-  const name = meta.name || 'This candidate';
-  const ideology = ideologyLabel(meta.score);
   const handle = normalizeHandle(meta.handle);
-  const block = factsBlock(name, meta.party, ideology, meta.office, meta.state, meta.incumbent, handle, facts);
+  // Use the @handle as the rep's name when we have one; fall back to the real name.
+  const displayName = handle ? `@${handle}` : (meta.name || 'This candidate');
+  const ideology = ideologyLabel(meta.score);
+  const block = factsBlock(displayName, meta.party, ideology, meta.office, meta.state, meta.incumbent, facts);
   const hint = headlineHint(facts);
   const timing = electionTimingDirective(facts.cycle, facts.today);
 
   const ai = await aiCaption(aiKey, buildPrompt(platform, block, hint, timing, handle, cfg.long, cfg.max), cfg.max);
   if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: 'finance_ai' };
-  return { caption: ensureHandle(templateCaption(name, meta.party, ideology, meta.state, handle, facts, cfg.max), handle, cfg.max), source: 'finance_template' };
+  return { caption: ensureHandle(templateCaption(displayName, meta.party, ideology, meta.state, facts, cfg.max), handle, cfg.max), source: 'finance_template' };
 }
