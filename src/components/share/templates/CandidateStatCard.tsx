@@ -168,12 +168,18 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
     data.totalRaised !== undefined &&
     Number.isFinite(data.totalRaised) &&
     data.totalRaised > 0;
-  const hasSpentTotal =
-    data.totalSpent !== null &&
-    data.totalSpent !== undefined &&
-    Number.isFinite(data.totalSpent) &&
-    data.totalSpent > 0;
-  const showFinanceTotals = hasRaisedTotal || hasSpentTotal;
+  const hasOutsideSupport =
+    data.outsideSupport !== null &&
+    data.outsideSupport !== undefined &&
+    Number.isFinite(data.outsideSupport) &&
+    data.outsideSupport > 0;
+  const hasOutsideOppose =
+    data.outsideOppose !== null &&
+    data.outsideOppose !== undefined &&
+    Number.isFinite(data.outsideOppose) &&
+    data.outsideOppose > 0;
+  const hasOutside = hasOutsideSupport || hasOutsideOppose;
+  const showFinanceTotals = hasRaisedTotal || hasOutside;
   const dataYearLabel = formatDataYearLabel(displayCycle);
   const cycleDateRange = formatCycleDateRange(displayCycle);
   const cycleLabel = data.ieCycle ? ` · ${data.ieCycle}` : '';
@@ -353,7 +359,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: hasRaisedTotal && hasSpentTotal ? '1fr 1fr' : '1fr',
+                    gridTemplateColumns: hasRaisedTotal && hasOutside ? '1fr 1fr' : '1fr',
                     gap: 10,
                     marginTop: 12,
                     maxWidth: 430,
@@ -385,7 +391,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                       </div>
                     </div>
                   )}
-                  {hasSpentTotal && (
+                  {hasOutside && (
                     <div
                       style={{
                         border: `2px solid hsl(0 80% 72% / 0.8)`,
@@ -406,8 +412,43 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                       >
                         Total Outside Spending
                       </div>
-                      <div style={{ fontSize: 22, fontWeight: 900, color: 'hsl(0 80% 82%)', lineHeight: 1.15 }}>
-                        {fmtMoneyShort(data.totalSpent)}
+                      <div style={{ display: 'flex', gap: 16, marginTop: 2 }}>
+                        {hasOutsideSupport && (
+                          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                letterSpacing: 0.6,
+                                textTransform: 'uppercase',
+                                color: 'hsl(150 60% 72%)',
+                                fontWeight: 800,
+                              }}
+                            >
+                              For
+                            </span>
+                            <span style={{ fontSize: 19, fontWeight: 900, color: 'hsl(150 70% 78%)' }}>
+                              {fmtMoneyShort(data.outsideSupport)}
+                            </span>
+                          </div>
+                        )}
+                        {hasOutsideOppose && (
+                          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                letterSpacing: 0.6,
+                                textTransform: 'uppercase',
+                                color: 'hsl(0 75% 78%)',
+                                fontWeight: 800,
+                              }}
+                            >
+                              Against
+                            </span>
+                            <span style={{ fontSize: 19, fontWeight: 900, color: 'hsl(0 80% 82%)' }}>
+                              {fmtMoneyShort(data.outsideOppose)}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -561,9 +602,19 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                     >
                       {s.name}
                     </div>
-                    <div style={{ display: 'flex', gap: 14, fontSize: 18, fontWeight: 800 }}>
-                      <span style={{ color: 'hsl(150 70% 70%)' }}>↑ {fmtMoneyShort(s.support)}</span>
-                      <span style={{ color: 'hsl(0 80% 72%)' }}>↓ {fmtMoneyShort(s.oppose)}</span>
+                    <div style={{ display: 'flex', gap: 16, fontWeight: 800 }}>
+                      <span style={{ display: 'flex', alignItems: 'baseline', gap: 5, color: 'hsl(150 70% 70%)' }}>
+                        <span style={{ fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase', opacity: 0.9 }}>
+                          For
+                        </span>
+                        <span style={{ fontSize: 18 }}>{fmtMoneyShort(s.support)}</span>
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'baseline', gap: 5, color: 'hsl(0 80% 72%)' }}>
+                        <span style={{ fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase', opacity: 0.9 }}>
+                          Against
+                        </span>
+                        <span style={{ fontSize: 18 }}>{fmtMoneyShort(s.oppose)}</span>
+                      </span>
                     </div>
                     {s.primaryCause && (
                       <div
