@@ -361,8 +361,15 @@ function json(payload: unknown, status = 200): Response {
   });
 }
 
+import { requireCronAuth } from '../_shared/cron-auth.ts';
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+
+  const unauthorized = await requireCronAuth(req);
+  if (unauthorized) return unauthorized;
+
+
 
   const body = await req.json().catch(() => ({}));
   const action: string = body.action || 'run';

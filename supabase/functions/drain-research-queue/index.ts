@@ -29,8 +29,15 @@ const HARD_MAX_BATCH = 25;
 const DEFAULT_COOLDOWN_HOURS = 6;
 const DEFAULT_MAX_ATTEMPTS = 3;
 
+import { requireCronAuth } from '../_shared/cron-auth.ts';
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+
+  const unauthorized = await requireCronAuth(req);
+  if (unauthorized) return unauthorized;
+
+
 
   const body = await req.json().catch(() => ({}));
   const batchSize = Math.max(1, Math.min(HARD_MAX_BATCH, Number(body.batchSize) || DEFAULT_BATCH));

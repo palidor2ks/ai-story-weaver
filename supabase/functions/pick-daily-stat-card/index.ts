@@ -26,8 +26,15 @@ function nowInTimezone(tz: string): { hour: number; minute: number } {
   return { hour, minute };
 }
 
+import { requireCronAuth } from '../_shared/cron-auth.ts';
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  const unauthorized = await requireCronAuth(req);
+  if (unauthorized) return unauthorized;
+
+
 
   const admin = createClient(supaUrl, serviceKey);
   const url = new URL(req.url);
