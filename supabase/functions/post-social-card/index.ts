@@ -2,6 +2,7 @@
 // X is fully wired; FB/IG/TikTok return "not_configured" until tokens added.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'npm:zod@3.23.8';
+import { isCronAuthorized } from '../_shared/cron-auth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +14,6 @@ const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 const X_CLIENT_ID = Deno.env.get('X_CLIENT_ID');
 const X_CLIENT_SECRET = Deno.env.get('X_CLIENT_SECRET');
-const CRON_SECRET = Deno.env.get('CRON_SECRET');
 
 const BodySchema = z.object({
   post_id: z.string().uuid(),
@@ -87,8 +87,9 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization') ?? '';
-    const cronHeader = req.headers.get('x-cron-secret') ?? '';
-    const isCron = CRON_SECRET && cronHeader === CRON_SECRET;
+    // Accept the vault cron secret (x-cron-secret) or a service-role bearer,
+    // consistent with the other cron-invoked functions.
+    const isCron = await isCronAuthorized(req);
 
     const admin = createClient(supaUrl, serviceKey);
 
