@@ -2,10 +2,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Candidate } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { MapPin, Star, Shield, ArrowRightLeft, CheckCircle, Sparkles } from 'lucide-react';
+import { MapPin, ArrowRightLeft, Sparkles } from 'lucide-react';
 import { ScoreText } from './ScoreText';
-import { CoverageTier, ConfidenceLevel } from '@/lib/scoreFormat';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { OfficialAvatar } from './OfficialAvatar';
 import { useAuth } from '@/context/AuthContext';
@@ -53,30 +53,9 @@ export const CandidateCard = ({
     }
   };
 
-  // Get coverage tier, confidence, and transition status from candidate (with defaults)
-  const coverageTier: CoverageTier = candidate.coverageTier || 'tier_3';
-  const confidence: ConfidenceLevel = candidate.confidence || 'medium';
+  // Incumbency + transition status from candidate (with defaults)
   const isIncumbent = candidate.isIncumbent ?? true;
   const transitionStatus = candidate.transitionStatus;
-
-  const getTierIcon = (tier: CoverageTier) => {
-    switch (tier) {
-      case 'tier_1': return { icon: Star, label: 'Tier 1 - Full Coverage', color: 'text-amber-500' };
-      case 'tier_2': return { icon: Star, label: 'Tier 2 - Partial Coverage', color: 'text-slate-400' };
-      case 'tier_3': return { icon: Star, label: 'Tier 3 - Basic Coverage', color: 'text-slate-300' };
-    }
-  };
-
-  const getConfidenceIcon = (conf: ConfidenceLevel) => {
-    switch (conf) {
-      case 'high': return { icon: Shield, label: 'High Confidence', color: 'text-green-500' };
-      case 'medium': return { icon: Shield, label: 'Medium Confidence', color: 'text-amber-500' };
-      case 'low': return { icon: Shield, label: 'Low Confidence', color: 'text-red-400' };
-    }
-  };
-
-  const tierInfo = getTierIcon(coverageTier);
-  const confidenceInfo = getConfidenceIcon(confidence);
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (compareMode && onToggleSelect) {
@@ -152,16 +131,8 @@ export const CandidateCard = ({
           {/* Icons and Score - below on mobile, right side on desktop */}
           <TooltipProvider>
             <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2 sm:gap-1 pl-12 sm:pl-0">
-              {/* Status icons */}
-              <div className="flex items-center gap-1">
-                {isIncumbent && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">Incumbent</TooltipContent>
-                  </Tooltip>
-                )}
+              {/* Incumbent / Challenger status */}
+              <div className="flex items-center gap-1.5">
                 {transitionStatus && transitionStatus !== 'current' && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -170,18 +141,17 @@ export const CandidateCard = ({
                     <TooltipContent side="top" className="text-xs">Transitioning</TooltipContent>
                   </Tooltip>
                 )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <tierInfo.icon className={cn("w-4 h-4", tierInfo.color)} />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">{tierInfo.label}</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <confidenceInfo.icon className={cn("w-4 h-4", confidenceInfo.color)} />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">{confidenceInfo.label}</TooltipContent>
-                </Tooltip>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "h-5 px-2 py-0 text-[10px] font-semibold",
+                    isIncumbent
+                      ? "border-green-500/40 bg-green-500/10 text-green-600"
+                      : "border-border bg-muted text-muted-foreground"
+                  )}
+                >
+                  {isIncumbent ? 'Incumbent' : 'Challenger'}
+                </Badge>
               </div>
 
               {/* Score with AI indicator */}
