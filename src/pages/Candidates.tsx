@@ -53,6 +53,7 @@ export const Candidates = () => {
   const [sortBy, setSortBy] = useState<'match' | 'name' | 'party'>('name');
   const [partyFilter, setPartyFilter] = useState<string>('all');
   const [officeFilter, setOfficeFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'incumbent' | 'challenger'>('all');
   const [activeTab, setActiveTab] = useState<string>('all');
 
   // Compare mode state
@@ -163,6 +164,12 @@ export const Candidates = () => {
       result = result.filter(c => normalizeOfficeName(c.office) === officeFilter);
     }
 
+    if (statusFilter !== 'all') {
+      // isIncumbent defaults to true when unknown (see useUnifiedCandidates).
+      const wantIncumbent = statusFilter === 'incumbent';
+      result = result.filter(c => (c.isIncumbent ?? true) === wantIncumbent);
+    }
+
     const userScore = profile?.overall_score ?? 0;
     switch (sortBy) {
       case 'match':
@@ -177,7 +184,7 @@ export const Candidates = () => {
     }
 
     return result;
-  }, [searchQuery, sortBy, partyFilter, officeFilter, tabCandidates, profile, isHidden]);
+  }, [searchQuery, sortBy, partyFilter, officeFilter, statusFilter, tabCandidates, profile, isHidden]);
 
   // Pagination: only ever mount one fixed-size page of cards, so the DOM stays
   // small no matter how many candidates exist (it doesn't grow with the dataset).
@@ -189,7 +196,7 @@ export const Candidates = () => {
   // Reset to page 1 whenever the result set changes (tab/search/filter/sort).
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, searchQuery, partyFilter, officeFilter, sortBy]);
+  }, [activeTab, searchQuery, partyFilter, officeFilter, statusFilter, sortBy]);
 
   // Clamp the page if the result set shrinks (e.g. async reps finish loading).
   useEffect(() => {
@@ -343,6 +350,16 @@ export const Candidates = () => {
                 <SelectItem value="Independent">Independent</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={statusFilter} onValueChange={(v: 'all' | 'incumbent' | 'challenger') => setStatusFilter(v)}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Candidates</SelectItem>
+                <SelectItem value="incumbent">Incumbents</SelectItem>
+                <SelectItem value="challenger">Challengers</SelectItem>
+              </SelectContent>
+            </Select>
             {activeTab === 'all' && (
               <Select value={officeFilter} onValueChange={setOfficeFilter}>
                 <SelectTrigger className="w-[160px]">
@@ -483,6 +500,7 @@ export const Candidates = () => {
               setSearchQuery('');
               setPartyFilter('all');
               setOfficeFilter('all');
+              setStatusFilter('all');
             }}>
               Clear Filters
             </Button>
