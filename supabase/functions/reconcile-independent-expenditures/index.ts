@@ -1,0 +1,212 @@
+// reconcile-independent-expenditures
+// Read-only verifier: for a given cycle, diff what we hold in
+// public.independent_expenditures against the FEC API's authoritative Schedule E
+// figures, so we can confirm completeness and surface dirty data. Writes nothing.
+//
+// Our-side totals come from ie_reconcile_local, which is exclusion-aware (junk
+// committees in ie_excluded_committees are reported separately, not in the
+// headline totals) so the comparison matches what the app actually shows.
+//
+// Ground truth comes entirely from FEC's schedule_e/by_candidate aggregation,
+// which respects the `cycle` param for both dollars AND line-item counts. (The
+// flat schedule_e endpoint's pagination.count ignores the cycle filter — it
+// returns the same number for every cycle — so it is NOT used here.)
+//
+// Same dual auth as import-independent-expenditures (admin JWT or x-sync-secret).
+// Body params: { cycle?: string = "2024", max_pages?: number = 200 }
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sync-secret",
+};
+
+const FEC_BASE = "https://api.open.fec.gov/v1";
+
+// deno-lint-ignore no-explicit-any
+async function fecGet(path: string, params: Record<string, string>): Promise<any> {
+  const qs = new URLSearchParams(params).toString();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const res = await fetch(`${FEC_BASE}${path}?${qs}`);
+    if (res.status === 429 || res.status >= 500) {
+      await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** attempt, 16000)));
+      continue;
+    }
+    if (!res.ok) throw new Error(`FEC ${path} ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    return res.json();
+  }
+  throw new Error(`FEC ${path}: max retries exceeded`);
+}
+
+// Authoritative, cycle-correct totals: walk FEC's per-candidate Schedule E
+// aggregation and sum dollars (deduped by FEC) and line-item counts.
+async function fecByCandidate(
+  apiKey: string,
+  cycle: string,
+  maxPages: number,
+): Promise<{ total: number; support: number; oppose: number; lineItems: number; capped: boolean }> {
+  let total = 0, support = 0, oppose = 0, lineItems = 0, pages = 1, page = 1;
+  for (; page <= maxPages; page++) {
+    const j = await fecGet("/schedules/schedule_e/by_candidate/", {
+      api_key: apiKey,
+      cycle,
+      election_full: "false",
+      per_page: "100",
+      page: String(page),
+    });
+    pages = Number(j?.pagination?.pages ?? 1);
+    for (const r of (j?.results ?? [])) {
+      const amt = Number(r?.total ?? 0);
+      total += amt;
+      lineItems += Number(r?.count ?? 0);
+      const so = r?.support_oppose_indicator;
+      if (so === "S") support += amt;
+      else if (so === "O") oppose += amt;
+    }
+    if (page >= pages) break;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return { total, support, oppose, lineItems, capped: page < pages };
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  try {
+    const fecApiKey = Deno.env.get("FEC_API_KEY");
+    if (!fecApiKey) {
+      return new Response(JSON.stringify({ error: "FEC API key not configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceKey);
+
+    // Auth: cron/server secret OR admin user JWT (mirrors import-independent-expenditures).
+    const providedSecret = req.headers.get("x-sync-secret") ?? "";
+    let authorized = false;
+    if (providedSecret) {
+      const { data: secretOk } = await supabase.rpc("check_ie_sync_secret", { p_token: providedSecret });
+      authorized = secretOk === true;
+    }
+    if (!authorized) {
+      const authHeader = req.headers.get("Authorization") ?? "";
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "Authentication required" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data: userData, error: userErr } = await userClient.auth.getUser();
+      if (userErr || !userData?.user) {
+        return new Response(JSON.stringify({ error: "Invalid session" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: isAdmin } = await userClient.rpc("has_role", { _user_id: userData.user.id, _role: "admin" });
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ error: "Admin role required" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    let body: Record<string, unknown> = {};
+    try { body = await req.json(); } catch { /* optional body */ }
+    const cycle = String(body.cycle ?? "2024");
+    const maxPages = Math.max(1, Math.min(400, Number(body.max_pages ?? 200)));
+
+    // Committee spot-check mode: given committee_ids, return each committee's FEC
+    // cycle IE total + coverage_end_date. Comparing these to our per-committee
+    // totals tells FEC mid-cycle processing lag apart from our-side inflation.
+    const committeeIds = Array.isArray(body.committee_ids) ? (body.committee_ids as unknown[]).map(String) : [];
+    if (committeeIds.length > 0) {
+      const committees: Array<Record<string, unknown>> = [];
+      for (const cid of committeeIds) {
+        const j = await fecGet(`/committee/${cid}/totals/`, { api_key: fecApiKey, cycle, per_page: "1" });
+        const t = (j?.results?.[0] ?? {}) as Record<string, unknown>;
+        committees.push({
+          committee_id: cid,
+          fec_independent_expenditures: Number(t.independent_expenditures ?? 0),
+          fec_coverage_end_date: t.coverage_end_date ?? null,
+        });
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      return new Response(JSON.stringify({ cycle, committees }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Our side (exclusion-aware)
+    const { data: localData, error: locErr } = await supabase.rpc("ie_reconcile_local", { p_cycle: cycle });
+    if (locErr) {
+      return new Response(JSON.stringify({ error: `local aggregate failed: ${locErr.message}` }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const ours = (Array.isArray(localData) ? localData[0] : localData) ?? {};
+
+    // FEC ground truth (cycle-correct dollars + line-item count)
+    const fec = await fecByCandidate(fecApiKey, cycle, maxPages);
+
+    const ourDistinctTx = Number(ours.distinct_transactions ?? 0);
+    const ourSum = Number(ours.sum_amount ?? 0);
+    const dollarRatio = fec.total > 0 ? ourSum / fec.total : null;
+    const lineItemShare = fec.lineItems > 0 ? ourDistinctTx / fec.lineItems : null;
+
+    const notes: string[] = [];
+    if (Number(ours.excluded_rows ?? 0) > 0) {
+      notes.push(`Excluded ${Number(ours.excluded_rows)} junk rows ($${(Number(ours.excluded_amount) / 1e9).toFixed(2)}B) from ie_excluded_committees — not in totals above.`);
+    }
+    if (dollarRatio != null && dollarRatio > 1.1) {
+      notes.push(`Dollars run HOT: our $${(ourSum / 1e9).toFixed(2)}B is ${dollarRatio.toFixed(2)}x FEC's deduped $${(fec.total / 1e9).toFixed(2)}B${fec.capped ? "+" : ""} (likely notice+report or amendment double-counting, or residual junk).`);
+    } else if (dollarRatio != null && dollarRatio < 0.9) {
+      notes.push(`Dollars run LOW: our $${(ourSum / 1e9).toFixed(2)}B vs FEC's $${(fec.total / 1e9).toFixed(2)}B${fec.capped ? "+" : ""} — missing ~${Math.round((1 - dollarRatio) * 100)}% of cycle dollars.`);
+    } else if (dollarRatio != null) {
+      notes.push(`Dollars reconcile: our $${(ourSum / 1e9).toFixed(2)}B vs FEC's $${(fec.total / 1e9).toFixed(2)}B (${dollarRatio.toFixed(2)}x).`);
+    }
+    if (lineItemShare != null) {
+      notes.push(`We hold ${ourDistinctTx} of FEC's ${fec.lineItems} Schedule E line items (${(lineItemShare * 100).toFixed(0)}%); the rest is mostly the sub-$1k digital long tail.`);
+    }
+    if (Number(ours.bad_date_rows ?? 0) > 0) {
+      notes.push(`${Number(ours.bad_date_rows)} rows have out-of-range expenditure dates (filer typos).`);
+    }
+    if (fec.capped) notes.push(`FEC totals were page-capped at ${maxPages} pages; treat them as a lower bound (raise max_pages).`);
+
+    return new Response(JSON.stringify({
+      cycle,
+      ours: {
+        rows: Number(ours.rows ?? 0),
+        distinct_transactions: ourDistinctTx,
+        distinct_committees: Number(ours.distinct_committees ?? 0),
+        sum_amount: ourSum,
+        support_amount: Number(ours.support_amount ?? 0),
+        oppose_amount: Number(ours.oppose_amount ?? 0),
+        excluded_rows: Number(ours.excluded_rows ?? 0),
+        excluded_amount: Number(ours.excluded_amount ?? 0),
+        bad_date_rows: Number(ours.bad_date_rows ?? 0),
+        date_range: [ours.min_valid_date ?? null, ours.max_valid_date ?? null],
+      },
+      fec: {
+        total_amount: fec.total,
+        support_amount: fec.support,
+        oppose_amount: fec.oppose,
+        line_items: fec.lineItems,
+        total_capped: fec.capped,
+      },
+      assessment: {
+        dollar_ratio: dollarRatio,
+        line_item_share: lineItemShare,
+        notes,
+      },
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  } catch (err) {
+    console.error("[IE-RECONCILE] error", err);
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Internal error" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
