@@ -163,6 +163,17 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
     .sort((a, b) => b.pct - a.pct)
     .slice(0, 4);
   const displayCycle = data.fundingCycle ?? data.ieCycle;
+  const hasRaisedTotal =
+    data.totalRaised !== null &&
+    data.totalRaised !== undefined &&
+    Number.isFinite(data.totalRaised) &&
+    data.totalRaised > 0;
+  const hasSpentTotal =
+    data.totalSpent !== null &&
+    data.totalSpent !== undefined &&
+    Number.isFinite(data.totalSpent) &&
+    data.totalSpent > 0;
+  const showFinanceTotals = hasRaisedTotal || hasSpentTotal;
   const dataYearLabel = formatDataYearLabel(displayCycle);
   const cycleDateRange = formatCycleDateRange(displayCycle);
   const cycleLabel = data.ieCycle ? ` · ${data.ieCycle}` : '';
@@ -338,6 +349,70 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                 </span>
               </div>
               <div style={{ fontSize: 20, marginTop: 4, color: mutedColor }}>{officeLabel}</div>
+              {showFinanceTotals && (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: hasRaisedTotal && hasSpentTotal ? '1fr 1fr' : '1fr',
+                    gap: 10,
+                    marginTop: 12,
+                    maxWidth: 430,
+                  }}
+                >
+                  {hasRaisedTotal && (
+                    <div
+                      style={{
+                        border: `2px solid hsl(150 70% 70% / 0.8)`,
+                        borderRadius: 12,
+                        padding: '7px 10px',
+                        background: 'hsl(150 70% 35% / 0.14)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 10,
+                          letterSpacing: 1.2,
+                          textTransform: 'uppercase',
+                          color: mutedColor,
+                          fontWeight: 800,
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        Total Raised
+                      </div>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: 'hsl(150 70% 78%)', lineHeight: 1.15 }}>
+                        {fmtMoneyShort(data.totalRaised)}
+                      </div>
+                    </div>
+                  )}
+                  {hasSpentTotal && (
+                    <div
+                      style={{
+                        border: `2px solid hsl(0 80% 72% / 0.8)`,
+                        borderRadius: 12,
+                        padding: '7px 10px',
+                        background: 'hsl(0 76% 46% / 0.14)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 10,
+                          letterSpacing: 1.2,
+                          textTransform: 'uppercase',
+                          color: mutedColor,
+                          fontWeight: 800,
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        Total Spent
+                      </div>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: 'hsl(0 80% 82%)', lineHeight: 1.15 }}>
+                        {fmtMoneyShort(data.totalSpent)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

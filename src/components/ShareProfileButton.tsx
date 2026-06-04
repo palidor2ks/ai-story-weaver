@@ -48,6 +48,8 @@ interface ShareProfileButtonProps {
   incumbent?: boolean;
   coverageTier?: string;
   confidence?: string;
+  totalRaised?: number | null;
+  totalSpent?: number | null;
   topDonors?: { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null }[];
   fundingBreakdown?: { label: string; pct: number; color: string }[];
   fundingCycle?: string;
@@ -71,6 +73,8 @@ export const ShareProfileButton = ({
   incumbent,
   coverageTier,
   confidence,
+  totalRaised,
+  totalSpent,
   topDonors,
   fundingBreakdown,
   fundingCycle,
@@ -301,6 +305,8 @@ export const ShareProfileButton = ({
           coverageTier,
           confidence,
           ieCycle,
+          totalRaised,
+          totalSpent,
           topSpenders: topSpendersWithCauses,
           topDonors,
           fundingBreakdown,

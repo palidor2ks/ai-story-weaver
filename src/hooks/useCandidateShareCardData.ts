@@ -51,6 +51,8 @@ export interface CandidateShareCardData {
   coverageTier: string | undefined;
   confidence: string | undefined;
   ieCycle: string | null;
+  totalRaised: number | null;
+  totalSpent: number | null;
   topSpenders: { name: string; support: number; oppose: number; primaryCause?: string | null }[];
   topDonors: { name: string; amount: number; primaryCause?: string | null }[];
   fundingBreakdown:
@@ -257,6 +259,7 @@ export function useCandidateShareCardData(
       financeReconciliation?.fec_total_receipts ??
       fecTotals?.total_receipts ??
       null;
+    const fecTotalDisbursements = fecTotals?.total_disbursements ?? null;
 
     const fundingInput = {
       fecItemized,
@@ -343,6 +346,8 @@ export function useCandidateShareCardData(
       coverageTier: candidate.coverage_tier ?? undefined,
       confidence: candidate.confidence ?? undefined,
       ieCycle,
+      totalRaised: fecTotalReceipts,
+      totalSpent: fecTotalDisbursements,
       topSpenders,
       topDonors,
       fundingBreakdown,

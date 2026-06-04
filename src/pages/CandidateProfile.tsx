@@ -282,6 +282,7 @@ export const CandidateProfile = () => {
   const fecItemized = financeReconciliation?.fec_itemized ?? fecTotals?.individual_itemized_contributions ?? null;
   const fecUnitemized = financeReconciliation?.fec_unitemized ?? fecTotals?.individual_unitemized_contributions ?? null;
   const fecTotalReceipts = financeReconciliation?.fec_total_receipts ?? fecTotals?.total_receipts ?? null;
+  const fecTotalDisbursements = fecTotals?.total_disbursements ?? null;
   const hasFecBreakdown = fecTotalReceipts !== null && fecTotalReceipts > 0;
   const fecSourceLabel = financeReconciliation ? 'Nightly reconciliation (cached)' : fecTotals ? 'Live FEC API (fallback)' : null;
 
@@ -527,6 +528,8 @@ export const CandidateProfile = () => {
                     incumbent={candidate.is_incumbent ?? true}
                     coverageTier={candidate.coverage_tier ?? undefined}
                     confidence={candidate.confidence ?? undefined}
+                    totalRaised={fecTotalReceipts}
+                    totalSpent={fecTotalDisbursements}
                     topDonors={(() => {
                       const agg = new Map<string, { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null }>();
                       donors
