@@ -401,7 +401,11 @@ Output ONLY a JSON object, no prose:
     const parsed = extractJson(content);
     if (!parsed) {
       console.error(`Could not parse ${provider} output`, content.slice(0, 500));
-      return json({ error: "Could not parse AI response. Please regenerate." }, 500);
+      return json({
+        error: "Could not parse AI response. Please regenerate.",
+        code: "PARSE_ERROR",
+        fallback: true,
+      }, 200);
     }
 
     const grounded: { title: string; url: string }[] =
