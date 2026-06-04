@@ -63,6 +63,12 @@ interface ShareCardModalProps {
   url: string;
   data: CardData;
   caption: CaptionInput;
+  /**
+   * Optional pre-composed caption body (e.g. an AI analysis summary) used as the
+   * default instead of the built-in short caption. May arrive asynchronously; it
+   * only seeds the editor while the user hasn't typed their own text.
+   */
+  captionBodyOverride?: string;
   triggerLabel?: string;
 }
 
@@ -111,6 +117,7 @@ export const ShareCardModal = ({
   url,
   data,
   caption,
+  captionBodyOverride,
 }: ShareCardModalProps) => {
   const templates = TEMPLATES_BY_KIND[data.kind];
   const defaultTemplate = data.kind === 'candidate-alignment' ? 'stat' : 'classic';
@@ -124,28 +131,42 @@ export const ShareCardModal = ({
     stat: null,
   });
 
-  const defaultBody = useMemo(() => generateShortCaption(caption), [caption]);
+  const defaultBody = useMemo(
+    () => (captionBodyOverride?.trim() ? captionBodyOverride.trim() : generateShortCaption(caption)),
+    [captionBodyOverride, caption],
+  );
   const defaultHashtags = useMemo(() => getDefaultHashtags(caption), [caption]);
 
   const [body, setBody] = useState(defaultBody);
   const [includeHashtags, setIncludeHashtags] = useState(true);
   const editedFiredRef = useRef(false);
+  // Flips true once the user types in the caption box, so an override that
+  // arrives asynchronously (or any later default change) won't clobber their edit.
+  const bodyTouchedRef = useRef(false);
   const surface = caption.surface;
 
-  // Reset when the modal opens with new content
+  // Reset everything except the caption body when the modal opens.
   useEffect(() => {
-    if (open) {
-      setBody(defaultBody);
-      setIncludeHashtags(true);
-      editedFiredRef.current = false;
-      setSelected(defaultTemplate);
-      trackEvent('share_modal_opened', {
-        surface,
-        kind: caption.kind,
-        templateDefault: defaultTemplate,
-      });
-    }
-  }, [open, defaultBody, surface, caption.kind, defaultTemplate]);
+    if (!open) return;
+    bodyTouchedRef.current = false;
+    setIncludeHashtags(true);
+    editedFiredRef.current = false;
+    setSelected(defaultTemplate);
+    trackEvent('share_modal_opened', {
+      surface,
+      kind: caption.kind,
+      templateDefault: defaultTemplate,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Seed (and refresh) the caption body from the current default while the modal
+  // is open and the user hasn't typed — this is what lets a late-arriving AI
+  // summary populate the editor.
+  useEffect(() => {
+    if (!open || bodyTouchedRef.current) return;
+    setBody(defaultBody);
+  }, [open, defaultBody]);
 
   // Fire once per session when caption first diverges from the suggestion
   useEffect(() => {
@@ -174,6 +195,7 @@ export const ShareCardModal = ({
       : 'text-muted-foreground';
 
   const handleResetCaption = () => {
+    bodyTouchedRef.current = false;
     setBody(defaultBody);
     setIncludeHashtags(true);
   };
@@ -522,7 +544,10 @@ export const ShareCardModal = ({
           <Textarea
             id="share-caption"
             value={body}
-            onChange={e => setBody(e.target.value)}
+            onChange={e => {
+              bodyTouchedRef.current = true;
+              setBody(e.target.value);
+            }}
             rows={4}
             placeholder="Write a custom message…"
             className="resize-y bg-background"

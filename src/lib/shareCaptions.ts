@@ -118,6 +118,33 @@ export function generateShortCaption(input: CaptionInput): string {
   return `Take the Pulse quiz and see where you really stand on the issues.`;
 }
 
+/**
+ * Condense a longer block of text (e.g. an AI analysis summary, which can run a
+ * few sentences and be repetitive) down to a social-friendly snippet. Trims to
+ * the last complete sentence that fits when one lands past the halfway mark,
+ * otherwise to a word boundary with an ellipsis. Always returns ≤ maxChars.
+ */
+export function summarizeForSocial(text: string | null | undefined, maxChars = 240): string {
+  const clean = (text ?? '').replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxChars) return clean;
+
+  // Prefer ending on a sentence terminator that falls within the budget.
+  const head = clean.slice(0, maxChars + 1);
+  let sentenceCut = -1;
+  for (const m of head.matchAll(/[.!?](?=\s|$)/g)) {
+    if (m.index !== undefined && m.index < maxChars) sentenceCut = m.index + 1;
+  }
+  if (sentenceCut >= Math.floor(maxChars * 0.5)) {
+    return clean.slice(0, sentenceCut).trim();
+  }
+
+  // Otherwise trim to a word boundary and mark the truncation.
+  const wordWindow = clean.slice(0, maxChars - 1);
+  const lastSpace = wordWindow.lastIndexOf(' ');
+  const base = (lastSpace > 0 ? wordWindow.slice(0, lastSpace) : wordWindow).replace(/[\s,;:.!?-]+$/, '');
+  return `${base}…`;
+}
+
 export function composeFinalText(body: string, hashtags: string, includeHashtags: boolean): string {
   const trimmed = body.trim();
   if (!includeHashtags || !hashtags) return trimmed;
