@@ -5163,6 +5163,22 @@ export type Database = {
         Returns: boolean
       }
       ie_excluded_committee_ids: { Args: never; Returns: string[] }
+      ie_reconcile_local: {
+        Args: { p_cycle: string }
+        Returns: {
+          bad_date_rows: number
+          distinct_committees: number
+          distinct_transactions: number
+          excluded_amount: number
+          excluded_rows: number
+          max_valid_date: string
+          min_valid_date: string
+          oppose_amount: number
+          rows: number
+          sum_amount: number
+          support_amount: number
+        }[]
+      }
       list_committee_pool: {
         Args: {
           p_assigned?: string
