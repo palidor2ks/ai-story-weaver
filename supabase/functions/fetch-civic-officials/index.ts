@@ -16,6 +16,13 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+// Statewide NJ ward-boundary layer (NJ Dept. of State / NJ Office of GIS),
+// queried point-in-polygon so we only surface the council member for the user's
+// OWN ward instead of every ward in the municipality. Fields: WARD_CODE ("01")
+// and MUN_NAME ("Piscataway Township"). NJ-only; override via env if it moves.
+const NJ_WARD_BOUNDARY_QUERY_URL = Deno.env.get('NJ_WARD_BOUNDARY_QUERY_URL') ||
+  'https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/arcgis/rest/services/Ward_Boundaries_for_New_Jersey/FeatureServer/0/query';
+
 // GitHub Pages URLs for congress-legislators data
 const EXECUTIVE_URL = 'https://unitedstates.github.io/congress-legislators/executive.json';
 const LEGISLATORS_URL = 'https://unitedstates.github.io/congress-legislators/legislators-current.json';
@@ -173,6 +180,67 @@ function extractCityFromAddress(address: string): string {
     if (candidate && !/^\d/.test(candidate) && !stateOnly.test(candidate)) return candidate;
   }
   return parts[1] || '';
+}
+
+interface ResolvedWard {
+  ward: number;
+  municipality: string;
+}
+
+// Extract a ward number from a free-form district string ("Ward 1", "Ward 4",
+// "1st District", "01"). Returns null for city-wide seats ("At-Large", "N/A",
+// null/empty) — those are never ward-filtered and always shown.
+function wardNumberFromDistrict(district?: string | null): number | null {
+  if (!district) return null;
+  const s = String(district).trim();
+  if (!s || /at[-\s]?large/i.test(s) || /^n\/?a$/i.test(s)) return null;
+  const m = s.match(/\d+/);
+  return m ? parseInt(m[0], 10) : null;
+}
+
+// Point-in-polygon lookup against the NJ statewide ward layer. Returns the ward
+// number + municipality for the given coordinates, or null on any miss/failure
+// (caller then falls back to showing all wards with a note).
+async function resolveWard(lat: number, lng: number): Promise<ResolvedWard | null> {
+  try {
+    const geometry = encodeURIComponent(
+      JSON.stringify({ x: lng, y: lat, spatialReference: { wkid: 4326 } }),
+    );
+    const url = `${NJ_WARD_BOUNDARY_QUERY_URL}?geometry=${geometry}` +
+      `&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects` +
+      `&outFields=WARD_CODE,MUN_NAME&returnGeometry=false&f=json`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    let resp: Response;
+    try {
+      resp = await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!resp.ok) {
+      console.warn(`[Ward] boundary service returned HTTP ${resp.status}`);
+      return null;
+    }
+    const data = await resp.json();
+    const attrs = data?.features?.[0]?.attributes;
+    if (!attrs) {
+      console.log('[Ward] No ward polygon contains the point');
+      return null;
+    }
+    const wardNum = parseInt(String(attrs.WARD_CODE ?? '').replace(/\D/g, ''), 10);
+    if (!Number.isFinite(wardNum) || wardNum <= 0) {
+      console.log(`[Ward] Unusable WARD_CODE: ${attrs.WARD_CODE}`);
+      return null;
+    }
+    const municipality = String(attrs.MUN_NAME ?? '');
+    console.log(`[Ward] Resolved Ward ${wardNum} (${municipality})`);
+    return { ward: wardNum, municipality };
+  } catch (e) {
+    console.error('[Ward] resolveWard failed:', e);
+    return null;
+  }
 }
 
 // Fetch federal executives from GitHub (unitedstates/congress-legislators)
@@ -1025,6 +1093,12 @@ serve(async (req) => {
       ? { lat: hintLat, lng: hintLng }
       : await geocodeAddress(address);
 
+    // Resolve the user's municipal ward (NJ only) so local council members can be
+    // scoped to the user's ward instead of showing every ward. null = unresolved.
+    const resolvedWard = (state.toUpperCase() === 'NJ' && coords?.lat != null && coords?.lng != null)
+      ? await resolveWard(coords.lat, coords.lng)
+      : null;
+
     // First fetch federal legislator names to filter from Open States results
     const federalLegislatorNames = await fetchFederalLegislatorNames(state);
 
@@ -1115,7 +1189,10 @@ serve(async (req) => {
     allOfficials = applyTransitions(allOfficials, transitions);
 
     // Final city-safety pass: drop any local officials whose static_officials.city
-    // doesn't match the user's city. Also de-duplicate by id (prefer first occurrence).
+    // doesn't match the user's city. Also de-duplicate by id (prefer first
+    // occurrence) and — when we know the user's ward — keep only that ward's
+    // council member (city-wide seats like At-Large and Mayor are always kept).
+    let wardUnresolvedWithWards = false; // true ⇒ we kept all wards & must note it
     {
       const userCity = (city || '').trim().toLowerCase();
       const localIds = allOfficials.filter(o => o.level === 'local').map(o => o.id).filter(Boolean) as string[];
@@ -1135,14 +1212,33 @@ serve(async (req) => {
           seen.add(o.id);
         }
         if (o.level !== 'local') return true;
+
+        // City scope: drop locals whose static_officials.city doesn't match.
         const rowCity = cityById.get(o.id);
-        if (rowCity == null) return true; // city-agnostic local row, keep
-        if (!userCity) return false;
-        return rowCity.trim().toLowerCase() === userCity;
+        if (rowCity != null) {
+          if (!userCity) return false;
+          if (rowCity.trim().toLowerCase() !== userCity) return false;
+        }
+
+        // Ward scope: a council member tied to a specific ward is only the user's
+        // rep when it's their ward. City-wide seats (At-Large/Mayor) have no ward
+        // number and are always kept.
+        const wardNum = wardNumberFromDistrict(o.district);
+        if (wardNum == null) return true;
+        if (resolvedWard) return wardNum === resolvedWard.ward;
+        // Ward couldn't be resolved — keep all ward seats but flag a note.
+        wardUnresolvedWithWards = true;
+        return true;
       });
     }
 
-    console.log(`Total officials after transitions + city filter: ${allOfficials.length}`);
+    const userWard = resolvedWard ? `Ward ${resolvedWard.ward}` : null;
+    const wardNote = wardUnresolvedWithWards
+      ? "We couldn't pinpoint your exact ward, so all ward council members are shown. " +
+        "Confirm your ward with your municipal clerk to narrow this down."
+      : null;
+
+    console.log(`Total officials after transitions + city + ward filter: ${allOfficials.length} (ward: ${userWard ?? 'unresolved'})`);
 
     // === Unified image_url resolver ===
     // Both Profile and Feed must show the same photo. Feed reads `image_url`
@@ -1267,6 +1363,8 @@ serve(async (req) => {
       stateLegislative: finalStateLegislative,
       local: finalLocal,
       state,
+      userWard,
+      wardNote,
       hasTransitions: transitions.length > 0,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -853,7 +853,18 @@ export const UserProfile = () => {
                     <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
                       <MapPin className="w-4 h-4" />
                       Local Officials
+                      {civicData.userWard && (
+                        <Badge variant="outline" className="text-xs font-normal">
+                          {civicData.userWard}
+                        </Badge>
+                      )}
                     </h4>
+                    {civicData.wardNote && (
+                      <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700">
+                        <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                        <span>{civicData.wardNote}</span>
+                      </div>
+                    )}
                     <div className="space-y-3">
                       {civicData.local.map((official) => (
                         <RepresentativeComparisonCard

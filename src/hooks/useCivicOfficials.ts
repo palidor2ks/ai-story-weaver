@@ -35,6 +35,10 @@ interface FetchCivicOfficialsResponse {
   local: CivicOfficial[];
   normalizedAddress?: string;
   state?: string;
+  /** The user's municipal ward (e.g. "Ward 1"), null when not resolved. */
+  userWard?: string | null;
+  /** Set when ward couldn't be resolved and all ward seats are shown. */
+  wardNote?: string | null;
   hasTransitions?: boolean;
   error?: string;
 }
@@ -46,6 +50,8 @@ interface CivicOfficialsResult {
   stateLegislative: CivicOfficial[];
   local: CivicOfficial[];
   state: string | null;
+  userWard: string | null;
+  wardNote: string | null;
   hasTransitions: boolean;
 }
 
@@ -61,7 +67,7 @@ export function useCivicOfficials(address: string | null | undefined) {
         return {
           officials: [], federalExecutive: [], stateExecutive: [],
           stateLegislative: [], local: [],
-          state: null, hasTransitions: false,
+          state: null, userWard: null, wardNote: null, hasTransitions: false,
         };
       }
 
@@ -87,7 +93,7 @@ export function useCivicOfficials(address: string | null | undefined) {
         return {
           officials: [], federalExecutive: [], stateExecutive: [],
           stateLegislative: [], local: [],
-          state: null, hasTransitions: false,
+          state: null, userWard: null, wardNote: null, hasTransitions: false,
         };
       }
 
@@ -96,7 +102,7 @@ export function useCivicOfficials(address: string | null | undefined) {
         return {
           officials: [], federalExecutive: [], stateExecutive: [],
           stateLegislative: [], local: [],
-          state: null, hasTransitions: false,
+          state: null, userWard: null, wardNote: null, hasTransitions: false,
         };
       }
 
@@ -109,6 +115,8 @@ export function useCivicOfficials(address: string | null | undefined) {
         stateLegislative: data?.stateLegislative || [],
         local: data?.local || [],
         state: data?.state || null,
+        userWard: data?.userWard ?? null,
+        wardNote: data?.wardNote ?? null,
         hasTransitions: data?.hasTransitions || false,
       };
     },
