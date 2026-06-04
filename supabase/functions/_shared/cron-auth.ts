@@ -1,8 +1,10 @@
 // Shared cron-auth helper for edge functions invoked exclusively by pg_cron.
 //
 // pg_cron sends an `x-cron-secret` header whose value matches the
-// `cron_secret` row in Supabase Vault. We cache the vault value per cold
-// start so we don't hit the DB on every invocation.
+// `cron_secret` row in Supabase Vault. We read it through the
+// `public.get_cron_secret()` SECURITY DEFINER RPC — the `vault` schema is not
+// exposed to PostgREST, so reading the view directly returns null and every
+// cron would 401. The value is cached per cold start.
 //
 // Bypass: an `Authorization: Bearer <SERVICE_ROLE_KEY>` request is also
 // accepted so admin tooling / local testing can still invoke the function.
@@ -16,20 +18,37 @@ async function loadCronSecret(): Promise<string | null> {
   const url = Deno.env.get('SUPABASE_URL');
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !key) return null;
+  const admin = createClient(url, key);
+
+  // Primary: SECURITY DEFINER RPC in the public schema (reachable via PostgREST
+  // and able to read the vault internally).
   try {
-    const admin = createClient(url, key);
+    const { data, error } = await admin.rpc('get_cron_secret');
+    if (!error && typeof data === 'string' && data) {
+      cachedSecret = data;
+      return cachedSecret;
+    }
+  } catch {
+    // fall through to the direct read
+  }
+
+  // Fallback: direct vault read (only works where the vault schema is exposed).
+  try {
     const { data, error } = await admin
       .schema('vault')
       .from('decrypted_secrets')
       .select('decrypted_secret')
       .eq('name', 'cron_secret')
       .maybeSingle();
-    if (error || !data?.decrypted_secret) return null;
-    cachedSecret = data.decrypted_secret as string;
-    return cachedSecret;
+    if (!error && data?.decrypted_secret) {
+      cachedSecret = data.decrypted_secret as string;
+      return cachedSecret;
+    }
   } catch {
-    return null;
+    // noop
   }
+
+  return null;
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
