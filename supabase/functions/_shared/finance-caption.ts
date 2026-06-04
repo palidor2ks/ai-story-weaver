@@ -77,6 +77,7 @@ function tidyName(name: string | null | undefined): string {
 
 export interface Facts {
   cycle: string | null;
+  today?: string | null; // DB current date (YYYY-MM-DD) — authoritative "now".
   raised: number | null;
   donor_count: number | null;
   top_donor: { name: string; amount: number; type?: string } | null;
@@ -91,11 +92,14 @@ function hasFinance(f: Facts | null): boolean {
   return (f.raised ?? 0) > 0 || (f.ie_support ?? 0) > 0 || (f.ie_oppose ?? 0) > 0;
 }
 
-function factsBlock(name: string, party: string, ideology: string | null, office: string, state: string, f: Facts): string {
+function factsBlock(name: string, party: string, ideology: string | null, office: string, state: string, incumbent: boolean | null | undefined, f: Facts): string {
   const lines: string[] = [];
   lines.push(`Name: ${name}`);
   lines.push(`Leaning & party: ${ideology ? ideology + ' ' : ''}${partyFull(party)}`.trim());
   if (office) lines.push(`Office: ${office}${state ? ` (${state})` : ''}`);
+  if (incumbent !== undefined && incumbent !== null) {
+    lines.push(`Incumbent: ${incumbent ? 'yes — currently holds this seat' : 'no — a challenger, not the sitting officeholder'}`);
+  }
   if (f.cycle) lines.push(`Election cycle: ${f.cycle}`);
   if ((f.raised ?? 0) > 0) lines.push(`Total raised: ${fmtMoney(f.raised)}${f.donor_count ? ` from ${f.donor_count.toLocaleString('en-US')} donors` : ''}`);
   if (f.top_donor && (f.top_donor.amount ?? 0) > 0) lines.push(`Largest direct donor: ${tidyName(f.top_donor.name)} at ${fmtMoney(f.top_donor.amount)}`);
@@ -115,7 +119,37 @@ function headlineHint(f: Facts): string | null {
   return opts[0].text;
 }
 
-function buildPrompt(platform: string, block: string, hint: string | null, long: boolean, max: number): string {
+// US general election day: the first Tuesday after the first Monday of November.
+function generalElectionDate(year: number): Date {
+  const nov1Dow = new Date(Date.UTC(year, 10, 1)).getUTCDay(); // 0=Sun..6=Sat
+  const firstMonday = 1 + ((1 - nov1Dow + 7) % 7);
+  return new Date(Date.UTC(year, 10, firstMonday + 1));
+}
+
+// Tells the model where "now" sits relative to the cycle's election so it uses
+// correct tense — an upcoming race must never be written as if it already happened.
+function electionTimingDirective(cycle: string | null, todayIso: string | null | undefined): string | null {
+  const year = Number(cycle);
+  if (!Number.isFinite(year) || year < 2000) return null;
+  const now = todayIso ? new Date(`${todayIso}T00:00:00Z`) : new Date();
+  if (Number.isNaN(now.getTime())) return null;
+  const election = generalElectionDate(year);
+  const days = Math.round((election.getTime() - now.getTime()) / 86_400_000);
+  const dateStr = `${election.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })} ${election.getUTCDate()}, ${year}`;
+  const stamp = todayIso ?? 'now';
+  if (days > 45) {
+    return `TIMING (today is ${stamp}): The ${year} general election is ${dateStr}, still ~${days} days away. The campaign is ONGOING — write in present/future tense (e.g. "is building", "ahead of the November election"). ${year} is NOT over; never imply the race or fundraising has already finished.`;
+  }
+  if (days >= 0) {
+    return `TIMING (today is ${stamp}): The ${year} election (${dateStr}) is only ~${days} days away — the final stretch. Use urgent present tense.`;
+  }
+  if (days >= -45) {
+    return `TIMING (today is ${stamp}): The ${year} election (${dateStr}) just happened. Use past tense; you may note it was a recent race.`;
+  }
+  return `TIMING (today is ${stamp}): The ${year} election cycle (${dateStr}) is over. Use PAST tense (e.g. "in the ${year} cycle, raised...") and do not imply any active or upcoming race.`;
+}
+
+function buildPrompt(platform: string, block: string, hint: string | null, timing: string | null, long: boolean, max: number): string {
   const lengthRule = long
     ? `Length: 3–5 short sentences. After the hook, give the fuller breakdown — money raised + donors, the standout donor, and the for-vs-against outside spending with the biggest PACs. Keep it under ${max} characters.`
     : `Length: 1–2 short, punchy sentences, under ${max} characters.`;
@@ -128,10 +162,11 @@ Use ONLY the verified facts below. Never invent, alter, or re-round any number; 
 
 VERIFIED FACTS:
 ${block}
-
+${timing ? `\n${timing}\n` : ''}
 Write the post:
 - ${leadRule}
-- Always name the politician's leaning AND party together (e.g., "Center-Right Republican", "Progressive Democrat").
+- Match the tense and framing to the TIMING note above — an upcoming election must NOT be described in the past tense, and a finished one must not be written as if it's still ahead.
+- Always name the politician's leaning AND party together (e.g., "Center-Right Republican", "Progressive Democrat"). Say "re-election" only if the facts mark them as the incumbent; otherwise call it their campaign or bid.
 - Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
 - ${lengthRule}
 - Plain text ONLY — no markdown, no asterisks, no underscores, no bullet points, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
@@ -190,6 +225,7 @@ export interface CandidateMeta {
   office: string;
   state: string;
   score: number | null;
+  incumbent?: boolean | null;
 }
 
 // Returns the headline caption for a candidate+platform, or null when the
@@ -208,10 +244,11 @@ export async function composeFinanceCaption(
 
   const name = meta.name || 'This candidate';
   const ideology = ideologyLabel(meta.score);
-  const block = factsBlock(name, meta.party, ideology, meta.office, meta.state, facts);
+  const block = factsBlock(name, meta.party, ideology, meta.office, meta.state, meta.incumbent, facts);
   const hint = headlineHint(facts);
+  const timing = electionTimingDirective(facts.cycle, facts.today);
 
-  const ai = await aiCaption(aiKey, buildPrompt(platform, block, hint, cfg.long, cfg.max), cfg.max);
+  const ai = await aiCaption(aiKey, buildPrompt(platform, block, hint, timing, cfg.long, cfg.max), cfg.max);
   if (ai) return { caption: ai, source: 'finance_ai' };
   return { caption: templateCaption(name, meta.party, ideology, meta.state, facts, cfg.max), source: 'finance_template' };
 }

@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
 
     const { data: cand } = await admin
       .from('candidates')
-      .select('name, party, office, state, overall_score')
+      .select('name, party, office, state, overall_score, is_incumbent')
       .eq('id', candidate_id)
       .maybeSingle();
     if (!cand) return json({ caption: null, source: null, error: 'candidate_not_found' });
@@ -57,6 +57,7 @@ Deno.serve(async (req) => {
       office: (cand.office as string) ?? '',
       state: (cand.state as string) ?? '',
       score: cand.overall_score != null ? Number(cand.overall_score) : null,
+      incumbent: (cand.is_incumbent as boolean | null) ?? null,
     };
 
     const headline = await composeFinanceCaption(admin, aiKey, candidate_id, platform, meta);
