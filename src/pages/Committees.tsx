@@ -334,7 +334,7 @@ export const Committees = () => {
 
                   <Link
                     to={`/committee/${committee.fecCommitteeId}`}
-                    state={{ from: '/committees' }}
+                    state={{ from: '/committees', cycle }}
                     aria-label={`View details for ${committee.aliasName || committee.name || 'committee'}`}
                   >
                     <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" aria-hidden="true" tabIndex={-1}>

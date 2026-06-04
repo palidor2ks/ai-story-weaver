@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
@@ -62,7 +62,8 @@ export const CommitteeProfile = () => {
     }
   };
 
-  const fromState = (location.state as { from?: string } | null)?.from;
+  const navigationState = location.state as { from?: string; cycle?: string } | null;
+  const fromState = navigationState?.from;
   // If the committee has no candidate-committee receipts, it's an outside-spender (IE-only) committee
   // that lives on /top-spenders rather than /committees.
   const isOutsideSpenderOnly = !!committeeBase && !committeeBase.totalRaised && !committeeBase.candidate;
@@ -78,7 +79,20 @@ export const CommitteeProfile = () => {
     (committeeBase?.cycles ?? []).forEach((c) => c && set.add(String(c)));
     return Array.from(set).sort((a, b) => Number(b) - Number(a));
   }, [committeeBase?.cycles]);
-  const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
+  const selectableCycles = useMemo(() => ['all', ...availableCycles], [availableCycles]);
+  const initialCycle = navigationState?.cycle === 'all' || availableCycles.includes(navigationState?.cycle ?? '')
+    ? navigationState?.cycle
+    : undefined;
+  const [selectedCycle, setSelectedCycle] = useState<string | undefined>(initialCycle);
+
+  useEffect(() => {
+    const requestedCycle = navigationState?.cycle;
+    if (selectedCycle || !requestedCycle) return;
+    if (requestedCycle === 'all' || availableCycles.includes(requestedCycle)) {
+      setSelectedCycle(requestedCycle);
+    }
+  }, [availableCycles, navigationState?.cycle, selectedCycle]);
+
   const effectiveCycle = selectedCycle ?? availableCycles[0] ?? '2024';
 
   // Re-query committee scoped to the selected cycle so totals (raised, donors, contributions) match the filter.
@@ -183,8 +197,8 @@ export const CommitteeProfile = () => {
                 {committee.designation && <Badge variant="secondary">{committee.designation}</Badge>}
                 {committee.designationFull && <Badge variant="outline">{committee.designationFull}</Badge>}
                 {committee.role && <Badge variant="outline">{committee.role}</Badge>}
-                {committee.cycles && committee.cycles.length > 0 && (
-                  <Badge variant="outline">Cycles: {committee.cycles.join(', ')}</Badge>
+                {selectableCycles.length > 0 && (
+                  <Badge variant="outline">Cycles: {selectableCycles.map((c) => c === 'all' ? 'All' : c).join(', ')}</Badge>
                 )}
                 <CommitteeTopicBadge
                   fecCommitteeId={committee.fecCommitteeId}
@@ -216,8 +230,10 @@ export const CommitteeProfile = () => {
                         <SelectValue placeholder="Cycle" />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableCycles.map((cy) => (
-                          <SelectItem key={cy} value={cy}>{cy} Cycle</SelectItem>
+                        {selectableCycles.map((cy) => (
+                          <SelectItem key={cy} value={cy}>
+                            {cy === 'all' ? 'All cycles' : `${cy} Cycle`}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -248,7 +264,9 @@ export const CommitteeProfile = () => {
                     Total Raised
                   </div>
                   <p className="text-2xl font-bold text-foreground mt-2">{formatCurrency(committee.totalRaised)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Includes latest synced totals</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {effectiveCycle === 'all' ? 'All-cycle total from synced rollups' : `${effectiveCycle} cycle total from synced rollups`}
+                  </p>
                 </CardContent>
               </Card>
               <Card>
