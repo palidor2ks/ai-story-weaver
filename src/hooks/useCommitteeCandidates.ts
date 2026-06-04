@@ -15,6 +15,12 @@ export interface CommitteePrimaryCandidate {
   state: string | null;
 }
 
+interface CandidateCommitteeJoinRow {
+  fec_committee_id: string | null;
+  candidate_id: string | null;
+  candidates: CommitteePrimaryCandidate | null;
+}
+
 const fetchPrimaryCandidates = async (ids: string[]) => {
   const map = new Map<string, CommitteePrimaryCandidate>();
   if (ids.length === 0) return map;
@@ -23,12 +29,13 @@ const fetchPrimaryCandidates = async (ids: string[]) => {
     .from('candidate_committees')
     .select('fec_committee_id, candidate_id, candidates:candidate_id(id, name, party, office, state)')
     .in('fec_committee_id', ids)
-    .not('candidate_id', 'is', null);
+    .not('candidate_id', 'is', null)
+    .returns<CandidateCommitteeJoinRow[]>();
   if (error) throw error;
 
   // Group rows by committee, collecting the distinct candidates linked to each.
   const byCommittee = new Map<string, Map<string, CommitteePrimaryCandidate>>();
-  for (const row of (data ?? []) as any[]) {
+  for (const row of data ?? []) {
     const cand = row.candidates;
     if (!row.fec_committee_id || !cand?.id) continue;
     const inner = byCommittee.get(row.fec_committee_id) ?? new Map<string, CommitteePrimaryCandidate>();
