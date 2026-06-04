@@ -42,6 +42,7 @@ const XComposer = lazy(() => import("./pages/admin/XComposer"));
 const XConnectCallback = lazy(() => import("./pages/admin/XConnectCallback"));
 const SocialComposer = lazy(() => import("./pages/admin/SocialComposer"));
 const SocialHandles = lazy(() => import("./pages/admin/SocialHandles"));
+const StatCardRender = lazy(() => import("./pages/StatCardRender"));
 const SocialPosts = lazy(() => import("./pages/admin/SocialPosts"));
 const Onboarding = lazy(() => import("./pages/Onboarding").then((m) => ({ default: m.Onboarding })));
 
@@ -158,6 +159,8 @@ const AppRoutes = () => (
       <Route path="/party/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><PartyProfile /></RouteGuard>} />
       <Route path="/donor/:id" element={<RouteGuard requireAuth requireOnboarding={false}><DonorProfile /></RouteGuard>} />
       <Route path="/candidate/:id" element={<RouteGuard requireAuth={false} requireOnboarding={false}><CandidateProfile /></RouteGuard>} />
+      {/* Headless render target for the automatic social-post screenshotter (public, no chrome). */}
+      <Route path="/r/card/:candidateId" element={<StatCardRender />} />
       <Route path="/profile" element={<RouteGuard requireAuth requireOnboarding><UserProfile /></RouteGuard>} />
       <Route path="/quiz" element={<RouteGuard requireAuth requireOnboarding><Quiz /></RouteGuard>} />
       <Route path="/quiz-library" element={<RouteGuard requireAuth requireOnboarding><QuizLibrary /></RouteGuard>} />
