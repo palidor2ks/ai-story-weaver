@@ -39,16 +39,30 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export async function requireCronAuth(req: Request): Promise<Response | null> {
+// Returns true when the request carries a valid cron secret (or the
+// service-role bearer escape hatch). Useful for functions that accept BOTH
+// cron/service callers and normal admin users on the same route.
+export async function isCronAuthorized(req: Request): Promise<boolean> {
   const provided = req.headers.get('x-cron-secret');
   const expected = await loadCronSecret();
-
-  if (expected && provided && timingSafeEqual(provided, expected)) return null;
+  if (expected && provided && timingSafeEqual(provided, expected)) return true;
 
   // Allow service-role bearer as an admin/manual escape hatch.
   const auth = req.headers.get('authorization') ?? '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  if (serviceKey && auth === `Bearer ${serviceKey}`) return null;
+  if (serviceKey && auth === `Bearer ${serviceKey}`) return true;
+
+  return false;
+}
+
+// Exposes the vault cron secret so one cron-invoked function can forward it
+// when calling another cron-protected function over HTTP.
+export async function getCronSecret(): Promise<string | null> {
+  return loadCronSecret();
+}
+
+export async function requireCronAuth(req: Request): Promise<Response | null> {
+  if (await isCronAuthorized(req)) return null;
 
   return new Response(JSON.stringify({ error: 'Unauthorized' }), {
     status: 401,

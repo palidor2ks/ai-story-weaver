@@ -159,3 +159,7 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = true
   [functions.post-social-card]
     verify_jwt = true
+  [functions.render-social-card]
+    verify_jwt = false
+  [functions.auto-post-due]
+    verify_jwt = false
