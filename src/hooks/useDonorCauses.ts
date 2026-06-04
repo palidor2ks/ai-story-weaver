@@ -15,6 +15,15 @@ export interface DonorCauseInfo {
 
 const norm = (s: string) => s.trim().toUpperCase();
 const CAUSE_ELIGIBLE_DONOR_TYPES = new Set(['Individual', 'PAC', 'Organization', 'Org/PAC']);
+const SUPABASE_IN_FILTER_BATCH_SIZE = 100;
+
+const chunk = <T,>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+};
 
 const getCauseLookupTypes = (type: string) => {
   // Donor cards collapse raw PAC and Organization records into an Org/PAC
@@ -62,11 +71,12 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       // Supabase `.in()` filter is case-sensitive, so match against both the
       // original-cased names and their uppercase variants. Downstream keys are
       // built with norm() (uppercase), so the extra variants are harmless.
-      const memberNames = Array.from(new Set(names.flatMap(n => [n, n.toUpperCase()])));
+      const lookupNames = Array.from(new Set(names.flatMap(n => [n, n.toUpperCase()])));
 
-      // The first three lookups (direct overrides, alias members, canonical
-      // aliases) don't depend on each other's results, so fetch them in parallel
-      // (one network round-trip instead of three). The processing below still runs
+      // The first three lookup groups (direct overrides, alias members, canonical
+      // aliases) don't depend on each other's results, so fetch the groups in
+      // parallel. Each group is batched to keep Supabase/PostgREST URLs small on
+      // candidate pages with thousands of donors. The processing below still runs
       // in the original order so cause-precedence (direct override > alias) holds.
       //
       // NOTE: keep these queries (and the loops that consume their results) free of
@@ -74,30 +84,43 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       // SelectQueryError when a selected column no longer exists, so accessing the
       // row fields below fails the build instead of silently breaking at runtime —
       // which is exactly the regression that previously hid the primary-cause badge.
-      const [directRes, membersRes, canonicalRes] = await Promise.all([
-        supabase
-          .from('donor_cause_overrides')
-          .select('donor_name, donor_type, primary_cause_id, assigned_by, committee_causes!donor_cause_overrides_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
-          .in('donor_name', names)
-          .in('donor_type', types),
-        supabase
-          .from('donor_alias_members')
-          .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
-          .in('donor_name', memberNames)
-          .in('donor_type', types),
-        supabase
-          .from('donor_aliases')
-          .select('canonical_name, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
-          .in('canonical_name', names)
-          .eq('is_active', true),
+      const [directChunks, memberChunks, canonicalChunks] = await Promise.all([
+        Promise.all(
+          chunk(lookupNames, SUPABASE_IN_FILTER_BATCH_SIZE).map((nameBatch) =>
+            supabase
+              .from('donor_cause_overrides')
+              .select('donor_name, donor_type, primary_cause_id, assigned_by, committee_causes!donor_cause_overrides_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
+              .in('donor_name', nameBatch)
+              .in('donor_type', types),
+          ),
+        ),
+        Promise.all(
+          chunk(lookupNames, SUPABASE_IN_FILTER_BATCH_SIZE).map((nameBatch) =>
+            supabase
+              .from('donor_alias_members')
+              .select('donor_name, donor_type, alias_id, donor_aliases!inner(id, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence)')
+              .in('donor_name', nameBatch)
+              .in('donor_type', types),
+          ),
+        ),
+        Promise.all(
+          chunk(lookupNames, SUPABASE_IN_FILTER_BATCH_SIZE).map((nameBatch) =>
+            supabase
+              .from('donor_aliases')
+              .select('canonical_name, fec_committee_id, fec_committee_ids, is_active, primary_cause_id, cause_assigned_by, cause_ai_confidence')
+              .in('canonical_name', nameBatch)
+              .eq('is_active', true),
+          ),
+        ),
       ]);
 
       // 1. Apply direct donor-level cause overrides first. These let admins tag
       //    a donor search result without creating a donor alias.
-      const { data: directOverrides, error: directErr } = directRes;
+      const directErr = directChunks.find((res) => res.error)?.error;
       if (directErr) throw directErr;
+      const directOverrides = directChunks.flatMap((res) => res.data ?? []);
 
-      for (const row of (directOverrides ?? [])) {
+      for (const row of directOverrides) {
         const c = row.committee_causes;
         if (!c) continue;
         result.set(`${norm(row.donor_name)}|${row.donor_type}`, {
@@ -114,8 +137,9 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       }
 
       // 2. Resolve names -> aliases (and fec_committee_ids + alias-level cause)
-      const { data: members, error: mErr } = membersRes;
+      const mErr = memberChunks.find((res) => res.error)?.error;
       if (mErr) throw mErr;
+      const members = memberChunks.flatMap((res) => res.data ?? []);
 
       // name|type -> set of committee ids
       const nameToCommittees = new Map<string, string[]>();
@@ -143,14 +167,14 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
           aliasLevelCause.set(key, {
             causeId: alias.primary_cause_id,
             assignedBy: alias.cause_assigned_by || 'admin',
-            confidence: alias.cause_ai_confidence,
+            confidence: alias.cause_ai_confidence ?? null,
             fecCommitteeId: ids[0] || '',
           });
           aliasCauseIds.add(alias.primary_cause_id);
         }
       };
 
-      for (const m of (members ?? [])) {
+      for (const m of members) {
         const alias = m.donor_aliases;
         if (!alias?.is_active) continue;
         applyAliasToKey(`${norm(m.donor_name)}|${m.donor_type}`, alias as unknown as AliasCauseRow);
@@ -162,10 +186,11 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
       // appear for rows like "AIPAC". donor_aliases is type-agnostic (the donor
       // type lives on donor_alias_members), so match on name alone — uniqueInputs
       // is already filtered to cause-eligible types upstream.
-      const { data: canonicalAliases, error: canonicalErr } = canonicalRes;
+      const canonicalErr = canonicalChunks.find((res) => res.error)?.error;
       if (canonicalErr) throw canonicalErr;
+      const canonicalAliases = canonicalChunks.flatMap((res) => res.data ?? []);
 
-      for (const alias of (canonicalAliases ?? [])) {
+      for (const alias of canonicalAliases) {
         for (const input of uniqueInputs) {
           if (norm(input.name) !== norm(alias.canonical_name)) continue;
           applyAliasToKey(`${norm(input.name)}|${input.type}`, alias as unknown as AliasCauseRow);
@@ -174,10 +199,17 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
 
       // Resolve alias-level cause metadata
       if (aliasCauseIds.size > 0) {
-        const { data: causeRows } = await supabase
-          .from('committee_causes')
-          .select('id, label, description, stance, quiz_topic_id')
-          .in('id', Array.from(aliasCauseIds));
+        const causeChunks = await Promise.all(
+          chunk(Array.from(aliasCauseIds), SUPABASE_IN_FILTER_BATCH_SIZE).map((causeIdBatch) =>
+            supabase
+              .from('committee_causes')
+              .select('id, label, description, stance, quiz_topic_id')
+              .in('id', causeIdBatch),
+          ),
+        );
+        const causeErr = causeChunks.find((res) => res.error)?.error;
+        if (causeErr) throw causeErr;
+        const causeRows = causeChunks.flatMap((res) => res.data ?? []);
         const causeMap = new Map(
           ((causeRows ?? []) as Array<{ id: string; label: string; description: string | null; stance: string | null; quiz_topic_id: string | null }>).map((c) => [c.id, c]),
         );
@@ -202,25 +234,46 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
 
 
       // 3. Fetch topics + causes for those committees
-      const { data: topics, error: tErr } = await supabase
-        .from('committee_topics')
-        .select('fec_committee_id, primary_cause_id, ai_confidence, assigned_by, admin_overridden, committee_causes!committee_topics_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
-        .in('fec_committee_id', Array.from(allCommitteeIds));
+      const committeeIdBatches = chunk(Array.from(allCommitteeIds), SUPABASE_IN_FILTER_BATCH_SIZE);
+      const topicChunks = await Promise.all(
+        committeeIdBatches.map((committeeIdBatch) =>
+          supabase
+            .from('committee_topics')
+            .select('fec_committee_id, primary_cause_id, ai_confidence, assigned_by, admin_overridden, committee_causes!committee_topics_primary_cause_id_fkey(id, label, description, stance, quiz_topic_id)')
+            .in('fec_committee_id', committeeIdBatch),
+        ),
+      );
+      const tErr = topicChunks.find((res) => res.error)?.error;
+      const topics = tErr ? null : topicChunks.flatMap((res) => res.data ?? []);
 
       // Fallback if FK name differs: do a manual join
       const causeByCommittee = new Map<string, DonorCauseInfo>();
       if (tErr || !topics) {
-        const { data: topicsPlain } = await supabase
-          .from('committee_topics')
-          .select('fec_committee_id, primary_cause_id, ai_confidence, assigned_by, admin_overridden')
-          .in('fec_committee_id', Array.from(allCommitteeIds));
-        const causeIds = Array.from(new Set((topicsPlain ?? []).map(t => t.primary_cause_id).filter(Boolean)));
-        const { data: causes } = await supabase
-          .from('committee_causes')
-          .select('id, label, description, stance, quiz_topic_id')
-          .in('id', causeIds);
+        const topicPlainChunks = await Promise.all(
+          committeeIdBatches.map((committeeIdBatch) =>
+            supabase
+              .from('committee_topics')
+              .select('fec_committee_id, primary_cause_id, ai_confidence, assigned_by, admin_overridden')
+              .in('fec_committee_id', committeeIdBatch),
+          ),
+        );
+        const topicPlainErr = topicPlainChunks.find((res) => res.error)?.error;
+        if (topicPlainErr) throw topicPlainErr;
+        const topicsPlain = topicPlainChunks.flatMap((res) => res.data ?? []);
+        const causeIds = Array.from(new Set(topicsPlain.map(t => t.primary_cause_id).filter(Boolean)));
+        const causeChunks = await Promise.all(
+          chunk(causeIds, SUPABASE_IN_FILTER_BATCH_SIZE).map((causeIdBatch) =>
+            supabase
+              .from('committee_causes')
+              .select('id, label, description, stance, quiz_topic_id')
+              .in('id', causeIdBatch),
+          ),
+        );
+        const causesErr = causeChunks.find((res) => res.error)?.error;
+        if (causesErr) throw causesErr;
+        const causes = causeChunks.flatMap((res) => res.data ?? []);
         const causeMap = new Map((causes ?? []).map(c => [c.id, c]));
-        for (const t of topicsPlain ?? []) {
+        for (const t of topicsPlain) {
           const c = causeMap.get(t.primary_cause_id);
           if (!c) continue;
           causeByCommittee.set(t.fec_committee_id, {
@@ -230,8 +283,8 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
             stance: c.stance,
             quizTopicId: c.quiz_topic_id,
             confidence: t.ai_confidence,
-            assignedBy: t.assigned_by,
-            adminOverridden: t.admin_overridden,
+            assignedBy: t.assigned_by || 'admin',
+            adminOverridden: Boolean(t.admin_overridden),
             fecCommitteeId: t.fec_committee_id,
           });
         }
@@ -256,8 +309,8 @@ export function useDonorCauses(inputs: DonorNameInput[]) {
             stance: c.stance,
             quizTopicId: c.quiz_topic_id,
             confidence: t.ai_confidence,
-            assignedBy: t.assigned_by,
-            adminOverridden: t.admin_overridden,
+            assignedBy: t.assigned_by || 'admin',
+            adminOverridden: Boolean(t.admin_overridden),
             fecCommitteeId: t.fec_committee_id,
           });
         }
