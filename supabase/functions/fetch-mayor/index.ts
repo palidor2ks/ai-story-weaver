@@ -243,12 +243,30 @@ async function processCity(supabase: ReturnType<typeof createClient>, state: str
     const { result, provider } = await researchRoster(stateUp, cityClean);
     console.log(`[fetch-mayor] provider=${provider} returned ${result.officials.length} officials`);
 
+    // If this city already has curated/seeded council members, only add the
+    // Mayor. Otherwise the AI roster would duplicate them under a different id
+    // scheme (…_city_council_member_… vs the canonical …_council_member_…) and
+    // overwrite curated data. For cities with no council yet, persist the full
+    // roster as before — fetch-mayor is their only source.
+    const { count: councilCount } = await supabase
+      .from('static_officials')
+      .select('id', { count: 'exact', head: true })
+      .eq('level', 'local')
+      .eq('state', stateUp)
+      .ilike('city', cityClean)
+      .ilike('id', 'local%'); // council ids start with "local_"; the mayor's with "mayor_"
+    const mayorOnly = (councilCount ?? 0) > 0;
+    if (mayorOnly) {
+      console.log(`[fetch-mayor] ${cityClean}, ${stateUp} already has ${councilCount} council members — inserting Mayor only`);
+    }
+
     const inserted: string[] = [];
     let mayorId_: string | null = null;
 
     for (const off of result.officials) {
       if (!off?.name || !off?.role) continue;
       const role = off.role.trim();
+      if (mayorOnly && role.toLowerCase() !== 'mayor') continue;
       const id = officialId(stateUp, cityClean, role, off.name);
       const wardSuffix = off.ward ? ` (${off.ward})` : '';
       const officeText = role.toLowerCase() === 'mayor'
