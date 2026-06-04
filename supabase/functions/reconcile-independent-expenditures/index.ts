@@ -7,12 +7,13 @@
 // committees in ie_excluded_committees are reported separately, not in the
 // headline totals) so the comparison matches what the app actually shows.
 //
-// FEC counts are reported at $0 / $1k / $10k thresholds because modern Schedule E
-// has a huge long tail of tiny (~$100) digital line items; coverage of *material*
-// IEs (>= $10k) is the meaningful completeness signal.
+// Ground truth comes entirely from FEC's schedule_e/by_candidate aggregation,
+// which respects the `cycle` param for both dollars AND line-item counts. (The
+// flat schedule_e endpoint's pagination.count ignores the cycle filter — it
+// returns the same number for every cycle — so it is NOT used here.)
 //
 // Same dual auth as import-independent-expenditures (admin JWT or x-sync-secret).
-// Body params: { cycle?: string = "2024", with_totals?: boolean = true }
+// Body params: { cycle?: string = "2024", max_pages?: number = 200 }
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -26,10 +27,10 @@ const FEC_BASE = "https://api.open.fec.gov/v1";
 // deno-lint-ignore no-explicit-any
 async function fecGet(path: string, params: Record<string, string>): Promise<any> {
   const qs = new URLSearchParams(params).toString();
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     const res = await fetch(`${FEC_BASE}${path}?${qs}`);
     if (res.status === 429 || res.status >= 500) {
-      await new Promise((r) => setTimeout(r, Math.min(2000 * 2 ** attempt, 16000)));
+      await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** attempt, 16000)));
       continue;
     }
     if (!res.ok) throw new Error(`FEC ${path} ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -38,25 +39,14 @@ async function fecGet(path: string, params: Record<string, string>): Promise<any
   throw new Error(`FEC ${path}: max retries exceeded`);
 }
 
-// Count of most-recent Schedule E records for a cycle (optional extra filters).
-async function fecScheduleECount(apiKey: string, cycle: string, extra: Record<string, string>): Promise<number> {
-  const j = await fecGet("/schedules/schedule_e/", {
-    api_key: apiKey,
-    two_year_transaction_period: cycle,
-    most_recent: "true",
-    per_page: "1",
-    ...extra,
-  });
-  return Number(j?.pagination?.count ?? 0);
-}
-
-// Authoritative deduped cycle dollars: sum of FEC's per-candidate IE aggregation.
-async function fecTotalByCandidate(
+// Authoritative, cycle-correct totals: walk FEC's per-candidate Schedule E
+// aggregation and sum dollars (deduped by FEC) and line-item counts.
+async function fecByCandidate(
   apiKey: string,
   cycle: string,
-  maxPages = 60,
-): Promise<{ total: number; support: number; oppose: number; capped: boolean }> {
-  let total = 0, support = 0, oppose = 0, pages = 1, page = 1;
+  maxPages: number,
+): Promise<{ total: number; support: number; oppose: number; lineItems: number; capped: boolean }> {
+  let total = 0, support = 0, oppose = 0, lineItems = 0, pages = 1, page = 1;
   for (; page <= maxPages; page++) {
     const j = await fecGet("/schedules/schedule_e/by_candidate/", {
       api_key: apiKey,
@@ -69,14 +59,15 @@ async function fecTotalByCandidate(
     for (const r of (j?.results ?? [])) {
       const amt = Number(r?.total ?? 0);
       total += amt;
+      lineItems += Number(r?.count ?? 0);
       const so = r?.support_oppose_indicator;
       if (so === "S") support += amt;
       else if (so === "O") oppose += amt;
     }
     if (page >= pages) break;
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 150));
   }
-  return { total, support, oppose, capped: page < pages };
+  return { total, support, oppose, lineItems, capped: page < pages };
 }
 
 serve(async (req) => {
@@ -126,7 +117,7 @@ serve(async (req) => {
     let body: Record<string, unknown> = {};
     try { body = await req.json(); } catch { /* optional body */ }
     const cycle = String(body.cycle ?? "2024");
-    const withTotals = body.with_totals !== false;
+    const maxPages = Math.max(1, Math.min(400, Number(body.max_pages ?? 200)));
 
     // Our side (exclusion-aware)
     const { data: localData, error: locErr } = await supabase.rpc("ie_reconcile_local", { p_cycle: cycle });
@@ -137,37 +128,32 @@ serve(async (req) => {
     }
     const ours = (Array.isArray(localData) ? localData[0] : localData) ?? {};
 
-    // FEC ground truth — counts at thresholds are cheap (1 call each); dollars optional.
-    const fecAll = await fecScheduleECount(fecApiKey, cycle, {});
-    const fecGe1k = await fecScheduleECount(fecApiKey, cycle, { min_amount: "1000" });
-    const fecGe10k = await fecScheduleECount(fecApiKey, cycle, { min_amount: "10000" });
-    const fecTotals = withTotals ? await fecTotalByCandidate(fecApiKey, cycle) : null;
+    // FEC ground truth (cycle-correct dollars + line-item count)
+    const fec = await fecByCandidate(fecApiKey, cycle, maxPages);
 
     const ourDistinctTx = Number(ours.distinct_transactions ?? 0);
     const ourSum = Number(ours.sum_amount ?? 0);
-    const coverageMaterial = fecGe10k > 0 ? ourDistinctTx / fecGe10k : null;
-    const dollarRatio = fecTotals && fecTotals.total > 0 ? ourSum / fecTotals.total : null;
+    const dollarRatio = fec.total > 0 ? ourSum / fec.total : null;
+    const lineItemShare = fec.lineItems > 0 ? ourDistinctTx / fec.lineItems : null;
 
     const notes: string[] = [];
     if (Number(ours.excluded_rows ?? 0) > 0) {
       notes.push(`Excluded ${Number(ours.excluded_rows)} junk rows ($${(Number(ours.excluded_amount) / 1e9).toFixed(2)}B) from ie_excluded_committees — not in totals above.`);
     }
-    if (coverageMaterial != null && coverageMaterial < 0.9) {
-      notes.push(`Possible GAPS in material IEs: ${ourDistinctTx} distinct transactions vs FEC's ${fecGe10k} records >= $10k (${(coverageMaterial * 100).toFixed(0)}%).`);
-    } else if (coverageMaterial != null) {
-      notes.push(`Material-IE coverage looks good: ${ourDistinctTx} vs FEC's ${fecGe10k} records >= $10k (${(coverageMaterial * 100).toFixed(0)}%).`);
-    }
     if (dollarRatio != null && dollarRatio > 1.1) {
-      notes.push(`Dollars run hot: our $${(ourSum / 1e9).toFixed(2)}B is ${dollarRatio.toFixed(2)}x FEC's deduped $${(fecTotals!.total / 1e9).toFixed(2)}B (possible notice+report or amendment double-counting).`);
+      notes.push(`Dollars run HOT: our $${(ourSum / 1e9).toFixed(2)}B is ${dollarRatio.toFixed(2)}x FEC's deduped $${(fec.total / 1e9).toFixed(2)}B${fec.capped ? "+" : ""} (likely notice+report or amendment double-counting, or residual junk).`);
     } else if (dollarRatio != null && dollarRatio < 0.9) {
-      notes.push(`Dollars run low: our $${(ourSum / 1e9).toFixed(2)}B vs FEC's $${(fecTotals!.total / 1e9).toFixed(2)}B — possible missing rows.`);
+      notes.push(`Dollars run LOW: our $${(ourSum / 1e9).toFixed(2)}B vs FEC's $${(fec.total / 1e9).toFixed(2)}B${fec.capped ? "+" : ""} — missing ~${Math.round((1 - dollarRatio) * 100)}% of cycle dollars.`);
     } else if (dollarRatio != null) {
-      notes.push(`Dollars reconcile: our $${(ourSum / 1e9).toFixed(2)}B vs FEC's $${(fecTotals!.total / 1e9).toFixed(2)}B (${dollarRatio.toFixed(2)}x).`);
+      notes.push(`Dollars reconcile: our $${(ourSum / 1e9).toFixed(2)}B vs FEC's $${(fec.total / 1e9).toFixed(2)}B (${dollarRatio.toFixed(2)}x).`);
+    }
+    if (lineItemShare != null) {
+      notes.push(`We hold ${ourDistinctTx} of FEC's ${fec.lineItems} Schedule E line items (${(lineItemShare * 100).toFixed(0)}%); the rest is mostly the sub-$1k digital long tail.`);
     }
     if (Number(ours.bad_date_rows ?? 0) > 0) {
       notes.push(`${Number(ours.bad_date_rows)} rows have out-of-range expenditure dates (filer typos).`);
     }
-    if (fecTotals?.capped) notes.push("FEC dollar total was page-capped; treat it as a lower bound.");
+    if (fec.capped) notes.push(`FEC totals were page-capped at ${maxPages} pages; treat them as a lower bound (raise max_pages).`);
 
     return new Response(JSON.stringify({
       cycle,
@@ -184,17 +170,15 @@ serve(async (req) => {
         date_range: [ours.min_valid_date ?? null, ours.max_valid_date ?? null],
       },
       fec: {
-        records_all: fecAll,
-        records_ge_1k: fecGe1k,
-        records_ge_10k: fecGe10k,
-        total_amount: fecTotals?.total ?? null,
-        support_amount: fecTotals?.support ?? null,
-        oppose_amount: fecTotals?.oppose ?? null,
-        total_capped: fecTotals?.capped ?? null,
+        total_amount: fec.total,
+        support_amount: fec.support,
+        oppose_amount: fec.oppose,
+        line_items: fec.lineItems,
+        total_capped: fec.capped,
       },
       assessment: {
-        coverage_material_ge10k: coverageMaterial,
         dollar_ratio: dollarRatio,
+        line_item_share: lineItemShare,
         notes,
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
