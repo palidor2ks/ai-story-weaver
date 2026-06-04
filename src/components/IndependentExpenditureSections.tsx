@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Megaphone, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { useCommitteeIE, useCandidateIE } from '@/hooks/useIndependentExpenditures';
 import { useCommitteeTopicsMap } from '@/hooks/useCommitteeTopics';
+import { useCommitteePrimaryCandidatesMap } from '@/hooks/useCommitteeCandidates';
 import { CommitteeTopicBadge } from '@/components/CommitteeTopicBadge';
 import { formatCompactCurrency } from '@/lib/utils';
 
@@ -113,6 +114,7 @@ export const CandidateIESection = ({ candidateId }: { candidateId: string | null
   const { data, isLoading } = useCandidateIE(candidateId, cycle);
   const spenderIds = (data?.topSpenders ?? []).map((s) => s.fecId).filter(Boolean) as string[];
   const { data: topicsMap } = useCommitteeTopicsMap(spenderIds);
+  const { data: candidateMap } = useCommitteePrimaryCandidatesMap(spenderIds);
   if (!candidateId) return null;
   if (isLoading && !data) {
     return (
@@ -180,6 +182,7 @@ export const CandidateIESection = ({ candidateId }: { candidateId: string | null
                               <CommitteeTopicBadge
                                 fecCommitteeId={s.fecId}
                                 row={topicsMap?.get(s.fecId) ?? null}
+                                candidate={candidateMap?.get(s.fecId) ?? null}
                               />
                             </div>
                             <div className="text-xs text-muted-foreground">

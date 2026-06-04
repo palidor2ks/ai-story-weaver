@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { CommitteesViewSwitcher } from '@/components/CommitteesViewSwitcher';
 import { CommitteeTopicBadge } from '@/components/CommitteeTopicBadge';
 import { useCommitteeTopicsMap } from '@/hooks/useCommitteeTopics';
+import { useCommitteePrimaryCandidatesMap } from '@/hooks/useCommitteeCandidates';
 import { formatIECompact } from '@/components/IESummaryInline';
 
 
@@ -121,6 +122,7 @@ export const Committees = () => {
   });
 
   const { data: topicsMap } = useCommitteeTopicsMap(visibleIds);
+  const { data: candidateMap } = useCommitteePrimaryCandidatesMap(visibleIds);
 
 
 
@@ -326,6 +328,7 @@ export const Committees = () => {
                         <CommitteeTopicBadge
                           fecCommitteeId={committee.fecCommitteeId}
                           row={topicsMap?.get(committee.fecCommitteeId) ?? null}
+                          candidate={candidateMap?.get(committee.fecCommitteeId) ?? null}
                         />
                       </div>
 

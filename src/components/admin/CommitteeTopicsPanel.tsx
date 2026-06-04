@@ -20,6 +20,7 @@ import {
 } from '@/hooks/useCommitteeTopics';
 import { useImportFecCommittee, useSyncFecCommittees } from '@/hooks/useImportFecCommittee';
 import { useCommitteePool, useRefreshCommitteePool } from '@/hooks/useCommitteePool';
+import { useCommitteePrimaryCandidatesMap } from '@/hooks/useCommitteeCandidates';
 
 const sourceLabel = (s: string) =>
   s === 'candidate_committees' ? 'Candidate cmte'
@@ -60,6 +61,7 @@ const AssignmentsTab = () => {
   });
 
   const rows = data?.rows ?? [];
+  const { data: candidateMap } = useCommitteePrimaryCandidatesMap(rows.map((r) => r.fec_committee_id));
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -224,6 +226,7 @@ const AssignmentsTab = () => {
                 {rows.map((c) => {
                   const hasAssign = !!c.primary_cause_id;
                   const currentCause = hasAssign ? causeById.get(c.primary_cause_id!) : null;
+                  const primaryCandidate = candidateMap?.get(c.fec_committee_id);
                   return (
                     <TableRow key={c.fec_committee_id}>
                       <TableCell>
@@ -233,6 +236,13 @@ const AssignmentsTab = () => {
                         </div>
                       </TableCell>
                       <TableCell>
+                        {primaryCandidate && (
+                          <div className="mb-1.5">
+                            <Badge variant="outline" className="text-[10px] gap-1 border-primary/30 text-primary">
+                              Single-candidate → {primaryCandidate.name}{primaryCandidate.party ? ` (${primaryCandidate.party})` : ''}
+                            </Badge>
+                          </div>
+                        )}
                         <Select
                           value={c.primary_cause_id ?? ''}
                           onValueChange={(causeId) => {
