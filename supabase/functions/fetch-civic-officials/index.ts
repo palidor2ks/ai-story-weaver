@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resolveDistrict, seatDivisionNumber } from '../_shared/district-resolver.ts';
 
 // Declare EdgeRuntime for background processing
 declare const EdgeRuntime: {
@@ -1114,8 +1115,26 @@ serve(async (req) => {
     // Apply transition data (mark outgoing, add incoming officials)
     allOfficials = applyTransitions(allOfficials, transitions);
 
+    // Resolve the user's ward / city-council district — but only if some local
+    // seat is actually ward/district-based (At-Large/Mayor-only towns need no
+    // lookup). Works in any state via the shared resolver (registry + ArcGIS
+    // discovery); null when it can't be determined.
+    const hasDistrictSeats = allOfficials.some(
+      o => o.level === 'local' && seatDivisionNumber(o.district) != null,
+    );
+    const resolvedDistrict = (hasDistrictSeats && coords?.lat != null && coords?.lng != null)
+      ? await resolveDistrict({
+          supabase: createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY),
+          lat: coords.lat, lng: coords.lng, state, city,
+        })
+      : null;
+
     // Final city-safety pass: drop any local officials whose static_officials.city
-    // doesn't match the user's city. Also de-duplicate by id (prefer first occurrence).
+    // doesn't match the user's city. Also de-duplicate by id (prefer first
+    // occurrence) and — when we know the user's ward/district — keep only that
+    // seat's council member (city-wide seats like At-Large and Mayor are always
+    // kept).
+    let districtUnresolvedWithSeats = false; // true ⇒ kept all seats & must note it
     {
       const userCity = (city || '').trim().toLowerCase();
       const localIds = allOfficials.filter(o => o.level === 'local').map(o => o.id).filter(Boolean) as string[];
@@ -1135,14 +1154,33 @@ serve(async (req) => {
           seen.add(o.id);
         }
         if (o.level !== 'local') return true;
+
+        // City scope: drop locals whose static_officials.city doesn't match.
         const rowCity = cityById.get(o.id);
-        if (rowCity == null) return true; // city-agnostic local row, keep
-        if (!userCity) return false;
-        return rowCity.trim().toLowerCase() === userCity;
+        if (rowCity != null) {
+          if (!userCity) return false;
+          if (rowCity.trim().toLowerCase() !== userCity) return false;
+        }
+
+        // Ward/district scope: a council member tied to a specific ward/district
+        // is only the user's rep when it's their ward/district. City-wide seats
+        // (At-Large/Mayor) have no division number and are always kept.
+        const seatNum = seatDivisionNumber(o.district);
+        if (seatNum == null) return true;
+        if (resolvedDistrict) return seatNum === resolvedDistrict.number;
+        // Couldn't resolve the division — keep all such seats but flag a note.
+        districtUnresolvedWithSeats = true;
+        return true;
       });
     }
 
-    console.log(`Total officials after transitions + city filter: ${allOfficials.length}`);
+    const userWard = resolvedDistrict ? resolvedDistrict.label : null;
+    const wardNote = districtUnresolvedWithSeats
+      ? "We couldn't pinpoint your exact ward/council district, so all of your city's " +
+        "ward council members are shown. Confirm yours with your municipal clerk."
+      : null;
+
+    console.log(`Total officials after transitions + city + district filter: ${allOfficials.length} (district: ${userWard ?? 'unresolved'})`);
 
     // === Unified image_url resolver ===
     // Both Profile and Feed must show the same photo. Feed reads `image_url`
@@ -1267,6 +1305,8 @@ serve(async (req) => {
       stateLegislative: finalStateLegislative,
       local: finalLocal,
       state,
+      userWard,
+      wardNote,
       hasTransitions: transitions.length > 0,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
