@@ -2,44 +2,50 @@
 // so the app can surface only the user's OWN ward/district council member
 // instead of every seat in the municipality. Works in any state.
 //
-// Two strategies, tried in order:
-//   1. Registry  — curated, authoritative statewide boundary services keyed by
-//                  state (e.g. NJ's statewide ward layer). Most reliable; used
-//                  first whenever the state is covered.
-//   2. Discovery — search ArcGIS Online for a "{city} ward / council district"
-//                  polygon service, validate a candidate by point-in-polygon +
-//                  a district-style attribute, then cache the winning source in
-//                  `district_boundary_sources` so later lookups are one call.
+// Resolution order (highest trust first):
+//   1. Overrides — admin-curated authoritative sources in
+//      `district_boundary_overrides` (this is where a vetted official list is
+//      uploaded). Per-city, or statewide via city='*'. Confidence: high.
+//   2. Registry  — curated authoritative statewide services in code, keyed by
+//      state (e.g. NJ's statewide ward layer). Confidence: high.
+//   3. Discovery — search ArcGIS Online for the city's "ward"/"council district"
+//      polygon service. Each candidate is scored for authority (government-hosted
+//      or on the trusted-owner allowlist ⇒ "gov"/medium; anything else ⇒
+//      "community"/low) and validated by point-in-polygon + a district attribute.
+//      A community source is only trusted when its number matches a seat we
+//      actually have an official for (cross-check). The winning source is cached
+//      in `district_boundary_sources` (with confidence + owner) so later lookups
+//      are one query; confirmed misses are cached too, and an admin can flag a
+//      cached source approved=true (always trust) or approved=false (never use).
 //
 // Everything fails safe: any miss/error returns null and the caller falls back
-// to showing all seats with a note. Municipal ward/district schemes are integer
-// based; matching to an official happens on that integer (see seatDivisionNumber),
-// so a council member's `district` ("Ward 1", "District 9", "At-Large") just has
-// to carry the same number the boundary layer reports.
+// to showing all seats with a note. Matching to an official is by integer
+// (see seatDivisionNumber), so a council member's `district` ("Ward 1",
+// "District 9", "At-Large") just has to carry the number the layer reports.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 type SupabaseClient = ReturnType<typeof createClient>;
+
+export type Confidence = 'high' | 'medium' | 'low';
 
 export interface ResolvedDistrict {
   number: number;            // 1, 9, 42 …
   kind: 'Ward' | 'District'; // inferred from the boundary layer's field name
   label: string;             // "Ward 1", "District 9"
   source: string;            // query URL used (logging/debug)
+  confidence: Confidence;    // how much to trust this attribution
 }
 
 interface RegistrySource {
-  // Full ArcGIS query endpoint (…/FeatureServer/<layer>/query)
-  queryUrl: string;
-  // Optional attribute used to confirm the polygon belongs to the user's city
-  // (statewide layers cover many municipalities, so we verify the match).
-  muniField?: string;
+  queryUrl: string;          // full ArcGIS query endpoint (…/FeatureServer/<layer>/query)
+  muniField?: string;        // attribute used to confirm the polygon's municipality
 }
 
-// Authoritative, vetted sources by USPS state code. Add an entry here as each
-// state's statewide ward/district layer is confirmed.
+// Authoritative, vetted statewide sources by USPS state code. Add an entry here
+// as each state's statewide ward/district layer is confirmed (DB overrides can
+// also do this without a code change).
 const STATE_REGISTRY: Record<string, RegistrySource> = {
-  // NJ Dept. of State / NJ Office of GIS — statewide municipal ward boundaries.
   NJ: {
     queryUrl:
       'https://services2.arcgis.com/XVOqAjTOJ5P6ngMu/arcgis/rest/services/Ward_Boundaries_for_New_Jersey/FeatureServer/0/query',
@@ -128,10 +134,47 @@ function muniMatches(munName: string, city: string): boolean {
   return !!a && (a.includes(b) || b.includes(a));
 }
 
+// Query one boundary source for the point and (optionally) confirm municipality.
+async function queryDivision(
+  queryUrl: string, lat: number, lng: number, muniField: string | null, city: string,
+): Promise<{ number: number; kind: 'Ward' | 'District' } | null> {
+  const data = await getJson(buildPointQuery(queryUrl, lat, lng));
+  const attrs = data?.features?.[0]?.attributes;
+  if (!attrs) return null;
+  if (muniField && !muniMatches(String(attrs[muniField] ?? ''), city)) return null;
+  return extractDivision(attrs);
+}
+
+// --- Authority scoring ------------------------------------------------------
+// A source is "gov" (authoritative) when it's hosted on a government server or
+// its ArcGIS Online owner / org id is on the trusted allowlist; otherwise
+// "community" (treated with low confidence and seat cross-checked).
+function authorityOf(url: string, owner: string | undefined, trusted: Set<string>): 'gov' | 'community' {
+  try {
+    const host = new URL(url).host.toLowerCase();
+    if (/\.(gov|mil)$/.test(host)) return 'gov';
+    if (/\.us$/.test(host) && !host.endsWith('arcgis.com')) return 'gov';
+  } catch (_e) { /* ignore */ }
+  const orgHash = url.match(/services\d*\.arcgis\.com\/([^/]+)/i)?.[1];
+  if (owner && trusted.has(owner.toLowerCase())) return 'gov';
+  if (orgHash && trusted.has(orgHash.toLowerCase())) return 'gov';
+  return 'community';
+}
+
+// Accept a resolved number given its confidence + the seats we actually have.
+// Community/low sources must name a ward/district we hold an official for;
+// admin-approved sources are always trusted.
+function accept(conf: Confidence, num: number, knownSeats: Set<number>, approved?: boolean | null): boolean {
+  if (approved === true) return true;
+  if (conf === 'high' || conf === 'medium') return true;
+  return knownSeats.size > 0 && knownSeats.has(num);
+}
+
 // --- Discovery -------------------------------------------------------------
 async function discoverSource(
   lat: number, lng: number, state: string, city: string,
-): Promise<{ number: number; kind: 'Ward' | 'District'; queryUrl: string } | null> {
+  trusted: Set<string>, knownSeats: Set<number>,
+): Promise<{ number: number; kind: 'Ward' | 'District'; queryUrl: string; confidence: Confidence; owner: string | null } | null> {
   const deadline = Date.now() + DISCOVERY_BUDGET_MS;
   const queries = [
     `${city} ${state} ward boundaries`,
@@ -139,7 +182,7 @@ async function discoverSource(
   ];
 
   const seen = new Set<string>();
-  const candidates: string[] = []; // FeatureServer base URLs
+  const candidates: { url: string; owner: string | undefined }[] = [];
   for (const q of queries) {
     if (Date.now() > deadline) break;
     const res = await getJson(
@@ -150,30 +193,80 @@ async function discoverSource(
       const url = String(r.url);
       if (seen.has(url)) continue;
       seen.add(url);
-      // Relevance guard: the service title must look like a ward/district layer.
       if (!/ward|district|council/i.test(String(r.title ?? ''))) continue;
-      candidates.push(url);
+      candidates.push({ url, owner: r.owner ? String(r.owner) : undefined });
     }
   }
 
-  for (const base of candidates.slice(0, 5)) {
+  // Try government / trusted sources before community ones.
+  candidates.sort((a, b) =>
+    Number(authorityOf(b.url, b.owner, trusted) === 'gov') -
+    Number(authorityOf(a.url, a.owner, trusted) === 'gov'));
+
+  let communityFallback: { number: number; kind: 'Ward' | 'District'; queryUrl: string; confidence: Confidence; owner: string | null } | null = null;
+
+  for (const cand of candidates.slice(0, 5)) {
     if (Date.now() > deadline) break;
-    const svc = await getJson(`${base}?f=json`);
+    const svc = await getJson(`${cand.url}?f=json`);
     const polygonLayers = (svc?.layers ?? []).filter(
       (l: any) => l?.geometryType === 'esriGeometryPolygon',
     );
     for (const layer of polygonLayers.slice(0, 2)) {
       if (Date.now() > deadline) break;
-      const queryUrl = `${base}/${layer.id}/query`;
-      const data = await getJson(buildPointQuery(queryUrl, lat, lng));
-      const div = extractDivision(data?.features?.[0]?.attributes);
-      if (div) {
-        console.log(`[District] Discovered ${div.kind} ${div.number} for ${city}, ${state} via ${queryUrl}`);
-        return { ...div, queryUrl };
+      const queryUrl = `${cand.url}/${layer.id}/query`;
+      const div = await queryDivision(queryUrl, lat, lng, null, city);
+      if (!div) continue;
+      const auth = authorityOf(cand.url, cand.owner, trusted);
+      if (auth === 'gov') {
+        console.log(`[District] Discovered ${div.kind} ${div.number} for ${city}, ${state} (gov: ${cand.owner ?? cand.url})`);
+        return { ...div, queryUrl, confidence: 'medium', owner: cand.owner ?? null };
+      }
+      // Community: only trust if it names a seat we hold an official for.
+      if (!communityFallback && knownSeats.has(div.number)) {
+        communityFallback = { ...div, queryUrl, confidence: 'low', owner: cand.owner ?? null };
       }
     }
   }
-  return null;
+
+  if (communityFallback) {
+    console.log(`[District] Discovered ${communityFallback.kind} ${communityFallback.number} for ${city}, ${state} (community, cross-checked)`);
+  }
+  return communityFallback;
+}
+
+// --- Trusted-owner allowlist (cached per cold start) -----------------------
+let trustedOwnersCache: { at: number; set: Set<string> } | null = null;
+async function loadTrustedOwners(supabase: SupabaseClient): Promise<Set<string>> {
+  if (trustedOwnersCache && Date.now() - trustedOwnersCache.at < 10 * 60_000) {
+    return trustedOwnersCache.set;
+  }
+  const set = new Set<string>();
+  try {
+    const { data } = await supabase.from('trusted_gis_owners').select('owner_key');
+    for (const r of data ?? []) {
+      if (r?.owner_key) set.add(String(r.owner_key).toLowerCase());
+    }
+  } catch (_e) { /* allowlist optional */ }
+  trustedOwnersCache = { at: Date.now(), set };
+  return set;
+}
+
+// --- Admin override table --------------------------------------------------
+async function readOverride(supabase: SupabaseClient, state: string, city: string) {
+  try {
+    const { data } = await supabase
+      .from('district_boundary_overrides')
+      .select('city, query_url, muni_field')
+      .eq('state', state)
+      .eq('is_active', true)
+      .in('city', [city, '*']);
+    if (!data?.length) return null;
+    return data.find((r: any) => String(r.city).toLowerCase() === city.toLowerCase())
+      ?? data.find((r: any) => r.city === '*')
+      ?? null;
+  } catch (_e) {
+    return null;
+  }
 }
 
 // --- Source cache (district_boundary_sources) ------------------------------
@@ -181,11 +274,12 @@ async function readSourceCache(supabase: SupabaseClient, state: string, city: st
   try {
     const { data } = await supabase
       .from('district_boundary_sources')
-      .select('status, query_url, checked_at')
+      .select('status, query_url, confidence, approved, checked_at')
       .eq('state', state)
       .eq('city', city)
       .maybeSingle();
     if (!data) return null;
+    if (data.approved === true || data.approved === false) return data; // sticky admin decision
     const ageDays = (Date.now() - new Date(data.checked_at as string).getTime()) / 86_400_000;
     const ttl = data.status === 'found' ? FOUND_TTL_DAYS : NONE_TTL_DAYS;
     return ageDays > ttl ? null : data;
@@ -196,11 +290,12 @@ async function readSourceCache(supabase: SupabaseClient, state: string, city: st
 
 async function writeSourceCache(
   supabase: SupabaseClient, state: string, city: string,
-  status: 'found' | 'none', queryUrl: string | null,
+  status: 'found' | 'none', queryUrl: string | null, confidence: Confidence, owner: string | null,
 ) {
   try {
     await supabase.from('district_boundary_sources').upsert({
-      state, city, status, query_url: queryUrl, checked_at: new Date().toISOString(),
+      state, city, status, query_url: queryUrl, confidence, source_owner: owner,
+      checked_at: new Date().toISOString(),
     }, { onConflict: 'state,city' });
   } catch (_e) {
     /* best-effort cache; ignore */
@@ -214,46 +309,57 @@ export async function resolveDistrict(opts: {
   lng: number;
   state: string;
   city: string;
+  /** Ward/district numbers we actually have an official for (cross-check). */
+  knownSeats?: number[];
 }): Promise<ResolvedDistrict | null> {
   const { supabase, lat, lng } = opts;
   const state = (opts.state || '').trim().toUpperCase();
   const city = (opts.city || '').trim();
   if (!state || lat == null || lng == null) return null;
+  const knownSeats = new Set((opts.knownSeats ?? []).filter((n) => Number.isFinite(n)));
 
   const finish = (
-    d: { number: number; kind: 'Ward' | 'District' }, source: string,
-  ): ResolvedDistrict => ({ ...d, label: `${d.kind} ${d.number}`, source });
+    d: { number: number; kind: 'Ward' | 'District' }, source: string, confidence: Confidence,
+  ): ResolvedDistrict => ({ ...d, label: `${d.kind} ${d.number}`, source, confidence });
 
-  // 1) Registry — authoritative statewide source.
+  // 1) Admin overrides (per-city, then statewide '*') — authoritative.
+  const override = await readOverride(supabase, state, city);
+  if (override) {
+    const div = await queryDivision(override.query_url as string, lat, lng, (override.muni_field as string) ?? null, city);
+    return div ? finish(div, override.query_url as string, 'high') : null;
+  }
+
+  // 2) Code registry — authoritative statewide source.
   const reg = STATE_REGISTRY[state];
   if (reg) {
-    const data = await getJson(buildPointQuery(reg.queryUrl, lat, lng));
-    const attrs = data?.features?.[0]?.attributes;
-    if (attrs && (!reg.muniField || muniMatches(String(attrs[reg.muniField] ?? ''), city))) {
-      const div = extractDivision(attrs);
-      if (div) return finish(div, reg.queryUrl);
-    }
+    const div = await queryDivision(reg.queryUrl, lat, lng, reg.muniField ?? null, city);
     // A registry covers the whole state, so "no polygon here" means the address
     // simply isn't in a warded municipality — don't fall through to discovery.
-    return null;
+    return div ? finish(div, reg.queryUrl, 'high') : null;
   }
 
-  // 2) Discovery (cached by state + city).
+  // 3) Discovery (cached by state + city), authority-scored + seat cross-checked.
   if (!city) return null;
+  const trusted = await loadTrustedOwners(supabase);
   const cached = await readSourceCache(supabase, state, city);
-  if (cached?.status === 'none') return null;
-  if (cached?.status === 'found' && cached.query_url) {
-    const data = await getJson(buildPointQuery(cached.query_url as string, lat, lng));
-    const div = extractDivision(data?.features?.[0]?.attributes);
-    if (div) return finish(div, cached.query_url as string);
-    // Cached source stopped resolving — re-discover below.
+  if (cached) {
+    if (cached.approved === false) return null;                 // admin-blocked
+    if (cached.status === 'none' && cached.approved !== true) return null;
+    if (cached.status === 'found' && cached.query_url) {
+      const div = await queryDivision(cached.query_url as string, lat, lng, null, city);
+      const conf = (cached.confidence as Confidence) ?? 'low';
+      if (div && accept(conf, div.number, knownSeats, cached.approved as boolean | null)) {
+        return finish(div, cached.query_url as string, conf);
+      }
+      // Cached source stopped resolving / failed cross-check — re-discover.
+    }
   }
 
-  const discovered = await discoverSource(lat, lng, state, city);
+  const discovered = await discoverSource(lat, lng, state, city, trusted, knownSeats);
   if (discovered) {
-    await writeSourceCache(supabase, state, city, 'found', discovered.queryUrl);
-    return finish({ number: discovered.number, kind: discovered.kind }, discovered.queryUrl);
+    await writeSourceCache(supabase, state, city, 'found', discovered.queryUrl, discovered.confidence, discovered.owner);
+    return finish({ number: discovered.number, kind: discovered.kind }, discovered.queryUrl, discovered.confidence);
   }
-  await writeSourceCache(supabase, state, city, 'none', null);
+  await writeSourceCache(supabase, state, city, 'none', null, 'low', null);
   return null;
 }
