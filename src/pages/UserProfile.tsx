@@ -431,33 +431,6 @@ export const UserProfile = () => {
                   </button>
                 )}
 
-                {/* Demographics display */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-xs text-muted-foreground">
-                  {profile.age && (
-                    <span className="flex items-center gap-1">
-                      🎂 {profile.age} years
-                    </span>
-                  )}
-                  {profile.sex && profile.sex !== 'Prefer not to say' && (
-                    <span>• {profile.sex}</span>
-                  )}
-                  {profile.income && profile.income !== 'Prefer not to say' && (
-                    <span className="flex items-center gap-1">
-                      • 💰 {profile.income}
-                    </span>
-                  )}
-                  {profile.political_party && profile.political_party !== 'Prefer not to say' && (
-                    <span className="flex items-center gap-1">
-                      • 🏛 {profile.political_party}
-                    </span>
-                  )}
-                  {profile.religion && profile.religion !== 'Prefer not to say' && (
-                    <span className="flex items-center gap-1">
-                      • ⛪ {profile.religion}
-                    </span>
-                  )}
-                </div>
-
                 {/* Edit Profile Button */}
                 <div className="mt-3">
                   <EditProfileDialog
