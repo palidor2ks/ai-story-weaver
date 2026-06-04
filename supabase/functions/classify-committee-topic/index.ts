@@ -32,13 +32,38 @@ async function requireAdmin(req: Request): Promise<{ ok: true } | { ok: false; r
   return { ok: true };
 }
 
+interface IETarget {
+  name: string;
+  party: 'R' | 'D' | 'I' | 'O' | null;
+  direction: 'support' | 'oppose';
+  amount: number;
+}
+
 interface CommitteeInfo {
   fec_committee_id: string;
   name: string;
   designation: string | null;
   ie_purposes: string[];
-  top_targets: string[];
+  support_total: number;
+  oppose_total: number;
+  /** Dollars whose effect helps Republicans (support R or oppose D). */
+  pro_rep_amount: number;
+  /** Dollars whose effect helps Democrats (support D or oppose R). */
+  pro_dem_amount: number;
+  top_targets: IETarget[];
 }
+
+const fmtUsd = (n: number) =>
+  n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M`
+  : n >= 1e3 ? `$${Math.round(n / 1e3)}K`
+  : `$${Math.round(n)}`;
+
+const partyLetter = (p: string | null | undefined): 'R' | 'D' | 'I' | 'O' | null =>
+  p === 'Republican' ? 'R'
+  : p === 'Democrat' ? 'D'
+  : p === 'Independent' ? 'I'
+  : p ? 'O'
+  : null;
 
 interface Cause {
   id: string;
@@ -86,15 +111,58 @@ async function gatherInfo(supabase: any, fecId: string): Promise<CommitteeInfo |
 
   const { data: ieRows } = await supabase
     .from('independent_expenditures')
-    .select('purpose, target_candidate_name, amount')
+    .select('purpose, target_candidate_name, support_oppose_indicator, candidate_id, target_fec_candidate_id, amount')
     .eq('spending_committee_fec_id', fecId)
     .order('amount', { ascending: false })
-    .limit(50);
+    .limit(500);
+  const rows = (ieRows ?? []) as any[];
 
-  const purposes = Array.from(new Set((ieRows ?? []).map((r: any) => (r.purpose ?? '').trim()).filter(Boolean))).slice(0, 15);
-  const targets = Array.from(new Set((ieRows ?? []).map((r: any) => r.target_candidate_name).filter(Boolean))).slice(0, 10);
+  const purposes = Array.from(new Set(rows.map((r) => (r.purpose ?? '').trim()).filter(Boolean))).slice(0, 15);
 
-  return { fec_committee_id: fecId, name, designation, ie_purposes: purposes as string[], top_targets: targets as string[] };
+  // Resolve the party of each target candidate so the model can reason about
+  // *who the money helps* — the committee name alone is unreliable (PACs are
+  // frequently named to obscure which side they actually support).
+  const candIds = Array.from(new Set(rows.map((r) => r.candidate_id).filter(Boolean)));
+  const fecCandIds = Array.from(new Set(rows.map((r) => r.target_fec_candidate_id).filter(Boolean)));
+  const partyById = new Map<string, string>();
+  const partyByFec = new Map<string, string>();
+  if (candIds.length) {
+    const { data } = await supabase.from('candidates').select('id, party').in('id', candIds);
+    (data ?? []).forEach((c: any) => { if (c.party) partyById.set(c.id, c.party); });
+  }
+  if (fecCandIds.length) {
+    const { data } = await supabase.from('candidates').select('fec_candidate_id, party').in('fec_candidate_id', fecCandIds);
+    (data ?? []).forEach((c: any) => { if (c.party) partyByFec.set(c.fec_candidate_id, c.party); });
+  }
+
+  let support_total = 0, oppose_total = 0, pro_rep_amount = 0, pro_dem_amount = 0;
+  const targetMap = new Map<string, IETarget>();
+  for (const r of rows) {
+    const amt = Number(r.amount ?? 0);
+    const direction: 'support' | 'oppose' = r.support_oppose_indicator === 'O' ? 'oppose' : 'support';
+    if (direction === 'oppose') oppose_total += amt; else support_total += amt;
+
+    const party = partyLetter(partyById.get(r.candidate_id) ?? partyByFec.get(r.target_fec_candidate_id));
+    if (party === 'R') { if (direction === 'support') pro_rep_amount += amt; else pro_dem_amount += amt; }
+    else if (party === 'D') { if (direction === 'support') pro_dem_amount += amt; else pro_rep_amount += amt; }
+
+    const tname = r.target_candidate_name;
+    if (tname) {
+      const key = `${tname}|${direction}`;
+      const cur = targetMap.get(key) ?? { name: tname, party, direction, amount: 0 };
+      cur.amount += amt;
+      if (!cur.party && party) cur.party = party;
+      targetMap.set(key, cur);
+    }
+  }
+  const top_targets = Array.from(targetMap.values()).sort((a, b) => b.amount - a.amount).slice(0, 12);
+
+  return {
+    fec_committee_id: fecId, name, designation,
+    ie_purposes: purposes as string[],
+    support_total, oppose_total, pro_rep_amount, pro_dem_amount,
+    top_targets,
+  };
 }
 
 async function classifyOne(info: CommitteeInfo, causes: Cause[]): Promise<{
@@ -109,12 +177,27 @@ async function classifyOne(info: CommitteeInfo, causes: Cause[]): Promise<{
     .join('\n');
   const allowed = causes.map((c) => c.id);
 
+  const partisan =
+    info.pro_rep_amount === 0 && info.pro_dem_amount === 0
+      ? 'no party-attributable spending'
+      : `helps Republicans ${fmtUsd(info.pro_rep_amount)} (supports R / opposes D) vs helps Democrats ${fmtUsd(info.pro_dem_amount)} (supports D / opposes R)`;
+
+  const targetLines = info.top_targets.length
+    ? info.top_targets.map((t) => `  - ${t.direction.toUpperCase()} ${t.name} (${t.party ?? '?'}) — ${fmtUsd(t.amount)}`).join('\n')
+    : '  none';
+
   const userMsg = `Committee: ${info.name}
 Designation: ${info.designation ?? 'unknown'}
-Top IE targets: ${info.top_targets.join(', ') || 'none'}
+
+Spending direction: supporting ${fmtUsd(info.support_total)} · opposing ${fmtUsd(info.oppose_total)}
+Partisan effect of spending: ${partisan}
+Top targets (direction · target · party · amount):
+${targetLines}
 IE expenditure purposes: ${info.ie_purposes.slice(0, 10).join(' | ') || 'none'}
 
-Pick ONE primary cause id from the list below that best describes this committee's focus, plus 0-2 optional secondary cause ids if clearly relevant. If a specific issue cause is clearly supported by the committee name, IE targets, or expenditure purposes, make that specific cause primary and put any generic partisan bucket only in secondary_cause_ids. Use "low" confidence for generic partisan committees with no clear single-issue focus.
+Use the PARTISAN EFFECT and target list as the strongest signal for partisan lean: a committee that mostly opposes Republicans or supports Democrats is progressive/Democratic-aligned; one that mostly opposes Democrats or supports Republicans is conservative/Republican-aligned. Committee NAMES are often deceptive (a PAC named "...Conservatives..." may actually spend to elect Democrats) — when the name conflicts with the spending direction, trust the spending direction.
+
+Pick ONE primary cause id from the list below that best describes this committee's focus, plus 0-2 optional secondary cause ids if clearly relevant. If a specific issue cause is clearly supported by the committee name, IE targets, or expenditure purposes, make that specific cause primary and put any generic partisan bucket only in secondary_cause_ids. Use "low" confidence only when neither the spending direction nor a specific issue is clear.
 
 If NO cause fits well, you may also propose a single new cause (suggested_new_cause) — but ONLY if there's a clear, specific issue not represented (e.g. "Pro-cannabis"). Do not propose duplicates.
 
@@ -127,7 +210,7 @@ ${causeMenu}`;
     body: JSON.stringify({
       model: 'google/gemini-3-flash-preview',
       messages: [
-        { role: 'system', content: 'You categorize US political committees (PACs, SuperPACs, party committees) by cause/stance (e.g. Pro-Israel, Pro-gun). Be conservative, but when there is clear evidence for a specific issue cause, prefer that over generic "conservative" or "progressive" buckets; use generic buckets only when the issue focus is unclear.' },
+        { role: 'system', content: 'You categorize US political committees (PACs, SuperPACs, party committees) by cause/stance (e.g. Pro-Israel, Pro-gun). Determine partisan lean from the DIRECTION of independent expenditures (who the committee supports vs. opposes and those targets\' parties), not from the committee name, which is frequently misleading. When there is clear evidence for a specific issue cause, prefer that over the generic "conservative" or "progressive" buckets; use the generic buckets only when no single issue stands out.' },
         { role: 'user', content: userMsg },
       ],
       tools: [{
