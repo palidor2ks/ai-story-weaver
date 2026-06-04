@@ -199,7 +199,9 @@ Use the PARTISAN EFFECT and target list as the strongest signal for partisan lea
 
 Pick ONE primary cause id from the list below that best describes this committee's focus, plus 0-2 optional secondary cause ids if clearly relevant. If a specific issue cause is clearly supported by the committee name, IE targets, or expenditure purposes, make that specific cause primary and put any generic partisan bucket only in secondary_cause_ids. Use "low" confidence only when neither the spending direction nor a specific issue is clear.
 
-If NO cause fits well, you may also propose a single new cause (suggested_new_cause) — but ONLY if there's a clear, specific issue not represented (e.g. "Pro-cannabis"). Do not propose duplicates.
+Industry rule: never make the generic "pro-business" cause primary for a single-industry committee. If the committee is tied to one industry (real estate, finance/banking, insurance, defense, agriculture, healthcare providers, telecom, manufacturing, gaming, etc.), pick that industry's specific cause. Reserve "pro-business" only for broad, cross-industry business coalitions (e.g. a Chamber of Commerce).
+
+If NO cause fits well, you may also propose a single new cause (suggested_new_cause) — but ONLY if there's a clear, specific issue or industry not represented (e.g. "Pro-cannabis", "Pro-Aviation"). This includes single-industry business groups that have no matching industry cause yet — propose an industry-specific cause rather than labeling them generic Pro-Business. Do not propose duplicates.
 
 Causes:
 ${causeMenu}`;
@@ -210,7 +212,7 @@ ${causeMenu}`;
     body: JSON.stringify({
       model: 'google/gemini-3-flash-preview',
       messages: [
-        { role: 'system', content: 'You categorize US political committees (PACs, SuperPACs, party committees) by cause/stance (e.g. Pro-Israel, Pro-gun). Determine partisan lean from the DIRECTION of independent expenditures (who the committee supports vs. opposes and those targets\' parties), not from the committee name, which is frequently misleading. When there is clear evidence for a specific issue cause, prefer that over the generic "conservative" or "progressive" buckets; use the generic buckets only when no single issue stands out.' },
+        { role: 'system', content: 'You categorize US political committees (PACs, SuperPACs, party committees) by cause/stance (e.g. Pro-Israel, Pro-gun). Determine partisan lean from the DIRECTION of independent expenditures (who the committee supports vs. opposes and those targets\' parties), not from the committee name, which is frequently misleading. When there is clear evidence for a specific issue cause, prefer that over the generic "conservative" or "progressive" buckets; use the generic buckets only when no single issue stands out. When a committee is tied to a single industry, prefer that industry\'s specific cause (e.g. Pro-Real Estate, Pro-Finance, Pro-Defense Industry) over the generic "Pro-Business" bucket, which is reserved only for broad, cross-industry business coalitions.' },
         { role: 'user', content: userMsg },
       ],
       tools: [{
