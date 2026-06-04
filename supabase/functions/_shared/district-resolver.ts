@@ -170,11 +170,22 @@ function muniMatches(munName: string, city: string): boolean {
 // Query one boundary source for the point and (optionally) confirm municipality.
 async function queryDivision(
   queryUrl: string, lat: number, lng: number, muniField: string | null, city: string,
+  fieldName?: string | null,
 ): Promise<{ key: string; kind: 'Ward' | 'District' } | null> {
   const data = await getJson(buildPointQuery(queryUrl, lat, lng));
   const attrs = data?.features?.[0]?.attributes;
   if (!attrs) return null;
   if (muniField && !muniMatches(String(attrs[muniField] ?? ''), city)) return null;
+  // A curated override may name the exact attribute holding the division — used
+  // when the layer's field name is too generic for auto-detection (e.g. "Name").
+  if (fieldName) {
+    const raw = attrs[fieldName];
+    const key = normalizeDivisionToken(raw);
+    if (key == null || key.length > 24) return null;
+    const kind: 'Ward' | 'District' =
+      /ward/i.test(String(raw ?? '')) || /ward/i.test(fieldName) ? 'Ward' : 'District';
+    return { key, kind };
+  }
   return extractDivision(attrs);
 }
 
@@ -289,7 +300,7 @@ async function readOverride(supabase: SupabaseClient, state: string, city: strin
   try {
     const { data } = await supabase
       .from('district_boundary_overrides')
-      .select('city, query_url, muni_field')
+      .select('city, query_url, muni_field, field_name')
       .eq('state', state)
       .eq('is_active', true)
       .in('city', [city, '*']);
@@ -426,7 +437,11 @@ export async function resolveDistrict(opts: {
   // 1) Admin overrides (per-city, then statewide '*') — authoritative.
   const override = await readOverride(supabase, state, city);
   if (override) {
-    const div = await queryDivision(override.query_url as string, lat, lng, (override.muni_field as string) ?? null, city);
+    const div = await queryDivision(
+      override.query_url as string, lat, lng,
+      (override.muni_field as string) ?? null, city,
+      (override.field_name as string) ?? null,
+    );
     return div ? finish(div, override.query_url as string, 'high') : null;
   }
 
