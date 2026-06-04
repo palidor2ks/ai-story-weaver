@@ -37,13 +37,13 @@ export function summarizeForSocial(text: string | null | undefined, maxChars: nu
 // app's CL/CR convention (center zone split at 0), so e.g. +1.18 reads Center-Right.
 function ideologyLabel(score: number | null | undefined): string | null {
   if (score === null || score === undefined || !Number.isFinite(score)) return null;
-  if (score <= -7) return 'Far-Left';
-  if (score <= -3) return 'Left';
-  if (score < -0.5) return 'Center-Left';
-  if (score <= 0.5) return 'Centrist';
-  if (score < 3) return 'Center-Right';
-  if (score < 7) return 'Right';
-  return 'Far-Right';
+  // Only label the middle. A partisan's direction is implied by their party, so
+  // "Left Democrat" / "Right Republican" is redundant — those return null and the
+  // caption uses just the party name. Only a rep near the center gets a qualifier.
+  if (score >= -0.5 && score <= 0.5) return 'Centrist';
+  if (score > -3 && score < -0.5) return 'Center-Left';
+  if (score > 0.5 && score < 3) return 'Center-Right';
+  return null;
 }
 
 function partyFull(party: string | null | undefined): string {
@@ -85,6 +85,12 @@ export interface Facts {
   ie_oppose: number | null;
   top_support_pac: { name: string; amount: number } | null;
   top_oppose_pac: { name: string; amount: number } | null;
+  // Direct-fundraising mix (shares of itemized donor money). Lets the caption say
+  // whether they're small-dollar/grassroots, large-donor, or PAC-funded.
+  funding?: {
+    small_dollar: number; large_individual: number; pac: number; self_funded: number;
+    donor_base: number; small_pct: number; large_pct: number; pac_pct: number;
+  } | null;
 }
 
 function hasFinance(f: Facts | null): boolean {
@@ -105,6 +111,10 @@ function factsBlock(name: string, party: string, ideology: string | null, office
   if (f.top_donor && (f.top_donor.amount ?? 0) > 0) lines.push(`Largest direct donor: ${tidyName(f.top_donor.name)} at ${fmtMoney(f.top_donor.amount)}`);
   if ((f.ie_support ?? 0) > 0) lines.push(`Outside money spent SUPPORTING them: ${fmtMoney(f.ie_support)}${f.top_support_pac ? ` (biggest: ${tidyName(f.top_support_pac.name)}, ${fmtMoney(f.top_support_pac.amount)})` : ''}`);
   if ((f.ie_oppose ?? 0) > 0) lines.push(`Outside money spent OPPOSING them: ${fmtMoney(f.ie_oppose)}${f.top_oppose_pac ? ` (biggest: ${tidyName(f.top_oppose_pac.name)}, ${fmtMoney(f.top_oppose_pac.amount)})` : ''}`);
+  if (f.funding) {
+    const fu = f.funding;
+    lines.push(`Funding mix (share of their itemized donor money): ${fu.small_pct}% small-dollar (under $200), ${fu.large_pct}% large individual donors, ${fu.pac_pct}% from PACs/committees${fu.self_funded > 0 ? `; self-funded ${fmtMoney(fu.self_funded)}` : ''}.`);
+  }
   return lines.join('\n');
 }
 
@@ -166,14 +176,15 @@ ${timing ? `\n${timing}\n` : ''}
 Write the post:
 - ${leadRule}
 - Match the tense and framing to the TIMING note above — an upcoming election must NOT be described in the past tense, and a finished one must not be written as if it's still ahead.
-- Always name the politician's leaning AND party together (e.g., "Center-Right Republican", "Progressive Democrat"). Say "re-election" only if the facts mark them as the incumbent; otherwise call it their campaign or bid.
+- Refer to them using the "Leaning & party" line EXACTLY as given. When it's only a party ("Democrat"/"Republican"), use just that — NEVER prepend "Left", "Right", "Progressive", "Conservative" or any direction yourself. Only a middle-of-the-road rep carries a "Center-Left", "Centrist", or "Center-Right" qualifier (e.g. "Center-Right Republican"). Say "re-election" only if the facts mark them as the incumbent; otherwise call it their campaign or bid.
+- Work the FUNDING MIX into the story when it's striking — e.g. grassroots/small-dollar-powered, large-donor-reliant, or heavily PAC-funded. Small-dollar = under $200; the "PACs/committees" share is direct money TO the campaign, distinct from the outside/Super-PAC spending above. For a deep (long) post, always include it.
 - Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
 - ${lengthRule}
 - Plain text ONLY — no markdown, no asterisks, no underscores, no bullet points, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
 }
 
 // Deterministic, safe fallback: lead with the single biggest number and assemble
-// a sentence directly. Always names the leaning + party.
+// a sentence directly. Names the party, with a leaning qualifier only for middle reps.
 function templateCaption(name: string, party: string, ideology: string | null, state: string, f: Facts, max: number): string {
   const who = `${name}, a ${ideology ? ideology + ' ' : ''}${partyFull(party)}${state ? ` (${state})` : ''}`.trim();
   const raised = f.raised ?? 0;
