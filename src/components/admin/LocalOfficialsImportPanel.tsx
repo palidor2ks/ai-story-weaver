@@ -24,7 +24,7 @@ interface SeatSummary {
   state: string;
   city: string;
   total: number;
-  wardSeats: number[];
+  wardSeats: string[];
   atLargeOrMayor: number;
 }
 

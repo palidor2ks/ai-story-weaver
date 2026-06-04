@@ -19,9 +19,10 @@
 //      cached source approved=true (always trust) or approved=false (never use).
 //
 // Everything fails safe: any miss/error returns null and the caller falls back
-// to showing all seats with a note. Matching to an official is by integer
-// (see seatDivisionNumber), so a council member's `district` ("Ward 1",
-// "District 9", "At-Large") just has to carry the number the layer reports.
+// to showing all seats with a note. Matching to an official is by a normalized
+// key (see seatDivisionKey) that handles numbers ("9"), letters ("D") and
+// directional/named wards ("Northeast", "Delaware"), so a council member's
+// `district` just has to carry the same identifier the boundary layer reports.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -30,9 +31,9 @@ type SupabaseClient = ReturnType<typeof createClient>;
 export type Confidence = 'high' | 'medium' | 'low';
 
 export interface ResolvedDistrict {
-  number: number;            // 1, 9, 42 …
+  key: string;               // normalized: "9", "d", "northeast" …
   kind: 'Ward' | 'District'; // inferred from the boundary layer's field name
-  label: string;             // "Ward 1", "District 9"
+  label: string;             // "Ward 9", "District D", "Northeast Ward"
   source: string;            // query URL used (logging/debug)
   confidence: Confidence;    // how much to trust this attribution
 }
@@ -82,49 +83,81 @@ function buildPointQuery(queryUrl: string, lat: number, lng: number): string {
     `&outFields=*&returnGeometry=false&f=json`;
 }
 
-// --- Attribute → division-number extraction --------------------------------
+// --- Attribute → division-KEY extraction -----------------------------------
 // Field names vary wildly across services (WARD_CODE, ward, District, DistrictID,
-// COUNCIL_DIST, CD…). Score keys so we pick the real ward/district id and avoid
-// look-alikes (Shape__Area, District_Enrollment, the "Districts" count, etc.).
+// COUNCIL_DIST, CD…) and values may be numbers ("9"), letters ("D") or names
+// ("Northeast", "Delaware"). Score field names to pick the real ward/district
+// field and avoid look-alikes (Shape__Area, District_Enrollment, the "Districts"
+// count, MEMBER/PHONE/YEAR…).
 const STRONG_KEY = /^(ward|ward_?code|ward_?no|ward_?num|ward_?id|district|district_?id|district_?no|district_?num|council_?district|councildist|coun_?dist|cd)$/i;
-const WEAK_KEY = /(ward|council.?dist|^district$|district_?id)/i;
-const BAD_KEY = /(objectid|globalid|^fid$|shape|area|length|perimeter|acre|enroll|population|^pop|count|districts|year|term|phone|zip|geoid)/i;
+const WEAK_KEY = /(ward|council.?dist|^district$|district_?id|district_?name)/i;
+const BAD_KEY = /(objectid|globalid|^fid$|shape|area|length|perimeter|acre|enroll|population|^pop|count|districts|year|term|phone|zip|geoid|member|email|website|url)/i;
 
-function parseSmallInt(v: unknown): number | null {
-  if (v == null) return null;
-  const m = String(v).match(/\d+/);
-  if (!m) return null;
-  const n = parseInt(m[0], 10);
-  return Number.isFinite(n) && n > 0 && n < 1000 ? n : null;
+// Directional names are canonicalized (symmetrically on both the seat label and
+// the boundary value) so "NE" and "Northeast" compare equal.
+const DIRECTION: Record<string, string> = {
+  n: 'north', s: 'south', e: 'east', w: 'west',
+  ne: 'northeast', nw: 'northwest', se: 'southeast', sw: 'southwest',
+  c: 'central', ctr: 'central',
+};
+
+// Normalize a ward/district token (from a seat label OR a boundary value) to a
+// comparable key: numbers → "9", single letters → "d", names/directions →
+// "northeast" / "delaware". Returns null when there's nothing identifying.
+function normalizeDivisionToken(raw: unknown): string | null {
+  if (raw == null) return null;
+  let s = String(raw).trim().toLowerCase();
+  if (!s) return null;
+  // Drop structural words so "ward 3", "district d", "delaware district",
+  // "super district 8", "1st voter district" reduce to their identifying token.
+  s = s.replace(/\b(wards?|districts?|councils?|divisions?|seats?|positions?|places?|super|voter|councilmember|member|of|the)\b/g, ' ')
+       .replace(/[^a-z0-9 ]/g, ' ')
+       .replace(/\s+/g, ' ')
+       .trim();
+  if (!s) return null;
+  if (/^\d+$/.test(s)) return String(parseInt(s, 10));
+  const first = s.split(' ')[0];
+  const ord = first.match(/^(\d+)(st|nd|rd|th)$/);
+  if (ord) return String(parseInt(ord[1], 10));
+  if (/^\d+$/.test(first)) return String(parseInt(first, 10));
+  const compact = s.replace(/ /g, '');
+  return DIRECTION[compact] ?? DIRECTION[first] ?? first;
+}
+
+// Human label for a division key: "Ward 9", "District D", "Northeast Ward".
+function keyLabel(key: string, kind: 'Ward' | 'District'): string {
+  if (/^\d+$/.test(key)) return `${kind} ${key}`;
+  if (/^[a-z]$/.test(key)) return `${kind} ${key.toUpperCase()}`;
+  const titled = key.charAt(0).toUpperCase() + key.slice(1);
+  return kind === 'Ward' ? `${titled} Ward` : `${titled} District`;
 }
 
 export function extractDivision(
   attrs: Record<string, unknown> | null | undefined,
-): { number: number; kind: 'Ward' | 'District' } | null {
+): { key: string; kind: 'Ward' | 'District' } | null {
   if (!attrs) return null;
-  let best: { number: number; kind: 'Ward' | 'District'; score: number } | null = null;
-  for (const [key, val] of Object.entries(attrs)) {
-    if (BAD_KEY.test(key)) continue;
-    const n = parseSmallInt(val);
-    if (n == null) continue;
-    const score = STRONG_KEY.test(key) ? 3 : WEAK_KEY.test(key) ? 1 : 0;
+  let best: { key: string; kind: 'Ward' | 'District'; score: number } | null = null;
+  for (const [field, val] of Object.entries(attrs)) {
+    if (BAD_KEY.test(field)) continue;
+    const score = STRONG_KEY.test(field) ? 3 : WEAK_KEY.test(field) ? 1 : 0;
     if (score === 0) continue;
+    const key = normalizeDivisionToken(val);
+    if (key == null || key.length > 24) continue;
     if (!best || score > best.score) {
-      best = { number: n, kind: /ward/i.test(key) ? 'Ward' : 'District', score };
+      best = { key, kind: /ward/i.test(field) ? 'Ward' : 'District', score };
     }
   }
-  return best ? { number: best.number, kind: best.kind } : null;
+  return best ? { key: best.key, kind: best.kind } : null;
 }
 
-// Pull the ward/district number out of a council member's seat label.
-// "Ward 4" → 4, "District 9" → 9, "Council District 3" → 3, "01" → 1.
+// Pull the ward/district KEY out of a council member's seat label.
+// "Ward 4" → "4", "District D" → "d", "Northeast Ward" → "northeast".
 // City-wide seats ("At-Large", "N/A", null/empty) → null (never ward-filtered).
-export function seatDivisionNumber(district?: string | null): number | null {
+export function seatDivisionKey(district?: string | null): string | null {
   if (!district) return null;
   const s = String(district).trim();
   if (!s || /at[-\s]?large/i.test(s) || /^n\/?a$/i.test(s)) return null;
-  const m = s.match(/\d+/);
-  return m ? parseInt(m[0], 10) : null;
+  return normalizeDivisionToken(s);
 }
 
 function muniMatches(munName: string, city: string): boolean {
@@ -137,7 +170,7 @@ function muniMatches(munName: string, city: string): boolean {
 // Query one boundary source for the point and (optionally) confirm municipality.
 async function queryDivision(
   queryUrl: string, lat: number, lng: number, muniField: string | null, city: string,
-): Promise<{ number: number; kind: 'Ward' | 'District' } | null> {
+): Promise<{ key: string; kind: 'Ward' | 'District' } | null> {
   const data = await getJson(buildPointQuery(queryUrl, lat, lng));
   const attrs = data?.features?.[0]?.attributes;
   if (!attrs) return null;
@@ -161,20 +194,20 @@ function authorityOf(url: string, owner: string | undefined, trusted: Set<string
   return 'community';
 }
 
-// Accept a resolved number given its confidence + the seats we actually have.
+// Accept a resolved key given its confidence + the seats we actually have.
 // Community/low sources must name a ward/district we hold an official for;
 // admin-approved sources are always trusted.
-function accept(conf: Confidence, num: number, knownSeats: Set<number>, approved?: boolean | null): boolean {
+function accept(conf: Confidence, key: string, knownKeys: Set<string>, approved?: boolean | null): boolean {
   if (approved === true) return true;
   if (conf === 'high' || conf === 'medium') return true;
-  return knownSeats.size > 0 && knownSeats.has(num);
+  return knownKeys.size > 0 && knownKeys.has(key);
 }
 
 // --- Discovery -------------------------------------------------------------
 async function discoverSource(
   lat: number, lng: number, state: string, city: string,
-  trusted: Set<string>, knownSeats: Set<number>,
-): Promise<{ number: number; kind: 'Ward' | 'District'; queryUrl: string; confidence: Confidence; owner: string | null } | null> {
+  trusted: Set<string>, knownKeys: Set<string>,
+): Promise<{ key: string; kind: 'Ward' | 'District'; queryUrl: string; confidence: Confidence; owner: string | null } | null> {
   const deadline = Date.now() + DISCOVERY_BUDGET_MS;
   const queries = [
     `${city} ${state} ward boundaries`,
@@ -203,7 +236,7 @@ async function discoverSource(
     Number(authorityOf(b.url, b.owner, trusted) === 'gov') -
     Number(authorityOf(a.url, a.owner, trusted) === 'gov'));
 
-  let communityFallback: { number: number; kind: 'Ward' | 'District'; queryUrl: string; confidence: Confidence; owner: string | null } | null = null;
+  let communityFallback: { key: string; kind: 'Ward' | 'District'; queryUrl: string; confidence: Confidence; owner: string | null } | null = null;
 
   for (const cand of candidates.slice(0, 5)) {
     if (Date.now() > deadline) break;
@@ -218,18 +251,18 @@ async function discoverSource(
       if (!div) continue;
       const auth = authorityOf(cand.url, cand.owner, trusted);
       if (auth === 'gov') {
-        console.log(`[District] Discovered ${div.kind} ${div.number} for ${city}, ${state} (gov: ${cand.owner ?? cand.url})`);
+        console.log(`[District] Discovered ${div.kind} ${div.key} for ${city}, ${state} (gov: ${cand.owner ?? cand.url})`);
         return { ...div, queryUrl, confidence: 'medium', owner: cand.owner ?? null };
       }
       // Community: only trust if it names a seat we hold an official for.
-      if (!communityFallback && knownSeats.has(div.number)) {
+      if (!communityFallback && knownKeys.has(div.key)) {
         communityFallback = { ...div, queryUrl, confidence: 'low', owner: cand.owner ?? null };
       }
     }
   }
 
   if (communityFallback) {
-    console.log(`[District] Discovered ${communityFallback.kind} ${communityFallback.number} for ${city}, ${state} (community, cross-checked)`);
+    console.log(`[District] Discovered ${communityFallback.kind} ${communityFallback.key} for ${city}, ${state} (community, cross-checked)`);
   }
   return communityFallback;
 }
@@ -377,18 +410,18 @@ export async function resolveDistrict(opts: {
   lng: number;
   state: string;
   city: string;
-  /** Ward/district numbers we actually have an official for (cross-check). */
-  knownSeats?: number[];
+  /** Ward/district keys we actually have an official for (cross-check). */
+  knownKeys?: string[];
 }): Promise<ResolvedDistrict | null> {
   const { supabase, lat, lng } = opts;
   const state = (opts.state || '').trim().toUpperCase();
   const city = (opts.city || '').trim();
   if (!state || lat == null || lng == null) return null;
-  const knownSeats = new Set((opts.knownSeats ?? []).filter((n) => Number.isFinite(n)));
+  const knownKeys = new Set((opts.knownKeys ?? []).filter((k): k is string => !!k));
 
   const finish = (
-    d: { number: number; kind: 'Ward' | 'District' }, source: string, confidence: Confidence,
-  ): ResolvedDistrict => ({ ...d, label: `${d.kind} ${d.number}`, source, confidence });
+    d: { key: string; kind: 'Ward' | 'District' }, source: string, confidence: Confidence,
+  ): ResolvedDistrict => ({ ...d, label: keyLabel(d.key, d.kind), source, confidence });
 
   // 1) Admin overrides (per-city, then statewide '*') — authoritative.
   const override = await readOverride(supabase, state, city);
@@ -416,17 +449,17 @@ export async function resolveDistrict(opts: {
     if (cached.status === 'found' && cached.query_url) {
       const div = await queryDivision(cached.query_url as string, lat, lng, null, city);
       const conf = (cached.confidence as Confidence) ?? 'low';
-      if (div && accept(conf, div.number, knownSeats, cached.approved as boolean | null)) {
+      if (div && accept(conf, div.key, knownKeys, cached.approved as boolean | null)) {
         return finish(div, cached.query_url as string, conf);
       }
       // Cached source stopped resolving / failed cross-check — re-discover.
     }
   }
 
-  const discovered = await discoverSource(lat, lng, state, city, trusted, knownSeats);
+  const discovered = await discoverSource(lat, lng, state, city, trusted, knownKeys);
   if (discovered) {
     await writeSourceCache(supabase, state, city, 'found', discovered.queryUrl, discovered.confidence, discovered.owner);
-    return finish({ number: discovered.number, kind: discovered.kind }, discovered.queryUrl, discovered.confidence);
+    return finish({ key: discovered.key, kind: discovered.kind }, discovered.queryUrl, discovered.confidence);
   }
   await writeSourceCache(supabase, state, city, 'none', null, 'low', null);
   return null;
