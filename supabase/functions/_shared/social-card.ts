@@ -1,12 +1,14 @@
-// Server-side stat-card renderer.
+// Server-side stat-card renderer for fully-automated posting (no browser).
 //
-// The admin Queue renders the rich in-app <CandidateStatCard> in the browser
-// (html-to-image) and uploads the PNG. For fully-automated posting there is no
-// browser, so this module produces a purpose-built 1080x1080 card entirely on
-// the server: hand-authored SVG rasterised with resvg-wasm, text drawn with the
-// Inter font fetched from Google Fonts. The output is uploaded to the same
-// `share-cards` bucket + table the browser flow uses, so the rest of the
-// pipeline (share-card-page OpenGraph unfurl, post-social-card) is unchanged.
+// Preferred: when SCREENSHOT_SERVICE_URL is set, render the EXACT in-app
+// <CandidateStatCard> by screenshotting it via the headless `card-renderer`
+// service — identical to the in-app share button.
+// Fallback: a purpose-built 1080x1080 SVG card rasterised with resvg-wasm
+// (simpler; used only until the screenshot service is configured).
+//
+// Either way the PNG is uploaded to the same `share-cards` bucket + table the
+// browser flow uses, so the rest of the pipeline (share-card-page OpenGraph
+// unfurl, post-social-card) is unchanged.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Resvg, initWasm } from 'https://esm.sh/@resvg/resvg-wasm@2.6.2';
@@ -15,6 +17,28 @@ import { encodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts';
 const RESVG_WASM_URL = 'https://esm.sh/@resvg/resvg-wasm@2.6.2/index_bg.wasm';
 const CARD_SIZE = 1080;
 const PUBLIC_SITE_URL = (Deno.env.get('PUBLIC_SITE_URL') ?? 'https://www.polipulseapp.com').replace(/\/+$/, '');
+
+// When configured, render the EXACT in-app CandidateStatCard via the headless
+// `services/card-renderer` screenshot service (same component as the share
+// button). Until it's set, we fall back to the built-in SVG card below.
+const SCREENSHOT_SERVICE_URL = Deno.env.get('SCREENSHOT_SERVICE_URL');
+const SCREENSHOT_SERVICE_TOKEN = Deno.env.get('SCREENSHOT_SERVICE_TOKEN');
+
+async function screenshotCard(candidateId: string): Promise<Uint8Array> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (SCREENSHOT_SERVICE_TOKEN) headers['x-render-token'] = SCREENSHOT_SERVICE_TOKEN;
+  const res = await fetch(SCREENSHOT_SERVICE_URL!, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ candidateId }),
+  });
+  if (!res.ok) {
+    throw new Error(`screenshot_failed_${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+  const buf = new Uint8Array(await res.arrayBuffer());
+  if (buf.byteLength < 1000) throw new Error('screenshot_too_small');
+  return buf;
+}
 
 // ---------- one-time asset init (cached across warm invocations) ----------
 
@@ -268,7 +292,11 @@ export async function renderAndStoreCard(
   if (candErr) throw candErr;
   if (!cand) throw new Error('candidate_not_found');
 
-  const png = await renderCandidateCardPng(cand as unknown as CardCandidate);
+  // Prefer the real CandidateStatCard via the screenshot service; fall back to
+  // the built-in SVG card if the service isn't configured yet.
+  const png = SCREENSHOT_SERVICE_URL
+    ? await screenshotCard(post.subject_id)
+    : await renderCandidateCardPng(cand as unknown as CardCandidate);
 
   const id = makeId();
   const path = `${id}.png`;
