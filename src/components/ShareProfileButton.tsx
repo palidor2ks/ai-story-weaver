@@ -131,7 +131,7 @@ export const ShareProfileButton = ({
   const requestedIeCycle = fundingCycle && fundingCycle !== 'all' ? fundingCycle : null;
   const { data: cycleIeData, isLoading: cycleIeLoading, isFetching: cycleIeFetching } = useCandidateIE(candidateId ?? null, requestedIeCycle);
   const { data: latestIeData, isLoading: latestIeLoading, isFetching: latestIeFetching } = useCandidateIE(candidateId ?? null, null);
-  const { topSpenders, ieCycle } = useMemo(() => {
+  const { topSpenders, ieCycle, outsideSupport, outsideOppose } = useMemo(() => {
     const requestedRows = requestedIeCycle
       ? (cycleIeData?.rows ?? []).filter((r) => String(r.cycle) === requestedIeCycle)
       : [];
@@ -161,7 +161,24 @@ export const ShareProfileButton = ({
     const ts = Array.from(map.values())
       .sort((a, b) => b.support + b.oppose - (a.support + a.oppose))
       .slice(0, 2);
-    return { topSpenders: ts, ieCycle: displayCycle };
+    // Total outside (independent-expenditure) spending for the displayed cycle,
+    // split by stance so the card can show a "For" / "Against" breakdown. Mirrors
+    // the support/oppose split used to build the per-spender map above, matching
+    // the admin auto-card (`useCandidateShareCardData`).
+    const supportTotal = rows.reduce(
+      (sum, r) => sum + (r.support_oppose_indicator === 'S' ? Number(r.amount ?? 0) : 0),
+      0,
+    );
+    const opposeTotal = rows.reduce(
+      (sum, r) => sum + (r.support_oppose_indicator === 'S' ? 0 : Number(r.amount ?? 0)),
+      0,
+    );
+    return {
+      topSpenders: ts,
+      ieCycle: displayCycle,
+      outsideSupport: supportTotal > 0 ? supportTotal : null,
+      outsideOppose: opposeTotal > 0 ? opposeTotal : null,
+    };
   }, [cycleIeData, latestIeData, requestedIeCycle]);
 
   const topSpenderIds = useMemo(
@@ -316,6 +333,8 @@ export const ShareProfileButton = ({
           ieCycle,
           totalRaised,
           totalSpent,
+          outsideSupport,
+          outsideOppose,
           topSpenders: topSpendersWithCauses,
           topDonors,
           fundingBreakdown,
