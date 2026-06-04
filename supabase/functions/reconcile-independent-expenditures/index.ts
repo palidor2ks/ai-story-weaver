@@ -119,6 +119,27 @@ serve(async (req) => {
     const cycle = String(body.cycle ?? "2024");
     const maxPages = Math.max(1, Math.min(400, Number(body.max_pages ?? 200)));
 
+    // Committee spot-check mode: given committee_ids, return each committee's FEC
+    // cycle IE total + coverage_end_date. Comparing these to our per-committee
+    // totals tells FEC mid-cycle processing lag apart from our-side inflation.
+    const committeeIds = Array.isArray(body.committee_ids) ? (body.committee_ids as unknown[]).map(String) : [];
+    if (committeeIds.length > 0) {
+      const committees: Array<Record<string, unknown>> = [];
+      for (const cid of committeeIds) {
+        const j = await fecGet(`/committee/${cid}/totals/`, { api_key: fecApiKey, cycle, per_page: "1" });
+        const t = (j?.results?.[0] ?? {}) as Record<string, unknown>;
+        committees.push({
+          committee_id: cid,
+          fec_independent_expenditures: Number(t.independent_expenditures ?? 0),
+          fec_coverage_end_date: t.coverage_end_date ?? null,
+        });
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      return new Response(JSON.stringify({ cycle, committees }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Our side (exclusion-aware)
     const { data: localData, error: locErr } = await supabase.rpc("ie_reconcile_local", { p_cycle: cycle });
     if (locErr) {
