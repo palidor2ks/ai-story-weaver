@@ -404,7 +404,7 @@ export const CandidateStatCard = forwardRef<HTMLDivElement, Props>(({ data }, re
                           lineHeight: 1.1,
                         }}
                       >
-                        Total Spent
+                        Total Outside Spending
                       </div>
                       <div style={{ fontSize: 22, fontWeight: 900, color: 'hsl(0 80% 82%)', lineHeight: 1.15 }}>
                         {fmtMoneyShort(data.totalSpent)}
