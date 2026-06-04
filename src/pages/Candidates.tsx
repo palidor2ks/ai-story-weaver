@@ -23,6 +23,7 @@ import {
 import { Search, SlidersHorizontal, Users, MapPin, Building, Crown, Landmark, GitCompare, X, Loader2 } from 'lucide-react';
 import { Candidate } from '@/types';
 import { cn } from '@/lib/utils';
+import { normalizeOfficeName } from '@/lib/officeLabel';
 import { useCandidatesIE } from '@/hooks/useIndependentExpenditures';
 
 const PAGE_SIZE = 25;
@@ -105,9 +106,12 @@ export const Candidates = () => {
     let rep = 0;
     const offices = new Set<string>();
     for (const c of allCandidates) {
-      offices.add(c.office);
-      if (c.office === 'Senator') senator++;
-      else if (c.office === 'Representative') rep++;
+      // Use the canonical label so the same role isn't split across raw variants
+      // (e.g. "Representative" vs "U.S. House FL-01" are both counted as U.S. House).
+      const office = normalizeOfficeName(c.office);
+      offices.add(office);
+      if (office === 'U.S. Senate') senator++;
+      else if (office === 'U.S. House') rep++;
     }
     return { senator, rep, uniqueOffices: Array.from(offices).sort() };
   }, [allCandidates]);
@@ -122,9 +126,9 @@ export const Candidates = () => {
       case 'executive':
         return [...federalExecutiveCandidates, ...stateExecutiveCandidates];
       case 'senators':
-        return allCandidates.filter(c => c.office === 'Senator');
+        return allCandidates.filter(c => normalizeOfficeName(c.office) === 'U.S. Senate');
       case 'representatives':
-        return allCandidates.filter(c => c.office === 'Representative');
+        return allCandidates.filter(c => normalizeOfficeName(c.office) === 'U.S. House');
       case 'state':
         return [...stateExecutiveCandidates, ...stateLegislativeCandidates];
       case 'local':
@@ -154,7 +158,9 @@ export const Candidates = () => {
     }
 
     if (officeFilter !== 'all') {
-      result = result.filter(c => c.office === officeFilter);
+      // officeFilter holds a canonical label from `uniqueOffices`, so compare
+      // against the normalized office rather than the raw per-district value.
+      result = result.filter(c => normalizeOfficeName(c.office) === officeFilter);
     }
 
     const userScore = profile?.overall_score ?? 0;
