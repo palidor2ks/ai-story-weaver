@@ -31,14 +31,48 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function repairTruncatedJson(s: string): string {
+  // Balance quotes/brackets so a truncated model response can still parse.
+  let out = s.replace(/,\s*$/, "");
+  let inStr = false, esc = false;
+  for (let i = 0; i < out.length; i++) {
+    const ch = out[i];
+    if (esc) { esc = false; continue; }
+    if (ch === "\\") { esc = true; continue; }
+    if (ch === '"') inStr = !inStr;
+  }
+  if (inStr) out += '"';
+  const stack: string[] = [];
+  let inStr2 = false, esc2 = false;
+  for (let i = 0; i < out.length; i++) {
+    const ch = out[i];
+    if (esc2) { esc2 = false; continue; }
+    if (ch === "\\") { esc2 = true; continue; }
+    if (ch === '"') { inStr2 = !inStr2; continue; }
+    if (inStr2) continue;
+    if (ch === "{" || ch === "[") stack.push(ch);
+    else if (ch === "}" && stack[stack.length - 1] === "{") stack.pop();
+    else if (ch === "]" && stack[stack.length - 1] === "[") stack.pop();
+  }
+  while (stack.length) {
+    const open = stack.pop();
+    out = out.replace(/,\s*$/, "") + (open === "{" ? "}" : "]");
+  }
+  return out;
+}
+
 function extractJson(raw: string): any | null {
   if (!raw) return null;
   const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  const sliced = firstBrace >= 0 ? cleaned.slice(firstBrace, lastBrace > firstBrace ? lastBrace + 1 : cleaned.length) : "";
   const candidates = [
     fence?.[1]?.trim(),
     cleaned,
-    cleaned.slice(cleaned.indexOf("{"), cleaned.lastIndexOf("}") + 1),
+    sliced,
+    sliced && repairTruncatedJson(sliced),
   ].filter(Boolean) as string[];
   for (const c of candidates) {
     try { return JSON.parse(c); } catch { /* try next */ }
