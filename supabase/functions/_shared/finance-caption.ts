@@ -98,10 +98,9 @@ function hasFinance(f: Facts | null): boolean {
   return (f.raised ?? 0) > 0 || (f.ie_support ?? 0) > 0 || (f.ie_oppose ?? 0) > 0;
 }
 
-function factsBlock(name: string, party: string, ideology: string | null, office: string, state: string, incumbent: boolean | null | undefined, handle: string | null, f: Facts): string {
+function factsBlock(name: string, party: string, ideology: string | null, office: string, state: string, incumbent: boolean | null | undefined, f: Facts): string {
   const lines: string[] = [];
-  lines.push(`Name: ${name}`);
-  if (handle) lines.push(`X/Twitter handle: @${handle} (mention exactly once, right after the name)`);
+  lines.push(`Name to use for the politician (use exactly this, no other name): ${name}`);
   lines.push(`Leaning & party: ${ideology ? ideology + ' ' : ''}${partyFull(party)}`.trim());
   if (office) lines.push(`Office: ${office}${state ? ` (${state})` : ''}`);
   if (incumbent !== undefined && incumbent !== null) {
@@ -162,7 +161,7 @@ function electionTimingDirective(cycle: string | null, todayIso: string | null |
 
 function buildPrompt(platform: string, block: string, hint: string | null, timing: string | null, handle: string | null, long: boolean, max: number): string {
   const handleRule = handle
-    ? `\n- @-mention the rep exactly ONCE as @${handle}, right after their name (e.g. "Rep. Jane Doe (@${handle})"). Never put @${handle} as the very first character of the post.`
+    ? `\n- The "Name to use" above IS the rep's X handle (@${handle}) — refer to them by that handle in place of a real name, and never write their actual personal name. Do NOT put @${handle} as the very first character of the post (so X does not treat it as a reply).`
     : '';
   const focusRule = long
     ? `Give the fuller breakdown: money raised + donors, the standout donor, the funding mix, and the for-vs-against outside spending with the biggest PACs.`
@@ -209,8 +208,8 @@ function ensureHandle(caption: string, handle: string | null, max: number): stri
 
 // Deterministic, safe fallback: lead with the single biggest number and assemble
 // a sentence directly. Names the party, with a leaning qualifier only for middle reps.
-function templateCaption(name: string, party: string, ideology: string | null, state: string, handle: string | null, f: Facts, max: number): string {
-  const who = `${name}${handle ? ` (@${handle})` : ''}, a ${ideology ? ideology + ' ' : ''}${partyFull(party)}${state ? ` (${state})` : ''}`.trim();
+function templateCaption(name: string, party: string, ideology: string | null, state: string, f: Facts, max: number): string {
+  const who = `${name}, a ${ideology ? ideology + ' ' : ''}${partyFull(party)}${state ? ` (${state})` : ''}`.trim();
   const raised = f.raised ?? 0;
   const support = f.ie_support ?? 0;
   const oppose = f.ie_oppose ?? 0;
@@ -225,7 +224,7 @@ function templateCaption(name: string, party: string, ideology: string | null, s
     base = `${fmtMoney(support)} in outside money is backing ${who}${sup ? `, led by ${tidyName(sup.name)} (${fmtMoney(sup.amount)})` : ''}${oppose > 0 ? ` — vs ${fmtMoney(oppose)} against` : ''}. 💥`;
   } else {
     const extra = (support > 0 || oppose > 0) ? ` Outside money: ${fmtMoney(support)} for, ${fmtMoney(oppose)} against.` : '';
-    base = `${who} has built a ${fmtMoney(raised)} war chest${f.donor_count ? ` from ${f.donor_count.toLocaleString('en-US')} donors` : ''}${f.top_donor ? `, top donor ${tidyName(f.top_donor.name)} (${fmtMoney(f.top_donor.amount)})` : ''}.${extra} 🏦`;
+    base = `${fmtMoney(raised)} war chest for ${who}${f.donor_count ? `, built from ${f.donor_count.toLocaleString('en-US')} donors` : ''}${f.top_donor ? `; top donor ${tidyName(f.top_donor.name)} (${fmtMoney(f.top_donor.amount)})` : ''}.${extra} 🏦`;
   }
   return summarizeForSocial(base, max);
 }
@@ -278,14 +277,15 @@ export async function composeFinanceCaption(
   const facts = (factsRaw ?? null) as Facts | null;
   if (!facts || !hasFinance(facts)) return null;
 
-  const name = meta.name || 'This candidate';
-  const ideology = ideologyLabel(meta.score);
   const handle = normalizeHandle(meta.handle);
-  const block = factsBlock(name, meta.party, ideology, meta.office, meta.state, meta.incumbent, handle, facts);
+  // Use the @handle as the rep's name when we have one; fall back to the real name.
+  const displayName = handle ? `@${handle}` : (meta.name || 'This candidate');
+  const ideology = ideologyLabel(meta.score);
+  const block = factsBlock(displayName, meta.party, ideology, meta.office, meta.state, meta.incumbent, facts);
   const hint = headlineHint(facts);
   const timing = electionTimingDirective(facts.cycle, facts.today);
 
   const ai = await aiCaption(aiKey, buildPrompt(platform, block, hint, timing, handle, cfg.long, cfg.max), cfg.max);
   if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: 'finance_ai' };
-  return { caption: ensureHandle(templateCaption(name, meta.party, ideology, meta.state, handle, facts, cfg.max), handle, cfg.max), source: 'finance_template' };
+  return { caption: ensureHandle(templateCaption(displayName, meta.party, ideology, meta.state, facts, cfg.max), handle, cfg.max), source: 'finance_template' };
 }
