@@ -98,10 +98,30 @@ export const CandidateProfile = () => {
   const { data: personalized } = useCandidatePersonalizedScore(id);
   const { data: cycleInfo } = useAvailableCycles(id);
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>(undefined);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isFecBreakdownOpen, setIsFecBreakdownOpen] = useState(false);
+  const [visibleDonorCount, setVisibleDonorCount] = useState(20);
+  const [visibleBillCount, setVisibleBillCount] = useState(20);
+  const [donorSearch, setDonorSearch] = useState('');
   const effectiveCycle = selectedCycle ?? cycleInfo?.defaultCycle;
   const { data: donors = [], refetch: refetchDonors } = useCandidateDonors(id, effectiveCycle);
+  const donorCauseLookupDonors = useMemo(() => {
+    const search = donorSearch.trim().toLowerCase();
+    const lookupLimit = Math.max(visibleDonorCount, 60);
+    const matchingDonors = search
+      ? donors.filter((d) =>
+        [d.display_name, d.name, d.employer, d.contributor_city, d.contributor_state, d.type]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(search),
+      )
+      : donors;
+
+    return matchingDonors.slice(0, lookupLimit);
+  }, [donors, donorSearch, visibleDonorCount]);
   const donorCauseInputs = useMemo(
-    () => donors.flatMap(d => {
+    () => donorCauseLookupDonors.flatMap(d => {
       const names = [d.name, d.display_name, ...(d.name_variations ?? [])]
         .filter((name): name is string => Boolean(name?.trim()));
       return Array.from(new Set(names.map((name) => name.trim()))).map((name) => ({
@@ -109,7 +129,7 @@ export const CandidateProfile = () => {
         type: d.type,
       }));
     }),
-    [donors],
+    [donorCauseLookupDonors],
   );
   const { data: donorCauseMap } = useDonorCauses(donorCauseInputs);
 
@@ -175,12 +195,6 @@ export const CandidateProfile = () => {
   
   // Fetch bills sponsored/cosponsored by this legislator
   const { data: sponsoredBills = [], isLoading: billsLoading } = useBillSponsors(id);
-  
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isFecBreakdownOpen, setIsFecBreakdownOpen] = useState(false);
-  const [visibleDonorCount, setVisibleDonorCount] = useState(20);
-  const [visibleBillCount, setVisibleBillCount] = useState(20);
-  const [donorSearch, setDonorSearch] = useState('');
   
   const isAdmin = adminData?.isAdmin ?? false;
   const isPoliticianOwner = !!user && candidate?.claimed_by_user_id === user.id;
