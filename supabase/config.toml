@@ -157,6 +157,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.generate-social-caption]
     verify_jwt = true
+  [functions.compose-candidate-caption]
+    verify_jwt = true
   [functions.post-social-card]
     verify_jwt = true
   [functions.render-social-card]
