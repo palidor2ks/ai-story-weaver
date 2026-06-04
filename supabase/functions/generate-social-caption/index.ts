@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       // Primary: the headline caption from VERIFIED finance/IE facts.
       const { data: cand } = await admin
         .from('candidates')
-        .select('name, party, office, state, overall_score, is_incumbent')
+        .select('name, party, office, state, overall_score, is_incumbent, x_handle')
         .eq('id', post.subject_id)
         .maybeSingle();
 
@@ -73,6 +73,7 @@ Deno.serve(async (req) => {
         state: (cand?.state as string) ?? stat.state ?? '',
         score: cand?.overall_score != null ? Number(cand.overall_score) : (stat.overall_score != null ? Number(stat.overall_score) : null),
         incumbent: (cand?.is_incumbent as boolean | null) ?? null,
+        handle: (cand?.x_handle as string | null) ?? null,
       };
 
       const headline = await composeFinanceCaption(admin, aiKey, post.subject_id, platform, meta);

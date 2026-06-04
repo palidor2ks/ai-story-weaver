@@ -98,9 +98,10 @@ function hasFinance(f: Facts | null): boolean {
   return (f.raised ?? 0) > 0 || (f.ie_support ?? 0) > 0 || (f.ie_oppose ?? 0) > 0;
 }
 
-function factsBlock(name: string, party: string, ideology: string | null, office: string, state: string, incumbent: boolean | null | undefined, f: Facts): string {
+function factsBlock(name: string, party: string, ideology: string | null, office: string, state: string, incumbent: boolean | null | undefined, handle: string | null, f: Facts): string {
   const lines: string[] = [];
   lines.push(`Name: ${name}`);
+  if (handle) lines.push(`X/Twitter handle: @${handle} (mention exactly once, right after the name)`);
   lines.push(`Leaning & party: ${ideology ? ideology + ' ' : ''}${partyFull(party)}`.trim());
   if (office) lines.push(`Office: ${office}${state ? ` (${state})` : ''}`);
   if (incumbent !== undefined && incumbent !== null) {
@@ -159,7 +160,10 @@ function electionTimingDirective(cycle: string | null, todayIso: string | null |
   return `TIMING (today is ${stamp}): The ${year} election cycle (${dateStr}) is over. Use PAST tense (e.g. "in the ${year} cycle, raised...") and do not imply any active or upcoming race.`;
 }
 
-function buildPrompt(platform: string, block: string, hint: string | null, timing: string | null, long: boolean, max: number): string {
+function buildPrompt(platform: string, block: string, hint: string | null, timing: string | null, handle: string | null, long: boolean, max: number): string {
+  const handleRule = handle
+    ? `\n- @-mention the rep exactly ONCE as @${handle}, right after their name (e.g. "Rep. Jane Doe (@${handle})"). Never put @${handle} as the very first character of the post.`
+    : '';
   const lengthRule = long
     ? `Length: 3–5 short sentences. After the hook, give the fuller breakdown — money raised + donors, the standout donor, and the for-vs-against outside spending with the biggest PACs. Keep it under ${max} characters.`
     : `Length: 1–2 short, punchy sentences, under ${max} characters.`;
@@ -176,17 +180,33 @@ ${timing ? `\n${timing}\n` : ''}
 Write the post:
 - ${leadRule}
 - Match the tense and framing to the TIMING note above — an upcoming election must NOT be described in the past tense, and a finished one must not be written as if it's still ahead.
-- Refer to them using the "Leaning & party" line EXACTLY as given. When it's only a party ("Democrat"/"Republican"), use just that — NEVER prepend "Left", "Right", "Progressive", "Conservative" or any direction yourself. Only a middle-of-the-road rep carries a "Center-Left", "Centrist", or "Center-Right" qualifier (e.g. "Center-Right Republican"). Say "re-election" only if the facts mark them as the incumbent; otherwise call it their campaign or bid.
+- Refer to them using the "Leaning & party" line EXACTLY as given. When it's only a party ("Democrat"/"Republican"), use just that — NEVER prepend "Left", "Right", "Progressive", "Conservative" or any direction yourself. Only a middle-of-the-road rep carries a "Center-Left", "Centrist", or "Center-Right" qualifier (e.g. "Center-Right Republican"). Say "re-election" only if the facts mark them as the incumbent; otherwise call it their campaign or bid.${handleRule}
 - Work the FUNDING MIX into the story when it's striking — e.g. grassroots/small-dollar-powered, large-donor-reliant, or heavily PAC-funded. Small-dollar = under $200; the "PACs/committees" share is direct money TO the campaign, distinct from the outside/Super-PAC spending above. For a deep (long) post, always include it.
 - Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
 - ${lengthRule}
 - Plain text ONLY — no markdown, no asterisks, no underscores, no bullet points, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
 }
 
+// Normalize a stored handle ("@RepX" / "RepX") to a bare, valid X username, or null.
+function normalizeHandle(h: string | null | undefined): string | null {
+  const s = (h ?? '').trim().replace(/^@+/, '');
+  return /^[A-Za-z0-9_]{1,15}$/.test(s) ? s : null;
+}
+
+// Guarantee the @handle is present (mid-text, never leading) without exceeding max.
+// If the model already wove it in, leave it; otherwise trim to make room and append.
+function ensureHandle(caption: string, handle: string | null, max: number): string {
+  if (!handle) return caption;
+  if (new RegExp(`@${handle}(?![A-Za-z0-9_])`, 'i').test(caption)) return caption;
+  const suffix = ` @${handle}`;
+  const body = summarizeForSocial(caption, Math.max(1, max - suffix.length));
+  return `${body}${suffix}`;
+}
+
 // Deterministic, safe fallback: lead with the single biggest number and assemble
 // a sentence directly. Names the party, with a leaning qualifier only for middle reps.
-function templateCaption(name: string, party: string, ideology: string | null, state: string, f: Facts, max: number): string {
-  const who = `${name}, a ${ideology ? ideology + ' ' : ''}${partyFull(party)}${state ? ` (${state})` : ''}`.trim();
+function templateCaption(name: string, party: string, ideology: string | null, state: string, handle: string | null, f: Facts, max: number): string {
+  const who = `${name}${handle ? ` (@${handle})` : ''}, a ${ideology ? ideology + ' ' : ''}${partyFull(party)}${state ? ` (${state})` : ''}`.trim();
   const raised = f.raised ?? 0;
   const support = f.ie_support ?? 0;
   const oppose = f.ie_oppose ?? 0;
@@ -237,6 +257,7 @@ export interface CandidateMeta {
   state: string;
   score: number | null;
   incumbent?: boolean | null;
+  handle?: string | null; // X/Twitter handle (with or without leading @)
 }
 
 // Returns the headline caption for a candidate+platform, or null when the
@@ -255,11 +276,12 @@ export async function composeFinanceCaption(
 
   const name = meta.name || 'This candidate';
   const ideology = ideologyLabel(meta.score);
-  const block = factsBlock(name, meta.party, ideology, meta.office, meta.state, meta.incumbent, facts);
+  const handle = normalizeHandle(meta.handle);
+  const block = factsBlock(name, meta.party, ideology, meta.office, meta.state, meta.incumbent, handle, facts);
   const hint = headlineHint(facts);
   const timing = electionTimingDirective(facts.cycle, facts.today);
 
-  const ai = await aiCaption(aiKey, buildPrompt(platform, block, hint, timing, cfg.long, cfg.max), cfg.max);
-  if (ai) return { caption: ai, source: 'finance_ai' };
-  return { caption: templateCaption(name, meta.party, ideology, meta.state, facts, cfg.max), source: 'finance_template' };
+  const ai = await aiCaption(aiKey, buildPrompt(platform, block, hint, timing, handle, cfg.long, cfg.max), cfg.max);
+  if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: 'finance_ai' };
+  return { caption: ensureHandle(templateCaption(name, meta.party, ideology, meta.state, handle, facts, cfg.max), handle, cfg.max), source: 'finance_template' };
 }
