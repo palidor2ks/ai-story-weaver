@@ -7,7 +7,7 @@ const corsHeaders = {
 
 const CLIENT_ID = Deno.env.get('X_CLIENT_ID');
 const REDIRECT_URI_ENV = Deno.env.get('X_REDIRECT_URI');
-const SCOPES = 'tweet.read tweet.write users.read offline.access';
+const SCOPES = 'tweet.read tweet.write users.read media.write offline.access';
 
 function b64url(bytes: Uint8Array): string {
   let bin = '';
