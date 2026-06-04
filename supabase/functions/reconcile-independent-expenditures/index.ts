@@ -1,13 +1,18 @@
 // reconcile-independent-expenditures
 // Read-only verifier: for a given cycle, diff what we hold in
 // public.independent_expenditures against the FEC API's authoritative Schedule E
-// figures, so we can confirm completeness and surface double-counting / dirty data.
-// Writes nothing. Same dual auth as import-independent-expenditures (admin JWT or
-// the Vault-backed x-sync-secret).
+// figures, so we can confirm completeness and surface dirty data. Writes nothing.
 //
+// Our-side totals come from ie_reconcile_local, which is exclusion-aware (junk
+// committees in ie_excluded_committees are reported separately, not in the
+// headline totals) so the comparison matches what the app actually shows.
+//
+// FEC counts are reported at $0 / $1k / $10k thresholds because modern Schedule E
+// has a huge long tail of tiny (~$100) digital line items; coverage of *material*
+// IEs (>= $10k) is the meaningful completeness signal.
+//
+// Same dual auth as import-independent-expenditures (admin JWT or x-sync-secret).
 // Body params: { cycle?: string = "2024", with_totals?: boolean = true }
-//   with_totals=false skips the per-candidate dollar aggregation (3 cheap count
-//   calls only) for a fast count-coverage check.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -123,7 +128,7 @@ serve(async (req) => {
     const cycle = String(body.cycle ?? "2024");
     const withTotals = body.with_totals !== false;
 
-    // Our side
+    // Our side (exclusion-aware)
     const { data: localData, error: locErr } = await supabase.rpc("ie_reconcile_local", { p_cycle: cycle });
     if (locErr) {
       return new Response(JSON.stringify({ error: `local aggregate failed: ${locErr.message}` }), {
@@ -132,30 +137,32 @@ serve(async (req) => {
     }
     const ours = (Array.isArray(localData) ? localData[0] : localData) ?? {};
 
-    // FEC ground truth — counts are cheap (1 call each); dollars optional.
+    // FEC ground truth — counts at thresholds are cheap (1 call each); dollars optional.
     const fecAll = await fecScheduleECount(fecApiKey, cycle, {});
-    const fecNotice = await fecScheduleECount(fecApiKey, cycle, { is_notice: "true" });
-    const fecReport = await fecScheduleECount(fecApiKey, cycle, { is_notice: "false" });
+    const fecGe1k = await fecScheduleECount(fecApiKey, cycle, { min_amount: "1000" });
+    const fecGe10k = await fecScheduleECount(fecApiKey, cycle, { min_amount: "10000" });
     const fecTotals = withTotals ? await fecTotalByCandidate(fecApiKey, cycle) : null;
 
-    const ourRows = Number(ours.rows ?? 0);
     const ourDistinctTx = Number(ours.distinct_transactions ?? 0);
     const ourSum = Number(ours.sum_amount ?? 0);
-    const countCoverage = fecAll > 0 ? ourDistinctTx / fecAll : null;
+    const coverageMaterial = fecGe10k > 0 ? ourDistinctTx / fecGe10k : null;
     const dollarRatio = fecTotals && fecTotals.total > 0 ? ourSum / fecTotals.total : null;
 
     const notes: string[] = [];
-    if (countCoverage != null && countCoverage < 0.98) {
-      notes.push(`Possible GAPS: ${ourDistinctTx} distinct transactions held vs FEC's ${fecAll} most-recent records (${(countCoverage * 100).toFixed(1)}% coverage).`);
+    if (Number(ours.excluded_rows ?? 0) > 0) {
+      notes.push(`Excluded ${Number(ours.excluded_rows)} junk rows ($${(Number(ours.excluded_amount) / 1e9).toFixed(2)}B) from ie_excluded_committees — not in totals above.`);
     }
-    if (countCoverage != null && countCoverage > 1.02) {
-      notes.push(`More distinct transactions (${ourDistinctTx}) than FEC most-recent records (${fecAll}) — superseded amendments retained.`);
+    if (coverageMaterial != null && coverageMaterial < 0.9) {
+      notes.push(`Possible GAPS in material IEs: ${ourDistinctTx} distinct transactions vs FEC's ${fecGe10k} records >= $10k (${(coverageMaterial * 100).toFixed(0)}%).`);
+    } else if (coverageMaterial != null) {
+      notes.push(`Material-IE coverage looks good: ${ourDistinctTx} vs FEC's ${fecGe10k} records >= $10k (${(coverageMaterial * 100).toFixed(0)}%).`);
     }
     if (dollarRatio != null && dollarRatio > 1.1) {
-      notes.push(`Likely DOUBLE-COUNTING: our $${(ourSum / 1e9).toFixed(2)}B is ${dollarRatio.toFixed(2)}x FEC's deduped $${(fecTotals!.total / 1e9).toFixed(2)}B (24/48h notice + periodic report and/or amendments not collapsed).`);
-    }
-    if (dollarRatio != null && dollarRatio < 0.9) {
-      notes.push(`Our dollars ($${(ourSum / 1e9).toFixed(2)}B) are below FEC's $${(fecTotals!.total / 1e9).toFixed(2)}B — possible missing rows.`);
+      notes.push(`Dollars run hot: our $${(ourSum / 1e9).toFixed(2)}B is ${dollarRatio.toFixed(2)}x FEC's deduped $${(fecTotals!.total / 1e9).toFixed(2)}B (possible notice+report or amendment double-counting).`);
+    } else if (dollarRatio != null && dollarRatio < 0.9) {
+      notes.push(`Dollars run low: our $${(ourSum / 1e9).toFixed(2)}B vs FEC's $${(fecTotals!.total / 1e9).toFixed(2)}B — possible missing rows.`);
+    } else if (dollarRatio != null) {
+      notes.push(`Dollars reconcile: our $${(ourSum / 1e9).toFixed(2)}B vs FEC's $${(fecTotals!.total / 1e9).toFixed(2)}B (${dollarRatio.toFixed(2)}x).`);
     }
     if (Number(ours.bad_date_rows ?? 0) > 0) {
       notes.push(`${Number(ours.bad_date_rows)} rows have out-of-range expenditure dates (filer typos).`);
@@ -165,27 +172,29 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       cycle,
       ours: {
-        rows: ourRows,
+        rows: Number(ours.rows ?? 0),
         distinct_transactions: ourDistinctTx,
         distinct_committees: Number(ours.distinct_committees ?? 0),
         sum_amount: ourSum,
         support_amount: Number(ours.support_amount ?? 0),
         oppose_amount: Number(ours.oppose_amount ?? 0),
+        excluded_rows: Number(ours.excluded_rows ?? 0),
+        excluded_amount: Number(ours.excluded_amount ?? 0),
         bad_date_rows: Number(ours.bad_date_rows ?? 0),
         date_range: [ours.min_valid_date ?? null, ours.max_valid_date ?? null],
       },
       fec: {
-        most_recent_records: fecAll,
-        notice_records: fecNotice,
-        report_records: fecReport,
+        records_all: fecAll,
+        records_ge_1k: fecGe1k,
+        records_ge_10k: fecGe10k,
         total_amount: fecTotals?.total ?? null,
         support_amount: fecTotals?.support ?? null,
         oppose_amount: fecTotals?.oppose ?? null,
         total_capped: fecTotals?.capped ?? null,
       },
       assessment: {
-        count_coverage_ratio: countCoverage,
-        dollar_inflation_ratio: dollarRatio,
+        coverage_material_ge10k: coverageMaterial,
+        dollar_ratio: dollarRatio,
         notes,
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
