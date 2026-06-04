@@ -22,7 +22,6 @@ import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { choosePrimaryCauseLabel, type CauseDisplayInfo } from '@/lib/committeeCauseDisplay';
-import { summarizeForSocial } from '@/lib/shareCaptions';
 import { useAuth } from '@/context/AuthContext';
 import { normalizeInvokeError } from '@/components/RecipientAIAnalysisDialog';
 
@@ -294,13 +293,22 @@ export const ShareProfileButton = ({
     },
   });
 
-  // Caption seed: the AI analysis summary, condensed to fit social limits. Stays
-  // undefined (so the built-in short caption is used) while loading or when the
-  // entity couldn't be confidently identified.
-  const aiCaptionOverride =
-    aiAnalysis && !aiAnalysis.insufficient_information && aiAnalysis.summary?.trim()
-      ? summarizeForSocial(aiAnalysis.summary, 240)
-      : undefined;
+  // Caption seed: the same headline finance caption the auto-poster produces,
+  // fetched from compose-candidate-caption. Stays undefined (so the built-in short
+  // caption is used) while loading or when the candidate has no finance data.
+  const { data: headlineCaption } = useQuery({
+    queryKey: ['share-profile-headline-caption', candidateId],
+    enabled: open && !!user && !!candidateId,
+    staleTime: 1000 * 60 * 10,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('compose-candidate-caption', {
+        body: { candidate_id: candidateId, platform: 'x' },
+      });
+      if (error) return null;
+      return (data as { caption?: string | null } | null)?.caption ?? null;
+    },
+  });
+  const aiCaptionOverride = headlineCaption?.trim() ? headlineCaption.trim() : undefined;
 
   return (
     <>
