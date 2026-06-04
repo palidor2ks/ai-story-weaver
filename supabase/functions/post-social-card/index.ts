@@ -14,6 +14,7 @@ const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 const X_CLIENT_ID = Deno.env.get('X_CLIENT_ID');
 const X_CLIENT_SECRET = Deno.env.get('X_CLIENT_SECRET');
+const PUBLIC_SITE_URL = (Deno.env.get('PUBLIC_SITE_URL') ?? 'https://www.polipulseapp.com').replace(/\/+$/, '');
 
 const BodySchema = z.object({
   post_id: z.string().uuid(),
@@ -55,7 +56,35 @@ function buildXText(caption: string, shareUrl: string): string {
   return `${trimmed}${link}`;
 }
 
-async function postToX(admin: ReturnType<typeof createClient>, caption: string, shareUrl: string) {
+// Upload the rendered card to X as native media and return its media id. Needs
+// the `media.write` scope on the connected account.
+async function uploadXMedia(accessToken: string, imageUrl: string): Promise<string> {
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) throw new Error(`image_fetch_${imgRes.status}`);
+  const bytes = new Uint8Array(await imgRes.arrayBuffer());
+  const form = new FormData();
+  form.append('media', new Blob([bytes], { type: 'image/png' }), 'card.png');
+  form.append('media_category', 'tweet_image');
+  // Note: do NOT set Content-Type — fetch derives the multipart boundary from FormData.
+  const up = await fetch('https://api.x.com/2/media/upload', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+  const txt = await up.text();
+  if (!up.ok) throw new Error(`media_upload_${up.status}: ${txt.slice(0, 200)}`);
+  let j: any;
+  try { j = JSON.parse(txt); } catch { j = {}; }
+  const mediaId = j?.data?.id ?? j?.media_id_string ?? (j?.media_id != null ? String(j.media_id) : null);
+  if (!mediaId) throw new Error('media_id_missing');
+  return mediaId;
+}
+
+async function postToX(
+  admin: ReturnType<typeof createClient>,
+  caption: string,
+  post: { image_url?: string | null; share_url?: string | null; subject_id?: string | null },
+) {
   const { data: rows } = await admin.from('x_account_tokens').select('*').limit(1);
   const row = rows?.[0];
   if (!row) return { ok: false, error: 'no_x_account_connected' };
@@ -63,11 +92,26 @@ async function postToX(admin: ReturnType<typeof createClient>, caption: string, 
   try { accessToken = await refreshX(admin, row); } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'refresh_failed' };
   }
-  const text = buildXText(caption, shareUrl);
+
+  // Prefer attaching the card as native media (shows the full 1:1 card in-feed
+  // and links straight to the profile). If media upload isn't available yet
+  // (e.g. the account hasn't been reconnected with media.write), fall back to
+  // the link-unfurl card so posting still works.
+  let mediaId: string | null = null;
+  if (post.image_url) {
+    try { mediaId = await uploadXMedia(accessToken, post.image_url); } catch { mediaId = null; }
+  }
+
+  const profileUrl = post.subject_id
+    ? `${PUBLIC_SITE_URL}/candidate/${encodeURIComponent(post.subject_id)}`
+    : (post.share_url ?? '');
+  const text = buildXText(caption, mediaId ? profileUrl : (post.share_url ?? profileUrl));
+  const body: Record<string, unknown> = mediaId ? { text, media: { media_ids: [mediaId] } } : { text };
+
   const res = await fetch('https://api.x.com/2/tweets', {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const t = await res.text();
@@ -79,6 +123,7 @@ async function postToX(admin: ReturnType<typeof createClient>, caption: string, 
     ok: true,
     external_post_id: id,
     external_url: id ? `https://x.com/${row.account_handle}/status/${id}` : null,
+    native_media: !!mediaId,
   };
 }
 
@@ -120,7 +165,7 @@ Deno.serve(async (req) => {
       const caption = p.caption ?? post.subject_label ?? '';
       let r: any;
       if (p.platform === 'x') {
-        r = await postToX(admin, caption, post.share_url);
+        r = await postToX(admin, caption, post);
       } else {
         r = { ok: false, error: 'not_configured', detail: `${p.platform} posting requires API credentials.` };
       }
