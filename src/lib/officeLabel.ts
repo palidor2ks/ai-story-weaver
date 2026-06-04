@@ -17,6 +17,16 @@ export function normalizeOfficeName(
   const raw = (office ?? '').trim();
   if (!raw) return '';
 
+  // Members of the U.S. House and Senate arrive labelled many ways across our
+  // feeds — "Representative" / "Senator" (Congress.gov), "U.S. House FL-01" (FEC),
+  // "Member, U.S. House of Representatives" (civic). Collapse every federal
+  // congressional variant to one canonical chamber label so the same role never
+  // shows up under two different names. Explicit "U.S. House/Senate" phrasings are
+  // unambiguous, so resolve them up front — before the comma/"of" stripping below
+  // would mangle forms like "Member, U.S. House of Representatives" into "Member".
+  if (/\bu\.?s\.?\s*house\b/i.test(raw)) return 'U.S. House';
+  if (/\bu\.?s\.?\s*senate\b/i.test(raw)) return 'U.S. Senate';
+
   let s = raw;
 
   // Drop trailing parentheticals (e.g. "(At-Large)", "(Ward 1)", "(1st District)", "(NJ)")
@@ -40,9 +50,11 @@ export function normalizeOfficeName(
   // Trailing "District N" / "Ward N" / "Precinct N"
   s = s.replace(/\s*[-—–]?\s*(District|Ward|Precinct)\s+\w+\s*$/i, '').trim();
 
-  // Canonicalize a few common short forms
-  if (/^u\.?s\.?\s*house$/i.test(s)) s = 'U.S. House';
-  else if (/^u\.?s\.?\s*senate$/i.test(s) || /^senator$/i.test(s)) s = 'U.S. Senate';
+  // Canonicalize a few common short forms. The bare titles "Representative" and
+  // "Senator" map to their chamber so they read the same as the explicit
+  // "U.S. House" / "U.S. Senate" forms handled above.
+  if (/^u\.?s\.?\s*house$/i.test(s) || /^(u\.?s\.?\s*|united\s+states\s+)?representative$/i.test(s)) s = 'U.S. House';
+  else if (/^u\.?s\.?\s*senate$/i.test(s) || /^(u\.?s\.?\s*|united\s+states\s+)?senator$/i.test(s)) s = 'U.S. Senate';
 
   return s || raw;
 }
