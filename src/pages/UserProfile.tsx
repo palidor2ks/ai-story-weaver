@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { normalizeOfficeName } from '@/lib/officeLabel';
-import { User, RefreshCw, TrendingUp, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info, Share2 } from 'lucide-react';
+import { User, RefreshCw, Target, LogOut, RotateCcw, Users, Sparkles, Building2, MapPin, Pencil, Check, X, AlertCircle, HelpCircle, Info, Share2 } from 'lucide-react';
 import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { AvatarUpload } from '@/components/AvatarUpload';
@@ -59,7 +59,7 @@ export const UserProfile = () => {
   const congressionalDistrict = repsData?.district;
   const congressionalState = repsData?.state;
   const geocodeFailed = !repsLoading && profile?.address && !congressionalDistrict && !repsError;
-  
+
   // Combine all representatives
   const allRepsLoading = repsLoading || civicLoading;
   const resetOnboarding = useResetOnboarding();
@@ -120,7 +120,7 @@ export const UserProfile = () => {
           userName: profile?.name,
         },
       });
-      
+
       if (error) throw error;
       return data as ProfileAnalysis;
     },
@@ -144,7 +144,7 @@ export const UserProfile = () => {
     if (!confirm('Are you sure you want to reset your onboarding? This will delete all your quiz answers and topic selections.')) {
       return;
     }
-    
+
     try {
       await resetOnboarding.mutateAsync();
       toast.success('Onboarding reset successfully!');
@@ -165,7 +165,7 @@ export const UserProfile = () => {
       toast.error('Please enter a valid address');
       return;
     }
-    
+
     try {
       await updateProfile.mutateAsync({ address: addressInput.trim() });
       setIsEditingAddress(false);
@@ -201,16 +201,16 @@ export const UserProfile = () => {
       toast.error('Please sign in to refresh party comparisons');
       return;
     }
-    
+
     setIsRefreshingParties(true);
     try {
       const { error } = await supabase
         .from('user_party_comparisons')
         .delete()
         .eq('user_id', user.id);
-      
+
       if (error) throw error;
-      
+
       queryClient.invalidateQueries({ queryKey: ['party-comparison'] });
       toast.success('Party comparisons refreshing...');
     } catch (error) {
@@ -227,16 +227,16 @@ export const UserProfile = () => {
       toast.error('Please sign in to refresh AI comparisons');
       return;
     }
-    
+
     setIsRefreshingRepAI(true);
     try {
       const { error } = await supabase
         .from('user_rep_comparisons')
         .delete()
         .eq('user_id', user.id);
-      
+
       if (error) throw error;
-      
+
       queryClient.invalidateQueries({ queryKey: ['rep-comparison'] });
       toast.success('Representative comparisons refreshing...');
     } catch (error) {
@@ -264,29 +264,29 @@ export const UserProfile = () => {
   };
 
   // Helper component for civic officials
-  const RepresentativeCard = ({ 
-    official, 
-    userScore, 
+  const RepresentativeCard = ({
+    official,
+    userScore,
     getPartyColor,
     resolvedScore,
-  }: { 
-    official: CivicOfficial; 
-    userScore: number; 
+  }: {
+    official: CivicOfficial;
+    userScore: number;
     getPartyColor: (party: string) => string;
     resolvedScore: number | null;
   }) => {
     const hasImage = official.image_url && official.image_url.trim() !== '';
-    
+
     return (
-      <Link 
+      <Link
         to={`/candidate/${official.id}`}
         className="flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
       >
         <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0">
           {hasImage ? (
-            <img 
-              src={official.image_url} 
-              alt={official.name} 
+            <img
+              src={official.image_url}
+              alt={official.name}
               className="w-full h-full object-cover"
               onError={(e) => {
                 const target = e.currentTarget;
@@ -296,7 +296,7 @@ export const UserProfile = () => {
               }}
             />
           ) : null}
-          <div 
+          <div
             className={cn("w-full h-full flex items-center justify-center", getPartyBgColor(official.party))}
             style={{ display: hasImage ? 'none' : 'flex' }}
           >
@@ -363,20 +363,20 @@ export const UserProfile = () => {
         noIndex
       />
       <Header />
-      
+
       <main className="container py-8 px-4 max-w-4xl">
         {/* Profile Header */}
-        <div className="bg-card rounded-2xl border border-border p-6 md:p-8 mb-8 shadow-elevated">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-6">
+        <div className="bg-card rounded-2xl border border-border p-5 sm:p-6 md:p-8 mb-8 shadow-elevated">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:gap-6 lg:flex-1">
               <AvatarUpload
                 userId={profile.id}
                 currentAvatarUrl={profile.avatar_url}
                 userName={profile.name}
                 onAvatarChange={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
               />
-              <div>
-                <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">
+              <div className="min-w-0 flex-1">
+                <h1 className="break-words font-display text-2xl md:text-3xl font-bold text-foreground">
                   {profile.name}
                 </h1>
                 <p className="text-muted-foreground mt-1">
@@ -430,7 +430,7 @@ export const UserProfile = () => {
                     Add your address
                   </button>
                 )}
-                
+
                 {/* Demographics display */}
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-xs text-muted-foreground">
                   {profile.age && (
@@ -457,11 +457,11 @@ export const UserProfile = () => {
                     </span>
                   )}
                 </div>
-                
+
                 {/* Edit Profile Button */}
                 <div className="mt-3">
-                  <EditProfileDialog 
-                    profile={profile} 
+                  <EditProfileDialog
+                    profile={profile}
                     onSave={async (data) => {
                       await updateProfile.mutateAsync(data);
                       toast.success('Profile updated successfully!');
@@ -470,15 +470,34 @@ export const UserProfile = () => {
                   />
                   <ChangePasswordDialog />
                 </div>
-                
+
                 {/* Verification badges */}
                 <VerificationBadges profile={profile} />
               </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleSignOut} className="gap-2">
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </Button>
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-stretch lg:w-72 lg:flex-col lg:items-end xl:w-80">
+              <div className="w-full rounded-xl border border-border/60 bg-secondary/50 px-4 py-4 text-center sm:flex-1 lg:flex-none">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
+                  Overall Score
+                </span>
+                <div className="mt-2 flex items-center justify-center">
+                  <ScoreText
+                    score={profile.overall_score}
+                    size="lg"
+                    className="[&>span:first-child]:text-2xl sm:[&>span:first-child]:text-3xl"
+                  />
+                </div>
+                <p className="mx-auto mt-2 max-w-xs text-xs leading-snug text-muted-foreground sm:text-sm">
+                  {profile.overall_score <= -30 ? 'You tend to lean Progressive on most issues' :
+                   profile.overall_score >= 30 ? 'You tend to lean Conservative on most issues' :
+                   'You hold moderate or mixed views across issues'}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleSignOut} className="w-full gap-2 sm:w-auto lg:self-end">
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -502,8 +521,8 @@ export const UserProfile = () => {
               Retake Full Quiz
             </Button>
           </Link>
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             className="flex-1 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
             onClick={handleResetOnboarding}
             disabled={resetOnboarding.isPending}
@@ -512,31 +531,6 @@ export const UserProfile = () => {
             {resetOnboarding.isPending ? 'Resetting...' : 'Reset Onboarding'}
           </Button>
         </div>
-
-        {/* Overall Score */}
-        <Card className="mb-8 shadow-elevated">
-          <CardHeader>
-            <CardTitle className="font-display flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-accent" />
-              Your Political Profile
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center p-6 rounded-xl bg-secondary/50">
-              <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                Overall Score
-              </span>
-              <div className="flex items-center justify-center mt-2">
-                <ScoreText score={profile.overall_score} size="lg" className="text-5xl" />
-              </div>
-              <p className="text-sm text-muted-foreground mt-2">
-                {profile.overall_score <= -30 ? 'You tend to lean Progressive on most issues' : 
-                 profile.overall_score >= 30 ? 'You tend to lean Conservative on most issues' : 
-                 'You hold moderate or mixed views across issues'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
 
         <Tabs defaultValue="ai-analysis" className="w-full">
           <TabsList className="w-full justify-start overflow-x-auto flex-nowrap mb-6">
@@ -588,7 +582,7 @@ export const UserProfile = () => {
             ) : analysis?.summary ? (
               <div className="space-y-4">
                 <p className="text-foreground leading-relaxed">{analysis.summary}</p>
-                
+
                 {analysis.keyInsights && analysis.keyInsights.length > 0 && (
                   <div className="mt-4">
                     <h4 className="font-semibold text-foreground mb-2">Key Insights</h4>
@@ -881,9 +875,9 @@ export const UserProfile = () => {
                     <p className="text-sm text-muted-foreground mt-1">
                       There was an error fetching your representatives. Please try again.
                     </p>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="mt-3 gap-2"
                       onClick={handleRefreshRepresentatives}
                     >
@@ -900,22 +894,22 @@ export const UserProfile = () => {
                   <div className="flex-1">
                     <p className="font-medium text-amber-600">Could not find your congressional district</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      We couldn't determine your exact congressional district from the address provided. 
+                      We couldn't determine your exact congressional district from the address provided.
                       Try updating your address to include street number, city, state, and ZIP code.
                     </p>
                     <div className="flex gap-2 mt-3">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="gap-2"
                         onClick={handleEditAddress}
                       >
                         <Pencil className="w-4 h-4" />
                         Edit Address
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="gap-2"
                         onClick={handleRefreshRepresentatives}
                       >
@@ -958,8 +952,8 @@ export const UserProfile = () => {
                 {topicsList.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {topicsList.map(topic => (
-                      <Badge 
-                        key={topic.id} 
+                      <Badge
+                        key={topic.id}
                         variant="secondary"
                         className="px-4 py-2 text-base gap-2"
                       >
