@@ -302,6 +302,74 @@ async function writeSourceCache(
   }
 }
 
+// --- Pre-seeding (coordinate-free) -----------------------------------------
+// Used at roster-import time to find & vet a city's ward/council-district
+// boundary service WITHOUT needing a specific address: we sample one record
+// (where=1=1) and confirm it carries a district-style field. Government /
+// trusted-owner sources come back high confidence (→ store as an authoritative
+// override); community sources come back low (→ park in the review cache).
+const MUNI_KEY = /^(city|muni|municipality|mun_?name|place|place_?name|jurisdiction|town|township|locality)$/i;
+
+function detectMuniField(attrs: Record<string, unknown>): string | null {
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (MUNI_KEY.test(k) && typeof v === 'string' && v.trim() && !/^\d+$/.test(v.trim())) return k;
+  }
+  return null;
+}
+
+export async function prefindBoundarySource(opts: {
+  supabase: SupabaseClient; state: string; city: string;
+}): Promise<{ queryUrl: string; confidence: Confidence; owner: string | null; muniField: string | null } | null> {
+  const state = (opts.state || '').trim().toUpperCase();
+  const city = (opts.city || '').trim();
+  if (!state || !city) return null;
+
+  const trusted = await loadTrustedOwners(opts.supabase);
+  const deadline = Date.now() + DISCOVERY_BUDGET_MS;
+
+  const seen = new Set<string>();
+  const candidates: { url: string; owner: string | undefined }[] = [];
+  for (const q of [`${city} ${state} ward boundaries`, `${city} ${state} city council district`]) {
+    if (Date.now() > deadline) break;
+    const res = await getJson(`https://www.arcgis.com/sharing/rest/search?q=${encodeURIComponent(q)}&f=json&num=6`);
+    for (const r of res?.results ?? []) {
+      if (r?.type !== 'Feature Service' || !r?.url) continue;
+      const url = String(r.url);
+      if (seen.has(url)) continue;
+      seen.add(url);
+      if (!/ward|district|council/i.test(String(r.title ?? ''))) continue;
+      candidates.push({ url, owner: r.owner ? String(r.owner) : undefined });
+    }
+  }
+  candidates.sort((a, b) =>
+    Number(authorityOf(b.url, b.owner, trusted) === 'gov') -
+    Number(authorityOf(a.url, a.owner, trusted) === 'gov'));
+
+  let communityFallback: { queryUrl: string; confidence: Confidence; owner: string | null; muniField: string | null } | null = null;
+  for (const cand of candidates.slice(0, 5)) {
+    if (Date.now() > deadline) break;
+    const svc = await getJson(`${cand.url}?f=json`);
+    const polygonLayers = (svc?.layers ?? []).filter((l: any) => l?.geometryType === 'esriGeometryPolygon');
+    for (const layer of polygonLayers.slice(0, 2)) {
+      if (Date.now() > deadline) break;
+      const queryUrl = `${cand.url}/${layer.id}/query`;
+      const data = await getJson(
+        `${queryUrl}?where=1%3D1&outFields=*&resultRecordCount=1&returnGeometry=false&f=json`,
+      );
+      const attrs = data?.features?.[0]?.attributes;
+      if (!attrs || !extractDivision(attrs)) continue;
+      const muniField = detectMuniField(attrs);
+      if (authorityOf(cand.url, cand.owner, trusted) === 'gov') {
+        return { queryUrl, confidence: 'high', owner: cand.owner ?? null, muniField };
+      }
+      if (!communityFallback) {
+        communityFallback = { queryUrl, confidence: 'low', owner: cand.owner ?? null, muniField };
+      }
+    }
+  }
+  return communityFallback;
+}
+
 // --- Public entry point ----------------------------------------------------
 export async function resolveDistrict(opts: {
   supabase: SupabaseClient;
