@@ -30,6 +30,9 @@ export interface CardData {
   ieCycle?: string | null;
   totalRaised?: number | null;
   totalSpent?: number | null;
+  // Outside (independent-expenditure) spending split by stance.
+  outsideSupport?: number | null;
+  outsideOppose?: number | null;
   topDonors?: { name: string; amount: number; primaryCause?: string | null; primaryCauseStance?: string | null }[];
   topSpenders?: { name: string; support: number; oppose: number; primaryCause?: string | null; primaryCauseStance?: string | null }[];
   aiPositions?: { topic: string; stance: string }[];

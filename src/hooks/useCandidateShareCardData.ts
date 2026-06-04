@@ -53,6 +53,8 @@ export interface CandidateShareCardData {
   ieCycle: string | null;
   totalRaised: number | null;
   totalSpent: number | null;
+  outsideSupport: number | null;
+  outsideOppose: number | null;
   topSpenders: { name: string; support: number; oppose: number; primaryCause?: string | null }[];
   topDonors: { name: string; amount: number; primaryCause?: string | null }[];
   fundingBreakdown:
@@ -328,6 +330,18 @@ export function useCandidateShareCardData(
         primaryCause: spenderCauseMap?.get(fecId) ?? null,
       }));
 
+    // Total outside (independent-expenditure) spending for the displayed cycle,
+    // split by stance so the card can show a "For" / "Against" breakdown. Mirror
+    // the support/oppose split used to build spenderMap above.
+    const outsideSupportTotal = rows.reduce(
+      (sum, r) => sum + (r.support_oppose_indicator === 'S' ? Number(r.amount ?? 0) : 0),
+      0,
+    );
+    const outsideOpposeTotal = rows.reduce(
+      (sum, r) => sum + (r.support_oppose_indicator === 'S' ? 0 : Number(r.amount ?? 0)),
+      0,
+    );
+
     return {
       brandHost: BRAND_HOST,
       candidateId: id,
@@ -348,6 +362,8 @@ export function useCandidateShareCardData(
       ieCycle,
       totalRaised: fecTotalReceipts,
       totalSpent: fecTotalDisbursements,
+      outsideSupport: outsideSupportTotal > 0 ? outsideSupportTotal : null,
+      outsideOppose: outsideOpposeTotal > 0 ? outsideOpposeTotal : null,
       topSpenders,
       topDonors,
       fundingBreakdown,
