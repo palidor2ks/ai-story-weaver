@@ -27,10 +27,11 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCronAuth } from "../_shared/cron-auth.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 const BUDGET_MS = 100_000;
 const RESUME_PHASE_FRACTION = 0.55; // spend at most ~55% of the budget resuming syncs
@@ -38,6 +39,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+
+  const unauthorized = await requireCronAuth(req);
+  if (unauthorized) return unauthorized;
+
+
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
