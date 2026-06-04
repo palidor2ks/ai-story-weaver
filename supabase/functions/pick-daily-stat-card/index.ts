@@ -12,6 +12,7 @@ const PLATFORMS = ['x', 'facebook', 'instagram', 'tiktok'] as const;
 
 const supaUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
 function nowInTimezone(tz: string): { hour: number; minute: number } {
   const fmt = new Intl.DateTimeFormat('en-US', {
@@ -26,7 +27,7 @@ function nowInTimezone(tz: string): { hour: number; minute: number } {
   return { hour, minute };
 }
 
-import { requireCronAuth } from '../_shared/cron-auth.ts';
+import { requireCronAuth, getCronSecret } from '../_shared/cron-auth.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -86,7 +87,7 @@ Deno.serve(async (req) => {
     // Pick a candidate with a non-null score and image, federal preferred
     const { data: pool } = await admin
       .from('candidates')
-      .select('id, name, office, party, state, district, image_url, overall_score, coverage_tier, confidence, is_incumbent')
+      .select('id, name, office, party, state, district, image_url, overall_score, coverage_tier, confidence, is_incumbent, fec_candidate_id')
       .not('overall_score', 'is', null)
       .order('last_updated', { ascending: false })
       .limit(200);
@@ -131,8 +132,42 @@ Deno.serve(async (req) => {
     }));
     await admin.from('social_post_platforms').insert(platformRows);
 
+    // Warm the candidate's AI analysis so the auto-post caption can reuse the
+    // same web-grounded summary shown on the profile (generate-social-caption
+    // reads it from cache). Best-effort and idempotent: the draft already exists,
+    // and the caption falls back to a generated summary if this misses. Awaited
+    // so the cache is populated before auto-post-due runs (hours later).
+    let warmed = false;
+    try {
+      const cronSecret = await getCronSecret();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        apikey: anonKey,
+        Authorization: `Bearer ${serviceKey}`,
+      };
+      if (cronSecret) headers['x-cron-secret'] = cronSecret;
+      const warmRes = await fetch(`${supaUrl}/functions/v1/ai-recipient-analysis`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          entity_kind: 'candidate',
+          entity_id: picked.id,
+          entity_name: picked.name,
+          fec_id: picked.fec_candidate_id ?? null,
+          party: picked.party ?? null,
+          office: picked.office ?? null,
+          state: picked.state ?? null,
+          cycle: null,
+          force_refresh: false,
+        }),
+      });
+      warmed = warmRes.ok;
+    } catch (e) {
+      console.warn('ai analysis warm failed', e);
+    }
+
     return new Response(
-      JSON.stringify({ ok: true, post_id: post.id, subject_id: picked.id, mode: settings.mode }),
+      JSON.stringify({ ok: true, post_id: post.id, subject_id: picked.id, mode: settings.mode, analysis_warmed: warmed }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err) {
