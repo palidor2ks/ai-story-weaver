@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sync-secret, x-internal-chain-secret',
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -11,6 +11,10 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const BUCKET = 'official-photos';
 const MIN_BYTES = 3000;
+// 'missing'-mode lease/retry caps so the scheduled cron doesn't re-hit the AI photo
+// finder every run for candidates with no verifiable portrait (mirrors drain-research-queue).
+const MAX_PHOTO_ATTEMPTS = 4;
+const PHOTO_COOLDOWN_HOURS = 72;
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
 type Target = {
@@ -21,7 +25,21 @@ type Target = {
   office: string | null;
   state: string | null;
   currentUrl: string | null;
+  attempts: number;
 };
+
+/** Best-effort lease bookkeeping for 'missing' mode: count a failed attempt + stamp the
+ * cooldown so the scheduled drainer skips this row until PHOTO_COOLDOWN_HOURS elapses. */
+async function markPhotoAttempt(
+  supabase: ReturnType<typeof createClient>,
+  t: Target,
+): Promise<void> {
+  const { error } = await supabase
+    .from(t.table)
+    .update({ photo_attempts: (t.attempts ?? 0) + 1, photo_checked_at: new Date().toISOString() })
+    .eq(t.pkColumn, t.id);
+  if (error) console.warn(`[enrich-photos] attempt bookkeeping failed for ${t.id}: ${error.message}`);
+}
 
 function isHostedByUs(url: string | null | undefined): boolean {
   if (!url) return false;
@@ -159,25 +177,40 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+
+    // Authorize: an internal/scheduled call (shared secret) OR an admin user.
+    //  • pg_cron sends x-sync-secret, validated against Vault via a service-role RPC.
+    //  • chained edge functions may send x-internal-chain-secret == service role key.
+    //  • otherwise the caller (e.g. the admin "enrich photos" button) must be an admin.
+    const chainSecret = req.headers.get('x-internal-chain-secret');
+    const syncSecret = req.headers.get('x-sync-secret');
+    let isInternal = chainSecret != null && chainSecret === SERVICE_KEY;
+    if (!isInternal && syncSecret) {
+      const { data: secretOk } = await supabase.rpc('check_photo_enrich_secret', { p_token: syncSecret });
+      isInternal = secretOk === true;
     }
-    const { data: roleRow } = await supabase
-      .from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
-    if (!roleRow) {
-      return new Response(JSON.stringify({ error: 'Admin only' }), {
-        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+
+    if (!isInternal) {
+      const authHeader = req.headers.get('authorization');
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: 'Missing authorization' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const { data: roleRow } = await supabase
+        .from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
+      if (!roleRow) {
+        return new Response(JSON.stringify({ error: 'Admin only' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const body = await req.json().catch(() => ({}));
@@ -189,47 +222,65 @@ serve(async (req) => {
 
     if (explicitCandidateId) {
       const { data: cand } = await supabase
-        .from('candidates').select('id,name,office,state,image_url')
+        .from('candidates').select('id,name,office,state,image_url,photo_attempts')
         .eq('id', explicitCandidateId).maybeSingle();
       if (cand && cand.name) {
-        targets.push({ table: 'candidates', id: cand.id, pkColumn: 'id', name: cand.name, office: cand.office, state: cand.state, currentUrl: cand.image_url });
+        targets.push({ table: 'candidates', id: cand.id, pkColumn: 'id', name: cand.name, office: cand.office, state: cand.state, currentUrl: cand.image_url, attempts: cand.photo_attempts ?? 0 });
       } else {
         const { data: ov } = await supabase
-          .from('candidate_overrides').select('candidate_id,name,office,state,image_url')
+          .from('candidate_overrides').select('candidate_id,name,office,state,image_url,photo_attempts')
           .eq('candidate_id', explicitCandidateId).maybeSingle();
         if (ov && ov.name) {
-          targets.push({ table: 'candidate_overrides', id: ov.candidate_id, pkColumn: 'candidate_id', name: ov.name, office: ov.office, state: ov.state, currentUrl: ov.image_url });
+          targets.push({ table: 'candidate_overrides', id: ov.candidate_id, pkColumn: 'candidate_id', name: ov.name, office: ov.office, state: ov.state, currentUrl: ov.image_url, attempts: ov.photo_attempts ?? 0 });
         }
       }
     } else {
+      // 'missing' mode leases rows via a cooldown: skip anything tried within the window so
+      // the scheduled cron doesn't re-burn AI on candidates with no findable portrait. The
+      // cooldown is applied in code (timestamp or()-strings are brittle in PostgREST); the
+      // max-attempts cap and ordering stay in the query.
+      const cooldownCutoff = new Date(Date.now() - PHOTO_COOLDOWN_HOURS * 3600 * 1000).toISOString();
+      const offCooldown = (checkedAt: string | null | undefined) => !checkedAt || checkedAt < cooldownCutoff;
+      const windowSize = mode === 'missing' ? limit * 3 : limit;
+
       // Pull overrides FIRST (most likely to have broken/missing URLs)
       let ovQuery = supabase
         .from('candidate_overrides')
-        .select('candidate_id,name,office,state,image_url')
+        .select('candidate_id,name,office,state,image_url,photo_attempts,photo_checked_at')
         .not('name', 'is', null);
       if (mode === 'missing') {
-        ovQuery = ovQuery.or('image_url.is.null,image_url.eq.');
+        ovQuery = ovQuery
+          .or('image_url.is.null,image_url.eq.')
+          .lt('photo_attempts', MAX_PHOTO_ATTEMPTS)
+          .order('photo_checked_at', { ascending: true, nullsFirst: true });
       }
-      const { data: ovs } = await ovQuery.limit(limit);
-      (ovs || []).forEach((o: any) => {
-        if (mode === 'rehost-all' && isHostedByUs(o.image_url)) return;
-        targets.push({ table: 'candidate_overrides', id: o.candidate_id, pkColumn: 'candidate_id', name: o.name, office: o.office, state: o.state, currentUrl: o.image_url });
-      });
+      const { data: ovs } = await ovQuery.limit(windowSize);
+      for (const o of (ovs || []) as any[]) {
+        if (targets.length >= limit) break;
+        if (mode === 'rehost-all' && isHostedByUs(o.image_url)) continue;
+        if (mode === 'missing' && !offCooldown(o.photo_checked_at)) continue;
+        targets.push({ table: 'candidate_overrides', id: o.candidate_id, pkColumn: 'candidate_id', name: o.name, office: o.office, state: o.state, currentUrl: o.image_url, attempts: o.photo_attempts ?? 0 });
+      }
 
       const remaining = limit - targets.length;
       if (remaining > 0) {
         let cQuery = supabase
           .from('candidates')
-          .select('id,name,office,state,image_url')
+          .select('id,name,office,state,image_url,photo_attempts,photo_checked_at')
           .not('name', 'is', null);
         if (mode === 'missing') {
-          cQuery = cQuery.or('image_url.is.null,image_url.eq.');
+          cQuery = cQuery
+            .or('image_url.is.null,image_url.eq.')
+            .lt('photo_attempts', MAX_PHOTO_ATTEMPTS)
+            .order('photo_checked_at', { ascending: true, nullsFirst: true });
         }
-        const { data: cands } = await cQuery.limit(remaining);
-        (cands || []).forEach((c: any) => {
-          if (mode === 'rehost-all' && isHostedByUs(c.image_url)) return;
-          targets.push({ table: 'candidates', id: c.id, pkColumn: 'id', name: c.name, office: c.office, state: c.state, currentUrl: c.image_url });
-        });
+        const { data: cands } = await cQuery.limit(mode === 'missing' ? remaining * 3 : remaining);
+        for (const c of (cands || []) as any[]) {
+          if (targets.length >= limit) break;
+          if (mode === 'rehost-all' && isHostedByUs(c.image_url)) continue;
+          if (mode === 'missing' && !offCooldown(c.photo_checked_at)) continue;
+          targets.push({ table: 'candidates', id: c.id, pkColumn: 'id', name: c.name, office: c.office, state: c.state, currentUrl: c.image_url, attempts: c.photo_attempts ?? 0 });
+        }
       }
     }
 
@@ -265,12 +316,14 @@ serve(async (req) => {
         }
 
         if (!downloaded) {
+          if (mode === 'missing') await markPhotoAttempt(supabase, t);
           results.push({ id: t.id, name: t.name, status: 'no_valid_photo_found' });
           continue;
         }
 
         const publicUrl = await uploadToStorage(supabase, t.id, downloaded.bytes, downloaded.contentType);
         if (!publicUrl) {
+          if (mode === 'missing') await markPhotoAttempt(supabase, t);
           results.push({ id: t.id, name: t.name, status: 'upload_failed', url: sourceUrl ?? undefined });
           continue;
         }
@@ -280,6 +333,7 @@ serve(async (req) => {
           .update({ image_url: publicUrl })
           .eq(t.pkColumn, t.id);
         if (upErr) {
+          if (mode === 'missing') await markPhotoAttempt(supabase, t);
           results.push({ id: t.id, name: t.name, status: `db_update_failed: ${upErr.message}`, url: publicUrl });
           continue;
         }
@@ -287,6 +341,7 @@ serve(async (req) => {
         updated++;
         results.push({ id: t.id, name: t.name, status: 'updated', url: publicUrl });
       } catch (e) {
+        if (mode === 'missing') await markPhotoAttempt(supabase, t);
         results.push({ id: t.id, name: t.name, status: `error: ${(e as Error).message}` });
       }
     }
