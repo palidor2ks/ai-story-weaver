@@ -4996,6 +4996,7 @@ export type Database = {
       }
       cancel_job: { Args: { p_id: string }; Returns: undefined }
       check_fl_sync_secret: { Args: { p_token: string }; Returns: boolean }
+      check_ie_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_nj_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_ny_sync_secret: { Args: { p_token: string }; Returns: boolean }
       claim_anon_poll_responses: {
