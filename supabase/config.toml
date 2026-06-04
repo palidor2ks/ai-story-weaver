@@ -109,6 +109,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.refresh-fec-totals]
     verify_jwt = false
+  [functions.drain-fec-finance]
+    verify_jwt = false
   [functions.scan-bill-topics]
     verify_jwt = false
   [functions.scan-evidence-relevance]
