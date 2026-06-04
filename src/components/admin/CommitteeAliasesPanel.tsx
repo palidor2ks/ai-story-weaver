@@ -111,15 +111,80 @@ export function CommitteeAliasesPanel() {
     queryKey: ['committee-aliases-raw-search', debouncedCommitteeSearch],
     enabled: debouncedCommitteeSearch.length >= 2,
     queryFn: async (): Promise<RawCommitteeSearchResult[]> => {
-      const safe = debouncedCommitteeSearch.replace(/,/g, ' ').trim();
-      const { data, error } = await (supabase as any)
-        .from('external_pacs')
-        .select('name, fec_committee_id, treasurer_name')
-        .or(`name.ilike.%${safe}%,fec_committee_id.ilike.%${safe}%`)
-        .order('name', { ascending: true })
-        .limit(30);
-      if (error) throw error;
-      return data ?? [];
+      // Commas/parens would break PostgREST's .or() grouping syntax.
+      const safe = debouncedCommitteeSearch.replace(/[,()]/g, ' ').trim();
+      if (!safe) return [];
+      const like = `%${safe}%`;
+
+      // Primary source: the committees that actually appear as outside spenders
+      // on the Top Spenders page (independent-expenditure filers). external_pacs
+      // is only the FEC registration catalog — it is frequently empty/partial and
+      // stores full registered names, so searching it alone returns nothing for
+      // filer abbreviations like "HMP" (registered as "HOUSE MAJORITY PAC").
+      const [ieRes, pacNameRes] = await Promise.all([
+        (supabase as any)
+          .from('committee_independent_expenditure_totals')
+          .select('spending_committee_fec_id, spending_committee_name, total_amount')
+          .or(`spending_committee_name.ilike.${like},spending_committee_fec_id.ilike.${like}`)
+          .order('total_amount', { ascending: false })
+          .limit(30),
+        (supabase as any)
+          .from('external_pacs')
+          .select('fec_committee_id, name, treasurer_name')
+          .or(`name.ilike.${like},fec_committee_id.ilike.${like}`)
+          .order('name', { ascending: true })
+          .limit(30),
+      ]);
+      if (ieRes.error) throw ieRes.error;
+      if (pacNameRes.error) throw pacNameRes.error;
+
+      const ieRows = (ieRes.data ?? []) as Array<{
+        spending_committee_fec_id: string;
+        spending_committee_name: string | null;
+      }>;
+      const pacRows = (pacNameRes.data ?? []) as Array<{
+        fec_committee_id: string;
+        name: string | null;
+        treasurer_name: string | null;
+      }>;
+
+      // Enrich the IE spenders with their registered FEC name + treasurer when we
+      // have it (so "HMP" can display as "HOUSE MAJORITY PAC" once external_pacs
+      // is populated). Falls back gracefully to the filer name when it is not.
+      const ieIds = Array.from(new Set(ieRows.map((r) => r.spending_committee_fec_id).filter(Boolean)));
+      const pacMap = new Map<string, { name: string | null; treasurer_name: string | null }>();
+      pacRows.forEach((p) => pacMap.set(p.fec_committee_id, { name: p.name, treasurer_name: p.treasurer_name }));
+      if (ieIds.length > 0) {
+        const { data: enrich } = await (supabase as any)
+          .from('external_pacs')
+          .select('fec_committee_id, name, treasurer_name')
+          .in('fec_committee_id', ieIds);
+        ((enrich ?? []) as typeof pacRows).forEach((p) =>
+          pacMap.set(p.fec_committee_id, { name: p.name, treasurer_name: p.treasurer_name }),
+        );
+      }
+
+      // Merge by FEC id: outside spenders first (ranked by spend), then any
+      // registration-only matches (lets a search for the full name work too).
+      const merged = new Map<string, RawCommitteeSearchResult>();
+      ieRows.forEach((r) => {
+        const pac = pacMap.get(r.spending_committee_fec_id);
+        merged.set(r.spending_committee_fec_id, {
+          name: pac?.name || r.spending_committee_name,
+          fec_committee_id: r.spending_committee_fec_id,
+          treasurer_name: pac?.treasurer_name ?? null,
+        });
+      });
+      pacRows.forEach((p) => {
+        if (merged.has(p.fec_committee_id)) return;
+        merged.set(p.fec_committee_id, {
+          name: p.name,
+          fec_committee_id: p.fec_committee_id,
+          treasurer_name: p.treasurer_name,
+        });
+      });
+
+      return Array.from(merged.values()).slice(0, 30);
     },
   });
 
@@ -300,10 +365,10 @@ export function CommitteeAliasesPanel() {
         <TabsContent value="attach" className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2"><Label>Alias to update</Label><Select value={selectedAttachAliasId} onValueChange={setSelectedAttachAliasId}><SelectTrigger><SelectValue placeholder="Select an active spender alias" /></SelectTrigger><SelectContent>{activeAliases.map((alias) => <SelectItem key={alias.id} value={alias.id}>{alias.canonical_name}</SelectItem>)}</SelectContent></Select></div>
-            <div className="space-y-2"><Label>Search committees</Label><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Type committee name or FEC ID..." value={committeeSearch} onChange={(e) => setCommitteeSearch(e.target.value)} className="pl-9" /></div></div>
+            <div className="space-y-2"><Label>Search committees</Label><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search spenders by name, abbreviation (e.g. HMP) or FEC ID..." value={committeeSearch} onChange={(e) => setCommitteeSearch(e.target.value)} className="pl-9" /></div></div>
           </div>
           <Card><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Committee</TableHead><TableHead>Treasurer</TableHead><TableHead>FEC Committee ID</TableHead><TableHead className="w-36">Action</TableHead></TableRow></TableHeader><TableBody>
-          {committeeSearch.trim().length<2 ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Type at least 2 characters to search committees.</TableCell></TableRow> : committeeSearchLoading ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Searching committees...</TableCell></TableRow> : committeeSearchResults.length===0 ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No committees found for that query.</TableCell></TableRow> : committeeSearchResults.map((row)=> { const alreadyAttached=aliases.some((a)=>a.fec_committee_ids.includes(row.fec_committee_id)); return <TableRow key={row.fec_committee_id}><TableCell className="font-medium">{row.name || 'Unknown committee'}</TableCell><TableCell className="text-sm text-muted-foreground">{row.treasurer_name || '—'}</TableCell><TableCell className="font-mono">{row.fec_committee_id}</TableCell><TableCell><Button size="sm" disabled={!selectedAttachAliasId || updateMutation.isPending || alreadyAttached} onClick={() => handleAddCommitteeId(row.fec_committee_id)}>{alreadyAttached ? 'Already attached' : 'Attach ID'}</Button></TableCell></TableRow>; })}
+          {committeeSearch.trim().length<2 ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Type at least 2 characters to search committees.</TableCell></TableRow> : committeeSearchLoading ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Searching committees...</TableCell></TableRow> : committeeSearchResults.length===0 ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No spenders match “{committeeSearch.trim()}”. Searches outside spenders (independent-expenditure filers) by name, abbreviation, or FEC ID.</TableCell></TableRow> : committeeSearchResults.map((row)=> { const alreadyAttached=aliases.some((a)=>a.fec_committee_ids.includes(row.fec_committee_id)); return <TableRow key={row.fec_committee_id}><TableCell className="font-medium">{row.name || 'Unknown committee'}</TableCell><TableCell className="text-sm text-muted-foreground">{row.treasurer_name || '—'}</TableCell><TableCell className="font-mono">{row.fec_committee_id}</TableCell><TableCell><Button size="sm" disabled={!selectedAttachAliasId || updateMutation.isPending || alreadyAttached} onClick={() => handleAddCommitteeId(row.fec_committee_id)}>{alreadyAttached ? 'Already attached' : 'Attach ID'}</Button></TableCell></TableRow>; })}
           </TableBody></Table></CardContent></Card>
         </TabsContent>
       </Tabs>
