@@ -107,7 +107,7 @@ serve(async (req) => {
       return jsonResponse(fallbackResult);
     }
 
-    console.log('Validating address:', address);
+    console.log('Validating address (length):', address.length);
 
     // Call Google Address Validation API
     const response = await fetch(

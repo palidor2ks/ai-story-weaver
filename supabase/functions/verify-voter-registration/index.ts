@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
     }
 
     const verifyData = await verifyResponse.json();
-    console.log('Civitech response:', JSON.stringify(verifyData));
+    console.log('Civitech response received, registered:', verifyData?.registered === true, 'status:', verifyData?.status ?? 'unknown');
 
     // Interpret the response
     const isRegistered = verifyData.registered === true || verifyData.status === 'Active';
