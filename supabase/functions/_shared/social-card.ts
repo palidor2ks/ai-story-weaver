@@ -30,32 +30,41 @@ function ensureWasm(): Promise<unknown> {
   return wasmReady;
 }
 
+// resvg needs raw TTF/OTF — it can't decode woff2. Scraping Google Fonts CSS
+// for a TTF proved unreliable (Google serves woff to most user-agents, so no
+// .ttf url is ever found and the render fails with font_ttf_not_found), so we
+// fetch the static Inter TTFs directly from a CDN. @expo-google-fonts ships
+// plain .ttf files; jsdelivr is primary with unpkg as a fallback.
+const FONT_URLS: Record<number, string[]> = {
+  400: [
+    'https://cdn.jsdelivr.net/npm/@expo-google-fonts/inter@0.2.3/Inter_400Regular.ttf',
+    'https://unpkg.com/@expo-google-fonts/inter@0.2.3/Inter_400Regular.ttf',
+  ],
+  700: [
+    'https://cdn.jsdelivr.net/npm/@expo-google-fonts/inter@0.2.3/Inter_700Bold.ttf',
+    'https://unpkg.com/@expo-google-fonts/inter@0.2.3/Inter_700Bold.ttf',
+  ],
+};
+
 const fontCache = new Map<number, Uint8Array>();
 async function loadInter(weight: number): Promise<Uint8Array> {
   const cached = fontCache.get(weight);
   if (cached) return cached;
-  // Text cannot render without a font, so retry transient upstream blips once.
+  const urls = FONT_URLS[weight] ?? FONT_URLS[400];
+  // Text cannot render without a font, so try each CDN and retry transient blips.
   let lastErr: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      // An old IE user-agent makes Google Fonts serve a plain TTF (resvg cannot
-      // read woff2). We then pull the .ttf URL out of the returned CSS.
-      const cssRes = await fetch(`https://fonts.googleapis.com/css2?family=Inter:wght@${weight}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko' },
-      });
-      if (!cssRes.ok) throw new Error(`font_css_${cssRes.status}`);
-      const css = await cssRes.text();
-      // Only accept TTF/OTF — resvg cannot decode woff2, so never fall back to
-      // a generic url() that might be woff2.
-      const match = css.match(/url\(([^)]+\.(?:ttf|otf))\)/i);
-      if (!match) throw new Error('font_ttf_not_found');
-      const fontRes = await fetch(match[1]);
-      if (!fontRes.ok) throw new Error(`font_fetch_${fontRes.status}`);
-      const buf = new Uint8Array(await fontRes.arrayBuffer());
-      fontCache.set(weight, buf);
-      return buf;
-    } catch (e) {
-      lastErr = e;
+  for (const url of urls) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`font_fetch_${res.status}`);
+        const buf = new Uint8Array(await res.arrayBuffer());
+        if (buf.byteLength < 2000) throw new Error('font_too_small');
+        fontCache.set(weight, buf);
+        return buf;
+      } catch (e) {
+        lastErr = e;
+      }
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error('font_load_failed');
