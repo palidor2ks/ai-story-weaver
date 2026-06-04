@@ -991,8 +991,8 @@ serve(async (req) => {
     const hintCity: string | undefined = typeof body.city === 'string' ? body.city : undefined;
 
     console.log(`=== FETCH CIVIC OFFICIALS START ===`);
-    console.log(`Address: ${address}`);
-    console.log(`Hints: state=${hintState}, lat/lng=${hintLat}/${hintLng}, city=${hintCity}`);
+    console.log(`Address length: ${address?.length ?? 0}`);
+    console.log(`Hints: state=${hintState}, has_coords=${!!(hintLat && hintLng)}`);
     console.log(`Include federal legislative: ${includeFederalLegislative}`);
     console.log(`OPEN_STATES_API_KEY set: ${!!OPEN_STATES_API_KEY}`);
 
