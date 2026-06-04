@@ -164,11 +164,14 @@ function buildPrompt(platform: string, block: string, hint: string | null, timin
   const handleRule = handle
     ? `\n- @-mention the rep exactly ONCE as @${handle}, right after their name (e.g. "Rep. Jane Doe (@${handle})"). Never put @${handle} as the very first character of the post.`
     : '';
+  const focusRule = long
+    ? `Give the fuller breakdown: money raised + donors, the standout donor, the funding mix, and the for-vs-against outside spending with the biggest PACs.`
+    : `Be SELECTIVE — this is a short post. Include only THREE things: (1) the lead figure, (2) the SINGLE most striking secondary fact — pick ONE of: a lopsided for-vs-against fight, a notable funding angle (e.g. "42% PAC-funded" or small-dollar/grassroots), or the standout top donor${handle ? ', and (3) the @-mention' : ''}. Leave every other fact OUT — a tight post beats a crammed one, and it must never get cut off.`;
   const lengthRule = long
-    ? `Length: 3–5 short sentences. After the hook, give the fuller breakdown — money raised + donors, the standout donor, and the for-vs-against outside spending with the biggest PACs. Keep it under ${max} characters.`
-    : `Length: 1–2 short, punchy sentences, under ${max} characters.`;
+    ? `Length: 3–5 short sentences, under ${max} characters.`
+    : `Length: ONE or TWO tight sentences. Stay comfortably under ${max} characters — aim for about ${Math.round(max * 0.85)} and leave room; do NOT run to the limit.`;
   const leadRule = hint
-    ? `OPEN with this exact figure — it is the single biggest number and MUST be your hook, right at the front: ${hint}. Weave the other facts in afterward.`
+    ? `OPEN with this exact figure — it is the single biggest number and MUST be your hook, right at the front: ${hint}.`
     : `LEAD with the single most eye-popping dollar figure and make it the hook.`;
   return `You are a sharp political-media editor writing a punchy, headline-worthy ${platform.toUpperCase()} post about a U.S. politician's campaign money, built for media consumption and engagement.
 
@@ -179,9 +182,10 @@ ${block}
 ${timing ? `\n${timing}\n` : ''}
 Write the post:
 - ${leadRule}
+- ${focusRule}
 - Match the tense and framing to the TIMING note above — an upcoming election must NOT be described in the past tense, and a finished one must not be written as if it's still ahead.
 - Refer to them using the "Leaning & party" line EXACTLY as given. When it's only a party ("Democrat"/"Republican"), use just that — NEVER prepend "Left", "Right", "Progressive", "Conservative" or any direction yourself. Only a middle-of-the-road rep carries a "Center-Left", "Centrist", or "Center-Right" qualifier (e.g. "Center-Right Republican"). Say "re-election" only if the facts mark them as the incumbent; otherwise call it their campaign or bid.${handleRule}
-- Work the FUNDING MIX into the story when it's striking — e.g. grassroots/small-dollar-powered, large-donor-reliant, or heavily PAC-funded. Small-dollar = under $200; the "PACs/committees" share is direct money TO the campaign, distinct from the outside/Super-PAC spending above. For a deep (long) post, always include it.
+- When you cite funding: small-dollar = under $200, and the "PACs/committees" share is direct money TO the campaign — keep it distinct from the outside/Super-PAC spending above.
 - Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
 - ${lengthRule}
 - Plain text ONLY — no markdown, no asterisks, no underscores, no bullet points, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
