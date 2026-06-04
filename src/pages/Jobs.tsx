@@ -181,12 +181,18 @@ export default function Jobs() {
         </section>
 
         <section className="container py-12 md:py-16">
+          <div className="mb-8 max-w-3xl">
+            <h2 className="font-display text-3xl font-bold text-foreground md:text-4xl">Collaboration principles</h2>
+            <p className="mt-3 text-muted-foreground">
+              How we work together as a small, focused team building civic-tech that voters can trust.
+            </p>
+          </div>
           <div className="grid gap-4 md:grid-cols-4">
             {collaborationPrinciples.map((principle) => (
               <Card key={principle.title} className="bg-gradient-card shadow-elevated">
                 <CardHeader className="pb-3">
                   <principle.icon className="mb-2 h-8 w-8 text-primary" />
-                  <CardTitle className="text-lg">{principle.title}</CardTitle>
+                  <CardTitle as="h3" className="text-lg">{principle.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm leading-6 text-muted-foreground">{principle.text}</p>
