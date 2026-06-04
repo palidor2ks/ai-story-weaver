@@ -43,6 +43,7 @@ import { QuestionManagementPanel } from "@/components/admin/QuestionManagementPa
 import { PartyAnswersPanel } from "@/components/admin/PartyAnswersPanel";
 import TopicReviewPanel from "@/components/admin/TopicReviewPanel";
 import { DonorImportPanel } from "@/components/admin/DonorImportPanel";
+import { LocalOfficialsImportPanel } from "@/components/admin/LocalOfficialsImportPanel";
 import { BulkDonorSyncCard } from "@/components/admin/BulkDonorSyncCard";
 import { BulkCommitteeTotalsCard } from "@/components/admin/BulkCommitteeTotalsCard";
 import { BulkAnswerValidation } from "@/components/admin/BulkAnswerValidation";
@@ -610,7 +611,8 @@ export default function Admin() {
             <AdminUsersPanel />
           </TabsContent>
 
-          <TabsContent value="officials">
+          <TabsContent value="officials" className="space-y-6">
+            <LocalOfficialsImportPanel />
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between gap-4">

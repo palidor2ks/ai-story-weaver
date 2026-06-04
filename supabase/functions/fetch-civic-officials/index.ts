@@ -1117,15 +1117,20 @@ serve(async (req) => {
 
     // Resolve the user's ward / city-council district — but only if some local
     // seat is actually ward/district-based (At-Large/Mayor-only towns need no
-    // lookup). Works in any state via the shared resolver (registry + ArcGIS
-    // discovery); null when it can't be determined.
-    const hasDistrictSeats = allOfficials.some(
-      o => o.level === 'local' && seatDivisionNumber(o.district) != null,
-    );
-    const resolvedDistrict = (hasDistrictSeats && coords?.lat != null && coords?.lng != null)
+    // lookup). Works in any state via the shared resolver (admin overrides +
+    // registry + authority-scored ArcGIS discovery); null when undetermined.
+    // Pass the seat numbers we actually have so discovery can cross-check
+    // community-published boundary layers against real seats.
+    const knownSeats = Array.from(new Set(
+      allOfficials
+        .filter(o => o.level === 'local')
+        .map(o => seatDivisionNumber(o.district))
+        .filter((n): n is number => n != null),
+    ));
+    const resolvedDistrict = (knownSeats.length > 0 && coords?.lat != null && coords?.lng != null)
       ? await resolveDistrict({
           supabase: createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY),
-          lat: coords.lat, lng: coords.lng, state, city,
+          lat: coords.lat, lng: coords.lng, state, city, knownSeats,
         })
       : null;
 
@@ -1175,12 +1180,18 @@ serve(async (req) => {
     }
 
     const userWard = resolvedDistrict ? resolvedDistrict.label : null;
-    const wardNote = districtUnresolvedWithSeats
-      ? "We couldn't pinpoint your exact ward/council district, so all of your city's " +
-        "ward council members are shown. Confirm yours with your municipal clerk."
-      : null;
+    let wardNote: string | null = null;
+    if (districtUnresolvedWithSeats) {
+      wardNote = "We couldn't pinpoint your exact ward/council district, so all of your city's " +
+        "ward council members are shown. Confirm yours with your municipal clerk.";
+    } else if (resolvedDistrict && resolvedDistrict.confidence === 'low') {
+      // Narrowed using a community-published boundary layer (cross-checked
+      // against our seats, but not an authoritative/government source).
+      wardNote = `Your ${resolvedDistrict.kind.toLowerCase()} was matched from a community-published ` +
+        `map, so double-check it with your municipal clerk.`;
+    }
 
-    console.log(`Total officials after transitions + city + district filter: ${allOfficials.length} (district: ${userWard ?? 'unresolved'})`);
+    console.log(`Total officials after transitions + city + district filter: ${allOfficials.length} (district: ${userWard ?? 'unresolved'}, confidence: ${resolvedDistrict?.confidence ?? 'n/a'})`);
 
     // === Unified image_url resolver ===
     // Both Profile and Feed must show the same photo. Feed reads `image_url`
