@@ -5063,6 +5063,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_candidate_caption_facts: {
+        Args: { _candidate_id: string; _cycle?: string }
+        Returns: Json
+      }
       get_committee_cycles: { Args: never; Returns: string[] }
       get_contribution_totals: {
         Args: { p_candidate_id: string; p_cycle: string }
@@ -5104,6 +5108,7 @@ export type Database = {
           transfer_total: number
         }[]
       }
+      get_cron_secret: { Args: never; Returns: string }
       get_donor_cycles: {
         Args: never
         Returns: {
