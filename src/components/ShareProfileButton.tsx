@@ -22,6 +22,7 @@ import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { choosePrimaryCauseLabel, type CauseDisplayInfo } from '@/lib/committeeCauseDisplay';
+import { summarizeForSocial } from '@/lib/shareCaptions';
 import { useAuth } from '@/context/AuthContext';
 import { normalizeInvokeError } from '@/components/RecipientAIAnalysisDialog';
 
@@ -228,15 +229,13 @@ export const ShareProfileButton = ({
     (fundingBreakdown?.length ?? 0) > 0 ||
     (topDonors?.length ?? 0) > 0 ||
     topSpendersWithCauses.length > 0;
-  const shouldUseAIAnalysis =
-    open &&
-    !!user &&
-    !!candidateId &&
-    !hasFinanceCardInfo &&
-    !cycleIeLoading &&
-    !cycleIeFetching &&
-    !latestIeLoading &&
-    !latestIeFetching;
+  // Fetch the candidate's AI analysis whenever the share sheet is open, so its
+  // summary can seed the social caption. Its positions/goals/causes still only
+  // feed the *card* when there's no finance info to show there (unchanged).
+  const aiAnalysisEnabled = open && !!user && !!candidateId;
+  const ieSettled =
+    !cycleIeLoading && !cycleIeFetching && !latestIeLoading && !latestIeFetching;
+  const useAIAnalysisForCard = aiAnalysisEnabled && !hasFinanceCardInfo && ieSettled;
 
   const { data: aiAnalysis, isLoading: aiAnalysisLoading } = useQuery({
     queryKey: [
@@ -248,7 +247,7 @@ export const ShareProfileButton = ({
       candidateOffice,
       candidateState ?? null,
     ],
-    enabled: shouldUseAIAnalysis,
+    enabled: aiAnalysisEnabled,
     staleTime: 1000 * 60 * 10,
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('ai-recipient-analysis', {
@@ -269,12 +268,22 @@ export const ShareProfileButton = ({
         throw new Error(String((data as { error: string }).error));
       }
       return data as {
+        summary?: string;
+        insufficient_information?: boolean;
         positions?: { topic: string; stance: string }[];
         goals?: string[];
         causes?: string[];
       };
     },
   });
+
+  // Caption seed: the AI analysis summary, condensed to fit social limits. Stays
+  // undefined (so the built-in short caption is used) while loading or when the
+  // entity couldn't be confidently identified.
+  const aiCaptionOverride =
+    aiAnalysis && !aiAnalysis.insufficient_information && aiAnalysis.summary?.trim()
+      ? summarizeForSocial(aiAnalysis.summary, 240)
+      : undefined;
 
   return (
     <>
@@ -314,7 +323,7 @@ export const ShareProfileButton = ({
           aiPositions: !hasFinanceCardInfo ? aiAnalysis?.positions : undefined,
           aiGoals: !hasFinanceCardInfo ? aiAnalysis?.goals : undefined,
           aiCauses: !hasFinanceCardInfo ? aiAnalysis?.causes : undefined,
-          aiAnalysisLoading: !hasFinanceCardInfo && shouldUseAIAnalysis && aiAnalysisLoading,
+          aiAnalysisLoading: useAIAnalysisForCard && aiAnalysisLoading,
         }}
         caption={{
           surface: 'candidate_profile',
@@ -329,6 +338,7 @@ export const ShareProfileButton = ({
           disagreements,
           url: profileUrl,
         }}
+        captionBodyOverride={aiCaptionOverride}
       />
     </>
   );
