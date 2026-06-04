@@ -21,13 +21,16 @@ with **Dry run**, then **Import**.
 
 ### How `seat` maps
 
-- `Ward N`  → `district = "Ward N"` (ward-filtered to that ward)
-- `District N` → `district = "District N"` (filtered to that council district)
+- `Ward N` / `Ward A` → `district = "Ward N"` / `"Ward A"` (filtered to that ward)
+- `District N` / `District D` → `district = "District N"` / `"District D"`
+- `East Ward`, `Delaware District`, `Northeast Ward` → kept as-is (named/directional)
 - `At-Large` → `district = "At-Large"` (always shown city-wide)
 - `Mayor`   → `district = null`, office `Mayor of {city}` (always shown)
 
-Matching to a user is by the **integer** in the seat, so the number here must
-match what the city's boundary layer reports.
+Matching to a user is by a **normalized key** that handles numbers (`9`),
+letters (`D`), and directional/named wards (`Northeast`, `Delaware`) — so the
+identifier here just has to match what the city's boundary layer reports
+(e.g. Houston's GIS uses letters A–K; Winston‑Salem's uses `Northeast`, …).
 
 ## CSV example
 

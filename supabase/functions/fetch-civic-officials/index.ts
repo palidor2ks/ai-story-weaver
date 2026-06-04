@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { resolveDistrict, seatDivisionNumber } from '../_shared/district-resolver.ts';
+import { resolveDistrict, seatDivisionKey } from '../_shared/district-resolver.ts';
 
 // Declare EdgeRuntime for background processing
 declare const EdgeRuntime: {
@@ -1119,18 +1119,19 @@ serve(async (req) => {
     // seat is actually ward/district-based (At-Large/Mayor-only towns need no
     // lookup). Works in any state via the shared resolver (admin overrides +
     // registry + authority-scored ArcGIS discovery); null when undetermined.
-    // Pass the seat numbers we actually have so discovery can cross-check
-    // community-published boundary layers against real seats.
-    const knownSeats = Array.from(new Set(
+    // Pass the seat keys we actually have so discovery can cross-check
+    // community-published boundary layers against real seats. Keys handle
+    // numbers ("9"), letters ("d") and named/directional wards ("northeast").
+    const knownKeys = Array.from(new Set(
       allOfficials
         .filter(o => o.level === 'local')
-        .map(o => seatDivisionNumber(o.district))
-        .filter((n): n is number => n != null),
+        .map(o => seatDivisionKey(o.district))
+        .filter((k): k is string => k != null),
     ));
-    const resolvedDistrict = (knownSeats.length > 0 && coords?.lat != null && coords?.lng != null)
+    const resolvedDistrict = (knownKeys.length > 0 && coords?.lat != null && coords?.lng != null)
       ? await resolveDistrict({
           supabase: createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY),
-          lat: coords.lat, lng: coords.lng, state, city, knownSeats,
+          lat: coords.lat, lng: coords.lng, state, city, knownKeys,
         })
       : null;
 
@@ -1169,10 +1170,10 @@ serve(async (req) => {
 
         // Ward/district scope: a council member tied to a specific ward/district
         // is only the user's rep when it's their ward/district. City-wide seats
-        // (At-Large/Mayor) have no division number and are always kept.
-        const seatNum = seatDivisionNumber(o.district);
-        if (seatNum == null) return true;
-        if (resolvedDistrict) return seatNum === resolvedDistrict.number;
+        // (At-Large/Mayor) have no division key and are always kept.
+        const seatKey = seatDivisionKey(o.district);
+        if (seatKey == null) return true;
+        if (resolvedDistrict) return seatKey === resolvedDistrict.key;
         // Couldn't resolve the division — keep all such seats but flag a note.
         districtUnresolvedWithSeats = true;
         return true;

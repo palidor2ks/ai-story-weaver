@@ -13,7 +13,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { prefindBoundarySource, seatDivisionNumber } from "../_shared/district-resolver.ts";
+import { prefindBoundarySource, seatDivisionKey } from "../_shared/district-resolver.ts";
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
 
@@ -196,9 +196,9 @@ serve(async (req) => {
     const seatSummary = cities.map(({ state, city }) => {
       const cityRecords = records.filter(r => r.state === state && (r.city as string).toLowerCase() === city.toLowerCase());
       const wards = cityRecords
-        .map(r => seatDivisionNumber(r.district as string | null))
-        .filter((n): n is number => n != null)
-        .sort((a, b) => a - b);
+        .map(r => seatDivisionKey(r.district as string | null))
+        .filter((k): k is string => k != null)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       return {
         state, city,
         total: cityRecords.length,
