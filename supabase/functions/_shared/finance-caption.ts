@@ -104,10 +104,24 @@ function factsBlock(name: string, party: string, ideology: string | null, office
   return lines.join('\n');
 }
 
-function buildPrompt(platform: string, block: string, long: boolean, max: number): string {
+// The single biggest aggregate figure — the number the caption must open with.
+function headlineHint(f: Facts): string | null {
+  const opts: { v: number; text: string }[] = [];
+  if ((f.raised ?? 0) > 0) opts.push({ v: f.raised!, text: `${fmtMoney(f.raised)} raised this cycle (the war chest)` });
+  if ((f.ie_oppose ?? 0) > 0) opts.push({ v: f.ie_oppose!, text: `${fmtMoney(f.ie_oppose)} in outside money spent OPPOSING them` });
+  if ((f.ie_support ?? 0) > 0) opts.push({ v: f.ie_support!, text: `${fmtMoney(f.ie_support)} in outside money spent SUPPORTING them` });
+  if (opts.length === 0) return null;
+  opts.sort((a, b) => b.v - a.v);
+  return opts[0].text;
+}
+
+function buildPrompt(platform: string, block: string, hint: string | null, long: boolean, max: number): string {
   const lengthRule = long
     ? `Length: 3–5 short sentences. After the hook, give the fuller breakdown — money raised + donors, the standout donor, and the for-vs-against outside spending with the biggest PACs. Keep it under ${max} characters.`
     : `Length: 1–2 short, punchy sentences, under ${max} characters.`;
+  const leadRule = hint
+    ? `OPEN with this exact figure — it is the single biggest number and MUST be your hook, right at the front: ${hint}. Weave the other facts in afterward.`
+    : `LEAD with the single most eye-popping dollar figure and make it the hook.`;
   return `You are a sharp political-media editor writing a punchy, headline-worthy ${platform.toUpperCase()} post about a U.S. politician's campaign money, built for media consumption and engagement.
 
 Use ONLY the verified facts below. Never invent, alter, or re-round any number; never add a fact that isn't listed. You MAY tidy an ALL-CAPS committee name to Title Case.
@@ -116,7 +130,7 @@ VERIFIED FACTS:
 ${block}
 
 Write the post:
-- LEAD with the single most eye-popping figure — usually the largest dollar amount (a giant war chest, the biggest outside-spending number for or against, or a striking top-donor sum). Make that number the hook.
+- ${leadRule}
 - Always name the politician's leaning AND party together (e.g., "Center-Right Republican", "Progressive Democrat").
 - Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
 - ${lengthRule}
@@ -195,8 +209,9 @@ export async function composeFinanceCaption(
   const name = meta.name || 'This candidate';
   const ideology = ideologyLabel(meta.score);
   const block = factsBlock(name, meta.party, ideology, meta.office, meta.state, facts);
+  const hint = headlineHint(facts);
 
-  const ai = await aiCaption(aiKey, buildPrompt(platform, block, cfg.long, cfg.max), cfg.max);
+  const ai = await aiCaption(aiKey, buildPrompt(platform, block, hint, cfg.long, cfg.max), cfg.max);
   if (ai) return { caption: ai, source: 'finance_ai' };
   return { caption: templateCaption(name, meta.party, ideology, meta.state, facts, cfg.max), source: 'finance_template' };
 }
