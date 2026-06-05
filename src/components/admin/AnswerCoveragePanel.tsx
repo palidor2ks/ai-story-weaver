@@ -58,6 +58,9 @@ import { CandidateAnswersDialog } from "@/components/admin/CandidateAnswersDialo
 import { BackfillAnswersControl } from "@/components/admin/BackfillAnswersControl";
 import { ColumnHeaderFilter } from "@/components/admin/ColumnHeaderFilter";
 import { ProcessingStatusIndicator } from "@/components/admin/ProcessingStatusIndicator";
+import { StatTile } from "@/components/admin/StatTile";
+import { FinanceCycleSummary } from "@/components/admin/FinanceCycleSummary";
+import { CronHealthPanel } from "@/components/admin/CronHealthPanel";
 import { ScoreTextInline } from "@/components/ScoreText";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -1074,7 +1077,7 @@ export function AnswerCoveragePanel() {
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4">
         {/* Overall Stats Grid - Candidate Answer Stats */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -1116,44 +1119,17 @@ export function AnswerCoveragePanel() {
               </TooltipProvider>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Users className="h-4 w-4" />
-                Total Reps
-              </div>
-              <div className="text-2xl font-bold">{candidateStats?.totalCandidates?.toLocaleString() || 0}</div>
-            </div>
-
-            <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <HelpCircle className="h-4 w-4" />
-                Total Questions
-              </div>
-              <div className="text-2xl font-bold">{candidateStats?.totalQuestions?.toLocaleString() || 0}</div>
-            </div>
-
-            <div className="bg-amber-500/10 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <FileText className="h-4 w-4 text-amber-600" />
-                No Answers
-              </div>
-              <div className="text-2xl font-bold text-amber-600">{candidateStats?.noAnswers || 0}</div>
-            </div>
-
-            <div className="bg-green-500/10 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                Full Coverage
-              </div>
-              <div className="text-2xl font-bold text-green-600">{candidateStats?.fullCoverage || 0}</div>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <StatTile icon={Users} label="Total Reps" value={candidateStats?.totalCandidates?.toLocaleString() || 0} />
+            <StatTile icon={HelpCircle} label="Total Questions" value={candidateStats?.totalQuestions?.toLocaleString() || 0} />
+            <StatTile icon={FileText} label="No Answers" tone="amber" value={candidateStats?.noAnswers || 0} />
+            <StatTile icon={CheckCircle2} label="Full Coverage" tone="green" value={candidateStats?.fullCoverage || 0} />
           </div>
         </div>
 
         {/* Source Coverage Stats */}
-        <div className="bg-muted/30 rounded-lg p-4">
-          <div className="flex items-center justify-between">
+        <div className="bg-muted/30 rounded-lg px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
               <FileText className="h-4 w-4" />
               <span>Source Quality</span>
@@ -1224,40 +1200,19 @@ export function AnswerCoveragePanel() {
               </TooltipProvider>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Link2 className="h-4 w-4" />
-              With FEC ID
-            </div>
-            <div className="text-2xl font-bold">{fecStats.withFecId}</div>
-          </div>
-
-          <div className="bg-muted/30 rounded-lg p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-              Never Synced
-            </div>
-            <div className="text-2xl font-bold text-muted-foreground">{fecStats.neverSynced}</div>
-          </div>
-
-          <div className="bg-amber-500/10 rounded-lg p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <RotateCcw className="h-4 w-4 text-amber-600" />
-              Partial Sync
-            </div>
-            <div className="text-2xl font-bold text-amber-600">{fecStats.partialSync}</div>
-          </div>
-
-          <div className="bg-green-500/10 rounded-lg p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              Complete
-            </div>
-            <div className="text-2xl font-bold text-green-600">{fecStats.complete}</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <StatTile icon={Link2} label="With FEC ID" value={fecStats.withFecId} />
+            <StatTile icon={DollarSign} label="Never Synced" tone="muted" value={fecStats.neverSynced} />
+            <StatTile icon={RotateCcw} label="Partial Sync" tone="amber" value={fecStats.partialSync} />
+            <StatTile icon={CheckCircle2} label="Complete" tone="green" value={fecStats.complete} />
           </div>
         </div>
-        </div>
+
+        {/* Finance Coverage by Cycle — FEC vs Local across visible states */}
+        <FinanceCycleSummary />
+
+        {/* Pipeline & Cron health — attempts, failures, and per-rep drill-down */}
+        <CronHealthPanel />
         {/* Voting Records Stats */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -1417,82 +1372,48 @@ export function AnswerCoveragePanel() {
           </div>
 
           {/* Two-column layout for Legislative Actions vs Floor Votes */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
             {/* Legislative Actions Card */}
-            <div className="bg-muted/30 rounded-lg p-4 space-y-3 border border-muted">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <FileText className="h-4 w-4 text-blue-600" />
+            <div className="bg-muted/30 rounded-md p-3 border border-muted">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-medium">
+                  <FileText className="h-3.5 w-3.5 text-blue-600" />
                   Legislative Actions
                 </div>
-                <Badge variant="outline" className="text-xs">Sponsored / Cosponsored</Badge>
+                <Badge variant="outline" className="text-[10px] h-5">Sponsored / Cosponsored</Badge>
               </div>
-              <div className="text-3xl font-bold text-blue-600">
+              <div className="mt-1 text-2xl font-bold text-blue-600 leading-none">
                 {votingStats?.legislativeActions?.toLocaleString() || 0}
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="mt-1 text-[11px] text-muted-foreground">
                 Bills and resolutions (co)sponsored by members
               </div>
             </div>
 
             {/* Floor Votes Card */}
-            <div className="bg-muted/30 rounded-lg p-4 space-y-3 border border-muted">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Vote className="h-4 w-4 text-green-600" />
+            <div className="bg-muted/30 rounded-md p-3 border border-muted">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-medium">
+                  <Vote className="h-3.5 w-3.5 text-green-600" />
                   Floor Votes
                 </div>
-                <Badge variant="outline" className="text-xs">Yea / Nay / Present</Badge>
+                <Badge variant="outline" className="text-[10px] h-5">Yea / Nay / Present</Badge>
               </div>
-              <div className="text-3xl font-bold text-green-600">
+              <div className="mt-1 text-2xl font-bold text-green-600 leading-none">
                 {votingStats?.floorVotes?.toLocaleString() || 0}
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="mt-1 text-[11px] text-muted-foreground">
                 Actual roll call votes cast on the floor
               </div>
             </div>
           </div>
 
           {/* Coverage Stats Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <FileText className="h-4 w-4" />
-                Total Records
-              </div>
-              <div className="text-2xl font-bold">{votingStats?.totalRecords?.toLocaleString() || 0}</div>
-            </div>
-
-            <div className="bg-muted/30 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Users className="h-4 w-4" />
-                Members Synced
-              </div>
-              <div className="text-2xl font-bold">
-                {votingStats?.membersSynced || 0}
-                <span className="text-sm text-muted-foreground font-normal"> / 540</span>
-              </div>
-            </div>
-
-            <div className="bg-purple-500/10 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Vote className="h-4 w-4 text-purple-600" />
-                With Floor Votes
-              </div>
-              <div className="text-2xl font-bold text-purple-600">
-                {votingStats?.membersWithFloorVotes || 0}
-              </div>
-            </div>
-
-            <div className="bg-green-500/10 rounded-lg p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                Coverage
-              </div>
-              <div className="text-2xl font-bold text-green-600">
-                {votingStats?.coveragePercentage || 0}%
-              </div>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <StatTile icon={FileText} label="Total Records" value={votingStats?.totalRecords?.toLocaleString() || 0} />
+            <StatTile icon={Users} label="Members Synced" value={votingStats?.membersSynced || 0} suffix="/ 540" />
+            <StatTile icon={Vote} label="With Floor Votes" tone="purple" value={votingStats?.membersWithFloorVotes || 0} />
+            <StatTile icon={CheckCircle2} label="Coverage" tone="green" value={`${votingStats?.coveragePercentage || 0}%`} />
           </div>
 
           {/* Voting Sync Progress - Legislation */}

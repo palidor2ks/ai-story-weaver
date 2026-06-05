@@ -5114,6 +5114,31 @@ export type Database = {
           transfer_total: number
         }[]
       }
+      get_cron_job_failures: {
+        Args: { p_jobname: string; p_limit?: number }
+        Returns: {
+          runid: number
+          start_time: string
+          end_time: string
+          status: string
+          return_message: string
+        }[]
+      }
+      get_cron_job_health: {
+        Args: { p_days?: number }
+        Returns: {
+          jobid: number
+          jobname: string
+          schedule: string
+          active: boolean
+          total_runs: number
+          succeeded: number
+          failed: number
+          last_run: string
+          last_status: string
+          avg_duration_seconds: number
+        }[]
+      }
       get_cron_secret: { Args: never; Returns: string }
       get_donor_cycles: {
         Args: never
@@ -5152,10 +5177,45 @@ export type Database = {
           types: string[]
         }[]
       }
+      get_finance_cycle_summary: {
+        Args: never
+        Returns: {
+          cycle: string
+          reps: number
+          reps_with_fec: number
+          fec_total: number
+          local_total: number
+          delta: number
+          delta_pct: number
+          ok_count: number
+          warning_count: number
+          error_count: number
+        }[]
+      }
       get_hidden_state_codes: {
         Args: never
         Returns: {
           state_code: string
+        }[]
+      }
+      get_pipeline_failure_summary: {
+        Args: never
+        Returns: {
+          source: string
+          label: string
+          failure_count: number
+          last_failed_at: string
+        }[]
+      }
+      get_pipeline_failures: {
+        Args: { p_source: string; p_limit?: number }
+        Returns: {
+          rep_id: string
+          rep_name: string
+          state: string
+          cycle: string
+          reason: string
+          occurred_at: string
         }[]
       }
       get_poll_tally: {
