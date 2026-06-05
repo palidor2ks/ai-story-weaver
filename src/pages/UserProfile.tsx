@@ -377,22 +377,12 @@ export const UserProfile = () => {
                   userName={profile.name}
                   onAvatarChange={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
                 />
-                <div className="flex-1 rounded-xl border border-border/60 bg-secondary/50 px-4 py-4 text-center">
-                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
-                    Overall Score
-                  </span>
-                  <div className="mt-2 flex items-center justify-center">
-                    <ScoreText
-                      score={profile.overall_score}
-                      size="lg"
-                      className="[&>span:first-child]:text-2xl sm:[&>span:first-child]:text-3xl"
-                    />
-                  </div>
-                  <p className="mx-auto mt-2 max-w-xs text-xs leading-snug text-muted-foreground sm:text-sm">
-                    {profile.overall_score <= -30 ? 'You tend to lean Progressive on most issues' :
-                     profile.overall_score >= 30 ? 'You tend to lean Conservative on most issues' :
-                     'You hold moderate or mixed views across issues'}
-                  </p>
+                <div className="flex flex-1 items-center justify-center rounded-xl border border-border/60 bg-secondary/50 px-4 py-4 text-center">
+                  <ScoreText
+                    score={profile.overall_score}
+                    size="lg"
+                    className="[&>span:first-child]:text-4xl [&>span:first-child]:font-extrabold sm:[&>span:first-child]:text-5xl"
+                  />
                 </div>
               </div>
               <div className="min-w-0">
