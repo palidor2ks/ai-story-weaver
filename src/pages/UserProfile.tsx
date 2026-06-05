@@ -367,28 +367,30 @@ export const UserProfile = () => {
       <main className="container py-8 px-4 max-w-4xl">
         {/* Profile Header */}
         <div className="bg-card rounded-2xl border border-border p-5 sm:p-6 md:p-8 mb-8 shadow-elevated">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex w-full min-w-0 flex-col gap-4 lg:flex-1">
-              {/* Avatar with the Overall Score right next to it */}
-              <div className="flex items-start gap-4 sm:gap-6">
-                <AvatarUpload
-                  userId={profile.id}
-                  currentAvatarUrl={profile.avatar_url}
-                  userName={profile.name}
-                  onAvatarChange={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
-                />
-                <div className="flex flex-1 items-center justify-center rounded-xl border border-border/60 bg-secondary/50 px-4 py-4 text-center">
-                  <ScoreText
-                    score={profile.overall_score}
-                    size="lg"
-                    className="[&>span:first-child]:text-4xl [&>span:first-child]:font-extrabold sm:[&>span:first-child]:text-5xl"
-                  />
+          <div className="flex flex-col gap-5">
+            {/* Identity: avatar + name, with sign out top-right */}
+            <div className="flex items-start gap-4 sm:gap-5">
+              <AvatarUpload
+                userId={profile.id}
+                currentAvatarUrl={profile.avatar_url}
+                userName={profile.name}
+                onAvatarChange={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <h1 className="break-words font-display text-2xl md:text-3xl font-bold text-foreground">
+                    {profile.name}
+                  </h1>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSignOut}
+                    className="flex-shrink-0 gap-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span className="hidden sm:inline">Sign Out</span>
+                  </Button>
                 </div>
-              </div>
-              <div className="min-w-0">
-                <h1 className="break-words font-display text-2xl md:text-3xl font-bold text-foreground">
-                  {profile.name}
-                </h1>
                 <p className="text-muted-foreground mt-1">
                   Member since {new Date(profile.created_at).toLocaleDateString()}
                 </p>
@@ -440,29 +442,42 @@ export const UserProfile = () => {
                     Add your address
                   </button>
                 )}
-
-                {/* Edit Profile Button */}
-                <div className="mt-3">
-                  <EditProfileDialog
-                    profile={profile}
-                    onSave={async (data) => {
-                      await updateProfile.mutateAsync(data);
-                      toast.success('Profile updated successfully!');
-                    }}
-                    isLoading={updateProfile.isPending}
-                  />
-                  <ChangePasswordDialog />
-                </div>
-
-                {/* Verification badges */}
-                <VerificationBadges profile={profile} />
               </div>
             </div>
-            <div className="flex w-full flex-col gap-3 lg:w-auto lg:items-end">
-              <Button variant="ghost" size="sm" onClick={handleSignOut} className="w-full gap-2 sm:w-auto lg:self-end">
-                <LogOut className="w-4 h-4" />
-                Sign Out
-              </Button>
+
+            {/* Pulse Score */}
+            <div className="border-t border-border/60 pt-4">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Pulse Score
+              </span>
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <ScoreText
+                  score={profile.overall_score}
+                  size="lg"
+                  className="[&>span:first-child]:text-4xl [&>span:first-child]:font-extrabold sm:[&>span:first-child]:text-5xl"
+                />
+                <span className="text-sm text-muted-foreground sm:text-base">
+                  {profile.overall_score <= -30 ? 'Leans Progressive on most issues' :
+                   profile.overall_score >= 30 ? 'Leans Conservative on most issues' :
+                   'Moderate or mixed views across issues'}
+                </span>
+              </div>
+            </div>
+
+            {/* Profile actions + verification */}
+            <div>
+              <div className="flex flex-wrap items-center gap-1">
+                <EditProfileDialog
+                  profile={profile}
+                  onSave={async (data) => {
+                    await updateProfile.mutateAsync(data);
+                    toast.success('Profile updated successfully!');
+                  }}
+                  isLoading={updateProfile.isPending}
+                />
+                <ChangePasswordDialog />
+              </div>
+              <VerificationBadges profile={profile} />
             </div>
           </div>
         </div>
