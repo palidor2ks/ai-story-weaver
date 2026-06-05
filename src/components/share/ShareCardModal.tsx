@@ -11,6 +11,7 @@ import { CandidateStatCard } from './templates/CandidateStatCard';
 import { DataCard } from './templates/DataCard';
 import { EditorialCard } from './templates/EditorialCard';
 import { DonorStatsCard } from './templates/DonorStatsCard';
+import { AIAnalysisCard } from './templates/AIAnalysisCard';
 import { CardData, CARD_SIZE } from './templates/types';
 import { copyNodeToClipboard, downloadNode, nodeToBlob, nodeToFile, renderNodeWithQA } from '@/lib/shareImage';
 import { SharePreviewDialog } from './SharePreviewDialog';
@@ -36,6 +37,9 @@ import { logBadgeEvent } from '@/lib/badges';
 const TEMPLATES_BY_KIND = {
   'candidate-alignment': [
     { id: 'stat', label: 'Stat Card', Component: (props: { data: CardData }) => <CandidateStatCard {...props} variant='classic' /> },
+  ],
+  'ai-analysis': [
+    { id: 'stat', label: 'Analysis Card', Component: (props: { data: CardData }) => <AIAnalysisCard {...props} /> },
   ],
   'donor-stats': [
     { id: 'classic', label: 'Patriot Card', Component: (props: { data: CardData }) => <BaseballCard {...props} variant='classic' /> },
@@ -120,7 +124,8 @@ export const ShareCardModal = ({
   captionBodyOverride,
 }: ShareCardModalProps) => {
   const templates = TEMPLATES_BY_KIND[data.kind];
-  const defaultTemplate = data.kind === 'candidate-alignment' ? 'stat' : 'classic';
+  const defaultTemplate =
+    data.kind === 'candidate-alignment' || data.kind === 'ai-analysis' ? 'stat' : 'classic';
   const [selected, setSelected] = useState<TemplateId>(defaultTemplate);
   const [busy, setBusy] = useState<null | 'download' | 'copy' | 'native'>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -208,6 +213,8 @@ export const ShareCardModal = ({
         ? 'pulse-my-profile'
         : caption.kind === 'donor-stats'
         ? `pulse-donor-${caption.donorName?.replace(/\s+/g, '-').toLowerCase()}`
+        : caption.kind === 'ai-analysis'
+        ? `pulse-analysis-${caption.subjectName?.replace(/\s+/g, '-').toLowerCase()}`
         : 'pulse-invite';
     return `${base}-${selected}.png`;
   }, [selected, caption]);
@@ -229,6 +236,7 @@ export const ShareCardModal = ({
       case 'donor-stats': return 'donor';
       case 'user-profile': return 'profile';
       case 'invite': return 'invite';
+      case 'ai-analysis': return 'ai_analysis';
       default: return 'unknown';
     }
   })();
@@ -353,6 +361,7 @@ export const ShareCardModal = ({
     }
     if (caption.kind === 'user-profile') return 'My political profile on Pulse';
     if (caption.kind === 'donor-stats') return `${caption.donorName} — Donor profile on Pulse`;
+    if (caption.kind === 'ai-analysis') return `${caption.subjectName} — AI analysis on Pulse`;
     return 'Pulse — Know Your Vote';
   }, [caption]);
 

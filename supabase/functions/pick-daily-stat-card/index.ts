@@ -100,15 +100,26 @@ Deno.serve(async (req) => {
     }
     const picked = eligible[Math.floor(Math.random() * eligible.length)];
 
+    // Decide the content type for today by cycling through the configured
+    // rotation (e.g. rep_profile one day, ai_analysis the next). Both types
+    // feature a candidate; they differ in how the caption is composed
+    // (finance headline vs. cached AI analysis summary).
+    const rotationTypes: string[] =
+      Array.isArray(settings.rotation_types) && settings.rotation_types.length > 0
+        ? settings.rotation_types
+        : ['rep_profile'];
+    const rotationIndex = Number(settings.rotation_index ?? 0);
+    const subjectType = rotationTypes[((rotationIndex % rotationTypes.length) + rotationTypes.length) % rotationTypes.length];
+
     // Insert draft
     const subjectLabel = `${picked.name} — ${picked.office}${picked.state ? `, ${picked.state}` : ''}`;
     const { data: post, error: insErr } = await admin
       .from('social_posts')
       .insert({
-        subject_type: 'rep_profile',
+        subject_type: subjectType,
         subject_id: picked.id,
         subject_label: subjectLabel,
-        stat_key: 'overall_score',
+        stat_key: subjectType === 'ai_analysis' ? 'ai_summary' : 'overall_score',
         stat_payload: {
           overall_score: picked.overall_score,
           party: picked.party,
@@ -122,6 +133,12 @@ Deno.serve(async (req) => {
       .select('id')
       .single();
     if (insErr) throw insErr;
+
+    // Advance the rotation pointer so the next draft uses the following type.
+    await admin
+      .from('social_post_settings')
+      .update({ rotation_index: rotationIndex + 1 })
+      .eq('id', 1);
 
     // Insert per-platform rows
     const platformRows = PLATFORMS.map((p) => ({
@@ -167,7 +184,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, post_id: post.id, subject_id: picked.id, mode: settings.mode, analysis_warmed: warmed }),
+      JSON.stringify({ ok: true, post_id: post.id, subject_id: picked.id, subject_type: subjectType, mode: settings.mode, analysis_warmed: warmed }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err) {

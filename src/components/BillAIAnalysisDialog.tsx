@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Sparkles, Loader2, ExternalLink, AlertTriangle, BookOpen, RefreshCw, X, Globe } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { ShareAIAnalysisButton } from '@/components/ShareAIAnalysisButton';
 
 export interface BillAnalysis {
   summary: string;
@@ -142,6 +143,15 @@ export const BillAIAnalysisDialog = ({
             </div>
             {analysis && !isLoading && (
               <div className="flex items-center gap-2 shrink-0">
+                {!analysis.insufficient_information && (
+                  <ShareAIAnalysisButton
+                    subjectName={`${billLabel}: ${billName}`}
+                    subtitle="Bill Analysis"
+                    subjectKind="bill"
+                    summary={analysis.summary}
+                    confidence={analysis.confidence}
+                  />
+                )}
                 <Button size="sm" variant="outline" onClick={() => fetchAnalysis(true)}>
 
                   <RefreshCw className="h-3.5 w-3.5 mr-1.5" />

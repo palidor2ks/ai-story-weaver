@@ -58,6 +58,22 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ caption, source }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     };
 
+    // AI-analysis rotation post: lead with the candidate's cached AI analysis
+    // summary (the same web-grounded writeup shown on the profile), condensed to
+    // the platform limit. Falls through to the static line if the cache misses.
+    if (post.subject_type === 'ai_analysis' && post.subject_id) {
+      const cached = await readCache<{ summary?: string; insufficient_information?: boolean }>({
+        kind: 'recipient', subject_id: `v2:candidate:${post.subject_id}`, cycle: null,
+      });
+      const summary = cached?.payload?.summary;
+      if (cached?.payload && !cached.payload.insufficient_information && typeof summary === 'string' && summary.trim()) {
+        const name = String(post.subject_label ?? '').split('—')[0].trim() || 'this candidate';
+        const prefix = `AI analysis — ${name}: `;
+        const body = summarizeForSocial(summary, Math.max(1, max - prefix.length));
+        return await save(`${prefix}${body}`, 'ai_analysis');
+      }
+    }
+
     if (post.subject_type === 'rep_profile' && post.subject_id) {
       // Primary: the headline caption from VERIFIED finance/IE facts.
       const { data: cand } = await admin
