@@ -1321,6 +1321,41 @@ export type Database = {
           },
         ]
       }
+      donor_card_causes: {
+        Row: {
+          assigned_by: string
+          cause_id: string | null
+          classified_at: string
+          model: string | null
+          primary_id: string
+          reasoning: string | null
+        }
+        Insert: {
+          assigned_by?: string
+          cause_id?: string | null
+          classified_at?: string
+          model?: string | null
+          primary_id: string
+          reasoning?: string | null
+        }
+        Update: {
+          assigned_by?: string
+          cause_id?: string | null
+          classified_at?: string
+          model?: string | null
+          primary_id?: string
+          reasoning?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "donor_card_causes_cause_id_fkey"
+            columns: ["cause_id"]
+            isOneToOne: false
+            referencedRelation: "committee_causes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       donor_cause_overrides: {
         Row: {
           assigned_at: string
@@ -5073,6 +5108,7 @@ export type Database = {
         Args: { _candidate_id: string; _cycle?: string }
         Returns: Json
       }
+      get_committee_card_facts: { Args: { _fec_id: string }; Returns: Json }
       get_committee_cycles: { Args: never; Returns: string[] }
       get_contribution_totals: {
         Args: { p_candidate_id: string; p_cycle: string }
@@ -5117,29 +5153,30 @@ export type Database = {
       get_cron_job_failures: {
         Args: { p_jobname: string; p_limit?: number }
         Returns: {
+          end_time: string
+          return_message: string
           runid: number
           start_time: string
-          end_time: string
           status: string
-          return_message: string
         }[]
       }
       get_cron_job_health: {
         Args: { p_days?: number }
         Returns: {
+          active: boolean
+          avg_duration_seconds: number
+          failed: number
           jobid: number
           jobname: string
-          schedule: string
-          active: boolean
-          total_runs: number
-          succeeded: number
-          failed: number
           last_run: string
           last_status: string
-          avg_duration_seconds: number
+          schedule: string
+          succeeded: number
+          total_runs: number
         }[]
       }
       get_cron_secret: { Args: never; Returns: string }
+      get_donor_card_facts: { Args: { _donor_id: string }; Returns: Json }
       get_donor_cycles: {
         Args: never
         Returns: {
@@ -5181,15 +5218,15 @@ export type Database = {
         Args: never
         Returns: {
           cycle: string
-          reps: number
-          reps_with_fec: number
-          fec_total: number
-          local_total: number
           delta: number
           delta_pct: number
-          ok_count: number
-          warning_count: number
           error_count: number
+          fec_total: number
+          local_total: number
+          ok_count: number
+          reps: number
+          reps_with_fec: number
+          warning_count: number
         }[]
       }
       get_hidden_state_codes: {
@@ -5201,21 +5238,21 @@ export type Database = {
       get_pipeline_failure_summary: {
         Args: never
         Returns: {
-          source: string
-          label: string
           failure_count: number
+          label: string
           last_failed_at: string
+          source: string
         }[]
       }
       get_pipeline_failures: {
-        Args: { p_source: string; p_limit?: number }
+        Args: { p_limit?: number; p_source: string }
         Returns: {
+          cycle: string
+          occurred_at: string
+          reason: string
           rep_id: string
           rep_name: string
           state: string
-          cycle: string
-          reason: string
-          occurred_at: string
         }[]
       }
       get_poll_tally: {
@@ -5224,6 +5261,23 @@ export type Database = {
           count: number
           question_id: string
           selected_option_id: string
+        }[]
+      }
+      get_top_committee_spenders: {
+        Args: { _exclude_ids?: string[]; _limit?: number }
+        Returns: {
+          fec_committee_id: string
+          name: string
+          total_spent: number
+        }[]
+      }
+      get_top_donor_entities: {
+        Args: { _exclude_ids?: string[]; _limit?: number }
+        Returns: {
+          display_name: string
+          primary_id: string
+          total_amount: number
+          type: string
         }[]
       }
       has_role: {
@@ -5325,6 +5379,10 @@ export type Database = {
       refresh_committee_pool: { Args: never; Returns: undefined }
       refresh_donor_consolidated_mv: { Args: never; Returns: undefined }
       resolve_committee_alias: { Args: { p_fec_id: string }; Returns: string[] }
+      resolve_committee_name: {
+        Args: { _fallback: string; _fec_id: string }
+        Returns: string
+      }
       resolve_donor_display_name: {
         Args: { p_donor_name: string; p_donor_type: string }
         Returns: string
