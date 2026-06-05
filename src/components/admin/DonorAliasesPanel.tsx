@@ -162,16 +162,6 @@ export function DonorAliasesPanel() {
 
   const filteredAliases = aliases;
 
-  const getAliasCommitteeIds = (alias: DonorAlias): string[] => {
-    const pageCommitteeIds = (alias as DonorAlias & { committee_ids?: string[] }).committee_ids;
-    if (pageCommitteeIds?.length) return pageCommitteeIds;
-    return alias.fec_committee_ids?.length
-      ? alias.fec_committee_ids
-      : alias.fec_committee_id
-        ? [alias.fec_committee_id]
-        : [];
-  };
-
   const handleOpenCreate = () => {
     setSelectedAlias(null);
     setFormData({ canonical_name: '', fec_committee_ids: [], notes: '', is_active: true });
@@ -285,17 +275,15 @@ export function DonorAliasesPanel() {
                   <TableRow>
                     <TableHead>Canonical Name</TableHead>
                     <TableHead>Members</TableHead>
-                    <TableHead>Committee ID(s)</TableHead>
                     <TableHead>Primary Cause</TableHead>
                     <TableHead>Active</TableHead>
-                    <TableHead>Notes</TableHead>
                     <TableHead className="w-32">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredAliases.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                         {debouncedAliasSearch ? 'No aliases match your search.' : 'No aliases yet — click “New Alias” to create one first.'}
                       </TableCell>
                     </TableRow>
@@ -327,19 +315,6 @@ export function DonorAliasesPanel() {
                             <Badge variant="secondary">{count}</Badge>
                           </Button>
                         </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {(() => {
-                            const ids = getAliasCommitteeIds(alias);
-                            if (ids.length === 0) return '—';
-                            return (
-                              <div className="flex flex-wrap gap-1">
-                                {ids.map((id) => (
-                                  <Badge key={id} variant="outline" className="font-mono text-[10px]">{id}</Badge>
-                                ))}
-                              </div>
-                            );
-                          })()}
-                        </TableCell>
                         <TableCell>
                           <AliasCauseCell
                             alias={alias}
@@ -357,9 +332,6 @@ export function DonorAliasesPanel() {
                           ) : (
                             <Badge variant="outline">Inactive</Badge>
                           )}
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
-                          {alias.notes || '—'}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
