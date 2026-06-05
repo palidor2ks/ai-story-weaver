@@ -160,6 +160,26 @@ Deno.serve(async (req) => {
         if (insErr) { skipped.push({ subject_type: type, reason: insErr.message }); continue; }
 
         await insertPlatforms(post.id);
+
+        // Cache an AI-classified cause for this donor BEFORE the card renders /
+        // caption runs, so more donor cards show a cause. Awaited (this is a
+        // daily/manual job, not latency-critical) so the cause is ready when an
+        // admin clicks Render right after. The classifier is itself cached/no-ops
+        // if the donor is already classified, and abstains when unsure. Best-effort
+        // — never fail the pick if classification fails.
+        try {
+          const cronSecret = await getCronSecret();
+          const headers: Record<string, string> = { 'Content-Type': 'application/json', apikey: anonKey, Authorization: `Bearer ${serviceKey}` };
+          if (cronSecret) headers['x-cron-secret'] = cronSecret;
+          await fetch(`${supaUrl}/functions/v1/classify-donor-cause`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ donor_id: donor.primary_id }),
+          });
+        } catch (e) {
+          console.warn('donor cause classify failed', e);
+        }
+
         createdMeta.push({ subject_type: type, subject_id: donor.primary_id, post_id: post.id });
         pickedThisRun.add(donor.primary_id);
         continue;
