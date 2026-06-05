@@ -268,7 +268,7 @@ function templateCaption(name: string, party: string, ideology: string | null, s
 // we trim back to the last whole sentence; if even that doesn't fit, we retry once
 // with a hard brevity instruction, then give up (null) so the caller falls back to
 // the deterministic template (which is built to fit).
-async function aiCaption(aiKey: string | undefined, prompt: string, max: number): Promise<string | null> {
+export async function aiCaption(aiKey: string | undefined, prompt: string, max: number): Promise<string | null> {
   if (!aiKey) return null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const content = attempt === 0
@@ -461,9 +461,6 @@ export function topOutsideSpender(f: Facts | null): { name: string; amount: numb
 export function hasCommitteeData(f: Facts | null): boolean {
   return !!f && ((f.ie_support ?? 0) > 0 || (f.ie_oppose ?? 0) > 0) && !!topOutsideSpender(f);
 }
-export function hasDonorData(f: Facts | null): boolean {
-  return !!f && !!f.top_donor && (f.top_donor.amount ?? 0) > 0;
-}
 
 function partyLineFor(meta: CandidateMeta): string {
   const ideology = ideologyLabel(meta.score);
@@ -527,33 +524,4 @@ export async function composeCommitteeCaption(
   const emoji = top.dir === 'oppose' ? '💸' : '💥';
   const base = `${fmtMoney(top.amount)} in outside money from ${tidyName(top.name)} is working to ${verb} ${displayName}.${contrast} Follow the money. ${emoji}`;
   return { caption: ensureHandle(summarizeForSocial(base, cfg.max), handle, cfg.max), source: 'committee_template' };
-}
-
-// Caption for a "top donor" post. Null when the candidate has no usable donor data.
-export async function composeTopDonorCaption(
-  admin: SupabaseClient, aiKey: string | undefined, candidateId: string, platform: string, meta: CandidateMeta,
-): Promise<{ caption: string; source: string } | null> {
-  const cfg = PLATFORM_LIMITS[platform] ?? PLATFORM_LIMITS.x;
-  const facts = await fetchCandidateFacts(admin, candidateId);
-  if (!hasDonorData(facts)) return null;
-  const f = facts as Facts;
-  const d = f.top_donor!;
-  const character = fundingCharacter(f.funding ?? null);
-
-  const handle = normalizeHandle(meta.handle);
-  const displayName = handle ? `@${handle}` : (meta.name || 'this candidate');
-  const typeNote = d.type && !/^ind/i.test(d.type) ? ` (a ${tidyName(d.type)})` : '';
-  const lines = [
-    `Politician: ${displayName} — ${partyLineFor(meta)}.`,
-    `Largest single donor: ${tidyName(d.name)}${typeNote} at ${fmtMoney(d.amount)}.`,
-  ];
-  if (f.funding) lines.push(`Funding mix (shares of total CONTRIBUTIONS from donors, NOT of the total raised — never phrase as "X% of the war chest"): ${f.funding.small_pct}% small-dollar / ${f.funding.large_pct}% large individual / ${f.funding.pac_pct}% PAC.`);
-  if (character) lines.push(`Funding character (feature this, pointed but factual): ${character}.`);
-  const timing = electionTimingDirective(f.cycle, f.today);
-  const ai = await aiCaption(aiKey, buildWatchdogPrompt(platform, 'donor', lines.join('\n'), timing, handle, cfg.max), cfg.max);
-  if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: 'top_donor_ai' };
-
-  const charClause = character ? ` The campaign is ${character}.` : '';
-  const base = `${displayName}'s single biggest backer: ${tidyName(d.name)}${typeNote} at ${fmtMoney(d.amount)}.${charClause} Follow the money. 💰`;
-  return { caption: ensureHandle(summarizeForSocial(base, cfg.max), handle, cfg.max), source: 'top_donor_template' };
 }

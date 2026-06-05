@@ -20,6 +20,7 @@ import {
   tidyName,
   topOutsideSpender,
 } from './finance-caption.ts';
+import { type DonorCardFacts, fetchDonorCardFacts } from './donor-card.ts';
 
 const RESVG_WASM_URL = 'https://esm.sh/@resvg/resvg-wasm@2.6.2/index_bg.wasm';
 const CARD_SIZE = 1080;
@@ -264,7 +265,6 @@ function centredIcon(paths: string, topY: number, size: number, color: string): 
   return `<g transform="translate(${x},${topY}) scale(${s})" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`;
 }
 const ICON_LANDMARK = '<path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2 21 8H3z"/>';
-const ICON_COIN = '<circle cx="12" cy="12" r="9"/><path d="M14.2 9.3a2.4 2.2 0 0 0-2.2-1.3h-.6a2 2 0 0 0 0 4h1.2a2 2 0 0 1 0 4h-.6a2.4 2.2 0 0 1-2.2-1.3"/><path d="M12 6v1.4M12 16.6V18"/>';
 
 // A horizontal multi-segment proportion bar (for "for vs against" or the funding mix).
 function segmentBar(y: number, segments: { value: number; color: string }[]): string {
@@ -368,43 +368,145 @@ function buildCommitteeSvg(c: CardCandidate, top: { name: string; amount: number
   });
 }
 
-function buildDonorSvg(c: CardCandidate, f: Facts, photo: string | null): string {
-  const d = f.top_donor!;
+// ---------- donor-ENTITY card (the `top_donor` rotation) ----------
+//
+// A standalone DONOR profile card (no candidate, no photo) mirroring the in-app
+// DonorStatsCard + /donor/:id header: donor name, type badge, optional cause
+// badge, a big "total given" figure, 4 stat tiles, top recipients, and a
+// "Follow the Money" footer. Uses an initials monogram in a coin in place of a
+// politician photo.
+
+function donorNameFontSize(name: string): number {
+  const len = (name ?? '').length;
+  if (len > 26) return 56;
+  if (len > 18) return 68;
+  return 80;
+}
+
+// A pill chip (rounded rect + centered label) sized to its text. Returns the
+// chip SVG plus the width used, so callers can place several side by side.
+function chip(cx: number, y: number, label: string, color: string, fontSize = 26): { svg: string; width: number } {
+  const text = truncate(label, 28);
+  const width = Math.min(CARD_SIZE - 160, Math.max(120, 56 + text.length * (fontSize * 0.62)));
+  const svg = `<rect x="${(cx - width / 2).toFixed(1)}" y="${y}" width="${width.toFixed(1)}" height="52" rx="26" fill="${color}" fill-opacity="0.16" stroke="${color}" stroke-width="2" />
+    <text x="${cx}" y="${y + 35}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${fontSize}" fill="${color}">${escapeXml(text)}</text>`;
+  return { svg, width };
+}
+
+// One stat tile (figure over uppercase label) in a bordered rounded box.
+function statTile(x: number, y: number, w: number, h: number, value: string, label: string, accent: string): string {
+  const cx = x + w / 2;
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="24" fill="#0f1a30" stroke="#1f2a44" stroke-width="2" />
+    <text x="${cx}" y="${y + h / 2 - 2}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="56" fill="${accent}">${escapeXml(truncate(value, 10))}</text>
+    <text x="${cx}" y="${y + h - 30}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="22" fill="#94a3b8" letter-spacing="2">${escapeXml(label)}</text>`;
+}
+
+function compactCount(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '0';
+  const a = Math.abs(n);
+  if (a >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+  if (a >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}K`;
+  return `${Math.round(n)}`;
+}
+
+function buildDonorEntitySvg(f: DonorCardFacts): string {
+  const cx = CARD_SIZE / 2;
   const GOLD = '#fbbf24';
-  const type = d.type && !/^ind/i.test(d.type) ? ` (${tidyName(d.type)})` : '';
-  const fu = f.funding;
-  return buildMoneyCardSvg(c, photo, {
-    eyebrow: 'TOP CAMPAIGN DONOR',
-    icon: ICON_COIN,
-    accent: GOLD,
-    bigFigure: fmtMoney(d.amount) ?? '—',
-    subLine: `${tidyName(d.name)}${type}`,
-    bar: fu
-      ? {
-          segments: [
-            { value: fu.small_pct, color: '#22c55e' },
-            { value: fu.large_pct, color: GOLD },
-            { value: fu.pac_pct, color: '#ef4444' },
-          ],
-          left: `${fu.small_pct}% small-dollar`,
-          right: `${fu.pac_pct}% PAC`,
-          leftColor: '#22c55e',
-          rightColor: '#ef4444',
-        }
-      : null,
-  });
+  const name = tidyName(f.display_name) || f.display_name;
+  const typeNoun = (f.type || 'Donor').replace(/^ind.*/i, 'Individual');
+
+  // Monogram coin in place of a photo.
+  const coinCy = 290;
+  const coinR = 110;
+  const monogram = `<circle cx="${cx}" cy="${coinCy}" r="${coinR}" fill="#1a2440" stroke="${GOLD}" stroke-width="4" />
+    <text x="${cx}" y="${coinCy + 32}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="92" fill="${GOLD}">${escapeXml(initials(name))}</text>`;
+
+  // Identity chips (type, optional cause), centered as a row under the name.
+  const typeChip = chip(0, 0, typeNoun, GOLD);
+  const causeChip = f.cause ? chip(0, 0, f.cause.label, '#60a5fa') : null;
+  const gap = 16;
+  const totalChipW = typeChip.width + (causeChip ? gap + causeChip.width : 0);
+  const chipsY = 560;
+  let chipX = cx - totalChipW / 2 + typeChip.width / 2;
+  const typeChipSvg = chip(chipX, chipsY, typeNoun, GOLD).svg;
+  chipX += typeChip.width / 2;
+  let causeChipSvg = '';
+  if (causeChip) {
+    const ccx = chipX + gap + causeChip.width / 2;
+    causeChipSvg = chip(ccx, chipsY, f.cause!.label, '#60a5fa').svg;
+  }
+
+  const locationLine = f.location
+    ? `<text x="${cx}" y="650" text-anchor="middle" font-family="Inter" font-weight="400" font-size="28" fill="#94a3b8">${escapeXml(truncate(f.location, 40))}</text>`
+    : '';
+
+  // Stat tiles row: Total Given / Donations / Recipients / Cycles.
+  const tileY = f.location ? 686 : 660;
+  const tileH = 130;
+  const tileGap = 20;
+  const margin = 80;
+  const tileW = (CARD_SIZE - margin * 2 - tileGap * 3) / 4;
+  const tiles = [
+    statTile(margin + (tileW + tileGap) * 0, tileY, tileW, tileH, fmtMoney(f.total_given) ?? '$0', 'TOTAL GIVEN', '#22c55e'),
+    statTile(margin + (tileW + tileGap) * 1, tileY, tileW, tileH, compactCount(f.donation_count), 'DONATIONS', '#e2e8f0'),
+    statTile(margin + (tileW + tileGap) * 2, tileY, tileW, tileH, compactCount(f.recipient_count), 'RECIPIENTS', '#e2e8f0'),
+    statTile(margin + (tileW + tileGap) * 3, tileY, tileW, tileH, compactCount(f.cycle_count), 'CYCLES', '#e2e8f0'),
+  ].join('');
+
+  // Top recipients (up to 3): name left, amount right, one per row. Sized so the
+  // header + up to 3 rows fit above the footer (≤ ~1050) within the 1080 card.
+  const recips = f.top_recipients.filter((r) => (r.amount ?? 0) > 0).slice(0, 3);
+  const recipHeaderY = tileY + tileH + 58;
+  let recipBlock = '';
+  if (recips.length > 0) {
+    recipBlock += `<text x="${margin}" y="${recipHeaderY}" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="3">TOP RECIPIENTS</text>`;
+    recips.forEach((r, i) => {
+      const ry = recipHeaderY + 50 + i * 54;
+      recipBlock += `<text x="${margin}" y="${ry}" font-family="Inter" font-weight="700" font-size="34" fill="#f8fafc">${escapeXml(truncate(tidyName(r.name), 32))}</text>
+        <text x="${CARD_SIZE - margin}" y="${ry}" text-anchor="end" font-family="Inter" font-weight="700" font-size="34" fill="${GOLD}">${escapeXml(fmtMoney(r.amount) ?? '$0')}</text>`;
+    });
+  }
+
+  return `<svg width="${CARD_SIZE}" height="${CARD_SIZE}" viewBox="0 0 ${CARD_SIZE} ${CARD_SIZE}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b1220" />
+      <stop offset="1" stop-color="#111d3a" />
+    </linearGradient>
+  </defs>
+
+  <rect width="${CARD_SIZE}" height="${CARD_SIZE}" fill="url(#bg)" />
+
+  <text x="72" y="96" font-family="Inter" font-weight="700" font-size="40" fill="#f8fafc">PoliPulse</text>
+  <text x="${CARD_SIZE - 72}" y="96" text-anchor="end" font-family="Inter" font-weight="400" font-size="26" fill="#94a3b8">Follow the Money</text>
+
+  ${monogram}
+
+  <text x="${cx}" y="462" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="4">DONOR PROFILE</text>
+  <text x="${cx}" y="530" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${donorNameFontSize(name)}" fill="#f8fafc">${escapeXml(truncate(name, 30))}</text>
+  ${typeChipSvg}
+  ${causeChipSvg}
+  ${locationLine}
+
+  ${tiles}
+  ${recipBlock}
+
+  <text x="${cx}" y="1062" text-anchor="middle" font-family="Inter" font-weight="400" font-size="22" fill="#64748b">polipulseapp.com — Follow the money</text>
+</svg>`;
+}
+
+export async function renderDonorEntityCardPng(f: DonorCardFacts): Promise<Uint8Array> {
+  return rasterize(buildDonorEntitySvg(f));
 }
 
 // Pick the right SVG for the post's subject_type. Money cards need verified facts;
 // when those are missing we fall back to the candidate score card so we always
-// produce a usable image.
+// produce a usable image. (top_donor is handled separately — it's donor-anchored,
+// not candidate-anchored — see renderAndStoreCard.)
 function buildCardSvgFor(subjectType: string, c: CardCandidate, facts: Facts | null, photo: string | null): string {
   if (subjectType === 'committee_spender' && facts) {
     const top = topOutsideSpender(facts);
     if (top) return buildCommitteeSvg(c, top, facts.ie_support ?? 0, facts.ie_oppose ?? 0, photo);
-  }
-  if (subjectType === 'top_donor' && facts?.top_donor && (facts.top_donor.amount ?? 0) > 0) {
-    return buildDonorSvg(c, facts, photo);
   }
   return buildSvg(c, photo);
 }
@@ -424,17 +526,22 @@ export async function renderStatCardPng(subjectType: string, c: CardCandidate, f
   return rasterize(buildCardSvgFor(subjectType, c, facts, photo));
 }
 
-// One-line OpenGraph description for a money card (used for link unfurls); null
-// for non-money types so the caller keeps its default office • party line.
+// One-line OpenGraph description for the committee money card (used for link
+// unfurls); null for other types so the caller keeps its default line.
 function moneyCardDescription(subjectType: string, facts: Facts | null): string | null {
   if (subjectType === 'committee_spender' && facts) {
     const top = topOutsideSpender(facts);
     if (top) return `${fmtMoney(top.amount)} from ${tidyName(top.name)} to ${top.dir === 'support' ? 'elect' : 'defeat'} them`.slice(0, 300);
   }
-  if (subjectType === 'top_donor' && facts?.top_donor && (facts.top_donor.amount ?? 0) > 0) {
-    return `Top donor: ${tidyName(facts.top_donor.name)} — ${fmtMoney(facts.top_donor.amount)}`.slice(0, 300);
-  }
   return null;
+}
+
+// One-line OG description for a donor-entity card.
+function donorCardDescription(f: DonorCardFacts): string {
+  const parts = [`${fmtMoney(f.total_given) ?? '$0'} given`];
+  if (f.cause) parts.push(f.cause.label);
+  else if (f.top_recipients[0]) parts.push(`top recipient ${tidyName(f.top_recipients[0].name)}`);
+  return `Follow the money — ${parts.join(' · ')}`.slice(0, 300);
 }
 
 function makeId(len = 10): string {
@@ -462,25 +569,46 @@ export async function renderAndStoreCard(
 ): Promise<RenderedCard> {
   const supaUrl = Deno.env.get('SUPABASE_URL')!;
   const subjectType = post.subject_type ?? 'rep_profile';
-  const isMoneyCard = subjectType === 'committee_spender' || subjectType === 'top_donor';
 
-  const { data: cand, error: candErr } = await admin
-    .from('candidates')
-    .select('id, name, office, party, state, district, image_url, overall_score')
-    .eq('id', post.subject_id)
-    .maybeSingle();
-  if (candErr) throw candErr;
-  if (!cand) throw new Error('candidate_not_found');
+  let png: Uint8Array;
+  let targetUrl: string;
+  let ogTitle: string;
+  let ogDescription: string;
 
-  // Money cards are bespoke SVG layouts the screenshot service doesn't know about,
-  // so always render them locally (with verified facts). Other types prefer the
-  // real CandidateStatCard via the screenshot service, falling back to SVG.
-  const facts = isMoneyCard ? await fetchCandidateFacts(admin, post.subject_id) : null;
-  const png = isMoneyCard
-    ? await renderStatCardPng(subjectType, cand as unknown as CardCandidate, facts)
-    : SCREENSHOT_SERVICE_URL
-      ? await screenshotCard(post.subject_id)
-      : await renderStatCardPng(subjectType, cand as unknown as CardCandidate, null);
+  if (subjectType === 'top_donor') {
+    // Donor-ENTITY card: anchored on a donor, NOT a candidate. Never touches the
+    // candidates table; deep-links to /donor/:id.
+    const facts = await fetchDonorCardFacts(admin, post.subject_id);
+    if (!facts) throw new Error('donor_not_found');
+    png = await renderDonorEntityCardPng(facts);
+    targetUrl = `${PUBLIC_SITE_URL}/donor/${encodeURIComponent(post.subject_id)}`;
+    ogTitle = (post.subject_label ?? facts.display_name ?? 'PoliPulse').slice(0, 200);
+    ogDescription = donorCardDescription(facts);
+  } else {
+    // Candidate-anchored cards (rep_profile, committee_spender, ai_analysis).
+    const { data: cand, error: candErr } = await admin
+      .from('candidates')
+      .select('id, name, office, party, state, district, image_url, overall_score')
+      .eq('id', post.subject_id)
+      .maybeSingle();
+    if (candErr) throw candErr;
+    if (!cand) throw new Error('candidate_not_found');
+
+    const isMoneyCard = subjectType === 'committee_spender';
+    // Money cards are bespoke SVG layouts the screenshot service doesn't know about,
+    // so always render them locally (with verified facts). Other types prefer the
+    // real CandidateStatCard via the screenshot service, falling back to SVG.
+    const facts = isMoneyCard ? await fetchCandidateFacts(admin, post.subject_id) : null;
+    png = isMoneyCard
+      ? await renderStatCardPng(subjectType, cand as unknown as CardCandidate, facts)
+      : SCREENSHOT_SERVICE_URL
+        ? await screenshotCard(post.subject_id)
+        : await renderStatCardPng(subjectType, cand as unknown as CardCandidate, null);
+
+    targetUrl = `${PUBLIC_SITE_URL}/candidate/${encodeURIComponent(post.subject_id)}`;
+    ogTitle = (post.subject_label ?? (cand as { name?: string }).name ?? 'PoliPulse').slice(0, 200);
+    ogDescription = moneyCardDescription(subjectType, facts) ?? [cand.office, cand.party].filter(Boolean).join(' • ').slice(0, 300);
+  }
 
   const id = makeId();
   const path = `${id}.png`;
@@ -490,10 +618,6 @@ export async function renderAndStoreCard(
     upsert: false,
   });
   if (up.error) throw new Error(`upload_failed: ${up.error.message}`);
-
-  const targetUrl = `${PUBLIC_SITE_URL}/candidate/${encodeURIComponent(post.subject_id)}`;
-  const ogTitle = (post.subject_label ?? (cand as { name?: string }).name ?? 'PoliPulse').slice(0, 200);
-  const ogDescription = moneyCardDescription(subjectType, facts) ?? [cand.office, cand.party].filter(Boolean).join(' • ').slice(0, 300);
 
   const { error: insErr } = await admin.from('share_cards').insert({
     id,

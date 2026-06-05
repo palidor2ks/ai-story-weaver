@@ -11,9 +11,9 @@ import {
   composeFinanceCaption,
   composeAnalysisCaption,
   composeCommitteeCaption,
-  composeTopDonorCaption,
   type CandidateMeta,
 } from '../_shared/finance-caption.ts';
+import { composeDonorEntityCaption } from '../_shared/donor-card.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,7 +63,16 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ caption, source }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     };
 
-    // All rotation types are candidate-anchored, so build the shared candidate meta once.
+    // Donor-ENTITY card: anchored on a donor, not a candidate. Compose its
+    // "follow the money" caption from the donor facts and return early — never
+    // build candidate meta (the subject_id is a donor primary_id, not a candidate).
+    if (post.subject_type === 'top_donor' && post.subject_id) {
+      const d = await composeDonorEntityCaption(admin, aiKey, post.subject_id, platform, post.subject_label ?? null);
+      if (d) return await save(d.caption, d.source);
+      return await save(`${post.subject_label ?? 'This donor'} on PoliPulse. Follow the money.`, 'static_donor');
+    }
+
+    // The remaining rotation types are candidate-anchored, so build the shared meta once.
     let meta: CandidateMeta | null = null;
     if (post.subject_id) {
       const { data: cand } = await admin
@@ -95,9 +104,6 @@ Deno.serve(async (req) => {
       // Type-specific composer first; each returns null when its data is missing.
       if (post.subject_type === 'committee_spender') {
         const c = await composeCommitteeCaption(admin, aiKey, post.subject_id, platform, meta);
-        if (c) return await save(c.caption, c.source);
-      } else if (post.subject_type === 'top_donor') {
-        const c = await composeTopDonorCaption(admin, aiKey, post.subject_id, platform, meta);
         if (c) return await save(c.caption, c.source);
       } else if (post.subject_type === 'ai_analysis') {
         const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, await readRecord());
