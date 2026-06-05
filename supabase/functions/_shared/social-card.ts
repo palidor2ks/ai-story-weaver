@@ -332,7 +332,7 @@ function buildDonorEntitySvg(f: DonorCardFacts): string {
   const typeNoun = (f.type || 'Donor').replace(/^ind.*/i, 'Individual');
   const titleFont = fitTitleFont(name, CARD_SIZE - 110, 78, 34);
   const titleText = escapeXml(fitTitleText(name, titleFont, CARD_SIZE - 110));
-  const eyebrow = `DONOR PROFILE${f.latest_cycle ? ` · ${escapeXml(f.latest_cycle)} CYCLE` : ''}`;
+  const eyebrow = 'DONOR PROFILE';
 
   // No avatar: donors never have a photo, and the owner's rule is "no initials
   // monogram when there's no picture." The layout is top-aligned to fill the space
@@ -369,7 +369,7 @@ function buildDonorEntitySvg(f: DonorCardFacts): string {
     statTile(margin + (tileW + tileGap) * 0, tileY, tileW, tileH, fmtMoney(f.total_given) ?? '$0', 'TOTAL GIVEN', '#22c55e'),
     statTile(margin + (tileW + tileGap) * 1, tileY, tileW, tileH, compactCount(f.donation_count), 'DONATIONS', '#e2e8f0'),
     statTile(margin + (tileW + tileGap) * 2, tileY, tileW, tileH, compactCount(f.recipient_count), 'RECIPIENTS', '#e2e8f0'),
-    statTile(margin + (tileW + tileGap) * 3, tileY, tileW, tileH, compactCount(f.cycle_count), 'CYCLES', '#e2e8f0'),
+    statTile(margin + (tileW + tileGap) * 3, tileY, tileW, tileH, f.latest_cycle ?? '—', 'LATEST CYCLE', '#e2e8f0'),
   ].join('');
 
   // Top recipients (up to 3): name left, amount right, one per row, generously
@@ -467,11 +467,18 @@ function buildCommitteeSpenderSvg(f: CommitteeCardFacts): string {
   if (targets.length > 0) {
     targetBlock += `<text x="${margin}" y="${tHeaderY}" font-family="Inter" font-weight="700" font-size="28" fill="#94a3b8" letter-spacing="3">TOP TARGETS</text>`;
     targets.forEach((t, i) => {
-      const ry = tHeaderY + 62 + i * 64;
+      const ry = tHeaderY + 60 + i * 80;
       const color = t.dir === 'oppose' ? RED : GREEN;
       const verb = t.dir === 'oppose' ? 'against' : 'for';
-      targetBlock += `<text x="${margin}" y="${ry}" font-family="Inter" font-weight="700" font-size="36" fill="#f8fafc">${escapeXml(truncate(tidyName(t.name), 26))}</text>
-        <text x="${CARD_SIZE - margin}" y="${ry}" text-anchor="end" font-family="Inter" font-weight="700" font-size="36" fill="${color}">${escapeXml(fmtMoney(t.amount) ?? '$0')} ${verb}</text>`;
+      // Subline: the race targeted — office + state(-district), e.g. "U.S. Senate · KY".
+      const stateLoc = t.state ? (t.district ? `${t.state}-${t.district}` : t.state) : '';
+      const race = [t.office, stateLoc].filter(Boolean).join(' · ');
+      const sub = race
+        ? `<text x="${margin}" y="${ry + 30}" font-family="Inter" font-weight="400" font-size="24" fill="#94a3b8">${escapeXml(truncate(race, 30))}</text>`
+        : '';
+      targetBlock += `<text x="${margin}" y="${ry}" font-family="Inter" font-weight="700" font-size="34" fill="#f8fafc">${escapeXml(truncate(tidyName(t.name), 24))}</text>
+        ${sub}
+        <text x="${CARD_SIZE - margin}" y="${ry}" text-anchor="end" font-family="Inter" font-weight="700" font-size="34" fill="${color}">${escapeXml(fmtMoney(t.amount) ?? '$0')} ${verb}</text>`;
     });
   }
 
