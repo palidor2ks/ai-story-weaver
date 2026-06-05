@@ -33,7 +33,20 @@ export function summarizeForSocial(text: string | null | undefined, maxChars: nu
   return `${base}…`;
 }
 
-// Directional ideology label from the PoliPulse -10..+10 score. Bands follow the
+// Trim to the largest prefix that ENDS on a complete sentence (. ! ?) within max.
+// Unlike summarizeForSocial it never appends an ellipsis — it returns a finished
+// thought, or '' when not even the first sentence fits (caller should shorten/retry).
+export function fitToSentence(text: string | null | undefined, max: number): string {
+  const clean = (text ?? '').replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  const head = clean.slice(0, max + 1);
+  let cut = -1;
+  for (const m of head.matchAll(/[.!?](?=\s|$)/g)) {
+    if (m.index !== undefined && m.index < max) cut = m.index + 1;
+  }
+  return cut > 0 ? clean.slice(0, cut).trim() : '';
+}
+
 // app's CL/CR convention (center zone split at 0), so e.g. +1.18 reads Center-Right.
 function ideologyLabel(score: number | null | undefined): string | null {
   if (score === null || score === undefined || !Number.isFinite(score)) return null;
@@ -214,14 +227,16 @@ function normalizeHandle(h: string | null | undefined): string | null {
   return /^[A-Za-z0-9_]{1,15}$/.test(s) ? s : null;
 }
 
-// Guarantee the @handle is present (mid-text, never leading) without exceeding max.
-// If the model already wove it in, leave it; otherwise trim to make room and append.
+// Guarantee the @handle is present (mid-text, never leading) without exceeding max
+// and without ever slicing a sentence in half. If making room for the handle would
+// cut mid-thought, we keep the full thought and drop the handle instead.
 function ensureHandle(caption: string, handle: string | null, max: number): string {
   if (!handle) return caption;
   if (new RegExp(`@${handle}(?![A-Za-z0-9_])`, 'i').test(caption)) return caption;
   const suffix = ` @${handle}`;
-  const body = summarizeForSocial(caption, Math.max(1, max - suffix.length));
-  return `${body}${suffix}`;
+  if (caption.length + suffix.length <= max) return `${caption}${suffix}`;
+  const body = fitToSentence(caption, max - suffix.length);
+  return body ? `${body}${suffix}` : caption;
 }
 
 // Deterministic, safe fallback: lead with the single biggest number and assemble
@@ -248,28 +263,41 @@ function templateCaption(name: string, party: string, ideology: string | null, s
   return summarizeForSocial(base, max);
 }
 
+// Calls the model and returns a caption that is ALWAYS a complete thought within
+// max — never an ellipsis-truncated fragment. If the model overshoots the budget,
+// we trim back to the last whole sentence; if even that doesn't fit, we retry once
+// with a hard brevity instruction, then give up (null) so the caller falls back to
+// the deterministic template (which is built to fit).
 async function aiCaption(aiKey: string | undefined, prompt: string, max: number): Promise<string | null> {
   if (!aiKey) return null;
-  try {
-    const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        temperature: 0.8,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-    if (!res.ok) return null;
-    const j = await res.json();
-    let caption: string = j?.choices?.[0]?.message?.content ?? '';
-    // Strip wrapping quotes and any stray markdown emphasis the model slips in.
-    caption = caption.replace(/^["']|["']$/g, '').replace(/[*_`]/g, '').trim();
-    caption = summarizeForSocial(caption, max);
-    return caption || null;
-  } catch {
-    return null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const content = attempt === 0
+      ? prompt
+      : `${prompt}\n\nIMPORTANT: Your previous attempt ran too long and got cut off. Rewrite it as a SINGLE complete sentence that ends cleanly in well under ${max} characters — it must read as a finished thought, never trailing off.`;
+    try {
+      const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          temperature: 0.8,
+          messages: [{ role: 'user', content }],
+        }),
+      });
+      if (!res.ok) continue;
+      const j = await res.json();
+      let caption: string = j?.choices?.[0]?.message?.content ?? '';
+      // Strip wrapping quotes and any stray markdown emphasis the model slips in.
+      caption = caption.replace(/^["']|["']$/g, '').replace(/[*_`]/g, '').trim();
+      if (caption && caption.length <= max) return caption; // already a full thought that fits
+      const fitted = fitToSentence(caption, max); // else trim back to a whole sentence
+      if (fitted) return fitted;
+      // Too long with no earlier sentence break — loop to retry with the brevity nudge.
+    } catch {
+      // network/parse blip — retry, then fall through to null
+    }
   }
+  return null;
 }
 
 export interface CandidateMeta {
