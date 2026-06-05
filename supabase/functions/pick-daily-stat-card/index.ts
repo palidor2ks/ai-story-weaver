@@ -106,11 +106,15 @@ Deno.serve(async (req) => {
       .gte('created_at', skipSince);
     const skipIds = new Set((recent ?? []).map((r) => r.subject_id));
 
-    // Pick a candidate with a non-null score and image, federal preferred
+    // Pick a candidate with a non-null score and image, federal preferred.
+    // Filter image_url in the query (not just in JS): ordering by last_updated and
+    // capping at 200 can otherwise return a window of freshly-synced, image-less
+    // candidates and skip every candidate that actually has a photo.
     const { data: pool } = await admin
       .from('candidates')
       .select('id, name, office, party, state, district, image_url, overall_score, coverage_tier, confidence, is_incumbent, fec_candidate_id')
       .not('overall_score', 'is', null)
+      .not('image_url', 'is', null)
       .order('last_updated', { ascending: false })
       .limit(200);
 
