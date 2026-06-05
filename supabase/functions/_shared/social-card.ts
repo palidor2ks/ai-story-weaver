@@ -285,11 +285,18 @@ function segmentBar(y: number, segments: { value: number; color: string }[]): st
 // "Follow the Money" footer. Uses an initials monogram in a coin in place of a
 // politician photo.
 
-function donorNameFontSize(name: string): number {
-  const len = (name ?? '').length;
-  if (len > 26) return 56;
-  if (len > 18) return 68;
-  return 80;
+// Shrink a centered title to fit one line within maxWidth, stepping down to
+// minFont; only hard-truncate if it still overflows at minFont (rare). AVG is a
+// conservative Inter-bold char-width / font-size ratio so text never overflows.
+const TITLE_AVG = 0.56;
+function fitTitleFont(text: string, maxWidth: number, maxFont: number, minFont: number): number {
+  let f = maxFont;
+  while (f > minFont && (text ?? '').length * f * TITLE_AVG > maxWidth) f -= 2;
+  return f;
+}
+function fitTitleText(text: string, fontSize: number, maxWidth: number): string {
+  const maxChars = Math.max(6, Math.floor(maxWidth / (fontSize * TITLE_AVG)));
+  return (text ?? '').length > maxChars ? truncate(text, maxChars) : text;
 }
 
 // A pill chip (rounded rect + centered label) sized to its text. Returns the
@@ -323,6 +330,9 @@ function buildDonorEntitySvg(f: DonorCardFacts): string {
   const GOLD = '#fbbf24';
   const name = tidyName(f.display_name) || f.display_name;
   const typeNoun = (f.type || 'Donor').replace(/^ind.*/i, 'Individual');
+  const titleFont = fitTitleFont(name, CARD_SIZE - 110, 78, 34);
+  const titleText = escapeXml(fitTitleText(name, titleFont, CARD_SIZE - 110));
+  const eyebrow = `DONOR PROFILE${f.latest_cycle ? ` · ${escapeXml(f.latest_cycle)} CYCLE` : ''}`;
 
   // No avatar: donors never have a photo, and the owner's rule is "no initials
   // monogram when there's no picture." The layout is top-aligned to fill the space
@@ -389,8 +399,8 @@ function buildDonorEntitySvg(f: DonorCardFacts): string {
   <text x="72" y="96" font-family="Inter" font-weight="700" font-size="40" fill="#f8fafc">PoliPulse</text>
   <text x="${CARD_SIZE - 72}" y="96" text-anchor="end" font-family="Inter" font-weight="400" font-size="26" fill="#94a3b8">Follow the Money</text>
 
-  <text x="${cx}" y="172" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="4">DONOR PROFILE</text>
-  <text x="${cx}" y="244" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${donorNameFontSize(name)}" fill="#f8fafc">${escapeXml(truncate(name, 30))}</text>
+  <text x="${cx}" y="172" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="4">${eyebrow}</text>
+  <text x="${cx}" y="244" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${titleFont}" fill="#f8fafc">${titleText}</text>
   ${typeChipSvg}
   ${causeChipSvg}
   ${locationLine}
@@ -414,13 +424,6 @@ export async function renderDonorEntityCardPng(f: DonorCardFacts): Promise<Uint8
 // top candidates targeted, and a "Follow the Money" footer. Top-aligned like the
 // reflowed donor card.
 
-function committeeNameFontSize(name: string): number {
-  const len = (name ?? '').length;
-  if (len > 30) return 50;
-  if (len > 22) return 62;
-  return 74;
-}
-
 function buildCommitteeSpenderSvg(f: CommitteeCardFacts): string {
   const cx = CARD_SIZE / 2;
   const GREEN = '#22c55e';
@@ -430,6 +433,9 @@ function buildCommitteeSpenderSvg(f: CommitteeCardFacts): string {
   const support = f.support_total ?? 0;
   const oppose = f.oppose_total ?? 0;
   const margin = 80;
+  const titleFont = fitTitleFont(name, CARD_SIZE - 110, 74, 34);
+  const titleText = escapeXml(fitTitleText(name, titleFont, CARD_SIZE - 110));
+  const eyebrow = `OUTSIDE SPENDER${f.latest_cycle ? ` · ${escapeXml(f.latest_cycle)} CYCLE` : ''}`;
 
   // Optional cause chip, centered under the name.
   const chipsY = 268;
@@ -482,8 +488,8 @@ function buildCommitteeSpenderSvg(f: CommitteeCardFacts): string {
   <text x="72" y="96" font-family="Inter" font-weight="700" font-size="40" fill="#f8fafc">PoliPulse</text>
   <text x="${CARD_SIZE - 72}" y="96" text-anchor="end" font-family="Inter" font-weight="400" font-size="26" fill="#94a3b8">Follow the Money</text>
 
-  <text x="${cx}" y="172" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="4">OUTSIDE SPENDER</text>
-  <text x="${cx}" y="244" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${committeeNameFontSize(name)}" fill="#f8fafc">${escapeXml(truncate(name, 34))}</text>
+  <text x="${cx}" y="172" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="4">${eyebrow}</text>
+  <text x="${cx}" y="244" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${titleFont}" fill="#f8fafc">${titleText}</text>
   ${causeChipSvg}
 
   ${figure}
