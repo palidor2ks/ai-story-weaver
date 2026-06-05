@@ -1,7 +1,7 @@
 import { formatScore, getScoreLabel } from '@/lib/scoreFormat';
 
 export interface CardData {
-  kind: 'candidate-alignment' | 'user-profile' | 'invite' | 'donor-stats';
+  kind: 'candidate-alignment' | 'user-profile' | 'invite' | 'donor-stats' | 'ai-analysis';
   // Donor stats
   donorName?: string;
   donorType?: 'Individual' | 'PAC' | 'Organization' | 'Unknown';
@@ -46,6 +46,14 @@ export interface CardData {
   // Funding sources breakdown (candidate cards only)
   fundingBreakdown?: { label: string; pct: number; color: string }[];
   fundingCycle?: string;
+  // AI analysis card
+  analysisTitle?: string; // subject name (donor / candidate / committee / bill)
+  analysisSubtitle?: string; // e.g. "Donor Analysis", "Candidate Analysis"
+  analysisSummary?: string;
+  analysisConfidence?: number | null; // 0-100
+  analysisDataCoverageLabel?: string | null; // e.g. "Rich filings"
+  analysisCauses?: string[];
+  analysisPartySupport?: { party: string; share: number }[];
 }
 
 export const CARD_SIZE = 1080;

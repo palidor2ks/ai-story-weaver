@@ -41,22 +41,32 @@ export interface DonorStatsCaptionInput {
   url: string;
 }
 
+export interface AIAnalysisCaptionInput {
+  kind: 'ai-analysis';
+  subjectName: string;
+  subjectKind?: string; // e.g. "donor", "candidate", "committee", "bill"
+  url: string;
+}
+
 export type ShareSurface =
   | 'quiz_results'
   | 'quiz_results_invite'
   | 'candidate_profile'
-  | 'donor_profile';
+  | 'donor_profile'
+  | 'ai_analysis';
 
 export type CaptionInput = (
   | CandidateAlignmentCaptionInput
   | UserProfileCaptionInput
   | InviteCaptionInput
   | DonorStatsCaptionInput
+  | AIAnalysisCaptionInput
 ) & { surface?: ShareSurface };
 
 export function getDefaultHashtags(input: CaptionInput): string {
   if (input.kind === 'invite') return '#Pulse';
   if (input.kind === 'donor-stats') return '#Pulse #FollowTheMoney';
+  if (input.kind === 'ai-analysis') return '#Pulse #FollowTheMoney';
   return '#Pulse #VoterMatch';
 }
 
@@ -99,6 +109,13 @@ export function generateLongCaption(input: CaptionInput): string {
       `Follow the money: ${input.url}`,
     ].join('\n');
   }
+  if (input.kind === 'ai-analysis') {
+    return [
+      `AI analysis of ${input.subjectName} on Pulse — grounded in campaign-finance data and public context.`,
+      '',
+      `See the full breakdown: ${input.url}`,
+    ].join('\n');
+  }
   return [
     `I just took the Pulse political alignment quiz — it shows where you really stand on the issues.`,
     `Take it and see your results: ${input.url}`,
@@ -114,6 +131,9 @@ export function generateShortCaption(input: CaptionInput): string {
   }
   if (input.kind === 'donor-stats') {
     return `${input.donorName}: ${input.totalGiven} across ${input.donationCount} donations to ${input.recipientCount} recipients. Follow the money on Pulse.`;
+  }
+  if (input.kind === 'ai-analysis') {
+    return `AI analysis of ${input.subjectName} on Pulse — follow the money and the context.`;
   }
   return `Take the Pulse quiz and see where you really stand on the issues.`;
 }

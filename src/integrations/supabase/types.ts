@@ -4046,6 +4046,8 @@ export type Database = {
           mode: string
           post_time_local: string
           recent_skip_days: number
+          rotation_index: number
+          rotation_types: string[]
           tiktok_enabled: boolean
           timezone: string
           updated_at: string
@@ -4059,6 +4061,8 @@ export type Database = {
           mode?: string
           post_time_local?: string
           recent_skip_days?: number
+          rotation_index?: number
+          rotation_types?: string[]
           tiktok_enabled?: boolean
           timezone?: string
           updated_at?: string
@@ -4072,6 +4076,8 @@ export type Database = {
           mode?: string
           post_time_local?: string
           recent_skip_days?: number
+          rotation_index?: number
+          rotation_types?: string[]
           tiktok_enabled?: boolean
           timezone?: string
           updated_at?: string

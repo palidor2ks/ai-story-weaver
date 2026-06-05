@@ -245,7 +245,10 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
   const [busy, setBusy] = useState<string | null>(null);
   const [localPlatforms, setLocalPlatforms] = useState(platforms);
   useEffect(() => setLocalPlatforms(platforms), [platforms]);
-  const canRenderProfileCard = post.subject_type === 'candidate' || post.subject_type === 'rep_profile';
+  const canRenderProfileCard =
+    post.subject_type === 'candidate' ||
+    post.subject_type === 'rep_profile' ||
+    post.subject_type === 'ai_analysis';
 
   // Offscreen renderer for the rep-profile share card. We always mount it so
   // the underlying hooks pre-fetch donor/finance/IE data — by the time the
@@ -354,7 +357,12 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <CardTitle className="text-base">{post.subject_label}</CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              <CardTitle className="text-base">{post.subject_label}</CardTitle>
+              <Badge variant="outline" className="text-[10px]">
+                {post.subject_type === 'ai_analysis' ? 'AI Analysis' : 'Rep Profile'}
+              </Badge>
+            </div>
             <p className="text-xs text-muted-foreground">
               Score: {post.stat_payload?.overall_score ?? '—'} • Created {new Date(post.created_at).toLocaleString()}
             </p>
@@ -524,7 +532,7 @@ export default function SocialPosts() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Social Posts</h1>
-            <p className="text-sm text-muted-foreground">Daily auto-generated stat-card posts from rep profiles.</p>
+            <p className="text-sm text-muted-foreground">Daily auto-generated posts, rotating between rep stat-cards and AI analyses.</p>
           </div>
           <Button asChild variant="outline" size="sm"><Link to="/admin">← Admin</Link></Button>
         </div>

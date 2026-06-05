@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Sparkles, Loader2, ExternalLink, AlertTriangle, Database, Globe, BookOpen, RefreshCw, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { ShareAIAnalysisButton } from '@/components/ShareAIAnalysisButton';
 
 export interface RelatedEntity {
   name: string;
@@ -152,6 +153,22 @@ export const RecipientAIAnalysisDialog = ({
             </div>
             {analysis && !isLoading && (
               <div className="flex items-center gap-2 shrink-0">
+                {!analysis.insufficient_information && (
+                  <ShareAIAnalysisButton
+                    subjectName={analysis.alias_canonical_name || entityName}
+                    subtitle={entityKind === 'committee' ? 'Committee Analysis' : 'Candidate Analysis'}
+                    subjectKind={entityKind}
+                    summary={analysis.summary}
+                    confidence={analysis.confidence}
+                    dataCoverage={analysis.data_coverage}
+                    causes={analysis.causes}
+                    profileUrl={
+                      typeof window !== 'undefined'
+                        ? `${window.location.origin}/${entityKind === 'committee' ? 'committee' : 'candidate'}/${entityId}`
+                        : undefined
+                    }
+                  />
+                )}
                 <Button size="sm" variant="outline" onClick={() => fetchAnalysis(true)}>
 
                   <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
