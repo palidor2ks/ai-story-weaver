@@ -74,12 +74,12 @@ function partyFull(party: string | null | undefined): string {
 export function fundingCharacter(fu: Facts['funding']): string | null {
   if (!fu) return null;
   const { small_pct, large_pct, pac_pct } = fu;
-  if (pac_pct >= 50) return `PAC-dependent — ${pac_pct}% of its itemized money comes from PACs and committees, not voters`;
-  if (small_pct >= 55) return `genuinely grassroots — ${small_pct}% from small-dollar donors`;
-  if (pac_pct >= 35) return `heavily PAC-funded (${pac_pct}% from PACs/committees)`;
-  if (large_pct >= 55) return `big-money-backed — ${large_pct}% from large individual donors, not grassroots`;
-  if (small_pct >= 35 && small_pct >= pac_pct && small_pct >= large_pct) return `with a real small-dollar base (${small_pct}%)`;
-  if (pac_pct + large_pct >= 60) return `funded mostly by big donors and PACs (${large_pct}% large individual / ${pac_pct}% PAC), not small-dollar givers`;
+  if (pac_pct >= 50) return `PAC-dependent — ${pac_pct}% of its donations come from PACs and committees, not voters`;
+  if (small_pct >= 55) return `genuinely grassroots — ${small_pct}% of its donations are small-dollar`;
+  if (pac_pct >= 35) return `heavily PAC-funded — ${pac_pct}% of its donations from PACs/committees`;
+  if (large_pct >= 55) return `big-money-backed — ${large_pct}% of its donations come from large individual donors, not grassroots`;
+  if (small_pct >= 35 && small_pct >= pac_pct && small_pct >= large_pct) return `with a real small-dollar base (${small_pct}% of its donations)`;
+  if (pac_pct + large_pct >= 60) return `funded mostly by big donors and PACs (${large_pct}% large individual / ${pac_pct}% PAC of its donations), not small-dollar givers`;
   return null;
 }
 
@@ -142,7 +142,7 @@ function factsBlock(name: string, party: string, ideology: string | null, office
   if ((f.ie_oppose ?? 0) > 0) lines.push(`Outside money spent OPPOSING them: ${fmtMoney(f.ie_oppose)}${f.top_oppose_pac ? ` (biggest: ${tidyName(f.top_oppose_pac.name)}, ${fmtMoney(f.top_oppose_pac.amount)})` : ''}`);
   if (f.funding) {
     const fu = f.funding;
-    lines.push(`Funding mix (share of their itemized donor money): ${fu.small_pct}% small-dollar (under $200), ${fu.large_pct}% large individual donors, ${fu.pac_pct}% from PACs/committees${fu.self_funded > 0 ? `; self-funded ${fmtMoney(fu.self_funded)}` : ''}.`);
+    lines.push(`Funding mix — these are shares of total CONTRIBUTIONS from donors, a SEPARATE and smaller base than "Total raised" above (which also includes loans, self-funding and transfers). Do NOT present them as a share of the total raised / war chest: ${fu.small_pct}% small-dollar (under $200), ${fu.large_pct}% large individual donors, ${fu.pac_pct}% from PACs/committees${fu.self_funded > 0 ? `; plus ${fmtMoney(fu.self_funded)} self-funded` : ''}.`);
     const character = fundingCharacter(fu);
     if (character) lines.push(`Funding character (surface this as a pointed but strictly factual watchdog angle): ${character}.`);
   }
@@ -215,7 +215,7 @@ Write the post:
 - ${focusRule}
 - Match the tense and framing to the TIMING note above — an upcoming election must NOT be described in the past tense, and a finished one must not be written as if it's still ahead.
 - Refer to them using the "Leaning & party" line EXACTLY as given. When it's only a party ("Democrat"/"Republican"), use just that — NEVER prepend "Left", "Right", "Progressive", "Conservative" or any direction yourself. Only a middle-of-the-road rep carries a "Center-Left", "Centrist", or "Center-Right" qualifier (e.g. "Center-Right Republican"). Say "re-election" only if the facts mark them as the incumbent; otherwise call it their campaign or bid.${handleRule}
-- When you cite funding: small-dollar = under $200, and the "PACs/committees" share is direct money TO the campaign — keep it distinct from the outside/Super-PAC spending above. Take a WATCHDOG stance on the money: heavy PAC or large-individual funding is a red flag worth calling out plainly (they answer to big/institutional donors, not small-dollar voters), while a high small-dollar share is a genuine grassroots positive. If a "Funding character" cue is given, lead with it or feature it prominently. Be pointed but strictly FACTUAL — never invent, alter, or re-round a number, and no name-calling.
+- When you cite funding: small-dollar = under $200, and the "PACs/committees" share is direct money TO the campaign — keep it distinct from the outside/Super-PAC spending above. CRITICAL — the funding-mix percentages are shares of the candidate's CONTRIBUTIONS (small-dollar + large individual + PAC), which is a DIFFERENT, smaller base than the total raised / war chest. NEVER state a funding-mix percentage as a share of the total raised or war chest (e.g. do NOT write "91% of her $956K war chest"); say "X% of her donations/contributions" or give the percentage on its own. Take a WATCHDOG stance on the money: heavy PAC or large-individual funding is a red flag worth calling out plainly (they answer to big/institutional donors, not small-dollar voters), while a high small-dollar share is a genuine grassroots positive. If a "Funding character" cue is given, lead with it or feature it prominently. Be pointed but strictly FACTUAL — never invent, alter, or re-round a number, and no name-calling.
 - Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
 - ${lengthRule}
 - Plain text ONLY — no markdown, no asterisks, no underscores, no bullet points, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
@@ -344,7 +344,7 @@ function fundingFactsLine(f: Facts | null): string | null {
   const parts: string[] = [];
   if ((f.raised ?? 0) > 0) parts.push(`raised ${fmtMoney(f.raised)}${f.donor_count ? ` from ${f.donor_count.toLocaleString('en-US')} donors` : ''}${f.cycle ? ` (${f.cycle} cycle)` : ''}`);
   if (f.top_donor && (f.top_donor.amount ?? 0) > 0) parts.push(`largest donor ${tidyName(f.top_donor.name)} at ${fmtMoney(f.top_donor.amount)}`);
-  if (f.funding) parts.push(`funding mix ${f.funding.small_pct}% small-dollar / ${f.funding.large_pct}% large individual / ${f.funding.pac_pct}% PAC`);
+  if (f.funding) parts.push(`funding mix (shares of contributions, not of total raised) ${f.funding.small_pct}% small-dollar / ${f.funding.large_pct}% large individual / ${f.funding.pac_pct}% PAC`);
   if ((f.ie_support ?? 0) > 0 || (f.ie_oppose ?? 0) > 0) parts.push(`outside money ${fmtMoney(f.ie_support ?? 0)} supporting vs ${fmtMoney(f.ie_oppose ?? 0)} opposing`);
   return parts.length ? parts.join('; ') : null;
 }
@@ -367,7 +367,7 @@ function buildAnalysisPrompt(
     ? `\n- What they're known for (summarize faithfully; never invent or embellish): ${record}`
     : '';
   const fundingRule = (mode !== 'record' && (funding || character))
-    ? `\n- Verified finance facts (never invent or re-round a number): ${funding ?? 'n/a'}.${character ? ` Funding character (feature this prominently): ${character}.` : ''} Take a WATCHDOG stance: call out heavy PAC/large-individual funding plainly (they answer to big/institutional donors, not small-dollar voters); treat a high small-dollar share as a genuine grassroots positive. Pointed but strictly factual — no name-calling.`
+    ? `\n- Verified finance facts (never invent or re-round a number): ${funding ?? 'n/a'}.${character ? ` Funding character (feature this prominently): ${character}.` : ''} Any funding-mix percentage is a share of the candidate's CONTRIBUTIONS, NOT of the total raised / war chest — never write it as "X% of the $Y raised"; say "X% of their donations" or give the percentage on its own. Take a WATCHDOG stance: call out heavy PAC/large-individual funding plainly (they answer to big/institutional donors, not small-dollar voters); treat a high small-dollar share as a genuine grassroots positive. Pointed but strictly factual — no name-calling.`
     : '';
   const lengthRule = long
     ? `Length: 3–5 short sentences, under ${max} characters.`
@@ -547,7 +547,7 @@ export async function composeTopDonorCaption(
     `Politician: ${displayName} — ${partyLineFor(meta)}.`,
     `Largest single donor: ${tidyName(d.name)}${typeNote} at ${fmtMoney(d.amount)}.`,
   ];
-  if (f.funding) lines.push(`Funding mix: ${f.funding.small_pct}% small-dollar / ${f.funding.large_pct}% large individual / ${f.funding.pac_pct}% PAC.`);
+  if (f.funding) lines.push(`Funding mix (shares of total CONTRIBUTIONS from donors, NOT of the total raised — never phrase as "X% of the war chest"): ${f.funding.small_pct}% small-dollar / ${f.funding.large_pct}% large individual / ${f.funding.pac_pct}% PAC.`);
   if (character) lines.push(`Funding character (feature this, pointed but factual): ${character}.`);
   const timing = electionTimingDirective(f.cycle, f.today);
   const ai = await aiCaption(aiKey, buildWatchdogPrompt(platform, 'donor', lines.join('\n'), timing, handle, cfg.max), cfg.max);
