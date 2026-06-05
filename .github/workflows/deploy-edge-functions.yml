@@ -8,16 +8,19 @@ name: Deploy Edge Functions to Supabase production
 # Worst case it's a redundant no-op; it can never leave prod behind main.
 #
 # Sibling to apply-prod-migrations.yml, which handles the migration half of the same gap. The
-# two share a concurrency group so they can never run at the same time (which would race on the
-# migration ledger), and this workflow applies any newly-added migrations BEFORE deploying
-# functions, so a function can never reach production traffic ahead of a schema change it needs.
+# two are kept INDEPENDENT — each with its own concurrency group — on purpose: a shared group
+# lets a later pending run supersede an earlier pending one (GitHub keeps only one pending run
+# per group even with cancel-in-progress: false), which could silently drop a queued migration
+# run. Independent groups can never cancel each other.
 #
-# One-time setup:
-#   - SUPABASE_ACCESS_TOKEN — a personal access token (Supabase Dashboard → Account → Access
-#     Tokens). Required to deploy functions.
-#   - SUPABASE_DB_URL — the prod session-pooler connection string (same secret apply-prod-
-#     migrations.yml uses). Only needed when a merge also adds migration files.
-# The project ref is public (it's in config.toml), so it stays inline below.
+# Ordering note: for a merge that adds BOTH a migration and a function that depends on it, the
+# two workflows run concurrently, so the function could briefly be live before the migration
+# applies. If that ever matters for a specific change, land the migration in its own merge
+# first. (Migrations are also applied to prod by Lovable, so this is belt-and-suspenders.)
+#
+# One-time setup: add a repository secret SUPABASE_ACCESS_TOKEN — a personal access token from
+# Supabase Dashboard → Account → Access Tokens. The project ref is public (it's in config.toml),
+# so it stays inline below.
 
 on:
   push:
@@ -27,10 +30,8 @@ on:
       - 'supabase/config.toml'
   workflow_dispatch:
 
-# Shared with apply-prod-migrations.yml: serialises all production-mutating runs so the two
-# workflows never apply migrations concurrently.
 concurrency:
-  group: prod-deploy
+  group: prod-edge-functions
   cancel-in-progress: false
 
 env:
@@ -44,8 +45,6 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0 # the migration step diffs across the push range
 
       # Fail loudly if the token is missing rather than silently skipping the deploy
       # (the same "don't let prod fall behind unnoticed" guard apply-prod-migrations.sh uses).
@@ -58,15 +57,6 @@ jobs:
             echo "Add it under Settings → Secrets and variables → Actions (Supabase Dashboard → Account → Access Tokens)."
             exit 1
           fi
-
-      # Apply any migrations added in this same push BEFORE deploying functions, so a function
-      # that references a new table/column/RPC never goes live ahead of the schema. Idempotent
-      # and a no-op when the push adds no migration files (SUPABASE_DB_URL isn't even needed
-      # then); it fails loudly if migrations were added but the DB URL is missing.
-      - name: Apply newly added migrations first
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: bash scripts/apply-prod-migrations.sh "${{ github.event.before }}" "${{ github.sha }}"
 
       - uses: supabase/setup-cli@v1
         with:
