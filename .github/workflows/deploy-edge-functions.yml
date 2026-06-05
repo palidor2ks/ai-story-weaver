@@ -7,11 +7,17 @@ name: Deploy Edge Functions to Supabase production
 # (or the shared config), it deploys the functions straight from the repo via the Supabase CLI.
 # Worst case it's a redundant no-op; it can never leave prod behind main.
 #
-# Sibling to apply-prod-migrations.yml, which handles the migration half of the same gap.
+# Sibling to apply-prod-migrations.yml, which handles the migration half of the same gap. The
+# two share a concurrency group so they can never run at the same time (which would race on the
+# migration ledger), and this workflow applies any newly-added migrations BEFORE deploying
+# functions, so a function can never reach production traffic ahead of a schema change it needs.
 #
-# One-time setup: add a repository secret SUPABASE_ACCESS_TOKEN — a personal access token from
-# Supabase Dashboard → Account → Access Tokens. The project ref is public (it's in config.toml),
-# so it stays inline below.
+# One-time setup:
+#   - SUPABASE_ACCESS_TOKEN — a personal access token (Supabase Dashboard → Account → Access
+#     Tokens). Required to deploy functions.
+#   - SUPABASE_DB_URL — the prod session-pooler connection string (same secret apply-prod-
+#     migrations.yml uses). Only needed when a merge also adds migration files.
+# The project ref is public (it's in config.toml), so it stays inline below.
 
 on:
   push:
@@ -21,8 +27,10 @@ on:
       - 'supabase/config.toml'
   workflow_dispatch:
 
+# Shared with apply-prod-migrations.yml: serialises all production-mutating runs so the two
+# workflows never apply migrations concurrently.
 concurrency:
-  group: prod-edge-functions
+  group: prod-deploy
   cancel-in-progress: false
 
 env:
@@ -31,8 +39,13 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Only ever deploy main to production. Without this, a workflow_dispatch run started from a
+    # feature branch would check out and deploy THAT branch's functions to prod.
+    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the migration step diffs across the push range
 
       # Fail loudly if the token is missing rather than silently skipping the deploy
       # (the same "don't let prod fall behind unnoticed" guard apply-prod-migrations.sh uses).
@@ -46,6 +59,15 @@ jobs:
             exit 1
           fi
 
+      # Apply any migrations added in this same push BEFORE deploying functions, so a function
+      # that references a new table/column/RPC never goes live ahead of the schema. Idempotent
+      # and a no-op when the push adds no migration files (SUPABASE_DB_URL isn't even needed
+      # then); it fails loudly if migrations were added but the DB URL is missing.
+      - name: Apply newly added migrations first
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash scripts/apply-prod-migrations.sh "${{ github.event.before }}" "${{ github.sha }}"
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest
@@ -53,7 +75,8 @@ jobs:
       # Deploy ALL functions, not just the changed ones: many functions import shared helpers
       # from supabase/functions/_shared, so a change there can affect any of them. Deploying the
       # whole set is the simple, always-correct choice; per-function verify_jwt is read from
-      # config.toml. If this ever gets too slow, scope it to changed function dirs instead.
+      # config.toml — which must list EVERY function (a function missing from it would be
+      # deployed with the CLI default verify_jwt=true and break public/anonymous endpoints).
       - name: Deploy Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
