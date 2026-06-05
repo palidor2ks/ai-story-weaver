@@ -13,6 +13,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Resvg, initWasm } from 'https://esm.sh/@resvg/resvg-wasm@2.6.2';
 import { encodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts';
+import {
+  type Facts,
+  fetchCandidateFacts,
+  fmtMoney,
+  tidyName,
+  topOutsideSpender,
+} from './finance-caption.ts';
 
 const RESVG_WASM_URL = 'https://esm.sh/@resvg/resvg-wasm@2.6.2/index_bg.wasm';
 const CARD_SIZE = 1080;
@@ -245,18 +252,189 @@ function buildSvg(c: CardCandidate, photoDataUri: string | null): string {
 }
 
 export async function renderCandidateCardPng(c: CardCandidate): Promise<Uint8Array> {
-  const [regular, bold, photo] = await Promise.all([
-    loadInter(400),
-    loadInter(700),
-    fetchImageDataUri(c.image_url),
-  ]);
+  return rasterize(buildSvg(c, await fetchImageDataUri(c.image_url)));
+}
+
+// ---------- money cards (top committee/PAC spender, top donor) ----------
+
+// A stroked 24-viewBox icon scaled and centred horizontally at the given top y.
+function centredIcon(paths: string, topY: number, size: number, color: string): string {
+  const s = size / 24;
+  const x = CARD_SIZE / 2 - size / 2;
+  return `<g transform="translate(${x},${topY}) scale(${s})" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`;
+}
+const ICON_LANDMARK = '<path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2 21 8H3z"/>';
+const ICON_COIN = '<circle cx="12" cy="12" r="9"/><path d="M14.2 9.3a2.4 2.2 0 0 0-2.2-1.3h-.6a2 2 0 0 0 0 4h1.2a2 2 0 0 1 0 4h-.6a2.4 2.2 0 0 1-2.2-1.3"/><path d="M12 6v1.4M12 16.6V18"/>';
+
+// A horizontal multi-segment proportion bar (for "for vs against" or the funding mix).
+function segmentBar(y: number, segments: { value: number; color: string }[]): string {
+  const x0 = 150;
+  const w = CARD_SIZE - 300;
+  const total = segments.reduce((s, seg) => s + Math.max(0, seg.value), 0) || 1;
+  let x = x0;
+  const rects = segments.map((seg) => {
+    const segW = (Math.max(0, seg.value) / total) * w;
+    const r = `<rect x="${x.toFixed(1)}" y="${y}" width="${Math.max(0, segW).toFixed(1)}" height="20" fill="${seg.color}" />`;
+    x += segW;
+    return r;
+  }).join('');
+  // Rounded mask so the assembled bar has soft ends.
+  return `<defs><clipPath id="barclip"><rect x="${x0}" y="${y}" width="${w}" height="20" rx="10" /></clipPath></defs>
+    <g clip-path="url(#barclip)">${rects}</g>`;
+}
+
+interface MoneyCardOpts {
+  eyebrow: string;
+  icon: string;
+  accent: string;
+  bigFigure: string;
+  subLine: string;
+  bar: { segments: { value: number; color: string }[]; left: string; right: string; leftColor: string; rightColor: string } | null;
+}
+
+// Shared scaffold: the same PoliPulse header / photo / name / party chip as the
+// score card, with the lower half given over to one big money figure + icon.
+function buildMoneyCardSvg(c: CardCandidate, photoDataUri: string | null, o: MoneyCardOpts): string {
+  const cx = CARD_SIZE / 2;
+  const displayName = truncate(c.name ?? 'Unknown', 30);
+  const officeLine = escapeXml(truncate([c.office, c.state].filter(Boolean).join(', ') + (c.district ? ` • District ${c.district}` : ''), 42));
+  const party = (c.party ?? '').trim();
+  const partyDisplay = truncate(party || 'Nonpartisan', 24);
+  const pColor = partyColor(party);
+  const partyChipWidth = Math.min(CARD_SIZE - 160, Math.max(160, 64 + partyDisplay.length * 18));
+
+  const photoR = 118;
+  const photoCy = 300;
+  const photo = photoDataUri
+    ? `<image href="${photoDataUri}" x="${cx - photoR}" y="${photoCy - photoR}" width="${photoR * 2}" height="${photoR * 2}" preserveAspectRatio="xMidYMid slice" clip-path="url(#avatar)" />`
+    : `<circle cx="${cx}" cy="${photoCy}" r="${photoR}" fill="#1e293b" />
+       <text x="${cx}" y="${photoCy + 40}" text-anchor="middle" font-family="Inter" font-weight="700" font-size="110" fill="#cbd5e1">${escapeXml(initials(c.name ?? ''))}</text>`;
+
+  const bar = o.bar
+    ? `${segmentBar(958, o.bar.segments)}
+       <text x="150" y="1012" text-anchor="start" font-family="Inter" font-weight="700" font-size="26" fill="${o.bar.leftColor}">${escapeXml(o.bar.left)}</text>
+       <text x="${CARD_SIZE - 150}" y="1012" text-anchor="end" font-family="Inter" font-weight="700" font-size="26" fill="${o.bar.rightColor}">${escapeXml(o.bar.right)}</text>`
+    : '';
+
+  return `<svg width="${CARD_SIZE}" height="${CARD_SIZE}" viewBox="0 0 ${CARD_SIZE} ${CARD_SIZE}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b1220" />
+      <stop offset="1" stop-color="#111d3a" />
+    </linearGradient>
+    <clipPath id="avatar"><circle cx="${cx}" cy="${photoCy}" r="${photoR}" /></clipPath>
+  </defs>
+
+  <rect width="${CARD_SIZE}" height="${CARD_SIZE}" fill="url(#bg)" />
+
+  <text x="72" y="96" font-family="Inter" font-weight="700" font-size="40" fill="#f8fafc">PoliPulse</text>
+  <text x="${CARD_SIZE - 72}" y="96" text-anchor="end" font-family="Inter" font-weight="400" font-size="26" fill="#94a3b8">Follow the Money</text>
+
+  <circle cx="${cx}" cy="${photoCy}" r="${photoR + 8}" fill="none" stroke="#1f2a44" stroke-width="6" />
+  ${photo}
+
+  <text x="${cx}" y="498" text-anchor="middle" font-family="Inter" font-weight="700" font-size="${nameFontSize(displayName)}" fill="#f8fafc">${escapeXml(displayName)}</text>
+  <text x="${cx}" y="552" text-anchor="middle" font-family="Inter" font-weight="400" font-size="32" fill="#cbd5e1">${officeLine}</text>
+  <rect x="${cx - partyChipWidth / 2}" y="580" width="${partyChipWidth}" height="48" rx="24" fill="${pColor}" fill-opacity="0.18" stroke="${pColor}" stroke-width="2" />
+  <text x="${cx}" y="613" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="${pColor}">${escapeXml(partyDisplay)}</text>
+
+  <text x="${cx}" y="690" text-anchor="middle" font-family="Inter" font-weight="700" font-size="26" fill="#94a3b8" letter-spacing="3">${escapeXml(o.eyebrow)}</text>
+  ${centredIcon(o.icon, 712, 64, o.accent)}
+  <text x="${cx}" y="868" text-anchor="middle" font-family="Inter" font-weight="700" font-size="120" fill="${o.accent}">${escapeXml(o.bigFigure)}</text>
+  <text x="${cx}" y="922" text-anchor="middle" font-family="Inter" font-weight="400" font-size="34" fill="#e2e8f0">${escapeXml(truncate(o.subLine, 52))}</text>
+  ${bar}
+</svg>`;
+}
+
+function buildCommitteeSvg(c: CardCandidate, top: { name: string; amount: number; dir: 'support' | 'oppose' }, support: number, oppose: number, photo: string | null): string {
+  const GREEN = '#22c55e';
+  const RED = '#ef4444';
+  const accent = top.dir === 'oppose' ? RED : GREEN;
+  return buildMoneyCardSvg(c, photo, {
+    eyebrow: 'BIGGEST OUTSIDE SPENDER',
+    icon: ICON_LANDMARK,
+    accent,
+    bigFigure: fmtMoney(top.amount) ?? '—',
+    subLine: `${tidyName(top.name)} — to ${top.dir === 'support' ? 'elect' : 'defeat'} them`,
+    bar: (support > 0 || oppose > 0)
+      ? {
+          segments: [{ value: support, color: GREEN }, { value: oppose, color: RED }],
+          left: `${fmtMoney(support) ?? '$0'} for`,
+          right: `${fmtMoney(oppose) ?? '$0'} against`,
+          leftColor: GREEN,
+          rightColor: RED,
+        }
+      : null,
+  });
+}
+
+function buildDonorSvg(c: CardCandidate, f: Facts, photo: string | null): string {
+  const d = f.top_donor!;
+  const GOLD = '#fbbf24';
+  const type = d.type && !/^ind/i.test(d.type) ? ` (${tidyName(d.type)})` : '';
+  const fu = f.funding;
+  return buildMoneyCardSvg(c, photo, {
+    eyebrow: 'TOP CAMPAIGN DONOR',
+    icon: ICON_COIN,
+    accent: GOLD,
+    bigFigure: fmtMoney(d.amount) ?? '—',
+    subLine: `${tidyName(d.name)}${type}`,
+    bar: fu
+      ? {
+          segments: [
+            { value: fu.small_pct, color: '#22c55e' },
+            { value: fu.large_pct, color: GOLD },
+            { value: fu.pac_pct, color: '#ef4444' },
+          ],
+          left: `${fu.small_pct}% small-dollar`,
+          right: `${fu.pac_pct}% PAC`,
+          leftColor: '#22c55e',
+          rightColor: '#ef4444',
+        }
+      : null,
+  });
+}
+
+// Pick the right SVG for the post's subject_type. Money cards need verified facts;
+// when those are missing we fall back to the candidate score card so we always
+// produce a usable image.
+function buildCardSvgFor(subjectType: string, c: CardCandidate, facts: Facts | null, photo: string | null): string {
+  if (subjectType === 'committee_spender' && facts) {
+    const top = topOutsideSpender(facts);
+    if (top) return buildCommitteeSvg(c, top, facts.ie_support ?? 0, facts.ie_oppose ?? 0, photo);
+  }
+  if (subjectType === 'top_donor' && facts?.top_donor && (facts.top_donor.amount ?? 0) > 0) {
+    return buildDonorSvg(c, facts, photo);
+  }
+  return buildSvg(c, photo);
+}
+
+async function rasterize(svg: string): Promise<Uint8Array> {
+  const [regular, bold] = await Promise.all([loadInter(400), loadInter(700)]);
   await ensureWasm();
-  const svg = buildSvg(c, photo);
   const resvg = new Resvg(svg, {
     fitTo: { mode: 'width', value: CARD_SIZE },
     font: { fontBuffers: [regular, bold], defaultFontFamily: 'Inter', loadSystemFonts: false },
   });
   return resvg.render().asPng();
+}
+
+export async function renderStatCardPng(subjectType: string, c: CardCandidate, facts: Facts | null): Promise<Uint8Array> {
+  const photo = await fetchImageDataUri(c.image_url);
+  return rasterize(buildCardSvgFor(subjectType, c, facts, photo));
+}
+
+// One-line OpenGraph description for a money card (used for link unfurls); null
+// for non-money types so the caller keeps its default office • party line.
+function moneyCardDescription(subjectType: string, facts: Facts | null): string | null {
+  if (subjectType === 'committee_spender' && facts) {
+    const top = topOutsideSpender(facts);
+    if (top) return `${fmtMoney(top.amount)} from ${tidyName(top.name)} to ${top.dir === 'support' ? 'elect' : 'defeat'} them`.slice(0, 300);
+  }
+  if (subjectType === 'top_donor' && facts?.top_donor && (facts.top_donor.amount ?? 0) > 0) {
+    return `Top donor: ${tidyName(facts.top_donor.name)} — ${fmtMoney(facts.top_donor.amount)}`.slice(0, 300);
+  }
+  return null;
 }
 
 function makeId(len = 10): string {
@@ -280,9 +458,11 @@ export interface RenderedCard {
 // server-side equivalent of the browser's captureAndUpload + render mutation.
 export async function renderAndStoreCard(
   admin: ReturnType<typeof createClient>,
-  post: { id: string; subject_id: string; subject_label: string | null },
+  post: { id: string; subject_id: string; subject_label: string | null; subject_type?: string | null },
 ): Promise<RenderedCard> {
   const supaUrl = Deno.env.get('SUPABASE_URL')!;
+  const subjectType = post.subject_type ?? 'rep_profile';
+  const isMoneyCard = subjectType === 'committee_spender' || subjectType === 'top_donor';
 
   const { data: cand, error: candErr } = await admin
     .from('candidates')
@@ -292,11 +472,15 @@ export async function renderAndStoreCard(
   if (candErr) throw candErr;
   if (!cand) throw new Error('candidate_not_found');
 
-  // Prefer the real CandidateStatCard via the screenshot service; fall back to
-  // the built-in SVG card if the service isn't configured yet.
-  const png = SCREENSHOT_SERVICE_URL
-    ? await screenshotCard(post.subject_id)
-    : await renderCandidateCardPng(cand as unknown as CardCandidate);
+  // Money cards are bespoke SVG layouts the screenshot service doesn't know about,
+  // so always render them locally (with verified facts). Other types prefer the
+  // real CandidateStatCard via the screenshot service, falling back to SVG.
+  const facts = isMoneyCard ? await fetchCandidateFacts(admin, post.subject_id) : null;
+  const png = isMoneyCard
+    ? await renderStatCardPng(subjectType, cand as unknown as CardCandidate, facts)
+    : SCREENSHOT_SERVICE_URL
+      ? await screenshotCard(post.subject_id)
+      : await renderStatCardPng(subjectType, cand as unknown as CardCandidate, null);
 
   const id = makeId();
   const path = `${id}.png`;
@@ -309,7 +493,7 @@ export async function renderAndStoreCard(
 
   const targetUrl = `${PUBLIC_SITE_URL}/candidate/${encodeURIComponent(post.subject_id)}`;
   const ogTitle = (post.subject_label ?? (cand as { name?: string }).name ?? 'PoliPulse').slice(0, 200);
-  const ogDescription = [cand.office, cand.party].filter(Boolean).join(' • ').slice(0, 300);
+  const ogDescription = moneyCardDescription(subjectType, facts) ?? [cand.office, cand.party].filter(Boolean).join(' • ').slice(0, 300);
 
   const { error: insErr } = await admin.from('share_cards').insert({
     id,

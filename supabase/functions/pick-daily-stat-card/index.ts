@@ -28,6 +28,7 @@ function nowInTimezone(tz: string): { hour: number; minute: number } {
 }
 
 import { isCronAuthorized, getCronSecret } from '../_shared/cron-auth.ts';
+import { fetchCandidateFacts, hasCommitteeData, hasDonorData, topOutsideSpender } from '../_shared/finance-caption.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -124,18 +125,46 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const picked = eligible[Math.floor(Math.random() * eligible.length)];
+    let picked = eligible[Math.floor(Math.random() * eligible.length)];
 
-    // Decide the content type for today by cycling through the configured
-    // rotation (e.g. rep_profile one day, ai_analysis the next). Both types
-    // feature a candidate; they differ in how the caption is composed
-    // (finance headline vs. cached AI analysis summary).
+    // Decide the content type for today by cycling through the configured rotation
+    // (e.g. rep_profile → committee_spender → top_donor). Every type is candidate-
+    // anchored; they differ in which money angle the caption + card highlight.
     const rotationTypes: string[] =
       Array.isArray(settings.rotation_types) && settings.rotation_types.length > 0
         ? settings.rotation_types
         : ['rep_profile'];
     const rotationIndex = Number(settings.rotation_index ?? 0);
-    const subjectType = rotationTypes[((rotationIndex % rotationTypes.length) + rotationTypes.length) % rotationTypes.length];
+    let subjectType = rotationTypes[((rotationIndex % rotationTypes.length) + rotationTypes.length) % rotationTypes.length];
+
+    // The money-angle types need a candidate that actually HAS that data, so search the
+    // eligible pool for one and snapshot the headline fact (for the admin UI). If none in
+    // the pool has it, degrade to a rep profile so the daily post still goes out.
+    let statKey = subjectType === 'ai_analysis' ? 'ai_summary' : 'overall_score';
+    let statExtra: Record<string, unknown> = {};
+    if (subjectType === 'committee_spender' || subjectType === 'top_donor') {
+      const shuffled = [...eligible].sort(() => Math.random() - 0.5).slice(0, 30);
+      let found: { c: typeof picked; f: Awaited<ReturnType<typeof fetchCandidateFacts>> } | null = null;
+      for (const c of shuffled) {
+        const f = await fetchCandidateFacts(admin, c.id);
+        if (subjectType === 'committee_spender' ? hasCommitteeData(f) : hasDonorData(f)) { found = { c, f }; break; }
+      }
+      if (found && found.f) {
+        picked = found.c;
+        if (subjectType === 'committee_spender') {
+          const top = topOutsideSpender(found.f)!;
+          statKey = 'top_committee_spender';
+          statExtra = { committee_name: top.name, committee_amount: top.amount, committee_dir: top.dir, ie_support: found.f.ie_support, ie_oppose: found.f.ie_oppose };
+        } else {
+          const d = found.f.top_donor!;
+          statKey = 'top_donor';
+          statExtra = { top_donor_name: d.name, top_donor_amount: d.amount, top_donor_type: d.type ?? null };
+        }
+      } else {
+        subjectType = 'rep_profile';
+        statKey = 'overall_score';
+      }
+    }
 
     // Insert draft
     const subjectLabel = `${picked.name} — ${picked.office}${picked.state ? `, ${picked.state}` : ''}`;
@@ -145,7 +174,7 @@ Deno.serve(async (req) => {
         subject_type: subjectType,
         subject_id: picked.id,
         subject_label: subjectLabel,
-        stat_key: subjectType === 'ai_analysis' ? 'ai_summary' : 'overall_score',
+        stat_key: statKey,
         stat_payload: {
           overall_score: picked.overall_score,
           party: picked.party,
@@ -153,6 +182,7 @@ Deno.serve(async (req) => {
           state: picked.state,
           district: picked.district,
           coverage_tier: picked.coverage_tier,
+          ...statExtra,
         },
         status: 'pending_review',
       })

@@ -7,7 +7,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'npm:zod@3.23.8';
 import { isCronAuthorized } from '../_shared/cron-auth.ts';
 import { readCache } from '../_shared/ai-cache.ts';
-import { composeFinanceCaption, composeAnalysisCaption } from '../_shared/finance-caption.ts';
+import {
+  composeFinanceCaption,
+  composeAnalysisCaption,
+  composeCommitteeCaption,
+  composeTopDonorCaption,
+  type CandidateMeta,
+} from '../_shared/finance-caption.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -57,22 +63,15 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ caption, source }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     };
 
-    // AI-analysis rotation post: blend the candidate's cached record summary with their
-    // verified finance facts. Short posts (X/TikTok) feature one angle (randomized);
-    // long posts (FB/IG) cover both record + money, with a light grassroots-vs-PAC cue.
-    // Falls through to the static line only if there's neither a record nor finance data.
-    if (post.subject_type === 'ai_analysis' && post.subject_id) {
-      const cached = await readCache<{ summary?: string; insufficient_information?: boolean }>({
-        kind: 'recipient', subject_id: `v2:candidate:${post.subject_id}`, cycle: null,
-      });
-      const record = cached?.payload && !cached.payload.insufficient_information ? cached.payload.summary ?? null : null;
-
+    // All rotation types are candidate-anchored, so build the shared candidate meta once.
+    let meta: CandidateMeta | null = null;
+    if (post.subject_id) {
       const { data: cand } = await admin
         .from('candidates')
         .select('name, party, office, state, overall_score, is_incumbent, x_handle')
         .eq('id', post.subject_id)
         .maybeSingle();
-      const meta = {
+      meta = {
         name: (cand?.name as string) || String(post.subject_label ?? '').split('—')[0].trim() || 'This candidate',
         party: (cand?.party as string) ?? stat.party ?? '',
         office: (cand?.office as string) ?? stat.office ?? '',
@@ -81,39 +80,36 @@ Deno.serve(async (req) => {
         incumbent: (cand?.is_incumbent as boolean | null) ?? null,
         handle: (cand?.x_handle as string | null) ?? null,
       };
-
-      const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, record);
-      if (analysis) return await save(analysis.caption, analysis.source);
     }
 
-    if (post.subject_type === 'rep_profile' && post.subject_id) {
-      // Primary: the headline caption from VERIFIED finance/IE facts.
-      const { data: cand } = await admin
-        .from('candidates')
-        .select('name, party, office, state, overall_score, is_incumbent, x_handle')
-        .eq('id', post.subject_id)
-        .maybeSingle();
-
-      const meta = {
-        name: (cand?.name as string) || String(post.subject_label ?? '').split('—')[0].trim() || 'This candidate',
-        party: (cand?.party as string) ?? stat.party ?? '',
-        office: (cand?.office as string) ?? stat.office ?? '',
-        state: (cand?.state as string) ?? stat.state ?? '',
-        score: cand?.overall_score != null ? Number(cand.overall_score) : (stat.overall_score != null ? Number(stat.overall_score) : null),
-        incumbent: (cand?.is_incumbent as boolean | null) ?? null,
-        handle: (cand?.x_handle as string | null) ?? null,
-      };
-
-      const headline = await composeFinanceCaption(admin, aiKey, post.subject_id, platform, meta);
-      if (headline) return await save(headline.caption, headline.source);
-
-      // Fallback (no finance data): blend in the cached record summary instead of dumping
-      // it verbatim. composeAnalysisCaption degrades to a record-only post when finance is absent.
+    // The candidate's cached, web-grounded record summary (used by ai_analysis and as the
+    // no-finance fallback). Read lazily so we only hit the cache when a branch needs it.
+    const readRecord = async (): Promise<string | null> => {
       const cached = await readCache<{ summary?: string; insufficient_information?: boolean }>({
         kind: 'recipient', subject_id: `v2:candidate:${post.subject_id}`, cycle: null,
       });
-      const record = cached?.payload && !cached.payload.insufficient_information ? cached.payload.summary ?? null : null;
-      const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, record);
+      return cached?.payload && !cached.payload.insufficient_information ? cached.payload.summary ?? null : null;
+    };
+
+    if (meta && post.subject_id) {
+      // Type-specific composer first; each returns null when its data is missing.
+      if (post.subject_type === 'committee_spender') {
+        const c = await composeCommitteeCaption(admin, aiKey, post.subject_id, platform, meta);
+        if (c) return await save(c.caption, c.source);
+      } else if (post.subject_type === 'top_donor') {
+        const c = await composeTopDonorCaption(admin, aiKey, post.subject_id, platform, meta);
+        if (c) return await save(c.caption, c.source);
+      } else if (post.subject_type === 'ai_analysis') {
+        const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, await readRecord());
+        if (analysis) return await save(analysis.caption, analysis.source);
+      }
+
+      // Shared money-driven fallback for rep_profile AND for committee_spender / top_donor
+      // when their specific data is absent — every candidate-anchored post still gets a
+      // verified-finance caption, then a record-blended one, before the static line.
+      const headline = await composeFinanceCaption(admin, aiKey, post.subject_id, platform, meta);
+      if (headline) return await save(headline.caption, headline.source);
+      const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, await readRecord());
       if (analysis) return await save(analysis.caption, analysis.source);
     }
 

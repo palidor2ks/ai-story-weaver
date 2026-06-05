@@ -58,7 +58,7 @@ function partyFull(party: string | null | undefined): string {
 // genuine grassroots positive, while a high PAC or large-individual share is a red flag
 // worth calling out plainly (they answer to big/institutional donors, not small-dollar
 // voters). Embeds the real percentage so the cue stays strictly factual. Null when mixed.
-function fundingCharacter(fu: Facts['funding']): string | null {
+export function fundingCharacter(fu: Facts['funding']): string | null {
   if (!fu) return null;
   const { small_pct, large_pct, pac_pct } = fu;
   if (pac_pct >= 50) return `PAC-dependent — ${pac_pct}% of its itemized money comes from PACs and committees, not voters`;
@@ -70,7 +70,7 @@ function fundingCharacter(fu: Facts['funding']): string | null {
   return null;
 }
 
-function fmtMoney(n: number | null | undefined): string | null {
+export function fmtMoney(n: number | null | undefined): string | null {
   if (n === null || n === undefined || !Number.isFinite(n)) return null;
   const a = Math.abs(n);
   if (a >= 1e9) return `$${(n / 1e9).toFixed(1).replace(/\.0$/, '')}B`;
@@ -80,7 +80,7 @@ function fmtMoney(n: number | null | undefined): string | null {
 }
 
 const ACRONYMS = new Set(['PAC', 'PACS', 'INC', 'INC.', 'LLC', 'USA', 'AIPAC', 'US', 'GOP', 'NRA', 'AFL', 'CIO']);
-function tidyName(name: string | null | undefined): string {
+export function tidyName(name: string | null | undefined): string {
   const s = (name ?? '').trim();
   if (!s) return '';
   if (s !== s.toUpperCase()) return s; // only re-case if it's shouting in ALL CAPS
@@ -405,4 +405,127 @@ export async function composeAnalysisCaption(
     base = `${record}${fundClause}`.trim();
   }
   return { caption: ensureHandle(summarizeForSocial(base, cfg.max), handle, cfg.max), source: `analysis_${mode}_template` };
+}
+
+// ---------------------------------------------------------------------------
+// Candidate-anchored money cards: "top committee/PAC spender" and "top donor".
+// Both reuse the same verified get_candidate_caption_facts() data as rep_profile
+// but zoom in on ONE money angle, with a watchdog framing. Shared with the card
+// renderer (social-card.ts) so the image and caption agree on the headline fact.
+// ---------------------------------------------------------------------------
+
+export async function fetchCandidateFacts(admin: SupabaseClient, candidateId: string): Promise<Facts | null> {
+  const { data } = await admin.rpc('get_candidate_caption_facts', { _candidate_id: candidateId });
+  return (data ?? null) as Facts | null;
+}
+
+// The single biggest OUTSIDE (independent-expenditure / Super-PAC) spender on this
+// race, plus whether that money is working to elect or defeat the candidate.
+export function topOutsideSpender(f: Facts | null): { name: string; amount: number; dir: 'support' | 'oppose' } | null {
+  if (!f) return null;
+  const sup = f.top_support_pac && (f.top_support_pac.amount ?? 0) > 0 ? f.top_support_pac : null;
+  const opp = f.top_oppose_pac && (f.top_oppose_pac.amount ?? 0) > 0 ? f.top_oppose_pac : null;
+  if (!sup && !opp) return null;
+  if (sup && (!opp || sup.amount >= opp.amount)) return { name: sup.name, amount: sup.amount, dir: 'support' };
+  return { name: opp!.name, amount: opp!.amount, dir: 'oppose' };
+}
+
+export function hasCommitteeData(f: Facts | null): boolean {
+  return !!f && ((f.ie_support ?? 0) > 0 || (f.ie_oppose ?? 0) > 0) && !!topOutsideSpender(f);
+}
+export function hasDonorData(f: Facts | null): boolean {
+  return !!f && !!f.top_donor && (f.top_donor.amount ?? 0) > 0;
+}
+
+function partyLineFor(meta: CandidateMeta): string {
+  const ideology = ideologyLabel(meta.score);
+  return `${ideology ? ideology + ' ' : ''}${partyFull(meta.party)}${meta.office ? `, ${meta.office}${meta.state ? ` (${meta.state})` : ''}` : ''}`.trim();
+}
+
+function buildWatchdogPrompt(platform: string, kind: 'committee' | 'donor', block: string, timing: string | null, handle: string | null, max: number): string {
+  const long = PLATFORM_LIMITS[platform]?.long ?? false;
+  const handleRule = handle
+    ? `\n- Refer to them as @${handle} in place of a real name; never write their actual personal name, and do NOT start the post with @${handle} (so X does not treat it as a reply).`
+    : '';
+  const lengthRule = long
+    ? `Length: 2–4 short sentences, under ${max} characters.`
+    : `Length: ONE or TWO tight sentences. Stay comfortably under ${max} characters — aim for about ${Math.round(max * 0.85)} and leave room; never run to the limit.`;
+  const angle = kind === 'committee'
+    ? `- OPEN with the biggest outside-spending dollar figure — it is the hook. Name the committee/PAC behind it and whether that money is working to ELECT or DEFEAT them. If both for- and against- totals are given, contrast them. Take a WATCHDOG stance: big outside money trying to buy a seat is the story.`
+    : `- OPEN with the top donor's dollar figure and who they are — that's the hook. Take a WATCHDOG stance on the money: a campaign leaning on big-individual or PAC money answers to big/institutional donors, not small-dollar voters, while genuine small-dollar/grassroots funding is a real positive. If a "Funding character" cue is given, feature it.`;
+  return `You are a sharp political-money watchdog writing a punchy, headline-worthy ${platform.toUpperCase()} post about ${kind === 'committee' ? 'the OUTSIDE money (Super-PAC / independent expenditures) flooding' : 'who is bankrolling'} one U.S. politician's campaign, built for media consumption and engagement.
+
+Use ONLY the verified facts below. Never invent, alter, or re-round any number; never add a fact that isn't listed. You MAY tidy an ALL-CAPS committee or donor name to Title Case.
+
+VERIFIED FACTS:
+${block}
+${timing ? `\n${timing}\n` : ''}
+Write the post:
+${angle}
+- Pointed but strictly FACTUAL — no name-calling, no invented numbers.${handleRule}
+- Refer to the politician using the party/leaning EXACTLY as given; never prepend "Left"/"Right"/"Progressive"/"Conservative" yourself.
+- Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
+- ${lengthRule}
+- Plain text ONLY — no markdown, no asterisks, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
+}
+
+// Caption for a "top committee/PAC spender" post. Null when the candidate has no
+// usable independent-expenditure data (caller should fall back).
+export async function composeCommitteeCaption(
+  admin: SupabaseClient, aiKey: string | undefined, candidateId: string, platform: string, meta: CandidateMeta,
+): Promise<{ caption: string; source: string } | null> {
+  const cfg = PLATFORM_LIMITS[platform] ?? PLATFORM_LIMITS.x;
+  const facts = await fetchCandidateFacts(admin, candidateId);
+  if (!hasCommitteeData(facts)) return null;
+  const f = facts as Facts;
+  const top = topOutsideSpender(f)!;
+
+  const handle = normalizeHandle(meta.handle);
+  const displayName = handle ? `@${handle}` : (meta.name || 'this candidate');
+  const support = f.ie_support ?? 0;
+  const oppose = f.ie_oppose ?? 0;
+  const lines = [
+    `Politician: ${displayName} — ${partyLineFor(meta)}.`,
+    `Biggest single outside spender: ${tidyName(top.name)} spent ${fmtMoney(top.amount)} ${top.dir === 'support' ? 'to ELECT them' : 'to DEFEAT them'}.`,
+  ];
+  if (support > 0 || oppose > 0) lines.push(`Total outside (Super-PAC/independent) money in this race: ${fmtMoney(support)} supporting vs ${fmtMoney(oppose)} opposing.`);
+  const timing = electionTimingDirective(f.cycle, f.today);
+  const ai = await aiCaption(aiKey, buildWatchdogPrompt(platform, 'committee', lines.join('\n'), timing, handle, cfg.max), cfg.max);
+  if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: 'committee_ai' };
+
+  const both = support > 0 && oppose > 0;
+  const verb = top.dir === 'support' ? 'elect' : 'defeat';
+  const contrast = both ? ` Outside money in this race: ${fmtMoney(support)} for vs ${fmtMoney(oppose)} against.` : '';
+  const emoji = top.dir === 'oppose' ? '💸' : '💥';
+  const base = `${fmtMoney(top.amount)} in outside money from ${tidyName(top.name)} is working to ${verb} ${displayName}.${contrast} Follow the money. ${emoji}`;
+  return { caption: ensureHandle(summarizeForSocial(base, cfg.max), handle, cfg.max), source: 'committee_template' };
+}
+
+// Caption for a "top donor" post. Null when the candidate has no usable donor data.
+export async function composeTopDonorCaption(
+  admin: SupabaseClient, aiKey: string | undefined, candidateId: string, platform: string, meta: CandidateMeta,
+): Promise<{ caption: string; source: string } | null> {
+  const cfg = PLATFORM_LIMITS[platform] ?? PLATFORM_LIMITS.x;
+  const facts = await fetchCandidateFacts(admin, candidateId);
+  if (!hasDonorData(facts)) return null;
+  const f = facts as Facts;
+  const d = f.top_donor!;
+  const character = fundingCharacter(f.funding ?? null);
+
+  const handle = normalizeHandle(meta.handle);
+  const displayName = handle ? `@${handle}` : (meta.name || 'this candidate');
+  const typeNote = d.type && !/^ind/i.test(d.type) ? ` (a ${tidyName(d.type)})` : '';
+  const lines = [
+    `Politician: ${displayName} — ${partyLineFor(meta)}.`,
+    `Largest single donor: ${tidyName(d.name)}${typeNote} at ${fmtMoney(d.amount)}.`,
+  ];
+  if (f.funding) lines.push(`Funding mix: ${f.funding.small_pct}% small-dollar / ${f.funding.large_pct}% large individual / ${f.funding.pac_pct}% PAC.`);
+  if (character) lines.push(`Funding character (feature this, pointed but factual): ${character}.`);
+  const timing = electionTimingDirective(f.cycle, f.today);
+  const ai = await aiCaption(aiKey, buildWatchdogPrompt(platform, 'donor', lines.join('\n'), timing, handle, cfg.max), cfg.max);
+  if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: 'top_donor_ai' };
+
+  const charClause = character ? ` The campaign is ${character}.` : '';
+  const base = `${displayName}'s single biggest backer: ${tidyName(d.name)}${typeNote} at ${fmtMoney(d.amount)}.${charClause} Follow the money. 💰`;
+  return { caption: ensureHandle(summarizeForSocial(base, cfg.max), handle, cfg.max), source: 'top_donor_template' };
 }
