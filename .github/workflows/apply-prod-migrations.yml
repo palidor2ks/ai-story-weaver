@@ -16,7 +16,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: prod-migrations
+  # Shared with deploy-edge-functions.yml so the two production-mutating workflows never run
+  # concurrently (which could double-apply a migration). Renamed from prod-migrations.
+  group: prod-deploy
   cancel-in-progress: false
 
 jobs:

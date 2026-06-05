@@ -165,3 +165,57 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.auto-post-due]
     verify_jwt = false
+  # --- Completed for the auto-deploy workflow: these were deployed (all verify_jwt=false)
+  # but were missing from this file, so a blanket `supabase functions deploy` would have
+  # defaulted them to verify_jwt=true and broken public/anonymous endpoints (e.g.
+  # share-card-page, upload-share-card). Values mirror the live deployed state. ---
+  [functions.ai-recipient-analysis]
+    verify_jwt = false
+  [functions.attach-donors-to-alias]
+    verify_jwt = false
+  [functions.classify-donor-alias-cause]
+    verify_jwt = false
+  [functions.detach-donors-from-alias]
+    verify_jwt = false
+  [functions.discover-representative-x-handles]
+    verify_jwt = false
+  [functions.fec-candidate-drain]
+    verify_jwt = false
+  [functions.fetch-fl-finance]
+    verify_jwt = false
+  [functions.fetch-mayor]
+    verify_jwt = false
+  [functions.fetch-nj-elec-finance]
+    verify_jwt = false
+  [functions.fetch-ny-finance]
+    verify_jwt = false
+  [functions.fetch-relevant-news]
+    verify_jwt = false
+  [functions.import-fec-committee]
+    verify_jwt = false
+  [functions.import-fec-schedule-e-csv]
+    verify_jwt = false
+  [functions.import-independent-expenditures]
+    verify_jwt = false
+  [functions.import-local-officials]
+    verify_jwt = false
+  [functions.populate-civic-answers]
+    verify_jwt = false
+  [functions.reconcile-independent-expenditures]
+    verify_jwt = false
+  [functions.scrape-piscataway-officials]
+    verify_jwt = false
+  [functions.share-card-page]
+    verify_jwt = false
+  [functions.sync-committee-totals]
+    verify_jwt = false
+  [functions.sync-fec-committees]
+    verify_jwt = false
+  [functions.sync-house-press-gallery-handles]
+    verify_jwt = false
+  [functions.sync-representative-x-posts]
+    verify_jwt = false
+  [functions.upload-share-card]
+    verify_jwt = false
+  [functions.x-fetch-user-tweets]
+    verify_jwt = false

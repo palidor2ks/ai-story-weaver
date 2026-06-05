@@ -1,0 +1,83 @@
+name: Deploy Edge Functions to Supabase production
+
+# Why this exists: in this repo's Lovable + Supabase setup, merging to main is *supposed* to
+# deploy Edge Functions to production, but that path proved unreliable — functions stayed on
+# their previously-deployed versions after merges and had to be pushed by hand. This workflow
+# makes the deploy explicit and authoritative: on every merge to main that touches a function
+# (or the shared config), it deploys the functions straight from the repo via the Supabase CLI.
+# Worst case it's a redundant no-op; it can never leave prod behind main.
+#
+# Sibling to apply-prod-migrations.yml, which handles the migration half of the same gap. The
+# two share a concurrency group so they can never run at the same time (which would race on the
+# migration ledger), and this workflow applies any newly-added migrations BEFORE deploying
+# functions, so a function can never reach production traffic ahead of a schema change it needs.
+#
+# One-time setup:
+#   - SUPABASE_ACCESS_TOKEN — a personal access token (Supabase Dashboard → Account → Access
+#     Tokens). Required to deploy functions.
+#   - SUPABASE_DB_URL — the prod session-pooler connection string (same secret apply-prod-
+#     migrations.yml uses). Only needed when a merge also adds migration files.
+# The project ref is public (it's in config.toml), so it stays inline below.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+  workflow_dispatch:
+
+# Shared with apply-prod-migrations.yml: serialises all production-mutating runs so the two
+# workflows never apply migrations concurrently.
+concurrency:
+  group: prod-deploy
+  cancel-in-progress: false
+
+env:
+  SUPABASE_PROJECT_REF: ornnzinjrcyigazecctf
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Only ever deploy main to production. Without this, a workflow_dispatch run started from a
+    # feature branch would check out and deploy THAT branch's functions to prod.
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the migration step diffs across the push range
+
+      # Fail loudly if the token is missing rather than silently skipping the deploy
+      # (the same "don't let prod fall behind unnoticed" guard apply-prod-migrations.sh uses).
+      - name: Verify deploy credentials are configured
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN repository secret is not set — cannot deploy Edge Functions."
+            echo "Add it under Settings → Secrets and variables → Actions (Supabase Dashboard → Account → Access Tokens)."
+            exit 1
+          fi
+
+      # Apply any migrations added in this same push BEFORE deploying functions, so a function
+      # that references a new table/column/RPC never goes live ahead of the schema. Idempotent
+      # and a no-op when the push adds no migration files (SUPABASE_DB_URL isn't even needed
+      # then); it fails loudly if migrations were added but the DB URL is missing.
+      - name: Apply newly added migrations first
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash scripts/apply-prod-migrations.sh "${{ github.event.before }}" "${{ github.sha }}"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Deploy ALL functions, not just the changed ones: many functions import shared helpers
+      # from supabase/functions/_shared, so a change there can affect any of them. Deploying the
+      # whole set is the simple, always-correct choice; per-function verify_jwt is read from
+      # config.toml — which must list EVERY function (a function missing from it would be
+      # deployed with the CLI default verify_jwt=true and break public/anonymous endpoints).
+      - name: Deploy Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
