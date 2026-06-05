@@ -166,20 +166,26 @@ function SettingsTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const generateForce = useMutation({
-    mutationFn: async () => {
+  const generate = useMutation({
+    mutationFn: async (subjectType: string) => {
       // Use functions.invoke so the admin's session token is attached — the
       // function authorizes cron/service callers OR an authenticated admin.
       const { data, error } = await supabase.functions.invoke('pick-daily-stat-card', {
-        body: { force: true },
+        body: { force: true, subject_type: subjectType },
       });
       if (error) throw error;
       if ((data as { error?: string } | undefined)?.error) throw new Error((data as { error: string }).error);
-      return data as { ok?: boolean; subject_id?: string; subject_type?: string; skipped?: string };
+      return data as { ok?: boolean; created?: { subject_type: string; subject_id: string }[]; skipped?: { subject_type: string; reason: string }[] };
     },
     onSuccess: (j) => {
-      const typeLabel = subjectTypeLabel(j.subject_type);
-      toast.success(j.ok ? `${typeLabel} draft created for ${j.subject_id}` : `Skipped: ${j.skipped ?? 'unknown'}`);
+      const made = j.created ?? [];
+      if (made.length > 0) {
+        toast.success(made.map((c) => `${subjectTypeLabel(c.subject_type)} draft created`).join(' · '));
+      } else {
+        const reason = j.skipped?.[0]?.reason ?? 'unknown';
+        const pretty = reason === 'no_candidate_with_data' ? 'no candidate with that data was found' : reason.replace(/_/g, ' ');
+        toast.warning(`No draft created — ${pretty}`);
+      }
       qc.invalidateQueries({ queryKey: ['social-posts'] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -243,15 +249,31 @@ function SettingsTab() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-2">
+      <div className="space-y-3">
         <Button onClick={() => save.mutate(local)} disabled={save.isPending}>
           {save.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           Save settings
         </Button>
-        <Button variant="outline" onClick={() => generateForce.mutate()} disabled={generateForce.isPending}>
-          {generateForce.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
-          Generate draft now
-        </Button>
+        <div>
+          <p className="text-sm text-muted-foreground mb-2">
+            Generate a draft now — one button per card type. (The daily auto-run drafts one of each.)
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(['rep_profile', 'committee_spender', 'top_donor'] as const).map((type) => (
+              <Button
+                key={type}
+                variant="outline"
+                onClick={() => generate.mutate(type)}
+                disabled={generate.isPending}
+              >
+                {generate.isPending && generate.variables === type
+                  ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  : <Play className="h-4 w-4 mr-2" />}
+                {subjectTypeLabel(type)}
+              </Button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -488,7 +510,7 @@ function QueueTab() {
     return (
       <div className="text-center py-12 text-muted-foreground">
         <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        No drafts awaiting review. New drafts appear at your configured posting time (or click <strong>Generate draft now</strong> in Settings).
+        No drafts awaiting review. New drafts appear at your configured posting time (or use a <strong>Generate</strong> button in Settings).
       </div>
     );
   }
