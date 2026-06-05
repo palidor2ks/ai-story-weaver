@@ -35,8 +35,8 @@ function nowInTimezone(tz: string): { hour: number; minute: number } {
 }
 
 import { isCronAuthorized, getCronSecret } from '../_shared/cron-auth.ts';
-import { fetchCandidateFacts, hasCommitteeData, topOutsideSpender } from '../_shared/finance-caption.ts';
 import { fetchTopDonorEntities, fetchDonorCardFacts } from '../_shared/donor-card.ts';
+import { fetchTopCommitteeSpenders, fetchCommitteeCardFacts } from '../_shared/committee-card.ts';
 
 type Candidate = {
   id: string; name: string; office: string | null; party: string | null; state: string | null;
@@ -165,29 +165,42 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Committee/PAC OUTSIDE-SPENDER card: pick a notable Super PAC at random from
+      // the top ~100 by total independent-expenditure $, excluding recently-featured
+      // committee fec ids. NOT candidate-anchored.
+      if (type === 'committee_spender') {
+        const cmteSkip = [...skipIds, ...pickedThisRun];
+        const cmtePool = await fetchTopCommitteeSpenders(admin, 100, cmteSkip);
+        if (cmtePool.length === 0) { skipped.push({ subject_type: type, reason: 'no_eligible_committees' }); continue; }
+        const cmte = cmtePool[Math.floor(Math.random() * cmtePool.length)];
+
+        // Snapshot a few facts for the admin card / payload (cause is optional).
+        const facts = await fetchCommitteeCardFacts(admin, cmte.fec_committee_id);
+        const { data: post, error: insErr } = await admin.from('social_posts').insert({
+          subject_type: type,
+          subject_id: cmte.fec_committee_id,
+          subject_label: cmte.name,
+          stat_key: 'top_committee_spender',
+          stat_payload: {
+            total_spent: facts?.total_spent ?? cmte.total_spent,
+            ...(facts?.cause ? { cause_label: facts.cause.label } : {}),
+          },
+          status: 'pending_review',
+        }).select('id').single();
+        if (insErr) { skipped.push({ subject_type: type, reason: insErr.message }); continue; }
+
+        await insertPlatforms(post.id);
+        createdMeta.push({ subject_type: type, subject_id: cmte.fec_committee_id, post_id: post.id });
+        pickedThisRun.add(cmte.fec_committee_id);
+        continue;
+      }
+
       // Avoid featuring the same candidate twice in one run.
       const avail = basePool.filter((c) => !pickedThisRun.has(c.id));
       if (avail.length === 0) { skipped.push({ subject_type: type, reason: 'no_eligible_candidates' }); continue; }
 
-      let picked = avail[Math.floor(Math.random() * avail.length)];
-      let statKey = type === 'ai_analysis' ? 'ai_summary' : 'overall_score';
-      let statExtra: Record<string, unknown> = {};
-
-      // committee_spender needs a candidate that actually HAS outside-spending data.
-      // Search the pool for one; if none qualifies, skip this type (don't substitute).
-      if (type === 'committee_spender') {
-        const shuffled = [...avail].sort(() => Math.random() - 0.5).slice(0, 30);
-        let found: { c: Candidate; f: Awaited<ReturnType<typeof fetchCandidateFacts>> } | null = null;
-        for (const c of shuffled) {
-          const f = await fetchCandidateFacts(admin, c.id);
-          if (hasCommitteeData(f)) { found = { c, f }; break; }
-        }
-        if (!found || !found.f) { skipped.push({ subject_type: type, reason: 'no_candidate_with_data' }); continue; }
-        picked = found.c;
-        const top = topOutsideSpender(found.f)!;
-        statKey = 'top_committee_spender';
-        statExtra = { committee_name: top.name, committee_amount: top.amount, committee_dir: top.dir, ie_support: found.f.ie_support, ie_oppose: found.f.ie_oppose };
-      }
+      const picked = avail[Math.floor(Math.random() * avail.length)];
+      const statKey = type === 'ai_analysis' ? 'ai_summary' : 'overall_score';
 
       const subjectLabel = `${picked.name} — ${picked.office}${picked.state ? `, ${picked.state}` : ''}`;
       const { data: post, error: insErr } = await admin.from('social_posts').insert({
@@ -197,7 +210,7 @@ Deno.serve(async (req) => {
         stat_key: statKey,
         stat_payload: {
           overall_score: picked.overall_score, party: picked.party, office: picked.office,
-          state: picked.state, district: picked.district, coverage_tier: picked.coverage_tier, ...statExtra,
+          state: picked.state, district: picked.district, coverage_tier: picked.coverage_tier,
         },
         status: 'pending_review',
       }).select('id').single();
