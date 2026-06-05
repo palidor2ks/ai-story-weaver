@@ -175,6 +175,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.classify-donor-alias-cause]
     verify_jwt = false
+  [functions.classify-donor-cause]
+    verify_jwt = false
   [functions.detach-donors-from-alias]
     verify_jwt = false
   [functions.discover-representative-x-handles]
