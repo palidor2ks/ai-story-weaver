@@ -28,7 +28,7 @@ import { NjStateFinanceSection } from '@/components/NjStateFinanceSection';
 import { FlStateFinanceSection } from '@/components/FlStateFinanceSection';
 import { NyStateFinanceSection } from '@/components/NyStateFinanceSection';
 import { normalizeOfficeName } from '@/lib/officeLabel';
-import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
+import { computeFundingBreakdown, groupFundingSources, withPercents } from '@/lib/fundingBreakdown';
 import { CandidateIESection } from '@/components/IndependentExpenditureSections';
 import { cn, formatCompactCurrency } from '@/lib/utils';
 import { ArrowLeft, ExternalLink, MapPin, Calendar, DollarSign, Vote, Sparkles, Pencil, BadgeCheck, FileText, RefreshCw, Info, AlertTriangle, Search, X, ChevronDown, ChevronUp, ScrollText, Briefcase } from 'lucide-react';
@@ -322,14 +322,15 @@ export const CandidateProfile = () => {
   const conduitDonors = donors.filter(d => isConduitDonor(d));
   const conduitTotal = conduitDonors.reduce((sum, d) => sum + d.amount, 0);
   
-  // FEC PAC and Party contributions from reconciliation
-  const fecPacContributions = financeReconciliation?.fec_pac_contributions ?? 0;
-  const fecPartyContributions = financeReconciliation?.fec_party_contributions ?? 0;
-  
+  // FEC PAC and Party contributions — prefer nightly reconciliation, fall back to
+  // live FEC totals so these land in real buckets instead of "Other / Uncategorized".
+  const fecPacContributions = financeReconciliation?.fec_pac_contributions ?? fecTotals?.pac_contributions ?? 0;
+  const fecPartyContributions = financeReconciliation?.fec_party_contributions ?? fecTotals?.party_contributions ?? 0;
+
   // Additional FEC breakdown fields (loans, transfers, candidate contributions, other receipts)
-  const fecLoans = financeReconciliation?.fec_loans ?? 0;
-  const fecTransfers = financeReconciliation?.fec_transfers ?? 0;
-  const fecCandidateContribution = financeReconciliation?.fec_candidate_contribution ?? 0;
+  const fecLoans = financeReconciliation?.fec_loans ?? fecTotals?.loans ?? 0;
+  const fecTransfers = financeReconciliation?.fec_transfers ?? fecTotals?.transfers ?? 0;
+  const fecCandidateContribution = financeReconciliation?.fec_candidate_contribution ?? fecTotals?.candidate_contribution ?? 0;
   const fecOtherReceipts = financeReconciliation?.fec_other_receipts ?? fecTotals?.other_receipts ?? 0;
   
   // Visible donors total (from donors table - may be incomplete due to aggregation)
@@ -371,8 +372,7 @@ export const CandidateProfile = () => {
   const fundingBreakdownComputed = (() => {
     const b = computeFundingBreakdown(fundingInput);
     if (b.total <= 0) return undefined;
-    return withPercents(b.sources, b.total)
-      .filter((r) => r.amount > 0)
+    return withPercents(groupFundingSources(b.sources, b.total), b.total)
       .map((r) => ({ label: r.label, pct: r.pct, color: r.color }));
   })();
 

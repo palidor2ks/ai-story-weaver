@@ -7,7 +7,7 @@ import { useFinanceReconciliation } from '@/hooks/useFinanceReconciliation';
 import { useRepresentativeDetails } from '@/hooks/useRepresentativeDetails';
 import { useCandidateIE } from '@/hooks/useIndependentExpenditures';
 import { getDonorCause, useDonorCauses } from '@/hooks/useDonorCauses';
-import { computeFundingBreakdown, withPercents } from '@/lib/fundingBreakdown';
+import { computeFundingBreakdown, groupFundingSources, withPercents } from '@/lib/fundingBreakdown';
 import { proxiedImageUrl } from '@/lib/imageProxy';
 import { BRAND_HOST } from '@/lib/brand';
 import { supabase } from '@/integrations/supabase/client';
@@ -266,12 +266,14 @@ export function useCandidateShareCardData(
     const fundingInput = {
       fecItemized,
       fecUnitemized,
-      fecPacContributions: financeReconciliation?.fec_pac_contributions ?? 0,
-      fecPartyContributions: financeReconciliation?.fec_party_contributions ?? 0,
-      fecTransfers: financeReconciliation?.fec_transfers ?? 0,
-      fecLoans: financeReconciliation?.fec_loans ?? 0,
+      fecPacContributions:
+        financeReconciliation?.fec_pac_contributions ?? fecTotals?.pac_contributions ?? 0,
+      fecPartyContributions:
+        financeReconciliation?.fec_party_contributions ?? fecTotals?.party_contributions ?? 0,
+      fecTransfers: financeReconciliation?.fec_transfers ?? fecTotals?.transfers ?? 0,
+      fecLoans: financeReconciliation?.fec_loans ?? fecTotals?.loans ?? 0,
       fecCandidateContribution:
-        financeReconciliation?.fec_candidate_contribution ?? 0,
+        financeReconciliation?.fec_candidate_contribution ?? fecTotals?.candidate_contribution ?? 0,
       fecOtherReceipts:
         financeReconciliation?.fec_other_receipts ??
         fecTotals?.other_receipts ??
@@ -288,8 +290,7 @@ export function useCandidateShareCardData(
     const b = computeFundingBreakdown(fundingInput);
     const fundingBreakdown =
       b.total > 0
-        ? withPercents(b.sources, b.total)
-            .filter((r) => r.amount > 0)
+        ? withPercents(groupFundingSources(b.sources, b.total), b.total)
             .map((r) => ({ label: r.label, pct: r.pct, color: r.color }))
         : undefined;
 
