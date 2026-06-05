@@ -16,9 +16,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Shared with deploy-edge-functions.yml so the two production-mutating workflows never run
-  # concurrently (which could double-apply a migration). Renamed from prod-migrations.
-  group: prod-deploy
+  # Own group, kept separate from deploy-edge-functions.yml. Sharing a group between the two
+  # would let a later pending run supersede an earlier pending one (GitHub keeps only one
+  # pending run per group even with cancel-in-progress: false), silently dropping a queued
+  # migration run.
+  group: prod-migrations
   cancel-in-progress: false
 
 jobs:
