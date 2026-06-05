@@ -7,7 +7,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'npm:zod@3.23.8';
 import { isCronAuthorized } from '../_shared/cron-auth.ts';
 import { readCache } from '../_shared/ai-cache.ts';
-import { composeFinanceCaption, summarizeForSocial, PLATFORM_LIMITS } from '../_shared/finance-caption.ts';
+import { composeFinanceCaption, composeAnalysisCaption } from '../_shared/finance-caption.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,7 +50,6 @@ Deno.serve(async (req) => {
     const { data: post } = await admin.from('social_posts').select('*').eq('id', post_id).maybeSingle();
     if (!post) return new Response(JSON.stringify({ error: 'post_not_found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-    const max = (PLATFORM_LIMITS[platform] ?? PLATFORM_LIMITS.x).max;
     const stat = post.stat_payload ?? {};
 
     const save = async (caption: string, source: string) => {
@@ -58,20 +57,33 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ caption, source }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     };
 
-    // AI-analysis rotation post: lead with the candidate's cached AI analysis
-    // summary (the same web-grounded writeup shown on the profile), condensed to
-    // the platform limit. Falls through to the static line if the cache misses.
+    // AI-analysis rotation post: blend the candidate's cached record summary with their
+    // verified finance facts. Short posts (X/TikTok) feature one angle (randomized);
+    // long posts (FB/IG) cover both record + money, with a light grassroots-vs-PAC cue.
+    // Falls through to the static line only if there's neither a record nor finance data.
     if (post.subject_type === 'ai_analysis' && post.subject_id) {
       const cached = await readCache<{ summary?: string; insufficient_information?: boolean }>({
         kind: 'recipient', subject_id: `v2:candidate:${post.subject_id}`, cycle: null,
       });
-      const summary = cached?.payload?.summary;
-      if (cached?.payload && !cached.payload.insufficient_information && typeof summary === 'string' && summary.trim()) {
-        const name = String(post.subject_label ?? '').split('—')[0].trim() || 'this candidate';
-        const prefix = `AI analysis — ${name}: `;
-        const body = summarizeForSocial(summary, Math.max(1, max - prefix.length));
-        return await save(`${prefix}${body}`, 'ai_analysis');
-      }
+      const record = cached?.payload && !cached.payload.insufficient_information ? cached.payload.summary ?? null : null;
+
+      const { data: cand } = await admin
+        .from('candidates')
+        .select('name, party, office, state, overall_score, is_incumbent, x_handle')
+        .eq('id', post.subject_id)
+        .maybeSingle();
+      const meta = {
+        name: (cand?.name as string) || String(post.subject_label ?? '').split('—')[0].trim() || 'This candidate',
+        party: (cand?.party as string) ?? stat.party ?? '',
+        office: (cand?.office as string) ?? stat.office ?? '',
+        state: (cand?.state as string) ?? stat.state ?? '',
+        score: cand?.overall_score != null ? Number(cand.overall_score) : (stat.overall_score != null ? Number(stat.overall_score) : null),
+        incumbent: (cand?.is_incumbent as boolean | null) ?? null,
+        handle: (cand?.x_handle as string | null) ?? null,
+      };
+
+      const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, record);
+      if (analysis) return await save(analysis.caption, analysis.source);
     }
 
     if (post.subject_type === 'rep_profile' && post.subject_id) {
@@ -95,14 +107,14 @@ Deno.serve(async (req) => {
       const headline = await composeFinanceCaption(admin, aiKey, post.subject_id, platform, meta);
       if (headline) return await save(headline.caption, headline.source);
 
-      // Fallback: the candidate's cached AI analysis summary, condensed.
+      // Fallback (no finance data): blend in the cached record summary instead of dumping
+      // it verbatim. composeAnalysisCaption degrades to a record-only post when finance is absent.
       const cached = await readCache<{ summary?: string; insufficient_information?: boolean }>({
         kind: 'recipient', subject_id: `v2:candidate:${post.subject_id}`, cycle: null,
       });
-      const summary = cached?.payload?.summary;
-      if (cached?.payload && !cached.payload.insufficient_information && typeof summary === 'string' && summary.trim()) {
-        return await save(summarizeForSocial(summary, max), 'ai_analysis');
-      }
+      const record = cached?.payload && !cached.payload.insufficient_information ? cached.payload.summary ?? null : null;
+      const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, record);
+      if (analysis) return await save(analysis.caption, analysis.source);
     }
 
     // Last resort: a plain static caption.

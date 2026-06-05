@@ -54,6 +54,22 @@ function partyFull(party: string | null | undefined): string {
   return (party ?? '').trim();
 }
 
+// Watchdog read of where a campaign's itemized money comes from: small-dollar is a
+// genuine grassroots positive, while a high PAC or large-individual share is a red flag
+// worth calling out plainly (they answer to big/institutional donors, not small-dollar
+// voters). Embeds the real percentage so the cue stays strictly factual. Null when mixed.
+function fundingCharacter(fu: Facts['funding']): string | null {
+  if (!fu) return null;
+  const { small_pct, large_pct, pac_pct } = fu;
+  if (pac_pct >= 50) return `PAC-dependent — ${pac_pct}% of its itemized money comes from PACs and committees, not voters`;
+  if (small_pct >= 55) return `genuinely grassroots — ${small_pct}% from small-dollar donors`;
+  if (pac_pct >= 35) return `heavily PAC-funded (${pac_pct}% from PACs/committees)`;
+  if (large_pct >= 55) return `big-money-backed — ${large_pct}% from large individual donors, not grassroots`;
+  if (small_pct >= 35 && small_pct >= pac_pct && small_pct >= large_pct) return `with a real small-dollar base (${small_pct}%)`;
+  if (pac_pct + large_pct >= 60) return `funded mostly by big donors and PACs (${large_pct}% large individual / ${pac_pct}% PAC), not small-dollar givers`;
+  return null;
+}
+
 function fmtMoney(n: number | null | undefined): string | null {
   if (n === null || n === undefined || !Number.isFinite(n)) return null;
   const a = Math.abs(n);
@@ -114,6 +130,8 @@ function factsBlock(name: string, party: string, ideology: string | null, office
   if (f.funding) {
     const fu = f.funding;
     lines.push(`Funding mix (share of their itemized donor money): ${fu.small_pct}% small-dollar (under $200), ${fu.large_pct}% large individual donors, ${fu.pac_pct}% from PACs/committees${fu.self_funded > 0 ? `; self-funded ${fmtMoney(fu.self_funded)}` : ''}.`);
+    const character = fundingCharacter(fu);
+    if (character) lines.push(`Funding character (surface this as a pointed but strictly factual watchdog angle): ${character}.`);
   }
   return lines.join('\n');
 }
@@ -184,7 +202,7 @@ Write the post:
 - ${focusRule}
 - Match the tense and framing to the TIMING note above — an upcoming election must NOT be described in the past tense, and a finished one must not be written as if it's still ahead.
 - Refer to them using the "Leaning & party" line EXACTLY as given. When it's only a party ("Democrat"/"Republican"), use just that — NEVER prepend "Left", "Right", "Progressive", "Conservative" or any direction yourself. Only a middle-of-the-road rep carries a "Center-Left", "Centrist", or "Center-Right" qualifier (e.g. "Center-Right Republican"). Say "re-election" only if the facts mark them as the incumbent; otherwise call it their campaign or bid.${handleRule}
-- When you cite funding: small-dollar = under $200, and the "PACs/committees" share is direct money TO the campaign — keep it distinct from the outside/Super-PAC spending above.
+- When you cite funding: small-dollar = under $200, and the "PACs/committees" share is direct money TO the campaign — keep it distinct from the outside/Super-PAC spending above. Take a WATCHDOG stance on the money: heavy PAC or large-individual funding is a red flag worth calling out plainly (they answer to big/institutional donors, not small-dollar voters), while a high small-dollar share is a genuine grassroots positive. If a "Funding character" cue is given, lead with it or feature it prominently. Be pointed but strictly FACTUAL — never invent, alter, or re-round a number, and no name-calling.
 - Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
 - ${lengthRule}
 - Plain text ONLY — no markdown, no asterisks, no underscores, no bullet points, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
@@ -224,7 +242,8 @@ function templateCaption(name: string, party: string, ideology: string | null, s
     base = `${fmtMoney(support)} in outside money is backing ${who}${sup ? `, led by ${tidyName(sup.name)} (${fmtMoney(sup.amount)})` : ''}${oppose > 0 ? ` — vs ${fmtMoney(oppose)} against` : ''}. 💥`;
   } else {
     const extra = (support > 0 || oppose > 0) ? ` Outside money: ${fmtMoney(support)} for, ${fmtMoney(oppose)} against.` : '';
-    base = `${fmtMoney(raised)} war chest for ${who}${f.donor_count ? `, built from ${f.donor_count.toLocaleString('en-US')} donors` : ''}${f.top_donor ? `; top donor ${tidyName(f.top_donor.name)} (${fmtMoney(f.top_donor.amount)})` : ''}.${extra} 🏦`;
+    const character = fundingCharacter(f.funding);
+    base = `${fmtMoney(raised)} war chest for ${who}${f.donor_count ? `, built from ${f.donor_count.toLocaleString('en-US')} donors` : ''}${f.top_donor ? `; top donor ${tidyName(f.top_donor.name)} (${fmtMoney(f.top_donor.amount)})` : ''}${character ? ` — ${character}` : ''}.${extra} 🏦`;
   }
   return summarizeForSocial(base, max);
 }
@@ -288,4 +307,102 @@ export async function composeFinanceCaption(
   const ai = await aiCaption(aiKey, buildPrompt(platform, block, hint, timing, handle, cfg.long, cfg.max), cfg.max);
   if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: 'finance_ai' };
   return { caption: ensureHandle(templateCaption(displayName, meta.party, ideology, meta.state, facts, cfg.max), handle, cfg.max), source: 'finance_template' };
+}
+
+// Compact, prompt-ready summary of a candidate's verified finance facts (no name/party
+// preamble) — the funding "ingredient" for an analysis post. Null when there's no money data.
+function fundingFactsLine(f: Facts | null): string | null {
+  if (!f || !hasFinance(f)) return null;
+  const parts: string[] = [];
+  if ((f.raised ?? 0) > 0) parts.push(`raised ${fmtMoney(f.raised)}${f.donor_count ? ` from ${f.donor_count.toLocaleString('en-US')} donors` : ''}${f.cycle ? ` (${f.cycle} cycle)` : ''}`);
+  if (f.top_donor && (f.top_donor.amount ?? 0) > 0) parts.push(`largest donor ${tidyName(f.top_donor.name)} at ${fmtMoney(f.top_donor.amount)}`);
+  if (f.funding) parts.push(`funding mix ${f.funding.small_pct}% small-dollar / ${f.funding.large_pct}% large individual / ${f.funding.pac_pct}% PAC`);
+  if ((f.ie_support ?? 0) > 0 || (f.ie_oppose ?? 0) > 0) parts.push(`outside money ${fmtMoney(f.ie_support ?? 0)} supporting vs ${fmtMoney(f.ie_oppose ?? 0)} opposing`);
+  return parts.length ? parts.join('; ') : null;
+}
+
+function buildAnalysisPrompt(
+  platform: string, displayName: string, partyLine: string,
+  record: string | null, funding: string | null, character: string | null,
+  timing: string | null, handle: string | null, mode: 'both' | 'funding' | 'record', max: number,
+): string {
+  const long = PLATFORM_LIMITS[platform]?.long ?? false;
+  const handleRule = handle
+    ? `\n- Refer to them as @${handle} in place of a real name; never write their actual personal name, and do NOT start the post with @${handle} (so X does not treat it as a reply).`
+    : '';
+  const focus = mode === 'both'
+    ? `Cover BOTH angles: (1) who they are — their record, positions, and what they're known for; and (2) their campaign money and what it says about WHO funds them.`
+    : mode === 'funding'
+      ? `Focus ONLY on their campaign money and what it says about who funds them — one tight angle.`
+      : `Focus ONLY on who they are — their record, positions, and what they're known for — one tight angle. Do NOT cite dollar figures.`;
+  const recordRule = (mode !== 'funding' && record)
+    ? `\n- What they're known for (summarize faithfully; never invent or embellish): ${record}`
+    : '';
+  const fundingRule = (mode !== 'record' && (funding || character))
+    ? `\n- Verified finance facts (never invent or re-round a number): ${funding ?? 'n/a'}.${character ? ` Funding character (feature this prominently): ${character}.` : ''} Take a WATCHDOG stance: call out heavy PAC/large-individual funding plainly (they answer to big/institutional donors, not small-dollar voters); treat a high small-dollar share as a genuine grassroots positive. Pointed but strictly factual — no name-calling.`
+    : '';
+  const lengthRule = long
+    ? `Length: 3–5 short sentences, under ${max} characters.`
+    : `Length: ONE or TWO tight sentences. Stay comfortably under ${max} characters — aim for about ${Math.round(max * 0.85)} and leave room; never run to the limit.`;
+  return `You are a sharp political-media editor writing a punchy, headline-worthy ${platform.toUpperCase()} post about a U.S. politician, built for media consumption and engagement.
+
+Subject: ${displayName} — ${partyLine}.
+${focus}${recordRule}${fundingRule}
+${timing ? `\n${timing}\n` : ''}
+Write the post:
+- Match the tense and framing to the TIMING note above (if given) — an upcoming election must NOT be written in the past tense.${handleRule}
+- Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
+- ${lengthRule}
+- Plain text ONLY — no markdown, no asterisks, no underscores, no bullet points, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
+}
+
+// Caption for an "AI analysis" rotation post about a candidate. Blends two ingredients —
+// their cached record summary and their verified finance facts — per the user's rule:
+// short posts (X/TikTok) feature ONE angle, randomized; long posts (FB/IG) cover BOTH.
+// Returns null only when we have neither a record summary nor any finance data.
+export async function composeAnalysisCaption(
+  admin: SupabaseClient,
+  aiKey: string | undefined,
+  candidateId: string,
+  platform: string,
+  meta: CandidateMeta,
+  recordSummary: string | null | undefined,
+): Promise<{ caption: string; source: string } | null> {
+  const cfg = PLATFORM_LIMITS[platform] ?? PLATFORM_LIMITS.x;
+  const { data: factsRaw } = await admin.rpc('get_candidate_caption_facts', { _candidate_id: candidateId });
+  const facts = (factsRaw ?? null) as Facts | null;
+  const hasFin = hasFinance(facts);
+  const record = (recordSummary ?? '').replace(/\s+/g, ' ').trim() || null;
+  if (!record && !hasFin) return null;
+
+  // Short posts feature one angle (randomized when both exist); long posts include both.
+  let mode: 'both' | 'funding' | 'record';
+  if (cfg.long) mode = record && hasFin ? 'both' : (hasFin ? 'funding' : 'record');
+  else if (record && hasFin) mode = Math.random() < 0.5 ? 'funding' : 'record';
+  else mode = hasFin ? 'funding' : 'record';
+
+  const handle = normalizeHandle(meta.handle);
+  const displayName = handle ? `@${handle}` : (meta.name || 'This candidate');
+  const ideology = ideologyLabel(meta.score);
+  const partyLine = `${ideology ? ideology + ' ' : ''}${partyFull(meta.party)}${meta.office ? `, ${meta.office}${meta.state ? ` (${meta.state})` : ''}` : ''}`.trim();
+  const funding = fundingFactsLine(facts);
+  const character = fundingCharacter(facts?.funding ?? null);
+  const timing = facts ? electionTimingDirective(facts.cycle, facts.today) : null;
+  const recordForPrompt = record ? summarizeForSocial(record, 500) : null;
+
+  const prompt = buildAnalysisPrompt(platform, displayName, partyLine, recordForPrompt, funding, character, timing, handle, mode, cfg.max);
+  const ai = await aiCaption(aiKey, prompt, cfg.max);
+  if (ai) return { caption: ensureHandle(ai, handle, cfg.max), source: `analysis_${mode}_ai` };
+
+  // Deterministic fallback when the model is unavailable.
+  let base: string;
+  if (mode === 'funding') {
+    base = templateCaption(displayName, meta.party, ideology, meta.state, facts as Facts, cfg.max);
+  } else if (mode === 'record') {
+    base = record as string;
+  } else {
+    const fundClause = character ? ` ${displayName} is ${character}.` : (funding ? ` ${displayName}: ${funding}.` : '');
+    base = `${record}${fundClause}`.trim();
+  }
+  return { caption: ensureHandle(summarizeForSocial(base, cfg.max), handle, cfg.max), source: `analysis_${mode}_template` };
 }
