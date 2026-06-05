@@ -204,7 +204,7 @@ function useQuestionCounts() {
   });
 }
 
-export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean; limit?: number; financeCycle?: string }) {
+export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { enabled?: boolean; limit?: number; financeCycle?: string; refetchInterval?: number | false }) {
   const limit = options?.limit;
   const financeCycle = options?.financeCycle ?? '2026';
   const { data: questionCounts } = useQuestionCounts();
@@ -787,33 +787,41 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
       return filtered.sort((a, b) => a.answerCount - b.answerCount);
     },
     staleTime: 30000,
+    // Optional background polling so cron-written FEC/Local/Delta values surface
+    // without a manual refresh. Off unless a caller opts in. react-query pauses
+    // interval refetches while the tab is unfocused (refetchIntervalInBackground
+    // defaults to false), so this won't poll in the background.
+    refetchInterval: options?.refetchInterval ?? false,
   });
 }
 
 // Progressive loading wrapper: loads first 20 instantly, then all in background
-export function useCandidatesAnswerCoverageProgressive(filters: Filters = {}, options?: { enabled?: boolean; financeCycle?: string }) {
+export function useCandidatesAnswerCoverageProgressive(filters: Filters = {}, options?: { enabled?: boolean; financeCycle?: string; refetchInterval?: number | false }) {
   const INITIAL_LIMIT = 20;
-  
-  // Phase 1: Quick load first 20 candidates
-  const initialQuery = useCandidatesAnswerCoverage(filters, { 
-    ...options, 
+
+  // Phase 1: Quick load first 20 candidates. Never poll this throwaway first-page
+  // query — only the full query below carries the optional refetchInterval.
+  const initialQuery = useCandidatesAnswerCoverage(filters, {
+    ...options,
     limit: INITIAL_LIMIT,
     financeCycle: options?.financeCycle,
+    refetchInterval: false,
   });
-  
+
   // Phase 2: Load ALL after initial is done (different query key due to limit)
-  const fullQuery = useCandidatesAnswerCoverage(filters, { 
+  const fullQuery = useCandidatesAnswerCoverage(filters, {
     enabled: options?.enabled !== false && initialQuery.isSuccess,
     financeCycle: options?.financeCycle,
+    refetchInterval: options?.refetchInterval ?? false,
     // No limit = fetch all
   });
-  
+
   // Merge: show initial data immediately, then swap to full data when ready
   const candidates = fullQuery.data ?? initialQuery.data;
   const isInitialLoading = initialQuery.isLoading;
   const isLoadingMore = initialQuery.isSuccess && fullQuery.isFetching;
   const totalLoaded = candidates?.length ?? 0;
-  
+
   return {
     data: candidates,
     isLoading: isInitialLoading,
@@ -821,6 +829,7 @@ export function useCandidatesAnswerCoverageProgressive(filters: Filters = {}, op
     isLoadingMore,
     totalLoaded,
     refetch: fullQuery.refetch,
+    dataUpdatedAt: fullQuery.dataUpdatedAt || initialQuery.dataUpdatedAt,
   };
 }
 

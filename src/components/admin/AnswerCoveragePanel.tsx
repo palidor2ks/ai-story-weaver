@@ -35,6 +35,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -228,11 +229,24 @@ export function AnswerCoveragePanel() {
     level: levelFilter as any,
   }), [partyFilter, stateFilter, coverageFilter, levelFilter]);
 
-  const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, isLoadingMore, refetch: refetchCandidates } = useCandidatesAnswerCoverageProgressive(
+  // Auto-refresh: poll the coverage query so cron-written FEC/Local/Delta values
+  // surface without a manual refresh. Persisted; foreground-only (react-query
+  // pauses interval refetches while the tab is unfocused).
+  const AUTO_REFRESH_MS = 60000;
+  const [autoRefresh, setAutoRefreshState] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('admin.financeAutoRefresh') !== 'off';
+  });
+  const setAutoRefresh = useCallback((on: boolean) => {
+    setAutoRefreshState(on);
+    try { localStorage.setItem('admin.financeAutoRefresh', on ? 'on' : 'off'); } catch { /* storage unavailable */ }
+  }, []);
+
+  const { data: candidates, isLoading: candidatesLoading, isFetching: candidatesFetching, isLoadingMore, refetch: refetchCandidates, dataUpdatedAt: candidatesUpdatedAt } = useCandidatesAnswerCoverageProgressive(
     queryFilters,
-    { enabled: hasSelectedFilters, financeCycle }
+    { enabled: hasSelectedFilters, financeCycle, refetchInterval: autoRefresh ? AUTO_REFRESH_MS : false }
   );
-  
+
   // Error tracking for Phase 2
   const { errors: adminErrors, addError, dismissError, clearErrors, hasRecentError } = useAdminErrors();
   
@@ -1059,6 +1073,40 @@ export function AnswerCoveragePanel() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Auto-refresh toggle + last-updated hint */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1.5 mr-1">
+                    <Switch
+                      id="finance-auto-refresh"
+                      checked={autoRefresh}
+                      onCheckedChange={setAutoRefresh}
+                      aria-label="Auto-refresh finance data"
+                    />
+                    <label
+                      htmlFor="finance-auto-refresh"
+                      className="text-xs text-muted-foreground select-none cursor-pointer hidden sm:inline"
+                    >
+                      Auto
+                    </label>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {autoRefresh ? (
+                    <>
+                      Auto-refreshing every {Math.round(AUTO_REFRESH_MS / 1000)}s
+                      {candidatesUpdatedAt
+                        ? ` · updated ${formatDistanceToNow(new Date(candidatesUpdatedAt), { addSuffix: true })}`
+                        : ''}
+                    </>
+                  ) : (
+                    'Auto-refresh off'
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             {/* Refresh button */}
             <Button
