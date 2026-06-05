@@ -153,17 +153,18 @@ function SettingsTab() {
 
   const generateForce = useMutation({
     mutationFn: async () => {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pick-daily-stat-card?force=1`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+      // Use functions.invoke so the admin's session token is attached — the
+      // function authorizes cron/service callers OR an authenticated admin.
+      const { data, error } = await supabase.functions.invoke('pick-daily-stat-card', {
+        body: { force: true },
       });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? 'failed');
-      return j;
+      if (error) throw error;
+      if ((data as { error?: string } | undefined)?.error) throw new Error((data as { error: string }).error);
+      return data as { ok?: boolean; subject_id?: string; subject_type?: string; skipped?: string };
     },
     onSuccess: (j) => {
-      toast.success(j.ok ? `Draft created for ${j.subject_id}` : `Skipped: ${j.skipped ?? 'unknown'}`);
+      const typeLabel = j.subject_type === 'ai_analysis' ? 'AI analysis' : 'rep profile';
+      toast.success(j.ok ? `${typeLabel} draft created for ${j.subject_id}` : `Skipped: ${j.skipped ?? 'unknown'}`);
       qc.invalidateQueries({ queryKey: ['social-posts'] });
     },
     onError: (e: Error) => toast.error(e.message),
