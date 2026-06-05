@@ -39,6 +39,7 @@ export interface DonorCardFacts {
   donation_count: number | null;
   recipient_count: number | null;
   cycle_count: number | null;
+  latest_cycle: string | null;
   top_recipients: DonorRecipient[];
   cause: { label: string; reasoning: string | null } | null;
 }
@@ -82,6 +83,7 @@ export async function fetchDonorCardFacts(
     donation_count: raw.donation_count != null ? Number(raw.donation_count) : null,
     recipient_count: raw.recipient_count != null ? Number(raw.recipient_count) : null,
     cycle_count: raw.cycle_count != null ? Number(raw.cycle_count) : null,
+    latest_cycle: raw.latest_cycle != null ? String(raw.latest_cycle) : null,
     top_recipients: (recips as Array<Record<string, unknown>>)
       .filter((r) => r && r.name != null)
       .map((r) => ({ name: String(r.name), amount: Number(r.amount ?? 0) })),

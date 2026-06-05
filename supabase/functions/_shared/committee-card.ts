@@ -37,6 +37,7 @@ export interface CommitteeCardFacts {
   total_spent: number | null;
   support_total: number | null;
   oppose_total: number | null;
+  latest_cycle: string | null;
   top_targets: CommitteeTarget[];
   cause: { label: string; reasoning: string | null } | null;
 }
@@ -77,6 +78,7 @@ export async function fetchCommitteeCardFacts(
     total_spent: raw.total_spent != null ? Number(raw.total_spent) : null,
     support_total: raw.support_total != null ? Number(raw.support_total) : null,
     oppose_total: raw.oppose_total != null ? Number(raw.oppose_total) : null,
+    latest_cycle: raw.latest_cycle != null ? String(raw.latest_cycle) : null,
     top_targets: (targets as Array<Record<string, unknown>>)
       .filter((t) => t && t.name != null)
       .map((t) => ({
