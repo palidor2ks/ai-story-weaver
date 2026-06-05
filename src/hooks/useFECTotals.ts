@@ -5,6 +5,14 @@ interface FECTotals {
   individual_itemized_contributions: number;
   individual_unitemized_contributions: number;
   other_receipts: number;
+  // Non-individual receipt lines — surfaced so the funding-sources breakdown can
+  // land them in real buckets (PACs/Self-Funding) instead of "Other / Uncategorized"
+  // when no nightly reconciliation row exists.
+  pac_contributions: number; // Line 11C
+  party_contributions: number; // Line 11B
+  transfers: number; // Line 12
+  loans: number; // Line 13 (candidate loans)
+  candidate_contribution: number;
   total_disbursements: number;
   cash_on_hand_end_period: number;
   coverage_end_date: string | null;
@@ -37,6 +45,11 @@ export const useFECTotals = (committeeId: string | null | undefined, cycle: stri
           individual_itemized_contributions: result.individual_itemized_contributions || 0,
           individual_unitemized_contributions: result.individual_unitemized_contributions || 0,
           other_receipts: result.other_receipts || 0,
+          pac_contributions: result.other_political_committee_contributions || 0,
+          party_contributions: result.political_party_committee_contributions || 0,
+          transfers: result.transfers_from_other_authorized_committee || 0,
+          loans: result.loans_made_by_candidate || 0,
+          candidate_contribution: result.candidate_contribution || 0,
           total_disbursements: result.disbursements || 0,
           cash_on_hand_end_period: result.cash_on_hand_end_period || 0,
           coverage_end_date: result.coverage_end_date || null,

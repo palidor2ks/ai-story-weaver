@@ -1,6 +1,7 @@
 import { cn, formatCompactCurrency as formatCurrency } from '@/lib/utils';
 import {
   computeFundingBreakdown,
+  groupFundingSources,
   withPercents,
   type FundingInput,
 } from '@/lib/fundingBreakdown';
@@ -20,9 +21,9 @@ const formatPercent = (pct: number) => `${pct.toFixed(1)}%`;
 export function FundingSourcesBreakdown({ input, className, title = 'Funding Sources' }: Props) {
   const { sources, total } = computeFundingBreakdown(input);
   if (total <= 0) return null;
-  const rows = withPercents(sources, total)
-    .filter((r) => r.amount > 0)
-    .sort((a, b) => b.amount - a.amount);
+  // groupFundingSources already drops zeros, sorts by amount, and folds the
+  // smallest slices into a capped "Other" bucket (kept last).
+  const rows = withPercents(groupFundingSources(sources, total), total);
 
   return (
     <div
