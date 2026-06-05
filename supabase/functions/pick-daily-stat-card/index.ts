@@ -35,7 +35,8 @@ function nowInTimezone(tz: string): { hour: number; minute: number } {
 }
 
 import { isCronAuthorized, getCronSecret } from '../_shared/cron-auth.ts';
-import { fetchCandidateFacts, hasCommitteeData, hasDonorData, topOutsideSpender } from '../_shared/finance-caption.ts';
+import { fetchCandidateFacts, hasCommitteeData, topOutsideSpender } from '../_shared/finance-caption.ts';
+import { fetchTopDonorEntities, fetchDonorCardFacts } from '../_shared/donor-card.ts';
 
 type Candidate = {
   id: string; name: string; office: string | null; party: string | null; state: string | null;
@@ -118,11 +119,51 @@ Deno.serve(async (req) => {
     const basePool = ((pool ?? []) as Candidate[]).filter((c) => c.image_url && !skipIds.has(c.id));
 
     const created: Array<{ subject_type: string; subject_id: string; post_id: string; cand: Candidate }> = [];
+    // Donor-entity posts have no candidate to warm, so they're tracked separately
+    // from `created` (which drives the AI-analysis warm step) but still reported.
+    const createdMeta: Array<{ subject_type: string; subject_id: string; post_id: string }> = [];
     const skipped: Array<{ subject_type: string; reason: string }> = [];
     const pickedThisRun = new Set<string>();
 
+    // Helper: attach the four platform rows to a freshly-drafted post.
+    const insertPlatforms = (postId: string) =>
+      admin.from('social_post_platforms').insert(PLATFORMS.map((p) => ({
+        post_id: postId, platform: p,
+        enabled: (settings as Record<string, boolean>)[`${p}_enabled`] ?? false, status: 'pending',
+      })));
+
     for (const type of requestedTypes) {
       if (!manual && draftedToday.has(type)) { skipped.push({ subject_type: type, reason: 'already_drafted_today' }); continue; }
+
+      // Donor-ENTITY card: pick a notable donor at random from the top ~100 by
+      // total $, excluding recently-featured donor ids. NOT candidate-anchored.
+      if (type === 'top_donor') {
+        const donorSkip = [...skipIds, ...pickedThisRun];
+        const donorPool = await fetchTopDonorEntities(admin, 100, donorSkip);
+        if (donorPool.length === 0) { skipped.push({ subject_type: type, reason: 'no_eligible_donors' }); continue; }
+        const donor = donorPool[Math.floor(Math.random() * donorPool.length)];
+
+        // Snapshot a few facts for the admin card / payload (cause is optional).
+        const facts = await fetchDonorCardFacts(admin, donor.primary_id);
+        const { data: post, error: insErr } = await admin.from('social_posts').insert({
+          subject_type: type,
+          subject_id: donor.primary_id,
+          subject_label: donor.display_name,
+          stat_key: 'top_donor',
+          stat_payload: {
+            donor_type: donor.type,
+            total_amount: facts?.total_given ?? donor.total_amount,
+            ...(facts?.cause ? { cause_label: facts.cause.label } : {}),
+          },
+          status: 'pending_review',
+        }).select('id').single();
+        if (insErr) { skipped.push({ subject_type: type, reason: insErr.message }); continue; }
+
+        await insertPlatforms(post.id);
+        createdMeta.push({ subject_type: type, subject_id: donor.primary_id, post_id: post.id });
+        pickedThisRun.add(donor.primary_id);
+        continue;
+      }
 
       // Avoid featuring the same candidate twice in one run.
       const avail = basePool.filter((c) => !pickedThisRun.has(c.id));
@@ -132,26 +173,20 @@ Deno.serve(async (req) => {
       let statKey = type === 'ai_analysis' ? 'ai_summary' : 'overall_score';
       let statExtra: Record<string, unknown> = {};
 
-      // Money-angle types need a candidate that actually HAS that data. Search the
-      // pool for one; if none qualifies, skip this type (don't substitute another).
-      if (type === 'committee_spender' || type === 'top_donor') {
+      // committee_spender needs a candidate that actually HAS outside-spending data.
+      // Search the pool for one; if none qualifies, skip this type (don't substitute).
+      if (type === 'committee_spender') {
         const shuffled = [...avail].sort(() => Math.random() - 0.5).slice(0, 30);
         let found: { c: Candidate; f: Awaited<ReturnType<typeof fetchCandidateFacts>> } | null = null;
         for (const c of shuffled) {
           const f = await fetchCandidateFacts(admin, c.id);
-          if (type === 'committee_spender' ? hasCommitteeData(f) : hasDonorData(f)) { found = { c, f }; break; }
+          if (hasCommitteeData(f)) { found = { c, f }; break; }
         }
         if (!found || !found.f) { skipped.push({ subject_type: type, reason: 'no_candidate_with_data' }); continue; }
         picked = found.c;
-        if (type === 'committee_spender') {
-          const top = topOutsideSpender(found.f)!;
-          statKey = 'top_committee_spender';
-          statExtra = { committee_name: top.name, committee_amount: top.amount, committee_dir: top.dir, ie_support: found.f.ie_support, ie_oppose: found.f.ie_oppose };
-        } else {
-          const d = found.f.top_donor!;
-          statKey = 'top_donor';
-          statExtra = { top_donor_name: d.name, top_donor_amount: d.amount, top_donor_type: d.type ?? null };
-        }
+        const top = topOutsideSpender(found.f)!;
+        statKey = 'top_committee_spender';
+        statExtra = { committee_name: top.name, committee_amount: top.amount, committee_dir: top.dir, ie_support: found.f.ie_support, ie_oppose: found.f.ie_oppose };
       }
 
       const subjectLabel = `${picked.name} — ${picked.office}${picked.state ? `, ${picked.state}` : ''}`;
@@ -168,12 +203,10 @@ Deno.serve(async (req) => {
       }).select('id').single();
       if (insErr) { skipped.push({ subject_type: type, reason: insErr.message }); continue; }
 
-      await admin.from('social_post_platforms').insert(PLATFORMS.map((p) => ({
-        post_id: post.id, platform: p,
-        enabled: (settings as Record<string, boolean>)[`${p}_enabled`] ?? false, status: 'pending',
-      })));
+      await insertPlatforms(post.id);
 
       created.push({ subject_type: type, subject_id: picked.id, post_id: post.id, cand: picked });
+      createdMeta.push({ subject_type: type, subject_id: picked.id, post_id: post.id });
       pickedThisRun.add(picked.id);
     }
 
@@ -186,7 +219,7 @@ Deno.serve(async (req) => {
       warmed = results.filter((r) => r.status === 'fulfilled' && r.value).length;
     }
 
-    return json({ ok: created.length > 0, created: created.map(({ cand: _c, ...rest }) => rest), skipped, mode: settings.mode, analyses_warmed: warmed });
+    return json({ ok: createdMeta.length > 0, created: createdMeta, skipped, mode: settings.mode, analyses_warmed: warmed });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'unknown' }, 500);
   }
