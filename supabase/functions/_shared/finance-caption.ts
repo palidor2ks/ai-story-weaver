@@ -54,17 +54,19 @@ function partyFull(party: string | null | undefined): string {
   return (party ?? '').trim();
 }
 
-// Light, fair read of where a campaign's itemized money comes from. Small-dollar is a
-// grassroots positive; a high PAC or large-individual share signals reliance on big or
-// institutional money. Returns a short, non-moralizing phrase, or null when it's mixed.
+// Watchdog read of where a campaign's itemized money comes from: small-dollar is a
+// genuine grassroots positive, while a high PAC or large-individual share is a red flag
+// worth calling out plainly (they answer to big/institutional donors, not small-dollar
+// voters). Embeds the real percentage so the cue stays strictly factual. Null when mixed.
 function fundingCharacter(fu: Facts['funding']): string | null {
   if (!fu) return null;
   const { small_pct, large_pct, pac_pct } = fu;
-  if (small_pct >= 55) return 'grassroots-funded (mostly small-dollar donors)';
-  if (pac_pct >= 40) return 'heavily reliant on PAC/committee money';
-  if (large_pct >= 55) return 'bankrolled mainly by large individual donors';
-  if (small_pct >= 35 && small_pct >= pac_pct && small_pct >= large_pct) return 'with a notable small-dollar base';
-  if (pac_pct >= 25 && pac_pct >= small_pct) return 'leaning on PAC/committee money';
+  if (pac_pct >= 50) return `PAC-dependent — ${pac_pct}% of its itemized money comes from PACs and committees, not voters`;
+  if (small_pct >= 55) return `genuinely grassroots — ${small_pct}% from small-dollar donors`;
+  if (pac_pct >= 35) return `heavily PAC-funded (${pac_pct}% from PACs/committees)`;
+  if (large_pct >= 55) return `big-money-backed — ${large_pct}% from large individual donors, not grassroots`;
+  if (small_pct >= 35 && small_pct >= pac_pct && small_pct >= large_pct) return `with a real small-dollar base (${small_pct}%)`;
+  if (pac_pct + large_pct >= 60) return `funded mostly by big donors and PACs (${large_pct}% large individual / ${pac_pct}% PAC), not small-dollar givers`;
   return null;
 }
 
@@ -129,7 +131,7 @@ function factsBlock(name: string, party: string, ideology: string | null, office
     const fu = f.funding;
     lines.push(`Funding mix (share of their itemized donor money): ${fu.small_pct}% small-dollar (under $200), ${fu.large_pct}% large individual donors, ${fu.pac_pct}% from PACs/committees${fu.self_funded > 0 ? `; self-funded ${fmtMoney(fu.self_funded)}` : ''}.`);
     const character = fundingCharacter(fu);
-    if (character) lines.push(`Funding character (a LIGHT evaluative cue — do not moralize): ${character}.`);
+    if (character) lines.push(`Funding character (surface this as a pointed but strictly factual watchdog angle): ${character}.`);
   }
   return lines.join('\n');
 }
@@ -200,7 +202,7 @@ Write the post:
 - ${focusRule}
 - Match the tense and framing to the TIMING note above — an upcoming election must NOT be described in the past tense, and a finished one must not be written as if it's still ahead.
 - Refer to them using the "Leaning & party" line EXACTLY as given. When it's only a party ("Democrat"/"Republican"), use just that — NEVER prepend "Left", "Right", "Progressive", "Conservative" or any direction yourself. Only a middle-of-the-road rep carries a "Center-Left", "Centrist", or "Center-Right" qualifier (e.g. "Center-Right Republican"). Say "re-election" only if the facts mark them as the incumbent; otherwise call it their campaign or bid.${handleRule}
-- When you cite funding: small-dollar = under $200, and the "PACs/committees" share is direct money TO the campaign — keep it distinct from the outside/Super-PAC spending above. Read the funding mix evaluatively but FAIRLY — a high small-dollar share is a grassroots strength, while a high PAC or large-individual share shows reliance on big/institutional money. If a "Funding character" cue is given, you MAY weave it in with a light touch (e.g. "grassroots-funded", "largely PAC-backed", "big-donor-reliant"); never use loaded or moralizing language and never invent or re-round a number.
+- When you cite funding: small-dollar = under $200, and the "PACs/committees" share is direct money TO the campaign — keep it distinct from the outside/Super-PAC spending above. Take a WATCHDOG stance on the money: heavy PAC or large-individual funding is a red flag worth calling out plainly (they answer to big/institutional donors, not small-dollar voters), while a high small-dollar share is a genuine grassroots positive. If a "Funding character" cue is given, lead with it or feature it prominently. Be pointed but strictly FACTUAL — never invent, alter, or re-round a number, and no name-calling.
 - Intense, headline-worthy, media-ready. Exactly ONE tasteful emoji.
 - ${lengthRule}
 - Plain text ONLY — no markdown, no asterisks, no underscores, no bullet points, no hashtags. Do NOT include a URL (a link is appended automatically). No quotes, no preamble.`;
@@ -337,7 +339,7 @@ function buildAnalysisPrompt(
     ? `\n- What they're known for (summarize faithfully; never invent or embellish): ${record}`
     : '';
   const fundingRule = (mode !== 'record' && (funding || character))
-    ? `\n- Verified finance facts (never invent or re-round a number): ${funding ?? 'n/a'}.${character ? ` Funding character (a LIGHT evaluative cue — no moralizing): ${character}.` : ''} Frame fairly: high small-dollar = grassroots strength; high PAC/large-individual = reliance on big/institutional money. Light touch only (e.g. "grassroots-funded", "largely PAC-backed").`
+    ? `\n- Verified finance facts (never invent or re-round a number): ${funding ?? 'n/a'}.${character ? ` Funding character (feature this prominently): ${character}.` : ''} Take a WATCHDOG stance: call out heavy PAC/large-individual funding plainly (they answer to big/institutional donors, not small-dollar voters); treat a high small-dollar share as a genuine grassroots positive. Pointed but strictly factual — no name-calling.`
     : '';
   const lengthRule = long
     ? `Length: 3–5 short sentences, under ${max} characters.`
