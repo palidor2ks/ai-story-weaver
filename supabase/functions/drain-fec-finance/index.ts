@@ -23,8 +23,9 @@
 //
 // Cycles: pass `cycle` (single) or `cycles` (array / comma-separated) to target
 // specific cycles; otherwise the function auto-discovers every cycle that has
-// finance data (via get_committee_cycles) so new cycles are picked up
-// automatically. The time budget is shared across cycles.
+// reconciliation data (distinct finance_reconciliation.cycle) so new cycles are
+// picked up automatically and empty historical cycles are skipped. The time
+// budget is shared across cycles.
 //
 // Both target functions honor the service-role key (no admin JWT needed). Scheduled
 // via cron (see migration); also runnable on demand to clear the backlog.
@@ -49,8 +50,11 @@ const DAY_MS = 86_400_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Resolve the set of cycles to process. Explicit params win; otherwise discover
-// every cycle that actually has finance data so future cycles are covered without
-// a code change. Falls back to the current + prior cycle if discovery is empty.
+// every cycle that actually has reconciliation data so future cycles (e.g. 2028)
+// are covered automatically as soon as they get data — without pulling in the
+// historical cycles that only exist in candidates' FEC membership history
+// (get_committee_cycles spans back to the 1970s). Falls back to current + prior
+// cycle if discovery is empty.
 async function resolveCycles(
   supabase: Supabase,
   cyclesParam: unknown,
@@ -66,11 +70,17 @@ async function resolveCycles(
     return [String(cycleParam)];
   }
 
+  // Auto-discover from the table the drain maintains: distinct cycles present in
+  // finance_reconciliation, newest first. (Small single-column read; deduped here.)
   try {
-    const { data, error } = await supabase.rpc("get_committee_cycles");
+    const { data, error } = await supabase
+      .from("finance_reconciliation")
+      .select("cycle")
+      .not("cycle", "is", null);
     if (!error && Array.isArray(data)) {
-      const cycles = (data as unknown[]).map(String).filter(Boolean);
-      if (cycles.length) return [...new Set(cycles)];
+      const cycles = [...new Set(data.map((r) => String((r as { cycle: unknown }).cycle)).filter(Boolean))]
+        .sort((a, b) => b.localeCompare(a));
+      if (cycles.length) return cycles;
     }
   } catch {
     // fall through to default
