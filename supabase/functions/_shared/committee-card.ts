@@ -30,6 +30,9 @@ export interface CommitteeTarget {
   name: string;
   amount: number;
   dir: 'support' | 'oppose';
+  office: string | null;
+  state: string | null;
+  district: string | null;
 }
 
 export interface CommitteeCardFacts {
@@ -85,6 +88,9 @@ export async function fetchCommitteeCardFacts(
         name: String(t.name),
         amount: Number(t.amount ?? 0),
         dir: t.dir === 'oppose' ? 'oppose' : 'support',
+        office: t.office != null ? String(t.office) : null,
+        state: t.state != null ? String(t.state) : null,
+        district: t.district != null ? String(t.district) : null,
       })),
     cause: cause && cause.label != null
       ? { label: String(cause.label), reasoning: cause.reasoning != null ? String(cause.reasoning) : null }
