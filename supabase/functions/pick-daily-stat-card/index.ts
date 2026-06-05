@@ -27,19 +27,41 @@ function nowInTimezone(tz: string): { hour: number; minute: number } {
   return { hour, minute };
 }
 
-import { requireCronAuth, getCronSecret } from '../_shared/cron-auth.ts';
+import { isCronAuthorized, getCronSecret } from '../_shared/cron-auth.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-  const unauthorized = await requireCronAuth(req);
-  if (unauthorized) return unauthorized;
-
-
-
   const admin = createClient(supaUrl, serviceKey);
+
+  // Auth: accept cron/service-role callers (the daily pg_cron run) OR an
+  // authenticated admin using the "Generate draft now" button in the admin UI.
+  if (!(await isCronAuthorized(req))) {
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const userClient = createClient(supaUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) {
+      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const { data: role } = await admin.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
+    if (!role) {
+      return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+  }
+
+  // `force` may arrive as a query param (raw fetch) or a JSON body (functions.invoke).
   const url = new URL(req.url);
-  const force = url.searchParams.get('force') === '1';
+  let force = url.searchParams.get('force') === '1';
+  if (!force) {
+    try {
+      const body = await req.json();
+      const f = (body as { force?: unknown } | null)?.force;
+      if (f === true || f === '1' || f === 1) force = true;
+    } catch { /* no/invalid body — leave force as-is */ }
+  }
 
   try {
     // Load settings
