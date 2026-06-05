@@ -10,10 +10,10 @@ import { readCache } from '../_shared/ai-cache.ts';
 import {
   composeFinanceCaption,
   composeAnalysisCaption,
-  composeCommitteeCaption,
   type CandidateMeta,
 } from '../_shared/finance-caption.ts';
 import { composeDonorEntityCaption } from '../_shared/donor-card.ts';
+import { composeCommitteeSpenderCaption } from '../_shared/committee-card.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -72,6 +72,15 @@ Deno.serve(async (req) => {
       return await save(`${post.subject_label ?? 'This donor'} on PoliPulse. Follow the money.`, 'static_donor');
     }
 
+    // Committee/PAC OUTSIDE-SPENDER card: anchored on a Super PAC, not a candidate.
+    // Compose its "follow the money" caption from the committee facts and return
+    // early — never build candidate meta (subject_id is an fec_committee_id).
+    if (post.subject_type === 'committee_spender' && post.subject_id) {
+      const c = await composeCommitteeSpenderCaption(admin, aiKey, post.subject_id, platform, post.subject_label ?? null);
+      if (c) return await save(c.caption, c.source);
+      return await save(`${post.subject_label ?? 'This committee'} on PoliPulse. Follow the money.`, 'static_committee');
+    }
+
     // The remaining rotation types are candidate-anchored, so build the shared meta once.
     let meta: CandidateMeta | null = null;
     if (post.subject_id) {
@@ -102,17 +111,14 @@ Deno.serve(async (req) => {
 
     if (meta && post.subject_id) {
       // Type-specific composer first; each returns null when its data is missing.
-      if (post.subject_type === 'committee_spender') {
-        const c = await composeCommitteeCaption(admin, aiKey, post.subject_id, platform, meta);
-        if (c) return await save(c.caption, c.source);
-      } else if (post.subject_type === 'ai_analysis') {
+      if (post.subject_type === 'ai_analysis') {
         const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, await readRecord());
         if (analysis) return await save(analysis.caption, analysis.source);
       }
 
-      // Shared money-driven fallback for rep_profile AND for committee_spender / top_donor
-      // when their specific data is absent — every candidate-anchored post still gets a
-      // verified-finance caption, then a record-blended one, before the static line.
+      // Shared money-driven fallback for rep_profile (and any other candidate-anchored
+      // type) when its specific data is absent — every candidate-anchored post still
+      // gets a verified-finance caption, then a record-blended one, before the static line.
       const headline = await composeFinanceCaption(admin, aiKey, post.subject_id, platform, meta);
       if (headline) return await save(headline.caption, headline.source);
       const analysis = await composeAnalysisCaption(admin, aiKey, post.subject_id, platform, meta, await readRecord());
