@@ -50,31 +50,51 @@ import {
   useDeleteDonorAlias,
   useAttachDonors,
   useDetachDonors,
-  useAliasMemberCounts,
+  useActiveDonorAliasOptions,
   useAliasMembers,
   useUpdateDonorAliasCause,
   useClassifyDonorAliasCause,
   DonorAlias,
   DonorAliasInput,
 } from '@/hooks/useDonorAliases';
-import { useSearchRawDonors } from '@/hooks/useDonorsPaginated';
+import { useSearchRawDonorsAdmin } from '@/hooks/useDonorsPaginated';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCommitteeCauses } from '@/hooks/useCommitteeTopics';
 
 const DONOR_TYPES = ['Individual', 'PAC', 'Organization', 'Unknown'];
 
+const ALIAS_PAGE_SIZE = 50;
+
 export function DonorAliasesPanel() {
   const queryClient = useQueryClient();
-  const { data: aliases = [], isLoading } = useDonorAliases();
-  const { data: memberCounts = {} } = useAliasMemberCounts();
+  const [search, setSearch] = useState('');
+  const [debouncedAliasSearch, setDebouncedAliasSearch] = useState('');
+  const [aliasPage, setAliasPage] = useState(1);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedAliasSearch(search.trim());
+      setAliasPage(1);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [search]);
+  const { data: aliasesPage, isLoading, isFetching: aliasesFetching } = useDonorAliases({
+    search: debouncedAliasSearch,
+    page: aliasPage,
+    pageSize: ALIAS_PAGE_SIZE,
+  });
+  const aliases = aliasesPage?.aliases ?? [];
+  const aliasTotalCount = aliasesPage?.totalCount ?? 0;
+  const aliasTotalPages = Math.max(1, Math.ceil(aliasTotalCount / ALIAS_PAGE_SIZE));
+  useEffect(() => {
+    if (aliasPage > aliasTotalPages) setAliasPage(aliasTotalPages);
+  }, [aliasPage, aliasTotalPages]);
   const createMutation = useCreateDonorAlias();
   const updateMutation = useUpdateDonorAlias();
   const deleteMutation = useDeleteDonorAlias();
   const attachMutation = useAttachDonors();
   const detachMutation = useDetachDonors();
 
-  const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedAlias, setSelectedAlias] = useState<DonorAlias | null>(null);
@@ -96,7 +116,7 @@ export function DonorAliasesPanel() {
     const t = setTimeout(() => setDebouncedSearch(donorSearch), 300);
     return () => clearTimeout(t);
   }, [donorSearch]);
-  const { data: searchResults = [], isLoading: searchLoading } = useSearchRawDonors(
+  const { data: searchResults = [], isLoading: searchLoading } = useSearchRawDonorsAdmin(
     debouncedSearch,
     donorTypeFilter,
   );
@@ -110,43 +130,11 @@ export function DonorAliasesPanel() {
   const [pickerTargets, setPickerTargets] = useState<{ name: string; type: string }[]>([]);
   const [pickerAliasId, setPickerAliasId] = useState<string>('');
 
-  // Current alias attached to each search result row
-  const [rowAliasMap, setRowAliasMap] = useState<Record<string, DonorAlias | null>>({});
-  const [rowTreasurerMap, setRowTreasurerMap] = useState<Record<string, string>>({});
+  const { data: activeAliases = [] } = useActiveDonorAliasOptions();
   
   const { data: causes = [] } = useCommitteeCauses(false);
   const updateAliasCause = useUpdateDonorAliasCause();
   const classifyAliasCause = useClassifyDonorAliasCause();
-  const { data: directDonorCauseRows = [] } = useQuery({
-    queryKey: ['donor-cause-overrides', searchResults.map((r) => `${r.name}|${r.type}`).sort().join('|')],
-    enabled: searchResults.length > 0,
-    queryFn: async () => {
-      const names = Array.from(new Set(searchResults.map((r) => r.name)));
-      const types = Array.from(new Set(searchResults.map((r) => r.type)));
-      const { data, error } = await supabase
-        .from('donor_cause_overrides')
-        .select('donor_name, donor_type, primary_cause_id, assigned_by')
-        .in('donor_name', names)
-        .in('donor_type', types);
-      if (error) throw error;
-      return (data || []) as Array<{
-        donor_name: string;
-        donor_type: string;
-        primary_cause_id: string;
-        assigned_by: string;
-      }>;
-    },
-  });
-  const directCauseByDonorKey = useMemo(() => {
-    const map = new Map<string, { primary_cause_id: string; assigned_by: string }>();
-    directDonorCauseRows.forEach((row) => {
-      map.set(`${row.donor_name}|${row.donor_type}`, {
-        primary_cause_id: row.primary_cause_id,
-        assigned_by: row.assigned_by,
-      });
-    });
-    return map;
-  }, [directDonorCauseRows]);
   const updateDirectDonorCause = useMutation({
     mutationFn: async ({ name, type, primary_cause_id }: { name: string; type: string; primary_cause_id: string }) => {
       const { data, error } = await supabase
@@ -165,177 +153,23 @@ export function DonorAliasesPanel() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['donor-cause-overrides'] });
+      queryClient.invalidateQueries({ queryKey: ['donor-search-raw-admin'] });
       queryClient.invalidateQueries({ queryKey: ['donor-causes'] });
       toast.success('Primary cause updated');
     },
     onError: (error: Error) => toast.error(`Failed to update cause: ${error.message}`),
   });
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (searchResults.length === 0) {
-        setRowAliasMap({});
-        return;
-      }
-      const keys = searchResults.map((r) => `${r.name}|${r.type}`);
-      const { data } = await supabase
-        .from('donor_alias_members')
-        .select('donor_name, donor_type, donor_aliases!inner(*)')
-        .in(
-          'donor_name',
-          searchResults.map((r) => r.name),
-        );
-      if (cancelled) return;
-      const map: Record<string, DonorAlias | null> = {};
-      keys.forEach((k) => (map[k] = null));
-      (data || []).forEach((m: any) => {
-        map[`${m.donor_name}|${m.donor_type}`] = m.donor_aliases as DonorAlias;
-      });
-      setRowAliasMap(map);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [searchResults]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (searchResults.length === 0) {
-        setRowTreasurerMap({});
-        return;
-      }
-
-      const names = Array.from(new Set(searchResults.map((r) => r.name)));
-      const types = Array.from(new Set(searchResults.map((r) => r.type)));
-
-      // Treasurer names live in external_pacs, keyed by fec_committee_id, which
-      // matches donors.recipient_committee_id. There is no FK between the two
-      // tables (and no `committees` table at all), so resolve it with a manual
-      // two-step join rather than a PostgREST embed.
-      const { data: donorRows } = await supabase
-        .from('donors')
-        .select('name, type, recipient_committee_id')
-        .in('name', names)
-        .in('type', types as Array<'Individual' | 'PAC' | 'Organization' | 'Unknown'>)
-        .not('recipient_committee_id', 'is', null);
-      if (cancelled) return;
-
-      const committeeIds = Array.from(new Set(
-        (donorRows ?? []).map((d) => d.recipient_committee_id).filter((id): id is string => !!id),
-      ));
-      const treasurerByCommittee = new Map<string, string>();
-      if (committeeIds.length > 0) {
-        const { data: pacs } = await supabase
-          .from('external_pacs')
-          .select('fec_committee_id, treasurer_name')
-          .in('fec_committee_id', committeeIds);
-        if (cancelled) return;
-        for (const p of pacs ?? []) {
-          if (p.treasurer_name) treasurerByCommittee.set(p.fec_committee_id, p.treasurer_name);
-        }
-      }
-
-      const next: Record<string, Set<string>> = {};
-      for (const d of donorRows ?? []) {
-        const treasurer = d.recipient_committee_id
-          ? treasurerByCommittee.get(d.recipient_committee_id)
-          : undefined;
-        if (!treasurer) continue;
-        const key = `${d.name}|${d.type}`;
-        if (!next[key]) next[key] = new Set<string>();
-        next[key].add(treasurer);
-      }
-
-      const flattened: Record<string, string> = {};
-      Object.entries(next).forEach(([key, namesSet]) => {
-        flattened[key] = Array.from(namesSet).sort().join(', ');
-      });
-      setRowTreasurerMap(flattened);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [searchResults]);
-
-  const filteredAliases = aliases
-    .filter((a) => a.canonical_name.toLowerCase().includes(search.toLowerCase()))
-    .slice()
-    .sort((a, b) => {
-      const aCount = memberCounts[a.id] || 0;
-      const bCount = memberCounts[b.id] || 0;
-      // 0-member aliases first, then alphabetical
-      if ((aCount === 0) !== (bCount === 0)) return aCount === 0 ? -1 : 1;
-      return a.canonical_name.localeCompare(b.canonical_name);
-    });
-
-
-  const { data: aliasMemberCommitteeRows = [] } = useQuery({
-    queryKey: ['donor-alias-member-committee-ids', aliases.map((a) => a.id).join('|')],
-    enabled: aliases.length > 0,
-    queryFn: async () => {
-      const aliasIds = aliases.map((a) => a.id);
-      if (aliasIds.length === 0) return [] as Array<{ alias_id: string; recipient_committee_id: string | null }>;
-
-      // donor_alias_members links to donors by (donor_name, donor_type) — there is
-      // no FK to donors, so resolve recipient_committee_id with a manual two-step
-      // join instead of a PostgREST embed (which has no relationship to follow).
-      const { data: members, error: mErr } = await supabase
-        .from('donor_alias_members')
-        .select('alias_id, donor_name, donor_type')
-        .in('alias_id', aliasIds);
-      if (mErr) throw mErr;
-      if (!members?.length) return [];
-
-      const names = Array.from(new Set(members.map((m) => m.donor_name)));
-      const types = Array.from(new Set(members.map((m) => m.donor_type)));
-      const { data: donorRows, error: dErr } = await supabase
-        .from('donors')
-        .select('name, type, recipient_committee_id')
-        .in('name', names)
-        .in('type', types as Array<'Individual' | 'PAC' | 'Organization' | 'Unknown'>)
-        .not('recipient_committee_id', 'is', null);
-      if (dErr) throw dErr;
-
-      // (donor_name|donor_type) -> set of recipient_committee_ids
-      const committeeIdsByDonor = new Map<string, Set<string>>();
-      for (const d of donorRows ?? []) {
-        if (!d.recipient_committee_id) continue;
-        const key = `${d.name}|${d.type}`;
-        if (!committeeIdsByDonor.has(key)) committeeIdsByDonor.set(key, new Set());
-        committeeIdsByDonor.get(key)!.add(d.recipient_committee_id);
-      }
-
-      const rows: Array<{ alias_id: string; recipient_committee_id: string | null }> = [];
-      for (const m of members) {
-        const cids = committeeIdsByDonor.get(`${m.donor_name}|${m.donor_type}`);
-        if (cids) for (const cid of cids) rows.push({ alias_id: m.alias_id, recipient_committee_id: cid });
-      }
-      return rows;
-    },
-  });
-
-  const committeeIdsByAliasId = useMemo(() => {
-    const map = new Map<string, string[]>();
-    aliasMemberCommitteeRows.forEach((row) => {
-      if (!row.recipient_committee_id) return;
-      const existing = map.get(row.alias_id) || [];
-      if (!existing.includes(row.recipient_committee_id)) {
-        map.set(row.alias_id, [...existing, row.recipient_committee_id]);
-      }
-    });
-    return map;
-  }, [aliasMemberCommitteeRows]);
+  const filteredAliases = aliases;
 
   const getAliasCommitteeIds = (alias: DonorAlias): string[] => {
-    const explicit = alias.fec_committee_ids?.length
+    const pageCommitteeIds = (alias as DonorAlias & { committee_ids?: string[] }).committee_ids;
+    if (pageCommitteeIds?.length) return pageCommitteeIds;
+    return alias.fec_committee_ids?.length
       ? alias.fec_committee_ids
       : alias.fec_committee_id
         ? [alias.fec_committee_id]
         : [];
-    if (explicit.length > 0) return explicit;
-    return committeeIdsByAliasId.get(alias.id) || [];
   };
 
   const handleOpenCreate = () => {
@@ -383,7 +217,6 @@ export function DonorAliasesPanel() {
     }
   };
 
-  const activeAliases = useMemo(() => aliases.filter((a) => a.is_active), [aliases]);
 
   const openPicker = (targets: { name: string; type: string }[]) => {
     setPickerTargets(targets);
@@ -463,12 +296,12 @@ export function DonorAliasesPanel() {
                   {filteredAliases.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                        No aliases yet. Search only filters existing aliases—click “New Alias” to create one first.
+                        {debouncedAliasSearch ? 'No aliases match your search.' : 'No aliases yet — click “New Alias” to create one first.'}
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredAliases.map((alias) => {
-                      const count = memberCounts[alias.id] || 0;
+                      const count = alias.member_count || 0;
                       return (
                       <TableRow key={alias.id}>
                         <TableCell className="font-medium">
@@ -553,6 +386,36 @@ export function DonorAliasesPanel() {
               </Table>
             </CardContent>
           </Card>
+
+          <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+            <div>
+              {aliasTotalCount > 0
+                ? `Showing ${(aliasPage - 1) * ALIAS_PAGE_SIZE + 1}-${Math.min(aliasPage * ALIAS_PAGE_SIZE, aliasTotalCount)} of ${aliasTotalCount} aliases`
+                : 'No aliases to show'}
+              {aliasesFetching ? ' · Updating…' : ''}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={aliasPage <= 1 || aliasesFetching}
+                onClick={() => setAliasPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <span>
+                Page {aliasPage} of {aliasTotalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={aliasPage >= aliasTotalPages || aliasesFetching}
+                onClick={() => setAliasPage((p) => Math.min(aliasTotalPages, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </TabsContent>
 
         {/* Attach Tab */}
@@ -632,9 +495,9 @@ export function DonorAliasesPanel() {
                   ) : (
                     searchResults.map((r) => {
                       const key = `${r.name}|${r.type}`;
-                      const currentAlias = rowAliasMap[key];
-                      const treasurer = rowTreasurerMap[key];
-                      const direct = directCauseByDonorKey.get(key);
+                      const currentAlias = r.currentAlias;
+                      const treasurer = r.treasurerNames;
+                      const direct = r.directCause;
                       return (
                         <TableRow key={key}>
                           <TableCell>

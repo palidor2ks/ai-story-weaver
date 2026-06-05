@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getPrimaryDonorEntityType, toDonorTypeFilterValue } from '@/lib/donorType';
+import type { DonorAlias } from '@/hooks/useDonorAliases';
 
 export interface DonorFilters {
   page: number;
@@ -221,7 +222,7 @@ export const useSearchRawDonors = (searchTerm: string, donorType?: string) => {
       const { data, error } = await supabase.rpc('search_raw_donors_by_name', {
         p_search: searchTerm,
         p_type: donorType && donorType !== 'all' ? donorType : null,
-        p_limit: 200,
+        p_limit: 50,
       });
       if (error) throw error;
 
@@ -230,6 +231,66 @@ export const useSearchRawDonors = (searchTerm: string, donorType?: string) => {
         type: d.type as string,
         totalAmount: Number(d.total_amount) || 0,
         transactionCount: Number(d.transaction_count) || 0,
+      }));
+    },
+    enabled: searchTerm.length >= 3,
+  });
+};
+
+
+export interface RawDonorAdminSearchResult {
+  name: string;
+  type: string;
+  totalAmount: number;
+  transactionCount: number;
+  currentAlias: DonorAlias | null;
+  directCause: { primary_cause_id: string; assigned_by: string } | null;
+  treasurerNames: string;
+}
+
+const mapAdminAlias = (d: any): DonorAlias | null => {
+  if (!d.alias_id) return null;
+  return {
+    id: d.alias_id,
+    canonical_name: d.alias_canonical_name,
+    fec_committee_id: d.alias_fec_committee_id ?? null,
+    fec_committee_ids: d.alias_fec_committee_ids ?? [],
+    notes: d.alias_notes ?? null,
+    is_active: d.alias_is_active ?? true,
+    created_at: d.alias_created_at ?? '',
+    updated_at: d.alias_updated_at ?? '',
+    primary_cause_id: d.alias_primary_cause_id ?? null,
+    cause_assigned_by: d.alias_cause_assigned_by ?? null,
+    cause_ai_confidence: d.alias_cause_ai_confidence ?? null,
+    cause_ai_reasoning: d.alias_cause_ai_reasoning ?? null,
+    cause_assigned_at: d.alias_cause_assigned_at ?? null,
+  };
+};
+
+// Admin RAW donor search with row enrichment returned by one RPC.
+export const useSearchRawDonorsAdmin = (searchTerm: string, donorType?: string) => {
+  return useQuery({
+    queryKey: ['donor-search-raw-admin', searchTerm, donorType],
+    queryFn: async (): Promise<RawDonorAdminSearchResult[]> => {
+      if (!searchTerm || searchTerm.length < 3) return [];
+
+      const { data, error } = await (supabase as any).rpc('search_raw_donors_admin', {
+        p_search: searchTerm,
+        p_type: donorType && donorType !== 'all' ? donorType : null,
+        p_limit: 50,
+      });
+      if (error) throw error;
+
+      return (data || []).map((d: any) => ({
+        name: d.donor_name as string,
+        type: d.type as string,
+        totalAmount: Number(d.total_amount) || 0,
+        transactionCount: Number(d.transaction_count) || 0,
+        currentAlias: mapAdminAlias(d),
+        directCause: d.direct_primary_cause_id
+          ? { primary_cause_id: d.direct_primary_cause_id, assigned_by: d.direct_assigned_by || 'admin' }
+          : null,
+        treasurerNames: d.treasurer_names || '',
       }));
     },
     enabled: searchTerm.length >= 3,

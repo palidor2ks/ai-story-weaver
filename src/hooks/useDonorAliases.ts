@@ -86,8 +86,20 @@ export interface AttachableDonor {
   type: string;
 }
 
+export interface DonorAliasListItem extends DonorAlias {
+  member_count: number;
+  committee_ids: string[];
+}
+
+export interface DonorAliasesPage {
+  aliases: DonorAliasListItem[];
+  totalCount: number;
+}
+
 const invalidateDonorCaches = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['donor-aliases'] });
+  qc.invalidateQueries({ queryKey: ['donor-alias-options'] });
+  qc.invalidateQueries({ queryKey: ['donor-alias-member-counts'] });
   qc.invalidateQueries({ queryKey: ['donor-alias-members'] });
   qc.invalidateQueries({ queryKey: ['donor-alias-for'] });
   qc.invalidateQueries({ queryKey: ['donor-alias-info'] });
@@ -95,20 +107,66 @@ const invalidateDonorCaches = (qc: ReturnType<typeof useQueryClient>) => {
   qc.invalidateQueries({ queryKey: ['donors-paginated'] });
   qc.invalidateQueries({ queryKey: ['candidate-donors'] });
   qc.invalidateQueries({ queryKey: ['donor-search'] });
+  qc.invalidateQueries({ queryKey: ['donor-search-raw-admin'] });
   qc.invalidateQueries({ queryKey: ['donor-records'] });
   qc.invalidateQueries({ queryKey: ['donor-name-variations'] });
 };
 
-export const useDonorAliases = () => {
+const mapAliasRow = (row: any): DonorAlias => ({
+  id: row.id,
+  canonical_name: row.canonical_name,
+  fec_committee_id: row.fec_committee_id ?? null,
+  fec_committee_ids: row.fec_committee_ids ?? [],
+  notes: row.notes ?? null,
+  is_active: row.is_active ?? true,
+  created_at: row.created_at ?? '',
+  updated_at: row.updated_at ?? '',
+  primary_cause_id: row.primary_cause_id ?? null,
+  cause_assigned_by: row.cause_assigned_by ?? null,
+  cause_ai_confidence: row.cause_ai_confidence ?? null,
+  cause_ai_reasoning: row.cause_ai_reasoning ?? null,
+  cause_assigned_at: row.cause_assigned_at ?? null,
+});
+
+export const useDonorAliases = ({
+  search = '',
+  page = 1,
+  pageSize = 50,
+}: { search?: string; page?: number; pageSize?: number } = {}) => {
   return useQuery({
-    queryKey: ['donor-aliases'],
+    queryKey: ['donor-aliases', search.trim(), page, pageSize],
+    queryFn: async (): Promise<DonorAliasesPage> => {
+      const { data, error } = await (supabase as any).rpc('get_donor_aliases_page', {
+        p_search: search.trim() || null,
+        p_page: page,
+        p_page_size: pageSize,
+      });
+      if (error) throw error;
+      const rows = (data || []) as any[];
+      return {
+        aliases: rows.map((row) => ({
+          ...mapAliasRow(row),
+          member_count: Number(row.member_count) || 0,
+          committee_ids: row.committee_ids ?? [],
+        })),
+        totalCount: Number(rows[0]?.total_count || 0),
+      };
+    },
+    placeholderData: (prev) => prev,
+  });
+};
+
+export const useActiveDonorAliasOptions = () => {
+  return useQuery({
+    queryKey: ['donor-alias-options'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('donor_aliases')
-        .select('*')
+        .select('id, canonical_name')
+        .eq('is_active', true)
         .order('canonical_name');
       if (error) throw error;
-      return data as DonorAlias[];
+      return (data || []) as Array<Pick<DonorAlias, 'id' | 'canonical_name'>>;
     },
   });
 };
@@ -117,13 +175,11 @@ export const useAliasMemberCounts = () => {
   return useQuery({
     queryKey: ['donor-alias-member-counts'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('donor_alias_members')
-        .select('alias_id');
+      const { data, error } = await (supabase as any).rpc('get_donor_alias_member_counts');
       if (error) throw error;
       const counts: Record<string, number> = {};
-      (data || []).forEach((m: { alias_id: string }) => {
-        counts[m.alias_id] = (counts[m.alias_id] || 0) + 1;
+      (data || []).forEach((m: { alias_id: string; member_count: number }) => {
+        counts[m.alias_id] = Number(m.member_count) || 0;
       });
       return counts;
     },

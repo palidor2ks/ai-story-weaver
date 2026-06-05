@@ -5413,6 +5413,34 @@ export type Database = {
         Args: { p_topics: Json; p_user_id: string }
         Returns: undefined
       }
+      get_donor_alias_member_counts: {
+        Args: never
+        Returns: {
+          alias_id: string
+          member_count: number
+        }[]
+      }
+      get_donor_aliases_page: {
+        Args: { p_page?: number; p_page_size?: number; p_search?: string }
+        Returns: {
+          canonical_name: string
+          cause_ai_confidence: string | null
+          cause_ai_reasoning: string | null
+          cause_assigned_at: string | null
+          cause_assigned_by: string | null
+          committee_ids: string[]
+          created_at: string | null
+          fec_committee_id: string | null
+          fec_committee_ids: string[]
+          id: string
+          is_active: boolean
+          member_count: number
+          notes: string | null
+          primary_cause_id: string | null
+          total_count: number
+          updated_at: string | null
+        }[]
+      }
       search_donors_by_name: {
         Args: { p_limit?: number; p_search: string; p_type?: string }
         Returns: {
@@ -5420,6 +5448,31 @@ export type Database = {
           is_consolidated: boolean
           name_variations: string[]
           total_amount: number
+          type: string
+        }[]
+      }
+      search_raw_donors_admin: {
+        Args: { p_limit?: number; p_search: string; p_type?: string }
+        Returns: {
+          alias_canonical_name: string | null
+          alias_cause_ai_confidence: string | null
+          alias_cause_ai_reasoning: string | null
+          alias_cause_assigned_at: string | null
+          alias_cause_assigned_by: string | null
+          alias_created_at: string | null
+          alias_fec_committee_id: string | null
+          alias_fec_committee_ids: string[]
+          alias_id: string | null
+          alias_is_active: boolean | null
+          alias_notes: string | null
+          alias_primary_cause_id: string | null
+          alias_updated_at: string | null
+          direct_assigned_by: string | null
+          direct_primary_cause_id: string | null
+          donor_name: string
+          total_amount: number
+          transaction_count: number
+          treasurer_names: string | null
           type: string
         }[]
       }
