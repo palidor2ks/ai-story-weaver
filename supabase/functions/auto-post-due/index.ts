@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
 
     const { data: due, error: dueErr } = await admin
       .from('social_posts')
-      .select('id, subject_id, subject_label, share_url')
+      .select('id, subject_id, subject_label, subject_type, share_url')
       .eq('status', 'pending_review')
       .lte('created_at', dueBefore)
       .gte('created_at', windowStart)

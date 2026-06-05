@@ -41,6 +41,21 @@ interface SocialPost {
   rejected_reason: string | null;
 }
 
+const SUBJECT_TYPE_LABELS: Record<string, string> = {
+  rep_profile: 'Rep Profile',
+  candidate: 'Rep Profile',
+  ai_analysis: 'AI Analysis',
+  committee_spender: 'Top PAC Spender',
+  top_donor: 'Top Donor',
+};
+const subjectTypeLabel = (t: string | null | undefined): string => SUBJECT_TYPE_LABELS[t ?? ''] ?? 'Rep Profile';
+
+// Money cards are bespoke server-side SVGs (no offscreen React template), so the
+// admin "Render" button renders them via the render-social-card function instead
+// of capturing a DOM node.
+const isServerRenderedType = (t: string | null | undefined): boolean =>
+  t === 'committee_spender' || t === 'top_donor';
+
 interface PlatformRow {
   id: string;
   post_id: string;
@@ -163,7 +178,7 @@ function SettingsTab() {
       return data as { ok?: boolean; subject_id?: string; subject_type?: string; skipped?: string };
     },
     onSuccess: (j) => {
-      const typeLabel = j.subject_type === 'ai_analysis' ? 'AI analysis' : 'rep profile';
+      const typeLabel = subjectTypeLabel(j.subject_type);
       toast.success(j.ok ? `${typeLabel} draft created for ${j.subject_id}` : `Skipped: ${j.skipped ?? 'unknown'}`);
       qc.invalidateQueries({ queryKey: ['social-posts'] });
     },
@@ -288,6 +303,16 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
   const render = async () => {
     setBusy('render');
     try {
+      // Money cards (committee_spender / top_donor) have no offscreen React template;
+      // render them server-side as bespoke SVGs via the render-social-card function.
+      if (isServerRenderedType(post.subject_type)) {
+        const { data, error } = await supabase.functions.invoke('render-social-card', { body: { post_id: post.id } });
+        if (error) throw error;
+        if ((data as { error?: string } | undefined)?.error) throw new Error((data as { error: string }).error);
+        toast.success('Card rendered');
+        onChanged();
+        return;
+      }
       // Wait up to 10s for offscreen card data + DOM to settle
       const start = Date.now();
       while (
@@ -361,7 +386,7 @@ function PostCard({ post, platforms, onChanged }: { post: SocialPost; platforms:
             <div className="flex items-center gap-2 flex-wrap">
               <CardTitle className="text-base">{post.subject_label}</CardTitle>
               <Badge variant="outline" className="text-[10px]">
-                {post.subject_type === 'ai_analysis' ? 'AI Analysis' : 'Rep Profile'}
+                {subjectTypeLabel(post.subject_type)}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
