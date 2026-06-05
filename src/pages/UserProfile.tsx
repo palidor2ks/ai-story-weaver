@@ -368,14 +368,34 @@ export const UserProfile = () => {
         {/* Profile Header */}
         <div className="bg-card rounded-2xl border border-border p-5 sm:p-6 md:p-8 mb-8 shadow-elevated">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:gap-6 lg:flex-1">
-              <AvatarUpload
-                userId={profile.id}
-                currentAvatarUrl={profile.avatar_url}
-                userName={profile.name}
-                onAvatarChange={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
-              />
-              <div className="min-w-0 flex-1">
+            <div className="flex w-full min-w-0 flex-col gap-4 lg:flex-1">
+              {/* Avatar with the Overall Score right next to it */}
+              <div className="flex items-start gap-4 sm:gap-6">
+                <AvatarUpload
+                  userId={profile.id}
+                  currentAvatarUrl={profile.avatar_url}
+                  userName={profile.name}
+                  onAvatarChange={() => queryClient.invalidateQueries({ queryKey: ['profile'] })}
+                />
+                <div className="flex-1 rounded-xl border border-border/60 bg-secondary/50 px-4 py-4 text-center">
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
+                    Overall Score
+                  </span>
+                  <div className="mt-2 flex items-center justify-center">
+                    <ScoreText
+                      score={profile.overall_score}
+                      size="lg"
+                      className="[&>span:first-child]:text-2xl sm:[&>span:first-child]:text-3xl"
+                    />
+                  </div>
+                  <p className="mx-auto mt-2 max-w-xs text-xs leading-snug text-muted-foreground sm:text-sm">
+                    {profile.overall_score <= -30 ? 'You tend to lean Progressive on most issues' :
+                     profile.overall_score >= 30 ? 'You tend to lean Conservative on most issues' :
+                     'You hold moderate or mixed views across issues'}
+                  </p>
+                </div>
+              </div>
+              <div className="min-w-0">
                 <h1 className="break-words font-display text-2xl md:text-3xl font-bold text-foreground">
                   {profile.name}
                 </h1>
@@ -448,24 +468,7 @@ export const UserProfile = () => {
                 <VerificationBadges profile={profile} />
               </div>
             </div>
-            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-stretch lg:w-72 lg:flex-col lg:items-end xl:w-80">
-              <div className="w-full rounded-xl border border-border/60 bg-secondary/50 px-4 py-4 text-center sm:flex-1 lg:flex-none">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
-                  Overall Score
-                </span>
-                <div className="mt-2 flex items-center justify-center">
-                  <ScoreText
-                    score={profile.overall_score}
-                    size="lg"
-                    className="[&>span:first-child]:text-2xl sm:[&>span:first-child]:text-3xl"
-                  />
-                </div>
-                <p className="mx-auto mt-2 max-w-xs text-xs leading-snug text-muted-foreground sm:text-sm">
-                  {profile.overall_score <= -30 ? 'You tend to lean Progressive on most issues' :
-                   profile.overall_score >= 30 ? 'You tend to lean Conservative on most issues' :
-                   'You hold moderate or mixed views across issues'}
-                </p>
-              </div>
+            <div className="flex w-full flex-col gap-3 lg:w-auto lg:items-end">
               <Button variant="ghost" size="sm" onClick={handleSignOut} className="w-full gap-2 sm:w-auto lg:self-end">
                 <LogOut className="w-4 h-4" />
                 Sign Out
