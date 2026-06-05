@@ -1106,31 +1106,48 @@ export function useFECIntegration() {
     }
   };
 
-  // Batch refresh FEC totals for multiple candidates
+  // Batch refresh FEC totals for multiple candidates.
+  // Chunks the work into small server invocations to stay well under the
+  // edge function 150s idle timeout (each candidate can make several
+  // rate-limited FEC calls, so a single invocation with dozens of candidates
+  // times out).
   const batchRefreshFECTotals = async (
     candidateIds: string[],
     cycle = '2024'
   ): Promise<{ success: number; failed: number; skipped: number }> => {
     setTotalsProgress({ current: 0, total: candidateIds.length });
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('refresh-fec-totals', {
-        body: { batch: true, candidateIds, cycle }
-      });
 
-      if (error) {
-        console.error('[REFRESH-FEC-TOTALS] Batch invoke error:', error);
-        return { success: 0, failed: candidateIds.length, skipped: 0 };
+    const CHUNK_SIZE = 5;
+    const aggregate = { success: 0, failed: 0, skipped: 0 };
+
+    try {
+      for (let i = 0; i < candidateIds.length; i += CHUNK_SIZE) {
+        const chunk = candidateIds.slice(i, i + CHUNK_SIZE);
+        try {
+          const { data, error } = await supabase.functions.invoke('refresh-fec-totals', {
+            body: { batch: true, candidateIds: chunk, cycle, limit: chunk.length },
+          });
+
+          if (error) {
+            console.error('[REFRESH-FEC-TOTALS] Batch invoke error:', error);
+            aggregate.failed += chunk.length;
+          } else {
+            aggregate.success += data?.processed || data?.success || 0;
+            aggregate.failed += data?.failed || 0;
+            aggregate.skipped += data?.skipped || 0;
+          }
+        } catch (err) {
+          console.error('[REFRESH-FEC-TOTALS] Batch exception:', err);
+          aggregate.failed += chunk.length;
+        }
+
+        setTotalsProgress({
+          current: Math.min(i + CHUNK_SIZE, candidateIds.length),
+          total: candidateIds.length,
+        });
       }
 
-      return {
-        success: data?.processed || 0,
-        failed: data?.failed || 0,
-        skipped: data?.skipped || 0
-      };
-    } catch (err) {
-      console.error('[REFRESH-FEC-TOTALS] Batch exception:', err);
-      return { success: 0, failed: candidateIds.length, skipped: 0 };
+      return aggregate;
     } finally {
       setTotalsProgress(null);
     }
