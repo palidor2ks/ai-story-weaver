@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   Vote,
 } from 'lucide-react';
-import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -96,7 +95,6 @@ export default function PoliticalCompassTest() {
         path="/political-compass-test"
         jsonLd={jsonLd}
       />
-      <Header />
 
       <main>
         <section className="relative overflow-hidden border-b border-border bg-gradient-to-b from-primary/10 via-background to-background">
