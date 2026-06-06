@@ -63,7 +63,12 @@ Deno.serve(async (req) => {
 
     const upstream = await fetch(parsed.toString(), {
       redirect: 'follow',
-      headers: { 'User-Agent': 'PolipulseImageProxy/1.0' },
+      headers: {
+        // Wikimedia requires a descriptive UA with contact info or it returns 400.
+        'User-Agent': 'PolipulseImageProxy/1.0 (https://polipulseapp.com; contact@polipulseapp.com)',
+        'Accept': 'image/*,*/*;q=0.8',
+        'Referer': parsed.origin + '/',
+      },
     });
     if (!upstream.ok) {
       return new Response(JSON.stringify({ error: 'upstream_failed', status: upstream.status }), {
