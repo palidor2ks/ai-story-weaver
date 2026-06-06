@@ -3,6 +3,13 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "capture": "node scripts/capture-screens.mjs",
+    "vo": "node scripts/generate-vo.mjs",
+    "render": "node scripts/render-remotion.mjs",
+    "studio": "remotion studio src/index.ts",
+    "video": "bun run capture && bun run vo && bun run render"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/react": "^19.2.15",
