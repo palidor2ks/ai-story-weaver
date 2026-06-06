@@ -1,5 +1,5 @@
 // Admin-only OR cron-invoked. Posts a social_posts row to all enabled platforms.
-// X and TikTok are fully wired; FB/IG return "not_configured" until tokens added.
+// X, TikTok, and Facebook are wired; Instagram returns "not_configured" until tokens added.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'npm:zod@3.23.8';
 import { isCronAuthorized } from '../_shared/cron-auth.ts';
@@ -261,6 +261,54 @@ async function postToTikTok(
   return { ok: true, external_post_id: publishId, external_url: externalUrl };
 }
 
+// ===== Facebook Page =====
+// Posts to a Facebook Page using a long-lived Page access token kept as a
+// function secret (the same FACEBOOK_PAGE_ID / FACEBOOK_PAGE_ACCESS_TOKEN secrets
+// post-poll-to-social uses). When the card image is rendered we post it as a Page
+// photo with the share link in the caption; otherwise we fall back to a link post.
+async function postToFacebook(
+  caption: string,
+  post: { image_url?: string | null; share_url?: string | null },
+) {
+  const pageId = Deno.env.get('FACEBOOK_PAGE_ID');
+  const token = Deno.env.get('FACEBOOK_PAGE_ACCESS_TOKEN');
+  if (!pageId || !token) {
+    return { ok: false, error: 'facebook_not_configured', detail: 'Set FACEBOOK_PAGE_ID / FACEBOOK_PAGE_ACCESS_TOKEN secrets.' };
+  }
+
+  const link = post.share_url ?? '';
+  const base = `https://graph.facebook.com/v21.0/${pageId}`;
+  let endpoint: string;
+  const body: Record<string, string> = { access_token: token };
+  if (post.image_url) {
+    endpoint = `${base}/photos`;
+    body.url = post.image_url;
+    body.caption = link ? `${caption}\n${link}` : caption;
+  } else {
+    endpoint = `${base}/feed`;
+    body.message = caption;
+    if (link) body.link = link;
+  }
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(body).toString(),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return { ok: false, error: `facebook_post_failed_${res.status}`, detail: JSON.stringify(json).slice(0, 400) };
+  }
+  // /photos returns { id, post_id }; /feed returns { id } shaped `${pageId}_${postId}`.
+  const postId: string = json.post_id || json.id || '';
+  const urlPart = postId.includes('_') ? postId.split('_')[1] : postId;
+  return {
+    ok: true,
+    external_post_id: postId || null,
+    external_url: postId ? `https://www.facebook.com/${pageId}/posts/${urlPart}` : null,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -302,6 +350,8 @@ Deno.serve(async (req) => {
         r = await postToX(admin, caption, post);
       } else if (p.platform === 'tiktok') {
         r = await postToTikTok(admin, caption, post);
+      } else if (p.platform === 'facebook') {
+        r = await postToFacebook(caption, post);
       } else {
         r = { ok: false, error: 'not_configured', detail: `${p.platform} posting requires API credentials.` };
       }
