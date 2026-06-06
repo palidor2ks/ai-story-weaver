@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
-import { User, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper, Megaphone, LogIn, Briefcase, Compass } from 'lucide-react';
+import { User, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper, Megaphone, LogIn, Briefcase, Compass, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
@@ -18,8 +18,8 @@ export const Header = () => {
   const isAdmin = !!user && !adminLoading && !!adminData?.isAdmin;
   const isPolitician = !!user && !politicianLoading && !!politicianData?.isPolitician;
 
-  const navItems = [
-    { path: '/political-compass-test', label: 'Compass Test', icon: Compass, requiresAuth: false },
+  const navItems: { path: string; label: string; icon: LucideIcon; requiresAuth: boolean; adminOnly?: boolean }[] = [
+    { path: '/political-compass-test', label: 'Compass Test', icon: Compass, requiresAuth: false, adminOnly: true },
     { path: '/candidates', label: 'Candidates', icon: Users, requiresAuth: false },
     { path: '/parties', label: 'Parties', icon: Building2, requiresAuth: false },
     { path: '/donors', label: 'Donors', icon: DollarSign, requiresAuth: false },
@@ -32,7 +32,10 @@ export const Header = () => {
     { path: '/profile', label: 'Profile', icon: User, requiresAuth: true },
   ];
 
-  const visibleNavItems = navItems.filter((item) => (item.requiresAuth ? !authLoading && !!user : true));
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.adminOnly) return isAdmin;
+    return item.requiresAuth ? !authLoading && !!user : true;
+  });
 
   const isActive = (path: string) => location.pathname === path;
 
