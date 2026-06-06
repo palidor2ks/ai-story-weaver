@@ -2,6 +2,7 @@
 // (Pro-Israel, Pro-gun, etc.) — picked from the active `committee_causes` taxonomy.
 // Body: { fec_committee_ids?: string[], limit?: number, force?: boolean }
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { mintCandidateCause } from '../_shared/candidate-cause.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -170,6 +171,7 @@ async function classifyOne(info: CommitteeInfo, causes: Cause[]): Promise<{
   secondary_cause_ids: string[];
   confidence: 'low' | 'medium' | 'high';
   reasoning: string;
+  candidate_cause?: { candidate_name: string; stance: string; reasoning?: string };
   suggested_new_cause?: { label: string; stance: string; issue: string; quiz_topic_id: string; reasoning: string };
 } | null> {
   const causeMenu = causes
@@ -199,6 +201,8 @@ Use the PARTISAN EFFECT and target list as the strongest signal for partisan lea
 
 Pick ONE primary cause id from the list below that best describes this committee's focus, plus 0-2 optional secondary cause ids if clearly relevant. If a specific issue cause is clearly supported by the committee name, IE targets, or expenditure purposes, make that specific cause primary and put any generic partisan bucket only in secondary_cause_ids. Use "low" confidence only when neither the spending direction nor a specific issue is clear.
 
+Candidate rule: if this committee exists primarily to support or oppose ONE specific candidate — a single-candidate super PAC, a candidate's leadership PAC, or one whose IE targets concentrate on a single named candidate — return candidate_cause with that candidate's full name and stance ("pro" if it spends to elect/support them, "anti" if it spends to defeat/oppose them). Judge by the spending targets, not the (often misleading) committee name. When you set candidate_cause, still pick the closest primary_cause_id as a fallback (it will be kept as a secondary bucket). Do NOT use candidate_cause for multi-candidate party or ideological committees that spread money across many races.
+
 Industry rule: never make the generic "pro-business" cause primary for a single-industry committee. If the committee is tied to one industry (real estate, finance/banking, insurance, defense, agriculture, healthcare providers, telecom, manufacturing, gaming, etc.), pick that industry's specific cause. Reserve "pro-business" only for broad, cross-industry business coalitions (e.g. a Chamber of Commerce).
 
 If NO cause fits well, you may also propose a single new cause (suggested_new_cause) — but ONLY if there's a clear, specific issue or industry not represented (e.g. "Pro-cannabis", "Pro-Aviation"). This includes single-industry business groups that have no matching industry cause yet — propose an industry-specific cause rather than labeling them generic Pro-Business. Do not propose duplicates.
@@ -212,7 +216,7 @@ ${causeMenu}`;
     body: JSON.stringify({
       model: 'google/gemini-3-flash-preview',
       messages: [
-        { role: 'system', content: 'You categorize US political committees (PACs, SuperPACs, party committees) by cause/stance (e.g. Pro-Israel, Pro-gun). Determine partisan lean from the DIRECTION of independent expenditures (who the committee supports vs. opposes and those targets\' parties), not from the committee name, which is frequently misleading. When there is clear evidence for a specific issue cause, prefer that over the generic "conservative" or "progressive" buckets; use the generic buckets only when no single issue stands out. When a committee is tied to a single industry, prefer that industry\'s specific cause (e.g. Pro-Real Estate, Pro-Finance, Pro-Defense Industry) over the generic "Pro-Business" bucket, which is reserved only for broad, cross-industry business coalitions.' },
+        { role: 'system', content: 'You categorize US political committees (PACs, SuperPACs, party committees) by cause/stance (e.g. Pro-Israel, Pro-gun). Determine partisan lean from the DIRECTION of independent expenditures (who the committee supports vs. opposes and those targets\' parties), not from the committee name, which is frequently misleading. When a committee exists primarily to support or oppose ONE specific candidate (a single-candidate super PAC or leadership PAC, or one whose spending concentrates on a single named candidate), return candidate_cause so it can be labeled "Pro <candidate>" / "Anti <candidate>" rather than forced into an issue or generic partisan bucket. When there is clear evidence for a specific issue cause, prefer that over the generic "conservative" or "progressive" buckets; use the generic buckets only when no single issue stands out. When a committee is tied to a single industry, prefer that industry\'s specific cause (e.g. Pro-Real Estate, Pro-Finance, Pro-Defense Industry) over the generic "Pro-Business" bucket, which is reserved only for broad, cross-industry business coalitions.' },
         { role: 'user', content: userMsg },
       ],
       tools: [{
@@ -227,6 +231,17 @@ ${causeMenu}`;
               secondary_cause_ids: { type: 'array', items: { type: 'string', enum: allowed }, maxItems: 2 },
               confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
               reasoning: { type: 'string', maxLength: 240 },
+              candidate_cause: {
+                type: 'object',
+                description: 'Set ONLY when this committee exists primarily to support or oppose one specific candidate. It will be labeled "Pro <candidate>" / "Anti <candidate>" as primary, with primary_cause_id kept as a secondary bucket.',
+                properties: {
+                  candidate_name: { type: 'string' },
+                  stance: { type: 'string', enum: ['pro', 'anti'] },
+                  reasoning: { type: 'string', maxLength: 240 },
+                },
+                required: ['candidate_name', 'stance'],
+                additionalProperties: false,
+              },
               suggested_new_cause: {
                 type: 'object',
                 properties: {
@@ -264,6 +279,7 @@ ${causeMenu}`;
       secondary_cause_ids: (parsed.secondary_cause_ids ?? []).filter((id: string) => allowed.includes(id)),
       confidence: parsed.confidence ?? 'low',
       reasoning: (parsed.reasoning ?? '').slice(0, 240),
+      candidate_cause: parsed.candidate_cause,
       suggested_new_cause: parsed.suggested_new_cause,
     };
   } catch (e) {
@@ -326,10 +342,23 @@ async function processIds(supabase: any, ids: string[], force: boolean) {
         }
       }
 
+      // Candidate-specific committee? Mint (or reuse) a "Pro/Anti <candidate>" cause and
+      // make THAT primary, demoting the generic AI pick to a secondary bucket.
+      let primaryCauseId = result.primary_cause_id;
+      let secondaryCauseIds = result.secondary_cause_ids;
+      const minted = await mintCandidateCause(supabase, result.candidate_cause, validTopicIds);
+      if (minted) {
+        secondaryCauseIds = Array.from(
+          new Set([result.primary_cause_id, ...result.secondary_cause_ids].filter((cid) => cid && cid !== minted.id)),
+        ).slice(0, 2);
+        primaryCauseId = minted.id;
+        console.log(`Minted candidate cause ${minted.id} for ${id}`);
+      }
+
       const { error } = await supabase.from('committee_topics').upsert({
         fec_committee_id: id,
-        primary_cause_id: result.primary_cause_id,
-        secondary_cause_ids: result.secondary_cause_ids,
+        primary_cause_id: primaryCauseId,
+        secondary_cause_ids: secondaryCauseIds,
         assigned_by: 'ai',
         ai_confidence: result.confidence,
         ai_reasoning: result.reasoning,
