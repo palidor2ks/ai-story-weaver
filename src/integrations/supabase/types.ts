@@ -920,6 +920,21 @@ export type Database = {
         }
         Relationships: []
       }
+      claude_migration_log: {
+        Row: {
+          applied_at: string
+          filename: string
+        }
+        Insert: {
+          applied_at?: string
+          filename: string
+        }
+        Update: {
+          applied_at?: string
+          filename?: string
+        }
+        Relationships: []
+      }
       committee_aliases: {
         Row: {
           canonical_name: string
@@ -1242,6 +1257,72 @@ export type Database = {
           receipt_date?: string | null
           recipient_committee_id?: string
           recipient_committee_name?: string | null
+        }
+        Relationships: []
+      }
+      district_boundary_overrides: {
+        Row: {
+          city: string
+          created_at: string
+          field_name: string | null
+          is_active: boolean
+          label: string | null
+          muni_field: string | null
+          query_url: string
+          state: string
+        }
+        Insert: {
+          city?: string
+          created_at?: string
+          field_name?: string | null
+          is_active?: boolean
+          label?: string | null
+          muni_field?: string | null
+          query_url: string
+          state: string
+        }
+        Update: {
+          city?: string
+          created_at?: string
+          field_name?: string | null
+          is_active?: boolean
+          label?: string | null
+          muni_field?: string | null
+          query_url?: string
+          state?: string
+        }
+        Relationships: []
+      }
+      district_boundary_sources: {
+        Row: {
+          approved: boolean | null
+          checked_at: string
+          city: string
+          confidence: string
+          query_url: string | null
+          source_owner: string | null
+          state: string
+          status: string
+        }
+        Insert: {
+          approved?: boolean | null
+          checked_at?: string
+          city: string
+          confidence?: string
+          query_url?: string | null
+          source_owner?: string | null
+          state: string
+          status?: string
+        }
+        Update: {
+          approved?: boolean | null
+          checked_at?: string
+          city?: string
+          confidence?: string
+          query_url?: string | null
+          source_owner?: string | null
+          state?: string
+          status?: string
         }
         Relationships: []
       }
@@ -4365,6 +4446,24 @@ export type Database = {
           name?: string
           scope?: string
           weight?: number | null
+        }
+        Relationships: []
+      }
+      trusted_gis_owners: {
+        Row: {
+          created_at: string
+          label: string | null
+          owner_key: string
+        }
+        Insert: {
+          created_at?: string
+          label?: string | null
+          owner_key: string
+        }
+        Update: {
+          created_at?: string
+          label?: string | null
+          owner_key?: string
         }
         Relationships: []
       }
