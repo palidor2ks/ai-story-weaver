@@ -308,8 +308,28 @@ export const useUnifiedCandidates = ({
     const stateLeg = buildCivicGroup(stateLegRaw);
     const local = buildCivicGroup(localRaw);
 
-    // Add myReps to federalExec / etc. for state/local reps inferred from civic
-    // (civic already supplies these; nothing more to do.)
+    // President & Vice President are *national* offices — they don't depend on
+    // the user's address. The only source that classifies them as executives is
+    // the civic feed, which requires an address and whose upstream fetch can be
+    // slow (tens of seconds) or fail. When that feed is empty, the Executive tab
+    // collapses to 0 even though the sitting President/VP are already loaded from
+    // the `candidates` table — they'd otherwise be miscategorized into `dbOnly`,
+    // which the Executive tab never reads. Promote the incumbent President/VP DB
+    // rows into `federalExec` so executives appear instantly and unconditionally.
+    // Only incumbents qualify: non-incumbent "President of the United States"
+    // rows are challengers, not executives, and recent former holders are left to
+    // the civic feed (which alone can date-scope them via term history).
+    const isFederalExecOffice = (office: string) =>
+      /^(president|vice president)$/.test(normOffice(office));
+    const execNameKeys = new Set(federalExec.map((c) => nameKey(c.name, c.office)));
+    for (const c of dbCandidates) {
+      if (!isFederalExecOffice(c.office)) continue;
+      if (!(c.is_incumbent ?? true)) continue;
+      const k = nameKey(c.name, c.office);
+      if (execNameKeys.has(k) || congressNameKeys.has(k)) continue;
+      execNameKeys.add(k);
+      federalExec.push(make(c.id, { db: c }));
+    }
 
     // DB-only candidates: in DB but not matched by id or name to any above
     const knownIds = new Set<string>();
