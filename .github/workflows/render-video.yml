@@ -1,0 +1,73 @@
+name: Render website video
+
+# Renders the Remotion product video and uploads it as a downloadable artifact.
+# By default it reuses the screenshots and voiceover already committed in
+# remotion/public, so no API keys are required. You can optionally re-capture
+# the screenshots from the live site and/or regenerate the ElevenLabs narration.
+
+on:
+  workflow_dispatch:
+    inputs:
+      regenerate_screens:
+        description: "Re-capture screenshots from the live site before rendering"
+        type: boolean
+        default: false
+      base_url:
+        description: "Site URL to screenshot (only used when re-capturing)"
+        type: string
+        default: ""
+      regenerate_vo:
+        description: "Regenerate the voiceover before rendering (needs ELEVENLABS_API_KEY secret)"
+        type: boolean
+        default: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: remotion
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Remotion dependencies
+        run: bun install
+
+      # Installs a Chromium plus the system libraries that both Playwright
+      # (screenshot capture) and Remotion's renderer need.
+      - name: Install browser + system libraries
+        run: bunx playwright install --with-deps chromium
+
+      - name: Install ffmpeg (voiceover regeneration only)
+        if: ${{ inputs.regenerate_vo }}
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Re-capture screenshots
+        if: ${{ inputs.regenerate_screens }}
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: node scripts/capture-screens.mjs
+
+      - name: Regenerate voiceover
+        if: ${{ inputs.regenerate_vo }}
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        run: node scripts/generate-vo.mjs
+
+      - name: Render video
+        env:
+          OUT: ${{ github.workspace }}/website-video.mp4
+        run: node scripts/render-remotion.mjs
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-video
+          path: website-video.mp4
+          if-no-files-found: error
+          retention-days: 14
