@@ -638,18 +638,21 @@ serve(async (req) => {
     if (committees.length === 0 && allFecIds.length > 0) {
       console.warn('[FEC-DONORS] No committees discovered; invoking fetch-fec-committees fallback...');
 
-      const { error: linkErr, data: linkData } = await supabase.functions.invoke('fetch-fec-committees', {
-        body: {
-          candidateId,
-          fecCandidateId: allFecIds[0],
-          fetchAllFecIds: true,
-        },
-      });
-
-      if (linkErr) {
-        console.warn('[FEC-DONORS] fetch-fec-committees fallback invoke error:', linkErr);
-      } else if (linkData?.error) {
-        console.warn('[FEC-DONORS] fetch-fec-committees fallback returned error:', linkData.error);
+      // Hard cap the nested invoke so a slow/hung fetch-fec-committees can't
+      // burn the parent's 150s idle budget (caused IDLE_TIMEOUT 504s).
+      try {
+        const ac = new AbortController();
+        const timer = setTimeout(() => ac.abort(), 20_000);
+        const { error: linkErr, data: linkData } = await supabase.functions.invoke('fetch-fec-committees', {
+          body: { candidateId, fecCandidateId: allFecIds[0], fetchAllFecIds: true },
+          // @ts-ignore - forwarded to underlying fetch
+          signal: ac.signal,
+        });
+        clearTimeout(timer);
+        if (linkErr) console.warn('[FEC-DONORS] fallback invoke error:', linkErr);
+        else if (linkData?.error) console.warn('[FEC-DONORS] fallback returned error:', linkData.error);
+      } catch (e) {
+        console.warn('[FEC-DONORS] fallback aborted/failed:', String(e).slice(0, 200));
       }
 
       const { data: refreshedCandidate } = await supabase
