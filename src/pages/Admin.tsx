@@ -545,6 +545,9 @@ export default function Admin() {
           <Button asChild variant="default" size="sm">
             <Link to="/admin/social-posts">Daily Social Posts</Link>
           </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/substack">Substack Digest</Link>
+          </Button>
         </div>
 
         <Card className="mb-6">

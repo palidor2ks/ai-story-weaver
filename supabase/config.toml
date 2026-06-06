@@ -169,6 +169,8 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = false
   [functions.auto-post-due]
     verify_jwt = false
+  [functions.generate-substack-digest]
+    verify_jwt = false
   # --- Completed for the auto-deploy workflow: these were deployed (all verify_jwt=false)
   # but were missing from this file, so a blanket `supabase functions deploy` would have
   # defaulted them to verify_jwt=true and broken public/anonymous endpoints (e.g.

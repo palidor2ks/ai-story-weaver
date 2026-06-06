@@ -4095,6 +4095,11 @@ export type Database = {
           recent_skip_days: number
           rotation_index: number
           rotation_types: string[]
+          substack_enabled: boolean
+          substack_frequency_days: number
+          substack_last_generated_at: string | null
+          substack_lookback_days: number
+          substack_publication_url: string | null
           tiktok_enabled: boolean
           timezone: string
           updated_at: string
@@ -4110,6 +4115,11 @@ export type Database = {
           recent_skip_days?: number
           rotation_index?: number
           rotation_types?: string[]
+          substack_enabled?: boolean
+          substack_frequency_days?: number
+          substack_last_generated_at?: string | null
+          substack_lookback_days?: number
+          substack_publication_url?: string | null
           tiktok_enabled?: boolean
           timezone?: string
           updated_at?: string
@@ -4125,10 +4135,66 @@ export type Database = {
           recent_skip_days?: number
           rotation_index?: number
           rotation_types?: string[]
+          substack_enabled?: boolean
+          substack_frequency_days?: number
+          substack_last_generated_at?: string | null
+          substack_lookback_days?: number
+          substack_publication_url?: string | null
           tiktok_enabled?: boolean
           timezone?: string
           updated_at?: string
           x_enabled?: boolean
+        }
+        Relationships: []
+      }
+      substack_digests: {
+        Row: {
+          body_markdown: string
+          created_at: string
+          created_by: string | null
+          id: string
+          item_count: number
+          model: string | null
+          period_end: string | null
+          period_start: string | null
+          published_at: string | null
+          source_post_ids: Json
+          status: string
+          subtitle: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body_markdown: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_count?: number
+          model?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          published_at?: string | null
+          source_post_ids?: Json
+          status?: string
+          subtitle?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body_markdown?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          item_count?: number
+          model?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          published_at?: string | null
+          source_post_ids?: Json
+          status?: string
+          subtitle?: string | null
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
