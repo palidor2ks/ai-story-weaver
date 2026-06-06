@@ -49,19 +49,19 @@ export const Header = () => {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 min-w-0">
+        <nav className="hidden lg:flex flex-1 items-center justify-center gap-0.5 min-w-0">
           {visibleNavItems.map(item => (
             <Link key={item.path} to={item.path} title={item.label} aria-label={item.label}>
               <Button
                 variant={isActive(item.path) ? "secondary" : "ghost"}
                 className={cn(
-                  "gap-1.5 px-2 xl:px-3",
+                  "gap-1.5 px-2 text-xs xl:px-3 xl:text-sm",
                   isActive(item.path) && "bg-secondary text-foreground"
                 )}
                 aria-label={item.label}
               >
                 <item.icon className="w-4 h-4 shrink-0" />
-                <span className="hidden xl:inline">{item.label}</span>
+                <span className="hidden min-[1120px]:inline">{item.label}</span>
               </Button>
             </Link>
           ))}
@@ -69,12 +69,15 @@ export const Header = () => {
             <Link to="/politician">
               <Button
                 variant={isActive('/politician') ? "secondary" : "ghost"}
-                size="icon"
-                className="ml-0.5"
+                className={cn(
+                  "ml-0.5 gap-1.5 px-2 text-xs xl:px-3 xl:text-sm",
+                  isActive('/politician') && "bg-secondary text-foreground"
+                )}
                 title="Politician Dashboard"
                 aria-label="Politician Dashboard"
               >
-                <FileText className="w-4 h-4" />
+                <FileText className="w-4 h-4 shrink-0" />
+                <span className="hidden min-[1120px]:inline">Dashboard</span>
               </Button>
             </Link>
           )}
@@ -82,12 +85,15 @@ export const Header = () => {
             <Link to="/admin">
               <Button
                 variant={isActive('/admin') ? "secondary" : "ghost"}
-                size="icon"
-                className="ml-0.5"
+                className={cn(
+                  "ml-0.5 gap-1.5 px-2 text-xs xl:px-3 xl:text-sm",
+                  isActive('/admin') && "bg-secondary text-foreground"
+                )}
                 title="Admin"
                 aria-label="Admin"
               >
-                <Shield className="w-4 h-4" />
+                <Shield className="w-4 h-4 shrink-0" />
+                <span className="hidden min-[1120px]:inline">Admin</span>
               </Button>
             </Link>
           )}
