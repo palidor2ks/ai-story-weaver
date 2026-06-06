@@ -241,7 +241,17 @@ function SettingsTab() {
             <div key={p} className="flex items-center justify-between">
               <div>
                 <Label className="capitalize">{p === 'x' ? 'X (Twitter)' : p}</Label>
-                {p !== 'x' && <p className="text-xs text-muted-foreground">Requires API credentials — posts will fail until configured.</p>}
+                {p === 'x' ? (
+                  <p className="text-xs text-muted-foreground">
+                    <Link to="/admin/x-composer" className="text-primary underline">Manage connected X account →</Link>
+                  </p>
+                ) : p === 'tiktok' ? (
+                  <p className="text-xs text-muted-foreground">
+                    <Link to="/admin/tiktok-connect" className="text-primary underline">Connect a TikTok account →</Link>
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Requires API credentials — posts will fail until configured.</p>
+                )}
               </div>
               <Switch checked={(local as any)[`${p}_enabled`]} onCheckedChange={(v) => setLocal({ ...local, [`${p}_enabled`]: v } as Settings)} />
             </div>

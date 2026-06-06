@@ -153,6 +153,10 @@ project_id = "ornnzinjrcyigazecctf"
     verify_jwt = true
   [functions.x-post-tweet]
     verify_jwt = true
+  [functions.tiktok-oauth-start]
+    verify_jwt = true
+  [functions.tiktok-oauth-callback]
+    verify_jwt = true
   [functions.pick-daily-stat-card]
     verify_jwt = false
   [functions.generate-social-caption]
