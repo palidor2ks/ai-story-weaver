@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Search, Sparkles } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Sparkles, Unlink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -380,6 +380,43 @@ export function CommitteeAliasesPanel() {
     });
   };
 
+  // Detach a committee from whichever alias currently holds it (drops the FEC ID
+  // from that alias's list). The committee's cause in committee_topics is left
+  // intact — it belongs to the committee, not the alias grouping.
+  const handleRemoveCommitteeId = async (fecCommitteeId: string, aliasId: string) => {
+    const alias = aliases.find((a) => a.id === aliasId);
+    if (!alias) return;
+    await updateMutation.mutateAsync({
+      id: alias.id,
+      canonical_name: alias.canonical_name,
+      fec_committee_ids: alias.fec_committee_ids.filter((id) => id !== fecCommitteeId),
+      notes: alias.notes || '',
+      is_active: alias.is_active,
+    });
+  };
+
+  // Reassign a committee from its current alias to the one picked in "Alias to update".
+  const handleMoveCommitteeId = async (fecCommitteeId: string, fromAliasId: string) => {
+    if (!selectedAttachAliasId || selectedAttachAliasId === fromAliasId) return;
+    const fromAlias = aliases.find((a) => a.id === fromAliasId);
+    const toAlias = aliases.find((a) => a.id === selectedAttachAliasId);
+    if (!fromAlias || !toAlias) return;
+    await updateMutation.mutateAsync({
+      id: fromAlias.id,
+      canonical_name: fromAlias.canonical_name,
+      fec_committee_ids: fromAlias.fec_committee_ids.filter((id) => id !== fecCommitteeId),
+      notes: fromAlias.notes || '',
+      is_active: fromAlias.is_active,
+    });
+    await updateMutation.mutateAsync({
+      id: toAlias.id,
+      canonical_name: toAlias.canonical_name,
+      fec_committee_ids: Array.from(new Set([...toAlias.fec_committee_ids, fecCommitteeId.toUpperCase()])),
+      notes: toAlias.notes || '',
+      is_active: toAlias.is_active,
+    });
+  };
+
   const handleDelete = async () => {
     if (selectedAlias) {
       await deleteMutation.mutateAsync(selectedAlias.id);
@@ -478,9 +515,49 @@ export function CommitteeAliasesPanel() {
             <div className="space-y-2"><Label>Alias to update</Label><Select value={selectedAttachAliasId} onValueChange={setSelectedAttachAliasId}><SelectTrigger><SelectValue placeholder="Select an active spender alias" /></SelectTrigger><SelectContent>{activeAliases.map((alias) => <SelectItem key={alias.id} value={alias.id}>{alias.canonical_name}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-2"><Label>Search committees</Label><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search spenders by name, abbreviation (e.g. HMP) or FEC ID..." value={committeeSearch} onChange={(e) => setCommitteeSearch(e.target.value)} className="pl-9" /></div></div>
           </div>
-          <Card><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Committee</TableHead><TableHead>Treasurer</TableHead><TableHead>FEC Committee ID</TableHead><TableHead className="w-36">Action</TableHead></TableRow></TableHeader><TableBody>
-          {committeeSearch.trim().length<2 ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Type at least 2 characters to search committees.</TableCell></TableRow> : committeeSearchLoading ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Searching committees...</TableCell></TableRow> : committeeSearchResults.length===0 ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No spenders match “{committeeSearch.trim()}”. Searches outside spenders (independent-expenditure filers) by name, abbreviation, or FEC ID.</TableCell></TableRow> : committeeSearchResults.map((row)=> { const alreadyAttached=aliases.some((a)=>a.fec_committee_ids.includes(row.fec_committee_id)); return <TableRow key={row.fec_committee_id}><TableCell className="font-medium">{row.name || 'Unknown committee'}</TableCell><TableCell className="text-sm text-muted-foreground">{row.treasurer_name || '—'}</TableCell><TableCell className="font-mono">{row.fec_committee_id}</TableCell><TableCell><Button size="sm" disabled={!selectedAttachAliasId || updateMutation.isPending || alreadyAttached} onClick={() => handleAddCommitteeId(row.fec_committee_id)}>{alreadyAttached ? 'Already attached' : 'Attach ID'}</Button></TableCell></TableRow>; })}
-          </TableBody></Table></CardContent></Card>
+          <Card><CardContent className="p-0"><Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Committee</TableHead>
+                <TableHead>Treasurer</TableHead>
+                <TableHead>FEC Committee ID</TableHead>
+                <TableHead>Current alias</TableHead>
+                <TableHead className="w-44">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {committeeSearch.trim().length < 2 ? (
+                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Type at least 2 characters to search committees.</TableCell></TableRow>
+              ) : committeeSearchLoading ? (
+                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Searching committees...</TableCell></TableRow>
+              ) : committeeSearchResults.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No spenders match “{committeeSearch.trim()}”. Searches outside spenders (independent-expenditure filers) by name, abbreviation, or FEC ID.</TableCell></TableRow>
+              ) : committeeSearchResults.map((row) => {
+                const currentAlias = aliases.find((a) => a.fec_committee_ids.includes(row.fec_committee_id));
+                const attachedToSelected = !!currentAlias && currentAlias.id === selectedAttachAliasId;
+                return (
+                  <TableRow key={row.fec_committee_id}>
+                    <TableCell className="font-medium">{row.name || 'Unknown committee'}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{row.treasurer_name || '—'}</TableCell>
+                    <TableCell className="font-mono">{row.fec_committee_id}</TableCell>
+                    <TableCell>{currentAlias ? <Badge variant="secondary">{currentAlias.canonical_name}</Badge> : <span className="text-muted-foreground text-sm">—</span>}</TableCell>
+                    <TableCell>
+                      {!currentAlias ? (
+                        <Button size="sm" disabled={!selectedAttachAliasId || updateMutation.isPending} onClick={() => handleAddCommitteeId(row.fec_committee_id)}>Attach ID</Button>
+                      ) : attachedToSelected ? (
+                        <Button size="sm" variant="outline" disabled={updateMutation.isPending} onClick={() => handleRemoveCommitteeId(row.fec_committee_id, currentAlias.id)}><Unlink className="h-3 w-3 mr-1" /> Detach</Button>
+                      ) : (
+                        <div className="flex gap-1">
+                          <Button size="sm" disabled={!selectedAttachAliasId || updateMutation.isPending} onClick={() => handleMoveCommitteeId(row.fec_committee_id, currentAlias.id)} title={selectedAttachAliasId ? 'Move to the selected alias' : 'Select a target alias first'}>Move here</Button>
+                          <Button size="sm" variant="ghost" disabled={updateMutation.isPending} onClick={() => handleRemoveCommitteeId(row.fec_committee_id, currentAlias.id)} title="Detach"><Unlink className="h-3 w-3" /></Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table></CardContent></Card>
         </TabsContent>
       </Tabs>
 
