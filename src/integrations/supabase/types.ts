@@ -646,6 +646,8 @@ export type Database = {
           office: string | null
           overall_score: number | null
           party: string | null
+          photo_attempts: number
+          photo_checked_at: string | null
           prior_offices: Json | null
           state: string | null
           updated_at: string | null
@@ -666,6 +668,8 @@ export type Database = {
           office?: string | null
           overall_score?: number | null
           party?: string | null
+          photo_attempts?: number
+          photo_checked_at?: string | null
           prior_offices?: Json | null
           state?: string | null
           updated_at?: string | null
@@ -686,6 +690,8 @@ export type Database = {
           office?: string | null
           overall_score?: number | null
           party?: string | null
+          photo_attempts?: number
+          photo_checked_at?: string | null
           prior_offices?: Json | null
           state?: string | null
           updated_at?: string | null
@@ -801,6 +807,8 @@ export type Database = {
           overall_score: number | null
           party: Database["public"]["Enums"]["party_type"]
           person_id: string | null
+          photo_attempts: number
+          photo_checked_at: string | null
           research_attempts: number
           score_version: string | null
           state: string
@@ -829,6 +837,8 @@ export type Database = {
           overall_score?: number | null
           party: Database["public"]["Enums"]["party_type"]
           person_id?: string | null
+          photo_attempts?: number
+          photo_checked_at?: string | null
           research_attempts?: number
           score_version?: string | null
           state: string
@@ -857,6 +867,8 @@ export type Database = {
           overall_score?: number | null
           party?: Database["public"]["Enums"]["party_type"]
           person_id?: string | null
+          photo_attempts?: number
+          photo_checked_at?: string | null
           research_attempts?: number
           score_version?: string | null
           state?: string
@@ -4701,75 +4713,6 @@ export type Database = {
         }
         Relationships: []
       }
-      tiktok_account_tokens: {
-        Row: {
-          access_token: string
-          avatar_url: string | null
-          created_at: string
-          display_name: string | null
-          expires_at: string | null
-          id: string
-          open_id: string
-          refresh_expires_at: string | null
-          refresh_token: string | null
-          scope: string | null
-          updated_at: string
-          username: string | null
-        }
-        Insert: {
-          access_token: string
-          avatar_url?: string | null
-          created_at?: string
-          display_name?: string | null
-          expires_at?: string | null
-          id?: string
-          open_id: string
-          refresh_expires_at?: string | null
-          refresh_token?: string | null
-          scope?: string | null
-          updated_at?: string
-          username?: string | null
-        }
-        Update: {
-          access_token?: string
-          avatar_url?: string | null
-          created_at?: string
-          display_name?: string | null
-          expires_at?: string | null
-          id?: string
-          open_id?: string
-          refresh_expires_at?: string | null
-          refresh_token?: string | null
-          scope?: string | null
-          updated_at?: string
-          username?: string | null
-        }
-        Relationships: []
-      }
-      tiktok_oauth_pending: {
-        Row: {
-          code_verifier: string
-          created_at: string
-          redirect_uri: string | null
-          state: string
-          user_id: string
-        }
-        Insert: {
-          code_verifier: string
-          created_at?: string
-          redirect_uri?: string | null
-          state: string
-          user_id: string
-        }
-        Update: {
-          code_verifier?: string
-          created_at?: string
-          redirect_uri?: string | null
-          state?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       bill_summary_stats: {
@@ -5109,6 +5052,7 @@ export type Database = {
       check_ie_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_nj_sync_secret: { Args: { p_token: string }; Returns: boolean }
       check_ny_sync_secret: { Args: { p_token: string }; Returns: boolean }
+      check_photo_enrich_secret: { Args: { p_token: string }; Returns: boolean }
       claim_anon_poll_responses: {
         Args: { p_anon_session_id: string }
         Returns: number
@@ -5147,7 +5091,6 @@ export type Database = {
         }
       }
       cleanup_redundant_ai_candidates: { Args: never; Returns: number }
-      cleanup_tiktok_oauth_pending: { Args: never; Returns: undefined }
       cleanup_x_oauth_pending: { Args: never; Returns: undefined }
       complete_job: { Args: { p_id: string }; Returns: undefined }
       evaluate_badges: {
