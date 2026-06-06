@@ -604,15 +604,26 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
       });
 
       // === CIVIC OFFICIALS: Fetch from candidate_overrides ===
-      // Skip if level filter is set to a federal level
-      const skipCivic = filters.level && ['federal_executive', 'federal_legislative'].includes(filters.level);
-      
+      // Federal LEGISLATORS come entirely from the `candidates` table, so the
+      // override fetch is pure overhead for that level. Federal EXECUTIVE is the
+      // exception: recent FORMER Presidents & VPs (Obama, Bush, Pence, Cheney, …)
+      // live ONLY in candidate_overrides under `exec_`-prefixed ids — they have
+      // no candidates row — so we must still fetch them here, or they vanish from
+      // the directory. Current execs (Trump/Biden/etc.) keep coming from the
+      // candidates table because their former entry is re-keyed to its P-FEC id.
+      const skipCivic = filters.level === 'federal_legislative';
+      const onlyFederalExec = filters.level === 'federal_executive';
+
       if (!skipCivic) {
+        // `exec_` covers the former Presidents/VPs persisted by fetch-civic-officials.
+        const overridePrefixes = onlyFederalExec
+          ? ['exec_']
+          : ['openstates_', 'nj_', 'ny_', 'ca_', 'tx_', 'fl_', 'pa_', 'exec_'];
         let civicQuery = supabase
           .from('candidate_overrides')
           .select('candidate_id, name, party, office, state, overall_score, coverage_tier, confidence')
           .not('name', 'is', null)
-          .or('candidate_id.like.openstates_%,candidate_id.like.nj_%,candidate_id.like.ny_%,candidate_id.like.ca_%,candidate_id.like.tx_%,candidate_id.like.fl_%,candidate_id.like.pa_%');
+          .or(overridePrefixes.map(p => `candidate_id.like.${p}%`).join(','));
 
         if (filters.party && filters.party !== 'all') {
           civicQuery = civicQuery.eq('party', filters.party);
@@ -670,6 +681,13 @@ export function useCandidatesAnswerCoverage(filters: Filters = {}, options?: { e
           .from('static_officials')
           .select('id, name, party, office, state, level, coverage_tier, confidence')
           .eq('is_active', true);
+
+        // When the directory is narrowed to Federal Executive, only that level's
+        // static officials are relevant — don't pull every mayor just to drop
+        // them at the level filter below.
+        if (onlyFederalExec) {
+          staticQuery = staticQuery.eq('level', 'federal_executive');
+        }
 
         if (filters.party && filters.party !== 'all') {
           staticQuery = staticQuery.eq('party', filters.party);
