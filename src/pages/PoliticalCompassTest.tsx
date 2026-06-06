@@ -11,10 +11,13 @@ import {
   ShieldCheck,
   Vote,
 } from 'lucide-react';
+import { Header } from '@/components/Header';
 import { Seo } from '@/components/Seo';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/context/AuthContext';
+import { useAdminRole } from '@/hooks/useAdminRole';
 
 const benefits = [
   {
@@ -64,6 +67,10 @@ const faqs = [
 ];
 
 export default function PoliticalCompassTest() {
+  const { user } = useAuth();
+  const { data: adminData, isLoading: adminLoading } = useAdminRole();
+  const isAdmin = !!user && !adminLoading && !!adminData?.isAdmin;
+
   const jsonLd = [
     {
       '@context': 'https://schema.org',
@@ -95,6 +102,7 @@ export default function PoliticalCompassTest() {
         path="/political-compass-test"
         jsonLd={jsonLd}
       />
+      {isAdmin && <Header />}
 
       <main>
         <section className="relative overflow-hidden border-b border-border bg-gradient-to-b from-primary/10 via-background to-background">
