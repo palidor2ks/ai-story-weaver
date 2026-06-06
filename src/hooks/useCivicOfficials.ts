@@ -30,6 +30,8 @@ export interface CivicOfficial {
 interface FetchCivicOfficialsResponse {
   officials: CivicOfficial[];
   federalExecutive: CivicOfficial[];
+  /** Recent former Presidents & Vice Presidents (directory-only, not "my reps"). */
+  formerFederalExecutive?: CivicOfficial[];
   stateExecutive: CivicOfficial[];
   stateLegislative: CivicOfficial[];
   local: CivicOfficial[];
@@ -46,6 +48,7 @@ interface FetchCivicOfficialsResponse {
 interface CivicOfficialsResult {
   officials: CivicOfficial[];
   federalExecutive: CivicOfficial[];
+  formerFederalExecutive: CivicOfficial[];
   stateExecutive: CivicOfficial[];
   stateLegislative: CivicOfficial[];
   local: CivicOfficial[];
@@ -65,7 +68,7 @@ export function useCivicOfficials(address: string | null | undefined) {
     queryFn: async (): Promise<CivicOfficialsResult> => {
       if (!address) {
         return {
-          officials: [], federalExecutive: [], stateExecutive: [],
+          officials: [], federalExecutive: [], formerFederalExecutive: [], stateExecutive: [],
           stateLegislative: [], local: [],
           state: null, userWard: null, wardNote: null, hasTransitions: false,
         };
@@ -91,7 +94,7 @@ export function useCivicOfficials(address: string | null | undefined) {
       if (error) {
         console.error('Error fetching civic officials:', error);
         return {
-          officials: [], federalExecutive: [], stateExecutive: [],
+          officials: [], federalExecutive: [], formerFederalExecutive: [], stateExecutive: [],
           stateLegislative: [], local: [],
           state: null, userWard: null, wardNote: null, hasTransitions: false,
         };
@@ -100,7 +103,7 @@ export function useCivicOfficials(address: string | null | undefined) {
       if (data?.error) {
         console.error('Civic API error:', data.error);
         return {
-          officials: [], federalExecutive: [], stateExecutive: [],
+          officials: [], federalExecutive: [], formerFederalExecutive: [], stateExecutive: [],
           stateLegislative: [], local: [],
           state: null, userWard: null, wardNote: null, hasTransitions: false,
         };
@@ -111,6 +114,7 @@ export function useCivicOfficials(address: string | null | undefined) {
       return {
         officials: data?.officials || [],
         federalExecutive: data?.federalExecutive || [],
+        formerFederalExecutive: data?.formerFederalExecutive || [],
         stateExecutive: data?.stateExecutive || [],
         stateLegislative: data?.stateLegislative || [],
         local: data?.local || [],

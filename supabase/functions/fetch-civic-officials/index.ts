@@ -197,48 +197,93 @@ async function fetchFederalExecutiveFromGitHub(): Promise<OfficialInfo[]> {
 
     // Get current date for filtering
     const today = new Date();
-    
-    // Find current President and VP
+
+    // Find current President/VP plus recent former office holders. The cutoff
+    // keeps "former" entries scoped to recent administrations (G.W. Bush
+    // onward: Bush, Cheney, Obama, Biden, Pence, Harris, …) rather than every
+    // president back to Washington. As incumbents leave office going forward,
+    // their term simply ends after this cutoff, so they roll over into the
+    // "Former …" list automatically instead of disappearing.
+    const HISTORICAL_EXEC_CUTOFF = new Date('2001-01-20');
+
     const currentExecutives: OfficialInfo[] = [];
-    
+
     for (const exec of cachedExecutives!) {
-      const currentTerm = exec.terms?.find(term => {
+      const terms = exec.terms ?? [];
+
+      // Currently serving this term?
+      const currentTerm = terms.find(term => {
         const start = new Date(term.start);
         const end = new Date(term.end);
         return today >= start && today <= end;
       });
 
-      if (currentTerm) {
-        const isPrez = currentTerm.type === 'prez';
-        // Use standardized IDs matching static_officials table
-        const standardId = isPrez ? 'federal_president' : 'federal_vice_president';
-        const bioguideId = exec.id.bioguide || standardId;
-
-        // Default to bioguide photo URL. The unified DB image-url resolver
-        // (runs after all officials are merged) will override this with the
-        // image_url stored in `candidates` / `candidate_overrides` whenever
-        // one exists, keeping Profile and Feed photos in sync.
-        const imageUrl = exec.id.bioguide
-          ? `https://bioguide.congress.gov/bioguide/photo/${bioguideId[0]}/${bioguideId}.jpg`
-          : '';
-
-        currentExecutives.push({
-          id: bioguideId,
-          name: exec.name.official_full || `${exec.name.first} ${exec.name.last}`,
-          party: mapParty(currentTerm.party),
-          office: isPrez ? 'President' : 'Vice President',
-          level: 'federal_executive',
-          state: 'US',
-          image_url: imageUrl,
-          is_incumbent: true,
-          overall_score: null,
-          coverage_tier: 'tier_3',
-          confidence: 'low',
-        });
+      // Otherwise pick the most relevant recent former term: President outranks
+      // Vice President (so a two-office holder like Biden shows as the higher
+      // office), then most recently ended. Only terms that ended after the
+      // cutoff and on/before today count as "recent former".
+      let term = currentTerm;
+      const isFormer = !currentTerm;
+      if (!term) {
+        term = terms
+          .filter(t => {
+            const end = new Date(t.end);
+            return end > HISTORICAL_EXEC_CUTOFF && end <= today;
+          })
+          .sort((a, b) => {
+            if (a.type !== b.type) return a.type === 'prez' ? -1 : 1;
+            return new Date(b.end).getTime() - new Date(a.end).getTime();
+          })[0];
       }
+
+      if (!term) continue;
+
+      const isPrez = term.type === 'prez';
+      const baseOffice = isPrez ? 'President' : 'Vice President';
+
+      // Current holders use standardized IDs matching the static_officials
+      // table (and the exec-remap step below) so existing image/candidate
+      // overrides keep matching. Former holders get an `exec_`-prefixed id:
+      // it's recognized by the candidate detail page's non-Congress resolver
+      // and is what we persist to candidate_overrides below. The exec-remap
+      // step replaces it with the canonical `candidates` id when one exists
+      // (e.g. Biden -> P80000722), so only formers WITHOUT a candidate row
+      // keep the exec_ id.
+      const standardId = isPrez ? 'federal_president' : 'federal_vice_president';
+      const lastSlug = (exec.name.last || exec.name.official_full || 'unknown')
+        .toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const id = isFormer
+        ? `exec_${exec.id.bioguide || (exec.id.govtrack ? `gt${exec.id.govtrack}` : `${isPrez ? 'prez' : 'vp'}_${lastSlug}`)}`
+        : (exec.id.bioguide || standardId);
+
+      // Photo source: for former members the unitedstates.github.io portrait
+      // serves executive-era figures who were in Congress (Obama, Biden, Pence,
+      // Harris, …) and, unlike bioguide.congress.gov, isn't 403'd + cleared
+      // downstream. Current holders keep the bioguide URL, which the unified DB
+      // image-url resolver later swaps for a stored photo when one exists.
+      const imageUrl = !exec.id.bioguide
+        ? ''
+        : isFormer
+          ? `https://unitedstates.github.io/images/congress/450x550/${exec.id.bioguide}.jpg`
+          : `https://bioguide.congress.gov/bioguide/photo/${exec.id.bioguide[0]}/${exec.id.bioguide}.jpg`;
+
+      currentExecutives.push({
+        id,
+        name: exec.name.official_full || `${exec.name.first} ${exec.name.last}`,
+        party: mapParty(term.party),
+        office: isFormer ? `Former ${baseOffice}` : baseOffice,
+        level: 'federal_executive',
+        state: 'US',
+        image_url: imageUrl,
+        is_incumbent: !isFormer,
+        overall_score: null,
+        coverage_tier: 'tier_3',
+        confidence: 'low',
+      });
     }
 
-    console.log(`[GitHub] Found ${currentExecutives.length} current federal executives`);
+    const formerCount = currentExecutives.filter(e => !e.is_incumbent).length;
+    console.log(`[GitHub] Found ${currentExecutives.length} federal executives (${currentExecutives.length - formerCount} current, ${formerCount} recent former)`);
     return currentExecutives;
   } catch (error) {
     console.error('[GitHub] Error fetching executives:', error);
@@ -791,9 +836,16 @@ async function persistAndResearchOfficials(officials: OfficialInfo[], authHeader
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Filter to state/local officials only (federal are already in candidates table)
-    const persistable = officials.filter(o => 
-      o.level === 'state_executive' || o.level === 'state_legislative' || o.level === 'local'
+    // Persist state/local officials (current federal holders are already in the
+    // candidates table) plus recent FORMER federal executives that aren't backed
+    // by a candidates row. The latter still carry their `exec_` id (the remap
+    // re-keys ones that DO have a candidates row, e.g. Biden, to the P-id), so
+    // we persist + research them here the same way as any other off-DB official:
+    // this gives them a candidate_overrides row (so their detail page resolves)
+    // and an AI-generated score over time.
+    const persistable = officials.filter(o =>
+      o.level === 'state_executive' || o.level === 'state_legislative' || o.level === 'local' ||
+      (o.level === 'federal_executive' && !o.is_incumbent && o.id.startsWith('exec_'))
     );
 
     if (persistable.length === 0) {
@@ -1007,10 +1059,13 @@ serve(async (req) => {
 
     if (!state) {
       console.error('Could not extract state from address');
-      const federalExecutive = await fetchFederalExecutiveFromGitHub();
-      return new Response(JSON.stringify({ 
-        officials: federalExecutive,
+      const allExec = await fetchFederalExecutiveFromGitHub();
+      const federalExecutive = allExec.filter(o => o.is_incumbent);
+      const formerFederalExecutive = allExec.filter(o => !o.is_incumbent);
+      return new Response(JSON.stringify({
+        officials: allExec,
         federalExecutive,
+        formerFederalExecutive,
         stateExecutive: [],
         stateLegislative: [],
         local: [],
@@ -1069,36 +1124,40 @@ serve(async (req) => {
     console.log(`Transitions: ${transitions.length} (from DB)`);
     console.log(`Manual Overrides: ${manualOverrides.length} (from candidate_overrides)`);
 
-    // Re-key federal executives to existing candidates rows so the Feed
-    // link matches the canonical id (e.g. Trump -> P80001571 instead of
-    // his bioguide id T000338, which has no candidates row).
+    // Re-key federal executives (current + recent former) to existing
+    // `candidates` rows so the Feed link + scores match the canonical id
+    // (e.g. Trump -> P80001571, Biden -> P80000722) instead of a bioguide id
+    // with no candidates row. Matching is office-agnostic and uses
+    // punctuation/middle-name/suffix-insensitive keys so GitHub forms like
+    // "Joseph R. Biden, Jr." line up with the DB's "Joseph R. Biden Jr", and
+    // so a "Former President" entry still adopts the id of its old "President"
+    // row. Adopting the DB id is also what lets the unified candidate list
+    // collapse the former-holder entry and the legacy DB row into one card.
     try {
-      const execNames = federalExecutive.map((e) => e.name).filter(Boolean);
-      if (execNames.length) {
-        const sbRemap = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        const { data: dbExecs } = await sbRemap
-          .from('candidates')
-          .select('id, name, office')
-          .in('name', execNames)
-          .in('office', ['President', 'Vice President']);
-        const norm = (s: string) =>
-          (s || '').toLowerCase().replace(/\b[a-z]\.\s*/g, '').replace(/\s+/g, ' ').trim();
-        const byKey = new Map<string, string>();
-        for (const r of dbExecs || []) {
-          if (r?.id && r?.name && r?.office) {
-            byKey.set(`${norm(r.name)}::${r.office.toLowerCase()}`, r.id);
+      const sbRemap = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const { data: dbExecs } = await sbRemap
+        .from('candidates')
+        .select('id, name')
+        .in('office', ['President', 'Vice President']);
+      const byKey = new Map<string, string>();
+      for (const r of dbExecs || []) {
+        if (r?.id && r?.name) {
+          // First key wins so a fuller name doesn't get clobbered by a
+          // broader first+last key from a different row.
+          for (const k of generateNameMatchKeys(r.name)) {
+            if (!byKey.has(k)) byKey.set(k, r.id);
           }
         }
-        let remapped = 0;
-        for (const e of federalExecutive) {
-          const id = byKey.get(`${norm(e.name)}::${(e.office || '').toLowerCase()}`);
-          if (id && id !== e.id) {
-            e.id = id;
-            remapped++;
-          }
-        }
-        if (remapped) console.log(`[ExecRemap] Re-keyed ${remapped} federal executives to candidates ids`);
       }
+      let remapped = 0;
+      for (const e of federalExecutive) {
+        const id = generateNameMatchKeys(e.name).map((k) => byKey.get(k)).find(Boolean);
+        if (id && id !== e.id) {
+          e.id = id;
+          remapped++;
+        }
+      }
+      if (remapped) console.log(`[ExecRemap] Re-keyed ${remapped} federal executives to candidates ids`);
     } catch (e) {
       console.error('[ExecRemap] Failed to remap federal executive ids:', e);
     }
@@ -1304,15 +1363,20 @@ serve(async (req) => {
 
     console.log(`=== FETCH CIVIC OFFICIALS END ===`);
 
-    // Re-categorize for response
-    const finalFederalExecutive = allOfficials.filter(o => o.level === 'federal_executive');
+    // Re-categorize for response. Federal executives split into current
+    // (incumbent) holders — used everywhere as the user's national officials —
+    // and recent former holders, surfaced only in the politicians directory.
+    const allFederalExecutive = allOfficials.filter(o => o.level === 'federal_executive');
+    const finalFederalExecutive = allFederalExecutive.filter(o => o.is_incumbent);
+    const finalFormerFederalExecutive = allFederalExecutive.filter(o => !o.is_incumbent);
     const finalStateExecutive = allOfficials.filter(o => o.level === 'state_executive');
     const finalStateLegislative = allOfficials.filter(o => o.level === 'state_legislative');
     const finalLocal = allOfficials.filter(o => o.level === 'local');
 
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       officials: allOfficials,
       federalExecutive: finalFederalExecutive,
+      formerFederalExecutive: finalFormerFederalExecutive,
       stateExecutive: finalStateExecutive,
       stateLegislative: finalStateLegislative,
       local: finalLocal,
@@ -1330,17 +1394,20 @@ serve(async (req) => {
     console.error('Error:', errorMessage);
     
     // Try to return federal executive even on error
-    let federalExecutive: OfficialInfo[] = [];
+    let allExec: OfficialInfo[] = [];
     try {
-      federalExecutive = await fetchFederalExecutiveFromGitHub();
+      allExec = await fetchFederalExecutiveFromGitHub();
     } catch {
       console.error('Failed to fetch federal executive on error recovery');
     }
-    
-    return new Response(JSON.stringify({ 
+    const federalExecutive = allExec.filter(o => o.is_incumbent);
+    const formerFederalExecutive = allExec.filter(o => !o.is_incumbent);
+
+    return new Response(JSON.stringify({
       error: errorMessage,
-      officials: federalExecutive,
+      officials: allExec,
       federalExecutive,
+      formerFederalExecutive,
       stateExecutive: [],
       stateLegislative: [],
       local: [],
