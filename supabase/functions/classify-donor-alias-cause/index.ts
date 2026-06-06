@@ -2,6 +2,7 @@
 // Writes primary_cause_id directly onto donor_aliases — works even when the alias has no committee ID.
 // Body: { alias_id: string }
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { mintCandidateCause } from '../_shared/candidate-cause.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -141,6 +142,8 @@ IE expenditure purposes: ${iePurposes.slice(0, 10).join(' | ') || 'none'}
 
 Pick ONE primary cause id from the list below that best describes what this donor entity advocates for. Use "low" confidence for generic partisan donors with no clear single-issue focus.
 
+Candidate rule: if this entity exists primarily to support or oppose ONE specific political candidate — e.g. a single-candidate super PAC, a candidate's own leadership PAC, or when the top recipient committees and IE purposes concentrate on one named candidate — return candidate_cause with that candidate's full name and stance ("pro" if it works to elect/support them, "anti" if it works to defeat/oppose them). A misleading name (e.g. "Great Lakes Conservatives Fund" that in fact exists to elect one Senate candidate) does not change this — judge by where the money goes. When you set candidate_cause, still also pick the closest primary_cause_id as a fallback. Do NOT use candidate_cause for multi-candidate party/ideological committees that spread money across many races.
+
 Industry rule: never assign the generic "pro-business" cause to a single-industry donor. If this is a company, trade association, or PAC tied to one industry (real estate, finance/banking, insurance, defense, agriculture, healthcare providers, telecom, manufacturing, gaming, etc.), pick that industry's specific cause. Reserve "pro-business" only for broad, cross-industry business coalitions (e.g. a Chamber of Commerce). If the donor is clearly tied to a specific industry that has NO matching cause below, propose one with suggested_new_cause (map it to one of these quiz topics: ${topicIdList.join(', ')}) instead of settling for a generic bucket — but only for a clear, specific industry not already represented.
 
 Causes:
@@ -152,7 +155,7 @@ ${causeMenu}`;
       body: JSON.stringify({
         model: 'google/gemini-3-flash-preview',
         messages: [
-          { role: 'system', content: 'You categorize US political donors (PACs, orgs, individuals, trade associations) by cause/stance (e.g. Pro-Israel, Pro-gun, Pro-Real Estate). When a donor is tied to one industry, pick that industry\'s specific cause rather than the generic "Pro-Business" bucket, which is reserved for broad cross-industry business coalitions. Otherwise prefer the generic "conservative" / "progressive" buckets over forcing a specific cause when no single issue or industry stands out.' },
+          { role: 'system', content: 'You categorize US political donors (PACs, orgs, individuals, trade associations) by cause/stance (e.g. Pro-Israel, Pro-gun, Pro-Real Estate). When an entity exists primarily to support or oppose ONE specific candidate (a single-candidate super PAC or leadership PAC, or one whose spending concentrates on a single named candidate), return candidate_cause so it can be labeled "Pro <candidate>" / "Anti <candidate>" rather than forced into an issue bucket. When a donor is tied to one industry, pick that industry\'s specific cause rather than the generic "Pro-Business" bucket, which is reserved for broad cross-industry business coalitions. Otherwise prefer the generic "conservative" / "progressive" buckets over forcing a specific cause when no single issue or industry stands out.' },
           { role: 'user', content: userMsg },
         ],
         tools: [{
@@ -166,6 +169,17 @@ ${causeMenu}`;
                 primary_cause_id: { type: 'string', enum: allowed },
                 confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
                 reasoning: { type: 'string', maxLength: 280 },
+                candidate_cause: {
+                  type: 'object',
+                  description: 'Set ONLY when this entity exists primarily to support or oppose one specific candidate. The entity will be labeled "Pro <candidate>" / "Anti <candidate>" instead of the generic primary_cause_id.',
+                  properties: {
+                    candidate_name: { type: 'string' },
+                    stance: { type: 'string', enum: ['pro', 'anti'] },
+                    reasoning: { type: 'string', maxLength: 240 },
+                  },
+                  required: ['candidate_name', 'stance'],
+                  additionalProperties: false,
+                },
                 suggested_new_cause: {
                   type: 'object',
                   description: 'Propose a new industry-specific cause when this donor is tied to a specific industry not represented above, instead of using the generic pro-business bucket.',
@@ -245,27 +259,38 @@ ${causeMenu}`;
       }
     }
 
+    // Candidate-specific entity? Mint (or reuse) a "Pro/Anti <candidate>" cause and
+    // assign THAT as primary instead of the generic fallback bucket.
+    let finalCauseId: string = parsed.primary_cause_id;
+    let finalLabel = causes.find((c) => c.id === parsed.primary_cause_id)?.label ?? parsed.primary_cause_id;
+    let candidateCause: { id: string; label: string } | null = null;
+    const minted = await mintCandidateCause(supabase, parsed.candidate_cause, validTopicIds);
+    if (minted) {
+      finalCauseId = minted.id;
+      finalLabel = minted.label;
+      candidateCause = { id: minted.id, label: minted.label };
+    }
+
     const { error: updErr } = await supabase
       .from('donor_aliases')
       .update({
-        primary_cause_id: parsed.primary_cause_id,
+        primary_cause_id: finalCauseId,
         cause_assigned_by: 'ai',
         cause_ai_confidence: parsed.confidence,
-        cause_ai_reasoning: (parsed.reasoning ?? '').slice(0, 280),
+        cause_ai_reasoning: ((candidateCause ? (parsed.candidate_cause?.reasoning ?? parsed.reasoning) : parsed.reasoning) ?? '').slice(0, 280),
         cause_assigned_at: new Date().toISOString(),
       })
       .eq('id', alias_id);
     if (updErr) throw updErr;
 
-    const label = causes.find((c) => c.id === parsed.primary_cause_id)?.label ?? parsed.primary_cause_id;
-
     return new Response(JSON.stringify({
       success: true,
       alias_id,
-      primary_cause_id: parsed.primary_cause_id,
-      primary_cause_label: label,
+      primary_cause_id: finalCauseId,
+      primary_cause_label: finalLabel,
       confidence: parsed.confidence,
       reasoning: parsed.reasoning,
+      candidate_cause: candidateCause,
       suggested_new_cause: suggestedCause,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e) {
