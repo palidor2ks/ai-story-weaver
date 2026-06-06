@@ -4275,6 +4275,75 @@ export type Database = {
           },
         ]
       }
+      tiktok_account_tokens: {
+        Row: {
+          access_token: string
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          expires_at: string | null
+          id: string
+          open_id: string
+          refresh_expires_at: string | null
+          refresh_token: string | null
+          scope: string | null
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          access_token: string
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          expires_at?: string | null
+          id?: string
+          open_id: string
+          refresh_expires_at?: string | null
+          refresh_token?: string | null
+          scope?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          access_token?: string
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          expires_at?: string | null
+          id?: string
+          open_id?: string
+          refresh_expires_at?: string | null
+          refresh_token?: string | null
+          scope?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      tiktok_oauth_pending: {
+        Row: {
+          code_verifier: string
+          created_at: string
+          redirect_uri: string | null
+          state: string
+          user_id: string
+        }
+        Insert: {
+          code_verifier: string
+          created_at?: string
+          redirect_uri?: string | null
+          state: string
+          user_id: string
+        }
+        Update: {
+          code_verifier?: string
+          created_at?: string
+          redirect_uri?: string | null
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       topics: {
         Row: {
           icon: string
@@ -5091,6 +5160,7 @@ export type Database = {
         }
       }
       cleanup_redundant_ai_candidates: { Args: never; Returns: number }
+      cleanup_tiktok_oauth_pending: { Args: never; Returns: undefined }
       cleanup_x_oauth_pending: { Args: never; Returns: undefined }
       complete_job: { Args: { p_id: string }; Returns: undefined }
       evaluate_badges: {
