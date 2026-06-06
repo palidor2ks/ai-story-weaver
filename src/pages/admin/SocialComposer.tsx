@@ -99,8 +99,15 @@ export default function SocialComposer() {
             content_type: contentType,
           },
         });
-        if (error || (res as any)?.error) {
-          throw new Error(`${platform}: ${error?.message || (res as any)?.error || "failed"}`);
+        const payload = res as { error?: string; results?: { platform: string; status: string; error?: string }[] } | null;
+        if (error || payload?.error) {
+          throw new Error(`${platform}: ${error?.message || payload?.error || "failed"}`);
+        }
+        // post-poll-to-social returns HTTP 200 with per-platform results; a failed
+        // platform won't surface as `error`, so inspect the results too.
+        const failed = payload?.results?.find((r) => r.status === "failed");
+        if (failed) {
+          throw new Error(`${platform}: ${failed.error || "failed"}`);
         }
         return { platform, ok: true };
       }));

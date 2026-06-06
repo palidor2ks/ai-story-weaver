@@ -68,13 +68,16 @@ async function postToFacebook(text: string, link: string, imageUrl?: string | nu
 
   const base = `https://graph.facebook.com/v21.0/${pageId}`;
   let endpoint: string;
-  let body: Record<string, string>;
+  const body: Record<string, string> = { access_token: token };
   if (imageUrl) {
     endpoint = `${base}/photos`;
-    body = { url: imageUrl, caption: `${text}\n${link}`, access_token: token };
+    body.url = imageUrl;
+    body.caption = link ? `${text}\n${link}` : text;
   } else {
+    // Manual composer posts have no poll link; omit it rather than send an empty value.
     endpoint = `${base}/feed`;
-    body = { message: text, link, access_token: token };
+    body.message = text;
+    if (link) body.link = link;
   }
   const res = await fetch(endpoint, {
     method: 'POST',
@@ -113,20 +116,37 @@ Deno.serve(async (req) => {
     const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: userId, _role: 'admin' });
     if (!isAdmin) throw new Error('forbidden: admin only');
 
-    const { pollId, platforms } = await req.json();
-    if (!pollId || !Array.isArray(platforms) || platforms.length === 0) {
-      throw new Error('pollId and platforms[] are required');
+    const { pollId, platforms, caption: manualCaption } = await req.json();
+    if (!Array.isArray(platforms) || platforms.length === 0) {
+      throw new Error('platforms[] are required');
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    const { data: poll, error: pollErr } = await admin
-      .from('polls').select('*').eq('id', pollId).single();
-    if (pollErr || !poll) throw new Error('poll not found');
+    // Two call shapes:
+    //  - poll mode  { pollId, platforms } — posts a poll's caption/link/og-image
+    //    and records each attempt in poll_social_posts (used by usePolls auto-post
+    //    + repost). Unchanged behavior.
+    //  - manual mode { caption, platforms } — posts freeform text from the Social
+    //    Composer. There's no poll row, so there's no link/image and nothing is
+    //    written to poll_social_posts (its poll_id is NOT NULL).
+    let caption: string;
+    let link = '';
+    let imageUrl: string | null = null;
 
-    const origin = req.headers.get('origin') || 'https://polipulseapp.com';
-    const link = `${origin}/p/${poll.slug}`;
-    const caption = poll.share_caption?.trim() || `${poll.title} — Take the poll: ${link}`;
+    if (pollId) {
+      const { data: poll, error: pollErr } = await admin
+        .from('polls').select('*').eq('id', pollId).single();
+      if (pollErr || !poll) throw new Error('poll not found');
+      const origin = req.headers.get('origin') || 'https://polipulseapp.com';
+      link = `${origin}/p/${poll.slug}`;
+      caption = poll.share_caption?.trim() || `${poll.title} — Take the poll: ${link}`;
+      imageUrl = poll.og_image_url ?? null;
+    } else if (typeof manualCaption === 'string' && manualCaption.trim()) {
+      caption = manualCaption.trim();
+    } else {
+      throw new Error('pollId or caption is required');
+    }
 
     const results: any[] = [];
     for (const platform of platforms) {
@@ -137,24 +157,28 @@ Deno.serve(async (req) => {
           const tweetText = caption.length > 280 ? caption.slice(0, 277) + '…' : caption;
           result = await postToX(tweetText);
         } else if (platform === 'facebook') {
-          result = await postToFacebook(caption, link, poll.og_image_url);
+          result = await postToFacebook(caption, link, imageUrl);
         } else if (platform === 'linkedin') {
           result = await postToLinkedIn(caption, link);
         } else if (platform === 'instagram') {
-          result = await postToInstagram(caption, poll.og_image_url || '');
+          result = await postToInstagram(caption, imageUrl || '');
         } else {
           throw new Error(`unknown platform: ${platform}`);
         }
-        await admin.from('poll_social_posts').insert({
-          poll_id: pollId, platform, status: 'success',
-          remote_post_id: result.id, remote_post_url: result.url, posted_at: new Date().toISOString(),
-        });
+        if (pollId) {
+          await admin.from('poll_social_posts').insert({
+            poll_id: pollId, platform, status: 'success',
+            remote_post_id: result.id, remote_post_url: result.url, posted_at: new Date().toISOString(),
+          });
+        }
         results.push({ platform, status: 'success', url: result.url });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        await admin.from('poll_social_posts').insert({
-          poll_id: pollId, platform, status: 'failed', error: msg, posted_at: new Date().toISOString(),
-        });
+        if (pollId) {
+          await admin.from('poll_social_posts').insert({
+            poll_id: pollId, platform, status: 'failed', error: msg, posted_at: new Date().toISOString(),
+          });
+        }
         results.push({ platform, status: 'failed', error: msg });
       }
     }
