@@ -40,6 +40,8 @@ const PollResultsPage = lazy(() => import("./pages/PollResultsPage"));
 const TopSpenders = lazy(() => import("./pages/TopSpenders"));
 const XComposer = lazy(() => import("./pages/admin/XComposer"));
 const XConnectCallback = lazy(() => import("./pages/admin/XConnectCallback"));
+const TikTokConnect = lazy(() => import("./pages/admin/TikTokConnect"));
+const TikTokConnectCallback = lazy(() => import("./pages/admin/TikTokConnectCallback"));
 const SocialComposer = lazy(() => import("./pages/admin/SocialComposer"));
 const SocialHandles = lazy(() => import("./pages/admin/SocialHandles"));
 const StatCardRender = lazy(() => import("./pages/StatCardRender"));
@@ -172,6 +174,8 @@ const AppRoutes = () => (
       <Route path="/admin/social-handles" element={<RouteGuard requireAuth requireOnboarding><SocialHandles /></RouteGuard>} />
       <Route path="/admin/social-posts" element={<RouteGuard requireAuth requireOnboarding><SocialPosts /></RouteGuard>} />
       <Route path="/admin/x-connect/callback" element={<RouteGuard requireAuth requireOnboarding><XConnectCallback /></RouteGuard>} />
+      <Route path="/admin/tiktok-connect" element={<RouteGuard requireAuth requireOnboarding><TikTokConnect /></RouteGuard>} />
+      <Route path="/admin/tiktok-connect/callback" element={<RouteGuard requireAuth requireOnboarding><TikTokConnectCallback /></RouteGuard>} />
       <Route path="/politician" element={<RouteGuard requireAuth requireOnboarding><PoliticianDashboard /></RouteGuard>} />
       <Route path="/blog" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Blog /></RouteGuard>} />
       <Route path="/jobs" element={<RouteGuard requireAuth={false} requireOnboarding={false}><Jobs /></RouteGuard>} />

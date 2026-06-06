@@ -1,5 +1,5 @@
 // Admin-only OR cron-invoked. Posts a social_posts row to all enabled platforms.
-// X is fully wired; FB/IG/TikTok return "not_configured" until tokens added.
+// X and TikTok are fully wired; FB/IG return "not_configured" until tokens added.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'npm:zod@3.23.8';
 import { isCronAuthorized } from '../_shared/cron-auth.ts';
@@ -14,6 +14,11 @@ const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 const X_CLIENT_ID = Deno.env.get('X_CLIENT_ID');
 const X_CLIENT_SECRET = Deno.env.get('X_CLIENT_SECRET');
+const TIKTOK_CLIENT_KEY = Deno.env.get('TIKTOK_CLIENT_KEY') ?? Deno.env.get('TIKTOK_CLIENT_ID') ?? Deno.env.get('TIKTOK_KEY');
+const TIKTOK_CLIENT_SECRET = Deno.env.get('TIKTOK_CLIENT_SECRET') ?? Deno.env.get('TIKTOK_SECRET');
+// Override only if your TikTok app is audited for public posting; unaudited apps
+// are limited to SELF_ONLY. Left unset, we pick the safest level the account allows.
+const TIKTOK_PRIVACY_LEVEL = Deno.env.get('TIKTOK_PRIVACY_LEVEL');
 const PUBLIC_SITE_URL = (Deno.env.get('PUBLIC_SITE_URL') ?? 'https://www.polipulseapp.com').replace(/\/+$/, '');
 
 const BodySchema = z.object({
@@ -127,6 +132,135 @@ async function postToX(
   };
 }
 
+const TIKTOK_TOKEN_URL = 'https://open.tiktokapis.com/v2/oauth/token/';
+const TIKTOK_CREATOR_INFO_URL = 'https://open.tiktokapis.com/v2/post/publish/creator_info/query/';
+const TIKTOK_CONTENT_INIT_URL = 'https://open.tiktokapis.com/v2/post/publish/content/init/';
+const TIKTOK_STATUS_URL = 'https://open.tiktokapis.com/v2/post/publish/status/fetch/';
+
+async function refreshTikTok(admin: ReturnType<typeof createClient>, row: any): Promise<string> {
+  const now = Date.now();
+  const exp = row.expires_at ? new Date(row.expires_at).getTime() : 0;
+  if (exp - now > 60_000 && row.access_token) return row.access_token;
+  if (!row.refresh_token || !TIKTOK_CLIENT_KEY || !TIKTOK_CLIENT_SECRET) throw new Error('tiktok_not_configured');
+  const res = await fetch(TIKTOK_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_key: TIKTOK_CLIENT_KEY,
+      client_secret: TIKTOK_CLIENT_SECRET,
+      grant_type: 'refresh_token',
+      refresh_token: row.refresh_token,
+    }).toString(),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || j.error || !j.access_token) {
+    throw new Error(`tiktok_refresh_failed: ${j.error_description || j.error || res.status}`);
+  }
+  const expiresAt = new Date(Date.now() + (j.expires_in ?? 86400) * 1000).toISOString();
+  const refreshExpiresAt = j.refresh_expires_in
+    ? new Date(Date.now() + j.refresh_expires_in * 1000).toISOString()
+    : row.refresh_expires_at;
+  await admin.from('tiktok_account_tokens').update({
+    access_token: j.access_token,
+    refresh_token: j.refresh_token ?? row.refresh_token,
+    expires_at: expiresAt,
+    refresh_expires_at: refreshExpiresAt,
+    scope: j.scope ?? row.scope,
+  }).eq('id', row.id);
+  return j.access_token;
+}
+
+// Honor the operator's override when the account allows it; otherwise default to
+// the safest level the creator permits (unaudited apps only allow SELF_ONLY).
+function pickTikTokPrivacy(options: string[]): string {
+  if (TIKTOK_PRIVACY_LEVEL && options.includes(TIKTOK_PRIVACY_LEVEL)) return TIKTOK_PRIVACY_LEVEL;
+  if (options.includes('PUBLIC_TO_EVERYONE')) return 'PUBLIC_TO_EVERYONE';
+  return options[0] ?? 'SELF_ONLY';
+}
+
+// Posts the rendered card to TikTok as a single-photo DIRECT_POST via the
+// Content Posting API. TikTok pulls the image from its public URL, so the host
+// domain must be verified under the app's URL properties.
+async function postToTikTok(
+  admin: ReturnType<typeof createClient>,
+  caption: string,
+  post: { image_url?: string | null },
+) {
+  if (!TIKTOK_CLIENT_KEY || !TIKTOK_CLIENT_SECRET) {
+    return { ok: false, error: 'tiktok_not_configured', detail: 'Set TIKTOK_CLIENT_KEY/TIKTOK_CLIENT_SECRET secrets and connect an account.' };
+  }
+  const imageUrl = post.image_url;
+  if (!imageUrl) return { ok: false, error: 'tiktok_requires_image', detail: 'Render the card image before posting to TikTok.' };
+
+  const { data: rows } = await admin
+    .from('tiktok_account_tokens').select('*').order('updated_at', { ascending: false }).limit(1);
+  const row = rows?.[0];
+  if (!row) return { ok: false, error: 'no_tiktok_account_connected' };
+
+  let accessToken: string;
+  try { accessToken = await refreshTikTok(admin, row); } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'refresh_failed' };
+  }
+  const authH = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json; charset=UTF-8' };
+
+  // 1. Query creator info: required before a direct post, and it returns both the
+  //    allowed privacy levels and the username (for building the post URL).
+  const ciRes = await fetch(TIKTOK_CREATOR_INFO_URL, { method: 'POST', headers: authH });
+  const ciJson = await ciRes.json().catch(() => ({}));
+  if (!ciRes.ok || (ciJson?.error && ciJson.error.code !== 'ok')) {
+    return { ok: false, error: 'tiktok_creator_info_failed', detail: ciJson?.error?.message ?? `status_${ciRes.status}` };
+  }
+  const options: string[] = ciJson?.data?.privacy_level_options ?? [];
+  const privacy = pickTikTokPrivacy(options);
+  const username: string | null = ciJson?.data?.creator_username ?? row.username ?? null;
+
+  // 2. Initialize the direct photo post.
+  const description = (caption ?? '').trim();
+  const initBody = {
+    post_info: {
+      title: description.slice(0, 90),
+      description,
+      privacy_level: privacy,
+      disable_comment: false,
+    },
+    source_info: {
+      source: 'PULL_FROM_URL',
+      photo_cover_index: 0,
+      photo_images: [imageUrl],
+    },
+    post_mode: 'DIRECT_POST',
+    media_type: 'PHOTO',
+  };
+  const initRes = await fetch(TIKTOK_CONTENT_INIT_URL, { method: 'POST', headers: authH, body: JSON.stringify(initBody) });
+  const initJson = await initRes.json().catch(() => ({}));
+  if (!initRes.ok || (initJson?.error && initJson.error.code !== 'ok') || !initJson?.data?.publish_id) {
+    return { ok: false, error: 'tiktok_post_failed', detail: initJson?.error?.message ?? `status_${initRes.status}` };
+  }
+  const publishId: string = initJson.data.publish_id;
+
+  // 3. Best-effort status poll: catch an immediate failure and try to grab the
+  //    public post id. Photo posts often remain PROCESSING past this window —
+  //    that's fine, they still publish; we just won't have the URL yet.
+  let externalUrl: string | null = null;
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const stRes = await fetch(TIKTOK_STATUS_URL, { method: 'POST', headers: authH, body: JSON.stringify({ publish_id: publishId }) });
+    const stJson = await stRes.json().catch(() => ({}));
+    const status = stJson?.data?.status;
+    if (status === 'FAILED') {
+      return { ok: false, error: 'tiktok_publish_failed', detail: stJson?.data?.fail_reason ?? 'failed' };
+    }
+    const postIds: unknown[] = stJson?.data?.publicaly_available_post_id ?? [];
+    if (postIds.length > 0) {
+      externalUrl = username ? `https://www.tiktok.com/@${username}/photo/${String(postIds[0])}` : null;
+      break;
+    }
+    if (status === 'PUBLISH_COMPLETE') break;
+  }
+
+  return { ok: true, external_post_id: publishId, external_url: externalUrl };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -166,6 +300,8 @@ Deno.serve(async (req) => {
       let r: any;
       if (p.platform === 'x') {
         r = await postToX(admin, caption, post);
+      } else if (p.platform === 'tiktok') {
+        r = await postToTikTok(admin, caption, post);
       } else {
         r = { ok: false, error: 'not_configured', detail: `${p.platform} posting requires API credentials.` };
       }
