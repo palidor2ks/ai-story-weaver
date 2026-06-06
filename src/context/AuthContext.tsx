@@ -97,20 +97,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
-        // Only update if we're not in a reconnecting state with a valid last session
-        if (!isReconnecting || !lastKnownSession.current) {
+        // SIGNED_OUT is terminal — always clear, even mid-reconnect, so stale
+        // tokens don't keep firing authenticated requests (→ edge function 401s).
+        const isTerminal = event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !newSession);
+
+        if (isTerminal || !isReconnecting || !lastKnownSession.current) {
           setSession(newSession);
           setUser(newSession?.user ?? null);
           lastKnownSession.current = newSession;
         }
-        
+
         if (!loadingResolved.current) {
           loadingResolved.current = true;
           setLoading(false);
         }
 
         // Handle specific auth events
-        if (event === 'TOKEN_REFRESHED') {
+        if (event === 'TOKEN_REFRESHED' && newSession) {
           lastKnownSession.current = newSession;
           setIsReconnecting(false);
         } else if (event === 'SIGNED_OUT') {
