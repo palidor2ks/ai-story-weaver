@@ -18,5 +18,12 @@ export function proxiedImageUrl(url: string | null | undefined): string {
   }
 
   if (!SUPABASE_URL) return url;
+
+  // Our own Supabase Storage objects are already served with permissive CORS,
+  // so html-to-image can read them directly. Proxying them is pointless and
+  // would re-impose the proxy's size cap on photos we host ourselves (e.g.
+  // full-res official portraits), so pass them through untouched.
+  if (url.startsWith(`${SUPABASE_URL}/storage/v1/object/public/`)) return url;
+
   return `${SUPABASE_URL}/functions/v1/proxy-image?url=${encodeURIComponent(url)}`;
 }
