@@ -143,7 +143,14 @@ export const Candidates = () => {
   const { isHidden } = useHiddenStates();
 
   const filteredCandidates = useMemo(() => {
-    let result = tabCandidates.filter(c => !isHidden(c.state));
+    // National offices (President / Vice President) represent the whole country
+    // and are tagged with state 'US', not a real state. They must never be
+    // dropped by the per-state hiding used to scope the beta to a few states —
+    // otherwise the President and VP disappear from the Executive tab while
+    // still being counted in its badge.
+    const isNationalOffice = (c: Candidate) =>
+      c.state === 'US' || (c.level === 'federal' && /president/i.test(c.office));
+    let result = tabCandidates.filter(c => isNationalOffice(c) || !isHidden(c.state));
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
