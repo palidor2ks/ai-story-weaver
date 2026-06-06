@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminRole } from '@/hooks/useAdminRole';
 import { usePoliticianRole } from '@/hooks/usePoliticianProfile';
-import { User, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper, Megaphone, LogIn, Briefcase, Compass, type LucideIcon } from 'lucide-react';
+import { User, Menu, X, BookOpen, HelpCircle, Users, DollarSign, Shield, Building2, FileText, Landmark, Newspaper, Megaphone, LogIn, Briefcase, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoImg from '@/assets/logo.png';
@@ -19,7 +19,6 @@ export const Header = () => {
   const isPolitician = !!user && !politicianLoading && !!politicianData?.isPolitician;
 
   const navItems: { path: string; label: string; icon: LucideIcon; requiresAuth: boolean; adminOnly?: boolean }[] = [
-    { path: '/political-compass-test', label: 'Compass Test', icon: Compass, requiresAuth: false, adminOnly: true },
     { path: '/candidates', label: 'Candidates', icon: Users, requiresAuth: false },
     { path: '/parties', label: 'Parties', icon: Building2, requiresAuth: false },
     { path: '/donors', label: 'Donors', icon: DollarSign, requiresAuth: false },
