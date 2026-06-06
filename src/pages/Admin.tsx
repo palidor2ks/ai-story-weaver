@@ -309,24 +309,24 @@ export default function Admin() {
 
   return (
     <BackgroundProcessingProvider>
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       <Header />
-      
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between gap-6 mb-8">
+
+      <main className="container mx-auto px-4 py-8 max-w-full">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 mb-8">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Shield className="h-8 w-8 text-primary" />
+            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+              <Shield className="h-7 w-7 sm:h-8 sm:w-8 text-primary shrink-0" />
               Admin Console
             </h1>
             <p className="text-muted-foreground mt-1">
               Use the area drop-downs to jump between dashboards, people tools, scoring workflows, finance data, and platform settings.
             </p>
           </div>
-          
+
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={handleOpenCreate}>
+              <Button onClick={handleOpenCreate} className="w-full sm:w-auto shrink-0">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Official
               </Button>
@@ -342,7 +342,7 @@ export default function Admin() {
               </DialogHeader>
               
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="id">ID (unique)</Label>
                     <Input
@@ -367,7 +367,7 @@ export default function Admin() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="party">Party</Label>
                     <Select
@@ -403,7 +403,7 @@ export default function Admin() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="office">Office</Label>
                     <Input
@@ -428,7 +428,7 @@ export default function Admin() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="district">District (optional)</Label>
                     <Input
@@ -471,7 +471,7 @@ export default function Admin() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="coverage_tier">Coverage Tier</Label>
                     <Select

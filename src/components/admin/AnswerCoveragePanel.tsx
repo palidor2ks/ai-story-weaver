@@ -754,12 +754,12 @@ export function AnswerCoveragePanel() {
         </div>
       )}
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-          <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-primary" />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+          <CardTitle className="flex flex-wrap items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary shrink-0" />
               Coverage & Finance Dashboard
-              <Badge variant="outline" className="ml-2 text-xs font-normal">
+              <Badge variant="outline" className="text-xs font-normal">
                 Cycle {financeCycle} ({getCycleDateRange(financeCycle)})
               </Badge>
             </CardTitle>
@@ -767,9 +767,9 @@ export function AnswerCoveragePanel() {
               Unified view of AI position answers, FEC donors, and finance reconciliation
             </CardDescription>
           </div>
-          
-          <div className="flex items-center gap-2">
-            
+
+          <div className="flex flex-wrap items-center gap-2">
+
             {/* AI Actions Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1263,9 +1263,9 @@ export function AnswerCoveragePanel() {
         <CronHealthPanel />
         {/* Voting Records Stats */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Vote className="h-4 w-4" />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
+              <Vote className="h-4 w-4 shrink-0" />
               Congressional Voting Records
               {votingStatsCache?.updatedAt && (
                 <span className="text-xs text-muted-foreground">
@@ -1273,7 +1273,7 @@ export function AnswerCoveragePanel() {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
